@@ -28,19 +28,18 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import com.oracle.graal.phases.common.InliningUtil.InlineInfo;
 import com.oracle.graal.phases.common.InliningUtil.InliningCallback;
 import com.oracle.graal.phases.common.InliningUtil.InliningPolicy;
-import com.oracle.graal.phases.graph.*;
 
 public class InliningPhase extends Phase implements InliningCallback {
 
@@ -55,7 +54,6 @@ public class InliningPhase extends Phase implements InliningCallback {
 
     private final MetaAccessProvider runtime;
     private final Assumptions assumptions;
-    private final Replacements replacements;
     private final GraphCache cache;
     private final InliningPolicy inliningPolicy;
     private final OptimisticOptimizations optimisticOpts;
@@ -71,15 +69,12 @@ public class InliningPhase extends Phase implements InliningCallback {
     private static final DebugMetric metricInliningStoppedByMaxDesiredSize = Debug.metric("InliningStoppedByMaxDesiredSize");
     private static final DebugMetric metricInliningRuns = Debug.metric("Runs");
 
-    public InliningPhase(MetaAccessProvider runtime, Map<Invoke, Double> hints, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts) {
-        this(runtime, replacements, assumptions, cache, plan, createInliningPolicy(runtime, replacements, assumptions, optimisticOpts, hints), optimisticOpts);
+    public InliningPhase(MetaAccessProvider runtime, Map<Invoke, Double> hints, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+        this(runtime, assumptions, cache, plan, createInliningPolicy(runtime, assumptions, optimisticOpts, hints), optimisticOpts);
     }
 
-    public InliningPhase(MetaAccessProvider runtime, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan, InliningPolicy inliningPolicy,
-                    OptimisticOptimizations optimisticOpts) {
+    public InliningPhase(MetaAccessProvider runtime, Assumptions assumptions, GraphCache cache, PhasePlan plan, InliningPolicy inliningPolicy, OptimisticOptimizations optimisticOpts) {
         this.runtime = runtime;
-        this.replacements = replacements;
         this.assumptions = assumptions;
         this.cache = cache;
         this.plan = plan;
@@ -101,33 +96,27 @@ public class InliningPhase extends Phase implements InliningCallback {
 
     @Override
     protected void run(final StructuredGraph graph) {
-        NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
-        NodesToDoubles nodeRelevance = new ComputeInliningRelevanceClosure(graph, nodeProbabilities).apply();
         inliningPolicy.initialize(graph);
 
         while (inliningPolicy.continueInlining(graph)) {
             final InlineInfo candidate = inliningPolicy.next();
 
             if (candidate != null) {
-                boolean isWorthInlining = inliningPolicy.isWorthInlining(candidate, nodeProbabilities, nodeRelevance);
+                boolean isWorthInlining = inliningPolicy.isWorthInlining(candidate);
                 isWorthInlining &= candidate.numberOfMethods() <= maxMethodPerInlining;
 
                 metricInliningConsidered.increment();
                 if (isWorthInlining) {
                     int mark = graph.getMark();
                     try {
-                        List<Node> invokeUsages = candidate.invoke().asNode().usages().snapshot();
-                        candidate.inline(graph, runtime, replacements, this, assumptions);
+                        List<Node> invokeUsages = candidate.invoke().node().usages().snapshot();
+                        candidate.inline(graph, runtime, this, assumptions);
                         Debug.dump(graph, "after %s", candidate);
                         Iterable<Node> newNodes = graph.getNewNodes(mark);
                         inliningPolicy.scanInvokes(newNodes);
                         if (GraalOptions.OptCanonicalizer) {
-                            new CanonicalizerPhase.Instance(runtime, assumptions, invokeUsages, mark, customCanonicalizer).apply(graph);
+                            new CanonicalizerPhase(runtime, assumptions, invokeUsages, mark, customCanonicalizer).apply(graph);
                         }
-
-                        nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
-                        nodeRelevance = new ComputeInliningRelevanceClosure(graph, nodeProbabilities).apply();
-
                         inliningCount++;
                         metricInliningPerformed.increment();
                     } catch (BailoutException bailout) {
@@ -144,9 +133,6 @@ public class InliningPhase extends Phase implements InliningCallback {
                 }
             }
         }
-
-        // Clean up type profiles.
-        TypeProfileProxyNode.cleanFromGraph(graph);
     }
 
     @Override
@@ -168,10 +154,12 @@ public class InliningPhase extends Phase implements InliningCallback {
                 }
                 assert newGraph.start().next() != null : "graph needs to be populated during PhasePosition.AFTER_PARSING";
 
-                new DeadCodeEliminationPhase().apply(newGraph);
-
+                if (GraalOptions.ProbabilityAnalysis) {
+                    new DeadCodeEliminationPhase().apply(newGraph);
+                    new ComputeProbabilityPhase().apply(newGraph);
+                }
                 if (GraalOptions.OptCanonicalizer) {
-                    new CanonicalizerPhase.Instance(runtime, assumptions).apply(newGraph);
+                    new CanonicalizerPhase(runtime, assumptions).apply(newGraph);
                 }
                 if (GraalOptions.CullFrameStates) {
                     new CullFrameStatesPhase().apply(newGraph);
@@ -186,23 +174,22 @@ public class InliningPhase extends Phase implements InliningCallback {
 
     private interface InliningDecision {
 
-        boolean isWorthInlining(InlineInfo info, NodesToDoubles nodeProbabilities, NodesToDoubles nodeRelevance);
+        boolean isWorthInlining(InlineInfo info);
     }
 
     private static class GreedySizeBasedInliningDecision implements InliningDecision {
 
         private final MetaAccessProvider runtime;
-        private final Replacements replacements;
         private final Map<Invoke, Double> hints;
 
-        public GreedySizeBasedInliningDecision(MetaAccessProvider runtime, Replacements replacements, Map<Invoke, Double> hints) {
+        public GreedySizeBasedInliningDecision(MetaAccessProvider runtime, Map<Invoke, Double> hints) {
             this.runtime = runtime;
-            this.replacements = replacements;
             this.hints = hints;
         }
 
         @Override
-        public boolean isWorthInlining(InlineInfo info, NodesToDoubles nodeProbabilities, NodesToDoubles nodeRelevance) {
+        public boolean isWorthInlining(InlineInfo info) {
+            assert GraalOptions.ProbabilityAnalysis;
             /*
              * TODO (chaeubl): invoked methods that are on important paths but not yet compiled ->
              * will be compiled anyways and it is likely that we are the only caller... might be
@@ -211,11 +198,11 @@ public class InliningPhase extends Phase implements InliningCallback {
              */
 
             if (GraalOptions.AlwaysInlineIntrinsics) {
-                if (onlyIntrinsics(replacements, info)) {
+                if (onlyIntrinsics(info)) {
                     return InliningUtil.logInlinedMethod(info, "intrinsic");
                 }
             } else {
-                if (onlyForcedIntrinsics(replacements, info)) {
+                if (onlyForcedIntrinsics(info)) {
                     return InliningUtil.logInlinedMethod(info, "intrinsic");
                 }
             }
@@ -228,7 +215,8 @@ public class InliningPhase extends Phase implements InliningCallback {
             int bytecodeSize = (int) (bytecodeCodeSize(info) / bonus);
             int complexity = (int) (compilationComplexity(info) / bonus);
             int compiledCodeSize = (int) (compiledCodeSize(info) / bonus);
-            double relevance = nodeRelevance.get(info.invoke().asNode());
+            double relevance = info.invoke().inliningRelevance();
+
             /*
              * as long as the compiled code size is small enough (or the method was not yet
              * compiled), we can do a pretty general inlining that suits most situations
@@ -247,7 +235,7 @@ public class InliningPhase extends Phase implements InliningCallback {
              * the normal inlining did not fit this invoke, so check if we have any reason why we
              * should still do the inlining
              */
-            double probability = nodeProbabilities.get(info.invoke().asNode());
+            double probability = info.invoke().probability();
             int transferredValues = numberOfTransferredValues(info);
             int invokeUsages = countInvokeUsages(info);
             int moreSpecificArguments = countMoreSpecificArgumentInfo(info);
@@ -275,9 +263,8 @@ public class InliningPhase extends Phase implements InliningCallback {
         }
 
         private static int numberOfTransferredValues(InlineInfo info) {
-            MethodCallTargetNode methodCallTargetNode = ((MethodCallTargetNode) info.invoke().callTarget());
-            Signature signature = methodCallTargetNode.targetMethod().getSignature();
-            int transferredValues = signature.getParameterCount(!Modifier.isStatic(methodCallTargetNode.targetMethod().getModifiers()));
+            Signature signature = info.invoke().methodCallTarget().targetMethod().getSignature();
+            int transferredValues = signature.getParameterCount(!Modifier.isStatic(info.invoke().methodCallTarget().targetMethod().getModifiers()));
             if (signature.getReturnKind() != Kind.Void) {
                 transferredValues++;
             }
@@ -287,7 +274,7 @@ public class InliningPhase extends Phase implements InliningCallback {
         private static int countInvokeUsages(InlineInfo info) {
             // inlining calls with lots of usages simplifies the caller
             int usages = 0;
-            for (Node n : info.invoke().asNode().usages()) {
+            for (Node n : info.invoke().node().usages()) {
                 if (!(n instanceof FrameState)) {
                     usages++;
                 }
@@ -301,11 +288,10 @@ public class InliningPhase extends Phase implements InliningCallback {
              * argument simplifies the callee
              */
             int moreSpecificArgumentInfo = 0;
-            MethodCallTargetNode methodCallTarget = (MethodCallTargetNode) info.invoke().callTarget();
-            boolean isStatic = methodCallTarget.isStatic();
+            boolean isStatic = info.invoke().methodCallTarget().isStatic();
             int signatureOffset = isStatic ? 0 : 1;
-            NodeInputList arguments = methodCallTarget.arguments();
-            ResolvedJavaMethod targetMethod = methodCallTarget.targetMethod();
+            NodeInputList arguments = info.invoke().methodCallTarget().arguments();
+            ResolvedJavaMethod targetMethod = info.invoke().methodCallTarget().targetMethod();
             ResolvedJavaType methodHolderClass = targetMethod.getDeclaringClass();
             Signature signature = targetMethod.getSignature();
 
@@ -356,20 +342,21 @@ public class InliningPhase extends Phase implements InliningCallback {
             return result;
         }
 
-        private static boolean onlyIntrinsics(Replacements replacements, InlineInfo info) {
+        private static boolean onlyIntrinsics(InlineInfo info) {
             for (int i = 0; i < info.numberOfMethods(); i++) {
-                if (!InliningUtil.canIntrinsify(replacements, info.methodAt(i))) {
+                if (!InliningUtil.canIntrinsify(info.methodAt(i))) {
                     return false;
                 }
             }
             return true;
         }
 
-        private static boolean onlyForcedIntrinsics(Replacements replacements, InlineInfo info) {
+        private static boolean onlyForcedIntrinsics(InlineInfo info) {
             for (int i = 0; i < info.numberOfMethods(); i++) {
-                if (!InliningUtil.canIntrinsify(replacements, info.methodAt(i))) {
+                if (!InliningUtil.canIntrinsify(info.methodAt(i))) {
                     return false;
                 }
+                Replacements replacements = Graal.getRequiredCapability(Replacements.class);
                 if (!replacements.isForcedSubstitution(info.methodAt(i))) {
                     return false;
                 }
@@ -382,15 +369,13 @@ public class InliningPhase extends Phase implements InliningCallback {
 
         private final InliningDecision inliningDecision;
         private final Assumptions assumptions;
-        private final Replacements replacements;
         private final OptimisticOptimizations optimisticOpts;
         private final Deque<Invoke> sortedInvokes;
         private NodeBitMap visitedFixedNodes;
         private FixedNode invokePredecessor;
 
-        public CFInliningPolicy(InliningDecision inliningPolicy, Replacements replacements, Assumptions assumptions, OptimisticOptimizations optimisticOpts) {
+        public CFInliningPolicy(InliningDecision inliningPolicy, Assumptions assumptions, OptimisticOptimizations optimisticOpts) {
             this.inliningDecision = inliningPolicy;
-            this.replacements = replacements;
             this.assumptions = assumptions;
             this.optimisticOpts = optimisticOpts;
             this.sortedInvokes = new ArrayDeque<>();
@@ -408,7 +393,7 @@ public class InliningPhase extends Phase implements InliningCallback {
 
         public InlineInfo next() {
             Invoke invoke = sortedInvokes.pop();
-            InlineInfo info = InliningUtil.getInlineInfo(invoke, replacements, assumptions, optimisticOpts);
+            InlineInfo info = InliningUtil.getInlineInfo(invoke, assumptions, optimisticOpts);
             if (info != null) {
                 invokePredecessor = (FixedNode) info.invoke().predecessor();
                 assert invokePredecessor.isAlive();
@@ -416,9 +401,8 @@ public class InliningPhase extends Phase implements InliningCallback {
             return info;
         }
 
-        @Override
-        public boolean isWorthInlining(InlineInfo info, NodesToDoubles nodeProbabilities, NodesToDoubles nodeRelevance) {
-            return inliningDecision.isWorthInlining(info, nodeProbabilities, nodeRelevance);
+        public boolean isWorthInlining(InlineInfo info) {
+            return inliningDecision.isWorthInlining(info);
         }
 
         public void initialize(StructuredGraph graph) {
@@ -550,8 +534,8 @@ public class InliningPhase extends Phase implements InliningCallback {
         }
     }
 
-    private static InliningPolicy createInliningPolicy(MetaAccessProvider runtime, Replacements replacements, Assumptions assumptions, OptimisticOptimizations optimisticOpts, Map<Invoke, Double> hints) {
-        InliningDecision inliningDecision = new GreedySizeBasedInliningDecision(runtime, replacements, hints);
-        return new CFInliningPolicy(inliningDecision, replacements, assumptions, optimisticOpts);
+    private static InliningPolicy createInliningPolicy(MetaAccessProvider runtime, Assumptions assumptions, OptimisticOptimizations optimisticOpts, Map<Invoke, Double> hints) {
+        InliningDecision inliningDecision = new GreedySizeBasedInliningDecision(runtime, hints);
+        return new CFInliningPolicy(inliningDecision, assumptions, optimisticOpts);
     }
 }
