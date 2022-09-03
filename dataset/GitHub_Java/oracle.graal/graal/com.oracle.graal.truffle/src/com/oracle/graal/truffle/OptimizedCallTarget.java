@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
@@ -51,24 +50,11 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     protected final CompilationPolicy compilationPolicy;
     private OptimizedCallTarget splitSource;
     private final AtomicInteger callSitesKnown = new AtomicInteger(0);
-    @CompilationFinal private Class<?> profiledReturnType;
-    @CompilationFinal private Assumption profiledReturnTypeAssumption;
 
     private final RootNode rootNode;
 
     public final RootNode getRootNode() {
         return rootNode;
-    }
-
-    public Class<?> getProfiledReturnType() {
-        Class<?> result = profiledReturnType;
-        if (result != null) {
-            try {
-                profiledReturnTypeAssumption.check();
-            } catch (InvalidAssumptionException e) {
-            }
-        }
-        return result;
     }
 
     public OptimizedCallTarget(RootNode rootNode, GraalTruffleRuntime runtime, int invokeCounter, int compilationThreshold, CompilationPolicy compilationPolicy, SpeculationLog speculationLog) {
@@ -97,13 +83,11 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private Object callBoundary(Object[] args) {
         if (CompilerDirectives.inInterpreter()) {
             // We are called and we are still in Truffle interpreter mode.
-            CompilerDirectives.transferToInterpreter();
             interpreterCall();
         } else {
             // We come here from compiled code (i.e., we have been inlined).
         }
-
-        return callRoot(args);
+        return executeHelper(args);
     }
 
     @Override
@@ -214,8 +198,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         if (CompilerDirectives.inInterpreter()) {
             compilationProfile.reportInlinedCall();
         }
-        VirtualFrame frame = createFrame(getRootNode().getFrameDescriptor(), arguments);
-        return callProxy(frame);
+        return executeHelper(arguments);
     }
 
     public final void performInlining() {
@@ -245,27 +228,16 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         }
     }
 
-    public final Object callRoot(Object[] args) {
+    public final Object executeHelper(Object[] args) {
         VirtualFrame frame = createFrame(getRootNode().getFrameDescriptor(), args);
-        Object result = callProxy(frame);
-
-        // Profile call return type
-        if (profiledReturnTypeAssumption == null) {
-            CompilerDirectives.transferToInterpreter();
-            profiledReturnType = result.getClass();
-            profiledReturnTypeAssumption = Truffle.getRuntime().createAssumption("Profiled Return Type");
-        } else if (profiledReturnType != null) {
-            if (result == null || profiledReturnType != result.getClass()) {
-                CompilerDirectives.transferToInterpreter();
-                profiledReturnType = null;
-                profiledReturnTypeAssumption.invalidate();
-            }
-        }
-
-        return result;
+        return callProxy(frame);
     }
 
     public static FrameWithoutBoxing createFrame(FrameDescriptor descriptor, Object[] args) {
+        return new FrameWithoutBoxing(descriptor, args);
+    }
+
+    public static FrameWithoutBoxing createMaterializedFrame(FrameDescriptor descriptor, Object[] args) {
         return new FrameWithoutBoxing(descriptor, args);
     }
 
