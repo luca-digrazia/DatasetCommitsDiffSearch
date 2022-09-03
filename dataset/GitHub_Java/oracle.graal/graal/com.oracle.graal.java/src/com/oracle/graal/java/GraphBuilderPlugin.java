@@ -25,145 +25,40 @@ package com.oracle.graal.java;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 
 /**
- * Marker interface for graph builder plugins.
+ * Extensions for handling certain bytecode instructions while building a
+ * {@linkplain StructuredGraph graph} from a bytecode stream.
  */
 public interface GraphBuilderPlugin {
 
-    public interface LoadFieldPlugin extends GraphBuilderPlugin {
-        @SuppressWarnings("unused")
-        default boolean apply(GraphBuilderContext builder, ValueNode receiver, ResolvedJavaField field) {
-            return false;
-        }
-
-        @SuppressWarnings("unused")
-        default boolean apply(GraphBuilderContext graphBuilderContext, ResolvedJavaField staticField) {
-            return false;
-        }
-
-        default boolean tryConstantFold(GraphBuilderContext builder, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ResolvedJavaField field, JavaConstant asJavaConstant) {
-            JavaConstant result = constantReflection.readConstantFieldValue(field, asJavaConstant);
-            if (result != null) {
-                ConstantNode constantNode = builder.append(ConstantNode.forConstant(result, metaAccess));
-                builder.push(constantNode.getKind().getStackKind(), constantNode);
-                return true;
-            }
-            return false;
-        }
-    }
+    /**
+     * Processes an invocation parsed in a bytecode stream and add nodes to a graph being
+     * constructed that implement the semantics of the invocation.
+     *
+     * @param builder object being used to build a graph
+     * @param args the arguments to the invocation
+     */
+    boolean handleInvocation(GraphBuilderContext builder, ValueNode[] args);
 
     /**
-     * Plugin for specifying what is inlined during graph parsing.
+     * Gets the method handled by {@link #handleInvocation(GraphBuilderContext, ValueNode[])} .
      */
-    public interface InlineInvokePlugin extends GraphBuilderPlugin {
-
-        /**
-         * Gets the method to be inlined for a call to a given method. A non-null return value other
-         * than {@code method} is interpreted as a
-         * {@linkplain GraphBuilderContext#parsingReplacement() replacement} by the graph builder
-         * context used for inlining it.
-         *
-         * @param method the target method of an invoke
-         * @param args the arguments to the invoke
-         * @param returnType the return type derived from {@code method}'s signature
-         * @return the method to inline for a call to {@code method} or null if the call should not
-         *         be inlined
-         */
-        ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType);
-
-        default void postInline(@SuppressWarnings("unused") ResolvedJavaMethod inlinedTargetMethod) {
-
-        }
-    }
-
-    public interface LoopExplosionPlugin extends GraphBuilderPlugin {
-        boolean shouldExplodeLoops(ResolvedJavaMethod method);
-    }
-
-    public interface ParameterPlugin extends GraphBuilderPlugin {
-        FloatingNode interceptParameter(int index);
-    }
+    ResolvedJavaMethod getInvocationTarget(MetaAccessProvider metaAccess);
 
     /**
-     * Plugin for handling an invocation based on the annotations of the invoked method.
+     * Looks up a {@link ResolvedJavaMethod}.
+     *
+     * @param methodNameBase the name of the method is the prefix of this value up to the first '$'
+     *            character
      */
-    public interface AnnotatedInvocationPlugin extends GraphBuilderPlugin {
-        /**
-         * Executes this plugin for an invocation of a given method with a given set of arguments.
-         *
-         * @return {@code true} if this plugin handled the invocation, {@code false} if not
-         */
-        boolean apply(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args);
-    }
-
-    /**
-     * Plugin for handling a specific method invocation.
-     */
-    public interface InvocationPlugin extends GraphBuilderPlugin {
-        /**
-         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
-         */
-        default boolean apply(GraphBuilderContext builder) {
-            throw invalidHandler(builder);
-        }
-
-        /**
-         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
-         */
-        default boolean apply(GraphBuilderContext builder, ValueNode arg) {
-            throw invalidHandler(builder, arg);
-        }
-
-        /**
-         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
-         */
-        default boolean apply(GraphBuilderContext builder, ValueNode arg1, ValueNode arg2) {
-            throw invalidHandler(builder, arg1, arg2);
-        }
-
-        /**
-         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
-         */
-        default boolean apply(GraphBuilderContext builder, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
-            throw invalidHandler(builder, arg1, arg2, arg3);
-        }
-
-        /**
-         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
-         */
-        default boolean apply(GraphBuilderContext builder, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4) {
-            throw invalidHandler(builder, arg1, arg2, arg3, arg4);
-        }
-
-        /**
-         * Executes a given plugin against a set of invocation arguments by dispatching to the
-         * plugin's {@code apply(...)} method that matches the number of arguments.
-         *
-         * @return {@code true} if the plugin handled the invocation, {@code false} if the graph
-         *         builder should process the invoke further (e.g., by inlining it or creating an
-         *         {@link Invoke} node). A plugin that does not handle an invocation must not modify
-         *         the graph being constructed.
-         */
-        static boolean execute(GraphBuilderContext builder, InvocationPlugin plugin, ValueNode[] args) {
-            if (args.length == 0) {
-                return plugin.apply(builder);
-            } else if (args.length == 1) {
-                return plugin.apply(builder, args[0]);
-            } else if (args.length == 2) {
-                return plugin.apply(builder, args[0], args[1]);
-            } else if (args.length == 3) {
-                return plugin.apply(builder, args[0], args[1], args[2]);
-            } else if (args.length == 4) {
-                return plugin.apply(builder, args[0], args[1], args[2], args[3]);
-            } else {
-                throw plugin.invalidHandler(builder, args);
-            }
-        }
-
-        default Error invalidHandler(@SuppressWarnings("unused") GraphBuilderContext builder, ValueNode... args) {
-            return new GraalInternalError("Invocation plugin %s does not handle invocations with %d arguments", getClass().getSimpleName(), args.length);
+    static ResolvedJavaMethod resolveTarget(MetaAccessProvider metaAccess, Class<?> declaringClass, String methodNameBase, Class<?>... parameterTypes) {
+        int index = methodNameBase.indexOf('$');
+        String methodName = index == -1 ? methodNameBase : methodNameBase.substring(0, index);
+        try {
+            return metaAccess.lookupJavaMethod(methodName.equals("<init>") ? declaringClass.getDeclaredConstructor(parameterTypes) : declaringClass.getDeclaredMethod(methodName, parameterTypes));
+        } catch (NoSuchMethodException | SecurityException e) {
+            throw new GraalInternalError(e);
         }
     }
 }

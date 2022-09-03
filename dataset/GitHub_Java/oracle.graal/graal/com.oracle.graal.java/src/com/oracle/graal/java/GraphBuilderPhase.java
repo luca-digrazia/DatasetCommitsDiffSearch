@@ -42,7 +42,6 @@ import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
 import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
-import com.oracle.graal.java.GraphBuilderPlugins.InvocationPlugin;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.calc.*;
@@ -64,7 +63,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
     public GraphBuilderPhase(GraphBuilderConfiguration config) {
         this.graphBuilderConfig = config;
-        this.graphBuilderPlugins = new DefaultGraphBuilderPlugins();
+        this.graphBuilderPlugins = new GraphBuilderPlugins();
     }
 
     @Override
@@ -774,10 +773,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 if (GraalOptions.InlineDuringParsing.getValue() && invokeKind.isDirect()) {
 
                     if (graphBuilderPlugins != null) {
-                        InvocationPlugin plugin = graphBuilderPlugins.lookupInvocation(targetMethod);
+                        GraphBuilderPlugin plugin = graphBuilderPlugins.getPlugin(targetMethod);
                         if (plugin != null) {
                             int beforeStackSize = frameState.stackSize;
-                            if (plugin.apply(this, args)) {
+                            if (plugin.handleInvocation(this, args)) {
+                                // System.out.println("used plugin: " + plugin);
                                 assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize;
                                 return;
                             }
