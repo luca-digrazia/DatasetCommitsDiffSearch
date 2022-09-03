@@ -163,7 +163,7 @@ public class StampTool {
             lowerBound = downMask;
             upperBound = upMask;
         } else {
-            lowerBound = downMask | (-1L << (kind.getBitCount() - 1));
+            lowerBound = upMask;
             upperBound = kind.getMaxValue() & upMask;
         }
         if (kind == Kind.Int) {
