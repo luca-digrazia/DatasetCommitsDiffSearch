@@ -27,9 +27,9 @@ package com.oracle.svm.hosted.javafx;
 import java.util.Objects;
 import java.util.stream.Stream;
 
-import org.graalvm.nativeimage.hosted.ClassInitialization;
-import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.hosted.RuntimeReflection;
+import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.RuntimeClassInitialization;
+import org.graalvm.nativeimage.RuntimeReflection;
 
 import com.oracle.svm.hosted.FeatureImpl;
 
@@ -61,7 +61,7 @@ final class JavaFXFeature implements Feature {
                         "com.sun.javafx.tk.quantum.PrismImageLoader2", "com.sun.prism.PresentableState")
                         .map(access::findClassByName)
                         .filter(Objects::nonNull)
-                        .forEach(ClassInitialization::delay);
+                        .forEach(RuntimeClassInitialization::delayClassInitialization);
     }
 
     private static Class<?> getJavaFXApplication(FeatureAccess access) {
