@@ -34,6 +34,7 @@ import javax.lang.model.util.*;
 import com.oracle.truffle.dsl.processor.*;
 import com.oracle.truffle.dsl.processor.java.model.*;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.DeclaredCodeTypeMirror;
+import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.WildcardTypeMirror;
 
 /**
  * THIS IS NOT PUBLIC API.
@@ -216,7 +217,7 @@ public class ElementUtils {
     }
 
     public static boolean isSubtype(TypeMirror type1, TypeMirror type2) {
-        if (type1 instanceof CodeTypeMirror || type2 instanceof CodeTypeMirror) {
+        if (type1 instanceof CodeTypeMirror && type2 instanceof CodeTypeMirror) {
             throw new UnsupportedOperationException();
         }
         return ProcessorContext.getInstance().getEnvironment().getTypeUtils().isSubtype(type1, type2);
@@ -1045,7 +1046,11 @@ public class ElementUtils {
         }
         int typeParameters = element.getTypeParameters().size();
         if (typeParameters > 0 && declaredType.getTypeArguments().size() != typeParameters) {
-            return ProcessorContext.getInstance().getEnvironment().getTypeUtils().erasure(type);
+            List<TypeMirror> genericTypes = new ArrayList<>();
+            for (int i = 0; i < typeParameters; i++) {
+                genericTypes.add(new WildcardTypeMirror(null, null));
+            }
+            return new DeclaredCodeTypeMirror(element, genericTypes);
         }
         return type;
     }
