@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -87,10 +85,8 @@ import java.util.Formatter;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import org.graalvm.compiler.test.SubprocessUtil;
 import org.junit.Assert;
 import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Test;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
@@ -126,11 +122,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  */
 public class ClassfileBytecodeProviderTest extends GraalCompilerTest {
 
-    @Before
-    public void checkJavaAgent() {
-        Assume.assumeFalse("Java Agent found -> skipping", SubprocessUtil.isJavaAgentAttached());
-    }
-
     private static boolean shouldProcess(String classpathEntry) {
         if (classpathEntry.endsWith(".jar")) {
             String name = new File(classpathEntry).getName();
@@ -158,7 +149,7 @@ public class ClassfileBytecodeProviderTest extends GraalCompilerTest {
                     for (final Enumeration<? extends ZipEntry> entry = zipFile.entries(); entry.hasMoreElements();) {
                         final ZipEntry zipEntry = entry.nextElement();
                         String name = zipEntry.getName();
-                        if (name.endsWith(".class") && !name.equals("module-info.class") && !name.startsWith("META-INF/versions/")) {
+                        if (name.endsWith(".class") && !name.equals("module-info.class")) {
                             String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
                             if (isInNativeImage(className)) {
                                 /*
