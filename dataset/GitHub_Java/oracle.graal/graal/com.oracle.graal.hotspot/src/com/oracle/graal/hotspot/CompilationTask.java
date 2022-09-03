@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,12 +29,16 @@ import static com.oracle.graal.compiler.GraalCompilerOptions.PrintBailout;
 import static com.oracle.graal.compiler.GraalCompilerOptions.PrintCompilation;
 import static com.oracle.graal.compiler.GraalCompilerOptions.PrintFilter;
 import static com.oracle.graal.compiler.GraalCompilerOptions.PrintStackTraceOnException;
+
+import java.lang.reflect.Field;
+import java.util.concurrent.TimeUnit;
+
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CompilationRequestResult;
+import jdk.vm.ci.code.CompilationResult;
 import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
 import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
-import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.hotspot.HotSpotInstalledCode;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
 import jdk.vm.ci.hotspot.HotSpotNmethod;
@@ -45,9 +49,9 @@ import jdk.vm.ci.hotspot.events.EventProvider;
 import jdk.vm.ci.hotspot.events.EventProvider.CompilationEvent;
 import jdk.vm.ci.hotspot.events.EventProvider.CompilerFailureEvent;
 import jdk.vm.ci.runtime.JVMCICompiler;
-import jdk.vm.ci.services.Services;
+import jdk.vm.ci.service.Services;
+import sun.misc.Unsafe;
 
-import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
@@ -60,6 +64,22 @@ import com.oracle.graal.debug.TTY;
 //JaCoCo Exclude
 
 public class CompilationTask {
+
+    private static final Unsafe UNSAFE = initUnsafe();
+
+    private static Unsafe initUnsafe() {
+        try {
+            return Unsafe.getUnsafe();
+        } catch (SecurityException se) {
+            try {
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                return (Unsafe) theUnsafe.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe", e);
+            }
+        }
+    }
 
     private static final DebugMetric BAILOUTS = Debug.metric("Bailouts");
 
@@ -85,8 +105,6 @@ public class CompilationTask {
      */
     private final boolean installAsDefault;
 
-    private final boolean useProfilingInfo;
-
     static class Lazy {
         /**
          * A {@link com.sun.management.ThreadMXBean} to be able to query some information about the
@@ -95,11 +113,10 @@ public class CompilationTask {
         static final com.sun.management.ThreadMXBean threadMXBean = (com.sun.management.ThreadMXBean) Management.getThreadMXBean();
     }
 
-    public CompilationTask(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean useProfilingInfo, boolean installAsDefault) {
+    public CompilationTask(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean installAsDefault) {
         this.jvmciRuntime = jvmciRuntime;
         this.compiler = compiler;
         this.request = request;
-        this.useProfilingInfo = useProfilingInfo;
         this.installAsDefault = installAsDefault;
     }
 
@@ -133,9 +150,10 @@ public class CompilationTask {
     public static final DebugTimer CodeInstallationTime = Debug.timer("CodeInstallation");
 
     @SuppressWarnings("try")
-    public CompilationRequestResult runCompilation() {
+    public void runCompilation() {
         HotSpotVMConfig config = jvmciRuntime.getConfig();
         final long threadId = Thread.currentThread().getId();
+        long startCompilationTime = System.nanoTime();
         HotSpotInstalledCode installedCode = null;
         int entryBCI = getEntryBCI();
         final boolean isOSR = entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI;
@@ -148,7 +166,7 @@ public class CompilationTask {
         // JVMCI compiles are always at the highest compile level, even in non-tiered mode so we
         // only need to check for that value.
         if (method.hasCodeAtLevel(entryBCI, config.compilationLevelFullOptimization)) {
-            return null;
+            return;
         }
 
         CompilationResult result = null;
@@ -174,7 +192,7 @@ public class CompilationTask {
             try (Scope s = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(getId()), true))) {
                 // Begin the compilation event.
                 compilationEvent.begin();
-                result = compiler.compile(method, entryBCI, useProfilingInfo);
+                result = compiler.compile(method, entryBCI);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             } finally {
@@ -203,10 +221,6 @@ public class CompilationTask {
                 }
             }
             stats.finish(method, installedCode);
-            if (result != null) {
-                return CompilationRequestResult.success(result.getBytecodeSize() - method.getCodeSize());
-            }
-            return null;
         } catch (BailoutException bailout) {
             BAILOUTS.increment();
             if (ExitVMOnBailout.getValue()) {
@@ -217,10 +231,6 @@ public class CompilationTask {
                 TTY.out.println(method.format("Bailout in %H.%n(%p)"));
                 bailout.printStackTrace(TTY.out);
             }
-            /*
-             * Treat bailouts as retryable.
-             */
-            return CompilationRequestResult.failure(bailout.getMessage(), true);
         } catch (Throwable t) {
             // Log a failure event.
             CompilerFailureEvent event = eventProvider.newCompilerFailureEvent();
@@ -231,11 +241,6 @@ public class CompilationTask {
             }
 
             handleException(t);
-            /*
-             * Treat random exceptions from the compiler as indicating a problem compiling this
-             * method.
-             */
-            return CompilationRequestResult.failure(t.getMessage(), false);
         } finally {
             try {
                 int compiledBytecodes = 0;
@@ -258,6 +263,19 @@ public class CompilationTask {
                     compilationEvent.setCodeSize(codeSize);
                     compilationEvent.setInlinedBytes(compiledBytecodes);
                     compilationEvent.commit();
+                }
+
+                long jvmciEnv = request.getJvmciEnv();
+                if (jvmciEnv != 0) {
+                    long ctask = UNSAFE.getAddress(jvmciEnv + config.jvmciEnvTaskOffset);
+                    assert ctask != 0L;
+                    UNSAFE.putInt(ctask + config.compileTaskNumInlinedBytecodesOffset, compiledBytecodes);
+                }
+                long compilationTime = System.nanoTime() - startCompilationTime;
+                if ((config.ciTime || config.ciTimeEach) && installedCode != null) {
+                    long timeUnitsPerSecond = TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
+                    final HotSpotCodeCacheProvider codeCache = (HotSpotCodeCacheProvider) jvmciRuntime.getHostJVMCIBackend().getCodeCache();
+                    codeCache.notifyCompilationStatistics(getId(), method, entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI, compiledBytecodes, compilationTime, timeUnitsPerSecond, installedCode);
                 }
             } catch (Throwable t) {
                 handleException(t);
@@ -290,8 +308,7 @@ public class CompilationTask {
         final CodeCacheProvider codeCache = jvmciRuntime.getHostJVMCIBackend().getCodeCache();
         InstalledCode installedCode = null;
         try (Scope s = Debug.scope("CodeInstall", new DebugDumpScope(String.valueOf(getId()), true), codeCache, getMethod())) {
-            HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(request.getMethod(), request, compResult);
-            installedCode = codeCache.installCode(request.getMethod(), compiledCode, null, request.getMethod().getSpeculationLog(), installAsDefault);
+            installedCode = codeCache.installCode(request, compResult, null, request.getMethod().getSpeculationLog(), installAsDefault);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
