@@ -32,17 +32,17 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.PhasePlan.*;
-import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
-import com.oracle.graal.phases.common.InliningUtil.*;
+import com.oracle.graal.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.phases.common.InliningUtil.InlineInfo;
+import com.oracle.graal.phases.common.InliningUtil.InliningCallback;
+import com.oracle.graal.phases.common.InliningUtil.InliningPolicy;
+import com.oracle.graal.phases.common.InliningUtil.WeightComputationPolicy;
 
 public class InliningPhase extends Phase implements InliningCallback {
-
     /*
-     * - Detect method which only call another method with some parameters set to constants: void
-     * foo(a) -> void foo(a, b) -> void foo(a, b, c) ... These should not be taken into account when
-     * determining inlining depth. - honor the result of overrideInliningDecision(0, caller,
-     * invoke.bci, method, true);
+     * - Detect method which only call another method with some parameters set to constants: void foo(a) -> void foo(a, b) -> void foo(a, b, c) ...
+     *   These should not be taken into account when determining inlining depth.
+     * - honor the result of overrideInliningDecision(0, caller, invoke.bci, method, true);
      */
 
     private final TargetDescription target;
@@ -52,7 +52,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     private final Assumptions assumptions;
     private final GraphCache cache;
     private final InliningPolicy inliningPolicy;
-    private CustomCanonicalizer customCanonicalizer;
 
     // Metrics
     private static final DebugMetric metricInliningPerformed = Debug.metric("InliningPerformed");
@@ -60,13 +59,8 @@ public class InliningPhase extends Phase implements InliningCallback {
     private static final DebugMetric metricInliningStoppedByMaxDesiredSize = Debug.metric("InliningStoppedByMaxDesiredSize");
     private static final DebugMetric metricInliningRuns = Debug.metric("Runs");
 
-    public InliningPhase(TargetDescription target, GraalCodeCacheProvider runtime, Collection<Invoke> hints, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts) {
+    public InliningPhase(TargetDescription target, GraalCodeCacheProvider runtime, Collection<Invoke> hints, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
         this(target, runtime, assumptions, cache, plan, createInliningPolicy(assumptions, optimisticOpts, hints));
-    }
-
-    public void setCustomCanonicalizer(CustomCanonicalizer customCanonicalizer) {
-        this.customCanonicalizer = customCanonicalizer;
     }
 
     public InliningPhase(TargetDescription target, GraalCodeCacheProvider runtime, Assumptions assumptions, GraphCache cache, PhasePlan plan, InliningPolicy inliningPolicy) {
@@ -97,7 +91,7 @@ public class InliningPhase extends Phase implements InliningCallback {
                         Debug.dump(graph, "after %s", candidate);
                         Iterable<Node> newNodes = graph.getNewNodes(mark);
                         if (GraalOptions.OptCanonicalizer) {
-                            new CanonicalizerPhase(target, runtime, assumptions, invokeUsages, mark, customCanonicalizer).apply(graph);
+                            new CanonicalizerPhase(target, runtime, assumptions, invokeUsages, mark).apply(graph);
                         }
                         metricInliningPerformed.increment();
 
@@ -149,12 +143,10 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private interface InliningDecision {
-
         boolean isWorthInlining(InlineInfo info);
     }
 
     private abstract static class AbstractInliningDecision implements InliningDecision {
-
         protected static boolean decideSizeBasedInlining(InlineInfo info, double maxSize) {
             assert !Double.isNaN(info.weight()) && !Double.isNaN(maxSize);
             boolean success = info.weight() <= maxSize;
@@ -183,7 +175,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class C1StaticSizeBasedInliningDecision extends AbstractInliningDecision {
-
         @Override
         public boolean isWorthInlining(InlineInfo info) {
             double maxSize = Math.max(GraalOptions.MaximumTrivialSize, Math.pow(GraalOptions.NestedInliningSizeRatio, info.level()) * GraalOptions.MaximumInlineSize);
@@ -192,7 +183,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class MinimumCodeSizeBasedInliningDecision extends AbstractInliningDecision {
-
         @Override
         public boolean isWorthInlining(InlineInfo info) {
             assert GraalOptions.ProbabilityAnalysis;
@@ -209,7 +199,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class DynamicSizeBasedInliningDecision extends AbstractInliningDecision {
-
         @Override
         public boolean isWorthInlining(InlineInfo info) {
             assert GraalOptions.ProbabilityAnalysis;
@@ -228,7 +217,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class GreedySizeBasedInliningDecision extends AbstractInliningDecision {
-
         @Override
         public boolean isWorthInlining(InlineInfo info) {
             assert GraalOptions.ProbabilityAnalysis;
@@ -255,7 +243,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class GreedyMachineCodeInliningDecision extends AbstractInliningDecision {
-
         @Override
         public boolean isWorthInlining(InlineInfo info) {
             assert GraalOptions.ProbabilityAnalysis;
@@ -270,7 +257,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class BytecodeSizeBasedWeightComputationPolicy implements WeightComputationPolicy {
-
         @Override
         public double computeWeight(ResolvedJavaMethod caller, ResolvedJavaMethod method, Invoke invoke, boolean preferredInvoke) {
             if (GraalOptions.AlwaysInlineIntrinsics && InliningUtil.canIntrinsify(method)) {
@@ -286,7 +272,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class ComplexityBasedWeightComputationPolicy implements WeightComputationPolicy {
-
         @Override
         public double computeWeight(ResolvedJavaMethod caller, ResolvedJavaMethod method, Invoke invoke, boolean preferredInvoke) {
             if (GraalOptions.AlwaysInlineIntrinsics && InliningUtil.canIntrinsify(method)) {
@@ -302,7 +287,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class CompiledCodeSizeWeightComputationPolicy implements WeightComputationPolicy {
-
         @Override
         public double computeWeight(ResolvedJavaMethod caller, ResolvedJavaMethod method, Invoke invoke, boolean preferredInvoke) {
             if (GraalOptions.AlwaysInlineIntrinsics && InliningUtil.canIntrinsify(method)) {
@@ -315,7 +299,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class CFInliningPolicy implements InliningPolicy {
-
         private final InliningDecision inliningDecision;
         private final WeightComputationPolicy weightComputationPolicy;
         private final Collection<Invoke> hints;
@@ -325,8 +308,8 @@ public class InliningPhase extends Phase implements InliningCallback {
         private NodeBitMap visitedFixedNodes;
         private FixedNode invokePredecessor;
 
-        public CFInliningPolicy(InliningDecision inliningPolicy, WeightComputationPolicy weightComputationPolicy, Collection<Invoke> hints, Assumptions assumptions,
-                        OptimisticOptimizations optimisticOpts) {
+        public CFInliningPolicy(InliningDecision inliningPolicy, WeightComputationPolicy weightComputationPolicy, Collection<Invoke> hints,
+                        Assumptions assumptions, OptimisticOptimizations optimisticOpts) {
             this.inliningDecision = inliningPolicy;
             this.weightComputationPolicy = weightComputationPolicy;
             this.hints = hints;
@@ -387,7 +370,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class PriorityInliningPolicy implements InliningPolicy {
-
         private final InliningDecision inliningDecision;
         private final WeightComputationPolicy weightComputationPolicy;
         private final Collection<Invoke> hints;
@@ -395,8 +377,8 @@ public class InliningPhase extends Phase implements InliningCallback {
         private final OptimisticOptimizations optimisticOpts;
         private final PriorityQueue<InlineInfo> sortedCandidates;
 
-        public PriorityInliningPolicy(InliningDecision inliningPolicy, WeightComputationPolicy weightComputationPolicy, Collection<Invoke> hints, Assumptions assumptions,
-                        OptimisticOptimizations optimisticOpts) {
+        public PriorityInliningPolicy(InliningDecision inliningPolicy, WeightComputationPolicy weightComputationPolicy, Collection<Invoke> hints,
+                        Assumptions assumptions, OptimisticOptimizations optimisticOpts) {
             this.inliningDecision = inliningPolicy;
             this.weightComputationPolicy = weightComputationPolicy;
             this.hints = hints;
@@ -437,7 +419,7 @@ public class InliningPhase extends Phase implements InliningCallback {
         }
 
         public void scanInvokes(Iterable<? extends Node> nodes) {
-            for (Node node : nodes) {
+            for (Node node: nodes) {
                 if (node != null) {
                     if (node instanceof Invoke) {
                         Invoke invoke = (Invoke) node;
@@ -465,7 +447,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class InliningIterator {
-
         private final FixedNode start;
         private final NodeBitMap processedNodes;
 
@@ -519,7 +500,7 @@ public class InliningPhase extends Phase implements InliningCallback {
                 } else {
                     assert false : current;
                 }
-            } while (current != null);
+            } while(current != null);
 
             return invokes;
         }
@@ -562,11 +543,9 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static InliningPolicy createInliningPolicy(Assumptions assumptions, OptimisticOptimizations optimisticOpts, Collection<Invoke> hints) {
-        switch (GraalOptions.InliningPolicy) {
-            case 0:
-                return new CFInliningPolicy(createInliningDecision(), createWeightComputationPolicy(), hints, assumptions, optimisticOpts);
-            case 1:
-                return new PriorityInliningPolicy(createInliningDecision(), createWeightComputationPolicy(), hints, assumptions, optimisticOpts);
+        switch(GraalOptions.InliningPolicy) {
+            case 0: return new CFInliningPolicy(createInliningDecision(), createWeightComputationPolicy(), hints, assumptions, optimisticOpts);
+            case 1: return new PriorityInliningPolicy(createInliningDecision(), createWeightComputationPolicy(), hints, assumptions, optimisticOpts);
             default:
                 GraalInternalError.shouldNotReachHere();
                 return null;
@@ -574,17 +553,12 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static InliningDecision createInliningDecision() {
-        switch (GraalOptions.InliningDecision) {
-            case 1:
-                return new C1StaticSizeBasedInliningDecision();
-            case 2:
-                return new MinimumCodeSizeBasedInliningDecision();
-            case 3:
-                return new DynamicSizeBasedInliningDecision();
-            case 4:
-                return new GreedySizeBasedInliningDecision();
-            case 5:
-                return new GreedyMachineCodeInliningDecision();
+        switch(GraalOptions.InliningDecision) {
+            case 1: return new C1StaticSizeBasedInliningDecision();
+            case 2: return new MinimumCodeSizeBasedInliningDecision();
+            case 3: return new DynamicSizeBasedInliningDecision();
+            case 4: return new GreedySizeBasedInliningDecision();
+            case 5: return new GreedyMachineCodeInliningDecision();
             default:
                 GraalInternalError.shouldNotReachHere();
                 return null;
@@ -592,15 +566,11 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static WeightComputationPolicy createWeightComputationPolicy() {
-        switch (GraalOptions.WeightComputationPolicy) {
-            case 0:
-                throw new GraalInternalError("removed because of invokation counter changes");
-            case 1:
-                return new BytecodeSizeBasedWeightComputationPolicy();
-            case 2:
-                return new ComplexityBasedWeightComputationPolicy();
-            case 3:
-                return new CompiledCodeSizeWeightComputationPolicy();
+        switch(GraalOptions.WeightComputationPolicy) {
+            case 0: throw new GraalInternalError("removed because of invokation counter changes");
+            case 1: return new BytecodeSizeBasedWeightComputationPolicy();
+            case 2: return new ComplexityBasedWeightComputationPolicy();
+            case 3: return new CompiledCodeSizeWeightComputationPolicy();
             default:
                 GraalInternalError.shouldNotReachHere();
                 return null;

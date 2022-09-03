@@ -29,7 +29,6 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 
 public abstract class ScopedPostOrderNodeIterator {
-
     private final NodeBitMap processedNodes;
     private final Deque<FixedNode> nodeQueue;
     private final NodeBitMap queuedNodes;
@@ -93,7 +92,7 @@ public abstract class ScopedPostOrderNodeIterator {
             } else {
                 assert false : current;
             }
-        } while (current != null);
+        } while(current != null);
     }
 
     protected void queueLoopBeginSuccessors(LoopBeginNode node) {
@@ -102,7 +101,7 @@ public abstract class ScopedPostOrderNodeIterator {
         } else if (currentScope instanceof LoopBeginNode) {
             // so we are currently processing loop A and found another loop B
             // -> queue all loop exits of B except those that also exit loop A
-            for (LoopExitNode loopExit : node.loopExits()) {
+            for (LoopExitNode loopExit: node.loopExits()) {
                 if (!((LoopBeginNode) currentScope).loopExits().contains(loopExit)) {
                     queue(loopExit);
                 }
@@ -121,7 +120,7 @@ public abstract class ScopedPostOrderNodeIterator {
     protected Deque<FixedNode> getScopes(StructuredGraph graph) {
         Deque<FixedNode> result = new ArrayDeque<>();
         result.push(graph.start());
-        for (LoopBeginNode loopBegin : graph.getNodes(LoopBeginNode.class)) {
+        for (LoopBeginNode loopBegin: graph.getNodes(LoopBeginNode.class)) {
             result.push(loopBegin);
         }
         return result;
@@ -172,6 +171,5 @@ public abstract class ScopedPostOrderNodeIterator {
     }
 
     protected abstract void initializeScope();
-
     protected abstract void invoke(Invoke invoke);
 }

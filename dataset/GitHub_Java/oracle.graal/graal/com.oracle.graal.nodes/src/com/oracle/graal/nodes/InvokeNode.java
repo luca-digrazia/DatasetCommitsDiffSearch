@@ -35,7 +35,7 @@ import com.oracle.graal.nodes.util.*;
  * The {@code InvokeNode} represents all kinds of method calls.
  */
 @NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}")
-public final class InvokeNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint {
+public final class InvokeNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint  {
 
     @Input private final CallTargetNode callTarget;
     private final int bci;
@@ -46,7 +46,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
 
     /**
      * Constructs a new Invoke instruction.
-     * 
+     *
      * @param bci the bytecode index of the original invoke (used for debug infos)
      * @param callTarget the target method being called
      */
@@ -109,8 +109,6 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
         Map<Object, Object> debugProperties = super.getDebugProperties(map);
         if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetMethod() != null) {
             debugProperties.put("targetMethod", methodCallTarget().targetMethod());
-        } else if (callTarget instanceof AbstractCallTargetNode) {
-            debugProperties.put("targetMethod", ((AbstractCallTargetNode) callTarget).target());
         }
         return debugProperties;
     }

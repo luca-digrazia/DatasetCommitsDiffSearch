@@ -71,4 +71,6 @@ public interface Invoke extends StateSplit, Lowerable {
     boolean isPolymorphic();
 
     void setPolymorphic(boolean value);
+
+    long leafGraphId();
 }

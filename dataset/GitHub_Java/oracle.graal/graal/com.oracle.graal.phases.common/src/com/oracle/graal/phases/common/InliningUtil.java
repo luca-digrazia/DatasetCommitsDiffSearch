@@ -44,32 +44,23 @@ import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 
 public class InliningUtil {
-
     private static final DebugMetric metricInliningTailDuplication = Debug.metric("InliningTailDuplication");
     private static final String inliningDecisionsScopeString = "InliningDecisions";
 
     public interface InliningCallback {
-
         StructuredGraph buildGraph(final ResolvedJavaMethod method);
     }
 
     public interface InliningPolicy {
-
         void initialize(StructuredGraph graph);
-
         boolean continueInlining(StructuredGraph graph);
-
         InlineInfo next();
-
         void scanInvokes(Iterable<? extends Node> newNodes);
-
         double inliningWeight(ResolvedJavaMethod caller, ResolvedJavaMethod method, Invoke invoke);
-
         boolean isWorthInlining(InlineInfo info);
     }
 
     public interface WeightComputationPolicy {
-
         double computeWeight(ResolvedJavaMethod caller, ResolvedJavaMethod method, Invoke invoke, boolean preferredInvoke);
     }
 
@@ -85,7 +76,6 @@ public class InliningUtil {
 
     public static void logInliningDecision(final String msg, final Object... args) {
         Debug.scope(inliningDecisionsScopeString, new Runnable() {
-
             public void run() {
                 Debug.log(msg, args);
             }
@@ -130,7 +120,6 @@ public class InliningUtil {
 
     private static boolean shouldLogInliningDecision() {
         return Debug.scope(inliningDecisionsScopeString, new Callable<Boolean>() {
-
             public Boolean call() {
                 return Debug.isLogEnabled();
             }
@@ -168,31 +157,24 @@ public class InliningUtil {
 
     /**
      * Represents an opportunity for inlining at the given invoke, with the given weight and level.
-     * The weight is the amortized weight of the additional code - so smaller is better. The level
-     * is the number of nested inlinings that lead to this invoke.
+     * The weight is the amortized weight of the additional code - so smaller is better.
+     * The level is the number of nested inlinings that lead to this invoke.
      */
     public interface InlineInfo extends Comparable<InlineInfo> {
-
         Invoke invoke();
-
         double weight();
-
         int level();
-
         int compiledCodeSize();
-
         int compareTo(InlineInfo o);
 
         /**
-         * Performs the inlining described by this object and returns the node that represents the
-         * return value of the inlined method (or null for void methods and methods that have no
-         * non-exceptional exit).
+         * Performs the inlining described by this object and returns the node that represents the return value of the
+         * inlined method (or null for void methods and methods that have no non-exceptional exit).
          */
         void inline(StructuredGraph graph, GraalCodeCacheProvider runtime, InliningCallback callback, Assumptions assumptions);
     }
 
     public abstract static class AbstractInlineInfo implements InlineInfo {
-
         protected final Invoke invoke;
         protected final double weight;
 
@@ -218,48 +200,26 @@ public class InliningUtil {
             return computeInliningLevel(invoke);
         }
 
-        protected static void inline(Invoke invoke, ResolvedJavaMethod concrete, InliningCallback callback, Assumptions assumptions, boolean receiverNullCheck) {
-            Class<? extends FixedWithNextNode> macroNodeClass = getMacroNodeClass(concrete);
-            if (macroNodeClass != null) {
-                StructuredGraph graph = (StructuredGraph) invoke.graph();
-                assert invoke instanceof InvokeNode;
-                FixedWithNextNode macroNode;
-                try {
-                    macroNode = macroNodeClass.getConstructor(InvokeNode.class).newInstance(invoke);
-                } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
-                    throw new GraalInternalError(e).addContext(invoke.node()).addContext("macroSubstitution", macroNodeClass);
-                }
-                CallTargetNode callTarget = invoke.callTarget();
-                graph.replaceFixedWithFixed((InvokeNode) invoke, graph.add(macroNode));
-                GraphUtil.killWithUnusedFloatingInputs(callTarget);
-            } else {
-                StructuredGraph calleeGraph = getIntrinsicGraph(concrete);
-                if (calleeGraph == null) {
-                    calleeGraph = getGraph(concrete, callback);
-                }
-                assumptions.recordMethodContents(concrete);
-                InliningUtil.inline(invoke, calleeGraph, receiverNullCheck);
-            }
-        }
-
-        private static StructuredGraph getGraph(final ResolvedJavaMethod concrete, final InliningCallback callback) {
+        protected static StructuredGraph getGraph(final ResolvedJavaMethod concrete, final InliningCallback callback) {
             return Debug.scope("GetInliningGraph", concrete, new Callable<StructuredGraph>() {
-
                 @Override
                 public StructuredGraph call() throws Exception {
-                    assert !Modifier.isNative(concrete.getModifiers());
-                    return callback.buildGraph(concrete);
+                    StructuredGraph result = getIntrinsicGraph(concrete);
+                    if (result == null) {
+                        assert !Modifier.isNative(concrete.getModifiers());
+                        result = callback.buildGraph(concrete);
+                    }
+                    return result;
                 }
             });
         }
     }
 
     /**
-     * Represents an inlining opportunity where the compiler can statically determine a monomorphic
-     * target method and therefore is able to determine the called method exactly.
+     * Represents an inlining opportunity where the compiler can statically determine a monomorphic target method and
+     * therefore is able to determine the called method exactly.
      */
     private static class ExactInlineInfo extends AbstractInlineInfo {
-
         public final ResolvedJavaMethod concrete;
 
         public ExactInlineInfo(Invoke invoke, double weight, ResolvedJavaMethod concrete) {
@@ -269,7 +229,9 @@ public class InliningUtil {
 
         @Override
         public void inline(StructuredGraph compilerGraph, GraalCodeCacheProvider runtime, InliningCallback callback, Assumptions assumptions) {
-            inline(invoke, concrete, callback, assumptions, true);
+            StructuredGraph graph = getGraph(concrete, callback);
+            assumptions.recordMethodContents(concrete);
+            InliningUtil.inline(invoke, graph, true);
         }
 
         @Override
@@ -284,12 +246,10 @@ public class InliningUtil {
     }
 
     /**
-     * Represents an inlining opportunity for which profiling information suggests a monomorphic
-     * receiver, but for which the receiver type cannot be proven. A type check guard will be
-     * generated if this inlining is performed.
+     * Represents an inlining opportunity for which profiling information suggests a monomorphic receiver, but for which
+     * the receiver type cannot be proven. A type check guard will be generated if this inlining is performed.
      */
     private static class TypeGuardInlineInfo extends AbstractInlineInfo {
-
         public final ResolvedJavaMethod concrete;
         public final ResolvedJavaType type;
 
@@ -323,7 +283,9 @@ public class InliningUtil {
             graph.addBeforeFixed(invoke.node(), guard);
             graph.addBeforeFixed(invoke.node(), anchor);
 
-            inline(invoke, concrete, callback, assumptions, false);
+            StructuredGraph calleeGraph = getGraph(concrete, callback);
+            assumptions.recordMethodContents(concrete);
+            InliningUtil.inline(invoke, calleeGraph, false);
         }
 
         @Override
@@ -333,18 +295,17 @@ public class InliningUtil {
     }
 
     /**
-     * Polymorphic inlining of m methods with n type checks (n >= m) in case that the profiling
-     * information suggests a reasonable amounts of different receiver types and different methods.
-     * If an unknown type is encountered a deoptimization is triggered.
+     * Polymorphic inlining of m methods with n type checks (n >= m) in case that the profiling information suggests a reasonable
+     * amounts of different receiver types and different methods. If an unknown type is encountered a deoptimization is triggered.
      */
     private static class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
-
         public final List<ResolvedJavaMethod> concretes;
         public final ArrayList<ProfiledType> ptypes;
         public final int[] typesToConcretes;
         public final double notRecordedTypeProbability;
 
-        public MultiTypeGuardInlineInfo(Invoke invoke, double weight, ArrayList<ResolvedJavaMethod> concretes, ArrayList<ProfiledType> ptypes, int[] typesToConcretes, double notRecordedTypeProbability) {
+        public MultiTypeGuardInlineInfo(Invoke invoke, double weight, ArrayList<ResolvedJavaMethod> concretes, ArrayList<ProfiledType> ptypes,
+                        int[] typesToConcretes, double notRecordedTypeProbability) {
             super(invoke, weight);
             assert concretes.size() > 0 && concretes.size() <= ptypes.size() : "must have at least one method but no more than types methods";
             assert ptypes.size() == typesToConcretes.length : "array lengths must match";
@@ -358,7 +319,7 @@ public class InliningUtil {
         @Override
         public int compiledCodeSize() {
             int result = 0;
-            for (ResolvedJavaMethod m : concretes) {
+            for (ResolvedJavaMethod m: concretes) {
                 result += InliningUtil.compiledCodeSize(m);
             }
             return result;
@@ -444,7 +405,14 @@ public class InliningUtil {
                 GraphUtil.killCFG(invokeWithExceptionNode.exceptionEdge());
             }
 
+            // get all graphs and record assumptions
             assert invoke.node().isAlive();
+            StructuredGraph[] calleeGraphs = new StructuredGraph[numberOfMethods];
+            for (int i = 0; i < numberOfMethods; i++) {
+                ResolvedJavaMethod concrete = concretes.get(i);
+                calleeGraphs[i] = getGraph(concrete, callback);
+                assumptions.recordMethodContents(concrete);
+            }
 
             // replace the invoke with a switch on the type of the actual receiver
             Kind hubKind = invoke.methodCallTarget().targetMethod().getDeclaringClass().getEncoding(Representation.ObjectHub).getKind();
@@ -471,8 +439,8 @@ public class InliningUtil {
                 PiNode anchoredReceiver = createAnchoredReceiver(graph, node, commonType, receiver, exact);
                 invokeForInlining.callTarget().replaceFirstInput(receiver, anchoredReceiver);
 
-                inline(invokeForInlining, concretes.get(i), callback, assumptions, false);
-
+                StructuredGraph calleeGraph = calleeGraphs[i];
+                InliningUtil.inline(invokeForInlining, calleeGraph, false);
                 replacements.add(anchoredReceiver);
             }
             if (shouldFallbackToInvoke()) {
@@ -480,8 +448,8 @@ public class InliningUtil {
             }
             if (GraalOptions.OptTailDuplication) {
                 /*
-                 * We might want to perform tail duplication at the merge after a type switch, if
-                 * there are invokes that would benefit from the improvement in type information.
+                 * We might want to perform tail duplication at the merge after a type switch, if there are invokes that would
+                 * benefit from the improvement in type information.
                  */
                 FixedNode current = returnMerge;
                 int opportunities = 0;
@@ -536,7 +504,7 @@ public class InliningUtil {
             graph.addBeforeFixed(invoke.node(), receiverHub);
 
             BeginNode unknownTypeSux = BeginNode.begin(graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.TypeCheckedInliningViolated, invoke.leafGraphId())));
-            BeginNode[] successors = new BeginNode[]{calleeEntryNode, unknownTypeSux};
+            BeginNode[] successors = new BeginNode[] {calleeEntryNode, unknownTypeSux};
             FixedNode dispatchOnType = createDispatchOnType(graph, receiverHub, successors);
 
             FixedWithNextNode pred = (FixedWithNextNode) invoke.node().predecessor();
@@ -544,7 +512,9 @@ public class InliningUtil {
             calleeEntryNode.setNext(invoke.node());
 
             ResolvedJavaMethod concrete = concretes.get(0);
-            inline(invoke, concrete, callback, assumptions, false);
+            StructuredGraph calleeGraph = getGraph(concrete, callback);
+            assumptions.recordMethodContents(concrete);
+            InliningUtil.inline(invoke, calleeGraph, false);
         }
 
         private FixedNode createDispatchOnType(StructuredGraph graph, LoadHubNode hub, BeginNode[] successors) {
@@ -568,8 +538,8 @@ public class InliningUtil {
             return typeSwitch;
         }
 
-        private static BeginNode createInvocationBlock(StructuredGraph graph, Invoke invoke, MergeNode returnMerge, PhiNode returnValuePhi, MergeNode exceptionMerge, PhiNode exceptionObjectPhi,
-                        double probability, boolean useForInlining) {
+        private static BeginNode createInvocationBlock(StructuredGraph graph, Invoke invoke, MergeNode returnMerge, PhiNode returnValuePhi,
+                        MergeNode exceptionMerge, PhiNode exceptionObjectPhi, double probability, boolean useForInlining) {
             Invoke duplicatedInvoke = duplicateInvokeForInlining(graph, invoke, exceptionMerge, exceptionObjectPhi, useForInlining, probability);
             BeginNode calleeEntryNode = graph.add(new BeginNode());
             calleeEntryNode.setNext(duplicatedInvoke.node());
@@ -649,12 +619,12 @@ public class InliningUtil {
         }
     }
 
+
     /**
-     * Represents an inlining opportunity where the current class hierarchy leads to a monomorphic
-     * target method, but for which an assumption has to be registered because of non-final classes.
+     * Represents an inlining opportunity where the current class hierarchy leads to a monomorphic target method,
+     * but for which an assumption has to be registered because of non-final classes.
      */
     private static class AssumptionInlineInfo extends ExactInlineInfo {
-
         private final Assumption takenAssumption;
 
         public AssumptionInlineInfo(Invoke invoke, double weight, ResolvedJavaMethod concrete, Assumption takenAssumption) {
@@ -678,7 +648,6 @@ public class InliningUtil {
 
     /**
      * Determines if inlining is possible at the given invoke node.
-     * 
      * @param invoke the invoke that should be inlined
      * @param inliningPolicy used to determine the weight of a specific inlining
      * @return an instance of InlineInfo, or null if no inlining is possible at the given invoke
@@ -700,8 +669,7 @@ public class InliningUtil {
         ResolvedJavaType holder = targetMethod.getDeclaringClass();
         ObjectStamp receiverStamp = callTarget.receiver().objectStamp();
         if (receiverStamp.type() != null) {
-            // the invoke target might be more specific than the holder (happens after inlining:
-            // locals lose their declared type...)
+            // the invoke target might be more specific than the holder (happens after inlining: locals lose their declared type...)
             ResolvedJavaType receiverType = receiverStamp.type();
             if (receiverType != null && holder.isAssignableFrom(receiverType)) {
                 holder = receiverType;
@@ -717,8 +685,7 @@ public class InliningUtil {
             return getExactInlineInfo(invoke, inliningPolicy, optimisticOpts, caller, holder.resolveMethod(targetMethod));
         }
 
-        // TODO (chaeubl): we could also use the type determined after assumptions for the
-        // type-checked inlining case as it might have an effect on type filtering
+        // TODO (chaeubl): we could also use the type determined after assumptions for the type-checked inlining case as it might have an effect on type filtering
         if (assumptions.useOptimisticAssumptions()) {
             ResolvedJavaType uniqueSubtype = holder.findUniqueConcreteSubtype();
             if (uniqueSubtype != null) {
@@ -737,8 +704,8 @@ public class InliningUtil {
         return getTypeCheckedInlineInfo(invoke, inliningPolicy, caller, holder, targetMethod, optimisticOpts);
     }
 
-    private static InlineInfo getAssumptionInlineInfo(Invoke invoke, InliningPolicy inliningPolicy, OptimisticOptimizations optimisticOpts, ResolvedJavaMethod caller, ResolvedJavaMethod concrete,
-                    Assumption takenAssumption) {
+    private static InlineInfo getAssumptionInlineInfo(Invoke invoke, InliningPolicy inliningPolicy, OptimisticOptimizations optimisticOpts,
+                    ResolvedJavaMethod caller, ResolvedJavaMethod concrete, Assumption takenAssumption) {
         assert !Modifier.isAbstract(concrete.getModifiers());
         if (!checkTargetConditions(invoke, concrete, optimisticOpts)) {
             return null;
@@ -747,7 +714,8 @@ public class InliningUtil {
         return new AssumptionInlineInfo(invoke, weight, concrete, takenAssumption);
     }
 
-    private static InlineInfo getExactInlineInfo(Invoke invoke, InliningPolicy inliningPolicy, OptimisticOptimizations optimisticOpts, ResolvedJavaMethod caller, ResolvedJavaMethod targetMethod) {
+    private static InlineInfo getExactInlineInfo(Invoke invoke, InliningPolicy inliningPolicy, OptimisticOptimizations optimisticOpts,
+                    ResolvedJavaMethod caller, ResolvedJavaMethod targetMethod) {
         assert !Modifier.isAbstract(targetMethod.getModifiers());
         if (!checkTargetConditions(invoke, targetMethod, optimisticOpts)) {
             return null;
@@ -756,8 +724,8 @@ public class InliningUtil {
         return new ExactInlineInfo(invoke, weight, targetMethod);
     }
 
-    private static InlineInfo getTypeCheckedInlineInfo(Invoke invoke, InliningPolicy inliningPolicy, ResolvedJavaMethod caller, ResolvedJavaType holder, ResolvedJavaMethod targetMethod,
-                    OptimisticOptimizations optimisticOpts) {
+    private static InlineInfo getTypeCheckedInlineInfo(Invoke invoke, InliningPolicy inliningPolicy, ResolvedJavaMethod caller,
+                    ResolvedJavaType holder, ResolvedJavaMethod targetMethod, OptimisticOptimizations optimisticOpts) {
         ProfilingInfo profilingInfo = caller.getProfilingInfo();
         JavaTypeProfile typeProfile = profilingInfo.getTypeProfile(invoke.bci());
         if (typeProfile == null) {
@@ -790,19 +758,16 @@ public class InliningUtil {
                 return logNotInlinedMethodAndReturnNull(invoke, targetMethod, "inlining polymorphic calls is disabled (%d types)", ptypes.size());
             }
             if (!optimisticOpts.inlineMegamorphicCalls() && notRecordedTypeProbability > 0) {
-                // due to filtering impossible types, notRecordedTypeProbability can be > 0 although
-                // the number of types is lower than what can be recorded in a type profile
-                return logNotInlinedMethodAndReturnNull(invoke, targetMethod, "inlining megamorphic calls is disabled (%d types, %f %% not recorded types)", ptypes.size(),
-                                notRecordedTypeProbability * 100);
+                // due to filtering impossible types, notRecordedTypeProbability can be > 0 although the number of types is lower than what can be recorded in a type profile
+                return logNotInlinedMethodAndReturnNull(invoke, targetMethod, "inlining megamorphic calls is disabled (%d types, %f %% not recorded types)", ptypes.size(), notRecordedTypeProbability * 100);
             }
 
             // TODO (chaeubl) inlining of multiple methods should work differently
             // 1. check which methods can be inlined
-            // 2. for those methods, use weight and probability to compute which of them should be
-            // inlined
+            // 2. for those methods, use weight and probability to compute which of them should be inlined
             // 3. do the inlining
-            // a) all seen methods can be inlined -> do so and guard with deopt
-            // b) some methods can be inlined -> inline them and fall back to invocation if violated
+            //    a) all seen methods can be inlined -> do so and guard with deopt
+            //    b) some methods can be inlined -> inline them and fall back to invocation if violated
 
             // determine concrete methods and map type to specific method
             ArrayList<ResolvedJavaMethod> concreteMethods = new ArrayList<>();
@@ -819,7 +784,7 @@ public class InliningUtil {
             }
 
             double totalWeight = 0;
-            for (ResolvedJavaMethod concrete : concreteMethods) {
+            for (ResolvedJavaMethod concrete: concreteMethods) {
                 if (!checkTargetConditions(invoke, concrete, optimisticOpts)) {
                     return logNotInlinedMethodAndReturnNull(invoke, targetMethod, "it is a polymorphic method call and at least one invoked method cannot be inlined");
                 }
@@ -828,6 +793,7 @@ public class InliningUtil {
             return new MultiTypeGuardInlineInfo(invoke, totalWeight, concreteMethods, ptypes, typesToConcretes, notRecordedTypeProbability);
         }
     }
+
 
     private static ArrayList<ProfiledType> getCompatibleTypes(ProfiledType[] types, ResolvedJavaType holder) {
         ArrayList<ProfiledType> result = new ArrayList<>();
@@ -917,13 +883,12 @@ public class InliningUtil {
 
     /**
      * Performs an actual inlining, thereby replacing the given invoke with the given inlineGraph.
-     * 
+     *
      * @param invoke the invoke that will be replaced
      * @param inlineGraph the graph that the invoke will be replaced with
-     * @param receiverNullCheck true if a null check needs to be generated for non-static inlinings,
-     *            false if no such check is required
+     * @param receiverNullCheck true if a null check needs to be generated for non-static inlinings, false if no such check is required
      */
-    public static Map<Node, Node> inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck) {
+    public static void inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck) {
         NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
         StructuredGraph graph = (StructuredGraph) invoke.node().graph();
 
@@ -952,10 +917,7 @@ public class InliningUtil {
                 }
             }
         }
-        replacements.put(entryPointNode, BeginNode.prevBegin(invoke.node())); // ensure proper
-                                                                              // anchoring of things
-                                                                              // that were anchored
-                                                                              // to the StartNode
+        replacements.put(entryPointNode, BeginNode.prevBegin(invoke.node())); // ensure proper anchoring of things that where anchored to the StartNode
 
         assert invoke.node().successors().first() != null : invoke;
         assert invoke.node().predecessor() != null;
@@ -989,8 +951,7 @@ public class InliningUtil {
                 UnwindNode unwindDuplicate = (UnwindNode) duplicates.get(unwindNode);
                 DeoptimizeNode deoptimizeNode = new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.NotCompiledExceptionHandler, invoke.leafGraphId());
                 unwindDuplicate.replaceAndDelete(graph.add(deoptimizeNode));
-                // move the deopt upwards if there is a monitor exit that tries to use the
-                // "after exception" frame state
+                // move the deopt upwards if there is a monitor exit that tries to use the "after exception" frame state
                 // (because there is no "after exception" frame state!)
                 if (deoptimizeNode.predecessor() instanceof MonitorExitNode) {
                     MonitorExitNode monitorExit = (MonitorExitNode) deoptimizeNode.predecessor();
@@ -1067,8 +1028,6 @@ public class InliningUtil {
 
         invoke.node().replaceAtUsages(null);
         GraphUtil.killCFG(invoke.node());
-
-        return duplicates;
     }
 
     public static void receiverNullCheck(Invoke invoke) {
@@ -1077,13 +1036,12 @@ public class InliningUtil {
         NodeInputList<ValueNode> parameters = callTarget.arguments();
         ValueNode firstParam = parameters.size() <= 0 ? null : parameters.get(0);
         if (!callTarget.isStatic() && firstParam.kind() == Kind.Object && !firstParam.objectStamp().nonNull()) {
-            graph.addBeforeFixed(invoke.node(), graph.add(new FixedGuardNode(graph.unique(new IsNullNode(firstParam)), DeoptimizationReason.NullCheckException,
-                            DeoptimizationAction.InvalidateReprofile, true, invoke.leafGraphId())));
+            graph.addBeforeFixed(invoke.node(), graph.add(new FixedGuardNode(graph.unique(new IsNullNode(firstParam)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true, invoke.leafGraphId())));
         }
     }
 
     public static boolean canIntrinsify(ResolvedJavaMethod target) {
-        return getIntrinsicGraph(target) != null || getMacroNodeClass(target) != null;
+        return getIntrinsicGraph(target) != null;
     }
 
     public static StructuredGraph getIntrinsicGraph(ResolvedJavaMethod target) {
@@ -1096,10 +1054,5 @@ public class InliningUtil {
         } else {
             return target.getCompiledCodeSize();
         }
-    }
-
-    public static Class<? extends FixedWithNextNode> getMacroNodeClass(ResolvedJavaMethod target) {
-        Object result = target.getCompilerStorage().get(Node.class);
-        return result == null ? null : ((Class<?>) result).asSubclass(FixedWithNextNode.class);
     }
 }
