@@ -22,45 +22,33 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.posix.darwin;
-
-import java.util.Arrays;
-import java.util.List;
+package com.oracle.svm.core.posix.linux;
 
 import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.impl.ProcessPropertiesSupport;
 
-import com.oracle.svm.core.CompilerCommandPlugin;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.jdk.RuntimeFeature;
-import com.oracle.svm.core.jdk.RuntimeSupport;
-import com.oracle.svm.core.posix.PosixExecutableName;
-import org.graalvm.nativeimage.ProcessProperties;
+import com.oracle.svm.core.posix.PosixProcessPropertiesSupport;
 
-@Platforms(Platform.DARWIN.class)
-public class DarwinExecutableName extends PosixExecutableName {
+@Platforms(Platform.LINUX.class)
+public class LinuxProcessPropertiesSupport extends PosixProcessPropertiesSupport {
 
-    /**
-     * This implementation of {@link CompilerCommandPlugin#apply(Object[])} does not use the
-     * arguments, and returns a String, possibly null.
-     */
     @Override
-    public Object apply(Object[] args) {
-        return ProcessProperties.getExecutableName();
+    public String getExecutableName() {
+        final String exefileString = "/proc/self/exe";
+        return realpath(exefileString);
     }
 
     @AutomaticFeature
-    public static class ExposeExecutableNameFeature implements Feature {
-        @Override
-        public List<Class<? extends Feature>> getRequiredFeatures() {
-            return Arrays.asList(RuntimeFeature.class);
-        }
+    public static class ImagePropertiesFeature implements Feature {
 
         @Override
         public void afterRegistration(AfterRegistrationAccess access) {
-            RuntimeSupport rs = RuntimeSupport.getRuntimeSupport();
-            rs.addCommandPlugin(new DarwinExecutableName());
+            ImageSingletons.add(ProcessPropertiesSupport.class, new LinuxProcessPropertiesSupport());
         }
     }
+
 }

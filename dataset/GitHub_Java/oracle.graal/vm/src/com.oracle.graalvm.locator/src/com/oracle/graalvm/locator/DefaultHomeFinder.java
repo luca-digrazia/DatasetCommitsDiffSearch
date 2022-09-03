@@ -427,11 +427,13 @@ public final class DefaultHomeFinder extends HomeFinder {
         return result;
     }
 
+    @SuppressWarnings("deprecation")
     private static Path getCurrentObjectFilePath() {
         String path = ProcessProperties.getObjectFile(VmLocatorSymbol.SYMBOL);
         return path == null ? null : Paths.get(path);
     }
 
+    @SuppressWarnings("deprecation")
     private static Path getCurrentExecutablePath() {
         return Paths.get(ProcessProperties.getExecutableName());
     }

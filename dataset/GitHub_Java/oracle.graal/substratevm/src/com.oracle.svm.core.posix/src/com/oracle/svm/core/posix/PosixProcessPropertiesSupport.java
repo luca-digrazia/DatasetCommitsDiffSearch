@@ -24,9 +24,6 @@
  */
 package com.oracle.svm.core.posix;
 
-import static com.oracle.svm.core.posix.headers.Signal.SignalEnum.SIGKILL;
-import static com.oracle.svm.core.posix.headers.Signal.SignalEnum.SIGTERM;
-
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.function.CEntryPointLiteral;
 import org.graalvm.nativeimage.c.type.CCharPointer;
@@ -38,7 +35,6 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.posix.headers.Dlfcn;
 import com.oracle.svm.core.posix.headers.LibC;
-import com.oracle.svm.core.posix.headers.Signal;
 import com.oracle.svm.core.posix.headers.Stdlib;
 
 public abstract class PosixProcessPropertiesSupport implements ProcessPropertiesSupport {
@@ -46,31 +42,6 @@ public abstract class PosixProcessPropertiesSupport implements ProcessProperties
     @Override
     public long getProcessID() {
         return PosixUtils.getpid();
-    }
-
-    @Override
-    public long getProcessID(Process process) {
-        return PosixUtils.getpid(process);
-    }
-
-    @Override
-    public boolean destroy(long processID) {
-        return Signal.kill(Math.toIntExact(processID), SIGTERM.getCValue()) == 0;
-    }
-
-    @Override
-    public boolean destroyForcibly(long processID) {
-        return Signal.kill(Math.toIntExact(processID), SIGKILL.getCValue()) == 0;
-    }
-
-    @Override
-    public boolean isAlive(long processID) {
-        return Signal.kill(Math.toIntExact(processID), 0) == 0;
-    }
-
-    @Override
-    public int waitForProcessExit(long processID) {
-        return Java_lang_Process_Supplement.waitForProcessExit(Math.toIntExact(processID));
     }
 
     @Override
