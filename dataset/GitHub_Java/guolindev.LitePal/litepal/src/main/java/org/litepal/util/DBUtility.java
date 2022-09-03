@@ -449,34 +449,32 @@ public class DBUtility {
      * @return True if conflicted, false otherwise.
      */
     public static boolean isFieldNameConflictWithSQLiteKeywords(String fieldName) {
-        if (!TextUtils.isEmpty(fieldName)) {
-            String fieldNameWithComma = "," + fieldName.toLowerCase() + ",";
-            if (SQLITE_KEYWORDS.contains(fieldNameWithComma)) {
-                return true;
-            }
+        String fieldNameWithComma = "," + fieldName + ",";
+        if (SQLITE_KEYWORDS.contains(fieldNameWithComma)) {
+            return true;
         }
         return false;
     }
 
     /**
-     * Convert the passed in name to valid column name if the name is conflicted with SQLite keywords.
-     * The convert rule is to append {@link #KEYWORDS_COLUMN_SUFFIX} to the name as new column name.
-     * @param columnName
-     *          Original column name.
-     * @return Converted name as new column name if conflicted with SQLite keywords.
+     * Convert the field name to valid column name if field name is conflicted with SQLite keywords.
+     * The convert rule is to append {@link #KEYWORDS_COLUMN_SUFFIX} to field name as column name.
+     * @param fieldName
+     *          Name of the field.
+     * @return Converted name as column name if field name is conflicted with SQLite keywords.
      */
-    public static String convertToValidColumnName(String columnName) {
-        if (isFieldNameConflictWithSQLiteKeywords(columnName)) {
-            return columnName + KEYWORDS_COLUMN_SUFFIX;
+    public static String convertFieldNameToColumnName(String fieldName) {
+        if (isFieldNameConflictWithSQLiteKeywords(fieldName)) {
+            return fieldName + KEYWORDS_COLUMN_SUFFIX;
         }
-        return columnName;
+        return fieldName;
     }
 
     /**
-     * Convert the where clause if it contains invalid column names which conflict with SQLite keywords.
+     * Convert the where clause if it contains invalid column which conflict with SQLite keywords.
      * @param whereClause
      *          where clause for query, update or delete.
-     * @return Converted where clause with valid column names.
+     * @return Converted where clause with valid columns.
      */
     public static String convertWhereClauseToColumnName(String whereClause) {
         try {
@@ -487,7 +485,7 @@ public class DBUtility {
                 String matches = m.group();
                 String column = matches.replaceAll("(" + REG_OPERATOR + "|" + REG_FUZZY + "|" + REG_COLLECTION + ")", "");
                 String rest = matches.replace(column, "");
-                column = convertToValidColumnName(column);
+                column = convertFieldNameToColumnName(column);
                 m.appendReplacement(convertedWhereClause, column + rest);
             }
             m.appendTail(convertedWhereClause);
@@ -496,76 +494,6 @@ public class DBUtility {
             e.printStackTrace();
         }
         return whereClause;
-    }
-
-    /**
-     * Convert the select clause if it contains invalid column names which conflict with SQLite keywords.
-     * @param columns
-     *          A String array of which columns to return. Passing null will
-     *          return all columns.
-     * @return Converted select clause with valid column names.
-     */
-    public static String[] convertSelectClauseToValidNames(String[] columns) {
-        if (columns != null && columns.length > 0) {
-            String[] convertedColumns = new String[columns.length];
-            for (int i = 0; i < columns.length; i++) {
-                convertedColumns[i] = convertToValidColumnName(columns[i]);
-            }
-            return convertedColumns;
-        }
-        return null;
-    }
-
-    /**
-     * Convert the order by clause if it contains invalid column names which conflict with SQLite keywords.
-     * @param orderBy
-     *          How to order the rows, formatted as an SQL ORDER BY clause. Passing null will use
-     *          the default sort order, which may be unordered.
-     * @return Converted order by clause with valid column names.
-     */
-    public static String convertOrderByClauseToValidName(String orderBy) {
-        if (!TextUtils.isEmpty(orderBy)) {
-            orderBy = orderBy.trim().toLowerCase();
-            if (orderBy.contains(",")) {
-                String[] orderByItems = orderBy.split(",");
-                StringBuilder builder = new StringBuilder();
-                boolean needComma = false;
-                for (String orderByItem : orderByItems) {
-                    if (needComma) {
-                        builder.append(",");
-                    }
-                    builder.append(convertOrderByItem(orderByItem));
-                    needComma = true;
-                }
-                orderBy = builder.toString();
-            } else {
-                orderBy = convertOrderByItem(orderBy);
-            }
-            return orderBy;
-        }
-        return null;
-    }
-
-    /**
-     * Convert the order by item if it is invalid column name which conflict with SQLite keywords.
-     * @param orderByItem
-     *          The single order by condition.
-     * @return Converted order by item with valid column name.
-     */
-    private static String convertOrderByItem(String orderByItem) {
-        String column = null;
-        String append = null;
-        if (orderByItem.endsWith("asc")) {
-            column = orderByItem.replace("asc", "").trim();
-            append = " asc";
-        } else if (orderByItem.endsWith("desc")) {
-            column = orderByItem.replace("desc", "").trim();
-            append = " desc";
-        } else {
-            column = orderByItem;
-            append = "";
-        }
-        return convertToValidColumnName(column) + append;
     }
 
 }
