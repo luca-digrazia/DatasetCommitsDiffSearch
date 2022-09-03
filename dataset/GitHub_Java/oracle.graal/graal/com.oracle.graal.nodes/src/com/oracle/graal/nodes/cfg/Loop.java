@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,38 @@
  */
 package com.oracle.graal.nodes.cfg;
 
-import com.oracle.graal.nodes.*;
+import java.util.*;
 
-public class HIRLoop extends Loop<Block> {
+public abstract class Loop<T extends AbstractBlock<T>> {
 
-    protected HIRLoop(Loop<Block> parent, int index, Block header) {
-        super(parent, index, header);
+    public final Loop<T> parent;
+    public final List<Loop<T>> children;
+
+    public final int depth;
+    public final int index;
+    public final T header;
+    public final List<T> blocks;
+    public final List<T> exits;
+
+    protected Loop(Loop<T> parent, int index, T header) {
+        this.parent = parent;
+        if (parent != null) {
+            this.depth = parent.depth + 1;
+            parent.children.add(this);
+        } else {
+            this.depth = 1;
+        }
+        this.index = index;
+        this.header = header;
+        this.blocks = new ArrayList<>();
+        this.children = new ArrayList<>();
+        this.exits = new ArrayList<>();
     }
 
+    public abstract long numBackedges();
+
     @Override
-    public long numBackedges() {
-        return ((LoopBeginNode) header.getBeginNode()).loopEnds().count();
+    public String toString() {
+        return "loop " + index + " depth " + depth + (parent != null ? " outer " + parent.index : "");
     }
 }
