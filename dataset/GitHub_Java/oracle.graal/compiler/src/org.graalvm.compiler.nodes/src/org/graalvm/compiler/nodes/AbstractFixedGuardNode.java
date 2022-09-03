@@ -25,7 +25,6 @@ package org.graalvm.compiler.nodes;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.graph.spi.Simplifiable;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.InputType;
@@ -43,11 +42,10 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
 
     public static final NodeClass<AbstractFixedGuardNode> TYPE = NodeClass.create(AbstractFixedGuardNode.class);
     @Input(InputType.Condition) protected LogicNode condition;
-    protected DeoptimizationReason reason;
-    protected DeoptimizationAction action;
+    protected final DeoptimizationReason reason;
+    protected final DeoptimizationAction action;
     protected JavaConstant speculation;
     protected boolean negated;
-    protected NodeSourcePosition noDeoptSuccessorPosition;
 
     @Override
     public LogicNode getCondition() {
@@ -73,12 +71,6 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
         this.negated = negated;
         this.condition = condition;
         this.reason = deoptReason;
-    }
-
-    protected AbstractFixedGuardNode(NodeClass<? extends AbstractFixedGuardNode> c, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation,
-                    boolean negated, NodeSourcePosition noDeoptSuccessorPosition) {
-        this(c, condition, deoptReason, action, speculation, negated);
-        this.noDeoptSuccessorPosition = noDeoptSuccessorPosition;
     }
 
     @Override
@@ -134,7 +126,6 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
                 ifNode = graph().add(new IfNode(condition, currentNext, deopt, 1));
                 noDeoptSuccessor = ifNode.trueSuccessor();
             }
-            noDeoptSuccessor.setNodeSourcePosition(getNoDeoptSuccessorPosition());
             ((FixedWithNextNode) predecessor()).setNext(ifNode);
             this.replaceAtUsages(noDeoptSuccessor);
             GraphUtil.killWithUnusedFloatingInputs(this);
@@ -146,26 +137,5 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
     @Override
     public boolean canDeoptimize() {
         return true;
-    }
-
-    @Override
-    public void setAction(DeoptimizationAction action) {
-        this.action = action;
-    }
-
-    @Override
-    public void setReason(DeoptimizationReason reason) {
-        this.reason = reason;
-    }
-
-    public NodeSourcePosition getNoDeoptSuccessorPosition() {
-        return noDeoptSuccessorPosition;
-    }
-
-    public void addCallerToNoDeoptSuccessorPosition(NodeSourcePosition caller) {
-        if (noDeoptSuccessorPosition == null) {
-            return;
-        }
-        noDeoptSuccessorPosition = noDeoptSuccessorPosition.addCaller(caller);
     }
 }
