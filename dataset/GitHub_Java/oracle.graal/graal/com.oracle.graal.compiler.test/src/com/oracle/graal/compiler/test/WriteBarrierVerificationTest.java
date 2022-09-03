@@ -33,6 +33,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
 import com.oracle.graal.phases.*;
@@ -640,7 +641,7 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
                     protected Boolean processNode(FixedNode node, Boolean currentState) {
                         if (node instanceof WriteNode) {
                             WriteNode write = (WriteNode) node;
-                            LocationIdentity obj = write.getLocationIdentity();
+                            LocationIdentity obj = write.getLocationIdentities()[0];
                             if (obj instanceof ResolvedJavaField) {
                                 if (((ResolvedJavaField) obj).getName().equals("barrierIndex")) {
                                     /*
