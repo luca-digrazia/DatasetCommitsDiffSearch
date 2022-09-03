@@ -234,7 +234,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     private final int entryBCI;
     private GuardsStage guardsStage = GuardsStage.FLOATING_GUARDS;
     private boolean isAfterFloatingReadPhase = false;
-    private boolean isAfterFixedReadPhase = false;
     private boolean hasValueProxies = true;
     private boolean isAfterExpandLogic = false;
     private final boolean useProfilingInfo;
@@ -244,7 +243,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
      */
     private final Assumptions assumptions;
 
-    private final SpeculationLog speculationLog;
+    private SpeculationLog speculationLog;
 
     private ScheduleResult lastSchedule;
 
@@ -686,18 +685,9 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         return isAfterFloatingReadPhase;
     }
 
-    public boolean isAfterFixedReadPhase() {
-        return isAfterFixedReadPhase;
-    }
-
     public void setAfterFloatingReadPhase(boolean state) {
         assert state : "cannot 'unapply' floating read phase on graph";
         isAfterFloatingReadPhase = state;
-    }
-
-    public void setAfterFixReadPhase(boolean state) {
-        assert state : "cannot 'unapply' fix reads phase on graph";
-        isAfterFixedReadPhase = state;
     }
 
     public boolean hasValueProxies() {
@@ -856,6 +846,10 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
 
     public SpeculationLog getSpeculationLog() {
         return speculationLog;
+    }
+
+    public void setSpeculationLog(SpeculationLog speculationLog) {
+        this.speculationLog = speculationLog;
     }
 
     public void clearAllStateAfter() {

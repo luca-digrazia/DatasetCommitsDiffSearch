@@ -32,6 +32,7 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrum
 import java.util.ArrayList;
 import java.util.List;
 
+import jdk.vm.ci.meta.JavaConstant;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
@@ -197,7 +198,7 @@ public abstract class TruffleCompiler {
     }
 
     @SuppressWarnings("try")
-    public CompilationResult compileMethodHelper(StructuredGraph graph, String name, PhaseSuite<HighTierContext> graphBuilderSuite, OptimizedCallTarget predefinedInstalledCode,
+    public CompilationResult compileMethodHelper(StructuredGraph graph, String name, PhaseSuite<HighTierContext> graphBuilderSuite, InstalledCode predefinedInstalledCode,
                     CompilationRequest compilationRequest) {
         try (Scope s = Debug.scope("TruffleFinal")) {
             Debug.dump(Debug.BASIC_LEVEL, graph, "After TruffleTier");
@@ -223,21 +224,17 @@ public abstract class TruffleCompiler {
             throw Debug.handle(e);
         }
 
-        compilationNotify.notifyCompilationGraalTierFinished(predefinedInstalledCode, graph);
+        compilationNotify.notifyCompilationGraalTierFinished((OptimizedCallTarget) predefinedInstalledCode, graph);
 
-        OptimizedCallTarget installedCode;
+        InstalledCode installedCode;
         try (DebugCloseable a = CodeInstallationTime.start(); DebugCloseable c = CodeInstallationMemUse.start()) {
-            installedCode = (OptimizedCallTarget) backend.createInstalledCode(graph.method(), compilationRequest, result, graph.getSpeculationLog(), predefinedInstalledCode, false);
+            installedCode = backend.createInstalledCode(graph.method(), compilationRequest, result, graph.getSpeculationLog(), predefinedInstalledCode, false);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
 
         for (AssumptionValidAssumption a : validAssumptions) {
             a.getAssumption().registerInstalledCode(installedCode);
-        }
-
-        if (!providers.getCodeCache().getTarget().arch.getName().equals("aarch64")) {
-            installedCode.releaseEntryPoint();
         }
 
         return result;
@@ -254,5 +251,9 @@ public abstract class TruffleCompiler {
 
     public PartialEvaluator getPartialEvaluator() {
         return partialEvaluator;
+    }
+
+    public OptimizedCallTarget asOptimizedCallTarget(JavaConstant constant) {
+        return snippetReflection.asObject(OptimizedCallTarget.class, constant);
     }
 }

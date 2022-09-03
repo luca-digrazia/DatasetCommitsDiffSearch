@@ -29,9 +29,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
-import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.IterableNodeType;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
@@ -53,11 +53,10 @@ import org.graalvm.compiler.truffle.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.OptimizedAssumption;
 import org.graalvm.compiler.truffle.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.nodes.AssumptionValidAssumption;
-import org.graalvm.compiler.truffle.substitutions.KnownTruffleFields;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -83,37 +82,34 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
 
     @Input private ValueNode frameDefaultValue;
     private final boolean intrinsifyAccessors;
-    private final byte[] frameSlots;
-    private final int frameSlotsUsed; // The number of the actually used elements in the beginning
+    private final FrameSlot[] frameSlots;
 
     private final SpeculationReason intrinsifyAccessorsSpeculation;
 
     static final class IntrinsifyFrameAccessorsSpeculationReason implements SpeculationReason {
-        private final JavaConstant frameDescriptor;
+        private final FrameDescriptor frameDescriptor;
 
-        IntrinsifyFrameAccessorsSpeculationReason(JavaConstant frameDescriptor) {
+        IntrinsifyFrameAccessorsSpeculationReason(FrameDescriptor frameDescriptor) {
             this.frameDescriptor = frameDescriptor;
         }
 
         @Override
         public boolean equals(Object obj) {
-            return obj instanceof IntrinsifyFrameAccessorsSpeculationReason && ((IntrinsifyFrameAccessorsSpeculationReason) obj).frameDescriptor.equals(this.frameDescriptor);
+            return obj instanceof IntrinsifyFrameAccessorsSpeculationReason && ((IntrinsifyFrameAccessorsSpeculationReason) obj).frameDescriptor == this.frameDescriptor;
         }
 
         @Override
         public int hashCode() {
-            return frameDescriptor.hashCode();
+            return System.identityHashCode(frameDescriptor);
         }
     }
 
-    public NewFrameNode(KnownTruffleFields knownFields, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, StructuredGraph graph, ResolvedJavaType frameType,
+    public NewFrameNode(MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, StructuredGraph graph, ResolvedJavaType frameType, FrameDescriptor frameDescriptor,
                     ValueNode frameDescriptorNode, ValueNode arguments) {
         super(TYPE, StampFactory.objectNonNull(TypeReference.createExactTrusted(frameType)));
 
         this.descriptor = frameDescriptorNode;
         this.arguments = arguments;
-
-        final JavaConstant frameDescriptor = frameDescriptorNode.asJavaConstant();
 
         /*
          * We access the FrameDescriptor only here and copy out all relevant data. So later
@@ -121,9 +117,7 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
          * frame version assumption is registered first, so that we get invalidated in case the
          * FrameDescriptor changes.
          */
-        final JavaConstant version = constantReflection.readFieldValue(knownFields.fieldFrameDescriptorVersion, frameDescriptor);
-        GraalError.guarantee(knownFields.classFrameDescriptor.equals(metaAccess.lookupJavaType(version)), "Unexpected FrameDescriptor.version");
-        graph.getAssumptions().record(new AssumptionValidAssumption(version));
+        graph.getAssumptions().record(new AssumptionValidAssumption((OptimizedAssumption) frameDescriptor.getVersion()));
 
         /*
          * We only want to intrinsify get/set/is accessor methods of a virtual frame when we expect
@@ -133,29 +127,11 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
          * evaluation.
          */
         this.intrinsifyAccessorsSpeculation = new IntrinsifyFrameAccessorsSpeculationReason(frameDescriptor);
-        boolean materializeCalled = constantReflection.readFieldValue(knownFields.fieldFrameDescriptorMaterializeCalled, frameDescriptor).asBoolean();
-        this.intrinsifyAccessors = !materializeCalled && graph.getSpeculationLog().maySpeculate(intrinsifyAccessorsSpeculation);
+        boolean maySpeculate = graph.getSpeculationLog() != null ? graph.getSpeculationLog().maySpeculate(intrinsifyAccessorsSpeculation) : false;
+        this.intrinsifyAccessors = !GraalTruffleRuntime.getRuntime().getFrameMaterializeCalled(frameDescriptor) && maySpeculate;
 
-        final JavaConstant defaultValue = constantReflection.readFieldValue(knownFields.fieldFrameDescriptorDefaultValue, frameDescriptor);
-        this.frameDefaultValue = ConstantNode.forConstant(defaultValue, metaAccess, graph);
-
-        {
-            final JavaConstant slots = constantReflection.readFieldValue(knownFields.fieldFrameDescriptorSlots, frameDescriptor);
-            final JavaConstant slotsElementData = constantReflection.readFieldValue(knownFields.fieldArrayListElementData, slots);
-            final int length = constantReflection.readArrayLength(slotsElementData);
-            final byte[] frameSlots = new byte[length];
-            int count = 0;
-            for (int i = 0; i < length; i++) {
-                final JavaConstant slot = constantReflection.readArrayElement(slotsElementData, i);
-                if (slot.isNonNull()) {
-                    final JavaConstant slotKind = constantReflection.readFieldValue(knownFields.fieldFrameSlotKind, slot);
-                    final JavaConstant slotKindTag = constantReflection.readFieldValue(knownFields.fieldFrameSlotKindTag, slotKind);
-                    frameSlots[count++] = (byte) slotKindTag.asInt();
-                }
-            }
-            this.frameSlots = frameSlots;
-            this.frameSlotsUsed = count;
-        }
+        this.frameDefaultValue = ConstantNode.forConstant(snippetReflection.forObject(frameDescriptor.getDefaultValue()), metaAccess, graph);
+        this.frameSlots = frameDescriptor.getSlots().toArray(new FrameSlot[0]);
 
         ResolvedJavaField[] frameFields = frameType.getInstanceFields(true);
 
@@ -164,10 +140,10 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
         ResolvedJavaField tagsField = findField(frameFields, "tags");
 
         this.virtualFrame = graph.add(new VirtualInstanceNode(frameType, frameFields, true));
-        this.virtualFrameObjectArray = graph.add(new VirtualArrayNode((ResolvedJavaType) localsField.getType().getComponentType(), frameSlotsUsed));
+        this.virtualFrameObjectArray = graph.add(new VirtualArrayNode((ResolvedJavaType) localsField.getType().getComponentType(), frameSlots.length));
         if (primitiveLocalsField != null) {
-            this.virtualFramePrimitiveArray = graph.add(new VirtualArrayNode((ResolvedJavaType) primitiveLocalsField.getType().getComponentType(), frameSlotsUsed));
-            this.virtualFrameTagArray = graph.add(new VirtualArrayNode((ResolvedJavaType) tagsField.getType().getComponentType(), frameSlotsUsed));
+            this.virtualFramePrimitiveArray = graph.add(new VirtualArrayNode((ResolvedJavaType) primitiveLocalsField.getType().getComponentType(), frameSlots.length));
+            this.virtualFrameTagArray = graph.add(new VirtualArrayNode((ResolvedJavaType) tagsField.getType().getComponentType(), frameSlots.length));
         }
 
         ValueNode[] c = new ValueNode[FrameSlotKind.values().length];
@@ -204,7 +180,7 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        final int frameSize = frameSlotsUsed;
+        int frameSize = frameSlots.length;
 
         ResolvedJavaType frameType = stamp().javaType(tool.getMetaAccessProvider());
         ResolvedJavaField[] frameFields = frameType.getInstanceFields(true);
@@ -226,7 +202,7 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
             }
             if (virtualFramePrimitiveArray != null) {
                 for (int i = 0; i < frameSize; i++) {
-                    primitiveArrayEntryState[i] = ConstantNode.defaultForKind(toJavaKind(frameSlots[i]), graph());
+                    primitiveArrayEntryState[i] = initialPrimitiveValue(frameSlots[i].getKind());
                 }
             }
         }
@@ -260,27 +236,41 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
         tool.replaceWithVirtual(virtualFrame);
     }
 
-    private static JavaKind toJavaKind(int kind) {
-        if (kind == FrameSlotKind.Boolean.ordinal() || kind == FrameSlotKind.Byte.ordinal() || kind == FrameSlotKind.Int.ordinal()) {
-            return JavaKind.Int;
+    private ValueNode initialPrimitiveValue(FrameSlotKind kind) {
+        JavaKind graalKind = null;
+        switch (kind) {
+            case Boolean:
+            case Byte:
+            case Int:
+                graalKind = JavaKind.Int;
+                break;
+            case Double:
+                graalKind = JavaKind.Double;
+                break;
+            case Float:
+                graalKind = JavaKind.Float;
+                break;
+            case Long:
+                graalKind = JavaKind.Long;
+                break;
+            case Object:
+            case Illegal:
+                // won't be stored in the primitive array, so default to long
+                graalKind = JavaKind.Long;
+                break;
+            default:
+                throw new IllegalStateException("Unexpected frame slot kind: " + kind);
         }
-        if (kind == FrameSlotKind.Double.ordinal()) {
-            return JavaKind.Double;
-        }
-        if (kind == FrameSlotKind.Float.ordinal()) {
-            return JavaKind.Float;
-        }
-        if (kind == FrameSlotKind.Long.ordinal() || kind == FrameSlotKind.Object.ordinal() || kind == FrameSlotKind.Illegal.ordinal()) {
-            return JavaKind.Long;
-        }
-        throw new IllegalStateException("Unexpected frame slot kind: " + kind);
+
+        return ConstantNode.defaultForKind(graalKind, graph());
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
+        } else {
+            return this;
         }
-        return this;
     }
 }
