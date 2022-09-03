@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,9 +23,9 @@
 package com.oracle.svm.core.genscavenge;
 
 import org.graalvm.compiler.options.Option;
+import org.graalvm.nativeimage.Feature.FeatureAccess;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.Feature.FeatureAccess;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.log.Log;
@@ -35,14 +33,22 @@ import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionKey;
 import com.oracle.svm.core.util.TimeUtils;
 
-/** A collection policy decides when to collect incrementally or completely. */
+/** A collection policy to decide when to collect incrementally or completely. */
 public abstract class CollectionPolicy {
 
     public static class Options {
-        @Option(help = "The initial garbage collection policy, as a fully-qualified class name (might require quotes or escaping).")//
+        /**
+         * Pro tip: A fully qualified name looks like
+         * <code>com.oracle.svm.core.genscavenge.CollectionPolicy$ByTime</code>, so if it has a
+         * dollar sign in it you probably have to quote it to protect it from the shell.
+         */
+        @Option(help = "What is the initial collection policy?")//
         public static final HostedOptionKey<String> InitialCollectionPolicy = new HostedOptionKey<>(ByTime.class.getName());
 
-        @Option(help = "Percentage of total collection time that should be spent on young generation collections.")//
+        /**
+         * Ratio of incremental to complete collection times that cause complete collections.
+         */
+        @Option(help = "Percentage of time that should be spent in young generation collections.")//
         public static final RuntimeOptionKey<Integer> PercentTimeInIncrementalCollection = new RuntimeOptionKey<>(50);
     }
 
@@ -51,21 +57,24 @@ public abstract class CollectionPolicy {
         return HeapPolicy.instantiatePolicy(access, CollectionPolicy.class, Options.InitialCollectionPolicy.getValue());
     }
 
-    /** Return {@code true} if the current collection should entail an incremental collection. */
+    /** Return true if this collection should do an incremental collection. */
     public abstract boolean collectIncrementally();
 
-    /** Return {@code true} if the current collection should entail a complete collection. */
+    /** Return true if this collection should be a complete collection. */
     public abstract boolean collectCompletely();
 
+    /** Constructor for subclasses. */
     CollectionPolicy() {
+        /* Nothing to do. */
     }
 
     public abstract void nameToLog(Log log);
 
-    static GCImpl.Accounting getAccounting() {
+    protected static GCImpl.Accounting getAccounting() {
         return HeapImpl.getHeapImpl().getGCImpl().getAccounting();
     }
 
+    /** For debugging: A collection policy that only collects incrementally. */
     public static class OnlyIncrementally extends CollectionPolicy {
 
         @Override
@@ -84,6 +93,7 @@ public abstract class CollectionPolicy {
         }
     }
 
+    /** For debugging: A collection policy that only collects completely. */
     public static class OnlyCompletely extends CollectionPolicy {
 
         @Override
@@ -102,6 +112,7 @@ public abstract class CollectionPolicy {
         }
     }
 
+    /** For debugging: A collection policy that never collects. */
     public static class NeverCollect extends CollectionPolicy {
 
         @Override
@@ -122,8 +133,9 @@ public abstract class CollectionPolicy {
 
     /**
      * A collection policy that attempts to balance the time spent in incremental collections and
-     * the time spent in full collections. There might be intervening collections that are not
-     * chosen by this policy.
+     * the time spent in full collections.
+     *
+     * There might be intervening collections that are not chosen by this policy.
      */
     public static class ByTime extends CollectionPolicy {
 
@@ -134,10 +146,8 @@ public abstract class CollectionPolicy {
 
         @Override
         public boolean collectCompletely() {
-            Log trace = Log.noopLog().string("[CollectionPolicy.ByTime.collectIncrementally:");
-
-            boolean result = collectCompletelyBasedOnTime(trace) || collectCompletelyBasedOnSpace(trace);
-
+            final Log trace = Log.noopLog().string("[CollectionPolicy.ByTime.collectIncrementally:");
+            final boolean result = collectCompletelyBasedOnTime(trace) || collectCompletelyBasedOnSpace(trace);
             trace.string("  returns: ").bool(result).string("]").newline();
             return result;
         }
@@ -165,6 +175,10 @@ public abstract class CollectionPolicy {
                             .string("  totalNanos: ").unsigned(totalNanos)
                             .string("  weightedTotalNanos: ").unsigned(weightedTotalNanos)
                             .newline();
+            /*
+             * The comparison is strictly less than, so equality (e.g., at 0 and 0) does not request
+             * a complete collection.
+             */
             return TimeUtils.nanoTimeLessThan(weightedTotalNanos, incrementalNanos);
         }
 
@@ -195,10 +209,8 @@ public abstract class CollectionPolicy {
 
         @Override
         public boolean collectCompletely() {
-            Log trace = Log.noopLog().string("[CollectionPolicy.BySpaceAndTime.collectCompletely:").newline();
-
-            boolean result = voteOnMaximumSpace(trace) || (!vetoOnMinimumSpace(trace) && !vetoOnIncrementalTime(trace));
-
+            final Log trace = Log.noopLog().string("[CollectionPolicy.BySpaceAndTime.collectCompletely:").newline();
+            final boolean result = decideToCollectCompletely(trace);
             trace.string("  returns: ").bool(result).string("]").newline();
             return result;
         }
@@ -208,17 +220,36 @@ public abstract class CollectionPolicy {
             log.string("by space and time: ").signed(Options.PercentTimeInIncrementalCollection.getValue()).string("% in incremental collections");
         }
 
+        /** Cascading tests for whether to do a complete collection. */
+        private static boolean decideToCollectCompletely(Log trace) {
+            /* A vote for a complete collection based on the maximum heap size. */
+            if (voteOnMaximumSpace(trace)) {
+                return true;
+            }
+            /* A veto of a complete collection based on the minimum heap size. */
+            if (vetoOnMinimumSpace(trace)) {
+                return false;
+            }
+            /* A veto of a complete collection based on incremental collection time. */
+            if (vetoOnIncrementalTime(trace)) {
+                return false;
+            }
+            return true;
+        }
+
         /** If the heap is too full, request a complete collection. */
         private static boolean voteOnMaximumSpace(Log trace) {
             final UnsignedWord youngSize = HeapPolicy.getMaximumYoungGenerationSize();
             final UnsignedWord oldInUse = getAccounting().getOldGenerationAfterChunkBytes();
-            final UnsignedWord lastPromotion = getAccounting().lastCollectionPromotedChunkBytes();
-            final UnsignedWord expectedSize = youngSize.add(oldInUse).add(lastPromotion);
+            final UnsignedWord averagePromotion = getAccounting().averagePromotedUnpinnedChunkBytes().add(getAccounting().averagePromotedPinnedChunkBytes());
+            final UnsignedWord expectedSize = youngSize.add(oldInUse).add(averagePromotion);
             final UnsignedWord maxHeapSize = HeapPolicy.getMaximumHeapSize();
             final boolean vote = maxHeapSize.belowThan(expectedSize);
             trace.string("  youngSize: ").unsigned(youngSize)
                             .string("  oldInUse: ").unsigned(oldInUse)
-                            .string("  lastPromotion: ").unsigned(lastPromotion)
+                            .string("  averagePromotedUnpinnedChunkBytes: ").unsigned(getAccounting().averagePromotedUnpinnedChunkBytes())
+                            .string("  averagePromotedPinnedChunkBytes: ").unsigned(getAccounting().averagePromotedPinnedChunkBytes())
+                            .string("  averagePromotion: ").unsigned(averagePromotion)
                             .string("  expectedSize: ").unsigned(expectedSize)
                             .string("  maxHeapSize: ").unsigned(maxHeapSize)
                             .string("  vote: ").bool(vote)

@@ -177,59 +177,30 @@ public abstract class JavaThreads {
         }
     }
 
+    @NeverInline("Truffle compilation must not inline this method")
     private static Thread createThread(IsolateThread isolateThread) {
         /*
          * Either the main thread, or VMThread was started a different way. Create a new Thread
          * object and remember it for future calls, so that currentThread always returns the same
          * object.
          */
+        final Thread result = JavaThreads.fromTarget(new Target_java_lang_Thread(true));
 
-        // The thread has not been launched as java.lang.Thread, so we consider it a daemon thread.
-        boolean isDaemon = true;
-
-        final Thread thread = JavaThreads.fromTarget(new Target_java_lang_Thread(null, null, isDaemon));
-        if (!assignJavaThread(isolateThread, thread)) {
+        /* necessary to be here as it breaks the infinite recursion */
+        boolean status = currentThread.compareAndSet(isolateThread, null, result);
+        if (!status) {
+            /*
+             * We lost the race. The constructor does not register the new instance anywhere, so we
+             * can discard the Thread we created.
+             */
             return currentThread.get(isolateThread);
         }
-        return thread;
-    }
 
-    /**
-     * Create a {@link Thread} object for the current thread. The current thread must have already
-     * been attached {@link VMThreads} as an {@link IsolateThread}.
-     *
-     * @param name the thread's name, or {@code null} for a default name.
-     * @param group the thread group, or {@code null} for the default thread group.
-     * @return true if successful; false if a {@link Thread} object has already been assigned.
-     */
-    public boolean assignJavaThread(String name, ThreadGroup group, boolean asDaemon) {
-        final Thread thread = JavaThreads.fromTarget(new Target_java_lang_Thread(name, group, asDaemon));
-        return assignJavaThread(KnownIntrinsics.currentVMThread(), thread);
-    }
-
-    /**
-     * Assign a {@link Thread} object to the current thread, which must have already been attached
-     * {@link VMThreads} as an {@link IsolateThread}.
-     * 
-     * @return true if successful; false if a {@link Thread} object has already been assigned.
-     */
-    public boolean assignJavaThread(Thread thread) {
-        return assignJavaThread(KnownIntrinsics.currentVMThread(), thread);
-    }
-
-    @NeverInline("Truffle compilation must not inline this method")
-    private static boolean assignJavaThread(IsolateThread isolateThread, Thread thread) {
-        if (!currentThread.compareAndSet(isolateThread, null, thread)) {
-            return false;
-        }
-        ThreadGroup group = thread.getThreadGroup();
+        ThreadGroup group = result.getThreadGroup();
         toTarget(group).addUnstarted();
-        toTarget(group).add(thread);
-        if (!thread.isDaemon()) {
-            assert isolateThread.equal(KnownIntrinsics.currentVMThread()) : "Non-daemon threads must call this method themselves, or they can detach incompletely in a race";
-            singleton().nonDaemonThreads.incrementAndGet();
-        }
-        return true;
+        toTarget(group).add(result);
+
+        return result;
     }
 
     /**
@@ -279,9 +250,6 @@ public abstract class JavaThreads {
 
         detachParkEvent(getUnsafeParkEvent(thread));
         detachParkEvent(getSleepParkEvent(thread));
-        if (!thread.isDaemon()) {
-            singleton().nonDaemonThreads.decrementAndGet();
-        }
     }
 
     /** Have each thread, except this one, tear itself down. */
@@ -556,10 +524,11 @@ final class Target_java_lang_Thread {
     @Alias
     public native void exit();
 
-    Target_java_lang_Thread(String withName, ThreadGroup withGroup, boolean asDaemon) {
+    Target_java_lang_Thread(boolean marker) {
         /*
          * Raw creation of a thread without calling init(). Used to create a Thread object for an
-         * already running thread.
+         * already running thread. The "marker" parameter is necessary to distinguish this
+         * constructor from the no-argument constructor in Thread.
          */
 
         this.unsafeParkEvent = new AtomicReference<>();
@@ -567,11 +536,10 @@ final class Target_java_lang_Thread {
 
         tid = nextThreadID();
         threadStatus = ThreadStatus.RUNNABLE;
-        name = (withName != null) ? withName : ("System-" + nextThreadNum());
-        group = (withGroup != null) ? withGroup : JavaThreads.singleton().rootGroup;
+        name = ("System-" + nextThreadNum());
+        group = JavaThreads.singleton().rootGroup;
         priority = Thread.NORM_PRIORITY;
         blockerLock = new Object();
-        daemon = asDaemon;
     }
 
     @Substitute

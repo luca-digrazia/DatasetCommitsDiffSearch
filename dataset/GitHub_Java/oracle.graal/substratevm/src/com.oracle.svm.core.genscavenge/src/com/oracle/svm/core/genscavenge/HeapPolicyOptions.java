@@ -69,10 +69,10 @@ public class HeapPolicyOptions {
 
     /* Options that are no longer used. TODO: Remove uses in user scripts. */
 
-    @Option(help = "Deprecated: Set the maximum young generation size with '--native.Xmn<value>'.") //
+    @Option(help = "Replaced by '-Xmn'.") //
     public static final RuntimeOptionKey<Long> YoungGenerationSize = new RuntimeOptionKey<>(0L);
 
-    @Option(help = "Deprecated: Set the maximum heap size with '--native.Xmx<value>'.") //
+    @Option(help = "Replaced by '-Xmx' - '-Xmn'.") //
     public static final RuntimeOptionKey<Long> OldGenerationSize = new RuntimeOptionKey<>(0L);
 
 }

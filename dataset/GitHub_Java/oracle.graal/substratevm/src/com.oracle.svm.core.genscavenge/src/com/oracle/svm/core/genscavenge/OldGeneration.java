@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -306,12 +304,20 @@ public class OldGeneration extends Generation {
 
     @Override
     public Log report(Log log, boolean traceHeapChunks) {
-        log.string("[Old generation: ").indent(true);
-        getFromSpace().report(log, traceHeapChunks).newline();
-        getToSpace().report(log, traceHeapChunks).newline();
-        getPinnedFromSpace().report(log, traceHeapChunks).newline();
+        log.string("[Old generation: ");
+        log.newline();
+        log.string("  FromSpace: ");
+        getFromSpace().report(log, traceHeapChunks);
+        log.newline();
+        log.string("  ToSpace: ");
+        getToSpace().report(log, traceHeapChunks);
+        log.newline();
+        log.string("  PinnedFromSpace: ");
+        getPinnedFromSpace().report(log, traceHeapChunks);
+        log.newline();
+        log.string("  PinnedToSpace: ");
         getPinnedToSpace().report(log, traceHeapChunks);
-        log.redent(false).string("]");
+        log.string("]");
         return log;
     }
 
