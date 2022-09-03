@@ -68,7 +68,6 @@ import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMVectorNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode.LLVMResolvedDirectCallNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallUnboxNodeFactory.LLVMI32CallUnboxNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallUnboxNodeFactory.LLVMStructCallUnboxNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMGlobalRootNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMInlineAssemblyRootNode;
@@ -354,7 +353,7 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode createFunctionBlockNode(FrameSlot retSlot, List<? extends LLVMNode> allFunctionNodes, LLVMStackFrameNuller[][] beforeSlotNullerNodes,
+    public LLVMExpressionNode createFunctionBlockNode(FrameSlot retSlot, List<LLVMNode> allFunctionNodes, LLVMStackFrameNuller[][] beforeSlotNullerNodes,
                     LLVMStackFrameNuller[][] afterSlotNullerNodes) {
         return LLVMBlockFactory.createFunctionBlock(retSlot, allFunctionNodes.toArray(new LLVMBasicBlockNode[allFunctionNodes.size()]), beforeSlotNullerNodes, afterSlotNullerNodes);
     }
@@ -413,8 +412,6 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
                 return new LLVMAddressUnsupportedInlineAssemblerNode();
             case FUNCTION_ADDRESS:
                 return new LLVMFunctionUnsupportedInlineAssemblerNode();
-            case STRUCT:
-                return LLVMStructCallUnboxNodeGen.create(new LLVMResolvedDirectCallNode(target, args));
             default:
                 throw new AssertionError(retType);
         }

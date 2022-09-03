@@ -34,7 +34,7 @@ import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 import com.oracle.truffle.llvm.types.memory.LLVMMemory;
@@ -42,14 +42,14 @@ import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 public class LLVMX86_64BitVAStart extends LLVMNode {
 
     private static final int LONG_DOUBLE_SIZE = 16;
-    private final int numberExplicitArguments;
+    private final int numberOfExplicitArguments;
     @Child private LLVMAddressNode target;
 
-    public LLVMX86_64BitVAStart(int numberExplicitArguments, LLVMAddressNode target) {
-        if (numberExplicitArguments < 0) {
+    public LLVMX86_64BitVAStart(int numberOfExplicitArguments, LLVMAddressNode target) {
+        if (numberOfExplicitArguments < 0) {
             throw new AssertionError();
         }
-        this.numberExplicitArguments = numberExplicitArguments;
+        this.numberOfExplicitArguments = numberOfExplicitArguments;
         this.target = target;
     }
 
@@ -66,6 +66,14 @@ public class LLVMX86_64BitVAStart extends LLVMNode {
             case I16:
             case I32:
             case I64:
+            case I1_POINTER:
+            case I8_POINTER:
+            case I16_POINTER:
+            case I32_POINTER:
+            case I64_POINTER:
+            case HALF_POINTER:
+            case FLOAT_POINTER:
+            case DOUBLE_POINTER:
             case ADDRESS:
                 return VarArgArea.GP_AREA;
             case FLOAT:
@@ -83,7 +91,7 @@ public class LLVMX86_64BitVAStart extends LLVMNode {
     public void executeVoid(VirtualFrame frame) {
         LLVMAddress address = target.executePointee(frame);
         initOffsets(address);
-        int varArgsStartIndex = numberExplicitArguments;
+        int varArgsStartIndex = numberOfExplicitArguments;
         Object[] realArguments = getRealArguments(frame);
         int argumentsLength = realArguments.length;
         if (varArgsStartIndex != argumentsLength) {
@@ -254,6 +262,14 @@ public class LLVMX86_64BitVAStart extends LLVMNode {
             case X86_FP80:
                 LLVMMemory.put80BitFloat(currentAddress, (LLVM80BitFloat) object);
                 break;
+            case I1_POINTER:
+            case I8_POINTER:
+            case I16_POINTER:
+            case I32_POINTER:
+            case I64_POINTER:
+            case HALF_POINTER:
+            case FLOAT_POINTER:
+            case DOUBLE_POINTER:
             case ADDRESS:
                 LLVMMemory.putAddress(currentAddress, (LLVMAddress) object);
                 break;
