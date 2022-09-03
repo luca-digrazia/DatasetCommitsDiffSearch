@@ -125,8 +125,7 @@ public final class NodeClass extends FieldIntrospection {
         return registry.make(key);
     }
 
-    public static final int NOT_ITERABLE = -1;
-    public static final int NODE_LIST = -2;
+    static final int NOT_ITERABLE = -1;
 
     private static final Class<?> NODE_CLASS = Node.class;
     private static final Class<?> INPUT_LIST_CLASS = NodeInputList.class;
@@ -456,6 +455,8 @@ public final class NodeClass extends FieldIntrospection {
      * concurrently. Concurrent modifications are detected by an assertion on a best-effort basis.
      */
     public abstract static class NodeClassIterator implements Iterator<Node> {
+
+        private final NodeClass nodeClass;
         protected final Node node;
         private int index;
         private int subIndex;
@@ -467,6 +468,7 @@ public final class NodeClass extends FieldIntrospection {
          */
         NodeClassIterator(Node node) {
             this.node = node;
+            this.nodeClass = node.getNodeClass();
             index = NOT_ITERABLE;
             subIndex = 0;
         }
@@ -524,9 +526,9 @@ public final class NodeClass extends FieldIntrospection {
         public Position nextPosition() {
             try {
                 if (index < getDirectCount()) {
-                    return new Position(getOffsets() == getNodeClass().inputOffsets, index, NOT_ITERABLE);
+                    return new Position(getOffsets() == nodeClass.inputOffsets, index, NOT_ITERABLE);
                 } else {
-                    return new Position(getOffsets() == getNodeClass().inputOffsets, index, subIndex);
+                    return new Position(getOffsets() == nodeClass.inputOffsets, index, subIndex);
                 }
             } finally {
                 forward();
@@ -541,8 +543,6 @@ public final class NodeClass extends FieldIntrospection {
         protected abstract int getDirectCount();
 
         protected abstract long[] getOffsets();
-
-        protected abstract NodeClass getNodeClass();
     }
 
     private class NodeClassInputsIterator extends NodeClassIterator {
@@ -552,7 +552,6 @@ public final class NodeClass extends FieldIntrospection {
 
         NodeClassInputsIterator(Node node, boolean forward) {
             super(node);
-            assert NodeClass.this == node.getNodeClass();
             if (forward) {
                 forward();
             }
@@ -566,11 +565,6 @@ public final class NodeClass extends FieldIntrospection {
         @Override
         protected long[] getOffsets() {
             return inputOffsets;
-        }
-
-        @Override
-        protected NodeClass getNodeClass() {
-            return NodeClass.this;
         }
     }
 
@@ -619,7 +613,6 @@ public final class NodeClass extends FieldIntrospection {
 
         NodeClassSuccessorsIterator(Node node, boolean forward) {
             super(node);
-            assert NodeClass.this == node.getNodeClass();
             if (forward) {
                 forward();
             }
@@ -633,11 +626,6 @@ public final class NodeClass extends FieldIntrospection {
         @Override
         protected long[] getOffsets() {
             return successorOffsets;
-        }
-
-        @Override
-        protected NodeClass getNodeClass() {
-            return NodeClass.this;
         }
     }
 
@@ -816,12 +804,6 @@ public final class NodeClass extends FieldIntrospection {
         } else {
             return getNodeList(node, offset).get(pos.subIndex);
         }
-    }
-
-    public NodeList<?> getNodeList(Node node, Position pos) {
-        long offset = pos.input ? inputOffsets[pos.index] : successorOffsets[pos.index];
-        assert pos.subIndex == NODE_LIST;
-        return getNodeList(node, offset);
     }
 
     public String getName(Position pos) {
@@ -1182,64 +1164,20 @@ public final class NodeClass extends FieldIntrospection {
         return false;
     }
 
-    public Collection<Position> getFirstLevelInputPositions() {
-        return new AbstractCollection<Position>() {
-            @Override
-            public Iterator<Position> iterator() {
-                return new Iterator<NodeClass.Position>() {
-                    int i = 0;
-
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    public Position next() {
-                        Position pos = new Position(true, i, i >= directInputCount ? 0 : NOT_ITERABLE);
-                        i++;
-                        return pos;
-                    }
-
-                    public boolean hasNext() {
-                        return i < inputOffsets.length;
-                    }
-                };
-            }
-
-            @Override
-            public int size() {
-                return inputOffsets.length;
-            }
-        };
+    public List<Position> getFirstLevelInputPositions() {
+        List<Position> positions = new ArrayList<>(inputOffsets.length);
+        for (int i = 0; i < inputOffsets.length; i++) {
+            positions.add(new Position(true, i, NOT_ITERABLE));
+        }
+        return positions;
     }
 
-    public Collection<Position> getFirstLevelSuccessorPositions() {
-        return new AbstractCollection<Position>() {
-            @Override
-            public Iterator<Position> iterator() {
-                return new Iterator<NodeClass.Position>() {
-                    int i = 0;
-
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    public Position next() {
-                        Position pos = new Position(false, i, i >= directSuccessorCount ? 0 : NOT_ITERABLE);
-                        i++;
-                        return pos;
-                    }
-
-                    public boolean hasNext() {
-                        return i < successorOffsets.length;
-                    }
-                };
-            }
-
-            @Override
-            public int size() {
-                return successorOffsets.length;
-            }
-        };
+    public List<Position> getFirstLevelSuccessorPositions() {
+        List<Position> positions = new ArrayList<>(successorOffsets.length);
+        for (int i = 0; i < successorOffsets.length; i++) {
+            positions.add(new Position(false, i, NOT_ITERABLE));
+        }
+        return positions;
     }
 
     public Class<?> getJavaClass() {
