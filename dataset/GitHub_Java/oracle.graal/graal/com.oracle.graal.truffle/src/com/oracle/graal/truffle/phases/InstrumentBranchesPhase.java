@@ -49,13 +49,14 @@ import com.oracle.graal.nodes.java.LoadIndexedNode;
 import com.oracle.graal.nodes.java.StoreIndexedNode;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.tiers.HighTierContext;
-import com.oracle.graal.truffle.TruffleCompilerOptions;
 
+import com.oracle.graal.truffle.TruffleCompilerOptions;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
@@ -84,21 +85,6 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
     @Override
     protected void run(StructuredGraph graph, HighTierContext context) {
-        JavaConstant tableConstant = lookupTableContant(context);
-        try {
-            for (IfNode n : graph.getNodes().filter(IfNode.class)) {
-                BranchInstrumentation.Point p = instrumentation.getOrCreatePoint(methodFilter, n);
-                if (p != null) {
-                    insertCounter(graph, context, tableConstant, n, p, true);
-                    insertCounter(graph, context, tableConstant, n, p, false);
-                }
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    protected JavaConstant lookupTableContant(HighTierContext context) {
         ResolvedJavaField[] fields = context.getMetaAccess().lookupJavaType(InstrumentBranchesPhase.class).getStaticFields();
         ResolvedJavaField tableField = null;
         for (ResolvedJavaField field : fields) {
@@ -108,14 +94,24 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
             }
         }
         JavaConstant tableConstant = context.getConstantReflection().readFieldValue(tableField, null);
-        return tableConstant;
+        try {
+            for (IfNode n : graph.getNodes().filter(IfNode.class)) {
+                BranchInstrumentation.Point p = instrumentation.getOrCreatePoint(methodFilter, n);
+                if (p != null) {
+                    insertCounter(graph, tableField, tableConstant, n, p, true);
+                    insertCounter(graph, tableField, tableConstant, n, p, false);
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    private static void insertCounter(StructuredGraph graph, HighTierContext context, JavaConstant tableConstant,
+    private static void insertCounter(StructuredGraph graph, ResolvedJavaField tableField, JavaConstant tableConstant,
                     IfNode ifNode, BranchInstrumentation.Point p, boolean isTrue) {
         assert (tableConstant != null);
         AbstractBeginNode beginNode = (isTrue) ? ifNode.trueSuccessor() : ifNode.falseSuccessor();
-        TypeReference typeRef = TypeReference.createExactTrusted(context.getMetaAccess().lookupJavaType(tableConstant));
+        TypeReference typeRef = TypeReference.createExactTrusted((ResolvedJavaType) tableField.getType());
         ConstantNode table = graph.unique(new ConstantNode(tableConstant, StampFactory.object(typeRef, true)));
         ConstantNode rawIndex = graph.unique(ConstantNode.forInt(p.getRawIndex(isTrue)));
         LoadIndexedNode load = graph.add(new LoadIndexedNode(null, table, rawIndex, JavaKind.Long));
