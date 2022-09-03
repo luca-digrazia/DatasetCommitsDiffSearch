@@ -41,8 +41,7 @@ public @interface ClassSubstitution {
     Class<?> value() default ClassSubstitution.class;
 
     /**
-     * Specifies the original class or classes if a single class is being used for multiple
-     * substitutions.
+     * Specifies the original class.
      * <p>
      * This method is provided for cases where the original class is not accessible (according to
      * Java language access control rules).
@@ -50,7 +49,7 @@ public @interface ClassSubstitution {
      * If the default value is specified for this element, then a non-default value must be given
      * for the {@link #value()} element.
      */
-    String[] className() default {};
+    String className() default "";
 
     /**
      * Determines if the substitutions are for classes that may not be part of the runtime.
@@ -62,5 +61,6 @@ public @interface ClassSubstitution {
      * Determines if the substitutions in a class are globally enabled. Individual
      * MethodSubstitutions can also have guards and those override this guard.
      */
+
     Class<? extends SubstitutionGuard> defaultGuard() default SubstitutionGuard.class;
 }
