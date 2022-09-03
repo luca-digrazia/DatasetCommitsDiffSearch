@@ -47,9 +47,8 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
     public ValueNode canonical(CanonicalizerTool tool) {
         if (array() instanceof ArrayLengthProvider) {
             ValueNode length = ((ArrayLengthProvider) array()).length();
-            if (length != null) {
-                return length;
-            }
+            assert length != null;
+            return length;
         }
         MetaAccessProvider runtime = tool.runtime();
         if (runtime != null && array().isConstant() && !array().isNullConstant()) {
@@ -62,7 +61,7 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 

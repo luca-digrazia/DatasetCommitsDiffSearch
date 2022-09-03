@@ -35,7 +35,6 @@ public final class LoadIndexedNode extends AccessIndexedNode implements Node.Ite
 
     /**
      * Creates a new LoadIndexedNode.
-     * 
      * @param array the instruction producing the array
      * @param index the instruction producing the index
      * @param elementKind the element type
