@@ -75,7 +75,7 @@ import com.oracle.graal.phases.Phase;
 
 public final class SchedulePhase extends Phase {
 
-    public enum SchedulingStrategy {
+    public static enum SchedulingStrategy {
         EARLIEST,
         LATEST,
         LATEST_OUT_OF_LOOPS,
