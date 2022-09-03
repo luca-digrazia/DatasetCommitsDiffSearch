@@ -26,6 +26,7 @@ import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -56,8 +57,8 @@ public class UnsafeLoadSnippets implements Snippets {
             super(providers, target);
         }
 
-        public void lower(UnsafeLoadNode load, LoweringTool tool) {
-            Arguments args = new Arguments(unsafeLoad, load.graph().getGuardsStage(), tool.getLoweringStage());
+        public void lower(UnsafeLoadNode load, @SuppressWarnings("unused") LoweringTool tool) {
+            Arguments args = new Arguments(unsafeLoad, load.graph().getGuardsStage());
             args.add("object", load.object());
             args.add("offset", load.offset());
             template(args).instantiate(providers.getMetaAccess(), load, DEFAULT_REPLACER, args);
