@@ -31,10 +31,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -91,11 +89,7 @@ public class InstrumentationMultiThreadingTest {
             for (Future<?> future : futures) {
                 future.get();
             }
-            engineRef.get().getInstruments().get("testAsyncAttachement1").setEnabled(false);
-            engineRef.get().getInstruments().get("testAsyncAttachement2").setEnabled(false);
         }
-
-        Assert.assertEquals(0, createDisposeCount.get());
 
     }
 
@@ -105,17 +99,9 @@ public class InstrumentationMultiThreadingTest {
         @Override
         protected void onCreate(Env env) {
             createDummyBindings(env.getInstrumenter());
-            createDisposeCount.incrementAndGet();
-        }
-
-        @Override
-        protected void onDispose(Env env) {
-            createDisposeCount.decrementAndGet();
         }
 
     }
-
-    final static AtomicInteger createDisposeCount = new AtomicInteger(0);
 
     @Registration(id = "testAsyncAttachement2")
     public static class TestAsyncAttachement2 extends TruffleInstrument {
@@ -123,12 +109,6 @@ public class InstrumentationMultiThreadingTest {
         @Override
         protected void onCreate(Env env) {
             createDummyBindings(env.getInstrumenter());
-            createDisposeCount.incrementAndGet();
-        }
-
-        @Override
-        protected void onDispose(Env env) {
-            createDisposeCount.decrementAndGet();
         }
     }
 
