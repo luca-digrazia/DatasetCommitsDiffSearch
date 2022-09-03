@@ -39,7 +39,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -103,13 +102,6 @@ public class JavaInteropTest {
         data = new Data();
         obj = JavaInterop.asTruffleObject(data);
         xyp = JavaInterop.asJavaObject(XYPlus.class, obj);
-    }
-
-    @Test
-    public void testRecursiveListMarshalling() throws UnknownIdentifierException, UnsupportedMessageException {
-        List<GregorianCalendar> testList = Arrays.asList(new GregorianCalendar());
-        TruffleObject list = JavaInterop.asTruffleObject(testList);
-        assertTrue(JavaInterop.isJavaObject(ForeignAccess.sendRead(Message.READ.createNode(), list, 0)));
     }
 
     @Test
