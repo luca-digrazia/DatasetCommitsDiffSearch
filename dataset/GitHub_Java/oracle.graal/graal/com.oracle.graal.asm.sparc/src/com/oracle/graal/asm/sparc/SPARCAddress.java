@@ -32,6 +32,15 @@ public class SPARCAddress extends AbstractAddress {
     private final int displacement;
 
     /**
+     * Creates an {@link SPARCAddress} with given base register,and no displacement.
+     * 
+     * @param base the base register
+     */
+    public SPARCAddress(Register base) {
+        this(base, Register.None, 0);
+    }
+
+    /**
      * Creates an {@link SPARCAddress} with given base register, no scaling and a given
      * displacement.
      * 
@@ -39,9 +48,7 @@ public class SPARCAddress extends AbstractAddress {
      * @param displacement the displacement
      */
     public SPARCAddress(Register base, int displacement) {
-        this.base = base;
-        this.displacement = displacement;
-        this.index = null;
+        this(base, Register.None, displacement);
     }
 
     /**
@@ -50,11 +57,12 @@ public class SPARCAddress extends AbstractAddress {
      * 
      * @param base the base register
      * @param index the index register
+     * @param displacement the displacement
      */
-    public SPARCAddress(Register base, Register index, int disp) {
+    public SPARCAddress(Register base, Register index, int displacement) {
         this.base = base;
         this.index = index;
-        this.displacement = disp;
+        this.displacement = displacement;
     }
 
     @Override
