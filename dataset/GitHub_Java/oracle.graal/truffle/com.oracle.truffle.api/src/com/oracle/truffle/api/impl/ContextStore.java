@@ -31,26 +31,28 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
 
-final class ContextStore {
+public final class ContextStore {
+    final Object vm;
 
     @CompilationFinal Object[] store;
     @CompilationFinal private Assumption storeStable = Truffle.getRuntime().createAssumption("context store stable");
 
-    ContextStore(int capacity) {
-        this.store = new Object[capacity]; // initial language capacity
+    ContextStore(Object vm, int capacity) {
+        this.vm = vm;
+        this.store = new Object[capacity < 4 ? 4 : capacity];
     }
 
-    public Object getContext(int index) {
+    Object getContext(int index) {
         if (!storeStable.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             storeStable = Truffle.getRuntime().createAssumption();
         }
-        return store[index];
+        return index < store.length ? store[index] : null;
     }
 
-    public void setContext(int languageId, Object context) {
+    void setContext(int languageId, Object context) {
         if (languageId >= store.length) {
-            store = Arrays.copyOf(store, store.length << 2);
+            store = Arrays.copyOf(store, store.length << 1);
         }
         store[languageId] = context;
         storeStable.invalidate();
