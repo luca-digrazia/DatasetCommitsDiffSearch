@@ -23,14 +23,11 @@
 
 package com.oracle.graal.compiler.hsail.test.lambda;
 
-import static com.oracle.graal.debug.Debug.*;
+import java.util.*;
 
-import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
-import com.oracle.graal.debug.*;
+import org.junit.*;
 
-import org.junit.Test;
-
-import java.util.ArrayList;
+import com.oracle.graal.compiler.hsail.test.infra.*;
 
 /**
  * Tests calling ArrayList.get().
@@ -58,12 +55,10 @@ public class ArrayListGetTest extends GraalKernelTester {
         });
     }
 
-    // NYI emitForeignCall charAlignedDisjointArraycopy
-    @Test(expected = com.oracle.graal.compiler.common.GraalInternalError.class)
+    @Ignore("emitDirectCall unimplemented")
+    @Test
     public void testUsingLambdaMethod() {
-        try (DebugConfigScope s = disableIntercept()) {
-            testGeneratedHsailUsingLambdaMethod();
-        }
+        testGeneratedHsailUsingLambdaMethod();
     }
 
 }

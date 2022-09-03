@@ -25,30 +25,29 @@ package com.oracle.graal.compiler.hsail.test.lambda;
 import com.oracle.graal.compiler.hsail.test.infra.*;
 
 import org.junit.*;
-import java.util.*;
 
 /**
- * Tests calling ArrayList.set().
+ * Tests creating a new String using {@link String#substring(int, int)}.
  */
-public class ArrayListSetTest extends GraalKernelTester {
+public class StringSubstringTest extends GraalKernelTester {
 
     final static int NUM = 50;
-    ArrayList<Integer> aryList = new ArrayList<>();
+    String inputString;
+    @Result String[] resultString = new String[NUM];
 
     @Override
     public void runTest() {
-        for (int i = 0; i < NUM; i++) {
-            aryList.add(-1);
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < NUM + 10; i++) {
+            builder.append(i);
         }
+        inputString = builder.toString();
         dispatchLambdaKernel(NUM, (gid) -> {
-            aryList.set(gid, gid);
+            resultString[gid] = inputString.substring(gid, gid + 10);
         });
-
-        // for (int i = 0; i < NUM; i++) {
-        // System.out.println(aryList.get(i));
-        // }
     }
 
+    @Ignore("emitDirectCall unimplemented")
     @Test
     public void testUsingLambdaMethod() {
         testGeneratedHsailUsingLambdaMethod();
