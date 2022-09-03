@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.tools.debug.shell.client;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -602,14 +601,7 @@ public abstract class REPLRemoteCommand extends REPLCommand {
                 }
             } else {
                 try {
-
-                    final File file = new File(args[1]);
-                    if (!file.canRead()) {
-                        context.displayFailReply("Can't read file: " + args[1]);
-                        return null;
-                    }
-                    final String path = file.getCanonicalPath();
-                    runSource = Source.fromFileName(path);
+                    runSource = Source.fromFileName(args[1]);
                 } catch (IOException e) {
                     context.displayFailReply("Can't find file: " + args[1]);
                     return null;

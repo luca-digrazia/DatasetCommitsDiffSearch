@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,15 +24,15 @@
  */
 package com.oracle.truffle.tools.debug.shell.client;
 
-import java.util.*;
+import java.util.List;
 
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.tools.debug.shell.*;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.tools.debug.shell.server.REPLServer;
 
 /**
  * Client context for interaction with a program halted by the {@link REPLServer}.
  */
-public interface REPLClientContext {
+interface REPLClientContext {
 
     /**
      * The source code halted in this context.
@@ -96,5 +96,15 @@ public interface REPLClientContext {
      * Send a message related to failure while handling a command in this context.
      */
     void displayFailReply(String message);
+
+    /**
+     * notifies client that current execution has been killed.
+     */
+    void notifyKilled();
+
+    /**
+     * Recompute the client's command line prompt.
+     */
+    void updatePrompt();
 
 }
