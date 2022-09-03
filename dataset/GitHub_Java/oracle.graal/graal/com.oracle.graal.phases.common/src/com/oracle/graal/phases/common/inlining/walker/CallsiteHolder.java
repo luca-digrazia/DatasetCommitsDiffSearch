@@ -55,19 +55,18 @@ public class CallsiteHolder {
         this.relevance = relevance;
         if (graph == null) {
             remainingInvokes = new LinkedList<>();
-            probabilities = null;
-            computeInliningRelevance = null;
         } else {
             remainingInvokes = new InliningIterator(graph).apply();
             assert remainingInvokes.size() == count(graph.getInvokes());
-            if (remainingInvokes.isEmpty()) {
-                probabilities = null;
-                computeInliningRelevance = null;
-            } else {
-                probabilities = new FixedNodeProbabilityCache();
-                computeInliningRelevance = new ComputeInliningRelevance(graph, probabilities);
-                computeProbabilities();
-            }
+        }
+
+        if (graph != null && !remainingInvokes.isEmpty()) {
+            probabilities = new FixedNodeProbabilityCache();
+            computeInliningRelevance = new ComputeInliningRelevance(graph, probabilities);
+            computeProbabilities();
+        } else {
+            probabilities = null;
+            computeInliningRelevance = null;
         }
     }
 
