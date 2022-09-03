@@ -305,14 +305,10 @@ public class OptimizedCompilationProfile {
     }
 
     @CompilerDirectives.TruffleBoundary
-    private boolean firstTierCompile(OptimizedCallTarget callTarget) {
-        return callTarget.compile(true);
-    }
-
     final boolean firstTierCall(OptimizedCallTarget callTarget) {
         int callCount = ++firstTierCallCount;
         if (callCount >= compilationCallAndLoopThreshold && !callTarget.isCompiling() && !compilationFailed) {
-            return firstTierCompile(callTarget);
+            return callTarget.compile(true);
         }
         return false;
     }
