@@ -22,14 +22,15 @@
  */
 package com.oracle.graal.jtt.jdk;
 
-import java.lang.reflect.*;
-import java.util.*;
+import java.util.AbstractList;
+import java.util.List;
 
-import org.junit.*;
+import org.junit.Ignore;
+import org.junit.Test;
 
-import sun.misc.*;
+import com.oracle.graal.jtt.JTTTest;
 
-import com.oracle.graal.jtt.*;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /*
  */
@@ -38,24 +39,27 @@ public class UnsafeAllocateInstance01 extends JTTTest {
     int field01 = 42;
 
     public static int testInstance() throws SecurityException, InstantiationException {
-        final Unsafe unsafe = getUnsafe();
-        UnsafeAllocateInstance01 newObject = (UnsafeAllocateInstance01) unsafe.allocateInstance(UnsafeAllocateInstance01.class);
+        UnsafeAllocateInstance01 newObject = (UnsafeAllocateInstance01) UNSAFE.allocateInstance(UnsafeAllocateInstance01.class);
         return newObject.field01;
     }
 
-    public static void testClassForException(Class clazz) throws SecurityException, InstantiationException {
-        final Unsafe unsafe = getUnsafe();
-        unsafe.allocateInstance(clazz);
+    public static void testClassForException(Class<?> clazz) throws SecurityException, InstantiationException {
+        UNSAFE.allocateInstance(clazz);
     }
 
-    static Unsafe getUnsafe() {
-        try {
-            final Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
-            unsafeField.setAccessible(true);
-            return (Unsafe) unsafeField.get(null);
-        } catch (Exception e) {
-            throw new Error(e);
+    @Override
+    protected Result executeExpected(ResolvedJavaMethod method, Object receiver, Object... args) {
+        if (args.length == 1) {
+            /*
+             * HotSpot will crash if the C2 intrinsic for this is used with array classes, so just
+             * handle it explicitly so that we can still exercise Graal.
+             */
+            Class<?> cl = (Class<?>) args[0];
+            if (cl.isArray()) {
+                return new Result(null, new InstantiationException(cl.getName()));
+            }
         }
+        return super.executeExpected(method, receiver, args);
     }
 
     @Test
@@ -88,13 +92,13 @@ public class UnsafeAllocateInstance01 extends JTTTest {
         runTest("testClassForException", Class.class);
     }
 
-    @Ignore("Currently crashes hotspot")
+    @Ignore("Currently crashes hotspot because primitive classes aren't handled")
     @Test
     public void run5() throws Throwable {
         runTest("testClassForException", void.class);
     }
 
-    @Ignore("Currently crashes hotspot")
+    @Ignore("Currently crashes hotspot because primitive classes aren't handled")
     @Test
     public void run6() throws Throwable {
         runTest("testClassForException", int.class);
