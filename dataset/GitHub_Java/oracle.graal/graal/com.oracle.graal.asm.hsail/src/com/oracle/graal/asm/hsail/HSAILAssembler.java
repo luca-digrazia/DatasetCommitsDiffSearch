@@ -27,7 +27,7 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hsail.*;
 
 /**
@@ -190,9 +190,16 @@ public abstract class HSAILAssembler extends AbstractHSAILAssembler {
         emitString("st_spill_" + getArgTypeFromKind(kind) + " " + HSAIL.mapRegister(src) + ", " + mapStackSlot(dest, getArgSizeFromKind(kind)) + ";");
     }
 
+    /**
+     * The mapping to stack slots is always relative to the beginning of the spillseg.
+     * HSAIL.getStackOffset returns the positive version of the originally negative offset. Then we
+     * back up from that by the argSize in bytes. This ensures that slots of different size do not
+     * overlap, even though we have converted from negative to positive offsets.
+     */
     public static String mapStackSlot(Value reg, int argSize) {
-        long startOffset = HSAIL.getStackOffsetStart(reg, argSize);
-        return "[%spillseg]" + "[" + startOffset + "]";
+        long offset = HSAIL.getStackOffset(reg);
+        int argSizeBytes = argSize / 8;
+        return "[%spillseg]" + "[" + (offset - argSizeBytes) + "]";
     }
 
     public void cbr(String target1) {
@@ -535,28 +542,10 @@ public abstract class HSAILAssembler extends AbstractHSAILAssembler {
      *
      * @param result result operand that gets the original contents of the memory location
      * @param address the memory location
-     * @param delta the amount to add
+     * @param deltaValue the amount to add
      */
-    public void emitAtomicAdd(AllocatableValue result, HSAILAddress address, Value delta) {
-        // ensure result and delta agree (this should probably be at some higher level)
-        Value mydelta = delta;
-        if (!isConstant(delta) && (getArgSize(result) != getArgSize(delta))) {
-            emitConvert(result, delta, result.getKind(), delta.getKind());
-            mydelta = result;
-        }
-        String prefix = getArgTypeForceUnsigned(result);
-        emitString(String.format("atomic_add_global_%s   %s, %s, %s;", prefix, HSAIL.mapRegister(result), mapAddress(address), mapRegOrConstToString(mydelta)));
-    }
-
-    /**
-     * Emits an atomic_exch_global instruction.
-     *
-     * @param result result operand that gets the original contents of the memory location
-     * @param address the memory location
-     * @param newValue the new value to write to the memory location
-     */
-    public void emitAtomicExch(Kind accessKind, AllocatableValue result, HSAILAddress address, Value newValue) {
-        emitString(String.format("atomic_exch_global_b%d   %s, %s, %s;", getArgSizeFromKind(accessKind), HSAIL.mapRegister(result), mapAddress(address), mapRegOrConstToString(newValue)));
+    public void emitAtomicAdd(AllocatableValue result, HSAILAddress address, Value deltaValue) {
+        emitString(String.format("atomic_add_global_u%d   %s, %s, %s;", getArgSize(result), HSAIL.mapRegister(result), mapAddress(address), mapRegOrConstToString(deltaValue)));
     }
 
     /**
