@@ -22,16 +22,14 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * A helper class to allow elimination of byte code instrumentation that could interfere with escape
@@ -42,8 +40,8 @@ public class VirtualizableInvokeMacroNode extends MacroStateSplitNode implements
 
     public static final NodeClass<VirtualizableInvokeMacroNode> TYPE = NodeClass.create(VirtualizableInvokeMacroNode.class);
 
-    public VirtualizableInvokeMacroNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
-        super(TYPE, invokeKind, targetMethod, bci, returnStamp, arguments);
+    public VirtualizableInvokeMacroNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, JavaType returnType, ValueNode... arguments) {
+        super(TYPE, invokeKind, targetMethod, bci, returnType, arguments);
     }
 
     @Override

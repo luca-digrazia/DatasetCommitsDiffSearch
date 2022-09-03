@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,59 +22,145 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ri.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.meta.Assumptions.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
- * The {@code TypeCheckNode} is the base class of casts and instanceof tests.
+ * The {@code TypeCheckNode} represents a test equivalent to {@code o.getClass() == type}. The node
+ * may only be used if {@code o != null} is known to be true as indicated by the object's stamp.
  */
-public abstract class TypeCheckNode extends BooleanNode {
+@NodeInfo
+public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, Virtualizable {
+    public static final NodeClass<TypeCheckNode> TYPE = NodeClass.create(TypeCheckNode.class);
 
-    protected static final RiResolvedType[] EMPTY_HINTS = new RiResolvedType[0];
-    @Input private ValueNode object;
-    @Input private ValueNode targetClassInstruction;
-    @Data private final RiResolvedType targetClass;
-    @Data private final RiResolvedType[] hints;
-    @Data private final boolean hintsExact;
+    protected final ResolvedJavaType type;
+
+    protected TypeCheckNode(ResolvedJavaType type, ValueNode object) {
+        super(TYPE, object);
+        this.type = type;
+        assert type != null;
+        assert type.isConcrete() || type.isArray();
+    }
+
+    public static LogicNode create(ResolvedJavaType type, ValueNode object) {
+        ObjectStamp objectStamp = (ObjectStamp) object.stamp();
+        assert objectStamp.nonNull() : object;
+        LogicNode constantValue = findSynonym(type, objectStamp.type(), true, objectStamp.isExactType());
+        if (constantValue != null) {
+            return constantValue;
+        } else {
+            return new TypeCheckNode(type, object);
+        }
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (!(forValue.stamp() instanceof ObjectStamp)) {
+            return this;
+        }
+        ObjectStamp objectStamp = (ObjectStamp) forValue.stamp();
+        assert objectStamp.nonNull();
+
+        ResolvedJavaType stampType = objectStamp.type();
+        if (stampType != null) {
+            ValueNode result = findSynonym(type(), stampType, true, objectStamp.isExactType());
+            if (result != null) {
+                return result;
+            }
+            Assumptions assumptions = graph() == null ? null : graph().getAssumptions();
+            if (assumptions != null) {
+                AssumptionResult<ResolvedJavaType> leafConcreteSubtype = stampType.findLeafConcreteSubtype();
+                if (leafConcreteSubtype != null) {
+                    result = findSynonym(type(), leafConcreteSubtype.getResult(), true, true);
+                    if (result != null) {
+                        assumptions.record(leafConcreteSubtype);
+                        return result;
+                    }
+                }
+            }
+        }
+        return this;
+    }
+
+    public static LogicNode findSynonym(ResolvedJavaType type, ResolvedJavaType inputType, boolean nonNull, boolean exactType) {
+        if (inputType == null) {
+            return null;
+        }
+        if (type.equals(inputType)) {
+            if (nonNull && exactType) {
+                // the type matches, so return true
+                return LogicConstantNode.tautology();
+            }
+        } else {
+            if (exactType || !inputType.isAssignableFrom(type)) {
+                // since this type check failed for an exact type we know that it can never
+                // succeed at run time. we also don't care about null values, since they will
+                // also make the check fail.
+                return LogicConstantNode.contradiction();
+            }
+        }
+        return null;
+    }
 
     /**
-     * Creates a new TypeCheckNode.
-     * @param targetClassInstruction the instruction which produces the class which is being cast to or checked against
-     * @param targetClass the class that is being casted to or checked against
-     * @param object the node which produces the object
-     * @param kind the result type of this node
+     * Gets the type being tested.
      */
-    public TypeCheckNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact, Stamp stamp) {
-        super(stamp);
-        this.targetClassInstruction = targetClassInstruction;
-        this.targetClass = targetClass;
-        this.object = object;
-        this.hints = hints;
-        this.hintsExact = hintsExact;
+    public ResolvedJavaType type() {
+        return type;
     }
 
-    public ValueNode object() {
-        return object;
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(getValue());
+        TriState state = tryFold(alias.stamp());
+        if (state != TriState.UNKNOWN) {
+            tool.replaceWithValue(LogicConstantNode.forBoolean(state.isTrue(), graph()));
+        }
     }
 
-    public ValueNode targetClassInstruction() {
-        return targetClassInstruction;
+    @Override
+    public Stamp getSucceedingStampForValue(boolean negated) {
+        if (negated) {
+            return null;
+        } else {
+            return StampFactory.exactNonNull(type);
+        }
     }
 
-    /**
-     * Gets the target class, i.e. the class being cast to, or the class being tested against.
-     * @return the target class
-     */
-    public RiResolvedType targetClass() {
-        return targetClass;
-    }
+    @Override
+    public TriState tryFold(Stamp valueStamp) {
+        if (valueStamp instanceof ObjectStamp) {
+            ObjectStamp objectStamp = (ObjectStamp) valueStamp;
+            if (objectStamp.alwaysNull()) {
+                return TriState.FALSE;
+            }
 
-    public RiResolvedType[] hints() {
-        return hints;
-    }
-
-    public boolean hintsExact() {
-        return hintsExact;
+            ResolvedJavaType objectType = objectStamp.type();
+            if (objectType != null) {
+                ResolvedJavaType instanceofType = type;
+                if (instanceofType.equals(objectType)) {
+                    if (objectStamp.nonNull() && (objectStamp.isExactType() || objectType.isLeaf())) {
+                        return TriState.TRUE;
+                    }
+                } else {
+                    if (objectStamp.isExactType()) {
+                        return TriState.FALSE;
+                    }
+                }
+            }
+        }
+        return TriState.UNKNOWN;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,49 +22,84 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
+import java.util.*;
+
+import com.oracle.graal.debug.*;
+
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.virtual.nodes.*;
 
 /**
- * This class describes the state of a virtual object while iterating over the graph.
- * It describes the fields or array elements (called "entries") and the lock count if the object is still virtual.
- * If the object was materialized, it contains the current materialized value.
+ * This class describes the state of a virtual object while iterating over the graph. It describes
+ * the fields or array elements (called "entries") and the lock count if the object is still
+ * virtual. If the object was materialized, it contains the current materialized value.
  */
-class ObjectState {
+public class ObjectState {
 
-    public final VirtualObjectNode virtual;
+    public static final DebugMetric CREATE_ESCAPED_OBJECT_STATE = Debug.metric("CreateEscapeObjectState");
+    public static final DebugMetric GET_ESCAPED_OBJECT_STATE = Debug.metric("GetEscapeObjectState");
+
     private ValueNode[] entries;
     private ValueNode materializedValue;
-    private int lockCount;
+    private LockState locks;
+    private boolean ensureVirtualized;
 
-    public ObjectState(VirtualObjectNode virtual, ValueNode[] entries, int lockCount) {
-        this.virtual = virtual;
-        this.entries = entries;
-        this.lockCount = lockCount;
+    private EscapeObjectState cachedState;
+
+    boolean copyOnWrite;
+
+    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized) {
+        this(entries, (LockState) null, ensureVirtualized);
+        for (int i = locks.size() - 1; i >= 0; i--) {
+            this.locks = new LockState(locks.get(i), this.locks);
+        }
     }
 
-    public ObjectState(VirtualObjectNode virtual, ValueNode materializedValue, int lockCount) {
-        this.virtual = virtual;
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
+        this.entries = entries;
+        this.locks = locks;
+        this.ensureVirtualized = ensureVirtualized;
+    }
+
+    public ObjectState(ValueNode materializedValue, LockState locks, boolean ensureVirtualized) {
+        assert materializedValue != null;
         this.materializedValue = materializedValue;
-        this.lockCount = lockCount;
+        this.locks = locks;
+        this.ensureVirtualized = ensureVirtualized;
     }
 
     private ObjectState(ObjectState other) {
-        virtual = other.virtual;
         entries = other.entries == null ? null : other.entries.clone();
         materializedValue = other.materializedValue;
-        lockCount = other.lockCount;
+        locks = other.locks;
+        cachedState = other.cachedState;
+        ensureVirtualized = other.ensureVirtualized;
     }
 
     public ObjectState cloneState() {
         return new ObjectState(this);
     }
 
+    public EscapeObjectState createEscapeObjectState(VirtualObjectNode virtual) {
+        GET_ESCAPED_OBJECT_STATE.increment();
+        if (cachedState == null) {
+            CREATE_ESCAPED_OBJECT_STATE.increment();
+            cachedState = isVirtual() ? new VirtualObjectState(virtual, entries) : new MaterializedObjectState(virtual, materializedValue);
+        }
+        return cachedState;
+
+    }
+
     public boolean isVirtual() {
-        assert (entries == null) ^ (materializedValue == null);
+        assert materializedValue == null ^ entries == null;
         return materializedValue == null;
     }
 
+    /**
+     * Users of this method are not allowed to change the entries of the returned array.
+     */
     public ValueNode[] getEntries() {
         assert isVirtual();
         return entries;
@@ -75,44 +110,80 @@ class ObjectState {
         return entries[index];
     }
 
-    public void setEntry(int index, ValueNode value) {
-        assert isVirtual();
-        entries[index] = value;
-    }
-
     public ValueNode getMaterializedValue() {
         assert !isVirtual();
         return materializedValue;
     }
 
-    public void setMaterializedValue(ValueNode value) {
+    public void setEntry(int index, ValueNode value) {
         assert isVirtual();
-        materializedValue = value;
+        cachedState = null;
+        entries[index] = value;
+    }
+
+    public void escape(ValueNode materialized) {
+        assert isVirtual();
+        assert materialized != null;
+        materializedValue = materialized;
         entries = null;
+        cachedState = null;
+        assert !isVirtual();
     }
 
     public void updateMaterializedValue(ValueNode value) {
         assert !isVirtual();
+        assert value != null;
+        cachedState = null;
         materializedValue = value;
     }
 
-    public int getLockCount() {
-        return lockCount;
+    public void addLock(MonitorIdNode monitorId) {
+        locks = new LockState(monitorId, locks);
     }
 
-    public void setLockCount(int lockCount) {
-        this.lockCount = lockCount;
+    public MonitorIdNode removeLock() {
+        try {
+            return locks.monitorId;
+        } finally {
+            locks = locks.next;
+        }
+    }
+
+    public LockState getLocks() {
+        return locks;
+    }
+
+    public boolean hasLocks() {
+        return locks != null;
+    }
+
+    public boolean locksEqual(ObjectState other) {
+        LockState a = locks;
+        LockState b = other.locks;
+        while (a != null && b != null && a.monitorId == b.monitorId) {
+            a = a.next;
+            b = b.next;
+        }
+        return a == null && b == null;
+    }
+
+    public void setEnsureVirtualized(boolean ensureVirtualized) {
+        this.ensureVirtualized = ensureVirtualized;
+    }
+
+    public boolean getEnsureVirtualized() {
+        return ensureVirtualized;
     }
 
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder().append('{');
-        if (lockCount > 0) {
-            str.append('l').append(lockCount).append(' ');
+        if (locks != null) {
+            str.append('l').append(locks).append(' ');
         }
         if (entries != null) {
             for (int i = 0; i < entries.length; i++) {
-                str.append(virtual.fieldName(i)).append('=').append(entries[i]).append(' ');
+                str.append("entry").append(i).append('=').append(entries[i]).append(' ');
             }
         }
         if (materializedValue != null) {
@@ -120,5 +191,45 @@ class ObjectState {
         }
 
         return str.append('}').toString();
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + Arrays.hashCode(entries);
+        result = prime * result + (locks != null ? locks.monitorId.getLockDepth() : 0);
+        result = prime * result + ((materializedValue == null) ? 0 : materializedValue.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        ObjectState other = (ObjectState) obj;
+        if (!Arrays.equals(entries, other.entries)) {
+            return false;
+        }
+        if (!locksEqual(other)) {
+            return false;
+        }
+        if (materializedValue == null) {
+            if (other.materializedValue != null) {
+                return false;
+            }
+        } else if (!materializedValue.equals(other.materializedValue)) {
+            return false;
+        }
+        return true;
+    }
+
+    public ObjectState share() {
+        copyOnWrite = true;
+        return this;
     }
 }

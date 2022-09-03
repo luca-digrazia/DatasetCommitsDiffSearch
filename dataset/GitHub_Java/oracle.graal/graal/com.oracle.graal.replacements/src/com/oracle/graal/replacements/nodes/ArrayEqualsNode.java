@@ -22,30 +22,17 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.LocationIdentity;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValueNodeUtil;
-import com.oracle.graal.nodes.memory.MemoryAccess;
-import com.oracle.graal.nodes.memory.MemoryNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.virtual.*;
 
 // JaCoCo Exclude
 
@@ -56,8 +43,8 @@ import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable, Virtualizable, MemoryAccess {
 
     public static final NodeClass<ArrayEqualsNode> TYPE = NodeClass.create(ArrayEqualsNode.class);
-    /** {@link JavaKind} of the arrays to compare. */
-    protected final JavaKind kind;
+    /** {@link Kind} of the arrays to compare. */
+    protected final Kind kind;
 
     /** One array to be tested for equality. */
     @Input ValueNode array1;
@@ -70,24 +57,12 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
 
     @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
 
-    public ArrayEqualsNode(ValueNode array1, ValueNode array2, ValueNode length, @ConstantNodeParameter JavaKind kind) {
-        super(TYPE, StampFactory.forKind(JavaKind.Boolean));
+    public ArrayEqualsNode(ValueNode array1, ValueNode array2, ValueNode length, @ConstantNodeParameter Kind kind) {
+        super(TYPE, StampFactory.forKind(Kind.Boolean));
         this.kind = kind;
         this.array1 = array1;
         this.array2 = array2;
         this.length = length;
-    }
-
-    public ValueNode getArray1() {
-        return array1;
-    }
-
-    public ValueNode getArray2() {
-        return array2;
-    }
-
-    public ValueNode getLength() {
-        return length;
     }
 
     @Override
@@ -135,38 +110,38 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
     }
 
     @NodeIntrinsic
-    public static native boolean equals(Object array1, Object array2, int length, @ConstantNodeParameter JavaKind kind);
+    public static native boolean equals(Object array1, Object array2, int length, @ConstantNodeParameter Kind kind);
 
     public static boolean equals(boolean[] array1, boolean[] array2, int length) {
-        return equals(array1, array2, length, JavaKind.Boolean);
+        return equals(array1, array2, length, Kind.Boolean);
     }
 
     public static boolean equals(byte[] array1, byte[] array2, int length) {
-        return equals(array1, array2, length, JavaKind.Byte);
+        return equals(array1, array2, length, Kind.Byte);
     }
 
     public static boolean equals(char[] array1, char[] array2, int length) {
-        return equals(array1, array2, length, JavaKind.Char);
+        return equals(array1, array2, length, Kind.Char);
     }
 
     public static boolean equals(short[] array1, short[] array2, int length) {
-        return equals(array1, array2, length, JavaKind.Short);
+        return equals(array1, array2, length, Kind.Short);
     }
 
     public static boolean equals(int[] array1, int[] array2, int length) {
-        return equals(array1, array2, length, JavaKind.Int);
+        return equals(array1, array2, length, Kind.Int);
     }
 
     public static boolean equals(long[] array1, long[] array2, int length) {
-        return equals(array1, array2, length, JavaKind.Long);
+        return equals(array1, array2, length, Kind.Long);
     }
 
     public static boolean equals(float[] array1, float[] array2, int length) {
-        return equals(array1, array2, length, JavaKind.Float);
+        return equals(array1, array2, length, Kind.Float);
     }
 
     public static boolean equals(double[] array1, double[] array2, int length) {
-        return equals(array1, array2, length, JavaKind.Double);
+        return equals(array1, array2, length, Kind.Double);
     }
 
     @Override

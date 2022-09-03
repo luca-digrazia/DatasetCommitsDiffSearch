@@ -22,49 +22,36 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.nodeinfo.InputType.State;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_8;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_8;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.virtual.VirtualArrayNode;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code StoreIndexedNode} represents a write to an array element.
  */
-@NodeInfo(cycles = CYCLES_8, size = SIZE_8)
+@NodeInfo
 public final class StoreIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable {
 
     public static final NodeClass<StoreIndexedNode> TYPE = NodeClass.create(StoreIndexedNode.class);
     @Input ValueNode value;
-    @OptionalInput(State) FrameState stateAfter;
+    @OptionalInput(InputType.State) FrameState stateAfter;
 
-    @Override
     public FrameState stateAfter() {
         return stateAfter;
     }
 
-    @Override
     public void setStateAfter(FrameState x) {
         assert x == null || x.isAlive() : "frame state must be in a graph";
         updateUsages(stateAfter, x);
         stateAfter = x;
     }
 
-    @Override
     public boolean hasSideEffect() {
         return true;
     }
@@ -73,7 +60,7 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
         return value;
     }
 
-    public StoreIndexedNode(ValueNode array, ValueNode index, JavaKind elementKind, ValueNode value) {
+    public StoreIndexedNode(ValueNode array, ValueNode index, Kind elementKind, ValueNode value) {
         super(TYPE, StampFactory.forVoid(), array, index, elementKind);
         this.value = value;
     }
@@ -88,7 +75,7 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
             if (idx >= 0 && idx < virtual.entryCount()) {
                 ResolvedJavaType componentType = virtual.type().getComponentType();
                 if (componentType.isPrimitive() || StampTool.isPointerAlwaysNull(value) || componentType.getSuperclass() == null ||
-                                (StampTool.typeReferenceOrNull(value) != null && componentType.isAssignableFrom(StampTool.typeOrNull(value)))) {
+                                (StampTool.typeOrNull(value) != null && componentType.isAssignableFrom(StampTool.typeOrNull(value)))) {
                     tool.setVirtualEntry(virtual, idx, value(), false);
                     tool.delete();
                 }

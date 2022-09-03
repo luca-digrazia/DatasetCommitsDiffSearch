@@ -22,31 +22,19 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
-import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.GetClassNode;
-import com.oracle.graal.nodes.java.InstanceOfNode;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 @NodeInfo(shortName = "==")
 public final class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable {
@@ -76,11 +64,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     protected ValueNode canonicalizeSymmetricConstant(CanonicalizerTool tool, Constant constant, ValueNode nonConstant, boolean mirrored) {
         ResolvedJavaType type = tool.getConstantReflection().asJavaType(constant);
         if (type != null && nonConstant instanceof GetClassNode) {
-            GetClassNode getClassNode = (GetClassNode) nonConstant;
-            ValueNode object = getClassNode.getObject();
-            assert ((ObjectStamp) object.stamp()).nonNull();
             if (!type.isPrimitive() && (type.isConcrete() || type.isArray())) {
-                return InstanceOfNode.create(TypeReference.createExactTrusted(type), object);
+                return TypeCheckNode.create(type, ((GetClassNode) nonConstant).getObject());
             }
             return LogicConstantNode.forBoolean(false);
         }
@@ -88,10 +73,10 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     }
 
     private void virtualizeNonVirtualComparison(VirtualObjectNode virtual, ValueNode other, VirtualizerTool tool) {
-        if (!virtual.hasIdentity() && virtual.entryKind(0) == JavaKind.Boolean) {
+        if (!virtual.hasIdentity() && virtual.entryKind(0) == Kind.Boolean) {
             if (other.isConstant()) {
                 JavaConstant otherUnboxed = tool.getConstantReflectionProvider().unboxPrimitive(other.asJavaConstant());
-                if (otherUnboxed != null && otherUnboxed.getJavaKind() == JavaKind.Boolean) {
+                if (otherUnboxed != null && otherUnboxed.getKind() == Kind.Boolean) {
                     int expectedValue = otherUnboxed.asBoolean() ? 1 : 0;
                     IntegerEqualsNode equals = new IntegerEqualsNode(tool.getEntry(virtual, 0), ConstantNode.forInt(expectedValue, graph()));
                     tool.addNode(equals);
@@ -123,7 +108,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                 /*
                  * One of the two objects has identity, the other doesn't. In code, this looks like
                  * "Integer.valueOf(a) == new Integer(b)", which is always false.
-                 *
+                 * 
                  * In other words: an object created via valueOf can never be equal to one created
                  * by new in the same compilation unit.
                  */
@@ -135,7 +120,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                     if (type.equals(metaAccess.lookupJavaType(Integer.class)) || type.equals(metaAccess.lookupJavaType(Long.class))) {
                         // both are virtual without identity: check contents
                         assert xVirtual.entryCount() == 1 && yVirtual.entryCount() == 1;
-                        assert xVirtual.entryKind(0).getStackKind() == JavaKind.Int || xVirtual.entryKind(0) == JavaKind.Long;
+                        assert xVirtual.entryKind(0).getStackKind() == Kind.Int || xVirtual.entryKind(0) == Kind.Long;
                         IntegerEqualsNode equals = new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
                         tool.addNode(equals);
                         tool.replaceWithValue(equals);

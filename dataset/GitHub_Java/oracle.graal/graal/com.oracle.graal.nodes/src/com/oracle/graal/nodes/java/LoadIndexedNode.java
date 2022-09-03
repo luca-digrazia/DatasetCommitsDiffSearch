@@ -22,26 +22,16 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.virtual.VirtualArrayNode;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code LoadIndexedNode} represents a read from an element of an array.
@@ -58,11 +48,11 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
      * @param index the instruction producing the index
      * @param elementKind the element type
      */
-    public LoadIndexedNode(ValueNode array, ValueNode index, JavaKind elementKind) {
+    public LoadIndexedNode(ValueNode array, ValueNode index, Kind elementKind) {
         this(TYPE, createStamp(array, elementKind), array, index, elementKind);
     }
 
-    public static ValueNode create(ValueNode array, ValueNode index, JavaKind elementKind, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+    public static ValueNode create(ValueNode array, ValueNode index, Kind elementKind, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
         ValueNode constant = tryConstantFold(array, index, metaAccess, constantReflection);
         if (constant != null) {
             return constant;
@@ -70,13 +60,13 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
         return new LoadIndexedNode(array, index, elementKind);
     }
 
-    protected LoadIndexedNode(NodeClass<? extends LoadIndexedNode> c, Stamp stamp, ValueNode array, ValueNode index, JavaKind elementKind) {
+    protected LoadIndexedNode(NodeClass<? extends LoadIndexedNode> c, Stamp stamp, ValueNode array, ValueNode index, Kind elementKind) {
         super(c, stamp, array, index, elementKind);
     }
 
-    private static Stamp createStamp(ValueNode array, JavaKind kind) {
+    private static Stamp createStamp(ValueNode array, Kind kind) {
         ResolvedJavaType type = StampTool.typeOrNull(array);
-        if (kind == JavaKind.Object && type != null && type.isArray()) {
+        if (kind == Kind.Object && type != null) {
             return StampFactory.declaredTrusted(type.getComponentType());
         } else {
             return StampFactory.forKind(kind);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,68 @@
  */
 package com.oracle.graal.nodes.java;
 
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code StoreFieldNode} represents a write to a static or instance field.
  */
-public final class StoreFieldNode extends AccessFieldNode {
+@NodeInfo(nameTemplate = "StoreField#{p#field/s}")
+public final class StoreFieldNode extends AccessFieldNode implements StateSplit, Virtualizable {
+    public static final NodeClass<StoreFieldNode> TYPE = NodeClass.create(StoreFieldNode.class);
 
-    @Input private ValueNode value;
+    @Input ValueNode value;
+    @OptionalInput(InputType.State) FrameState stateAfter;
+
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
+
+    public boolean hasSideEffect() {
+        return true;
+    }
 
     public ValueNode value() {
         return value;
     }
 
-    /**
-     * Creates a new StoreFieldNode.
-     * @param object the receiver object
-     * @param field the compiler interface field
-     * @param value the node representing the value to store to the field
-     */
-    public StoreFieldNode(ValueNode object, RiResolvedField field, ValueNode value) {
-        super(StampFactory.illegal(), object, field);
+    public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value) {
+        super(TYPE, StampFactory.forVoid(), object, field);
         this.value = value;
+    }
+
+    public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value, FrameState stateAfter) {
+        super(TYPE, StampFactory.forVoid(), object, field);
+        this.value = value;
+        this.stateAfter = stateAfter;
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(object());
+        if (alias instanceof VirtualObjectNode) {
+            VirtualInstanceNode virtual = (VirtualInstanceNode) alias;
+            int fieldIndex = virtual.fieldIndex(field());
+            if (fieldIndex != -1) {
+                tool.setVirtualEntry(virtual, fieldIndex, value(), false);
+                tool.delete();
+            }
+        }
+    }
+
+    public FrameState getState() {
+        return stateAfter;
     }
 }

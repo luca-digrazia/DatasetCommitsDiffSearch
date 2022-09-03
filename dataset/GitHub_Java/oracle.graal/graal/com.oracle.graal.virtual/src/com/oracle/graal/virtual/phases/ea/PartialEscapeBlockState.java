@@ -24,15 +24,22 @@ package com.oracle.graal.virtual.phases.ea;
 
 import java.util.*;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
 
 public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<T>> extends EffectsBlockState<T> {
 
-    protected final IdentityHashMap<VirtualObjectNode, ObjectState> objectStates = new IdentityHashMap<>();
-    protected final IdentityHashMap<ValueNode, VirtualObjectNode> objectAliases;
+    private static final ObjectState[] EMPTY_ARRAY = new ObjectState[0];
+
+    private ObjectState[] objectStates;
+
+    private static class RefCount {
+        private int refCount = 1;
+    }
+
+    private RefCount arrayRefCount;
 
     /**
      * Final subclass of PartialEscapeBlockState, for performance and to make everything behave
@@ -49,61 +56,155 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
     }
 
     protected PartialEscapeBlockState() {
-        objectAliases = new IdentityHashMap<>();
+        objectStates = EMPTY_ARRAY;
+        arrayRefCount = new RefCount();
     }
 
     protected PartialEscapeBlockState(PartialEscapeBlockState<T> other) {
         super(other);
-        for (Map.Entry<VirtualObjectNode, ObjectState> entry : other.objectStates.entrySet()) {
-            objectStates.put(entry.getKey(), entry.getValue().cloneState());
-        }
-        objectAliases = new IdentityHashMap<>(other.objectAliases);
+        adoptAddObjectStates(other);
+    }
+
+    public ObjectState getObjectState(int object) {
+        ObjectState state = objectStates[object];
+        assert state != null;
+        return state;
+    }
+
+    public ObjectState getObjectStateOptional(int object) {
+        return object >= objectStates.length ? null : objectStates[object];
     }
 
     public ObjectState getObjectState(VirtualObjectNode object) {
-        assert objectStates.containsKey(object);
-        return objectStates.get(object);
+        ObjectState state = objectStates[object.getObjectId()];
+        assert state != null;
+        return state;
     }
 
     public ObjectState getObjectStateOptional(VirtualObjectNode object) {
-        return objectStates.get(object);
+        int id = object.getObjectId();
+        return id >= objectStates.length ? null : objectStates[id];
     }
 
-    public ObjectState getObjectState(ValueNode value) {
-        VirtualObjectNode object = objectAliases.get(value);
-        return object == null ? null : getObjectState(object);
+    private ObjectState[] getObjectStateArrayForModification() {
+        if (arrayRefCount.refCount > 1) {
+            objectStates = objectStates.clone();
+            arrayRefCount = new RefCount();
+        }
+        return objectStates;
     }
 
-    public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, EscapeState state, GraphEffectList materializeEffects) {
+    private ObjectState getObjectStateForModification(int object) {
+        ObjectState[] array = getObjectStateArrayForModification();
+        ObjectState objectState = array[object];
+        if (objectState.copyOnWrite) {
+            array[object] = objectState = objectState.cloneState();
+        }
+        return objectState;
+    }
+
+    public void setEntry(int object, int entryIndex, ValueNode value) {
+        if (objectStates[object].getEntry(entryIndex) != value) {
+            getObjectStateForModification(object).setEntry(entryIndex, value);
+        }
+    }
+
+    public void escape(int object, ValueNode materialized) {
+        getObjectStateForModification(object).escape(materialized);
+    }
+
+    public void addLock(int object, MonitorIdNode monitorId) {
+        getObjectStateForModification(object).addLock(monitorId);
+    }
+
+    public MonitorIdNode removeLock(int object) {
+        return getObjectStateForModification(object).removeLock();
+    }
+
+    public void setEnsureVirtualized(int object, boolean ensureVirtualized) {
+        if (objectStates[object].getEnsureVirtualized() != ensureVirtualized) {
+            getObjectStateForModification(object).setEnsureVirtualized(ensureVirtualized);
+        }
+    }
+
+    public void updateMaterializedValue(int object, ValueNode value) {
+        if (objectStates[object].getMaterializedValue() != value) {
+            getObjectStateForModification(object).updateMaterializedValue(value);
+        }
+    }
+
+    public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, GraphEffectList materializeEffects) {
         PartialEscapeClosure.METRIC_MATERIALIZATIONS.increment();
         List<AllocatedObjectNode> objects = new ArrayList<>(2);
         List<ValueNode> values = new ArrayList<>(8);
-        List<int[]> locks = new ArrayList<>(2);
+        List<List<MonitorIdNode>> locks = new ArrayList<>(2);
         List<ValueNode> otherAllocations = new ArrayList<>(2);
-        materializeWithCommit(fixed, virtual, objects, locks, values, otherAllocations, state);
+        List<Boolean> ensureVirtual = new ArrayList<>(2);
+        materializeWithCommit(fixed, virtual, objects, locks, values, ensureVirtual, otherAllocations);
 
-        materializeEffects.addMaterializationBefore(fixed, objects, locks, values, otherAllocations);
+        materializeEffects.add("materializeBefore", (graph, obsoleteNodes) -> {
+            for (ValueNode otherAllocation : otherAllocations) {
+                graph.addWithoutUnique(otherAllocation);
+                if (otherAllocation instanceof FixedWithNextNode) {
+                    graph.addBeforeFixed(fixed, (FixedWithNextNode) otherAllocation);
+                } else {
+                    assert otherAllocation instanceof FloatingNode;
+                }
+            }
+            if (!objects.isEmpty()) {
+                CommitAllocationNode commit;
+                if (fixed.predecessor() instanceof CommitAllocationNode) {
+                    commit = (CommitAllocationNode) fixed.predecessor();
+                } else {
+                    commit = graph.add(new CommitAllocationNode());
+                    graph.addBeforeFixed(fixed, commit);
+                }
+                for (AllocatedObjectNode obj : objects) {
+                    graph.addWithoutUnique(obj);
+                    commit.getVirtualObjects().add(obj.getVirtualObject());
+                    obj.setCommit(commit);
+                }
+                commit.getValues().addAll(values);
+                for (List<MonitorIdNode> monitorIds : locks) {
+                    commit.addLocks(monitorIds);
+                }
+                commit.getEnsureVirtual().addAll(ensureVirtual);
+
+                assert commit.usages().filter(AllocatedObjectNode.class).count() == commit.getUsageCount();
+                List<AllocatedObjectNode> materializedValues = commit.usages().filter(AllocatedObjectNode.class).snapshot();
+                for (int i = 0; i < commit.getValues().size(); i++) {
+                    if (materializedValues.contains(commit.getValues().get(i))) {
+                        commit.getValues().set(i, ((AllocatedObjectNode) commit.getValues().get(i)).getVirtualObject());
+                    }
+                }
+            }
+        });
     }
 
-    private void materializeWithCommit(FixedNode fixed, VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<int[]> locks, List<ValueNode> values, List<ValueNode> otherAllocations,
-                    EscapeState state) {
+    private void materializeWithCommit(FixedNode fixed, VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<List<MonitorIdNode>> locks, List<ValueNode> values,
+                    List<Boolean> ensureVirtual, List<ValueNode> otherAllocations) {
         ObjectState obj = getObjectState(virtual);
 
         ValueNode[] entries = obj.getEntries();
         ValueNode representation = virtual.getMaterializedRepresentation(fixed, entries, obj.getLocks());
-        obj.escape(representation, state);
+        escape(virtual.getObjectId(), representation);
+        obj = getObjectState(virtual);
+        PartialEscapeClosure.updateStatesForMaterialized(this, virtual, obj.getMaterializedValue());
         if (representation instanceof AllocatedObjectNode) {
             objects.add((AllocatedObjectNode) representation);
-            locks.add(obj.getLocks());
+            locks.add(LockState.asList(obj.getLocks()));
+            ensureVirtual.add(obj.getEnsureVirtualized());
             int pos = values.size();
             while (values.size() < pos + entries.length) {
                 values.add(null);
             }
             for (int i = 0; i < entries.length; i++) {
-                ObjectState entryObj = getObjectState(entries[i]);
-                if (entryObj != null) {
+                if (entries[i] instanceof VirtualObjectNode) {
+                    VirtualObjectNode entryVirtual = (VirtualObjectNode) entries[i];
+                    ObjectState entryObj = getObjectState(entryVirtual);
                     if (entryObj.isVirtual()) {
-                        materializeWithCommit(fixed, entryObj.getVirtualObject(), objects, locks, values, otherAllocations, state);
+                        materializeWithCommit(fixed, entryVirtual, objects, locks, values, ensureVirtual, otherAllocations);
+                        entryObj = getObjectState(entryVirtual);
                     }
                     values.set(pos + i, entryObj.getMaterializedValue());
                 } else {
@@ -114,7 +215,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         } else {
             VirtualUtil.trace("materialized %s as %s", virtual, representation);
             otherAllocations.add(representation);
-            assert obj.getLocks().length == 0;
+            assert obj.getLocks() == null;
         }
     }
 
@@ -122,58 +223,46 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         VirtualUtil.trace("materialized %s as %s with values %s", virtual, representation, values);
     }
 
-    void addAndMarkAlias(VirtualObjectNode virtual, ValueNode node, NodeBitMap usages) {
-        objectAliases.put(node, virtual);
-        if (node.isAlive()) {
-            for (Node usage : node.usages()) {
-                markVirtualUsages(usage, usages);
-            }
+    public void addObject(int virtual, ObjectState state) {
+        ensureSize(virtual)[virtual] = state;
+    }
+
+    private ObjectState[] ensureSize(int objectId) {
+        if (objectStates.length <= objectId) {
+            objectStates = Arrays.copyOf(objectStates, Math.max(objectId * 2, 4));
+            arrayRefCount.refCount--;
+            arrayRefCount = new RefCount();
+            return objectStates;
+        } else {
+            return getObjectStateArrayForModification();
         }
     }
 
-    private void markVirtualUsages(Node node, NodeBitMap usages) {
-        if (!usages.isNew(node)) {
-            usages.mark(node);
-        }
-        if (node instanceof VirtualState) {
-            for (Node usage : node.usages()) {
-                markVirtualUsages(usage, usages);
-            }
-        }
-    }
-
-    public void addObject(VirtualObjectNode virtual, ObjectState state) {
-        objectStates.put(virtual, state);
-    }
-
-    public Iterable<ObjectState> getStates() {
-        return objectStates.values();
-    }
-
-    public Collection<VirtualObjectNode> getVirtualObjects() {
-        return objectAliases.values();
+    public int getStateCount() {
+        return objectStates.length;
     }
 
     @Override
     public String toString() {
-        return super.toString() + ", Object Aliases: " + objectAliases + ", Object States: " + objectStates;
-    }
-
-    @Override
-    public void meetAliases(List<T> states) {
-        super.meetAliases(states);
-        objectAliases.putAll(states.get(0).objectAliases);
-        for (int i = 1; i < states.size(); i++) {
-            meetMaps(objectAliases, states.get(i).objectAliases);
-        }
+        return super.toString() + ", Object States: " + Arrays.toString(objectStates);
     }
 
     @Override
     public boolean equivalentTo(T other) {
-        if (!compareMaps(objectAliases, other.objectAliases) || !compareMaps(objectStates, other.objectStates)) {
-            return false;
+        int length = Math.max(objectStates.length, other.getStateCount());
+        for (int i = 0; i < length; i++) {
+            ObjectState left = getObjectStateOptional(i);
+            ObjectState right = other.getObjectStateOptional(i);
+            if (left != right) {
+                if (left == null || right == null) {
+                    return false;
+                }
+                if (!left.equals(right)) {
+                    return false;
+                }
+            }
         }
-        return super.equivalentTo(other);
+        return true;
     }
 
     protected static <K, V> boolean compareMaps(Map<K, V> left, Map<K, V> right) {
@@ -211,4 +300,42 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         }
     }
 
+    public void resetObjectStates(int size) {
+        objectStates = new ObjectState[size];
+    }
+
+    public static boolean identicalObjectStates(PartialEscapeBlockState<?>[] states) {
+        for (int i = 1; i < states.length; i++) {
+            if (states[0].objectStates != states[i].objectStates) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static boolean identicalObjectStates(PartialEscapeBlockState<?>[] states, int object) {
+        for (int i = 1; i < states.length; i++) {
+            if (states[0].objectStates[object] != states[i].objectStates[object]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void adoptAddObjectStates(PartialEscapeBlockState<?> other) {
+        if (objectStates != null) {
+            arrayRefCount.refCount--;
+        }
+        objectStates = other.objectStates;
+        arrayRefCount = other.arrayRefCount;
+
+        if (arrayRefCount.refCount == 1) {
+            for (ObjectState state : objectStates) {
+                if (state != null) {
+                    state.share();
+                }
+            }
+        }
+        arrayRefCount.refCount++;
+    }
 }

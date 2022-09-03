@@ -61,7 +61,7 @@ public final class GuardedValueNode extends FloatingGuardedNode implements LIRLo
 
     @Override
     public void generate(NodeLIRBuilderTool generator) {
-        if (object.getStackKind() != Kind.Void && object.getStackKind() != Kind.Illegal) {
+        if (object.getKind() != Kind.Void && object.getKind() != Kind.Illegal) {
             generator.setResult(this, generator.operand(object));
         }
     }

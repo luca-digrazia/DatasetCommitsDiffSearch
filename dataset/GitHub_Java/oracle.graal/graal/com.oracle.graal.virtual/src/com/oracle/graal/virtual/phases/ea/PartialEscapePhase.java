@@ -22,24 +22,22 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.compiler.common.GraalOptions.EscapeAnalysisIterations;
-import static com.oracle.graal.compiler.common.GraalOptions.EscapeAnalyzeOnly;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.virtual.phases.ea.PartialEscapePhase.Options.*;
 
-import java.util.Set;
+import java.util.*;
 
-import jdk.internal.jvmci.options.Option;
-import jdk.internal.jvmci.options.OptionType;
-import jdk.internal.jvmci.options.OptionValue;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.nodes.spi.VirtualizableAllocation;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.schedule.SchedulePhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class PartialEscapePhase extends EffectsPhase<PhaseContext> {
 
@@ -54,11 +52,11 @@ public class PartialEscapePhase extends EffectsPhase<PhaseContext> {
     private final BasePhase<PhaseContext> cleanupPhase;
 
     public PartialEscapePhase(boolean iterative, CanonicalizerPhase canonicalizer) {
-        this(iterative, Options.OptEarlyReadElimination.getValue(), canonicalizer, null);
+        this(iterative, OptEarlyReadElimination.getValue(), canonicalizer, null);
     }
 
     public PartialEscapePhase(boolean iterative, CanonicalizerPhase canonicalizer, BasePhase<PhaseContext> cleanupPhase) {
-        this(iterative, Options.OptEarlyReadElimination.getValue(), canonicalizer, cleanupPhase);
+        this(iterative, OptEarlyReadElimination.getValue(), canonicalizer, cleanupPhase);
     }
 
     public PartialEscapePhase(boolean iterative, boolean readElimination, CanonicalizerPhase canonicalizer, BasePhase<PhaseContext> cleanupPhase) {

@@ -22,21 +22,19 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.compiler.common.GraalOptions.TraceEscapeAnalysis;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeFlood;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.debug.*;
+
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 
 public final class VirtualUtil {
 
@@ -111,7 +109,7 @@ public final class VirtualUtil {
         }
         if (!success) {
             TTY.println();
-            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "assertNonReachable");
+            Debug.dump(graph, "assertNonReachable");
         }
         return success;
     }

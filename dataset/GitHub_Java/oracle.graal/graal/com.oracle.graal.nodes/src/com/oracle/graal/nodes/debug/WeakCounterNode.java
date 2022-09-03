@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,33 @@
  */
 package com.oracle.graal.nodes.debug;
 
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * This is a special version of the dynamic counter node that removes itself as soon as it's the
  * only usage of the associated node. This way it only increments the counter if the node is
  * actually executed.
  */
-public class WeakCounterNode extends DynamicCounterNode implements Simplifiable, Virtualizable {
+@NodeInfo
+public final class WeakCounterNode extends DynamicCounterNode implements Simplifiable, Virtualizable {
 
-    @Input private ValueNode checkedValue;
+    public static final NodeClass<WeakCounterNode> TYPE = NodeClass.create(WeakCounterNode.class);
+    @Input ValueNode checkedValue;
 
     public WeakCounterNode(String group, String name, ValueNode increment, boolean addContext, ValueNode checkedValue) {
-        super(group, name, increment, addContext);
+        super(TYPE, group, name, increment, addContext);
         this.checkedValue = checkedValue;
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
-        if (checkedValue instanceof FloatingNode && checkedValue.usages().count() == 1) {
+        if (checkedValue instanceof FloatingNode && checkedValue.getUsageCount() == 1) {
             tool.addToWorkList(checkedValue);
             graph().removeFixed(this);
         }
@@ -51,8 +56,8 @@ public class WeakCounterNode extends DynamicCounterNode implements Simplifiable,
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(checkedValue);
-        if (state != null && state.getState() == EscapeState.Virtual) {
+        ValueNode alias = tool.getAlias(checkedValue);
+        if (alias instanceof VirtualObjectNode) {
             tool.delete();
         }
     }

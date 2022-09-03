@@ -22,52 +22,41 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
+import java.util.*;
 
-import java.util.Collections;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.MonitorIdNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.VirtualizableAllocation;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.virtual.VirtualBoxingNode;
-
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * This node represents the boxing of a primitive value. This corresponds to a call to the valueOf
  * methods in Integer, Long, etc.
  */
-@NodeInfo(cycles = CYCLES_100, size = SIZE_50)
+@NodeInfo
 public final class BoxNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Canonicalizable.Unary<ValueNode> {
 
     public static final NodeClass<BoxNode> TYPE = NodeClass.create(BoxNode.class);
     @Input private ValueNode value;
-    private final JavaKind boxingKind;
+    private final Kind boxingKind;
 
-    public BoxNode(ValueNode value, ResolvedJavaType resultType, JavaKind boxingKind) {
-        super(TYPE, StampFactory.objectNonNull(TypeReference.createExactTrusted(resultType)));
+    public BoxNode(ValueNode value, ResolvedJavaType resultType, Kind boxingKind) {
+        super(TYPE, StampFactory.exactNonNull(resultType));
         this.value = value;
         this.boxingKind = boxingKind;
     }
 
-    public JavaKind getBoxingKind() {
+    public Kind getBoxingKind() {
         return boxingKind;
     }
 
-    @Override
     public ValueNode getValue() {
         return value;
     }

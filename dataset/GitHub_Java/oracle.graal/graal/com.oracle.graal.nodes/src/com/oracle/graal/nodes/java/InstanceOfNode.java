@@ -22,29 +22,16 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Assumptions.AssumptionResult;
-import jdk.vm.ci.meta.JavaTypeProfile;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.TriState;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.meta.Assumptions.*;
 
-import com.oracle.graal.compiler.common.type.CheckedJavaType;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.LogicNegationNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.UnaryOpLogicNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
@@ -53,21 +40,21 @@ import com.oracle.graal.nodes.spi.VirtualizerTool;
 public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtualizable {
     public static final NodeClass<InstanceOfNode> TYPE = NodeClass.create(InstanceOfNode.class);
 
-    protected final CheckedJavaType type;
+    protected final ResolvedJavaType type;
     protected JavaTypeProfile profile;
 
-    private InstanceOfNode(CheckedJavaType type, ValueNode object, JavaTypeProfile profile) {
+    private InstanceOfNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
         this(TYPE, type, object, profile);
     }
 
-    protected InstanceOfNode(NodeClass<? extends InstanceOfNode> c, CheckedJavaType type, ValueNode object, JavaTypeProfile profile) {
+    protected InstanceOfNode(NodeClass<? extends InstanceOfNode> c, ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
         super(c, object);
         this.type = type;
         this.profile = profile;
         assert type != null;
     }
 
-    public static LogicNode create(CheckedJavaType type, ValueNode object, JavaTypeProfile profile) {
+    public static LogicNode create(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
         ObjectStamp objectStamp = (ObjectStamp) object.stamp();
         LogicNode constantValue = findSynonym(object, type, objectStamp.type(), objectStamp.nonNull(), objectStamp.isExactType());
         if (constantValue != null) {
@@ -98,14 +85,15 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
             if (result != null) {
                 return result;
             }
-
             Assumptions assumptions = graph() == null ? null : graph().getAssumptions();
-            AssumptionResult<ResolvedJavaType> leafConcreteSubtype = stampType.findLeafConcreteSubtype();
-            if (leafConcreteSubtype != null && leafConcreteSubtype.canRecordTo(assumptions)) {
-                result = checkInstanceOf(forValue, leafConcreteSubtype.getResult(), objectStamp.nonNull(), true);
-                if (result != null) {
-                    leafConcreteSubtype.recordTo(assumptions);
-                    return result;
+            if (assumptions != null) {
+                AssumptionResult<ResolvedJavaType> leafConcreteSubtype = stampType.findLeafConcreteSubtype();
+                if (leafConcreteSubtype != null) {
+                    result = checkInstanceOf(forValue, leafConcreteSubtype.getResult(), objectStamp.nonNull(), true);
+                    if (result != null) {
+                        assumptions.record(leafConcreteSubtype);
+                        return result;
+                    }
                 }
             }
         }
@@ -117,7 +105,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
         if (result != null) {
             return result;
         }
-        if (type().getType().isAssignableFrom(inputType)) {
+        if (type().isAssignableFrom(inputType)) {
             if (!nonNull) {
                 // the instanceof matches if the object is non-null, so return true
                 // depending on the null-ness.
@@ -127,11 +115,11 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
         return null;
     }
 
-    public static LogicNode findSynonym(ValueNode object, CheckedJavaType type, ResolvedJavaType inputType, boolean nonNull, boolean exactType) {
+    public static LogicNode findSynonym(ValueNode object, ResolvedJavaType type, ResolvedJavaType inputType, boolean nonNull, boolean exactType) {
         if (inputType == null) {
             return null;
         }
-        boolean subType = type.getType().isAssignableFrom(inputType);
+        boolean subType = type.isAssignableFrom(inputType);
         if (subType) {
             if (nonNull) {
                 // the instanceOf matches, so return true
@@ -144,8 +132,8 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
                 // also make the check fail.
                 return LogicConstantNode.contradiction();
             } else {
-                boolean superType = inputType.isAssignableFrom(type.getType());
-                if (!superType && (type.isExactType() || (!isInterfaceOrArrayOfInterface(inputType) && !isInterfaceOrArrayOfInterface(type.getType())))) {
+                boolean superType = inputType.isAssignableFrom(type);
+                if (!superType && (type.asExactType() != null || (!isInterfaceOrArrayOfInterface(inputType) && !isInterfaceOrArrayOfInterface(type)))) {
                     return LogicConstantNode.contradiction();
                 }
                 // since the subtype comparison was only performed on a declared type we don't
@@ -153,8 +141,8 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
             }
         }
 
-        if (type.isExactType() && nonNull) {
-            return TypeCheckNode.create(type.getType(), object);
+        if (type.isLeaf() && nonNull) {
+            return TypeCheckNode.create(type, object);
         }
         return null;
     }
@@ -162,7 +150,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
     /**
      * Gets the type being tested.
      */
-    public CheckedJavaType type() {
+    public ResolvedJavaType type() {
         return type;
     }
 
@@ -188,7 +176,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
         if (negated) {
             return null;
         } else {
-            return StampFactory.declaredTrustedNonNull(type.getType());
+            return StampFactory.declaredTrustedNonNull(type);
         }
     }
 
@@ -202,7 +190,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
 
             ResolvedJavaType objectType = objectStamp.type();
             if (objectType != null) {
-                ResolvedJavaType instanceofType = type.getType();
+                ResolvedJavaType instanceofType = type;
                 if (instanceofType.isAssignableFrom(objectType)) {
                     if (objectStamp.nonNull()) {
                         return TriState.TRUE;

@@ -22,37 +22,28 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import java.util.Collections;
+import java.util.*;
 
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.meta.Assumptions.*;
 
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.LoadFieldNode;
-import com.oracle.graal.nodes.java.MonitorIdNode;
-import com.oracle.graal.nodes.spi.ArrayLengthProvider;
-import com.oracle.graal.nodes.spi.VirtualizableAllocation;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.nodes.virtual.VirtualInstanceNode;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.virtual.*;
 
 @NodeInfo
 public abstract class BasicObjectCloneNode extends MacroStateSplitNode implements VirtualizableAllocation, ArrayLengthProvider {
 
     public static final NodeClass<BasicObjectCloneNode> TYPE = NodeClass.create(BasicObjectCloneNode.class);
 
-    public BasicObjectCloneNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
-        super(c, invokeKind, targetMethod, bci, returnStamp, arguments);
+    public BasicObjectCloneNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, JavaType returnType, ValueNode... arguments) {
+        super(c, invokeKind, targetMethod, bci, returnType, arguments);
     }
 
     @Override
@@ -78,7 +69,7 @@ public abstract class BasicObjectCloneNode extends MacroStateSplitNode implement
      * 
      * If yes, then the exact type is returned, otherwise it returns null.
      */
-    protected static ResolvedJavaType getConcreteType(Stamp stamp, MetaAccessProvider metaAccess) {
+    protected static ResolvedJavaType getConcreteType(Stamp stamp, Assumptions assumptions, MetaAccessProvider metaAccess) {
         if (!(stamp instanceof ObjectStamp)) {
             return null;
         }
@@ -87,6 +78,12 @@ public abstract class BasicObjectCloneNode extends MacroStateSplitNode implement
             return null;
         } else if (objectStamp.isExactType()) {
             return isCloneableType(objectStamp.type(), metaAccess) ? objectStamp.type() : null;
+        } else if (assumptions != null) {
+            AssumptionResult<ResolvedJavaType> leafConcreteSubtype = objectStamp.type().findLeafConcreteSubtype();
+            if (leafConcreteSubtype != null && isCloneableType(leafConcreteSubtype.getResult(), metaAccess)) {
+                assumptions.record(leafConcreteSubtype);
+                return leafConcreteSubtype.getResult();
+            }
         }
         return null;
     }
@@ -106,7 +103,7 @@ public abstract class BasicObjectCloneNode extends MacroStateSplitNode implement
                 tool.replaceWithVirtual(newVirtual);
             }
         } else {
-            ResolvedJavaType type = getConcreteType(originalAlias.stamp(), tool.getMetaAccessProvider());
+            ResolvedJavaType type = getConcreteType(originalAlias.stamp(), graph().getAssumptions(), tool.getMetaAccessProvider());
             if (type != null && !type.isArray()) {
                 VirtualInstanceNode newVirtual = createVirtualInstanceNode(type, true);
                 ResolvedJavaField[] fields = newVirtual.getFields();
@@ -114,7 +111,7 @@ public abstract class BasicObjectCloneNode extends MacroStateSplitNode implement
                 ValueNode[] state = new ValueNode[fields.length];
                 final LoadFieldNode[] loads = new LoadFieldNode[fields.length];
                 for (int i = 0; i < fields.length; i++) {
-                    state[i] = loads[i] = LoadFieldNode.create(graph().getAssumptions(), originalAlias, fields[i]);
+                    state[i] = loads[i] = new LoadFieldNode(originalAlias, fields[i]);
                     tool.addNode(loads[i]);
                 }
                 tool.createVirtualObject(newVirtual, state, Collections.<MonitorIdNode> emptyList(), false);

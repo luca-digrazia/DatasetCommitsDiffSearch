@@ -22,25 +22,15 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValueProxyNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.ValueProxy;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.nodes.virtual.VirtualArrayNode;
+import jdk.internal.jvmci.meta.*;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * The {@code ArrayLength} instruction gets the length of an array.
@@ -55,7 +45,6 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
         return array;
     }
 
-    @Override
     public ValueNode getValue() {
         return array;
     }
@@ -78,7 +67,6 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
         return new ArrayLengthNode(forValue);
     }
 
-    @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         ValueNode length = readArrayLength(forValue, tool.getConstantReflection());
         if (length != null) {
@@ -149,9 +137,13 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
     @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(array());
-        if (alias instanceof VirtualArrayNode) {
-            VirtualArrayNode virtualArray = (VirtualArrayNode) alias;
-            tool.replaceWithValue(ConstantNode.forInt(virtualArray.entryCount(), graph()));
+        ValueNode length = GraphUtil.arrayLength(alias);
+        if (length != null) {
+            ValueNode lengthAlias = tool.getAlias(length);
+            if (!lengthAlias.isAlive()) {
+                lengthAlias = graph().addOrUnique(lengthAlias);
+            }
+            tool.replaceWithValue(lengthAlias);
         }
     }
 }

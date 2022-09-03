@@ -22,15 +22,11 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.spi.ValueProxy;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 @NodeInfo(nameTemplate = "Proxy({i#value})")
 public final class ValueProxyNode extends ProxyNode implements Canonicalizable, Virtualizable, ValueProxy {
@@ -38,12 +34,9 @@ public final class ValueProxyNode extends ProxyNode implements Canonicalizable, 
     public static final NodeClass<ValueProxyNode> TYPE = NodeClass.create(ValueProxyNode.class);
     @Input ValueNode value;
 
-    private final boolean loopPhiProxy;
-
     public ValueProxyNode(ValueNode value, AbstractBeginNode proxyPoint) {
         super(TYPE, value.stamp(), proxyPoint);
         this.value = value;
-        loopPhiProxy = (proxyPoint instanceof LoopExitNode && value instanceof PhiNode && ((PhiNode) value).merge() == ((LoopExitNode) proxyPoint).loopBegin());
     }
 
     @Override
@@ -60,13 +53,6 @@ public final class ValueProxyNode extends ProxyNode implements Canonicalizable, 
     public Node canonical(CanonicalizerTool tool) {
         if (value.isConstant()) {
             return value;
-        }
-        if (loopPhiProxy && proxyPoint instanceof LoopExitNode) {
-            if (!(value instanceof PhiNode)) {
-                return value;
-            } else if (((PhiNode) value).merge() != ((LoopExitNode) proxyPoint).loopBegin()) {
-                return value;
-            }
         }
         return this;
     }

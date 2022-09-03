@@ -22,24 +22,15 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public abstract class VirtualObjectNode extends ValueNode implements LIRLowerable, IterableNodeType {
 
     public static final NodeClass<VirtualObjectNode> TYPE = NodeClass.create(VirtualObjectNode.class);
@@ -47,7 +38,7 @@ public abstract class VirtualObjectNode extends ValueNode implements LIRLowerabl
     private int objectId = -1;
 
     protected VirtualObjectNode(NodeClass<? extends VirtualObjectNode> c, ResolvedJavaType type, boolean hasIdentity) {
-        super(c, StampFactory.objectNonNull(TypeReference.createExactTrusted(type)));
+        super(c, StampFactory.exactNonNull(type));
         this.hasIdentity = hasIdentity;
     }
 
@@ -95,12 +86,12 @@ public abstract class VirtualObjectNode extends ValueNode implements LIRLowerabl
      * @param expectedEntryKind Specifies which type is expected at this offset (Is important when
      *            doing implicit casts, especially on big endian systems.
      */
-    public abstract int entryIndexForOffset(long constantOffset, JavaKind expectedEntryKind);
+    public abstract int entryIndexForOffset(long constantOffset, Kind expectedEntryKind);
 
     /**
-     * Returns the {@link JavaKind} of the entry at the given index.
+     * Returns the {@link Kind} of the entry at the given index.
      */
-    public abstract JavaKind entryKind(int index);
+    public abstract Kind entryKind(int index);
 
     /**
      * Returns an exact duplicate of this virtual object node, which has not been added to the graph

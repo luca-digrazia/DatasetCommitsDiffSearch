@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,33 +22,17 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.isNotA;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaField;
+import static com.oracle.graal.graph.iterators.NodePredicates.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.spi.UncheckedInterfaceProvider;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.virtual.VirtualInstanceNode;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code LoadFieldNode} represents a read of a static or instance field.
@@ -58,19 +42,21 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
 
     public static final NodeClass<LoadFieldNode> TYPE = NodeClass.create(LoadFieldNode.class);
 
-    private final Stamp uncheckedStamp;
-
-    protected LoadFieldNode(StampPair stamp, ValueNode object, ResolvedJavaField field) {
-        super(TYPE, stamp.getTrustedStamp(), object, field);
-        this.uncheckedStamp = stamp.getUncheckedStamp();
-    }
-
-    public static LoadFieldNode create(Assumptions assumptions, ValueNode object, ResolvedJavaField field) {
-        return new LoadFieldNode(StampFactory.forDeclaredType(assumptions, field.getType(), false), object, field);
+    public LoadFieldNode(ValueNode object, ResolvedJavaField field) {
+        super(TYPE, createStamp(field), object, field);
     }
 
     public ValueNode getValue() {
         return object();
+    }
+
+    private static Stamp createStamp(ResolvedJavaField field) {
+        Kind kind = field.getKind();
+        if (kind == Kind.Object && field.getType() instanceof ResolvedJavaType) {
+            return StampFactory.declared((ResolvedJavaType) field.getType());
+        } else {
+            return StampFactory.forKind(kind);
+        }
     }
 
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forObject) {
@@ -145,6 +131,6 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
     }
 
     public Stamp uncheckedStamp() {
-        return uncheckedStamp;
+        return UncheckedInterfaceProvider.uncheckedOrNull(field().getType(), stamp());
     }
 }

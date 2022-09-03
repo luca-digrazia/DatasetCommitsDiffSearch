@@ -22,25 +22,14 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.VerificationError;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.util.GraphUtil;
-
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public final class EnsureVirtualizedNode extends FixedWithNextNode implements Virtualizable, Lowerable {
 
     public static final NodeClass<EnsureVirtualizedNode> TYPE = NodeClass.create(EnsureVirtualizedNode.class);
@@ -54,7 +43,6 @@ public final class EnsureVirtualizedNode extends FixedWithNextNode implements Vi
         this.localOnly = localOnly;
     }
 
-    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object);
         if (alias instanceof VirtualObjectNode) {
@@ -70,21 +58,12 @@ public final class EnsureVirtualizedNode extends FixedWithNextNode implements Vi
         }
     }
 
-    @Override
     public void lower(LoweringTool tool) {
         ensureVirtualFailure(this, object.stamp());
     }
 
     public static void ensureVirtualFailure(Node location, Stamp stamp) {
         Throwable exception = new VerificationError("Object should not be materialized (stamp=%s):", stamp);
-        Node pos;
-        if (location instanceof FixedWithNextNode) {
-            pos = ((FixedWithNextNode) location).next();
-        } else if (location instanceof AbstractEndNode) {
-            pos = ((AbstractEndNode) location).merge();
-        } else {
-            pos = location;
-        }
-        throw GraphUtil.approxSourceException(pos, exception);
+        throw GraphUtil.approxSourceException(location, exception);
     }
 }

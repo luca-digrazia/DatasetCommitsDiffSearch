@@ -22,31 +22,23 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.meta.Assumptions.*;
 
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Loads an object's class (i.e., this node can be created for {@code object.getClass()}).
  */
 @NodeInfo
-public final class GetClassNode extends FloatingNode implements Lowerable, Canonicalizable, Virtualizable, Node.ValueNumberable {
+public final class GetClassNode extends FloatingNode implements Lowerable, Canonicalizable, Virtualizable {
 
     public static final NodeClass<GetClassNode> TYPE = NodeClass.create(GetClassNode.class);
     @Input ValueNode object;
@@ -66,11 +58,23 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
         tool.getLowerer().lower(this, tool);
     }
 
-    public static ValueNode tryFold(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode object) {
+    public static ValueNode tryFold(MetaAccessProvider metaAccess, ValueNode object) {
         if (metaAccess != null && object != null && object.stamp() instanceof ObjectStamp) {
             ObjectStamp objectStamp = (ObjectStamp) object.stamp();
+
+            ResolvedJavaType exactType = null;
             if (objectStamp.isExactType()) {
-                return ConstantNode.forConstant(constantReflection.asJavaClass(objectStamp.type()), metaAccess);
+                exactType = objectStamp.type();
+            } else if (objectStamp.type() != null && object.graph().getAssumptions() != null) {
+                AssumptionResult<ResolvedJavaType> leafConcreteSubtype = objectStamp.type().findLeafConcreteSubtype();
+                if (leafConcreteSubtype != null) {
+                    exactType = leafConcreteSubtype.getResult();
+                    object.graph().getAssumptions().record(leafConcreteSubtype);
+                }
+            }
+
+            if (exactType != null) {
+                return ConstantNode.forConstant(exactType.getJavaClass(), metaAccess);
             }
         }
         return null;
@@ -78,7 +82,7 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        ValueNode folded = tryFold(tool.getMetaAccess(), tool.getConstantReflection(), getObject());
+        ValueNode folded = tryFold(tool.getMetaAccess(), getObject());
         return folded == null ? this : folded;
     }
 
@@ -87,7 +91,7 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
         ValueNode alias = tool.getAlias(getObject());
         if (alias instanceof VirtualObjectNode) {
             VirtualObjectNode virtual = (VirtualObjectNode) alias;
-            Constant javaClass = tool.getConstantReflectionProvider().asJavaClass(virtual.type());
+            Constant javaClass = virtual.type().getJavaClass();
             tool.replaceWithValue(ConstantNode.forConstant(stamp(), javaClass, tool.getMetaAccessProvider(), graph()));
         }
     }

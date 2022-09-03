@@ -111,15 +111,18 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
             return object();
         }
         if (getGuard() != null) {
-            for (PiNode otherPi : getGuard().asNode().usages().filter(PiNode.class)) {
-                if (object() == otherPi.object() && stamp().equals(otherPi.stamp())) {
-                    /*
-                     * Two PiNodes with the same guard and same result, so return the one with the
-                     * more precise piStamp.
-                     */
-                    Stamp newStamp = piStamp.join(otherPi.piStamp);
-                    if (newStamp.equals(otherPi.piStamp)) {
-                        return otherPi;
+            for (Node use : getGuard().asNode().usages()) {
+                if (use instanceof PiNode) {
+                    PiNode otherPi = (PiNode) use;
+                    if (object() == otherPi.object() && stamp().equals(otherPi.stamp())) {
+                        /*
+                         * Two PiNodes with the same guard and same result, so return the one with
+                         * the more precise piStamp.
+                         */
+                        Stamp newStamp = piStamp.join(otherPi.piStamp);
+                        if (newStamp.equals(otherPi.piStamp)) {
+                            return otherPi;
+                        }
                     }
                 }
             }

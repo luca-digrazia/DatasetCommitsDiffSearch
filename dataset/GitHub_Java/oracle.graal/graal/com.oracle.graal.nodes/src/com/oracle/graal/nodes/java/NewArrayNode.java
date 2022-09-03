@@ -22,21 +22,17 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.util.Collections;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.VirtualizableAllocation;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.VirtualArrayNode;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import jdk.internal.jvmci.meta.*;
 
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code NewArrayNode} is used for all array allocations where the element type is know at
@@ -47,7 +43,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableAllocation {
 
     public static final NodeClass<NewArrayNode> TYPE = NodeClass.create(NewArrayNode.class);
-    private final ResolvedJavaType elementType;
 
     public NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents) {
         this(elementType, length, fillContents, null);
@@ -58,8 +53,7 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
     }
 
     protected NewArrayNode(NodeClass<? extends NewArrayNode> c, ResolvedJavaType elementType, ValueNode length, boolean fillContents, FrameState stateBefore) {
-        super(c, StampFactory.objectNonNull(TypeReference.createExactTrusted(elementType.getArrayClass())), length, fillContents, stateBefore);
-        this.elementType = elementType;
+        super(c, StampFactory.exactNonNull(elementType.getArrayClass()), length, fillContents, stateBefore);
     }
 
     @NodeIntrinsic
@@ -75,7 +69,7 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
      * @return the element type of the array
      */
     public ResolvedJavaType elementType() {
-        return elementType;
+        return StampTool.typeOrNull(this).getComponentType();
     }
 
     @Override
@@ -102,6 +96,6 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
 
     /* Factored out in a separate method so that subclasses can override it. */
     protected ConstantNode defaultElementValue() {
-        return ConstantNode.defaultForKind(elementType().getJavaKind(), graph());
+        return ConstantNode.defaultForKind(elementType().getKind(), graph());
     }
 }
