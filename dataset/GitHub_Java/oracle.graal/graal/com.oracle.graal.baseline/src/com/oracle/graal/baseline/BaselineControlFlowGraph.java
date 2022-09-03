@@ -30,9 +30,9 @@ import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 
-public final class BaselineControlFlowGraph implements AbstractControlFlowGraph<BciBlock> {
+public class BaselineControlFlowGraph implements AbstractControlFlowGraph<BciBlock> {
 
-    private BciBlock[] blocks;
+    private List<BciBlock> blocks;
     private Collection<Loop<BciBlock>> loops;
 
     public static BaselineControlFlowGraph compute(BciBlockMapping blockMap) {
@@ -50,12 +50,12 @@ public final class BaselineControlFlowGraph implements AbstractControlFlowGraph<
     }
 
     private BaselineControlFlowGraph(BciBlockMapping blockMap) {
-        blocks = blockMap.getBlocks();
+        blocks = blockMap.blocks;
         loops = new ArrayList<>();
     }
 
     public List<BciBlock> getBlocks() {
-        return Arrays.asList(blocks);
+        return blocks;
     }
 
     public Collection<Loop<BciBlock>> getLoops() {
@@ -63,8 +63,8 @@ public final class BaselineControlFlowGraph implements AbstractControlFlowGraph<
     }
 
     public BciBlock getStartBlock() {
-        if (blocks.length > 0) {
-            return blocks[0];
+        if (!blocks.isEmpty()) {
+            return blocks.get(0);
         }
         return null;
     }
