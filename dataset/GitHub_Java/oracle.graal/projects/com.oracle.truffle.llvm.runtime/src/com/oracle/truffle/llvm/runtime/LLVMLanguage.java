@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -48,6 +48,9 @@ public abstract class LLVMLanguage extends TruffleLanguage<LLVMContext> {
      * base 64 strings when they don't exist as a file which can be read directly.
      */
     public static final String LLVM_BITCODE_BASE64_MIME_TYPE = "application/x-llvm-ir-bitcode-base64";
+
+    // TODO: remove Sulong.SULONG_LIBRARY_MIME_TYPE after GR-5904 is closed.
+    public static final String SULONG_LIBRARY_MIME_TYPE = "application/x-sulong-library";
 
     public static final String LLVM_ELF_SHARED_MIME_TYPE = "application/x-sharedlib";
     public static final String LLVM_ELF_EXEC_MIME_TYPE = "application/x-executable";

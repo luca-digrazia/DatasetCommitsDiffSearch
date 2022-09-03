@@ -41,6 +41,7 @@ import com.oracle.truffle.llvm.runtime.LLVMVarArgCompoundValue;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadObjectNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "source")})
@@ -50,9 +51,9 @@ public abstract class LLVMStructByValueNode extends LLVMExpressionNode {
     public abstract long getLength();
 
     @Child private LLVMMemMoveNode memMove;
-    @Child private LLVMExpressionNode stackAllocationNode;
+    @Child private LLVMStackAllocationNode stackAllocationNode;
 
-    public LLVMStructByValueNode(LLVMMemMoveNode memMove, LLVMExpressionNode stackAllocationNode) {
+    public LLVMStructByValueNode(LLVMMemMoveNode memMove, LLVMStackAllocationNode stackAllocationNode) {
         this.memMove = memMove;
         this.stackAllocationNode = stackAllocationNode;
     }
@@ -69,8 +70,8 @@ public abstract class LLVMStructByValueNode extends LLVMExpressionNode {
     }
 
     private Object byValueImp(VirtualFrame frame, Object source) {
-        Object dest = stackAllocationNode.executeGeneric(frame);
-        memMove.executeWithTarget(dest, source, getLength());
+        Object dest = stackAllocationNode.executeWithTarget(frame, getLength());
+        memMove.executeWithTarget(frame, dest, source, getLength());
         return dest;
     }
 

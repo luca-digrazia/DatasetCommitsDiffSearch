@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
@@ -39,7 +40,7 @@ import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalWriteNode.WriteFloatNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeIntArrayAccess;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
 public abstract class LLVMFloatStoreNode extends LLVMStoreNode {
@@ -64,15 +65,15 @@ public abstract class LLVMFloatStoreNode extends LLVMStoreNode {
 
     @Specialization
     protected Object doOp(LLVMVirtualAllocationAddress address, float value,
-                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+                    @Cached("getUnsafeIntArrayAccess()") UnsafeIntArrayAccess memory) {
         address.writeFloat(memory, value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(LLVMTruffleObject address, float value,
+    protected Object doOp(VirtualFrame frame, LLVMTruffleObject address, float value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
-        foreignWrite.execute(address, value);
+        foreignWrite.execute(frame, address, value);
         return null;
     }
 

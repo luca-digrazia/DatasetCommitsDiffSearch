@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.memory.load;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.profiles.DoubleValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
@@ -41,7 +42,7 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadDoubleNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeIntArrayAccess;
 
 public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
 
@@ -55,7 +56,7 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
 
     @Specialization
     protected double doDouble(LLVMVirtualAllocationAddress address,
-                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+                    @Cached("getUnsafeIntArrayAccess()") UnsafeIntArrayAccess memory) {
         return address.getDouble(memory);
     }
 
@@ -71,9 +72,9 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
     }
 
     @Specialization
-    protected double doDouble(LLVMTruffleObject addr,
+    protected double doDouble(VirtualFrame frame, LLVMTruffleObject addr,
                     @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
-        return (double) foreignRead.execute(addr);
+        return (double) foreignRead.execute(frame, addr);
     }
 
     @Specialization

@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.ServiceLoader;
 
+import com.oracle.truffle.api.debug.DebuggerTags;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
@@ -43,7 +44,6 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.debug.DebuggerTags;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;

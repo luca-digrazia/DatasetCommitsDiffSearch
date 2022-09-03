@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.memory.load;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.profiles.LongValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
@@ -41,7 +42,7 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadI64Node;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeIntArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 public abstract class LLVMI64LoadNode extends LLVMLoadNode {
@@ -57,15 +58,15 @@ public abstract class LLVMI64LoadNode extends LLVMLoadNode {
 
     @Specialization
     protected long doI64(LLVMVirtualAllocationAddress address,
-                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+                    @Cached("getUnsafeIntArrayAccess()") UnsafeIntArrayAccess memory) {
         return address.getI64(memory);
     }
 
     @Specialization
-    protected long doI64(LLVMGlobal addr,
+    protected long doI64(VirtualFrame frame, LLVMGlobal addr,
                     @Cached("create()") ReadI64Node globalAccess,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
-        return toNative.executeWithTarget(globalAccess.execute(addr)).getVal();
+        return toNative.executeWithTarget(frame, globalAccess.execute(addr)).getVal();
     }
 
     static LLVMForeignReadNode createForeignRead() {
@@ -73,9 +74,9 @@ public abstract class LLVMI64LoadNode extends LLVMLoadNode {
     }
 
     @Specialization
-    protected Object doI64(LLVMTruffleObject addr,
+    protected Object doI64(VirtualFrame frame, LLVMTruffleObject addr,
                     @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
-        return foreignRead.execute(addr);
+        return foreignRead.execute(frame, addr);
     }
 
     @Specialization

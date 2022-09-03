@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
@@ -39,7 +40,7 @@ import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalWriteNode.WriteI64Node;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeIntArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
@@ -64,10 +65,10 @@ public abstract class LLVMI64StoreNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object doOp(LLVMAddress address, LLVMTruffleObject value,
+    protected Object doOp(VirtualFrame frame, LLVMAddress address, LLVMTruffleObject value,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toAddress,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
-        memory.putI64(address, toAddress.executeWithTarget(value).getVal());
+        memory.putI64(address, toAddress.executeWithTarget(frame, value).getVal());
         return null;
     }
 
@@ -79,24 +80,24 @@ public abstract class LLVMI64StoreNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object doOp(LLVMAddress address, LLVMGlobal value,
+    protected Object doOp(VirtualFrame frame, LLVMAddress address, LLVMGlobal value,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
-        memory.putI64(address, globalAccess.executeWithTarget(value).getVal());
+        memory.putI64(address, globalAccess.executeWithTarget(frame, value).getVal());
         return null;
     }
 
     @Specialization
     protected Object doOp(LLVMVirtualAllocationAddress address, long value,
-                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+                    @Cached("getUnsafeIntArrayAccess()") UnsafeIntArrayAccess memory) {
         address.writeI64(memory, value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(LLVMTruffleObject address, Object value,
+    protected Object doOp(VirtualFrame frame, LLVMTruffleObject address, Object value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
-        foreignWrite.execute(address, value);
+        foreignWrite.execute(frame, address, value);
         return null;
     }
 

@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.memory.load;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
@@ -40,7 +41,7 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadI1Node;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeIntArrayAccess;
 
 public abstract class LLVMI1LoadNode extends LLVMLoadNode {
 
@@ -52,7 +53,7 @@ public abstract class LLVMI1LoadNode extends LLVMLoadNode {
 
     @Specialization
     protected boolean doI1(LLVMVirtualAllocationAddress address,
-                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+                    @Cached("getUnsafeIntArrayAccess()") UnsafeIntArrayAccess memory) {
         return address.getI1(memory);
     }
 
@@ -67,9 +68,9 @@ public abstract class LLVMI1LoadNode extends LLVMLoadNode {
     }
 
     @Specialization
-    protected boolean doI1(LLVMTruffleObject addr,
+    protected boolean doI1(VirtualFrame frame, LLVMTruffleObject addr,
                     @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
-        return (boolean) foreignRead.execute(addr);
+        return (boolean) foreignRead.execute(frame, addr);
     }
 
     @Specialization
