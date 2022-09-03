@@ -389,10 +389,14 @@ public final class Profiler {
     // custom version of SourceSection#getShortDescription
     private static String getShortDescription(SourceSection sourceSection) {
         if (sourceSection.getSource() == null) {
-            return sourceSection.getShortDescription();
+            return sourceSection.getIdentifier();
         }
         StringBuilder b = new StringBuilder();
-        b.append(sourceSection.getSource().getName());
+        if (sourceSection.getIdentifier() != null) {
+            b.append(sourceSection.getSource().getName());
+        } else {
+            b.append("<unknown>");
+        }
         b.append(":");
         if (sourceSection.getStartLine() == sourceSection.getEndLine()) {
             b.append(sourceSection.getStartLine());
@@ -432,10 +436,10 @@ public final class Profiler {
         protected void onDispose(VirtualFrame frame) {
             FrameDescriptor frameDescriptor = context.getInstrumentedNode().getRootNode().getFrameDescriptor();
             if (frameDescriptor.getIdentifiers().contains(KEY_TIME_STARTED)) {
-                frameDescriptor.removeFrameSlot(KEY_TIME_STARTED);
+                frameDescriptor.removeFrameSlot(timeStartedSlot);
             }
             if (frameDescriptor.getIdentifiers().contains(KEY_PARENT_COUNTER)) {
-                frameDescriptor.removeFrameSlot(KEY_PARENT_COUNTER);
+                frameDescriptor.removeFrameSlot(parentCounterSlot);
             }
         }
 
