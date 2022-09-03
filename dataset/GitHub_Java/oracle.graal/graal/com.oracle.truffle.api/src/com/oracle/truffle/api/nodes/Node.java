@@ -102,7 +102,6 @@ public abstract class Node implements Cloneable {
      * 
      * @return the assigned source code section
      */
-    @CompilerDirectives.SlowPath
     public final SourceSection getEncapsulatingSourceSection() {
         if (sourceSection == null && getParent() != null) {
             return getParent().getEncapsulatingSourceSection();
