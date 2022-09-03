@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,14 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.UnsafeStoreNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * A special purpose store node that differs from {@link UnsafeStoreNode} in that it is not a
@@ -46,9 +41,9 @@ public final class DirectStoreNode extends FixedWithNextNode implements LIRLower
     public static final NodeClass<DirectStoreNode> TYPE = NodeClass.create(DirectStoreNode.class);
     @Input protected ValueNode address;
     @Input protected ValueNode value;
-    protected final JavaKind kind;
+    protected final Kind kind;
 
-    public DirectStoreNode(ValueNode address, ValueNode value, JavaKind kind) {
+    public DirectStoreNode(ValueNode address, ValueNode value, Kind kind) {
         super(TYPE, StampFactory.forVoid());
         this.address = address;
         this.value = value;
@@ -59,7 +54,7 @@ public final class DirectStoreNode extends FixedWithNextNode implements LIRLower
     public void generate(NodeLIRBuilderTool gen) {
         Value v = gen.operand(value);
         LIRKind lirKind = gen.getLIRGeneratorTool().target().getLIRKind(kind);
-        gen.getLIRGeneratorTool().getArithmetic().emitStore(lirKind, gen.operand(address), v, null);
+        gen.getLIRGeneratorTool().emitStore(lirKind, gen.operand(address), v, null);
     }
 
     public ValueNode getAddress() {
@@ -71,5 +66,5 @@ public final class DirectStoreNode extends FixedWithNextNode implements LIRLower
     }
 
     @NodeIntrinsic
-    public static native void storeBoolean(long address, boolean value, @ConstantNodeParameter JavaKind kind);
+    public static native void storeBoolean(long address, boolean value, @ConstantNodeParameter Kind kind);
 }
