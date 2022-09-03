@@ -409,7 +409,7 @@ public abstract class Source {
 
     /**
      * The URL if the source is retrieved via URL.
-     *
+     * 
      * @return URL or <code>null</code>
      */
     public abstract URL getURL();
@@ -893,8 +893,6 @@ public abstract class Source {
                 return "text/x-c";
             } else if (file.getName().endsWith(".R") || file.getName().endsWith(".r")) {
                 return "application/x-r";
-            } else if (file.getName().endsWith(".js") || file.getName().endsWith(".JS")) {
-                return "application/javascript";
             } else {
                 try {
                     return Files.probeContentType(file.toPath());
@@ -983,8 +981,6 @@ public abstract class Source {
                 return "text/x-c";
             } else if (file.getName().endsWith(".R") || file.getName().endsWith(".r")) {
                 return "application/x-r";
-            } else if (file.getName().endsWith(".js") || file.getName().endsWith(".JS")) {
-                return "application/javascript";
             } else {
                 try {
                     return Files.probeContentType(file.toPath());
