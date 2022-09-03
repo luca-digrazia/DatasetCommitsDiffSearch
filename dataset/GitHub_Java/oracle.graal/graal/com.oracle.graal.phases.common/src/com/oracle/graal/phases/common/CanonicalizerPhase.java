@@ -24,6 +24,7 @@ package com.oracle.graal.phases.common;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Graph.NodeEventListener;
@@ -253,24 +254,30 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
             }
             if (nodeClass.isCanonicalizable()) {
                 METRIC_CANONICALIZATION_CONSIDERED_NODES.increment();
-                Node canonical;
-                try (AutoCloseable verify = getCanonicalizeableContractAssertion(node)) {
-                    canonical = ((Canonicalizable) node).canonical(tool);
-                    if (canonical == node && nodeClass.isCommutative()) {
-                        canonical = ((BinaryCommutative<?>) node).maybeCommuteInputs();
+                try (Scope s = Debug.scope("CanonicalizeNode", node)) {
+                    Node canonical;
+                    try (AutoCloseable verify = getCanonicalizeableContractAssertion(node)) {
+                        canonical = ((Canonicalizable) node).canonical(tool);
+                        if (canonical == node && nodeClass.isCommutative()) {
+                            canonical = ((BinaryCommutative<?>) node).maybeCommuteInputs();
+                        }
+                    }
+                    if (performReplacement(node, canonical)) {
+                        return true;
                     }
                 } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-                if (performReplacement(node, canonical)) {
-                    return true;
+                    throw Debug.handle(e);
                 }
             }
 
             if (nodeClass.isSimplifiable() && simplify) {
                 Debug.log(3, "Canonicalizer: simplifying %s", node);
                 METRIC_SIMPLIFICATION_CONSIDERED_NODES.increment();
-                node.simplify(tool);
+                try (Scope s = Debug.scope("SimplifyNode", node)) {
+                    node.simplify(tool);
+                } catch (Throwable e) {
+                    throw Debug.handle(e);
+                }
                 return node.isDeleted();
             }
             return false;
