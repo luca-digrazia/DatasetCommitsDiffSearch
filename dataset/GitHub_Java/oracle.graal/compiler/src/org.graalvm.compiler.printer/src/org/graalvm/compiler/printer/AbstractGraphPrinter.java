@@ -26,7 +26,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.Charset;
-import java.util.Collection;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -36,12 +37,28 @@ import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Signature;
+import org.graalvm.compiler.core.common.cfg.BlockMap;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.GraalDebugConfig;
+import org.graalvm.compiler.graph.Edges;
+import static org.graalvm.compiler.graph.Edges.Type.Inputs;
+import static org.graalvm.compiler.graph.Edges.Type.Successors;
+import org.graalvm.compiler.graph.Graph;
+import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
+import org.graalvm.compiler.graph.NodeList;
+import org.graalvm.compiler.graph.NodeMap;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodeinfo.InputType;
+import org.graalvm.compiler.nodes.AbstractMergeNode;
+import org.graalvm.compiler.nodes.PhiNode;
+import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.nodes.cfg.Block;
+import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
+import org.graalvm.compiler.phases.schedule.SchedulePhase;
 
-abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
-    private static final Charset UTF8 = Charset.forName("UTF-8");
+abstract class AbstractGraphPrinter implements GraphPrinter {
+    private static final Charset utf8 = Charset.forName("UTF-8");
 
     private static final int CONSTANT_POOL_MAX_SIZE = 8000;
 
@@ -90,6 +107,7 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
     }
 
     @SuppressWarnings("all")
+    @Override
     public void print(Graph graph, Map<Object, Object> properties, int id, String format, Object... args) throws IOException {
         writeByte(BEGIN_GRAPH);
         if (CURRENT_MAJOR_VERSION >= 3) {
@@ -102,10 +120,11 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
         } else {
             writePoolObject(formatTitle(id, format, args));
         }
-        writeGraph(graph, properties);
+        writeGraph(new GraphInfo(graph), properties);
         flush();
     }
 
+    @Override
     public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties) throws IOException {
         writeByte(BEGIN_GROUP);
         writePoolObject(name);
@@ -115,10 +134,12 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
         writeProperties(properties);
     }
 
+    @Override
     public void endGroup() throws IOException {
         writeByte(CLOSE_GROUP);
     }
 
+    @Override
     public void close() {
         try {
             flush();
@@ -132,43 +153,21 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
 
     abstract ResolvedJavaMethod findMethod(Object obj);
 
-    abstract Edges findEdges(NodeClass<?> nodeClass, boolean dumpInputs);
+    abstract void findEdges(NodeClass<?> nodeClass, boolean dumpInputs, List<String> names, List<Boolean> direct, List<InputType> types);
 
     abstract int findNodeId(Node n);
 
-    abstract void findExtraNodes(Node node, Collection<? super Node> extraNodes);
+    abstract int findNodesCount(GraphInfo info);
 
-    abstract boolean hasPredecessor(Node node);
+    abstract Iterable<Node> findNodes(GraphInfo info);
 
-    abstract int findNodesCount(Graph info);
+    abstract void findNodeProperties(Node node, Map<Object, Object> props, GraphInfo info);
 
-    abstract Iterable<Node> findNodes(Graph info);
-
-    abstract void findNodeProperties(Node node, Map<Object, Object> props, Graph info);
-
-    abstract List<Node> findBlockNodes(Graph info, Block block);
+    abstract List<Node> findBlockNodes(GraphInfo info, Block block);
 
     abstract int findBlockId(Block sux);
 
-    abstract List<Block> findBlocks(Graph graph);
-
     abstract List<Block> findBlockSuccessors(Block block);
-
-    abstract String formatTitle(int id, String format, Object... args);
-
-    abstract NodeClass<?> findNodeClass(Node node);
-
-    abstract int findSize(Edges edges);
-
-    abstract boolean isDirect(Edges edges, int i);
-
-    abstract String findName(Edges edges, int i);
-
-    abstract InputType findType(Edges edges, int i);
-
-    abstract Node findNode(Node node, Edges edges, int i);
-
-    abstract List<Node> findNodes(Node node, Edges edges, int i);
 
     private void writeVersion() throws IOException {
         writeBytesRaw(MAGIC_BYTES);
@@ -200,42 +199,42 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
         }
     }
 
-    private void writeByte(int b) throws IOException {
+    final void writeByte(int b) throws IOException {
         ensureAvailable(1);
         buffer.put((byte) b);
     }
 
-    private void writeInt(int b) throws IOException {
+    final void writeInt(int b) throws IOException {
         ensureAvailable(4);
         buffer.putInt(b);
     }
 
-    private void writeLong(long b) throws IOException {
+    final void writeLong(long b) throws IOException {
         ensureAvailable(8);
         buffer.putLong(b);
     }
 
-    private void writeDouble(double b) throws IOException {
+    final void writeDouble(double b) throws IOException {
         ensureAvailable(8);
         buffer.putDouble(b);
     }
 
-    private void writeFloat(float b) throws IOException {
+    final void writeFloat(float b) throws IOException {
         ensureAvailable(4);
         buffer.putFloat(b);
     }
 
-    private void writeShort(char b) throws IOException {
+    final void writeShort(char b) throws IOException {
         ensureAvailable(2);
         buffer.putChar(b);
     }
 
-    private void writeString(String str) throws IOException {
-        byte[] bytes = str.getBytes(UTF8);
+    final void writeString(String str) throws IOException {
+        byte[] bytes = str.getBytes(utf8);
         writeBytes(bytes);
     }
 
-    private void writeBytes(byte[] b) throws IOException {
+    final void writeBytes(byte[] b) throws IOException {
         if (b == null) {
             writeInt(-1);
         } else {
@@ -278,7 +277,7 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
         }
     }
 
-    private void writePoolObject(Object object) throws IOException {
+    final void writePoolObject(Object object) throws IOException {
         if (object == null) {
             writeByte(POOL_NULL);
             return;
@@ -317,50 +316,84 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
         return getClassName(klass.getComponentType()) + "[]";
     }
 
-    private void writeGraph(Graph graph, Map<Object, Object> properties) throws IOException {
+    final void writeGraph(GraphInfo graph, Map<Object, Object> properties) throws IOException {
         writeProperties(properties);
         writeNodes(graph);
-        writeBlocks(findBlocks(graph), graph);
+        writeBlocks(graph.blocks, graph);
     }
 
-    private void writeNodes(Graph info) throws IOException {
+    static final class GraphInfo {
+        final Graph graph;
+        final ControlFlowGraph cfg;
+        final BlockMap<List<Node>> blockToNodes;
+        final NodeMap<Block> nodeToBlocks;
+        final List<Block> blocks;
+
+        private GraphInfo(Graph graph) {
+            this.graph = graph;
+            StructuredGraph.ScheduleResult scheduleResult = null;
+            if (graph instanceof StructuredGraph) {
+
+                StructuredGraph structuredGraph = (StructuredGraph) graph;
+                scheduleResult = structuredGraph.getLastSchedule();
+                if (scheduleResult == null) {
+
+                    // Also provide a schedule when an error occurs
+                    if (GraalDebugConfig.Options.PrintGraphWithSchedule.getValue(graph.getOptions()) || Debug.contextLookup(Throwable.class) != null) {
+                        try {
+                            SchedulePhase schedule = new SchedulePhase(graph.getOptions());
+                            schedule.apply(structuredGraph);
+                            scheduleResult = structuredGraph.getLastSchedule();
+                        } catch (Throwable t) {
+                        }
+                    }
+
+                }
+            }
+            cfg = scheduleResult == null ? Debug.contextLookup(ControlFlowGraph.class) : scheduleResult.getCFG();
+            blockToNodes = scheduleResult == null ? null : scheduleResult.getBlockToNodesMap();
+            nodeToBlocks = scheduleResult == null ? null : scheduleResult.getNodeToBlockMap();
+            blocks = cfg == null ? null : Arrays.asList(cfg.getBlocks());
+        }
+    }
+
+    private void writeNodes(GraphInfo info) throws IOException {
         Map<Object, Object> props = new HashMap<>();
 
         writeInt(findNodesCount(info));
 
         for (Node node : findNodes(info)) {
-            NodeClass<?> nodeClass = findNodeClass(node);
+            NodeClass<?> nodeClass = node.getNodeClass();
             findNodeProperties(node, props, info);
 
             writeInt(findNodeId(node));
             writePoolObject(nodeClass);
-            writeByte(hasPredecessor(node) ? 1 : 0);
+            writeByte(node.predecessor() == null ? 0 : 1);
             writeProperties(props);
-            writeEdges(node, true);
-            writeEdges(node, false);
+            writeEdges(node, Inputs);
+            writeEdges(node, Successors);
 
             props.clear();
         }
     }
 
-    private void writeEdges(Node node, boolean dumpInputs) throws IOException {
-        NodeClass<?> nodeClass = findNodeClass(node);
-        Edges edges = findEdges(nodeClass, dumpInputs);
-        int size = findSize(edges);
-        for (int i = 0; i < size; i++) {
-            if (isDirect(edges, i)) {
-                writeNodeRef(findNode(node, edges, i));
+    private void writeEdges(Node node, Edges.Type type) throws IOException {
+        NodeClass<?> nodeClass = node.getNodeClass();
+        Edges edges = nodeClass.getEdges(type);
+        final long[] curOffsets = edges.getOffsets();
+        for (int i = 0; i < edges.getDirectCount(); i++) {
+            writeNodeRef(Edges.getNode(node, curOffsets, i));
+        }
+        for (int i = edges.getDirectCount(); i < edges.getCount(); i++) {
+            NodeList<Node> list = Edges.getNodeList(node, curOffsets, i);
+            if (list == null) {
+                writeShort((char) 0);
             } else {
-                List<Node> list = findNodes(node, edges, i);
-                if (list == null) {
-                    writeShort((char) 0);
-                } else {
-                    int listSize = list.size();
-                    assert listSize == ((char) listSize);
-                    writeShort((char) listSize);
-                    for (Node edge : list) {
-                        writeNodeRef(edge);
-                    }
+                int listSize = list.count();
+                assert listSize == ((char) listSize);
+                writeShort((char) listSize);
+                for (Node edge : list) {
+                    writeNodeRef(edge);
                 }
             }
         }
@@ -370,7 +403,7 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
         writeInt(findNodeId(node));
     }
 
-    private void writeBlocks(List<Block> blocks, Graph info) throws IOException {
+    private void writeBlocks(List<Block> blocks, GraphInfo info) throws IOException {
         if (blocks != null) {
             for (Block block : blocks) {
                 List<Node> nodes = findBlockNodes(info, block);
@@ -385,9 +418,15 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
                 List<Node> extraNodes = new LinkedList<>();
                 writeInt(findBlockId(block));
                 for (Node node : nodes) {
-                    findExtraNodes(node, extraNodes);
+                    if (node instanceof AbstractMergeNode) {
+                        AbstractMergeNode merge = (AbstractMergeNode) node;
+                        for (PhiNode phi : merge.phis()) {
+                            if (!nodes.contains(phi)) {
+                                extraNodes.add(phi);
+                            }
+                        }
+                    }
                 }
-                extraNodes.removeAll(nodes);
                 writeInt(nodes.size() + extraNodes.size());
                 for (Node node : nodes) {
                     writeInt(findNodeId(node));
@@ -407,14 +446,16 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
     }
 
     private void writeEdgesInfo(NodeClass<?> nodeClass, boolean dumpInputs) throws IOException {
-        Edges edges = findEdges(nodeClass, dumpInputs);
-        int size = findSize(edges);
-        writeShort((char) size);
-        for (int i = 0; i < size; i++) {
-            writeByte(isDirect(edges, i) ? 0 : 1);
-            writePoolObject(findName(edges, i));
+        List<String> names = new ArrayList<>();
+        List<Boolean> direct = new ArrayList<>();
+        List<InputType> types = new ArrayList<>();
+        findEdges(nodeClass, dumpInputs, names, direct, types);
+        writeShort((char) names.size());
+        for (int i = 0; i < names.size(); i++) {
+            writeByte(direct.get(i) ? 0 : 1);
+            writePoolObject(names.get(i));
             if (dumpInputs) {
-                writePoolObject(findType(edges, i));
+                writePoolObject(types.get(i));
             }
         }
     }
@@ -507,7 +548,7 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
         }
     }
 
-    private void writePropertyObject(Object obj) throws IOException {
+    final void writePropertyObject(Object obj) throws IOException {
         if (obj instanceof Integer) {
             writeByte(PROPERTY_INT);
             writeInt(((Integer) obj).intValue());
@@ -557,12 +598,12 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
                 writePoolObject(obj);
             } else {
                 writeByte(PROPERTY_SUBGRAPH);
-                writeGraph(g, null);
+                writeGraph(new GraphInfo(g), null);
             }
         }
     }
 
-    private void writeProperties(Map<Object, Object> props) throws IOException {
+    final void writeProperties(Map<Object, Object> props) throws IOException {
         if (props == null) {
             writeShort((char) 0);
             return;
