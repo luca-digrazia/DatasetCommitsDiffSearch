@@ -28,6 +28,7 @@ import static java.lang.reflect.Modifier.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -44,29 +45,29 @@ import com.oracle.graal.phases.*;
  */
 public class VerifyOptionsPhase extends Phase {
 
-    public static boolean checkOptions(MetaAccessProvider metaAccess) {
+    public static boolean checkOptions(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls) {
         ServiceLoader<Options> sl = ServiceLoader.loadInstalled(Options.class);
         Set<ResolvedJavaType> checked = new HashSet<>();
         for (Options opts : sl) {
             for (OptionDescriptor desc : opts) {
                 ResolvedJavaType holder = metaAccess.lookupJavaType(desc.getDeclaringClass());
-                checkType(holder, desc, metaAccess, checked);
+                checkType(holder, desc, metaAccess, foreignCalls, checked);
             }
         }
         return true;
     }
 
-    private static void checkType(ResolvedJavaType type, OptionDescriptor option, MetaAccessProvider metaAccess, Set<ResolvedJavaType> checked) {
+    private static void checkType(ResolvedJavaType type, OptionDescriptor option, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, Set<ResolvedJavaType> checked) {
         if (!checked.contains(type)) {
             checked.add(type);
             ResolvedJavaType superType = type.getSuperclass();
             if (superType != null && !MetaUtil.isJavaLangObject(superType)) {
-                checkType(superType, option, metaAccess, checked);
+                checkType(superType, option, metaAccess, foreignCalls, checked);
             }
             ResolvedJavaMethod clinit = type.getClassInitializer();
             if (clinit != null) {
                 StructuredGraph graph = new StructuredGraph(clinit);
-                new GraphBuilderPhase.Instance(metaAccess, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
+                new GraphBuilderPhase(metaAccess, foreignCalls, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
                 new VerifyOptionsPhase(type, metaAccess, option).apply(graph);
             }
         }
@@ -100,7 +101,7 @@ public class VerifyOptionsPhase extends Phase {
             }
         } else if (boxingTypes.contains(holder)) {
             return method.getName().equals("valueOf");
-        } else if (method.getDeclaringClass().equals(metaAccess.lookupJavaType(Class.class))) {
+        } else if (method.getDeclaringClass() == metaAccess.lookupJavaType(Class.class)) {
             return method.getName().equals("desiredAssertionStatus");
         } else if (method.getDeclaringClass().equals(declaringClass)) {
             return (method.getName().equals("$jacocoInit"));
@@ -113,7 +114,7 @@ public class VerifyOptionsPhase extends Phase {
         for (ValueNode node : graph.getNodes().filter(ValueNode.class)) {
             if (node instanceof StoreFieldNode) {
                 ResolvedJavaField field = ((StoreFieldNode) node).field();
-                verify(field.getDeclaringClass().equals(declaringClass), node, "store to field " + format("%H.%n", field));
+                verify(field.getDeclaringClass() == declaringClass, node, "store to field " + format("%H.%n", field));
                 verify(isStatic(field.getModifiers()), node, "store to field " + format("%H.%n", field));
                 if (optionValueType.isAssignableFrom((ResolvedJavaType) field.getType())) {
                     verify(isFinal(field.getModifiers()), node, "option field " + format("%H.%n", field) + " not final");
