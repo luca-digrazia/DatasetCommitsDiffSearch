@@ -66,20 +66,11 @@ public class LayoutParser {
     }
 
     public void parse(TypeElement layoutElement) {
-        if (layoutElement.getKind() != ElementKind.INTERFACE) {
-            processor.reportError(layoutElement, "@Layout should only be applied to interfaces");
+        if (!layoutElement.getInterfaces().isEmpty()) {
+            parseSuperLayout((TypeElement) ((DeclaredType) layoutElement.getInterfaces().get(0)).asElement());
         }
 
         parseName(layoutElement);
-
-        if (!layoutElement.getInterfaces().isEmpty()) {
-            if (layoutElement.getInterfaces().size() > 1) {
-                processor.reportError(layoutElement, "@Layout interfaces can have at most one super-interface");
-            }
-
-            final DeclaredType superInterface = (DeclaredType) layoutElement.getInterfaces().get(0);
-            parseSuperLayout((TypeElement) superInterface.asElement());
-        }
 
         for (AnnotationMirror annotationMirror : layoutElement.getAnnotationMirrors()) {
             if (annotationMirror.getAnnotationType().toString().equals(Layout.class.getCanonicalName())) {
@@ -94,7 +85,7 @@ public class LayoutParser {
                 if (simpleName.endsWith("_IDENTIFIER")) {
                     parseIdentifier((VariableElement) element);
                 } else {
-                    processor.reportError(element, "@Layout interface fields should only be identifier fields, ending with _IDENTIFIER");
+                    // throw new AssertionError("Unknown field in layout interface");
                 }
             } else if (element.getKind() == ElementKind.METHOD) {
                 final String simpleName = element.getSimpleName().toString();
@@ -114,52 +105,56 @@ public class LayoutParser {
                 } else if (simpleName.startsWith("set")) {
                     parseSetter((ExecutableElement) element);
                 } else {
-                    processor.reportError(element, "Unknown method prefix in @Layout interface - woudln't know how to implement this method");
+                    // throw new AssertionError("Unknown method '" + simpleName + "' in layout
+                    // interface " + interfaceFullName);
                 }
-            } else {
-                processor.reportError(element, "@Layout interfaces can only contain fields and methods");
             }
         }
+
+        // assert constructorProperties.size() == properties.size();
+        // assert constructorProperties.containsAll(properties.keySet());
     }
 
-    private void parseName(TypeElement layoutElement) {
-        parsePackageName(layoutElement);
-        interfaceFullName = layoutElement.getQualifiedName().toString();
-        final String nameString = layoutElement.getSimpleName().toString();
+    private void parseIdentifier(VariableElement fieldElement) {
+        final String name = fieldElement.getSimpleName().toString();
+        // assert name.endsWith("_IDENTIFIER");
 
-        if (!nameString.endsWith("Layout")) {
-            processor.reportError(layoutElement, "@Layout interfaces should have a name ending with -Layout");
-        }
+        final String propertyName = NameUtils.constantToIdentifier(name.substring(0, name.length() - "_IDENTIFIER".length()));
 
-        name = nameString.substring(0, nameString.length() - "Layout".length());
+        getProperty(propertyName).setHasIdentifier(true);
     }
 
     private void parseSuperLayout(TypeElement superTypeElement) {
         final LayoutParser superParser = new LayoutParser(processor);
         superParser.parse(superTypeElement);
+
         superLayout = superParser.build();
     }
 
-    private void parseIdentifier(VariableElement fieldElement) {
-        final String identifierName = fieldElement.getSimpleName().toString();
-        final String propertyName = NameUtils.constantToIdentifier(identifierName.substring(0, identifierName.length() - "_IDENTIFIER".length()));
-        getProperty(propertyName).setHasIdentifier(true);
+    private void parseName(TypeElement layoutElement) {
+        parsePackageName(layoutElement);
+
+        interfaceFullName = layoutElement.getQualifiedName().toString();
+
+        final String nameString = layoutElement.getSimpleName().toString();
+        // assert nameString.endsWith("Layout");
+        name = nameString.substring(0, nameString.length() - "Layout".length());
     }
 
     private void parseShapeConstructor(ExecutableElement methodElement) {
         List<? extends VariableElement> parameters = methodElement.getParameters();
 
         if (superLayout != null) {
-            final List<PropertyModel> superShapeProperties = superLayout.getAllShapeProperties();
-            checkSharedParameters(methodElement, parameters, superShapeProperties);
+            // assert parameters.size() >= superLayout.getAllShapeProperties().size();
             parameters = parameters.subList(superLayout.getAllShapeProperties().size(), parameters.size());
         }
 
         for (VariableElement element : parameters) {
-            final String parameterName = element.getSimpleName().toString();
-            constructorProperties.add(parameterName);
-            final PropertyBuilder property = getProperty(parameterName);
-            setPropertyType(element, property, element.asType());
+            final String name = element.getSimpleName().toString();
+
+            constructorProperties.add(name);
+            final PropertyBuilder property = getProperty(name);
+            setPropertyType(property, element.asType());
             parseConstructorParameterAnnotations(property, element);
             property.setIsShapeProperty(true);
             hasShapeProperties = true;
@@ -170,57 +165,24 @@ public class LayoutParser {
         List<? extends VariableElement> parameters = methodElement.getParameters();
 
         if (hasShapeProperties || (superLayout != null && superLayout.hasShapeProperties())) {
-            if (parameters.isEmpty()) {
-                processor.reportError(methodElement, "If an @Layout has shape properties the constructor must have parameters");
-            }
-
-            final VariableElement firstParameter = parameters.get(0);
-
-            if (!firstParameter.getSimpleName().toString().equals("factory")) {
-                processor.reportError(firstParameter, "If an @Layout has shape properties, the first parameter of the constructor must be called factory (was %s)",
-                                firstParameter.getSimpleName());
-            }
-
-            if (!firstParameter.asType().toString().equals(DynamicObjectFactory.class.getName())) {
-                processor.reportError(firstParameter, "If an @Layout has shape properties, the first parameter of the constructor must be of type DynamicObjectFactory (was %s)",
-                                firstParameter.asType());
-            }
-
+            // assert
+            // parameters.get(0).asType().toString().equals(DynamicObjectFactory.class.getName()) :
+            // parameters.get(0).asType();
             parameters = parameters.subList(1, parameters.size());
         }
 
         if (superLayout != null) {
-            final List<PropertyModel> superProperties = superLayout.getAllInstanceProperties();
-            checkSharedParameters(methodElement, parameters, superProperties);
+            // assert parameters.size() >= superLayout.getAllNonShapeProperties().size();
+            parameters = parameters.subList(superLayout.getAllInstanceProperties().size(), parameters.size());
         }
 
         for (VariableElement element : parameters) {
-            final String parameterName = element.getSimpleName().toString();
-            constructorProperties.add(parameterName);
-            final PropertyBuilder property = getProperty(parameterName);
-            setPropertyType(element, property, element.asType());
+            final String name = element.getSimpleName().toString();
+
+            constructorProperties.add(name);
+            final PropertyBuilder property = getProperty(name);
+            setPropertyType(property, element.asType());
             parseConstructorParameterAnnotations(property, element);
-        }
-    }
-
-    private void checkSharedParameters(Element element, List<? extends VariableElement> parameters, List<PropertyModel> sharedProperties) {
-        if (parameters.size() < sharedProperties.size()) {
-            processor.reportError(element, "@Layout constructor cannot have less parameters than the super layout constructor");
-        }
-
-        for (int n = 0; n < sharedProperties.size(); n++) {
-            final VariableElement parameter = parameters.get(n);
-            final PropertyModel superLayoutProperty = sharedProperties.get(n);
-
-            if (!parameter.getSimpleName().toString().equals(superLayoutProperty.getName())) {
-                processor.reportError(element, "@Layout constructor parameter %d needs to have the same name as the super layout constructor (is %s, should be %s)",
-                                n, parameter.getSimpleName(), superLayoutProperty.getName());
-            }
-
-            if (!parameter.asType().equals(superLayoutProperty.getType())) {
-                processor.reportError(element, "@Layout constructor parameter %d needs to have the same type as the super layout constructor (is %s, should be %s)",
-                                n, parameter.asType(), superLayoutProperty.getType());
-            }
         }
     }
 
@@ -245,74 +207,48 @@ public class LayoutParser {
     }
 
     private void parseGuard(ExecutableElement methodElement) {
-        if (methodElement.getParameters().size() != 1) {
-            processor.reportError(methodElement, "@Layout guard methods must have just one parameter");
-        }
+        // assert methodElement.getParameters().size() == 1;
 
-        final VariableElement parameter = methodElement.getParameters().get(0);
-
-        final String type = parameter.asType().toString();
-
-        final String expectedParameterName;
+        final String type = methodElement.getParameters().get(0).asType().toString();
 
         if (type.equals(DynamicObject.class.getName())) {
+            // assert !hasDynamicObjectGuard;
             hasDynamicObjectGuard = true;
-            expectedParameterName = "object";
         } else if (type.equals(ObjectType.class.getName())) {
+            // assert !hasObjectTypeGuard;
             hasObjectTypeGuard = true;
-            expectedParameterName = "objectType";
         } else if (type.equals(Object.class.getName())) {
+            // assert !hasObjectGuard;
             hasObjectGuard = true;
-            expectedParameterName = "object";
         } else {
-            processor.reportError(methodElement, "@Layout guard method with unknown parameter type %s - don't know how to guard on this", type);
-            expectedParameterName = null;
-        }
-
-        if (expectedParameterName != null && !expectedParameterName.equals(parameter.getSimpleName().toString())) {
-            processor.reportError(methodElement, "@Layout guard method should have a parameter named %s", expectedParameterName);
+            // assert false : "Unknown type for the first guard parameter: " + type;
         }
     }
 
     private void parseGetter(ExecutableElement methodElement) {
-        if (methodElement.getParameters().size() != 1) {
-            processor.reportError(methodElement, "@Layout getter methods must have just one parameter");
-        }
+        // assert methodElement.getSimpleName().toString().startsWith("get");
+        // assert methodElement.getParameters().size() == 1;
 
-        final VariableElement parameter = methodElement.getParameters().get(0);
-        final String parameterType = parameter.asType().toString();
+        final boolean isFactoryGetter = methodElement.getParameters().get(0).asType().toString().equals(DynamicObjectFactory.class.getName());
+        final boolean isObjectTypeGetter = methodElement.getParameters().get(0).asType().toString().equals(ObjectType.class.getName());
 
-        final boolean isShapeGetter;
-        final boolean isObjectTypeGetter;
-        final String expectedParameterName;
+        // assert !(isFactoryGetter & isObjectTypeGetter);
 
-        if (parameterType.equals(DynamicObject.class.getName())) {
-            isShapeGetter = false;
-            isObjectTypeGetter = false;
-            expectedParameterName = "object";
-        } else if (parameterType.equals(DynamicObjectFactory.class.getName())) {
-            isShapeGetter = true;
-            isObjectTypeGetter = false;
-            expectedParameterName = "factory";
-        } else if (parameterType.equals(ObjectType.class.getName())) {
-            isShapeGetter = false;
-            isObjectTypeGetter = true;
-            expectedParameterName = "objectType";
-        } else {
-            isShapeGetter = false;
-            isObjectTypeGetter = false;
-            expectedParameterName = null;
-            processor.reportError(methodElement, "@Layout getter methods must have a parameter of type DynamicObject or, for shape properties, DynamicObjectFactory or ObjectType");
-        }
+        // if (isFactoryGetter) {
+        // assert methodElement.getParameters().get(0).getSimpleName().toString().equals("factory");
+        // } else if (isObjectTypeGetter) {
+        // assert
+        // methodElement.getParameters().get(0).getSimpleName().toString().equals("objectType");
+        // } else {
+        // assert
+        // methodElement.getParameters().get(0).asType().toString().equals(DynamicObject.class.getName());
+        // assert methodElement.getParameters().get(0).getSimpleName().toString().equals("object");
+        // }
 
-        if (expectedParameterName != null && !expectedParameterName.equals(parameter.getSimpleName().toString())) {
-            processor.reportError(methodElement, "@Layout getter method should have a parameter named %s", expectedParameterName);
-        }
+        final String name = titleToCamel(methodElement.getSimpleName().toString().substring("get".length()));
+        final PropertyBuilder property = getProperty(name);
 
-        final String propertyName = NameUtils.titleToCamel(methodElement.getSimpleName().toString().substring("get".length()));
-        final PropertyBuilder property = getProperty(propertyName);
-
-        if (isShapeGetter) {
+        if (isFactoryGetter) {
             property.setHasShapeGetter(true);
         } else if (isObjectTypeGetter) {
             property.setHasObjectTypeGetter(true);
@@ -320,51 +256,35 @@ public class LayoutParser {
             property.setHasGetter(true);
         }
 
-        setPropertyType(methodElement, property, methodElement.getReturnType());
+        setPropertyType(property, methodElement.getReturnType());
     }
 
     private void parseSetter(ExecutableElement methodElement) {
-        if (methodElement.getParameters().size() != 2) {
-            processor.reportError(methodElement, "@Layout guard methods must have two parameters");
-        }
+        // assert methodElement.getSimpleName().toString().startsWith("set");
+        // assert methodElement.getParameters().size() == 2;
 
-        final VariableElement parameter = methodElement.getParameters().get(0);
-        final String parameterType = parameter.asType().toString();
-
-        final boolean isShapeSetter;
-        final String expectedParameterName;
-
-        if (parameterType.equals(DynamicObject.class.getName())) {
-            isShapeSetter = false;
-            expectedParameterName = "object";
-        } else if (parameterType.equals(DynamicObjectFactory.class.getName())) {
-            isShapeSetter = true;
-            expectedParameterName = "factory";
-        } else {
-            isShapeSetter = false;
-            expectedParameterName = null;
-            processor.reportError(methodElement, "@Layout setter methods must have a first parameter of type DynamicObject or, for shape properties, DynamicObjectFactory");
-        }
-
-        if (expectedParameterName != null && !expectedParameterName.equals(parameter.getSimpleName().toString())) {
-            processor.reportError(methodElement, "@Layout getter method should have a first parameter named %s", expectedParameterName);
-        }
-
-        if (!methodElement.getParameters().get(1).getSimpleName().toString().equals("value")) {
-            processor.reportError(methodElement, "@Layout getter method should have a second parameter named value");
-        }
-
+        final boolean isFactorySetter = methodElement.getParameters().get(0).asType().toString().equals(DynamicObjectFactory.class.getName());
         final boolean isUnsafeSetter = methodElement.getSimpleName().toString().endsWith("Unsafe");
 
-        String propertyName = NameUtils.titleToCamel(methodElement.getSimpleName().toString().substring("set".length()));
+        // assert !(isFactorySetter && isUnsafeSetter);
+
+        // if (isFactorySetter) {
+        // assert methodElement.getParameters().get(0).getSimpleName().toString().equals("factory");
+        // } else {
+        // assert
+        // methodElement.getParameters().get(0).asType().toString().equals(DynamicObject.class.getName());
+        // assert methodElement.getParameters().get(0).getSimpleName().toString().equals("object");
+        // }
+
+        String name = titleToCamel(methodElement.getSimpleName().toString().substring("set".length()));
 
         if (isUnsafeSetter) {
-            propertyName = propertyName.substring(0, propertyName.length() - "Unsafe".length());
+            name = name.substring(0, name.length() - "Unsafe".length());
         }
 
-        final PropertyBuilder property = getProperty(propertyName);
+        final PropertyBuilder property = getProperty(name);
 
-        if (isShapeSetter) {
+        if (isFactorySetter) {
             property.setHasShapeSetter(true);
         } else {
             if (isUnsafeSetter) {
@@ -374,73 +294,46 @@ public class LayoutParser {
             }
         }
 
-        setPropertyType(methodElement, property, methodElement.getParameters().get(1).asType());
+        setPropertyType(property, methodElement.getParameters().get(1).asType());
     }
 
     private void parseCompareAndSet(ExecutableElement methodElement) {
-        if (methodElement.getParameters().size() != 3) {
-            processor.reportError(methodElement, "@Layout compare and set methods must have three parameters");
-        }
+        // assert methodElement.getSimpleName().toString().startsWith("compareAndSet");
+        // assert methodElement.getParameters().size() == 3;
+        // assert
+        // methodElement.getParameters().get(0).asType().toString().equals(DynamicObject.class.getName());
+        // assert methodElement.getParameters().get(0).getSimpleName().toString().equals("object");
 
-        final VariableElement objectParameter = methodElement.getParameters().get(0);
-        final VariableElement currentValueParameter = methodElement.getParameters().get(1);
-        final VariableElement newValueParameter = methodElement.getParameters().get(2);
-
-        if (!objectParameter.asType().toString().equals(DynamicObject.class.getName())) {
-            processor.reportError(methodElement, "@Layout compare and set method should have a first parameter of type DynamicObject");
-        }
-
-        if (!objectParameter.getSimpleName().toString().equals("object")) {
-            processor.reportError(methodElement, "@Layout compare and set method should have a first parameter named object");
-        }
-
-        if (!currentValueParameter.getSimpleName().toString().equals("expectedValue")) {
-            processor.reportError(methodElement, "@Layout compare and set method should have a second parameter named expectedValue");
-        }
-
-        if (!newValueParameter.getSimpleName().toString().equals("value")) {
-            processor.reportError(methodElement, "@Layout compare and set method should have a third parameter named value");
-        }
-
-        String propertyName = NameUtils.titleToCamel(methodElement.getSimpleName().toString().substring("compareAndSet".length()));
-        final PropertyBuilder property = getProperty(propertyName);
+        String name = titleToCamel(methodElement.getSimpleName().toString().substring("compareAndSet".length()));
+        final PropertyBuilder property = getProperty(name);
 
         property.setHasCompareAndSet(true);
 
-        setPropertyType(methodElement, property, methodElement.getParameters().get(1).asType());
-        setPropertyType(methodElement, property, methodElement.getParameters().get(2).asType());
+        setPropertyType(property, methodElement.getParameters().get(1).asType());
+        setPropertyType(property, methodElement.getParameters().get(2).asType());
     }
 
     private void parseGetAndSet(ExecutableElement methodElement) {
-        if (methodElement.getParameters().size() != 2) {
-            processor.reportError(methodElement, "@Layout get and set methods must have two parameters");
-        }
+        // assert methodElement.getSimpleName().toString().startsWith("getAndSet");
+        // assert methodElement.getParameters().size() == 2;
+        // assert
+        // methodElement.getParameters().get(0).asType().toString().equals(DynamicObject.class.getName());
+        // assert methodElement.getParameters().get(0).getSimpleName().toString().equals("object");
 
-        final VariableElement objectParameter = methodElement.getParameters().get(0);
-        final VariableElement newValueParameter = methodElement.getParameters().get(1);
-
-        if (!objectParameter.asType().toString().equals(DynamicObject.class.getName())) {
-            processor.reportError(methodElement, "@Layout get and set method should have a first parameter of type DynamicObject");
-        }
-
-        if (!objectParameter.getSimpleName().toString().equals("object")) {
-            processor.reportError(methodElement, "@Layout get and set method should have a first parameter named object");
-        }
-
-        if (!newValueParameter.getSimpleName().toString().equals("value")) {
-            processor.reportError(methodElement, "@Layout get and set method should have a second parameter named value");
-        }
-
-        String propertyName = NameUtils.titleToCamel(methodElement.getSimpleName().toString().substring("getAndSet".length()));
-        final PropertyBuilder property = getProperty(propertyName);
+        String name = titleToCamel(methodElement.getSimpleName().toString().substring("getAndSet".length()));
+        final PropertyBuilder property = getProperty(name);
 
         property.setHasGetAndSet(true);
 
-        setPropertyType(methodElement, property, methodElement.getParameters().get(1).asType());
-        setPropertyType(methodElement, property, methodElement.getReturnType());
+        setPropertyType(property, methodElement.getParameters().get(1).asType());
+        setPropertyType(property, methodElement.getReturnType());
     }
 
-    private static void parseConstructorParameterAnnotations(PropertyBuilder property, Element element) {
+    private String titleToCamel(String name) {
+        return Character.toLowerCase(name.charAt(0)) + name.substring(1);
+    }
+
+    private void parseConstructorParameterAnnotations(PropertyBuilder property, Element element) {
         if (element.getAnnotation(Nullable.class) != null) {
             property.setNullable(true);
         }
@@ -450,39 +343,34 @@ public class LayoutParser {
         }
     }
 
-    private void setPropertyType(Element element, PropertyBuilder builder, TypeMirror type) {
+    private void setPropertyType(PropertyBuilder builder, TypeMirror type) {
         if (builder.getType() == null) {
             builder.setType(type);
-        } else if (!type.toString().equals(builder.getType().toString())) {
-            processor.reportError(element, "@Layout property types are inconsistent - was previously %s but now %s",
-                            builder.getType(), type);
+        } else {
+            // assert builder.getType().toString().equals(type.toString());
         }
     }
 
-    private PropertyBuilder getProperty(String propertyName) {
-        PropertyBuilder builder = properties.get(propertyName);
+    private PropertyBuilder getProperty(String name) {
+        PropertyBuilder builder = properties.get(name);
 
         if (builder == null) {
-            builder = new PropertyBuilder(propertyName);
-            properties.put(propertyName, builder);
+            builder = new PropertyBuilder(name);
+            properties.put(name, builder);
         }
 
         return builder;
     }
 
     public LayoutModel build() {
-        return new LayoutModel(objectTypeSuperclass, superLayout, name, packageName, hasObjectTypeGuard, hasObjectGuard,
-                        hasDynamicObjectGuard, buildProperties(), interfaceFullName);
+        return new LayoutModel(objectTypeSuperclass, superLayout, name, packageName, hasObjectTypeGuard, hasObjectGuard, hasDynamicObjectGuard,
+                        buildProperties(), interfaceFullName);
     }
 
     private List<PropertyModel> buildProperties() {
         final List<PropertyModel> models = new ArrayList<>();
 
         for (String propertyName : constructorProperties) {
-            if (superLayout != null && superLayout.hasProperty(propertyName)) {
-                continue;
-            }
-
             models.add(getProperty(propertyName).build());
         }
 
