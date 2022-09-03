@@ -94,13 +94,6 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, 
             return IsNullNode.create(GraphUtil.skipPi(forValue));
         }
 
-        if (forValue instanceof ConvertNode) {
-            ConvertNode convertNode = (ConvertNode) forValue;
-            if (convertNode.mayNullCheckSkipConversion()) {
-                return IsNullNode.create(convertNode.getValue());
-            }
-        }
-
         return this;
     }
 
