@@ -25,38 +25,15 @@ package com.oracle.graal.graphbuilderconf;
 import java.lang.invoke.*;
 import java.lang.reflect.*;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * Plugin for handling a specific method invocation.
  */
 public interface InvocationPlugin extends GraphBuilderPlugin {
-
-    /**
-     * The receiver in a non-static method. The class literal for this interface must be used with
-     * {@link MethodIdMap#put(Object, boolean, boolean, Class, String, Class...)} to denote the
-     * receiver argument for such a non-static method.
-     */
-    public interface Receiver {
-        /**
-         * Gets the receiver value, null checking it first if necessary.
-         *
-         * @return the receiver value with a {@linkplain StampTool#isPointerNonNull(ValueNode)
-         *         non-null} stamp
-         */
-        ValueNode get();
-
-        /**
-         * Determines if the receiver is constant.
-         */
-        default boolean isConstant() {
-            return false;
-        }
-    }
 
     /**
      * Determines if this plugin is for a method with a polymorphic signature (e.g.
@@ -68,7 +45,6 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
 
     /**
      * Determines if this plugin can only be used when inlining the method is it associated with.
-     * That is, this plugin cannot be used when the associated method is the compilation root.
      */
     default boolean inlineOnly() {
         return isSignaturePolymorphic();
@@ -82,49 +58,49 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
      *            position 0 if {@code targetMethod} is not static
      * @see #execute
      */
-    default boolean applyPolymorphic(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode... argsIncludingReceiver) {
+    default boolean applyPolymorphic(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode... argsIncludingReceiver) {
         return defaultHandler(b, targetMethod, receiver, argsIncludingReceiver);
     }
 
     /**
      * @see #execute
      */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver) {
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
         return defaultHandler(b, targetMethod, receiver);
     }
 
     /**
      * @see #execute
      */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg) {
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
         return defaultHandler(b, targetMethod, receiver, arg);
     }
 
     /**
      * @see #execute
      */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2) {
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg1, ValueNode arg2) {
         return defaultHandler(b, targetMethod, receiver, arg1, arg2);
     }
 
     /**
      * @see #execute
      */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
         return defaultHandler(b, targetMethod, receiver, arg1, arg2, arg3);
     }
 
     /**
      * @see #execute
      */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4) {
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4) {
         return defaultHandler(b, targetMethod, receiver, arg1, arg2, arg3, arg4);
     }
 
     /**
      * @see #execute
      */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4, ValueNode arg5) {
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4, ValueNode arg5) {
         return defaultHandler(b, targetMethod, receiver, arg1, arg2, arg3, arg4, arg5);
     }
 
@@ -144,7 +120,7 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
      *         inlining it or creating an {@link Invoke} node). A plugin that does not handle an
      *         invocation must not modify the graph being constructed.
      */
-    default boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode[] argsIncludingReceiver) {
+    default boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode[] argsIncludingReceiver) {
         if (isSignaturePolymorphic()) {
             return applyPolymorphic(b, targetMethod, receiver, argsIncludingReceiver);
         } else if (receiver != null) {
@@ -187,9 +163,8 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
     /**
      * Handles an invocation when a specific {@code apply} method is not available.
      */
-    default boolean defaultHandler(@SuppressWarnings("unused") GraphBuilderContext b, ResolvedJavaMethod targetMethod, @SuppressWarnings("unused") InvocationPlugin.Receiver receiver,
-                    ValueNode... args) {
-        throw new JVMCIError("Invocation plugin for %s does not handle invocations with %d arguments", targetMethod.format("%H.%n(%p)"), args.length);
+    default boolean defaultHandler(@SuppressWarnings("unused") GraphBuilderContext b, ResolvedJavaMethod targetMethod, @SuppressWarnings("unused") Receiver receiver, ValueNode... args) {
+        throw new GraalInternalError("Invocation plugin for %s does not handle invocations with %d arguments", targetMethod.format("%H.%n(%p)"), args.length);
     }
 
     default StackTraceElement getApplySourceLocation(MetaAccessProvider metaAccess) {
@@ -201,6 +176,6 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
                 return metaAccess.lookupJavaMethod(m).asStackTraceElement(0);
             }
         }
-        throw new JVMCIError("could not find method named \"apply\" or \"defaultHandler\" in " + c.getName());
+        throw new GraalInternalError("could not find method named \"apply\" or \"defaultHandler\" in " + c.getName());
     }
 }
