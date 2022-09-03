@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -184,12 +182,11 @@ public class SubstrateReplacements extends ReplacementsImpl {
 
         EncodedGraph encodedGraph = new EncodedGraph(snippetEncoding, startOffset, snippetObjects, snippetNodeClasses, null, null, null, false, trackNodeSourcePosition);
         try (DebugContext debug = openDebugContext("SVMSnippet_", method)) {
-            StructuredGraph result = new StructuredGraph.Builder(options, debug).method(method).trackNodeSourcePosition(trackNodeSourcePosition).setIsSubstitution(true).build();
+            StructuredGraph result = new StructuredGraph.Builder(options, debug).method(method).trackNodeSourcePosition(trackNodeSourcePosition).build();
             PEGraphDecoder graphDecoder = new PEGraphDecoder(ConfigurationValues.getTarget().arch, result, providers.getMetaAccess(), providers.getConstantReflection(),
                             providers.getConstantFieldProvider(), providers.getStampProvider(), null, snippetInvocationPlugins, new InlineInvokePlugin[0], parameterPlugin, null, null, null) {
                 @Override
-                protected EncodedGraph lookupEncodedGraph(ResolvedJavaMethod lookupMethod, ResolvedJavaMethod originalMethod, BytecodeProvider intrinsicBytecodeProvider,
-                                boolean isSubstitution, boolean track) {
+                protected EncodedGraph lookupEncodedGraph(ResolvedJavaMethod lookupMethod, ResolvedJavaMethod originalMethod, BytecodeProvider intrinsicBytecodeProvider, boolean track) {
                     if (lookupMethod.equals(method)) {
                         assert !track || encodedGraph.trackNodeSourcePosition();
                         return encodedGraph;
@@ -199,7 +196,7 @@ public class SubstrateReplacements extends ReplacementsImpl {
                 }
             };
 
-            graphDecoder.decode(method, true, trackNodeSourcePosition);
+            graphDecoder.decode(method, trackNodeSourcePosition);
 
             assert result.verify();
             return result;

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -83,15 +81,9 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
     }
 
     @SuppressWarnings("try")
-    private EncodedGraph createGraph(ResolvedJavaMethod method, ResolvedJavaMethod originalMethod, BytecodeProvider intrinsicBytecodeProvider, boolean isSubstitution) {
-        // @formatter:off
-        StructuredGraph graphToEncode = new StructuredGraph.Builder(options, debug, allowAssumptions).
-                        useProfilingInfo(false).
-                        trackNodeSourcePosition(graphBuilderConfig.trackNodeSourcePosition()).
-                        method(method).
-                        setIsSubstitution(isSubstitution).
-                        build();
-        // @formatter:on
+    private EncodedGraph createGraph(ResolvedJavaMethod method, ResolvedJavaMethod originalMethod, BytecodeProvider intrinsicBytecodeProvider) {
+        StructuredGraph graphToEncode = new StructuredGraph.Builder(options, debug, allowAssumptions).useProfilingInfo(false).trackNodeSourcePosition(
+                        graphBuilderConfig.trackNodeSourcePosition()).method(method).build();
         try (DebugContext.Scope scope = debug.scope("createGraph", graphToEncode)) {
             IntrinsicContext initialIntrinsicContext = intrinsicBytecodeProvider != null ? new IntrinsicContext(originalMethod, method, intrinsicBytecodeProvider, INLINE_AFTER_PARSING) : null;
             GraphBuilderPhase.Instance graphBuilderPhaseInstance = createGraphBuilderPhaseInstance(initialIntrinsicContext);
@@ -116,11 +108,10 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
     }
 
     @Override
-    protected EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method, ResolvedJavaMethod originalMethod, BytecodeProvider intrinsicBytecodeProvider, boolean isSubstitution,
-                    boolean trackNodeSourcePosition) {
+    protected EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method, ResolvedJavaMethod originalMethod, BytecodeProvider intrinsicBytecodeProvider, boolean trackNodeSourcePosition) {
         EncodedGraph result = graphCache.get(method);
         if (result == null && method.hasBytecodes()) {
-            result = createGraph(method, originalMethod, intrinsicBytecodeProvider, isSubstitution);
+            result = createGraph(method, originalMethod, intrinsicBytecodeProvider);
         }
         return result;
     }

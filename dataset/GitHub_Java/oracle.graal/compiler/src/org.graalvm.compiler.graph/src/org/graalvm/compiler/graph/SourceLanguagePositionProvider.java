@@ -22,23 +22,11 @@
  */
 package org.graalvm.compiler.graph;
 
-import java.util.Map;
+import jdk.vm.ci.meta.JavaConstant;
 
 /**
- * Provides a path to report information about a high level language source position to the Graph
- * Visualizer.
+ * Provider of {@link SourceLanguagePosition} for a constant if it represents an AST node.
  */
-public interface SourceLanguagePosition {
-
-    /**
-     * This is called during dumping of Nodes. The implementation should add any properties which
-     * describe this source position. The actual keys and values used are a private contract between
-     * the language implementation and the Graph Visualizer.
-     */
-    void addSourceInformation(Map<String, Object> props);
-
-    /**
-     * Produce a compact description of this position suitable for printing.
-     */
-    String toShortString();
+public interface SourceLanguagePositionProvider {
+    SourceLanguagePosition getPosition(JavaConstant node);
 }

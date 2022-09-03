@@ -269,7 +269,7 @@ public class BinaryGraphPrinter implements
         if (node.getNodeSourcePosition() != null) {
             NodeSourcePosition pos = node.getNodeSourcePosition();
             while (pos != null) {
-                SourceLanguagePosition cur = pos.getSourceLanguage();
+                SourceLanguagePosition cur = pos.getSourceLanauage();
                 if (cur != null) {
                     cur.addSourceInformation(props);
                     break;
