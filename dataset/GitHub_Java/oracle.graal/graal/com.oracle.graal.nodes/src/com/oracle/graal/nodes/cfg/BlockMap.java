@@ -23,18 +23,19 @@
 package com.oracle.graal.nodes.cfg;
 
 public class BlockMap<T> {
+
     private final T[] data;
 
     @SuppressWarnings("unchecked")
-    public BlockMap(ControlFlowGraph cfg) {
+    public BlockMap(AbstractControlFlowGraph<?> cfg) {
         data = (T[]) new Object[cfg.getBlocks().length];
     }
 
-    public T get(Block block) {
+    public T get(AbstractBlock<?> block) {
         return data[block.getId()];
     }
 
-    public void put(Block block, T value) {
+    public void put(AbstractBlock<?> block, T value) {
         data[block.getId()] = value;
     }
 }

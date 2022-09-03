@@ -34,7 +34,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
 
     private final NodeMap<Block> nodeToBlock;
     private Block[] reversePostOrder;
-    private List<Loop<Block>> loops;
+    private Loop[] loops;
 
     public static ControlFlowGraph compute(StructuredGraph graph, boolean connectBlocks, boolean computeLoops, boolean computeDominators, boolean computePostdominators) {
         ControlFlowGraph cfg = new ControlFlowGraph(graph);
@@ -106,7 +106,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
         return nodeToBlock.get(node);
     }
 
-    public List<Loop<Block>> getLoops() {
+    public Loop[] getLoops() {
         return loops;
     }
 
@@ -233,12 +233,12 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
     }
 
     private void computeLoopInformation() {
-        loops = new ArrayList<>();
+        ArrayList<Loop> loopsList = new ArrayList<>();
         for (Block block : reversePostOrder) {
             Node beginNode = block.getBeginNode();
             if (beginNode instanceof LoopBeginNode) {
-                Loop<Block> loop = new HIRLoop(block.getLoop(), loops.size(), block);
-                loops.add(loop);
+                Loop loop = new Loop(block.getLoop(), loopsList.size(), block);
+                loopsList.add(loop);
 
                 LoopBeginNode loopBegin = (LoopBeginNode) beginNode;
                 for (LoopEndNode end : loopBegin.loopEnds()) {
@@ -269,9 +269,10 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                 }
             }
         }
+        loops = loopsList.toArray(new Loop[loopsList.size()]);
     }
 
-    private static void addBranchToLoop(Loop<Block> l, Block b) {
+    private static void addBranchToLoop(Loop l, Block b) {
         if (l.blocks.contains(b)) {
             return;
         }
@@ -282,7 +283,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
         }
     }
 
-    private static void computeLoopBlocks(Block block, Loop<Block> loop) {
+    private static void computeLoopBlocks(Block block, Loop loop) {
         if (block.getLoop() == loop) {
             return;
         }
