@@ -91,12 +91,13 @@ import com.oracle.truffle.llvm.parser.util.Pair;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMIntrinsicProvider;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.Intrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension.NativeLookupResult;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension.NativePointerIntoLibrary;
+import com.oracle.truffle.llvm.runtime.NativeIntrinsicProvider;
 import com.oracle.truffle.llvm.runtime.SystemContextExtension;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.LLVMForeignCallNode;
@@ -215,6 +216,14 @@ public final class Runner {
                     throw UnknownIdentifierException.raise(name);
                 }
                 return call.executeCall(fn, arguments);
+            }
+        }
+
+        @Resolve(message = "KEYS")
+        abstract static class KeysNode extends Node {
+
+            TruffleObject access(SulongLibrary library) {
+                return library.scope.getKeys();
             }
         }
 
@@ -342,13 +351,13 @@ public final class Runner {
             addExternalsToScope(parserResults);
             bindUnresolvedGlobals(parserResults);
             bindUnresolvedFunctions(parserResults);
-
-            InitializationOrder initializationOrder = computeInitializationOrder(parserResults, defaultLibraries);
-            overrideSulongLibraryFunctionsWithIntrinsics(initializationOrder.sulongLibraries);
-
-            parseFunctionsEagerly(parserResults);
             registerDynamicLinkChain(parserResults);
-            callStructors(initializationOrder);
+
+            if (!context.getEnv().getOptions().get(SulongEngineOption.LAZY_PARSING)) {
+                resolveLazyLLVMIRFunctions(parserResults);
+            }
+
+            callStructors(parserResults, defaultLibraries);
             return createLibraryCallTarget(parserResults);
         } catch (Throwable t) {
             throw new IOException("Error while parsing " + library, t);
@@ -505,13 +514,14 @@ public final class Runner {
 
     private void bindUnresolvedFunctions(List<LLVMParserResult> parserResults) {
         NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
-        LLVMIntrinsicProvider intrinsicProvider = context.getContextExtensionOrNull(LLVMIntrinsicProvider.class);
+        NativeIntrinsicProvider intrinsicProvider = context.getContextExtensionOrNull(NativeIntrinsicProvider.class);
         for (LLVMParserResult parserResult : parserResults) {
             for (LLVMFunctionDescriptor function : parserResult.getRuntime().getFileScope().functions().toArray()) {
                 if (!function.isDefined()) {
                     assert context.getGlobalScope().functions().contains(function);
                     if (intrinsicProvider != null && intrinsicProvider.isIntrinsified(function.getName())) {
-                        function.define(intrinsicProvider);
+                        Intrinsic intrinsification = new Intrinsic(intrinsicProvider, function.getName());
+                        function.define(intrinsicProvider.getLibrary(), new LLVMFunctionDescriptor.NativeIntrinsicFunction(intrinsification));
                     } else if (nfiContextExtension != null) {
                         NativeLookupResult nativeFunction = nfiContextExtension.getNativeFunctionOrNull(context, function.getName());
                         if (nativeFunction != null) {
@@ -528,6 +538,14 @@ public final class Runner {
     private void registerDynamicLinkChain(List<LLVMParserResult> parserResults) {
         for (LLVMParserResult parserResult : parserResults) {
             context.registerScope(parserResult.getRuntime().getFileScope());
+        }
+    }
+
+    private static void resolveLazyLLVMIRFunctions(List<LLVMParserResult> parserResults) {
+        for (LLVMParserResult parserResult : parserResults) {
+            for (LLVMFunctionDescriptor function : parserResult.getRuntime().getFileScope().functions().toArray()) {
+                function.resolveIfLazyLLVMIRFunction();
+            }
         }
     }
 
@@ -619,8 +637,9 @@ public final class Runner {
         return map;
     }
 
-    private void callStructors(InitializationOrder initializationOrder) {
+    private void callStructors(List<LLVMParserResult> parserResults, ExternalLibrary[] defaultLibraries) {
         if (!context.getEnv().getOptions().get(SulongEngineOption.PARSE_ONLY)) {
+            InitializationOrder initializationOrder = computeInitializationOrder(parserResults, defaultLibraries);
             initialize(initializationOrder.sulongLibraries);
             context.initialize();
             initialize(initializationOrder.otherLibraries);
@@ -833,29 +852,6 @@ public final class Runner {
             result.addMissingEntries(scope);
         }
         return result;
-    }
-
-    private void overrideSulongLibraryFunctionsWithIntrinsics(List<LLVMParserResult> sulongLibraries) {
-        LLVMIntrinsicProvider intrinsicProvider = context.getContextExtensionOrNull(LLVMIntrinsicProvider.class);
-        if (intrinsicProvider != null) {
-            for (LLVMParserResult parserResult : sulongLibraries) {
-                for (LLVMFunctionDescriptor function : parserResult.getRuntime().getFileScope().functions().toArray()) {
-                    if (intrinsicProvider.isIntrinsified(function.getName())) {
-                        function.define(intrinsicProvider);
-                    }
-                }
-            }
-        }
-    }
-
-    private void parseFunctionsEagerly(List<LLVMParserResult> parserResults) {
-        if (!context.getEnv().getOptions().get(SulongEngineOption.LAZY_PARSING)) {
-            for (LLVMParserResult parserResult : parserResults) {
-                for (LLVMFunctionDescriptor function : parserResult.getRuntime().getFileScope().functions().toArray()) {
-                    function.resolveIfLazyLLVMIRFunction();
-                }
-            }
-        }
     }
 
     private static final class InitializationOrder {
