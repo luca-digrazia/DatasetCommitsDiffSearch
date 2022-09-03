@@ -106,7 +106,7 @@ public final class DebugScope {
 
     public void log(String msg, Object... args) {
         if (isLogEnabled()) {
-            if (lastLogScope.get() == null || !lastLogScope.get().qualifiedName.equals(this.qualifiedName)) {
+            if (lastLogScope.get() != this) {
                 output.println("scope: " + qualifiedName);
                 lastLogScope.set(this);
             }
@@ -122,18 +122,6 @@ public final class DebugScope {
                 for (DebugDumpHandler dumpHandler : config.dumpHandlers()) {
                     dumpHandler.dump(object, message);
                 }
-            }
-        }
-    }
-
-    /**
-     * This method exists mainly to allow a debugger (e.g., Eclipse) to force dump a graph.
-     */
-    public static void dump(Object object, String message) {
-        DebugConfig config = getConfig();
-        if (config != null) {
-            for (DebugDumpHandler dumpHandler : config.dumpHandlers()) {
-                dumpHandler.dump(object, message);
             }
         }
     }
