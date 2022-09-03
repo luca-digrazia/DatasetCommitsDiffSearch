@@ -51,15 +51,7 @@ public final class ObjectKlass extends Klass {
     private final EnclosingMethodAttribute enclosingMethod;
     private final ConstantPool pool;
 
-    @CompilerDirectives.CompilationFinal(dimensions = 1)
     private FieldInfo[] instanceFieldsCache;
-
-    @CompilerDirectives.CompilationFinal(dimensions = 1)
-    private FieldInfo[] declaredInstanceFieldsCache;
-
-    @CompilerDirectives.CompilationFinal(dimensions = 1)
-    private FieldInfo[] staticFieldsCache;
-
     private final InnerClassesAttribute innerClasses;
 
     private final AttributeInfo runtimeVisibleAnnotations;
@@ -218,14 +210,9 @@ public final class ObjectKlass extends Klass {
     @Override
     public FieldInfo[] getInstanceFields(boolean includeSuperclasses) {
         if (!includeSuperclasses) {
-            if (declaredInstanceFieldsCache == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                declaredInstanceFieldsCache = Arrays.stream(declaredFields).filter(f -> !f.isStatic()).toArray(FieldInfo[]::new);
-            }
-            return declaredInstanceFieldsCache;
+            return Arrays.stream(declaredFields).filter(f -> !f.isStatic()).toArray(FieldInfo[]::new);
         }
         if (instanceFieldsCache == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             Stream<FieldInfo> fields = Arrays.stream(declaredFields).filter(f -> !f.isStatic());
             if (includeSuperclasses && getSuperclass() != null) {
                 fields = Stream.concat(Arrays.stream(getSuperclass().getInstanceFields(includeSuperclasses)), fields);
@@ -238,11 +225,7 @@ public final class ObjectKlass extends Klass {
     @Override
     public FieldInfo[] getStaticFields() {
         // TODO(peterssen): Cache static fields.
-        if (staticFieldsCache == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            staticFieldsCache = Arrays.stream(declaredFields).filter(ModifiersProvider::isStatic).toArray(FieldInfo[]::new);
-        }
-        return staticFieldsCache;
+        return Arrays.stream(declaredFields).filter(ModifiersProvider::isStatic).toArray(FieldInfo[]::new);
     }
 
     @Override
