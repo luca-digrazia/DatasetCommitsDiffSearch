@@ -22,13 +22,10 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeCost;
-import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.NodeUtil.NodeCountFilter;
 
-public final class DefaultTruffleSplittingStrategy implements TruffleSplittingStrategy {
+public class DefaultTruffleSplittingStrategy implements TruffleSplittingStrategy {
 
     private final OptimizedDirectCallNode call;
 
@@ -49,6 +46,9 @@ public final class DefaultTruffleSplittingStrategy implements TruffleSplittingSt
             return;
         }
         call.installSplitCallTarget(call.getCallTarget().cloneUninitialized());
+    }
+
+    public void afterCall(Object returnValue) {
     }
 
     private boolean shouldSplit() {

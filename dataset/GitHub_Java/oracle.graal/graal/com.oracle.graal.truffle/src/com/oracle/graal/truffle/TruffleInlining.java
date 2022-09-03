@@ -22,19 +22,12 @@
  */
 package com.oracle.graal.truffle;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.stream.Collectors;
+import java.util.*;
+import java.util.stream.*;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerOptions;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.nodes.NodeVisitor;
 
 public class TruffleInlining implements Iterable<TruffleInliningDecision> {
 
@@ -296,7 +289,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
                 return;
             }
             TruffleInliningDecision decision = currentDecision.findByCall((OptimizedDirectCallNode) node);
-            if (decision != null && decision.isInline()) {
+            if (decision.isInline()) {
                 inliningDecisionStack.add(decision);
                 iteratorStack.add(NodeUtil.makeRecursiveIterator(decision.getTarget().getRootNode()));
             }

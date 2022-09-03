@@ -22,13 +22,17 @@
  */
 package com.oracle.graal.truffle.debug;
 
+import java.io.*;
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.truffle.*;
-import com.oracle.jvmci.code.*;
 
 public abstract class AbstractDebugCompilationListener implements GraalTruffleCompilationListener {
+
+    protected static final PrintStream OUT = TTY.out().out();
 
     public void notifyCompilationQueued(OptimizedCallTarget target) {
     }
@@ -63,7 +67,7 @@ public abstract class AbstractDebugCompilationListener implements GraalTruffleCo
     public void notifyStartup(GraalTruffleRuntime runtime) {
     }
 
-    public static void log(OptimizedCallTarget target, int indent, String msg, String details, Map<String, Object> properties) {
+    public static void log(int indent, String msg, String details, Map<String, Object> properties) {
         int spaceIndent = indent * 2;
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("[truffle] %-16s ", msg));
@@ -93,7 +97,7 @@ public abstract class AbstractDebugCompilationListener implements GraalTruffleCo
                 sb.append(String.format(" %" + length + "s ", propertyBuilder.toString()));
             }
         }
-        target.log(sb.toString());
+        OUT.println(sb.toString());
     }
 
     public static void addASTSizeProperty(OptimizedCallTarget target, Map<String, Object> properties) {
