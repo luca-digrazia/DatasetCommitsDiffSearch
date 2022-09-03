@@ -26,16 +26,8 @@ import java.io.*;
 import java.util.*;
 
 /**
- * Represents the debugging information for a particular point of execution. This information
- * includes:
- * <ul>
- * <li>a {@linkplain #getBytecodePosition() bytecode position}</li>
- * <li>a reference map for {@linkplain #getRegisterRefMap() registers}</li>
- * <li>a reference map for {@linkplain #getFrameRefMap() stack slots} in the current frame</li>
- * <li>a map from bytecode locals and operand stack slots to their values or locations from which
- * their values can be read</li>
- * <li>a map from the registers (in the caller's frame) to the slots where they are saved in the
- * current frame</li>
+ * Represents the debugging information for a particular place in the code, which includes the code
+ * position, a reference map, and deoptimization information.
  */
 public class DebugInfo implements Serializable {
 
@@ -45,7 +37,6 @@ public class DebugInfo implements Serializable {
     private final BitSet registerRefMap;
     private final BitSet frameRefMap;
     private final short deoptimizationReason;
-    private RegisterSaveLayout calleeSaveInfo;
 
     /**
      * Creates a new {@link DebugInfo} from the given values.
@@ -133,21 +124,5 @@ public class DebugInfo implements Serializable {
      */
     public short getDeoptimizationReason() {
         return deoptimizationReason;
-    }
-
-    /**
-     * Sets the map from the registers (in the caller's frame) to the slots where they are saved in
-     * the current frame.
-     */
-    public void setCalleeSaveInfo(RegisterSaveLayout calleeSaveInfo) {
-        this.calleeSaveInfo = calleeSaveInfo;
-    }
-
-    /**
-     * Gets the map from the registers (in the caller's frame) to the slots where they are saved in
-     * the current frame. If no such information is available, {@code null} is returned.
-     */
-    public RegisterSaveLayout getCalleeSaveInfo() {
-        return calleeSaveInfo;
     }
 }
