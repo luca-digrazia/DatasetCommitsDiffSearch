@@ -113,16 +113,18 @@ import com.oracle.truffle.api.vm.PolyglotEngine.Value;
  *
  * <h4>Use case: run guest language code</h4>
  *
- * An engine {@linkplain #eval(Source) evaluates} {@link Source} objects, which may wrap references
- * to guest language code (e.g. a filename or URL) or may represent code literally as in the example
- * below. The engine uses the language matching the code's MIME type and returns the result wrapped
- * in a language-agnostic {@link Value}.
- *
- * {@link com.oracle.truffle.api.vm.PolyglotEngineSnippets#evalCode}
+ * An engine evaluates guest language source code represented by builder-created {@link Source}
+ * instances. These may wrap a filename or URL reference to the code or may include the code
+ * literally. Every {@link Source} instance is required to have a {@linkplain Source#getMimeType()
+ * MIME type}.
+ * <p>
+ * A call to {@link PolyglotEngine#eval(Source)} evaluates the code at the top level, using the
+ * language matching the code's MIME type. The result is returned as an instance of {@link Value}.
+ * The method {@link Value#as(Class)} allows Java-typed views for access to the result.
  *
  * <h4>Use case: Java interoperation with guest language code</h4>
  *
- * There are many ways in which Java and guest language code can interoperate. For example:
+ * There are many ways in which Java and guest language code can operate. For example:
  * <ul>
  * <li>The documentation for {@link PolyglotEngine#eval(Source)} includes three examples that show
  * how Java code can directly access JavaScript functions, objects, and classes respectively.</li>
@@ -246,8 +248,8 @@ public class PolyglotEngine {
         // making Builder non-static inner class is a
         // nasty trick to avoid the Builder class to appear
         // in Javadoc next to PolyglotEngine class
-        PolyglotEngine engine = new PolyglotEngine();
-        return engine.new Builder();
+        PolyglotEngine vm = new PolyglotEngine();
+        return vm.new Builder();
     }
 
     /**
@@ -711,16 +713,17 @@ public class PolyglotEngine {
     }
 
     /**
-     * Finds a <em>global symbol</em> with a specified name.
+     * Finds by name a <em>global symbol</em>, either
+     * {@linkplain PolyglotEngine.Builder#globalSymbol pre-registered} when the engine was built or
+     * provided by one of the engine's active languages.
      * <p>
      * Symbol names can be language dependent, and they are not guaranteed unique. In case of
-     * duplicate symbol names the only guarantee is that the value of one of them will be returned.
-     * Use {@link #findGlobalSymbols(String)} to return the values from <em>all</em> symbols with
-     * the name.
+     * duplicate symbol names the only guarantee is that one of the symbols will be returned. Use
+     * {@link #findGlobalSymbols(String)} to return <em>all</em> matching symbols
      *
      * @param globalName a global symbol name
-     * @return the value of a global symbol, <code>null</code> if no global symbol with the
-     *         specified name exists
+     * @return the value of the global symbol, <code>null</code> if no global symbol by that name
+     *         exists
      * @since 0.9
      */
     public Value findGlobalSymbol(final String globalName) {
@@ -742,7 +745,9 @@ public class PolyglotEngine {
     }
 
     /**
-     * Finds <em>global symbols</em> with a specified name.
+     * Finds by name all <em>global symbols</em>, either
+     * {@linkplain PolyglotEngine.Builder#globalSymbol pre-registered} when the engine was built or
+     * provided by one of the engine's active languages.
      * <p>
      * First of all execute your program via {@link #eval(Source)} method and then look expected
      * symbols up using this method. If you want to be sure only one symbol has been exported, you
@@ -751,7 +756,7 @@ public class PolyglotEngine {
      * {@link com.oracle.truffle.api.vm.PolyglotEngineSnippets#findAndReportMultipleExportedSymbols}
      *
      * @param globalName a global symbol name
-     * @return iterable access to the values of global symbols with the specified name
+     * @return iterable access to all values matching the name
      * @since 0.22
      */
     public Iterable<Value> findGlobalSymbols(String globalName) {
@@ -1161,7 +1166,7 @@ public class PolyglotEngine {
          * Executes this value. If the value represents a function, then it should be invoked with
          * provided arguments. If the value represents a field, then first argument (if provided)
          * should set the value to the field; the return value should be the actual value of the
-         * field when this method returns.
+         * field when the <code>invoke</code> method returns.
          * <p>
          * All languages accept wrappers of Java primitive types (e.g. {@link java.lang.Byte},
          * {@link java.lang.Short}, {@link java.lang.Integer}, {@link java.lang.Long},
@@ -1755,31 +1760,16 @@ class PolyglotEngineSnippets {
         public static final String MIME_TYPE = "application/my-test-lang";
     }
 
-    public static int evalCode() {
-        // @formatter:off
-        // BEGIN: com.oracle.truffle.api.vm.PolyglotEngineSnippets#evalCode
-        Source src = Source.newBuilder("3 + 39").
-                        mimeType("application/my-test-lang").
-                        name("example.test-lang").
-                        build();
-        PolyglotEngine engine = PolyglotEngine.newBuilder().build();
-        Value result = engine.eval(src);
-        int answer = result.as(Integer.class);
-        // END: com.oracle.truffle.api.vm.PolyglotEngineSnippets#evalCode
-        // @formatter:on
-        return answer;
-    }
-
     public static PolyglotEngine initializeWithParameters() {
         // @formatter:off
         // BEGIN: com.oracle.truffle.api.vm.PolyglotEngineSnippets#initializeWithParameters
         String[] args = {"--kernel", "Kernel.som", "--instrument", "dyn-metrics"};
         PolyglotEngine.Builder builder = PolyglotEngine.newBuilder();
         builder.config(YourLang.MIME_TYPE, "CMD_ARGS", args);
-        PolyglotEngine engine = builder.build();
+        PolyglotEngine vm = builder.build();
         // END: com.oracle.truffle.api.vm.PolyglotEngineSnippets#initializeWithParameters
         // @formatter:on
-        return engine;
+        return vm;
     }
 
     // @formatter:off
