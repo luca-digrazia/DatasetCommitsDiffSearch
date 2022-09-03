@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,9 @@
 package com.oracle.truffle.api.vm;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -34,6 +36,9 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.debug.Breakpoint;
+import com.oracle.truffle.api.debug.Debugger;
+import com.oracle.truffle.api.debug.ExecutionEvent;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrument.ASTProber;
@@ -48,7 +53,6 @@ import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import org.junit.After;
 
 /**
  * Bug report validating test.
@@ -62,18 +66,15 @@ import org.junit.After;
  */
 public class InitializationTest {
 
-    private PolyglotEngine vm;
-
-    @After
-    public void dispose() {
-        if (vm != null) {
-            vm.dispose();
-        }
-    }
-
     @Test
     public void accessProbeForAbstractLanguage() throws IOException, NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
-        vm = PolyglotEngine.newBuilder().build();
+        final Debugger[] arr = {null};
+        PolyglotEngine vm = PolyglotEngine.newBuilder().onEvent(new EventConsumer<ExecutionEvent>(ExecutionEvent.class) {
+            @Override
+            protected void on(ExecutionEvent event) {
+                arr[0] = event.getDebugger();
+            }
+        }).build();
 
         final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
         field.setAccessible(true);
@@ -98,8 +99,15 @@ public class InitializationTest {
 
         assertEquals(vm.eval(source).get(), 1);
 
+        assertNotNull("Debugger found", arr[0]);
+
+        Debugger d = arr[0];
+        Breakpoint b = d.setLineBreakpoint(0, source.createLineLocation(1), true);
+        assertTrue(b.isEnabled());
+        b.setCondition("true");
+
+        assertEquals(vm.eval(source).get(), 1);
         vm.dispose();
-        vm = null;
     }
 
     private static final class MMRootNode extends RootNode {
@@ -202,7 +210,6 @@ public class InitializationTest {
             throw new UnsupportedOperationException();
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         public Visualizer getVisualizer() {
             throw new UnsupportedOperationException();

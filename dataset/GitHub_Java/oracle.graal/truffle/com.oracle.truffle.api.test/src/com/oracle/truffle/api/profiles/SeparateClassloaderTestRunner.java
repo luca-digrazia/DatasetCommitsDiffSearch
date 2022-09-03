@@ -56,9 +56,6 @@ public final class SeparateClassloaderTestRunner extends BlockJUnit4ClassRunner 
             if (name.startsWith(Profile.class.getPackage().getName())) {
                 return super.findClass(name);
             }
-            if (name.contains("ContextStore")) {
-                return super.findClass(name);
-            }
             return super.loadClass(name);
         }
     }

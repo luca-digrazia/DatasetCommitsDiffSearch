@@ -24,12 +24,15 @@
  */
 package com.oracle.truffle.api.dsl.internal;
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.concurrent.Callable;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent0;
 import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent1;
 import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent2;
@@ -37,23 +40,23 @@ import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent3;
 import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent4;
 import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent5;
 import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEventN;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.InvalidAssumptionException;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeCost;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.NodeUtil;
 
 /**
  * Internal implementation dependent base class for generated specialized nodes.
  */
 @NodeInfo(cost = NodeCost.NONE)
-@SuppressWarnings("unused")
 public abstract class SpecializationNode extends Node {
 
     @Child protected SpecializationNode next;
 
-    final int index;
-
-    public SpecializationNode() {
-        this(-1);
-    }
+    private final int index;
 
     public SpecializationNode(int index) {
         this.index = index;
@@ -78,14 +81,7 @@ public abstract class SpecializationNode extends Node {
     }
 
     private static void updateRootImpl(SpecializationNode start, Node node) {
-        NodeFieldAccessor[] fields = NodeClass.get(start).getFields();
-        for (int i = fields.length - 1; i >= 0; i--) {
-            NodeFieldAccessor f = fields[i];
-            if (f.getName().equals("root")) {
-                f.putObject(start, node);
-                break;
-            }
-        }
+        start.setRoot(node);
         if (start.next != null) {
             updateRootImpl(start.next, node);
         }
@@ -109,6 +105,8 @@ public abstract class SpecializationNode extends Node {
                 return NodeCost.POLYMORPHIC;
         }
     }
+
+    protected abstract void setRoot(Node root);
 
     protected abstract Node[] getSuppliedChildren();
 
@@ -165,30 +163,37 @@ public abstract class SpecializationNode extends Node {
         return getClass() == other.getClass();
     }
 
+    @SuppressWarnings("unused")
     protected boolean isIdentical(SpecializationNode newNode, Frame frame) {
         return isSame(newNode);
     }
 
+    @SuppressWarnings("unused")
     protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1) {
         return isSame(newNode);
     }
 
+    @SuppressWarnings("unused")
     protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1, Object o2) {
         return isSame(newNode);
     }
 
+    @SuppressWarnings("unused")
     protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1, Object o2, Object o3) {
         return isSame(newNode);
     }
 
+    @SuppressWarnings("unused")
     protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1, Object o2, Object o3, Object o4) {
         return isSame(newNode);
     }
 
+    @SuppressWarnings("unused")
     protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
         return isSame(newNode);
     }
 
+    @SuppressWarnings("unused")
     protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object... args) {
         return isSame(newNode);
     }
@@ -297,49 +302,37 @@ public abstract class SpecializationNode extends Node {
         return findStart().getParent();
     }
 
-    private SpecializedNode findSpecializedNode() {
-        return (SpecializedNode) findEnd().findStart().getParent();
-    }
-
-    private static SpecializationNode removeSameImpl(SpecializationNode toRemove, CharSequence reason) {
-        SpecializationNode start = toRemove.findStart();
-        SpecializationNode current = start;
-        while (current != null) {
-            if (current.isSame(toRemove)) {
-                NodeUtil.nonAtomicReplace(current, current.next, reason);
-                if (current == start) {
-                    start = start.next;
-                }
-            }
-            current = current.next;
-        }
-        return toRemove.findEnd().findStart();
-    }
-
+    @SuppressWarnings("unused")
     public Object acceptAndExecute(Frame frame) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     public Object acceptAndExecute(Frame frame, Object o1) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     public Object acceptAndExecute(Frame frame, Object o1, Object o2) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     public Object acceptAndExecute(Frame frame, Object o1, Object o2, Object o3) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     public Object acceptAndExecute(Frame frame, Object o1, Object o2, Object o3, Object o4) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     public Object acceptAndExecute(Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     public Object acceptAndExecute(Frame frame, Object... args) {
         throw new UnsupportedOperationException();
     }
@@ -352,30 +345,37 @@ public abstract class SpecializationNode extends Node {
         return null;
     }
 
+    @SuppressWarnings("unused")
     protected SpecializationNode createNext(Frame frame) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     protected SpecializationNode createNext(Frame frame, Object o1) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     protected SpecializationNode createNext(Frame frame, Object o1, Object o2) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     protected SpecializationNode createNext(Frame frame, Object o1, Object o2, Object o3) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     protected SpecializationNode createNext(Frame frame, Object o1, Object o2, Object o3, Object o4) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     protected SpecializationNode createNext(Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     protected SpecializationNode createNext(Frame frame, Object... args) {
         throw new UnsupportedOperationException();
     }
@@ -471,30 +471,37 @@ public abstract class SpecializationNode extends Node {
         return atomic(new RemoveEventN(this, reason, frame, args)).acceptAndExecute(frame, args);
     }
 
+    @SuppressWarnings("unused")
     protected Object unsupported(Frame frame) {
         throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren());
     }
 
+    @SuppressWarnings("unused")
     protected Object unsupported(Frame frame, Object o1) {
         throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1);
     }
 
+    @SuppressWarnings("unused")
     protected Object unsupported(Frame frame, Object o1, Object o2) {
         throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2);
     }
 
+    @SuppressWarnings("unused")
     protected Object unsupported(Frame frame, Object o1, Object o2, Object o3) {
         throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2, o3);
     }
 
+    @SuppressWarnings("unused")
     protected Object unsupported(Frame frame, Object o1, Object o2, Object o3, Object o4) {
         throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2, o3, o4);
     }
 
+    @SuppressWarnings("unused")
     protected Object unsupported(Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
         throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2, o3, o4, o5);
     }
 
+    @SuppressWarnings("unused")
     protected Object unsupported(Frame frame, Object... args) {
         throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), args);
     }
@@ -615,7 +622,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class InsertionEvent0 extends SlowPathEvent0 implements Callable<SpecializationNode> {
 
-        public InsertionEvent0(SpecializationNode source, String reason, Frame frame) {
+        InsertionEvent0(SpecializationNode source, String reason, Frame frame) {
             super(source, reason, frame);
         }
 
@@ -639,7 +646,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class InsertionEvent1 extends SlowPathEvent1 implements Callable<SpecializationNode> {
 
-        public InsertionEvent1(SpecializationNode source, String reason, Frame frame, Object o1) {
+        InsertionEvent1(SpecializationNode source, String reason, Frame frame, Object o1) {
             super(source, reason, frame, o1);
         }
 
@@ -663,7 +670,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class InsertionEvent2 extends SlowPathEvent2 implements Callable<SpecializationNode> {
 
-        public InsertionEvent2(SpecializationNode source, String reason, Frame frame, Object o1, Object o2) {
+        InsertionEvent2(SpecializationNode source, String reason, Frame frame, Object o1, Object o2) {
             super(source, reason, frame, o1, o2);
         }
 
@@ -687,7 +694,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class InsertionEvent3 extends SlowPathEvent3 implements Callable<SpecializationNode> {
 
-        public InsertionEvent3(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3) {
+        InsertionEvent3(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3) {
             super(source, reason, frame, o1, o2, o3);
         }
 
@@ -711,7 +718,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class InsertionEvent4 extends SlowPathEvent4 implements Callable<SpecializationNode> {
 
-        public InsertionEvent4(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
+        InsertionEvent4(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
             super(source, reason, frame, o1, o2, o3, o4);
         }
 
@@ -735,7 +742,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class InsertionEvent5 extends SlowPathEvent5 implements Callable<SpecializationNode> {
 
-        public InsertionEvent5(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
+        InsertionEvent5(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
             super(source, reason, frame, o1, o2, o3, o4, o5);
         }
 
@@ -759,7 +766,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class InsertionEventN extends SlowPathEventN implements Callable<SpecializationNode> {
 
-        public InsertionEventN(SpecializationNode source, String reason, Frame frame, Object[] args) {
+        InsertionEventN(SpecializationNode source, String reason, Frame frame, Object[] args) {
             super(source, reason, frame, args);
         }
 
@@ -782,7 +789,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class RemoveEvent0 extends SlowPathEvent0 implements Callable<SpecializationNode> {
 
-        public RemoveEvent0(SpecializationNode source, String reason, Frame frame) {
+        RemoveEvent0(SpecializationNode source, String reason, Frame frame) {
             super(source, reason, frame);
         }
 
@@ -794,7 +801,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class RemoveEvent1 extends SlowPathEvent1 implements Callable<SpecializationNode> {
 
-        public RemoveEvent1(SpecializationNode source, String reason, Frame frame, Object o1) {
+        RemoveEvent1(SpecializationNode source, String reason, Frame frame, Object o1) {
             super(source, reason, frame, o1);
         }
 
@@ -806,7 +813,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class RemoveEvent2 extends SlowPathEvent2 implements Callable<SpecializationNode> {
 
-        public RemoveEvent2(SpecializationNode source, String reason, Frame frame, Object o1, Object o2) {
+        RemoveEvent2(SpecializationNode source, String reason, Frame frame, Object o1, Object o2) {
             super(source, reason, frame, o1, o2);
         }
 
@@ -818,7 +825,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class RemoveEvent3 extends SlowPathEvent3 implements Callable<SpecializationNode> {
 
-        public RemoveEvent3(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3) {
+        RemoveEvent3(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3) {
             super(source, reason, frame, o1, o2, o3);
         }
 
@@ -830,7 +837,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class RemoveEvent4 extends SlowPathEvent4 implements Callable<SpecializationNode> {
 
-        public RemoveEvent4(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
+        RemoveEvent4(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
             super(source, reason, frame, o1, o2, o3, o4);
         }
 
@@ -842,7 +849,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class RemoveEvent5 extends SlowPathEvent5 implements Callable<SpecializationNode> {
 
-        public RemoveEvent5(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
+        RemoveEvent5(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
             super(source, reason, frame, o1, o2, o3, o4, o5);
         }
 
@@ -854,7 +861,7 @@ public abstract class SpecializationNode extends Node {
 
     private static final class RemoveEventN extends SlowPathEventN implements Callable<SpecializationNode> {
 
-        public RemoveEventN(SpecializationNode source, String reason, Frame frame, Object[] args) {
+        RemoveEventN(SpecializationNode source, String reason, Frame frame, Object[] args) {
             super(source, reason, frame, args);
         }
 

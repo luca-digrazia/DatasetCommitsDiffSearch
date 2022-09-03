@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -70,9 +70,6 @@ public class ImplicitExplicitExportTest {
     @After
     public void cleanThread() {
         mainThread = null;
-        if (vm != null) {
-            vm.dispose();
-        }
     }
 
     @Test
@@ -198,7 +195,6 @@ public class ImplicitExplicitExportTest {
             return false;
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         protected Visualizer getVisualizer() {
             return null;
@@ -279,6 +275,16 @@ public class ImplicitExplicitExportTest {
         public static final AbstractExportImportLanguage INSTANCE = new ExportImportLanguage1();
 
         public ExportImportLanguage1() {
+        }
+
+        @SuppressWarnings("unused")
+        // BEGIN: config.read
+        @Override
+        protected Ctx createContext(Env env) {
+            String[] args = (String[]) env.getConfig().get("CMD_ARGS");
+            // FINISH: config.read
+
+            return super.createContext(env);
         }
 
         @Override

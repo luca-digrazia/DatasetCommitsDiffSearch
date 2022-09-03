@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,19 +34,21 @@ import java.lang.annotation.Target;
 import java.util.Map;
 import java.util.Objects;
 
+import com.oracle.truffle.api.debug.Debugger;
+import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.FindContextNode;
 import com.oracle.truffle.api.instrument.ASTProber;
 import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.KillException;
+import com.oracle.truffle.api.instrument.QuitException;
 import com.oracle.truffle.api.instrument.SyntaxTag;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import java.util.LinkedHashSet;
-import java.util.Set;
 
 /**
  * An entry point for everyone who wants to implement a Truffle based language. By providing an
@@ -67,7 +69,7 @@ import java.util.Set;
  *            {@link #parse(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, java.lang.String...)
  *            parsed} by the language
  */
-@SuppressWarnings({"javadoc"})
+@SuppressWarnings("javadoc")
 public abstract class TruffleLanguage<C> {
     /**
      * Constructor to be called by subclasses.
@@ -128,8 +130,8 @@ public abstract class TruffleLanguage<C> {
      * findContext(findNode)} to get back your language context.
      *
      * If it is expected that any {@linkplain Instrumenter Instrumentation Services} or tools that
-     * depend on those services (e.g. the {@link com.oracle.truffle.api.debug.Debugger}, then part
-     * of the preparation in the new context is to
+     * depend on those services (e.g. the {@link Debugger}, then part of the preparation in the new
+     * context is to
      * {@linkplain Instrumenter#registerASTProber(com.oracle.truffle.api.instrument.ASTProber)
      * register} a "default" {@link ASTProber} for the language implementation. Instrumentation
      * requires that this be available to "mark up" each newly created AST with
@@ -227,22 +229,17 @@ public abstract class TruffleLanguage<C> {
     /**
      * Gets visualization services for language-specific information.
      */
-    @Deprecated
-    protected Visualizer getVisualizer() {
-        return null;
-    }
+    protected abstract Visualizer getVisualizer();
 
     /**
      * Returns {@code true} for a node can be "instrumented" by
      * {@linkplain Instrumenter#probe(Node) probing}.
      * <p>
      * <b>Note:</b> instrumentation requires a appropriate {@link WrapperNode}
-     * 
+     *
      * @see WrapperNode
      */
-    protected boolean isInstrumentable(@SuppressWarnings("unused") Node node) {
-        return false;
-    }
+    protected abstract boolean isInstrumentable(Node node);
 
     /**
      * For nodes in this language that are <em>instrumentable</em>, this method returns an
@@ -255,9 +252,7 @@ public abstract class TruffleLanguage<C> {
      *
      * @return an appropriately typed {@link WrapperNode}
      */
-    protected WrapperNode createWrapperNode(@SuppressWarnings("unused") Node node) {
-        throw new UnsupportedOperationException();
-    }
+    protected abstract WrapperNode createWrapperNode(Node node);
 
     /**
      * Runs source code in a halted execution context, or at top level.
@@ -365,7 +360,6 @@ public abstract class TruffleLanguage<C> {
         private final InputStream in;
         private final OutputStream err;
         private final OutputStream out;
-        private final Object[] services;
         private final Instrumenter instrumenter;
         private final Map<String, Object> config;
 
@@ -376,9 +370,6 @@ public abstract class TruffleLanguage<C> {
             this.out = out;
             this.lang = lang;
             this.instrumenter = instrumenter;
-            LinkedHashSet<Object> collectedServices = new LinkedHashSet<>();
-            API.collectEnvServices(collectedServices, vm, lang, this);
-            this.services = collectedServices.toArray();
             this.config = config;
             this.langCtx = new LangCtx<>(lang, this);
         }
@@ -463,28 +454,6 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Looks additional service up. An environment for a particular {@link TruffleLanguage
-         * language} and a {@link com.oracle.truffle.api.vm.PolyglotEngine} may also be associated
-         * with additional services. One can request implementations of such services by calling
-         * this method with the type identifying the requested service and its API.
-         *
-         * Services that can be obtained via this method include
-         * {@link com.oracle.truffle.api.instrumentation.Instrumenter} and others.
-         *
-         * @param <T> type of requested service
-         * @param type class of requested service
-         * @return instance of T or <code>null</code> if there is no such service available
-         */
-        public <T> T lookup(Class<T> type) {
-            for (Object obj : services) {
-                if (type.isInstance(obj)) {
-                    return type.cast(obj);
-                }
-            }
-            return null;
-        }
-
-        /**
          * Configuration arguments for this language. Arguments set
          * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#config when constructing the
          * engine} are accessible via this map.
@@ -526,11 +495,6 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        protected void collectEnvServices(Set<Object> collectTo, Object vm, TruffleLanguage<?> impl, Env context) {
-            super.collectEnvServices(collectTo, vm, impl, context);
-        }
-
-        @Override
         protected Object importSymbol(Object vm, TruffleLanguage<?> queryingLang, String globalName) {
             return super.importSymbol(vm, queryingLang, globalName);
         }
@@ -560,7 +524,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        protected Object evalInContext(Object vm, Object ev, String code, Node node, MaterializedFrame frame) throws IOException {
+        protected Object evalInContext(Object vm, SuspendedEvent ev, String code, Node node, MaterializedFrame frame) throws IOException {
             RootNode rootNode = node.getRootNode();
             Class<? extends TruffleLanguage> languageType = findLanguage(rootNode);
             final Env env = findLanguage(vm, languageType);

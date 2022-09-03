@@ -35,7 +35,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 class InstrumentationTestNodes {
 
     abstract static class TestLanguageNode extends Node {
-        public abstract Object execute(VirtualFrame frame);
+        public abstract Object execute(VirtualFrame vFrame);
 
     }
 
@@ -70,14 +70,14 @@ class InstrumentationTestNodes {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            eventHandlerNode.enter(child, frame);
+        public Object execute(VirtualFrame vFrame) {
+            eventHandlerNode.enter(child, vFrame);
             Object result;
             try {
-                result = child.execute(frame);
-                eventHandlerNode.returnValue(child, frame, result);
+                result = child.execute(vFrame);
+                eventHandlerNode.returnValue(child, vFrame, result);
             } catch (Exception e) {
-                eventHandlerNode.returnExceptional(child, frame, e);
+                eventHandlerNode.returnExceptional(child, vFrame, e);
                 throw (e);
             }
             return result;
@@ -95,7 +95,7 @@ class InstrumentationTestNodes {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
+        public Object execute(VirtualFrame vFrame) {
             return new Integer(this.value);
         }
     }
@@ -113,8 +113,8 @@ class InstrumentationTestNodes {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            return new Integer(((Integer) leftChild.execute(frame)).intValue() + ((Integer) rightChild.execute(frame)).intValue());
+        public Object execute(VirtualFrame vFrame) {
+            return new Integer(((Integer) leftChild.execute(vFrame)).intValue() + ((Integer) rightChild.execute(vFrame)).intValue());
         }
     }
 
@@ -137,8 +137,8 @@ class InstrumentationTestNodes {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            return body.execute(frame);
+        public Object execute(VirtualFrame vFrame) {
+            return body.execute(vFrame);
         }
 
         @Override
@@ -169,8 +169,8 @@ class InstrumentationTestNodes {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            return body.execute(frame);
+        public Object execute(VirtualFrame vFrame) {
+            return body.execute(vFrame);
         }
 
         @Override

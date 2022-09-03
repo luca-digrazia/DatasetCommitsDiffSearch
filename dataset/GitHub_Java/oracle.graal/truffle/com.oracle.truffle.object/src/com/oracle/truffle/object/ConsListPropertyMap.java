@@ -87,13 +87,10 @@ final class ConsListPropertyMap extends PropertyMap {
     }
 
     public Property get(Object key) {
-        ConsListPropertyMap current = this;
-        while (!current.isEmpty()) {
-            Property p = current.getLastProperty();
-            if (p.getKey().equals(key)) {
-                return p;
+        for (Map.Entry<Object, Property> entry : reverseOrderEntrySet()) {
+            if (entry.getKey().equals(key)) {
+                return entry.getValue();
             }
-            current = current.getParentMap();
         }
         return null;
     }

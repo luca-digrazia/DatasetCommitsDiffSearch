@@ -134,9 +134,9 @@ public class ShapeProfiler {
             oac += stats.oac;
             oas += stats.oas;
             ofs += stats.ofs;
-            pac += stats.pac;
-            pas += stats.pas;
-            pfs += stats.pfs;
+            oac += stats.oac;
+            oas += stats.oas;
+            ofs += stats.ofs;
         }
 
         public void dump(PrintWriter out) {

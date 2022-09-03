@@ -121,8 +121,6 @@ public abstract class Source {
 
     private static boolean fileCacheEnabled = true;
 
-    private static final String NO_FASTPATH_SUBSOURCE_CREATION_MESSAGE = "do not create sub sources from compiled code";
-
     /**
      * Locates an existing instance by the name under which it was indexed.
      */
@@ -197,7 +195,7 @@ public abstract class Source {
      *             method matches the file name
      */
     public static Source fromFileName(CharSequence chars, String fileName) throws IOException {
-        CompilerAsserts.neverPartOfCompilation("do not call Source.fromFileName from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         assert chars != null;
 
         final WeakReference<Source> nameRef = nameToSource.get(fileName);
@@ -230,7 +228,7 @@ public abstract class Source {
      * @return a newly created, non-indexed source representation
      */
     public static Source fromText(CharSequence chars, String description) {
-        CompilerAsserts.neverPartOfCompilation("do not call Source.fromText from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         return new LiteralSource(description, chars.toString());
     }
 
@@ -242,7 +240,7 @@ public abstract class Source {
      * @return a newly created, non-indexed, initially empty, appendable source representation
      */
     public static Source fromAppendableText(String description) {
-        CompilerAsserts.neverPartOfCompilation("do not call Source.fromAppendableText from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         return new AppendableLiteralSource(description);
     }
 
@@ -256,7 +254,7 @@ public abstract class Source {
      * @return a newly created, source representation
      */
     public static Source fromNamedText(CharSequence chars, String name) {
-        CompilerAsserts.neverPartOfCompilation("do not call Source.fromNamedText from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         final Source source = new LiteralSource(name, chars.toString());
         nameToSource.put(name, new WeakReference<>(source));
         return source;
@@ -272,7 +270,7 @@ public abstract class Source {
      * @return a newly created, indexed, initially empty, appendable source representation
      */
     public static Source fromNamedAppendableText(String name) {
-        CompilerAsserts.neverPartOfCompilation("do not call Source.fromNamedAppendable from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         final Source source = new AppendableLiteralSource(name);
         nameToSource.put(name, new WeakReference<>(source));
         return source;
@@ -289,7 +287,7 @@ public abstract class Source {
      * @throws IllegalArgumentException if the specified sub-range is not contained in the base
      */
     public static Source subSource(Source base, int baseCharIndex, int length) {
-        CompilerAsserts.neverPartOfCompilation(NO_FASTPATH_SUBSOURCE_CREATION_MESSAGE);
+        CompilerAsserts.neverPartOfCompilation();
         final SubSource subSource = SubSource.create(base, baseCharIndex, length);
         return subSource;
     }
@@ -304,7 +302,7 @@ public abstract class Source {
      * @throws IllegalArgumentException if the index is out of range
      */
     public static Source subSource(Source base, int baseCharIndex) {
-        CompilerAsserts.neverPartOfCompilation(NO_FASTPATH_SUBSOURCE_CREATION_MESSAGE);
+        CompilerAsserts.neverPartOfCompilation();
 
         return subSource(base, baseCharIndex, base.getLength() - baseCharIndex);
     }
@@ -318,7 +316,7 @@ public abstract class Source {
      * @throws IOException if reading fails
      */
     public static Source fromURL(URL url, String description) throws IOException {
-        CompilerAsserts.neverPartOfCompilation("do not call Source.fromURL from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         return URLSource.get(url, description);
     }
 
@@ -331,7 +329,7 @@ public abstract class Source {
      * @throws IOException if reading fails
      */
     public static Source fromReader(Reader reader, String description) throws IOException {
-        CompilerAsserts.neverPartOfCompilation("do not call Source.fromReader from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         return new LiteralSource(description, read(reader));
     }
 
@@ -363,7 +361,7 @@ public abstract class Source {
      * @return a newly created, non-indexed source representation
      */
     public static Source fromBytes(byte[] bytes, int byteIndex, int length, String description, Charset charset) {
-        CompilerAsserts.neverPartOfCompilation("do not call Source.fromBytes from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         return new BytesSource(description, bytes, byteIndex, length, charset);
     }
 

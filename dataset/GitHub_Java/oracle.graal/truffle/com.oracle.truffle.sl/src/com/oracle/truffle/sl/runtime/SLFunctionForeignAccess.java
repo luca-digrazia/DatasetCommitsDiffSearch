@@ -40,24 +40,29 @@
  */
 package com.oracle.truffle.sl.runtime;
 
+import static com.oracle.truffle.sl.runtime.SLContext.fromForeignValue;
+
+import java.util.List;
+
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.nodes.call.SLDispatchNode;
 import com.oracle.truffle.sl.nodes.call.SLDispatchNodeGen;
-import java.math.BigInteger;
-import java.util.List;
 
 /**
  * Implementation of foreign access for {@link SLFunction}.
  */
 final class SLFunctionForeignAccess implements ForeignAccess.Factory {
-    public static final ForeignAccess INSTANCE = ForeignAccess.create(new SLFunctionForeignAccess());
+    public static ForeignAccess create() {
+        return ForeignAccess.create(new SLFunctionForeignAccess());
+    }
 
     private SLFunctionForeignAccess() {
     }
@@ -73,45 +78,37 @@ final class SLFunctionForeignAccess implements ForeignAccess.Factory {
             return Truffle.getRuntime().createCallTarget(new SLForeignCallerRootNode());
         } else if (Message.IS_NULL.equals(tree)) {
             return Truffle.getRuntime().createCallTarget(new SLForeignNullCheckNode());
+        } else if (Message.IS_EXECUTABLE.equals(tree)) {
+            return Truffle.getRuntime().createCallTarget(new SLForeignExecutableCheckNode());
+        } else if (Message.IS_BOXED.equals(tree)) {
+            return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
         } else {
-            throw new IllegalArgumentException(tree.toString() + " not supported");
+            throw UnsupportedMessageException.raise(tree);
         }
     }
 
     private static class SLForeignCallerRootNode extends RootNode {
         @Child private SLDispatchNode dispatch = SLDispatchNodeGen.create();
 
-        public SLForeignCallerRootNode() {
+        SLForeignCallerRootNode() {
             super(SLLanguage.class, null, null);
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
             SLFunction function = (SLFunction) ForeignAccess.getReceiver(frame);
-            // the calling convention of interop passes the receiver of a
-            // function call (the this object)
-            // as an implicit 1st argument; we need to ignore this argument for SL
             List<Object> args = ForeignAccess.getArguments(frame);
-            Object[] arr = args.subList(1, args.size()).toArray();
+            Object[] arr = args.toArray();
             for (int i = 0; i < arr.length; i++) {
-                Object a = arr[i];
-                if (a instanceof Long) {
-                    continue;
-                }
-                if (a instanceof BigInteger) {
-                    continue;
-                }
-                if (a instanceof Number) {
-                    arr[i] = ((Number) a).longValue();
-                }
+                arr[i] = fromForeignValue(arr[i]);
             }
-            return dispatch.executeDispatch(frame, function, arr);
+            Object result = dispatch.executeDispatch(frame, function, arr);
+            return result;
         }
-
     }
 
     private static class SLForeignNullCheckNode extends RootNode {
-        public SLForeignNullCheckNode() {
+        SLForeignNullCheckNode() {
             super(SLLanguage.class, null, null);
         }
 
@@ -119,6 +116,18 @@ final class SLFunctionForeignAccess implements ForeignAccess.Factory {
         public Object execute(VirtualFrame frame) {
             Object receiver = ForeignAccess.getReceiver(frame);
             return SLNull.SINGLETON == receiver;
+        }
+    }
+
+    private static class SLForeignExecutableCheckNode extends RootNode {
+        SLForeignExecutableCheckNode() {
+            super(SLLanguage.class, null, null);
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            Object receiver = ForeignAccess.getReceiver(frame);
+            return receiver instanceof SLFunction;
         }
     }
 }

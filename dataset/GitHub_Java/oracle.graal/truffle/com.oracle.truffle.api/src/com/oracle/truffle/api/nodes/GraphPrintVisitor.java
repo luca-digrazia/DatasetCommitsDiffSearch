@@ -54,13 +54,10 @@ import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
 
 /**
  * Utility class for creating output for the ideal graph visualizer.
- * 
- * @since 0.8 or earlier
  */
 public class GraphPrintVisitor implements Closeable {
-    /** @since 0.8 or earlier */
+
     public static final String GraphVisualizerAddress = "127.0.0.1";
-    /** @since 0.8 or earlier */
     public static final int GraphVisualizerPort = 4444;
     private static final String DEFAULT_GRAPH_NAME = "truffle tree";
 
@@ -218,12 +215,10 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    /** @since 0.8 or earlier */
     public GraphPrintVisitor() {
         this(new ByteArrayOutputStream());
     }
 
-    /** @since 0.8 or earlier */
     public GraphPrintVisitor(OutputStream outputStream) {
         this.outputStream = outputStream;
         this.xmlstream = createImpl(outputStream);
@@ -241,7 +236,6 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    /** @since 0.8 or earlier */
     public GraphPrintVisitor beginGroup(String groupName) {
         ensureOpen();
         maybeEndGraph();
@@ -267,7 +261,6 @@ public class GraphPrintVisitor implements Closeable {
         return this;
     }
 
-    /** @since 0.8 or earlier */
     public GraphPrintVisitor endGroup() {
         ensureOpen();
         if (openGroupCount <= 0) {
@@ -281,7 +274,6 @@ public class GraphPrintVisitor implements Closeable {
         return this;
     }
 
-    /** @since 0.8 or earlier */
     public GraphPrintVisitor beginGraph(String graphName) {
         ensureOpen();
         if (openGroupCount == 0) {
@@ -307,7 +299,6 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    /** @since 0.8 or earlier */
     public GraphPrintVisitor endGraph() {
         ensureOpen();
         if (openGraphCount <= 0) {
@@ -375,7 +366,6 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    /** @since 0.8 or earlier */
     @Override
     public String toString() {
         if (outputStream instanceof ByteArrayOutputStream) {
@@ -384,7 +374,6 @@ public class GraphPrintVisitor implements Closeable {
         return super.toString();
     }
 
-    /** @since 0.8 or earlier */
     public void printToFile(File f) {
         close();
         if (outputStream instanceof ByteArrayOutputStream) {
@@ -396,7 +385,6 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    /** @since 0.8 or earlier */
     public void printToSysout() {
         close();
         if (outputStream instanceof ByteArrayOutputStream) {
@@ -405,7 +393,6 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    /** @since 0.8 or earlier */
     public void printToNetwork(boolean ignoreErrors) {
         close();
         if (outputStream instanceof ByteArrayOutputStream) {
@@ -419,7 +406,6 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    /** @since 0.8 or earlier */
     public void close() {
         if (xmlstream == null) {
             return;
@@ -488,8 +474,8 @@ public class GraphPrintVisitor implements Closeable {
     }
 
     private void readNodeProperties(Node node) {
-        NodeClass nodeClass = NodeClass.get(node);
-        for (NodeFieldAccessor field : nodeClass.getNodeFields()) {
+        NodeFieldAccessor[] fields = NodeClass.get(node).getFields();
+        for (NodeFieldAccessor field : fields) {
             if (field.getKind() == NodeFieldKind.DATA) {
                 String key = field.getName();
                 if (!getElementByObject(node).getProperties().containsKey(key)) {
@@ -518,7 +504,6 @@ public class GraphPrintVisitor implements Closeable {
         edgeList.add(new EdgeElement(fromNode, toNode, count, label));
     }
 
-    /** @since 0.8 or earlier */
     public GraphPrintVisitor visit(Object node) {
         if (openGraphCount == 0) {
             beginGraph(DEFAULT_GRAPH_NAME);
@@ -541,7 +526,6 @@ public class GraphPrintVisitor implements Closeable {
         return this;
     }
 
-    /** @since 0.8 or earlier */
     public GraphPrintVisitor visit(Object node, GraphPrintHandler handler) {
         if (openGraphCount == 0) {
             beginGraph(DEFAULT_GRAPH_NAME);
@@ -564,7 +548,7 @@ public class GraphPrintVisitor implements Closeable {
         LinkedHashMap<String, Node> nodes = new LinkedHashMap<>();
         NodeClass nodeClass = NodeClass.get(node);
 
-        for (NodeFieldAccessor field : nodeClass.getNodeFields()) {
+        for (NodeFieldAccessor field : nodeClass.getFields()) {
             NodeFieldKind kind = field.getKind();
             if (kind == NodeFieldKind.CHILD || kind == NodeFieldKind.CHILDREN) {
                 Object value = field.loadValue(node);
@@ -594,55 +578,39 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    /** @since 0.8 or earlier */
     public class GraphPrintAdapter {
-        /**
-         * Default constructor.
-         * 
-         * @since 0.8 or earlier
-         */
-        public GraphPrintAdapter() {
-        }
 
-        /** @since 0.8 or earlier */
         public void createElementForNode(Object node) {
             GraphPrintVisitor.this.createElementForNode(node);
         }
 
-        /** @since 0.8 or earlier */
         public void visit(Object node) {
             GraphPrintVisitor.this.visit(node);
         }
 
-        /** @since 0.8 or earlier */
         public void visit(Object node, GraphPrintHandler handler) {
             GraphPrintVisitor.this.visit(node, handler);
         }
 
-        /** @since 0.8 or earlier */
         public void connectNodes(Object node, Object child) {
             GraphPrintVisitor.this.connectNodes(node, child, null);
         }
 
-        /** @since 0.8 or earlier */
         public void connectNodes(Object node, Object child, String label) {
             GraphPrintVisitor.this.connectNodes(node, child, label);
         }
 
-        /** @since 0.8 or earlier */
         public void setNodeProperty(Object node, String propertyName, Object value) {
             GraphPrintVisitor.this.setNodeProperty(node, propertyName, value);
         }
 
-        /** @since 0.8 or earlier */
         public boolean visited(Object node) {
             return GraphPrintVisitor.this.getElementByObject(node) != null;
         }
     }
 
-    /** @since 0.8 or earlier */
     public interface GraphPrintHandler {
-        /** @since 0.8 or earlier */
+
         void visit(Object node, GraphPrintAdapter printer);
     }
 
@@ -659,7 +627,6 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    /** @since 0.8 or earlier */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.TYPE)
     public @interface CustomGraphPrintHandler {
@@ -667,7 +634,6 @@ public class GraphPrintVisitor implements Closeable {
         Class<? extends GraphPrintHandler> handler();
     }
 
-    /** @since 0.8 or earlier */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.TYPE)
     public @interface NullGraphPrintHandler {

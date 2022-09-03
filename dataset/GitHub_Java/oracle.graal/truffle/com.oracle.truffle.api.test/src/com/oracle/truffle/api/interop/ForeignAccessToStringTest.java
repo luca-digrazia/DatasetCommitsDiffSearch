@@ -116,10 +116,5 @@ public class ForeignAccessToStringTest {
         public CallTarget accessNew(int argumentsLength) {
             return null;
         }
-
-        @Override
-        public CallTarget accessProperties() {
-            return null;
-        }
     }
 }

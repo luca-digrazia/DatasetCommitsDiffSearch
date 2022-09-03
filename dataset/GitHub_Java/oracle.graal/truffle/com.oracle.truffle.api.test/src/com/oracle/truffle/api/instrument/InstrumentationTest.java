@@ -275,19 +275,19 @@ public class InstrumentationTest {
         public void attach(Probe probe) {
             instrument = instrumenter.attach(probe, new StandardInstrumentListener() {
 
-                public void onEnter(Probe p, Node node, VirtualFrame frame) {
+                public void onEnter(Probe p, Node node, VirtualFrame vFrame) {
                     enterCount++;
                 }
 
-                public void onReturnVoid(Probe p, Node node, VirtualFrame frame) {
+                public void onReturnVoid(Probe p, Node node, VirtualFrame vFrame) {
                     leaveCount++;
                 }
 
-                public void onReturnValue(Probe p, Node node, VirtualFrame frame, Object result) {
+                public void onReturnValue(Probe p, Node node, VirtualFrame vFrame, Object result) {
                     leaveCount++;
                 }
 
-                public void onReturnExceptional(Probe p, Node node, VirtualFrame frame, Throwable exception) {
+                public void onReturnExceptional(Probe p, Node node, VirtualFrame vFrame, Throwable exception) {
                     leaveCount++;
                 }
             }, "Instrumentation Test Counter");
@@ -354,7 +354,7 @@ public class InstrumentationTest {
         public int counter = 0;
 
         @Override
-        public void onEnter(Probe probe, Node node, VirtualFrame frame) {
+        public void onEnter(Probe probe, Node node, VirtualFrame vFrame) {
             counter++;
         }
     }

@@ -405,9 +405,9 @@ final class LineBreakpointFactory {
             setState(after);
         }
 
-        private void doBreak(Node node, VirtualFrame frame) {
+        private void doBreak(Node node, VirtualFrame vFrame) {
             if (incrHitCountCheckIgnore()) {
-                breakpointCallback.haltedAt(node, frame.materialize(), BREAKPOINT_NAME);
+                breakpointCallback.haltedAt(node, vFrame.materialize(), BREAKPOINT_NAME);
             }
         }
 
@@ -416,7 +416,7 @@ final class LineBreakpointFactory {
          * where the breakpoint is set. Designed so that when in the fast path, there is either an
          * unconditional "halt" call to the debugger or nothing.
          */
-        private void nodeEnter(Node astNode, VirtualFrame frame) {
+        private void nodeEnter(Node astNode, VirtualFrame vFrame) {
 
             // Deopt if the global active/inactive flag has changed
             try {
@@ -436,31 +436,31 @@ final class LineBreakpointFactory {
                 if (isOneShot()) {
                     dispose();
                 }
-                LineBreakpointImpl.this.doBreak(astNode, frame);
+                LineBreakpointImpl.this.doBreak(astNode, vFrame);
             }
         }
 
-        public void onExecution(Node node, VirtualFrame frame, Object result) {
+        public void onExecution(Node node, VirtualFrame vFrame, Object result) {
             if (result instanceof Boolean) {
                 final boolean condition = (Boolean) result;
                 if (TRACE) {
                     trace("breakpoint condition = %b  %s", condition, getShortDescription());
                 }
                 if (condition) {
-                    nodeEnter(node, frame);
+                    nodeEnter(node, vFrame);
                 }
             } else {
-                onFailure(node, frame, new RuntimeException("breakpint failure = non-boolean condition " + result.toString()));
+                onFailure(node, vFrame, new RuntimeException("breakpint failure = non-boolean condition " + result.toString()));
             }
         }
 
-        public void onFailure(Node node, VirtualFrame frame, Exception ex) {
+        public void onFailure(Node node, VirtualFrame vFrame, Exception ex) {
             addExceptionWarning(ex);
             if (TRACE) {
                 trace("breakpoint failure = %s  %s", ex, getShortDescription());
             }
             // Take the breakpoint if evaluation fails.
-            nodeEnter(node, frame);
+            nodeEnter(node, vFrame);
         }
 
         @TruffleBoundary
@@ -481,8 +481,8 @@ final class LineBreakpointFactory {
         private final class UnconditionalLineBreakInstrumentListener extends DefaultStandardInstrumentListener {
 
             @Override
-            public void onEnter(Probe probe, Node node, VirtualFrame frame) {
-                LineBreakpointImpl.this.nodeEnter(node, frame);
+            public void onEnter(Probe probe, Node node, VirtualFrame vFrame) {
+                LineBreakpointImpl.this.nodeEnter(node, vFrame);
             }
         }
     }
