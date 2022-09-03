@@ -33,12 +33,13 @@ import java.io.IOException;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.context.nativeint.NativeLookup;
+import com.oracle.truffle.llvm.runtime.LLVMFunction;
 
-@TruffleLanguage.Registration(name = "Sulong", version = "0.01", mimeType = {LLVMLanguage.LLVM_IR_MIME_TYPE, LLVMLanguage.LLVM_BITCODE_MIME_TYPE, LLVMLanguage.SULONG_LIBRARY_MIME_TYPE})
+@TruffleLanguage.Registration(name = "Sulong", version = "0.01", mimeType = {LLVMLanguage.LLVM_BITCODE_MIME_TYPE, LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE,
+                LLVMLanguage.SULONG_LIBRARY_MIME_TYPE})
 public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     /*
@@ -47,6 +48,7 @@ public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
      */
 
     static {
+        NativeLookup.getNFI();
         try {
             Class.forName("com.oracle.truffle.llvm.LLVM", true, ClassLoader.getSystemClassLoader());
         } catch (ClassNotFoundException e) {
@@ -54,11 +56,15 @@ public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
         }
     }
 
-    public static final String LLVM_IR_MIME_TYPE = "application/x-llvm-ir-text";
-    public static final String LLVM_IR_EXTENSION = "ll";
-
     public static final String LLVM_BITCODE_MIME_TYPE = "application/x-llvm-ir-bitcode";
     public static final String LLVM_BITCODE_EXTENSION = "bc";
+
+    /*
+     * The Truffle source API does not handle binary data well - it will read binary files in as
+     * strings in an unknown encoding. To get around this until it is fixed, we store binary data in
+     * base 64 strings when they don't exist as a file which can be read directly.
+     */
+    public static final String LLVM_BITCODE_BASE64_MIME_TYPE = "application/x-llvm-ir-bitcode-base64";
 
     public static final String SULONG_LIBRARY_MIME_TYPE = "application/x-sulong-library";
     public static final String SULONG_LIBRARY_EXTENSION = "su";
@@ -97,8 +103,9 @@ public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     }
 
     @Override
-    protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
-        return provider.parse(code, context, argumentNames);
+    protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
+        Source source = request.getSource();
+        return provider.parse(source, request.getLocation(), request.getArgumentNames().toArray(new String[request.getArgumentNames().size()]));
     }
 
     @Override
@@ -130,11 +137,6 @@ public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     public Node createFindContextNode0() {
         return createFindContextNode();
-    }
-
-    @Override
-    protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
-        throw new AssertionError();
     }
 
 }
