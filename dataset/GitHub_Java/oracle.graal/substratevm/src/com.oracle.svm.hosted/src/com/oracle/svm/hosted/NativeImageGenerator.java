@@ -1193,9 +1193,8 @@ public class NativeImageGenerator {
                     if (declaredType.isInterface()) {
                         state = TypeState.forSubtraction(bigbang, state, declaredType.getTypeFlow(bigbang, true).getState());
                         if (!state.isEmpty()) {
-                            String methodKey = method.format("%H.%n(%p)");
-                            bigbang.getUnsupportedFeatures().addMessage(methodKey, method,
-                                            "Parameter " + i + " of " + methodKey + " has declared type " + declaredType.toJavaName(true) + " which is incompatible with types in state: " + state);
+                            bigbang.getUnsupportedFeatures().addMessage(method.format("%H.%n(%p)"), method,
+                                            "Method parameter " + i + " has declaredType " + declaredType.toJavaName(true) + " and incompatible types in state: " + state);
                         }
                     }
                 }
@@ -1208,9 +1207,8 @@ public class NativeImageGenerator {
                 if (declaredType.isInterface()) {
                     state = TypeState.forSubtraction(bigbang, state, declaredType.getTypeFlow(bigbang, true).getState());
                     if (!state.isEmpty()) {
-                        String fieldKey = field.format("%H.%n");
-                        bigbang.getUnsupportedFeatures().addMessage(fieldKey, null,
-                                        "Field " + fieldKey + " has declared type " + declaredType.toJavaName(true) + " which is incompatible with types in state: " + state);
+                        bigbang.getUnsupportedFeatures().addMessage(field.format("%H.%n"), null,
+                                        "Field has declaredType " + declaredType.toJavaName(true) + " and incompatible types in state: " + state);
                     }
                 }
             }
