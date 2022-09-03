@@ -44,9 +44,9 @@ public class GraphUtil {
 
     public static void killCFG(FixedNode node) {
         assert node.isAlive();
-        if (node instanceof AbstractEndNode) {
+        if (node instanceof EndNode) {
             // We reached a control flow end.
-            AbstractEndNode end = (AbstractEndNode) node;
+            EndNode end = (EndNode) node;
             killEnd(end);
         } else {
             // Normal control flow node.
@@ -63,11 +63,11 @@ public class GraphUtil {
         propagateKill(node);
     }
 
-    private static void killEnd(AbstractEndNode end) {
+    private static void killEnd(EndNode end) {
         MergeNode merge = end.merge();
         if (merge != null) {
             merge.removeEnd(end);
-            StructuredGraph graph = end.graph();
+            StructuredGraph graph = (StructuredGraph) end.graph();
             if (merge instanceof LoopBeginNode && merge.forwardEndCount() == 0) { // dead loop
                 for (PhiNode phi : merge.phis().snapshot()) {
                     propagateKill(phi);
@@ -141,7 +141,7 @@ public class GraphUtil {
         if (singleValue != null) {
             Collection<PhiNode> phiUsages = phiNode.usages().filter(PhiNode.class).snapshot();
             Collection<ProxyNode> proxyUsages = phiNode.usages().filter(ProxyNode.class).snapshot();
-            phiNode.graph().replaceFloating(phiNode, singleValue);
+            ((StructuredGraph) phiNode.graph()).replaceFloating(phiNode, singleValue);
             for (PhiNode phi : phiUsages) {
                 checkRedundantPhi(phi);
             }
@@ -152,7 +152,7 @@ public class GraphUtil {
     }
 
     public static void checkRedundantProxy(ProxyNode vpn) {
-        AbstractBeginNode proxyPoint = vpn.proxyPoint();
+        BeginNode proxyPoint = vpn.proxyPoint();
         if (proxyPoint instanceof LoopExitNode) {
             LoopExitNode exit = (LoopExitNode) proxyPoint;
             LoopBeginNode loopBegin = exit.loopBegin();
@@ -165,7 +165,7 @@ public class GraphUtil {
                 if (vpnValue == v2) {
                     Collection<PhiNode> phiUsages = vpn.usages().filter(PhiNode.class).snapshot();
                     Collection<ProxyNode> proxyUsages = vpn.usages().filter(ProxyNode.class).snapshot();
-                    vpn.graph().replaceFloating(vpn, vpnValue);
+                    ((StructuredGraph) vpn.graph()).replaceFloating(vpn, vpnValue);
                     for (PhiNode phi : phiUsages) {
                         checkRedundantPhi(phi);
                     }

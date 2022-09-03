@@ -144,6 +144,9 @@ public class InliningPhase extends Phase implements InliningCallback {
                 }
             }
         }
+
+        // Clean up type profiles.
+        TypeProfileProxyNode.cleanFromGraph(graph);
     }
 
     @Override
@@ -529,7 +532,7 @@ public class InliningPhase extends Phase implements InliningCallback {
             return result;
         }
 
-        private void queueMerge(AbstractEndNode end) {
+        private void queueMerge(EndNode end) {
             MergeNode merge = end.merge();
             if (!queuedNodes.isMarked(merge) && visitedAllEnds(merge)) {
                 queuedNodes.mark(merge);
