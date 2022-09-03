@@ -25,42 +25,23 @@ package com.oracle.graal.phases.tiers;
 import java.util.*;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 
 public final class Suites {
 
-    // @formatter:off
-    @Option(help = "The compiler configuration to use")
-    private static final OptionValue<String> CompilerConfiguration = new OptionValue<>("basic");
-    // @formatter:on
+    public final PhaseSuite<HighTierContext> highTier;
+    public final PhaseSuite<MidTierContext> midTier;
 
     public static final Suites DEFAULT;
 
-    private final PhaseSuite<HighTierContext> highTier;
-    private final PhaseSuite<MidTierContext> midTier;
-    private final PhaseSuite<LowTierContext> lowTier;
-
     private static final Map<String, CompilerConfiguration> configurations;
-
-    public PhaseSuite<HighTierContext> getHighTier() {
-        return highTier;
-    }
-
-    public PhaseSuite<MidTierContext> getMidTier() {
-        return midTier;
-    }
-
-    public PhaseSuite<LowTierContext> getLowTier() {
-        return lowTier;
-    }
 
     static {
         configurations = new HashMap<>();
         for (CompilerConfiguration config : ServiceLoader.loadInstalled(CompilerConfiguration.class)) {
             String name = config.getClass().getSimpleName();
-            if (name.endsWith("CompilerConfiguration")) {
-                name = name.substring(0, name.length() - "CompilerConfiguration".length());
+            if (name.endsWith("Configuration")) {
+                name = name.substring(0, name.length() - "Configuration".length());
             }
             configurations.put(name.toLowerCase(), config);
         }
@@ -71,11 +52,10 @@ public final class Suites {
     private Suites(CompilerConfiguration config) {
         highTier = config.createHighTier();
         midTier = config.createMidTier();
-        lowTier = config.createLowTier();
     }
 
     public static Suites createDefaultSuites() {
-        return createSuites(CompilerConfiguration.getValue());
+        return createSuites(GraalOptions.CompilerConfiguration);
     }
 
     public static Suites createSuites(String name) {

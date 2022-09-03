@@ -34,17 +34,7 @@ public class PhaseSuite<C> extends BasePhase<C> {
         this.phases = new ArrayList<>();
     }
 
-    /**
-     * Add a new phase at the beginning of this suite.
-     */
-    public final void prependPhase(BasePhase<? super C> phase) {
-        phases.add(0, phase);
-    }
-
-    /**
-     * Add a new phase at the end of this suite.
-     */
-    public final void appendPhase(BasePhase<? super C> phase) {
+    public final void addPhase(BasePhase<? super C> phase) {
         phases.add(phase);
     }
 

@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
@@ -38,7 +37,7 @@ public class MidTier extends PhaseSuite<MidTierContext> {
         }
 
         if (GraalOptions.OptFloatingReads) {
-            IncrementalCanonicalizerPhase<MidTierContext> canonicalizer = new IncrementalCanonicalizerPhase<>();
+            PartialCanonicalizerPhase<MidTierContext> canonicalizer = new PartialCanonicalizerPhase<>();
             canonicalizer.addPhase(new FloatingReadPhase());
             addPhase(canonicalizer);
             if (GraalOptions.OptReadElimination) {
@@ -66,11 +65,5 @@ public class MidTier extends PhaseSuite<MidTierContext> {
         if (GraalOptions.OptCanonicalizer) {
             addPhase(new CanonicalizerPhase());
         }
-
-        addPhase(new LoopSafepointEliminationPhase());
-
-        addPhase(new SafepointInsertionPhase());
-
-        addPhase(new GuardLoweringPhase());
     }
 }
