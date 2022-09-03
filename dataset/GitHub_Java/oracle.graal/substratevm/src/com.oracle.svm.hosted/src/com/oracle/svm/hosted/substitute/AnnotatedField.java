@@ -39,12 +39,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class AnnotatedField implements ReadableJavaField {
 
-    static Annotation[] appendAnnotationTo(Annotation[] array, Annotation element) {
-        Annotation[] result = Arrays.copyOf(array, array.length + 1);
-        result[result.length - 1] = element;
-        return result;
-    }
-
     private final ResolvedJavaField original;
 
     private final Annotation injectedAnnotation;
@@ -56,12 +50,15 @@ public class AnnotatedField implements ReadableJavaField {
 
     @Override
     public Annotation[] getAnnotations() {
-        return appendAnnotationTo(original.getAnnotations(), injectedAnnotation);
+        Annotation[] result = original.getAnnotations();
+        result = Arrays.copyOf(result, result.length + 1);
+        result[result.length - 1] = injectedAnnotation;
+        return result;
     }
 
     @Override
     public Annotation[] getDeclaredAnnotations() {
-        return appendAnnotationTo(original.getDeclaredAnnotations(), injectedAnnotation);
+        return getAnnotations();
     }
 
     @Override

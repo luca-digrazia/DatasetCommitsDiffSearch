@@ -119,6 +119,9 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
         Field declaredPublicFieldsField = findField(originalReflectionDataClass, "declaredPublicFields");
         Field declaredPublicMethodsField = findField(originalReflectionDataClass, "declaredPublicMethods");
 
+        Method[] emptyMethods = new Method[0];
+        Constructor<?>[] emptyConstructors = new Constructor<?>[0];
+
         Set<Class<?>> allClasses = new HashSet<>(reflectionClasses);
         reflectionMethods.stream().map(method -> method.getDeclaringClass()).forEach(clazz -> allClasses.add(clazz));
         reflectionFields.keySet().stream().map(field -> field.getDeclaringClass()).forEach(clazz -> allClasses.add(clazz));
@@ -176,13 +179,13 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
                 hub.setReflectionData(new DynamicHub.ReflectionData(
                                 filterFields(declaredFieldsField.get(originalReflectionData), reflectionFields.keySet(), access.getMetaAccess()),
                                 filterFields(publicFieldsField.get(originalReflectionData), reflectionFields.keySet(), access.getMetaAccess()),
-                                filterMethods(declaredMethodsField.get(originalReflectionData), reflectionMethods, access.getMetaAccess()),
-                                filterMethods(publicMethodsField.get(originalReflectionData), reflectionMethods, access.getMetaAccess()),
-                                filterConstructors(declaredConstructorsField.get(originalReflectionData), reflectionMethods, access.getMetaAccess()),
-                                filterConstructors(publicConstructorsField.get(originalReflectionData), reflectionMethods, access.getMetaAccess()),
+                                filter(declaredMethodsField.get(originalReflectionData), reflectionMethods, emptyMethods),
+                                filter(publicMethodsField.get(originalReflectionData), reflectionMethods, emptyMethods),
+                                filter(declaredConstructorsField.get(originalReflectionData), reflectionMethods, emptyConstructors),
+                                filter(publicConstructorsField.get(originalReflectionData), reflectionMethods, emptyConstructors),
                                 nullaryConstructor(declaredConstructorsField.get(originalReflectionData), reflectionMethods),
                                 filterFields(declaredPublicFieldsField.get(originalReflectionData), reflectionFields.keySet(), access.getMetaAccess()),
-                                filterMethods(declaredPublicMethodsField.get(originalReflectionData), reflectionMethods, access.getMetaAccess()),
+                                filter(declaredPublicMethodsField.get(originalReflectionData), reflectionMethods, emptyMethods),
                                 enclosingMethodOrConstructor(clazz)));
             } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
                 throw VMError.shouldNotReachHere(ex);
@@ -235,6 +238,16 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
         }
     }
 
+    private static <T> T[] filter(Object elements, Set<?> filter, T[] prototypeArray) {
+        List<Object> result = new ArrayList<>();
+        for (Object element : (Object[]) elements) {
+            if (filter.contains(element)) {
+                result.add(element);
+            }
+        }
+        return result.toArray(prototypeArray);
+    }
+
     private static Field[] filterFields(Object fields, Set<Field> filter, AnalysisMetaAccess metaAccess) {
         List<Field> result = new ArrayList<>();
         for (Field field : (Field[]) fields) {
@@ -243,25 +256,6 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
             }
         }
         return result.toArray(new Field[0]);
-    }
-
-    private static Constructor<?>[] filterConstructors(Object methods, Set<Executable> filter, AnalysisMetaAccess metaAccess) {
-        return filterMethods(methods, filter, metaAccess, new Constructor<?>[0]);
-    }
-
-    private static Method[] filterMethods(Object methods, Set<Executable> filter, AnalysisMetaAccess metaAccess) {
-        return filterMethods(methods, filter, metaAccess, new Method[0]);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T extends Executable> T[] filterMethods(Object methods, Set<Executable> filter, AnalysisMetaAccess metaAccess, T[] prototypeArray) {
-        List<T> result = new ArrayList<>();
-        for (T method : (T[]) methods) {
-            if (filter.contains(method) && !metaAccess.lookupJavaMethod(method).isAnnotationPresent(Delete.class)) {
-                result.add(method);
-            }
-        }
-        return result.toArray(prototypeArray);
     }
 
     private static Method findMethod(Class<?> declaringClass, String methodName, Class<?>... parameterTypes) {
