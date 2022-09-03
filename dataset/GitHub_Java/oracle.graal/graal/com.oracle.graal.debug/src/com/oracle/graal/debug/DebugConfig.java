@@ -45,7 +45,7 @@ public interface DebugConfig {
      * Determines if metering is enabled in the {@linkplain Debug#currentScope() current debug
      * scope}.
      * 
-     * @see Debug#metric(CharSequence)
+     * @see Debug#metric(String)
      */
     boolean isMeterEnabled();
 
@@ -76,7 +76,7 @@ public interface DebugConfig {
     void removeFromContext(Object o);
 
     /**
-     * @see Debug#timer(CharSequence)
+     * @see Debug#timer(String)
      */
     boolean isTimeEnabled();
 

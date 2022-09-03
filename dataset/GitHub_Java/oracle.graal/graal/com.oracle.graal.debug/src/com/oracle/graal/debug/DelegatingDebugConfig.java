@@ -25,139 +25,45 @@ package com.oracle.graal.debug;
 import java.io.*;
 import java.util.*;
 
-import com.oracle.graal.debug.internal.*;
-
 public class DelegatingDebugConfig implements DebugConfig {
 
     protected final DebugConfig delegate;
 
-    /**
-     * The features of a {@link DelegatingDebugConfig} that can be force
-     * {@linkplain DelegatingDebugConfig#enable(Feature) enabled}/
-     * {@linkplain DelegatingDebugConfig#disable(Feature) disabled} or
-     * {@linkplain DelegatingDebugConfig#delegate(Feature) delegated}.
-     */
-    public enum Feature {
-        /**
-         * @see Debug#isLogEnabled()
-         */
-        LOG,
-        /**
-         * @see Debug#isLogEnabledForMethod()
-         */
-        LOG_METHOD,
-        /**
-         * @see Debug#isDumpEnabled()
-         */
-        DUMP,
-        /**
-         * @see Debug#isDumpEnabledForMethod()
-         */
-        DUMP_METHOD,
-        /**
-         * @see Debug#isMeterEnabled()
-         */
-        METER,
-        /**
-         * @see Debug#isTimeEnabled()
-         */
-        TIME,
-        /**
-         * @see DebugConfig#interceptException(Throwable)
-         */
-        INTERCEPT
-    }
-
-    private final Map<Feature, Boolean> featureState = new EnumMap<>(Feature.class);
-
-    /**
-     * Creates a config that delegates to the {@link DebugScope#getConfig() current config}.
-     */
-    public DelegatingDebugConfig() {
-        this(DebugScope.getConfig());
-    }
-
-    /**
-     * Creates a config that delegates to a given config.
-     */
     public DelegatingDebugConfig(DebugConfig delegate) {
         this.delegate = delegate;
     }
 
-    public DelegatingDebugConfig enable(Feature feature) {
-        featureState.put(feature, Boolean.TRUE);
-        return this;
-    }
-
-    public DelegatingDebugConfig disable(Feature feature) {
-        featureState.put(feature, Boolean.FALSE);
-        return this;
-    }
-
-    public DelegatingDebugConfig delegate(Feature feature) {
-        featureState.put(feature, null);
-        return this;
-    }
-
     @Override
     public boolean isLogEnabled() {
-        Boolean fs = featureState.get(Feature.LOG);
-        if (fs == null) {
-            return delegate.isLogEnabled();
-        }
-        return fs.booleanValue();
+        return delegate.isLogEnabled();
     }
 
     public boolean isLogEnabledForMethod() {
-        Boolean fs = featureState.get(Feature.LOG_METHOD);
-        if (fs == null) {
-            return delegate.isLogEnabledForMethod();
-        }
-        return fs.booleanValue();
+        return delegate.isLogEnabledForMethod();
     }
 
     @Override
     public boolean isMeterEnabled() {
-        Boolean fs = featureState.get(Feature.METER);
-        if (fs == null) {
-            return delegate.isMeterEnabled();
-        }
-        return fs.booleanValue();
+        return delegate.isMeterEnabled();
     }
 
     @Override
     public boolean isDumpEnabled() {
-        Boolean fs = featureState.get(Feature.DUMP);
-        if (fs == null) {
-            return delegate.isDumpEnabled();
-        }
-        return fs.booleanValue();
+        return delegate.isDumpEnabled();
     }
 
     public boolean isDumpEnabledForMethod() {
-        Boolean fs = featureState.get(Feature.DUMP_METHOD);
-        if (fs == null) {
-            return delegate.isDumpEnabledForMethod();
-        }
-        return fs.booleanValue();
+        return delegate.isDumpEnabledForMethod();
     }
 
     @Override
     public boolean isTimeEnabled() {
-        Boolean fs = featureState.get(Feature.TIME);
-        if (fs == null) {
-            return delegate.isTimeEnabled();
-        }
-        return fs.booleanValue();
+        return delegate.isTimeEnabled();
     }
 
     @Override
     public RuntimeException interceptException(Throwable e) {
-        Boolean fs = featureState.get(Feature.INTERCEPT);
-        if (fs == null || fs) {
-            return delegate.interceptException(e);
-        }
-        return null;
+        return delegate.interceptException(e);
     }
 
     @Override

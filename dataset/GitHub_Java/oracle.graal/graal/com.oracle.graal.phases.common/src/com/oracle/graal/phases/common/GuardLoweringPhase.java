@@ -125,11 +125,11 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
     private static class LowerGuards extends ScheduledNodeIterator {
 
         private final Block block;
-        private boolean useGuardIdAsDebugId;
+        private boolean useGuardIdAsSpeculationId;
 
-        public LowerGuards(Block block, boolean useGuardIdAsDebugId) {
+        public LowerGuards(Block block, boolean useGuardIdAsSpeculationId) {
             this.block = block;
-            this.useGuardIdAsDebugId = useGuardIdAsDebugId;
+            this.useGuardIdAsSpeculationId = useGuardIdAsSpeculationId;
         }
 
         @Override
@@ -149,7 +149,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
             StructuredGraph graph = guard.graph();
             AbstractBeginNode fastPath = graph.add(new BeginNode());
             @SuppressWarnings("deprecation")
-            DeoptimizeNode deopt = graph.add(new DeoptimizeNode(guard.action(), guard.reason(), useGuardIdAsDebugId ? guard.getId() : 0, guard.getSpeculation()));
+            DeoptimizeNode deopt = graph.add(new DeoptimizeNode(guard.action(), guard.reason(), useGuardIdAsSpeculationId ? guard.getId() : 0));
             AbstractBeginNode deoptBranch = AbstractBeginNode.begin(deopt);
             AbstractBeginNode trueSuccessor;
             AbstractBeginNode falseSuccessor;
