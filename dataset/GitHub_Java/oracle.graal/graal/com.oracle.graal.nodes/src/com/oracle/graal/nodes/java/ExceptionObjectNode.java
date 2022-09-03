@@ -29,50 +29,36 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * The entry to an exception handler with the exception coming from a call (as opposed to a local
- * throw instruction or implicit exception).
+ * The {@code ExceptionObject} instruction represents the incoming exception object to an exception
+ * handler.
  */
-public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable, MemoryCheckpoint {
+public class ExceptionObjectNode extends AbstractStateSplit implements StateSplit, Lowerable, LIRLowerable, MemoryCheckpoint {
 
+    /**
+     * Constructs a new ExceptionObject instruction.
+     */
     public ExceptionObjectNode(MetaAccessProvider runtime) {
-        super(StampFactory.declaredNonNull(runtime.lookupJavaType(Throwable.class)));
+        super(StampFactory.declared(runtime.lookupJavaType(Throwable.class)));
     }
 
     @Override
-    public Object[] getLocationIdentities() {
-        return new Object[]{LocationNode.ANY_LOCATION};
+    public Object getLocationIdentity() {
+        return LocationNode.ANY_LOCATION;
     }
 
     @Override
-    public void simplify(SimplifierTool tool) {
-        //
-    }
-
-    private boolean isLowered() {
-        return (stamp() == StampFactory.forVoid());
+    public void generate(LIRGeneratorTool gen) {
+        gen.visitExceptionObject(this);
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        if (isLowered()) {
-            return;
-        }
-        StructuredGraph graph = (StructuredGraph) graph();
-        LoadExceptionObjectNode loadException = graph.add(new LoadExceptionObjectNode(stamp()));
-        loadException.setStateAfter(stateAfter());
-        replaceAtUsages(loadException);
-        graph.addAfterFixed(this, loadException);
-        tool.setLastFixedNode(loadException);
-        setStateAfter(null);
-        setStamp(StampFactory.forVoid());
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
     public boolean verify() {
-        if (isLowered()) {
-            return true;
-        }
-        assertTrue(stateAfter() != null || stamp() == StampFactory.forVoid(), "an exception handler needs a frame state");
+        assertTrue(stateAfter() != null, "an exception handler needs a frame state");
         return super.verify();
     }
 }
