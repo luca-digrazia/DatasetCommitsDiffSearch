@@ -36,11 +36,7 @@ import com.oracle.graal.nodes.*;
 public final class MonitorDeoptTest extends GraalCompilerTest {
 
     private enum State {
-        INITIAL,
-        RUNNING_GRAAL,
-        INVALIDATED,
-        RUNNING_INTERPRETER,
-        TERMINATED
+        INITIAL, RUNNING_GRAAL, INVALIDATED, RUNNING_INTERPRETER, TERMINATED
     }
 
     private static class Monitor {
