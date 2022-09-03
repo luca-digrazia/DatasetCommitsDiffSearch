@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.hotspot.word;
 
+import com.oracle.jvmci.meta.LocationIdentity;
 import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.*;
 
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
 import com.oracle.graal.word.*;
 import com.oracle.graal.word.Word.Opcode;
 import com.oracle.graal.word.Word.Operation;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Marker type for a metaspace pointer.
@@ -50,7 +51,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -65,7 +66,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -80,7 +81,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -95,7 +96,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -110,7 +111,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -125,7 +126,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -140,7 +141,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -155,7 +156,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -170,7 +171,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -181,7 +182,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -192,7 +193,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -203,7 +204,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -214,7 +215,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -225,7 +226,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -236,7 +237,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -247,7 +248,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -258,7 +259,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -269,7 +270,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_POINTER)
@@ -284,7 +285,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -299,7 +300,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -314,7 +315,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -329,7 +330,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -344,7 +345,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -359,7 +360,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -374,7 +375,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -389,7 +390,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -404,7 +405,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.INITIALIZE)
@@ -419,7 +420,7 @@ public abstract class MetaspacePointer {
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -430,7 +431,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -441,7 +442,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -452,7 +453,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -463,7 +464,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -474,7 +475,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -485,7 +486,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -496,7 +497,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -507,7 +508,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
@@ -518,7 +519,7 @@ public abstract class MetaspacePointer {
      * are in bytes. The memory must be uninitialized or zero prior to this operation.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.INITIALIZE)
@@ -529,7 +530,7 @@ public abstract class MetaspacePointer {
      * bytes.
      *
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
