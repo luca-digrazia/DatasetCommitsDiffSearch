@@ -32,18 +32,43 @@ import com.oracle.graal.nodes.virtual.*;
  * Load of a value from a location specified as an offset relative to an object.
  * No null check is performed before the load.
  */
-public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtualizable {
+public class UnsafeLoadNode extends FixedWithNextNode implements Lowerable, Virtualizable {
+
+    @Input private ValueNode object;
+    @Input private ValueNode offset;
+    private final int displacement;
+    private final Kind loadKind;
+
+    public ValueNode object() {
+        return object;
+    }
+
+    public int displacement() {
+        return displacement;
+    }
+
+    public ValueNode offset() {
+        return offset;
+    }
 
     public UnsafeLoadNode(ValueNode object, int displacement, ValueNode offset, boolean nonNull) {
-        this(nonNull ? StampFactory.objectNonNull() : StampFactory.object(), object, displacement, offset, Kind.Object);
+        super(nonNull ? StampFactory.objectNonNull() : StampFactory.object());
+        this.object = object;
+        this.displacement = displacement;
+        this.offset = offset;
+        this.loadKind = Kind.Object;
     }
 
-    public UnsafeLoadNode(ValueNode object, int displacement, ValueNode offset, Kind accessKind) {
-        this(StampFactory.forKind(accessKind.getStackKind()), object, displacement, offset, accessKind);
+    public UnsafeLoadNode(ValueNode object, int displacement, ValueNode offset, Kind kind) {
+        super(StampFactory.forKind(kind.getStackKind()));
+        this.object = object;
+        this.displacement = displacement;
+        this.offset = offset;
+        this.loadKind = kind;
     }
 
-    public UnsafeLoadNode(Stamp stamp, ValueNode object, int displacement, ValueNode offset, Kind accessKind) {
-        super(stamp, object, displacement, offset, accessKind);
+    public Kind loadKind() {
+        return loadKind;
     }
 
     @Override

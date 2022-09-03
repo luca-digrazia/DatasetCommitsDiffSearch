@@ -34,7 +34,8 @@ public class VirtualArrayNode extends VirtualObjectNode {
     private final ResolvedJavaType componentType;
     private final int length;
 
-    public VirtualArrayNode(ResolvedJavaType componentType, int length) {
+    public VirtualArrayNode(long virtualId, ResolvedJavaType componentType, int length) {
+        super(virtualId);
         this.componentType = componentType;
         this.length = length;
     }
@@ -73,7 +74,7 @@ public class VirtualArrayNode extends VirtualObjectNode {
     }
 
     @Override
-    public int entryIndexForOffset(long constantOffset) {
+    public int fieldIndexForOffset(long constantOffset) {
         int baseOffset;
         int indexScale;
         switch (componentType.getKind()) {
@@ -125,11 +126,5 @@ public class VirtualArrayNode extends VirtualObjectNode {
             return -1;
         }
         return (int) elementIndex;
-    }
-
-    @Override
-    public Kind entryKind(int index) {
-        assert index >= 0 && index < length;
-        return componentType.getKind();
     }
 }
