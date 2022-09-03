@@ -24,8 +24,6 @@ package com.oracle.graal.loop.phases;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import java.util.*;
-
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
@@ -36,7 +34,6 @@ import com.oracle.graal.phases.*;
 public class LoopTransformLowPhase extends Phase {
 
     private static final DebugMetric UNSWITCHED = Debug.metric("Unswitched");
-    private static final DebugMetric UNSWITCH_CANDIDATES = Debug.metric("UnswitchCandidates");
 
     @Override
     protected void run(StructuredGraph graph) {
@@ -59,18 +56,16 @@ public class LoopTransformLowPhase extends Phase {
                     final LoopsData dataUnswitch = new LoopsData(graph);
                     for (LoopEx loop : dataUnswitch.loops()) {
                         if (LoopPolicies.shouldTryUnswitch(loop)) {
-                            List<ControlSplitNode> controlSplits = LoopTransformations.findUnswitchable(loop);
-                            if (controlSplits != null) {
-                                UNSWITCH_CANDIDATES.increment();
-                                if (LoopPolicies.shouldUnswitch(loop, controlSplits)) {
-                                    if (Debug.isLogEnabled()) {
-                                        logUnswitch(loop, controlSplits);
-                                    }
-                                    LoopTransformations.unswitch(loop, controlSplits);
-                                    UNSWITCHED.increment();
-                                    unswitched = true;
-                                    break;
+                            ControlSplitNode controlSplit = LoopTransformations.findUnswitchable(loop);
+                            if (controlSplit != null && LoopPolicies.shouldUnswitch(loop, controlSplit)) {
+                                if (Debug.isLogEnabled()) {
+                                    logUnswitch(loop, controlSplit);
                                 }
+                                LoopTransformations.unswitch(loop, controlSplit);
+                                UNSWITCHED.increment();
+                                Debug.dump(graph, "After unswitch %s", loop);
+                                unswitched = true;
+                                break;
                             }
                         }
                     }
@@ -79,20 +74,17 @@ public class LoopTransformLowPhase extends Phase {
         }
     }
 
-    private static void logUnswitch(LoopEx loop, List<ControlSplitNode> controlSplits) {
+    private static void logUnswitch(LoopEx loop, ControlSplitNode controlSplit) {
         StringBuilder sb = new StringBuilder("Unswitching ");
-        sb.append(loop).append(" at ");
-        for (ControlSplitNode controlSplit : controlSplits) {
-            sb.append(controlSplit).append(" [");
-            NodeClassIterator it = controlSplit.successors().iterator();
-            while (it.hasNext()) {
-                sb.append(controlSplit.probability((BeginNode) it.next()));
-                if (it.hasNext()) {
-                    sb.append(", ");
-                }
+        sb.append(loop).append(" at ").append(controlSplit).append(" [");
+        NodeClassIterator it = controlSplit.successors().iterator();
+        while (it.hasNext()) {
+            sb.append(controlSplit.probability((BeginNode) it.next()));
+            if (it.hasNext()) {
+                sb.append(", ");
             }
-            sb.append("]");
         }
+        sb.append("]");
         Debug.log("%s", sb);
     }
 }

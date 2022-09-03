@@ -141,14 +141,10 @@ public class LoopEx {
             if (!BinaryNode.canTryReassociate(binary)) {
                 continue;
             }
-            BinaryNode result = BinaryNode.reassociate(binary, invariant, binary.getX(), binary.getY());
+            BinaryNode result = BinaryNode.reassociate(binary, invariant);
             if (result != binary) {
                 if (Debug.isLogEnabled()) {
                     Debug.log("%s : Reassociated %s into %s", MetaUtil.format("%H::%n", graph.method()), binary, result);
-                }
-                if (!result.isAlive()) {
-                    assert !result.isDeleted();
-                    result = graph.addOrUniqueWithInputs(result);
                 }
                 graph.replaceFloating(binary, result);
             }
@@ -181,17 +177,17 @@ public class LoopEx {
             Condition condition = null;
             InductionVariable iv = null;
             ValueNode limit = null;
-            if (isOutsideLoop(lessThan.getX())) {
-                iv = getInductionVariables().get(lessThan.getY());
+            if (isOutsideLoop(lessThan.x())) {
+                iv = getInductionVariables().get(lessThan.y());
                 if (iv != null) {
                     condition = lessThan.condition().mirror();
-                    limit = lessThan.getX();
+                    limit = lessThan.x();
                 }
-            } else if (isOutsideLoop(lessThan.getY())) {
-                iv = getInductionVariables().get(lessThan.getX());
+            } else if (isOutsideLoop(lessThan.y())) {
+                iv = getInductionVariables().get(lessThan.x());
                 if (iv != null) {
                     condition = lessThan.condition();
-                    limit = lessThan.getY();
+                    limit = lessThan.y();
                 }
             }
             if (condition == null) {

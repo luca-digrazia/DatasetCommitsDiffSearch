@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -73,12 +73,12 @@ public class DerivedScaledInductionVariable extends InductionVariable {
 
     @Override
     public ValueNode initNode() {
-        return BinaryArithmeticNode.mul(graph(), base.initNode(), scale);
+        return IntegerArithmeticNode.mul(graph(), base.initNode(), scale);
     }
 
     @Override
     public ValueNode strideNode() {
-        return BinaryArithmeticNode.mul(graph(), base.strideNode(), scale);
+        return IntegerArithmeticNode.mul(graph(), base.strideNode(), scale);
     }
 
     @Override
@@ -93,22 +93,22 @@ public class DerivedScaledInductionVariable extends InductionVariable {
 
     @Override
     public long constantInit() {
-        return base.constantInit() * scale.asJavaConstant().asLong();
+        return base.constantInit() * scale.asConstant().asLong();
     }
 
     @Override
     public long constantStride() {
-        return base.constantStride() * scale.asJavaConstant().asLong();
+        return base.constantStride() * scale.asConstant().asLong();
     }
 
     @Override
     public ValueNode extremumNode(boolean assumePositiveTripCount, Stamp stamp) {
-        return BinaryArithmeticNode.mul(graph(), base.extremumNode(assumePositiveTripCount, stamp), IntegerConvertNode.convert(scale, stamp, graph()));
+        return IntegerArithmeticNode.mul(graph(), base.extremumNode(assumePositiveTripCount, stamp), IntegerConvertNode.convert(scale, stamp));
     }
 
     @Override
     public ValueNode exitValueNode() {
-        return BinaryArithmeticNode.mul(graph(), base.exitValueNode(), scale);
+        return IntegerArithmeticNode.mul(graph(), base.exitValueNode(), scale);
     }
 
     @Override
@@ -118,12 +118,12 @@ public class DerivedScaledInductionVariable extends InductionVariable {
 
     @Override
     public long constantExtremum() {
-        return base.constantExtremum() * scale.asJavaConstant().asLong();
+        return base.constantExtremum() * scale.asConstant().asLong();
     }
 
     @Override
     public void deleteUnusedNodes() {
-        if (scale.isAlive() && scale.hasNoUsages()) {
+        if (scale.usages().isEmpty()) {
             GraphUtil.killWithUnusedFloatingInputs(scale);
         }
     }

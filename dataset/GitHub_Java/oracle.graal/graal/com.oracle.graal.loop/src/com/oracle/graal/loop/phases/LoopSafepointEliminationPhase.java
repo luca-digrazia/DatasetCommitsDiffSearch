@@ -22,16 +22,12 @@
  */
 package com.oracle.graal.loop.phases;
 
-import com.oracle.graal.loop.LoopEx;
-import com.oracle.graal.loop.LoopsData;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.LoopEndNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.extended.ForeignCallNode;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.tiers.MidTierContext;
+import com.oracle.graal.loop.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class LoopSafepointEliminationPhase extends BasePhase<MidTierContext> {
 
@@ -48,14 +44,16 @@ public class LoopSafepointEliminationPhase extends BasePhase<MidTierContext> {
                     }
                     if (hasSafepoint) {
                         loop.counted().createOverFlowGuard();
-                        loop.loopBegin().disableSafepoint();
+                        for (LoopEndNode loopEnd : loop.loopBegin().loopEnds()) {
+                            loopEnd.disableSafepoint();
+                        }
                     }
                 }
             }
         }
         for (LoopEx loop : loops.countedLoops()) {
             for (LoopEndNode loopEnd : loop.loopBegin().loopEnds()) {
-                Block b = loops.getCFG().blockFor(loopEnd);
+                Block b = loops.controlFlowGraph().blockFor(loopEnd);
                 blocks: while (b != loop.loop().getHeader()) {
                     assert b != null;
                     for (FixedNode node : b.getNodes()) {
