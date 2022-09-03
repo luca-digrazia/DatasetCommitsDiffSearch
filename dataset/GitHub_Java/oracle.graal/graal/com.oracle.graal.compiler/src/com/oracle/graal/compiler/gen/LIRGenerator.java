@@ -407,7 +407,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
         res.getLIR().getLIRforBlock(currentBlock).add(op);
     }
 
-    private final void doBlockStart(AbstractBlock<?> block) {
+    public void doBlock(Block block, StructuredGraph graph, BlockMap<List<ScheduledNode>> blockMap) {
         if (printIRWithLIR) {
             TTY.print(block.toString());
         }
@@ -423,33 +423,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
         if (traceLevel >= 1) {
             TTY.println("BEGIN Generating LIR for block B" + block.getId());
         }
-    }
-
-    private final void doBlockEnd(AbstractBlock<?> block) {
-
-        if (traceLevel >= 1) {
-            TTY.println("END Generating LIR for block B" + block.getId());
-        }
-
-        currentBlock = null;
-
-        if (printIRWithLIR) {
-            TTY.println();
-        }
-    }
-
-    /**
-     * For Baseline compilation
-     */
-    public void doBlock(AbstractBlock<?> block) {
-        doBlockStart(block);
-        // add instruction
-        emitAdd(Constant.forLong(42), Constant.forLong(73));
-        doBlockEnd(block);
-    }
-
-    public void doBlock(Block block, StructuredGraph graph, BlockMap<List<ScheduledNode>> blockMap) {
-        doBlockStart(block);
 
         if (block == res.getLIR().getControlFlowGraph().getStartBlock()) {
             assert block.getPredecessorCount() == 0;
@@ -499,7 +472,16 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
         }
 
         assert verifyBlock(res.getLIR(), block);
-        doBlockEnd(block);
+
+        if (traceLevel >= 1) {
+            TTY.println("END Generating LIR for block B" + block.getId());
+        }
+
+        currentBlock = null;
+
+        if (printIRWithLIR) {
+            TTY.println();
+        }
     }
 
     protected abstract boolean peephole(ValueNode valueNode);

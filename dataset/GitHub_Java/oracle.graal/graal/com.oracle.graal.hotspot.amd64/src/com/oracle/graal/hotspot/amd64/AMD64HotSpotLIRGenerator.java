@@ -59,6 +59,7 @@ import com.oracle.graal.lir.amd64.AMD64Move.StoreConstantOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
@@ -163,46 +164,14 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
         emitIncomingValues(params);
 
-        saveRbp = new SaveRbp(new NoOp(currentBlock, res.getLIR().getLIRforBlock(currentBlock).size()));
+        assert currentBlock instanceof Block;
+        saveRbp = new SaveRbp(new NoOp((Block) currentBlock, res.getLIR().getLIRforBlock(currentBlock).size()));
         append(saveRbp.placeholder);
 
         for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
             Value paramValue = params[param.index()];
-            assert paramValue.getKind() == param.getKind().getStackKind();
+            assert paramValue.getKind() == param.kind().getStackKind();
             setResult(param, emitMove(paramValue));
-        }
-    }
-
-    @Override
-    protected void emitPrologue(ResolvedJavaMethod method) {
-
-        CallingConvention incomingArguments = getCallingConvention();
-
-        Value[] params = new Value[incomingArguments.getArgumentCount() + 1];
-        for (int i = 0; i < params.length - 1; i++) {
-            params[i] = toStackKind(incomingArguments.getArgument(i));
-            if (isStackSlot(params[i])) {
-                StackSlot slot = ValueUtil.asStackSlot(params[i]);
-                if (slot.isInCallerFrame() && !res.getLIR().hasArgInCallerFrame()) {
-                    res.getLIR().setHasArgInCallerFrame();
-                }
-            }
-        }
-        params[params.length - 1] = rbp.asValue(Kind.Long);
-
-        emitIncomingValues(params);
-
-        saveRbp = new SaveRbp(new NoOp(currentBlock, res.getLIR().getLIRforBlock(currentBlock).size()));
-        append(saveRbp.placeholder);
-
-        Signature sig = method.getSignature();
-        boolean isStatic = Modifier.isStatic(method.getModifiers());
-
-        for (int i = 0; i < sig.getParameterCount(!isStatic); i++) {
-            Value paramValue = params[i];
-            assert paramValue.getKind() == sig.getParameterKind(i).getStackKind();
-            // TODO setResult(param, emitMove(paramValue));
-            emitMove(paramValue);
         }
     }
 
@@ -331,8 +300,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @SuppressWarnings("hiding")
     @Override
     public void visitDirectCompareAndSwap(DirectCompareAndSwapNode x) {
-        Kind kind = x.newValue().getKind();
-        assert kind == x.expectedValue().getKind();
+        Kind kind = x.newValue().kind();
+        assert kind == x.expectedValue().kind();
 
         Value expected = loadNonConst(operand(x.expectedValue()));
         Variable newVal = load(operand(x.newValue()));
@@ -352,7 +321,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         emitMove(rax, expected);
         append(new CompareAndSwapOp(rax, address, rax, newVal));
 
-        Variable result = newVariable(x.getKind());
+        Variable result = newVariable(x.kind());
         emitMove(result, rax);
         setResult(x, result);
     }
@@ -580,8 +549,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     public void visitCompareAndSwap(LoweredCompareAndSwapNode node, Value address) {
-        Kind kind = node.getNewValue().getKind();
-        assert kind == node.getExpectedValue().getKind();
+        Kind kind = node.getNewValue().kind();
+        assert kind == node.getExpectedValue().kind();
         Value expected = loadNonConst(operand(node.getExpectedValue()));
         Variable newValue = load(operand(node.getNewValue()));
         AMD64AddressValue addressValue = asAddressValue(address);
@@ -594,7 +563,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         } else {
             append(new CompareAndSwapOp(raxRes, addressValue, raxRes, newValue));
         }
-        Variable result = newVariable(node.getKind());
+        Variable result = newVariable(node.kind());
         append(new CondMoveOp(result, Condition.EQ, load(Constant.TRUE), Constant.FALSE));
         setResult(node, result);
     }
