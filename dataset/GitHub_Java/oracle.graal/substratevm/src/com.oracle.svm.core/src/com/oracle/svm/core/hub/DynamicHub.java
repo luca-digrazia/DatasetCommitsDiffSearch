@@ -1070,7 +1070,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     public boolean desiredAssertionStatus() {
-        return SubstrateOptions.getRuntimeAssertionsForClass(getName());
+        return SubstrateOptions.RuntimeAssertions.getValue() && SubstrateOptions.getRuntimeAssertionsFilter().test(getName());
     }
 
     @Substitute //

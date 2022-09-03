@@ -41,6 +41,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.nativeimage.Feature.DuringAnalysisAccess;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CFunction;
@@ -88,10 +89,10 @@ public final class SVMHost implements HostVM {
     private final ClassLoader classLoader;
     private final ClassInitializationFeature classInitializationFeature;
     private final HostedStringDeduplication stringTable;
-    private final UnsafeAutomaticSubstitutionProcessor automaticSubstitutions;
+
     private final List<BiConsumer<DuringAnalysisAccess, Class<?>>> classReachabilityListeners;
 
-    public SVMHost(OptionValues options, Platform platform, AnalysisPolicy analysisPolicy, ClassLoader classLoader, UnsafeAutomaticSubstitutionProcessor automaticSubstitutions) {
+    public SVMHost(OptionValues options, Platform platform, AnalysisPolicy analysisPolicy, ClassLoader classLoader) {
         this.options = options;
         this.platform = platform;
         this.analysisPolicy = analysisPolicy;
@@ -100,7 +101,6 @@ public final class SVMHost implements HostVM {
         this.stringTable = HostedStringDeduplication.singleton();
         this.classReachabilityListeners = new ArrayList<>();
         this.forbiddenTypes = setupForbiddenTypes(options);
-        this.automaticSubstitutions = automaticSubstitutions;
     }
 
     private static Map<String, EnumSet<AnalysisType.UsageKind>> setupForbiddenTypes(OptionValues options) {
@@ -220,6 +220,7 @@ public final class SVMHost implements HostVM {
         assert existing == null;
 
         /* Compute the automatic substitutions. */
+        UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = ImageSingletons.lookup(UnsafeAutomaticSubstitutionProcessor.class);
         automaticSubstitutions.computeSubstitutions(GraalAccess.getOriginalProviders().getMetaAccess().lookupJavaType(analysisType.getJavaClass()), options);
     }
 
