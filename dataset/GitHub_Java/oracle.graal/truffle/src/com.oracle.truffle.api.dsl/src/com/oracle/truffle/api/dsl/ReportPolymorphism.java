@@ -24,27 +24,19 @@
  */
 package com.oracle.truffle.api.dsl;
 
-import com.oracle.truffle.api.nodes.Node;
-
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Target;
 
 /**
- * Nodes annotated with this annotation (and their subclasses) will, if processed by the DSL, automatically
- * {@link Node#reportPolymorphicSpecialize() report polymorphic specializations}.
- *
- * @since 0.33
+ * TODO: Javadoc.
  */
 @Target(ElementType.TYPE)
 @Inherited
 public @interface ReportPolymorphism {
 
     /**
-     * Nodes (and their subclasses) or specializations annotated with this annotation will be excluded
-     * from consideration when {@link Node#reportPolymorphicSpecialize() reporting polymorphic specializations}.
-     *
-     * @since 0.33
+     * TODO: Javadoc.
      */
     @Target({ElementType.METHOD, ElementType.TYPE})
     @Inherited

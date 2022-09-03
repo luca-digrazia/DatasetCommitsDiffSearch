@@ -496,11 +496,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /**
-     * Notifies the runtime that this node specialized to a polymorphic state. This includes
-     * specializations that increase "level" of polymorphism (e.g. Adding another element to an
-     * existing inline cache).
-     *
-     * @since 0.33
+     * TODO: Javadoc.
      */
     protected void reportPolymorphicSpecialize() {
         CompilerAsserts.neverPartOfCompilation();
