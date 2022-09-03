@@ -156,7 +156,7 @@ public final class IntegerStamp extends PrimitiveStamp {
     }
 
     @Override
-    public IntegerStamp empty() {
+    public Stamp empty() {
         return new IntegerStamp(getBits(), CodeUtil.maxValue(getBits()), CodeUtil.minValue(getBits()), CodeUtil.mask(getBits()), 0);
     }
 
@@ -305,7 +305,7 @@ public final class IntegerStamp extends PrimitiveStamp {
         return str.toString();
     }
 
-    private IntegerStamp createStamp(IntegerStamp other, long newUpperBound, long newLowerBound, long newDownMask, long newUpMask) {
+    private Stamp createStamp(IntegerStamp other, long newUpperBound, long newLowerBound, long newDownMask, long newUpMask) {
         assert getBits() == other.getBits();
         if (newLowerBound > newUpperBound || (newDownMask & (~newUpMask)) != 0 || (newUpMask == 0 && (newLowerBound > 0 || newUpperBound < 0))) {
             return empty();
@@ -314,7 +314,7 @@ public final class IntegerStamp extends PrimitiveStamp {
         } else if (newLowerBound == other.lowerBound && newUpperBound == other.upperBound && newDownMask == other.downMask && newUpMask == other.upMask) {
             return other;
         } else {
-            return IntegerStamp.create(getBits(), newLowerBound, newUpperBound, newDownMask, newUpMask);
+            return new IntegerStamp(getBits(), newLowerBound, newUpperBound, newDownMask, newUpMask);
         }
     }
 
@@ -328,7 +328,7 @@ public final class IntegerStamp extends PrimitiveStamp {
     }
 
     @Override
-    public IntegerStamp join(Stamp otherStamp) {
+    public Stamp join(Stamp otherStamp) {
         if (otherStamp == this) {
             return this;
         }
@@ -337,7 +337,8 @@ public final class IntegerStamp extends PrimitiveStamp {
         long newLowerBound = Math.max(lowerBound, other.lowerBound);
         long newUpperBound = Math.min(upperBound, other.upperBound);
         long newUpMask = upMask & other.upMask;
-        return createStamp(other, newUpperBound, newLowerBound, newDownMask, newUpMask);
+        IntegerStamp limit = StampFactory.forInteger(getBits(), newLowerBound, newUpperBound);
+        return createStamp(other, newUpperBound, newLowerBound, limit.downMask() | newDownMask, limit.upMask() & newUpMask);
     }
 
     @Override

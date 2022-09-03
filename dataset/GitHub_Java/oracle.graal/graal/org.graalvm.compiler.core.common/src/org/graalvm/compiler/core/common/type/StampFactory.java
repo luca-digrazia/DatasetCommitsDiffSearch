@@ -56,11 +56,6 @@ public class StampFactory {
         public boolean equals(Object obj) {
             return this == obj;
         }
-
-        @Override
-        public String toString() {
-            return "NodeIntrinsicStamp";
-        }
     }
 
     // JaCoCo Exclude
