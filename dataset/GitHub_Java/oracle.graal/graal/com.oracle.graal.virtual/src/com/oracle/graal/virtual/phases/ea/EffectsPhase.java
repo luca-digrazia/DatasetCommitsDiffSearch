@@ -31,7 +31,6 @@ import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.util.*;
@@ -50,16 +49,10 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
 
     private final int maxIterations;
     protected final CanonicalizerPhase canonicalizer;
-    private final boolean unscheduled;
 
-    protected EffectsPhase(int maxIterations, CanonicalizerPhase canonicalizer) {
-        this(maxIterations, canonicalizer, false);
-    }
-
-    protected EffectsPhase(int maxIterations, CanonicalizerPhase canonicalizer, boolean unscheduled) {
+    public EffectsPhase(int maxIterations, CanonicalizerPhase canonicalizer) {
         this.maxIterations = maxIterations;
         this.canonicalizer = canonicalizer;
-        this.unscheduled = unscheduled;
     }
 
     @Override
@@ -71,19 +64,10 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
         boolean changed = false;
         for (int iteration = 0; iteration < maxIterations; iteration++) {
             try (Scope s = Debug.scope(isEnabled() ? "iteration " + iteration : null)) {
-                SchedulePhase schedule;
-                ControlFlowGraph cfg;
-                if (unscheduled) {
-                    schedule = null;
-                    cfg = ControlFlowGraph.compute(graph, true, true, false, false);
-                } else {
-                    schedule = new SchedulePhase();
-                    schedule.apply(graph, false);
-                    cfg = schedule.getCFG();
-                }
-
-                Closure<?> closure = createEffectsClosure(context, schedule, cfg);
-                ReentrantBlockIterator.apply(closure, cfg.getStartBlock());
+                SchedulePhase schedule = new SchedulePhase();
+                schedule.apply(graph, false);
+                Closure<?> closure = createEffectsClosure(context, schedule);
+                ReentrantBlockIterator.apply(closure, schedule.getCFG().getStartBlock());
 
                 if (!closure.hasChanged()) {
                     break;
@@ -122,5 +106,5 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
         }
     }
 
-    protected abstract Closure<?> createEffectsClosure(PhaseContextT context, SchedulePhase schedule, ControlFlowGraph cfg);
+    protected abstract Closure<?> createEffectsClosure(PhaseContextT context, SchedulePhase schedule);
 }

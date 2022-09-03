@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -55,7 +55,7 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
         HotSpotConstantReflectionProvider constantReflection = new HotSpotConstantReflectionProvider(runtime);
         Value[] nativeABICallerSaveRegisters = createNativeABICallerSaveRegisters(runtime.getConfig(), codeCache.getRegisterConfig());
         HotSpotForeignCallsProvider foreignCalls = new SPARCHotSpotForeignCallsProvider(runtime, metaAccess, codeCache, nativeABICallerSaveRegisters);
-        LoweringProvider lowerer = new SPARCHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, target);
+        LoweringProvider lowerer = new SPARCHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers);
         // Replacements cannot have speculative optimizations since they have
         // to be valid for the entire run of the VM.
         Assumptions assumptions = new Assumptions(false);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,9 +36,8 @@ import com.oracle.graal.hotspot.hsail.replacements.*;
 @ServiceProvider(HotSpotBackendFactory.class)
 public class HSAILHotSpotBackendFactory implements HotSpotBackendFactory {
 
-    protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntime runtime, HotSpotMetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
-                    TargetDescription target) {
-        return new HSAILHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, target);
+    protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntime runtime, HotSpotMetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers) {
+        return new HSAILHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers);
     }
 
     @Override
@@ -47,11 +46,10 @@ public class HSAILHotSpotBackendFactory implements HotSpotBackendFactory {
 
         HotSpotRegisters registers = new HotSpotRegisters(HSAIL.threadRegister, Register.None, Register.None);
         HotSpotMetaAccessProvider metaAccess = host.getMetaAccess();
-        TargetDescription target = createTarget();
-        HSAILHotSpotCodeCacheProvider codeCache = new HSAILHotSpotCodeCacheProvider(runtime, target);
+        HSAILHotSpotCodeCacheProvider codeCache = new HSAILHotSpotCodeCacheProvider(runtime, createTarget());
         ConstantReflectionProvider constantReflection = host.getConstantReflection();
         HotSpotForeignCallsProvider foreignCalls = new HSAILHotSpotForeignCallsProvider(runtime, metaAccess, codeCache);
-        HotSpotLoweringProvider lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers, target);
+        HotSpotLoweringProvider lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers);
         // Replacements cannot have speculative optimizations since they have
         // to be valid for the entire run of the VM.
         Assumptions assumptions = new Assumptions(false);

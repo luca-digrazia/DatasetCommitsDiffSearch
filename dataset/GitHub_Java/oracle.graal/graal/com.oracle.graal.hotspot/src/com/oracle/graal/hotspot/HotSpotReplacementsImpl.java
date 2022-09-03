@@ -48,7 +48,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
     }
 
     @Override
-    protected ResolvedJavaMethod registerMethodSubstitution(ClassReplacements cr, Member originalMethod, Method substituteMethod) {
+    protected ResolvedJavaMethod registerMethodSubstitution(Member originalMethod, Method substituteMethod) {
         final Class<?> substituteClass = substituteMethod.getDeclaringClass();
         if (substituteClass.getDeclaringClass() == BoxingSubstitutions.class) {
             if (config.useHeapProfiler) {
@@ -78,7 +78,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
                 return null;
             }
         }
-        return super.registerMethodSubstitution(cr, originalMethod, substituteMethod);
+        return super.registerMethodSubstitution(originalMethod, substituteMethod);
     }
 
     @Override
@@ -90,6 +90,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
              * The methods of MethodHandle that need substitution are signature-polymorphic, i.e.,
              * the VM replicates them for every signature that they are actually used for.
              * Therefore, we cannot use the usual annotation-driven mechanism to define the
+             * substitution.
              */
             if (MethodHandleNode.lookupMethodHandleIntrinsic(method) != null) {
                 return MethodHandleNode.class;

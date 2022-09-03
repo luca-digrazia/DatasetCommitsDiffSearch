@@ -30,7 +30,6 @@ import java.util.function.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
@@ -85,8 +84,7 @@ public class PartialEscapePhase extends EffectsPhase<PhaseContext> {
     }
 
     @Override
-    protected Closure<?> createEffectsClosure(PhaseContext context, SchedulePhase schedule, ControlFlowGraph cfg) {
-        assert schedule != null;
+    protected Closure<?> createEffectsClosure(PhaseContext context, SchedulePhase schedule) {
         if (readElimination) {
             return new PEReadEliminationClosure(schedule, context.getMetaAccess(), context.getConstantReflection(), context.getAssumptions());
         } else {
