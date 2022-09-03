@@ -64,10 +64,8 @@ import com.oracle.graal.test.*;
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.code.CallingConvention.Type;
 import jdk.internal.jvmci.common.*;
-
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.options.*;
 
@@ -379,11 +377,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected TargetDescription getTarget() {
-        return getTargetProvider().getTarget();
-    }
-
-    protected TargetProvider getTargetProvider() {
-        return getBackend();
+        return getProviders().getCodeCache().getTarget();
     }
 
     protected CodeCacheProvider getCodeCache() {
@@ -654,7 +648,6 @@ public abstract class GraalCompilerTest extends GraalTest {
      * @param forceCompile specifies whether to ignore any previous code cached for the (method,
      *            key) pair
      */
-    @SuppressWarnings("try")
     protected InstalledCode getCode(final ResolvedJavaMethod installedCodeOwner, StructuredGraph graph, boolean forceCompile) {
         if (!forceCompile) {
             InstalledCode cached = cache.get(installedCodeOwner);
@@ -721,8 +714,8 @@ public abstract class GraalCompilerTest extends GraalTest {
         StructuredGraph graphToCompile = graph == null ? parseForCompile(installedCodeOwner) : graph;
         lastCompiledGraph = graphToCompile;
         CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graphToCompile.method(), false);
-        Request<CompilationResult> request = new Request<>(graphToCompile, cc, installedCodeOwner, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
-                        getProfilingInfo(graphToCompile), getSuites(), getLIRSuites(), new CompilationResult(), CompilationResultBuilderFactory.Default);
+        Request<CompilationResult> request = new Request<>(graphToCompile, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), getDefaultGraphBuilderSuite(),
+                        OptimisticOptimizations.ALL, getProfilingInfo(graphToCompile), getSuites(), getLIRSuites(), new CompilationResult(), CompilationResultBuilderFactory.Default);
         return GraalCompiler.compile(request);
     }
 
@@ -820,7 +813,6 @@ public abstract class GraalCompilerTest extends GraalTest {
         return parse1(m, getCustomGraphBuilderSuite(GraphBuilderConfiguration.getFullDebugDefault(getDefaultGraphBuilderPlugins())), allowAssumptions);
     }
 
-    @SuppressWarnings("try")
     private StructuredGraph parse1(ResolvedJavaMethod javaMethod, PhaseSuite<HighTierContext> graphBuilderSuite, AllowAssumptions allowAssumptions) {
         assert javaMethod.getAnnotation(Test.class) == null : "shouldn't parse method with @Test annotation: " + javaMethod;
         try (Scope ds = Debug.scope("Parsing", javaMethod)) {
