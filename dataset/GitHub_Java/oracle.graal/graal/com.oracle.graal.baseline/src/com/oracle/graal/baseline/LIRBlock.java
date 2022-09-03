@@ -24,7 +24,7 @@ package com.oracle.graal.baseline;
 
 import java.util.*;
 
-import com.oracle.graal.cfg.*;
+import com.oracle.graal.nodes.cfg.*;
 
 public class LIRBlock extends AbstractBlockBase<LIRBlock> {
 
@@ -34,7 +34,7 @@ public class LIRBlock extends AbstractBlockBase<LIRBlock> {
         successors = Collections.emptyList();
     }
 
-    public Loop<LIRBlock> getLoop() {
+    public Loop getLoop() {
         // TODO Auto-generated method stub
         return null;
     }
