@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.graalvm.compiler.debug.CSVUtil;
 import org.graalvm.compiler.debug.GraalError;
@@ -43,7 +44,6 @@ import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.debug.internal.method.MethodMetricsImpl;
 import org.graalvm.compiler.debug.internal.method.MethodMetricsPrinter;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.util.CollectionsUtil;
 
 /**
  * Facility for printing the {@linkplain KeyRegistry#getDebugValues() values} collected across all
@@ -77,7 +77,7 @@ public class DebugValuesPrinter {
                     summary = "Complete";
                 }
                 if (DebugValueThreadFilter.getValue(options) != null && topLevelMaps.size() != 0) {
-                    topLevelMaps = CollectionsUtil.filterToList(topLevelMaps, map -> Pattern.compile(DebugValueThreadFilter.getValue(options)).matcher(map.getName()).find());
+                    topLevelMaps = topLevelMaps.stream().filter(map -> Pattern.compile(DebugValueThreadFilter.getValue(options)).matcher(map.getName()).find()).collect(Collectors.toList());
                     if (topLevelMaps.size() == 0) {
                         TTY.println("Warning: DebugValueThreadFilter=%s eliminated all maps so nothing will be printed", DebugValueThreadFilter.getValue(options));
                     }
