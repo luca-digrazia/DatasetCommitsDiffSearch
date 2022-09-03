@@ -51,6 +51,9 @@ public final class GraalOptions {
     @Option(help = "Maximum level of recursive inlining.", type = OptionType.Expert)
     public static final OptionValue<Integer> MaximumRecursiveInlining = new OptionValue<>(5);
 
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> IterativeInlining = new OptionValue<>(false);
+
     @Option(help = "Graphs with less than this number of nodes are trivial and therefore always inlined.", type = OptionType.Expert)
     public static final OptionValue<Integer> TrivialInliningSize = new OptionValue<>(10);
 
@@ -91,6 +94,9 @@ public final class GraalOptions {
     @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Integer> DeoptsToDisableOptimisticOptimization = new OptionValue<>(40);
 
+    @Option(help = "", type = OptionType.Expert)
+    public static final OptionValue<Boolean> CacheGraphs = new OptionValue<>(false);
+
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> LoopPeeling = new OptionValue<>(true);
 
@@ -121,9 +127,6 @@ public final class GraalOptions {
 
     @Option(help = "Stressed the code emitting explicit exception throwing code.", type = OptionType.Debug)
     public static final StableOptionValue<Boolean> StressExplicitExceptionCode = new StableOptionValue<>(false);
-
-    @Option(help = "Stressed the code emitting explicit exception throwing code.", type = OptionType.Debug)
-    public static final StableOptionValue<Boolean> StressInvokeWithExceptionNode = new StableOptionValue<>(false);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> VerifyPhases = new OptionValue<>(false);
@@ -205,7 +208,7 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> HotSpotPrintInlining = new OptionValue<>(false);
 
     // Register allocator debugging
-    @Option(help = "Comma separated list of registers that register allocation is limited to.", type = OptionType.Debug)
+    @Option(help = "Comma separated list of register that the allocation is limited to.", type = OptionType.Debug)
     public static final OptionValue<String> RegisterPressure = new OptionValue<>(null);
 
     @Option(help = "", type = OptionType.Debug)
@@ -293,6 +296,9 @@ public final class GraalOptions {
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptFloatingReads = new OptionValue<>(true);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> OptTailDuplication = new OptionValue<>(false);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptEliminatePartiallyRedundantGuards = new OptionValue<>(true);
