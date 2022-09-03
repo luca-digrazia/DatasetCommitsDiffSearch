@@ -231,11 +231,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     @Override
-    public void reprofile() {
-        HotSpotGraalRuntime.getInstance().getCompilerToVM().reprofile(metaspaceMethod);
-    }
-
-    @Override
     public Map<Object, Object> getCompilerStorage() {
         if (compilerStorage == null) {
             compilerStorage = new ConcurrentHashMap<>();

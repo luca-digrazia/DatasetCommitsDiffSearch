@@ -55,8 +55,6 @@ public interface HotSpotMethodDataAccessor {
 
     JavaTypeProfile getTypeProfile(HotSpotMethodData data, int position);
 
-    JavaMethodProfile getMethodProfile(HotSpotMethodData data, int position);
-
     double getBranchTakenProbability(HotSpotMethodData data, int position);
 
     double[] getSwitchProbabilities(HotSpotMethodData data, int position);
