@@ -502,14 +502,13 @@ final class InstrumentationHandler {
 
         @Override
         boolean shouldVisit() {
-            final RootNode localRoot = root;
-            if (localRoot == null) {
+            if (root == null) {
                 return false;
             }
-            SourceSection sourceSection = localRoot.getSourceSection();
+            SourceSection sourceSection = root.getSourceSection();
             for (int i = 0; i < bindings.size(); i++) {
                 EventBinding<?> binding = bindings.get(i);
-                if (binding.isInstrumentedRoot(providedTags, localRoot, sourceSection)) {
+                if (binding.isInstrumentedRoot(providedTags, root, sourceSection)) {
                     return true;
                 }
             }
