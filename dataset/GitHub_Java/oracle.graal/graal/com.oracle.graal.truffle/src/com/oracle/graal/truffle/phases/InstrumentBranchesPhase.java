@@ -137,13 +137,12 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
         public synchronized Point getOrCreatePoint(IfNode n) {
             String key = encode(n);
-            if (key == null) {
+            if (key == null)
                 return null;
-            }
             Point existing = pointMap.get(key);
-            if (existing != null) {
+            if (existing != null)
                 return existing;
-            } else {
+            else {
                 int index = tableCount++;
                 Point p = new Point(index);
                 pointMap.put(key, p);
@@ -158,15 +157,14 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
             BOTH;
 
             public static BranchState from(boolean ifVisited, boolean elseVisited) {
-                if (ifVisited && elseVisited) {
+                if (ifVisited && elseVisited)
                     return BOTH;
-                } else if (ifVisited && !elseVisited) {
+                else if (ifVisited && !elseVisited)
                     return IF;
-                } else if (!ifVisited && elseVisited) {
+                else if (!ifVisited && elseVisited)
                     return ELSE;
-                } else {
+                else
                     return NONE;
-                }
             }
         }
 
@@ -186,9 +184,8 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
             public int getRawIndex(boolean isTrue) {
                 int rawIndex = index * 2;
-                if (!isTrue) {
+                if (!isTrue)
                     rawIndex += 1;
-                }
                 return rawIndex;
             }
 
