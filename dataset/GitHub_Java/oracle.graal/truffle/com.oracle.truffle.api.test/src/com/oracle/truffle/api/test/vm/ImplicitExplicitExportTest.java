@@ -163,8 +163,7 @@ public class ImplicitExplicitExportTest {
         }
 
         private Object importExport(Source code) {
-            final Node node = createFindContextNode();
-            Ctx ctx = findContext(node, null);
+            Ctx ctx = findContext();
             Properties p = new Properties();
             try (Reader r = code.getReader()) {
                 p.load(r);

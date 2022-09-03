@@ -179,7 +179,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         adoptHelper();
     }
 
-    void adoptHelper(final Node newChild) {
+    private void adoptHelper(final Node newChild) {
         assert newChild != null;
         if (newChild == this) {
             throw new IllegalStateException("The parent of a node can never be the node itself.");
@@ -280,7 +280,9 @@ public abstract class Node implements NodeInterface, Cloneable {
         // (aw) need to set parent *before* replace, so that (unsynchronized) getRootNode()
         // will always find the root node
         newNode.parent = this.parent;
-        if (!NodeUtil.replaceChild(this.parent, this, newNode, true)) {
+        if (NodeUtil.replaceChild(this.parent, this, newNode)) {
+            this.parent.adoptHelper(newNode);
+        } else {
             this.parent.adoptUnadoptedHelper(newNode);
         }
         reportReplace(this, newNode, reason);

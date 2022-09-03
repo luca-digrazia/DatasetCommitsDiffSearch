@@ -35,96 +35,45 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.*;
 
 public final class SymbolInvokerImpl extends SymbolInvoker {
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    static final FrameDescriptor UNUSED_FRAMEDESCRIPTOR = new FrameDescriptor();
+
+    @SuppressWarnings("unchecked")
     @Override
-    protected CallTarget createCallTarget(TruffleLanguage<?> lang, Object symbol, Object... arr) throws IOException {
-        Class<? extends TruffleLanguage<?>> type;
-        if (lang != null) {
-            type = (Class) lang.getClass();
-        } else {
-            type = (Class) TruffleLanguage.class;
+    protected Object invoke(TruffleLanguage<?> lang, Object symbol, Object... arr) throws IOException {
+        if (symbol instanceof String) {
+            return symbol;
         }
-        RootNode symbolNode;
-        if ((symbol instanceof String) || (symbol instanceof Number) || (symbol instanceof Boolean) || (symbol instanceof Character)) {
-            symbolNode = new ConstantRootNode(type, symbol);
-        } else {
-            Node executeMain = Message.createExecute(arr.length).createNode();
-            symbolNode = new TemporaryRoot(type, executeMain, (TruffleObject) symbol, arr.length);
+        if (symbol instanceof Number) {
+            return symbol;
         }
-        return Truffle.getRuntime().createCallTarget(symbolNode);
-    }
-
-    private final class ConstantRootNode extends RootNode {
-
-        private final Object value;
-
-        public ConstantRootNode(Class<? extends TruffleLanguage<?>> lang, Object value) {
-            super(lang, null, null);
-            this.value = value;
+        if (symbol instanceof Boolean) {
+            return symbol;
         }
-
-        @Override
-        public Object execute(VirtualFrame vf) {
-            return value;
-        }
-    }
-
-    private static class TemporaryRoot extends RootNode {
-        @Child private Node foreignAccess;
-        @Child private ConvertNode convert;
-        private final int argumentLength;
-        private final TruffleObject function;
-
-        public TemporaryRoot(Class<? extends TruffleLanguage<?>> lang, Node foreignAccess, TruffleObject function, int argumentLength) {
-            super(lang, null, null);
-            this.foreignAccess = foreignAccess;
-            this.convert = new ConvertNode();
-            this.function = function;
-            this.argumentLength = argumentLength;
-        }
-
-        @Override
-        public Object execute(VirtualFrame frame) {
-            final Object[] args = frame.getArguments();
-            if (args.length != argumentLength) {
-                throw new ArgumentsMishmashException();
-            }
-            Object tmp = ForeignAccess.execute(foreignAccess, frame, function, args);
-            return convert.convert(frame, tmp);
-        }
-    }
-
-    private static final class ConvertNode extends Node {
-        @Child private Node isNull;
-        @Child private Node isBoxed;
-        @Child private Node unbox;
-
-        public ConvertNode() {
-            this.isNull = Message.IS_NULL.createNode();
-            this.isBoxed = Message.IS_BOXED.createNode();
-            this.unbox = Message.UNBOX.createNode();
-        }
-
-        Object convert(VirtualFrame frame, Object obj) {
-            if (obj instanceof TruffleObject) {
-                return convert(frame, (TruffleObject) obj);
-            } else {
-                return obj;
-            }
-        }
-
-        private Object convert(VirtualFrame frame, TruffleObject obj) {
+        Class<? extends TruffleLanguage<?>> type = (Class<? extends TruffleLanguage<?>>) lang.getClass();
+        Node executeMain = Message.createExecute(arr.length).createNode();
+        CallTarget callTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(type, executeMain, (TruffleObject) symbol, arr));
+        VirtualFrame frame = Truffle.getRuntime().createVirtualFrame(arr, UNUSED_FRAMEDESCRIPTOR);
+        Object ret = callTarget.call(frame);
+        if (ret instanceof TruffleObject) {
+            TruffleObject tret = (TruffleObject) ret;
             Object isBoxedResult;
             try {
-                isBoxedResult = ForeignAccess.execute(isBoxed, frame, obj);
+                Node isBoxed = Message.IS_BOXED.createNode();
+                CallTarget isBoxedTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(type, isBoxed, tret));
+                isBoxedResult = isBoxedTarget.call(frame);
             } catch (IllegalArgumentException ex) {
                 isBoxedResult = false;
             }
             if (Boolean.TRUE.equals(isBoxedResult)) {
-                return ForeignAccess.execute(unbox, frame, obj);
+                Node unbox = Message.UNBOX.createNode();
+                CallTarget unboxTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(type, unbox, tret));
+                Object unboxResult = unboxTarget.call(frame);
+                return unboxResult;
             } else {
                 try {
-                    Object isNullResult = ForeignAccess.execute(isNull, frame, obj);
+                    Node isNull = Message.IS_NULL.createNode();
+                    CallTarget isNullTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(type, isNull, tret));
+                    Object isNullResult = isNullTarget.call(frame);
                     if (Boolean.TRUE.equals(isNullResult)) {
                         return null;
                     }
@@ -132,7 +81,26 @@ public final class SymbolInvokerImpl extends SymbolInvoker {
                     // fallthrough
                 }
             }
-            return obj;
+        }
+        return ret;
+    }
+
+    private static class TemporaryRoot extends RootNode {
+        @Child private Node foreignAccess;
+        private final TruffleObject function;
+        private final Object[] args;
+
+        public TemporaryRoot(Class<? extends TruffleLanguage<?>> lang, Node foreignAccess, TruffleObject function, Object... args) {
+            super(lang, null, null);
+            this.foreignAccess = foreignAccess;
+            this.function = function;
+            this.args = args;
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            return ForeignAccess.execute(foreignAccess, frame, function, args);
         }
     }
+
 }

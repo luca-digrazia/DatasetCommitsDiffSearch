@@ -117,8 +117,8 @@ public final class Debugger {
             }
         };
 
-        this.lineBreaks = new LineBreakpointFactory(this, breakpointCallback, warningLog);
-        this.tagBreaks = new TagBreakpointFactory(this, breakpointCallback, warningLog);
+        this.lineBreaks = new LineBreakpointFactory(breakpointCallback, warningLog);
+        this.tagBreaks = new TagBreakpointFactory(breakpointCallback, warningLog);
     }
 
     TruffleVM vm() {
@@ -267,11 +267,17 @@ public final class Debugger {
      *             formed.
      */
     @SuppressWarnings("rawtypes")
-    AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(Probe probe, String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
+    static AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(Probe probe, String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
         try {
             Class<? extends TruffleLanguage> langugageClass = ACCESSOR.findLanguage(probe);
-            TruffleLanguage.Env env = ACCESSOR.findLanguage(vm, langugageClass);
-            TruffleLanguage<?> l = ACCESSOR.findLanguage(env);
+            TruffleLanguage<?> l;
+            try {
+                l = langugageClass.newInstance();
+            } catch (InstantiationException ex) {
+                throw new IllegalStateException(ex);
+            } catch (IllegalAccessException ex) {
+                throw new IllegalStateException(ex);
+            }
             DebugSupportProvider dsp = ACCESSOR.getDebugSupport(l);
             return dsp.createAdvancedInstrumentRootFactory(expr, resultListener);
         } catch (DebugSupportException ex) {
@@ -818,11 +824,6 @@ public final class Debugger {
         @Override
         protected TruffleLanguage.Env findLanguage(TruffleVM vm, Class<? extends TruffleLanguage> languageClass) {
             return super.findLanguage(vm, languageClass);
-        }
-
-        @Override
-        protected TruffleLanguage<?> findLanguage(TruffleLanguage.Env env) {
-            return super.findLanguage(env);
         }
 
         @Override

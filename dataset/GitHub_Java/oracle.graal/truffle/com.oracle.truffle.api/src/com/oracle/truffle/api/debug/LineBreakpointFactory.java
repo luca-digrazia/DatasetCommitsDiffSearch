@@ -111,10 +111,8 @@ final class LineBreakpointFactory {
      */
     @CompilationFinal private boolean breakpointsActive = true;
     private final CyclicAssumption breakpointsActiveUnchanged = new CyclicAssumption(BREAKPOINT_NAME + " globally active");
-    private final Debugger debugger;
 
-    LineBreakpointFactory(Debugger debugger, BreakpointCallback breakpointCallback, final WarningLog warningLog) {
-        this.debugger = debugger;
+    LineBreakpointFactory(BreakpointCallback breakpointCallback, final WarningLog warningLog) {
         this.breakpointCallback = breakpointCallback;
         this.warningLog = warningLog;
 
@@ -365,7 +363,7 @@ final class LineBreakpointFactory {
             if (conditionExpr == null) {
                 newInstrument = Instrument.create(new UnconditionalLineBreakInstrumentListener(), BREAKPOINT_NAME);
             } else {
-                newInstrument = Instrument.create(this, debugger.createAdvancedInstrumentRootFactory(newProbe, conditionExpr, this), Boolean.class, BREAKPOINT_NAME);
+                newInstrument = Instrument.create(this, Debugger.createAdvancedInstrumentRootFactory(newProbe, conditionExpr, this), Boolean.class, BREAKPOINT_NAME);
             }
             newProbe.attach(newInstrument);
             instruments.add(newInstrument);

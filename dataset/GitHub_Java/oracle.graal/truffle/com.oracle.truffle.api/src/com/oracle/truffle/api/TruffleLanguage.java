@@ -28,7 +28,6 @@ import java.io.*;
 import java.lang.annotation.*;
 
 import com.oracle.truffle.api.debug.*;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.Node;
@@ -175,17 +174,19 @@ public abstract class TruffleLanguage<C> {
     protected abstract DebugSupportProvider getDebugSupport();
 
     /**
+     * Finds the currently executing context for this language and current thread. Obtains data
+     * previously created by {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env)}
+     * method.
+     *
+     * @return the context associated with current execution
+     * @throws IllegalStateException if no context is associated with the execution
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
-    protected final Node createFindContextNode() {
-        final Class<? extends TruffleLanguage<?>> c = (Class<? extends TruffleLanguage<?>>) getClass();
-        return new FindContextNode(c);
-    }
-    
-    public final C findContext(Node n, VirtualFrame frame) {
-        FindContextNode fcn = (FindContextNode) n;
-        assert fcn.type() == getClass();
-        return (C) fcn.executeFindContext(frame);
+    protected final C findContext() {
+        final Class<? extends TruffleLanguage> c = getClass();
+        final Env env = API.findLanguage(null, c);
+        assert env.langCtx.lang == this;
+        return (C) env.langCtx.ctx;
     }
 
     private static final class LangCtx<C> {
@@ -315,11 +316,6 @@ public abstract class TruffleLanguage<C> {
         @Override
         protected Object languageGlobal(TruffleLanguage.Env env) {
             return env.langCtx.getLanguageGlobal();
-        }
-
-        @Override
-        protected Object findContext(Env env) {
-            return env.langCtx.ctx;
         }
 
         @Override

@@ -41,7 +41,6 @@
 package com.oracle.truffle.sl.nodes.expression;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
@@ -58,27 +57,14 @@ import com.oracle.truffle.sl.runtime.*;
 @NodeInfo(shortName = "func")
 public final class SLFunctionLiteralNode extends SLExpressionNode {
     private final String value;
-    private final Node contextNode;
-    @CompilationFinal private SLFunction cachedFunction;
-    @CompilationFinal private SLContext cachedContext;
-
-    
 
     public SLFunctionLiteralNode(SourceSection src, String value) {
         super(src);
         this.value = value;
-        contextNode = SLLanguage.INSTANCE.createFindContextNode0();
-        adoptChildren();
     }
 
     @Override
     public SLFunction executeGeneric(VirtualFrame frame) {
-        SLContext context = SLLanguage.INSTANCE.findContext(contextNode, frame);
-        if (context != cachedContext) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.cachedContext = context;
-            this.cachedFunction = context.getFunctionRegistry().lookup(value);
-        }
-        return cachedFunction;
+        return SLLanguage.INSTANCE.getContext().getFunctionRegistry().lookup(value);
     }
 }
