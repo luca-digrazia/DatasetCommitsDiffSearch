@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,299 +22,325 @@
  */
 package com.oracle.graal.asm.sparc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.sparc.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.NOT_ANNUL;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_NOT_TAKEN;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Icc;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Xcc;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Always;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Equal;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.RCondition.Rc_z;
+import static jdk.vm.ci.sparc.SPARC.g0;
+import static jdk.vm.ci.sparc.SPARC.g3;
+import static jdk.vm.ci.sparc.SPARC.i7;
+import static jdk.vm.ci.sparc.SPARC.o7;
+
+import com.oracle.graal.asm.AbstractAddress;
+import com.oracle.graal.asm.Label;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.sparc.SPARC.CPUFeature;
 
 public class SPARCMacroAssembler extends SPARCAssembler {
 
-    public SPARCMacroAssembler(TargetDescription target, RegisterConfig registerConfig) {
-        super(target, registerConfig);
+    /**
+     * A sentinel value used as a place holder in an instruction stream for an address that will be
+     * patched.
+     */
+    private static final SPARCAddress Placeholder = new SPARCAddress(g0, 0);
+    private final ScratchRegister[] scratchRegister = new ScratchRegister[]{new ScratchRegister(g3), new ScratchRegister(o7)};
+    // Points to the next free scratch register
+    private int nextFreeScratchRegister = 0;
+    /**
+     * Use ld [reg+simm13], reg for loading constants (User has to make sure, that the size of the
+     * constant table does not exceed simm13).
+     */
+    private boolean immediateConstantLoad;
+
+    public SPARCMacroAssembler(TargetDescription target) {
+        super(target);
     }
 
-    @SuppressWarnings("unused")
-    public static class Bclr {
-
-        public Bclr(SPARCAssembler asm, Register src, Register dst) {
-            new Andn(asm, dst, src, dst);
-        }
-
-        public Bclr(SPARCAssembler asm, int simm13, Register dst) {
-            new Andn(asm, dst, simm13, dst);
-        }
+    /**
+     * @see #immediateConstantLoad
+     */
+    public void setImmediateConstantLoad(boolean immediateConstantLoad) {
+        this.immediateConstantLoad = immediateConstantLoad;
     }
 
-    @SuppressWarnings("unused")
-    public static class Bset {
-
-        public Bset(SPARCAssembler asm, Register src, Register dst) {
-            new Or(asm, dst, src, dst);
-        }
-
-        public Bset(SPARCAssembler asm, int simm13, Register dst) {
-            new Or(asm, dst, simm13, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Btog {
-
-        public Btog(SPARCAssembler asm, Register src, Register dst) {
-            new Xor(asm, dst, src, dst);
-        }
-
-        public Btog(SPARCAssembler asm, int simm13, Register dst) {
-            new Xor(asm, dst, simm13, dst);
+    @Override
+    public void align(int modulus) {
+        while (position() % modulus != 0) {
+            nop();
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Btst {
+    @Override
+    public void jmp(Label l) {
+        BPCC.emit(this, Xcc, Always, NOT_ANNUL, PREDICT_NOT_TAKEN, l);
+        nop();  // delay slot
+    }
 
-        public Btst(SPARCAssembler asm, Register src1, Register src2) {
-            new Andcc(asm, src1, src2, SPARC.g0);
-        }
+    @Override
+    protected final void patchJumpTarget(int branch, int branchTarget) {
+        final int disp = (branchTarget - branch) / 4;
+        final int inst = getInt(branch);
+        ControlTransferOp op = (ControlTransferOp) getSPARCOp(inst);
+        int newInst = op.setDisp(inst, disp);
+        emitInt(newInst, branch);
+    }
 
-        public Btst(SPARCAssembler asm, Register src1, int simm13) {
-            new Andcc(asm, src1, simm13, SPARC.g0);
+    @Override
+    public AbstractAddress makeAddress(Register base, int displacement) {
+        return new SPARCAddress(base, displacement);
+    }
+
+    @Override
+    public AbstractAddress getPlaceholder(int instructionStartPosition) {
+        return Placeholder;
+    }
+
+    @Override
+    public final void ensureUniquePC() {
+        nop();
+    }
+
+    public void cas(Register rs1, Register rs2, Register rd) {
+        casa(rs1, rs2, rd, Asi.ASI_PRIMARY);
+    }
+
+    public void casx(Register rs1, Register rs2, Register rd) {
+        casxa(rs1, rs2, rd, Asi.ASI_PRIMARY);
+    }
+
+    public void clr(Register dst) {
+        or(g0, g0, dst);
+    }
+
+    public void clrb(SPARCAddress addr) {
+        stb(g0, addr);
+    }
+
+    public void clrh(SPARCAddress addr) {
+        sth(g0, addr);
+    }
+
+    public void clrx(SPARCAddress addr) {
+        stx(g0, addr);
+    }
+
+    public void cmp(Register rs1, Register rs2) {
+        subcc(rs1, rs2, g0);
+    }
+
+    public void cmp(Register rs1, int simm13) {
+        subcc(rs1, simm13, g0);
+    }
+
+    public void dec(Register rd) {
+        sub(rd, 1, rd);
+    }
+
+    public void dec(int simm13, Register rd) {
+        sub(rd, simm13, rd);
+    }
+
+    public void jmp(SPARCAddress address) {
+        jmpl(address.getBase(), address.getDisplacement(), g0);
+    }
+
+    public void jmp(Register rd) {
+        jmpl(rd, 0, g0);
+    }
+
+    public void neg(Register rs1, Register rd) {
+        sub(g0, rs1, rd);
+    }
+
+    public void neg(Register rd) {
+        sub(g0, rd, rd);
+    }
+
+    public void mov(Register rs, Register rd) {
+        or(g0, rs, rd);
+    }
+
+    public void mov(int simm13, Register rd) {
+        or(g0, simm13, rd);
+    }
+
+    public void not(Register rs1, Register rd) {
+        xnor(rs1, g0, rd);
+    }
+
+    public void not(Register rd) {
+        xnor(rd, g0, rd);
+    }
+
+    public void restoreWindow() {
+        restore(g0, g0, g0);
+    }
+
+    public void ret() {
+        jmpl(i7, 8, g0);
+    }
+
+    /**
+     * Generates sethi hi22(value), dst; or dst, lo10(value), dst; code.
+     */
+    public void setw(int value, Register dst, boolean forceRelocatable) {
+        if (!forceRelocatable && isSimm13(value)) {
+            or(g0, value, dst);
+        } else {
+            sethi(hi22(value), dst);
+            or(dst, lo10(value), dst);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Clr {
-
-        public Clr(SPARCAssembler asm, Register dst) {
-            new Or(asm, SPARC.g0, SPARC.g0, dst);
-        }
-
-        public Clr(SPARCAssembler asm, SPARCAddress addr) {
-            new Stw(asm, SPARC.g0, addr);
+    public void setx(long value, Register dst, boolean forceRelocatable) {
+        int lo = (int) (value & ~0);
+        sethix(value, dst, forceRelocatable);
+        if (lo10(lo) != 0 || forceRelocatable) {
+            add(dst, lo10(lo), dst);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Clrb {
+    public void sethix(long value, Register dst, boolean forceRelocatable) {
+        final int hi = (int) (value >> 32);
+        final int lo = (int) (value & ~0);
 
-        public Clrb(SPARCAssembler asm, SPARCAddress addr) {
-            new Stb(asm, SPARC.g0, addr);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Clrh {
-
-        public Clrh(SPARCAssembler asm, SPARCAddress addr) {
-            new Sth(asm, SPARC.g0, addr);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Clrx {
-
-        public Clrx(SPARCAssembler asm, SPARCAddress addr) {
-            new Stx(asm, SPARC.g0, addr);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Clruw {
-
-        public Clruw(SPARCAssembler asm, Register src1, Register dst) {
-            assert src1.encoding() != dst.encoding();
-            new Srl(asm, src1, SPARC.g0, dst);
-        }
-
-        public Clruw(SPARCAssembler asm, Register dst) {
-            new Srl(asm, dst, SPARC.g0, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Cmp {
-
-        public Cmp(SPARCAssembler asm, Register a, Register b) {
-            new Subcc(asm, a, b, SPARC.g0);
-        }
-
-        public Cmp(SPARCAssembler asm, Register a, int simm13) {
-            new Subcc(asm, a, simm13, SPARC.g0);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Dec {
-
-        public Dec(SPARCAssembler asm, Register dst) {
-            new Sub(asm, dst, 1, dst);
-        }
-
-        public Dec(SPARCAssembler asm, int simm13, Register dst) {
-            new Sub(asm, dst, simm13, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Deccc {
-
-        public Deccc(SPARCAssembler asm, Register dst) {
-            new Subcc(asm, dst, 1, dst);
-        }
-
-        public Deccc(SPARCAssembler asm, int simm13, Register dst) {
-            new Subcc(asm, dst, simm13, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Inc {
-
-        public Inc(SPARCAssembler asm, Register dst) {
-            new Add(asm, dst, 1, dst);
-        }
-
-        public Inc(SPARCAssembler asm, int simm13, Register dst) {
-            new Add(asm, dst, simm13, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Inccc {
-
-        public Inccc(SPARCAssembler asm, Register dst) {
-            new Addcc(asm, dst, 1, dst);
-        }
-
-        public Inccc(SPARCAssembler asm, int simm13, Register dst) {
-            new Addcc(asm, dst, simm13, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Jmp {
-
-        public Jmp(SPARCAssembler asm, SPARCAddress address) {
-            new Jmpl(asm, address, SPARC.g0);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Neg {
-
-        public Neg(SPARCAssembler asm, Register src2, Register dst) {
-            assert src2.encoding() != dst.encoding();
-            new Sub(asm, SPARC.g0, src2, dst);
-        }
-
-        public Neg(SPARCAssembler asm, Register dst) {
-            new Sub(asm, SPARC.g0, dst, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Not {
-
-        public Not(SPARCAssembler asm, Register src1, Register dst) {
-            assert src1.encoding() != dst.encoding();
-            new Xnor(asm, src1, SPARC.g0, dst);
-        }
-
-        public Not(SPARCAssembler asm, Register dst) {
-            new Xnor(asm, dst, SPARC.g0, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class RestoreWindow {
-
-        public RestoreWindow(SPARCAssembler asm) {
-            new Restore(asm, SPARC.g0, SPARC.g0, SPARC.g0);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Ret {
-
-        public Ret(SPARCAssembler asm) {
-            new Jmpl(asm, new SPARCAddress(SPARC.i0, 8), SPARC.g0);
-
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class SaveWindow {
-
-        public SaveWindow(SPARCAssembler asm) {
-            new Save(asm, SPARC.g0, SPARC.g0, SPARC.g0);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Setuw {
-
-        public Setuw(SPARCAssembler asm, int value, Register dst) {
-            if (value >= 0 && ((value & 0x3FFF) == 0)) {
-                new Sethi(asm, hi22(value), dst);
-            } else if (-4095 <= value && value <= 4096) {
-                new Or(asm, SPARC.g0, value, dst);
-            } else {
-                new Sethi(asm, hi22(value), dst);
-                new Or(asm, dst, lo10(value), dst);
+        // This is the same logic as MacroAssembler::internal_set.
+        final int startPc = position();
+        if (hi == 0 && lo >= 0) {
+            sethi(hi22(lo), dst);
+        } else if (hi == -1) {
+            sethi(hi22(~lo), dst);
+            xor(dst, ~lo10(~0), dst);
+        } else {
+            final int shiftcnt;
+            final int shiftcnt2;
+            sethi(hi22(hi), dst);
+            if ((hi & 0x3ff) != 0) {                                  // Any bits?
+                // msb 32-bits are now in lsb 32
+                or(dst, hi & 0x3ff, dst);
             }
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Setx {
-
-        public Setx(SPARCAssembler asm, long value, Register tmp, Register dst) {
-            int hi = (int) (value >> 32);
-            int lo = (int) (value & ~0);
-
-            if (isSimm13(lo) && value == lo) {
-                new Or(asm, SPARC.g0, lo, dst);
-            } else if (hi == 0) {
-                new Sethi(asm, lo, dst);   // hardware version zero-extends to upper 32
-                if (lo10(lo) != 0) {
-                    new Or(asm, dst, lo10(lo), dst);
-                }
-            } else if (hi == -1) {
-                new Sethi(asm, ~lo, dst);  // hardware version zero-extends to upper 32
-                new Xor(asm, dst, lo10(lo) ^ ~lo10(~0), dst);
-            } else if (lo == 0) {
-                if (isSimm13(hi)) {
-                    new Or(asm, SPARC.g0, hi, dst);
+            if ((lo & 0xFFFFFC00) != 0) {                             // done?
+                if (((lo >> 20) & 0xfff) != 0) {                      // Any bits set?
+                    // Make room for next 12 bits
+                    sllx(dst, 12, dst);
+                    // Or in next 12
+                    or(dst, (lo >> 20) & 0xfff, dst);
+                    shiftcnt = 0;                                     // We already shifted
                 } else {
-                    new Sethi(asm, hi, dst);   // hardware version zero-extends to upper 32
-                    if (lo10(hi) != 0) {
-                        new Or(asm, dst, lo10(hi), dst);
-                    }
+                    shiftcnt = 12;
                 }
-                new Sllx(asm, dst, 32, dst);
+                if (((lo >> 10) & 0x3ff) != 0) {
+                    // Make room for last 10 bits
+                    sllx(dst, shiftcnt + 10, dst);
+                    // Or in next 10
+                    or(dst, (lo >> 10) & 0x3ff, dst);
+                    shiftcnt2 = 0;
+                } else {
+                    shiftcnt2 = 10;
+                }
+                // Shift leaving disp field 0'd
+                sllx(dst, shiftcnt2 + 10, dst);
             } else {
-                new Sethi(asm, hi, tmp);
-                new Sethi(asm, lo, dst); // macro assembler version sign-extends
-                if (lo10(hi) != 0) {
-                    new Or(asm, tmp, lo10(hi), tmp);
-                }
-                if (lo10(lo) != 0) {
-                    new Or(asm, dst, lo10(lo), dst);
-                }
-                new Sllx(asm, tmp, 32, tmp);
-                new Or(asm, dst, tmp, dst);
+                sllx(dst, 32, dst);
+            }
+        }
+        // Pad out the instruction sequence so it can be patched later.
+        if (forceRelocatable) {
+            while (position() < (startPc + (INSTRUCTION_SIZE * 7))) {
+                nop();
             }
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Signx {
+    public void signx(Register rs, Register rd) {
+        sra(rs, g0, rd);
+    }
 
-        public Signx(SPARCAssembler asm, Register src1, Register dst) {
-            assert src1.encoding() != dst.encoding();
-            new Sra(asm, src1, SPARC.g0, dst);
+    public void signx(Register rd) {
+        sra(rd, g0, rd);
+    }
+
+    public boolean isImmediateConstantLoad() {
+        return immediateConstantLoad;
+    }
+
+    public ScratchRegister getScratchRegister() {
+        return scratchRegister[nextFreeScratchRegister++];
+    }
+
+    public class ScratchRegister implements AutoCloseable {
+        private final Register register;
+
+        public ScratchRegister(Register register) {
+            super();
+            this.register = register;
         }
 
-        public Signx(SPARCAssembler asm, Register dst) {
-            new Sra(asm, dst, SPARC.g0, dst);
+        public Register getRegister() {
+            return register;
+        }
+
+        @Override
+        public void close() {
+            assert nextFreeScratchRegister > 0 : "Close called too often";
+            nextFreeScratchRegister--;
         }
     }
 
+    public void compareBranch(Register rs1, Register rs2, ConditionFlag cond, CC ccRegister, Label label, BranchPredict predict, Runnable delaySlotInstruction) {
+        assert isCPURegister(rs1, rs2);
+        assert ccRegister == Icc || ccRegister == Xcc;
+        if (hasFeature(CPUFeature.CBCOND)) {
+            if (delaySlotInstruction != null) {
+                delaySlotInstruction.run();
+            }
+            CBCOND.emit(this, cond, ccRegister == Xcc, rs1, rs2, label);
+        } else {
+            if (cond == Equal && rs1.equals(g0)) {
+                BPR.emit(this, Rc_z, NOT_ANNUL, predict, rs1, label);
+            } else {
+                cmp(rs1, rs2);
+                BPCC.emit(this, ccRegister, cond, NOT_ANNUL, predict, label);
+            }
+            if (delaySlotInstruction != null) {
+                int positionBefore = position();
+                delaySlotInstruction.run();
+                int positionAfter = position();
+                assert positionBefore - positionAfter > INSTRUCTION_SIZE : "Emitted more than one instruction into delay slot";
+            } else {
+                nop();
+            }
+        }
+    }
+
+    public void compareBranch(Register rs1, int simm, ConditionFlag cond, CC ccRegister, Label label, BranchPredict predict, Runnable delaySlotInstruction) {
+        assert isCPURegister(rs1);
+        assert ccRegister == Icc || ccRegister == Xcc;
+        if (hasFeature(CPUFeature.CBCOND)) {
+            if (delaySlotInstruction != null) {
+                delaySlotInstruction.run();
+            }
+            CBCOND.emit(this, cond, ccRegister == Xcc, rs1, simm, label);
+        } else {
+            if (cond == Equal && simm == 0) {
+                BPR.emit(this, Rc_z, NOT_ANNUL, PREDICT_NOT_TAKEN, rs1, label);
+            } else {
+                cmp(rs1, simm);
+                BPCC.emit(this, ccRegister, cond, NOT_ANNUL, predict, label);
+            }
+            if (delaySlotInstruction != null) {
+                int positionBefore = position();
+                delaySlotInstruction.run();
+                int positionAfter = position();
+                assert positionBefore - positionAfter > INSTRUCTION_SIZE : "Emitted more than one instruction into delay slot";
+            } else {
+                nop();
+            }
+        }
+    }
 }

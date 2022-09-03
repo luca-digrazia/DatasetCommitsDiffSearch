@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,14 +22,16 @@
  */
 package com.oracle.graal.asm.amd64;
 
-import com.oracle.graal.api.code.*;
+import jdk.vm.ci.code.Register;
+
+import com.oracle.graal.asm.AbstractAddress;
 
 /**
  * Represents an address in target machine memory, specified via some combination of a base
  * register, an index register, a displacement and a scale. Note that the base and index registers
  * may be a variable that will get a register assigned later by the register allocator.
  */
-public final class AMD64Address implements AbstractAddress {
+public final class AMD64Address extends AbstractAddress {
 
     private final Register base;
     private final Register index;
@@ -37,8 +39,15 @@ public final class AMD64Address implements AbstractAddress {
     private final int displacement;
 
     /**
+     * The start of the instruction, i.e., the value that is used as the key for looking up
+     * placeholder patching information. Only used for {@link AMD64Assembler#getPlaceholder
+     * placeholder addresses}.
+     */
+    final int instructionStartPosition;
+
+    /**
      * Creates an {@link AMD64Address} with given base register, no scaling and no displacement.
-     * 
+     *
      * @param base the base register
      */
     public AMD64Address(Register base) {
@@ -48,7 +57,7 @@ public final class AMD64Address implements AbstractAddress {
     /**
      * Creates an {@link AMD64Address} with given base register, no scaling and a given
      * displacement.
-     * 
+     *
      * @param base the base register
      * @param displacement the displacement
      */
@@ -59,26 +68,36 @@ public final class AMD64Address implements AbstractAddress {
     /**
      * Creates an {@link AMD64Address} with given base and index registers, scaling and
      * displacement. This is the most general constructor.
-     * 
+     *
      * @param base the base register
      * @param index the index register
      * @param scale the scaling factor
      * @param displacement the displacement
      */
     public AMD64Address(Register base, Register index, Scale scale, int displacement) {
+        this(base, index, scale, displacement, -1);
+    }
+
+    AMD64Address(Register base, Register index, Scale scale, int displacement, int instructionStartPosition) {
         this.base = base;
         this.index = index;
         this.scale = scale;
         this.displacement = displacement;
+        this.instructionStartPosition = instructionStartPosition;
+
+        assert scale != null;
     }
 
     /**
      * A scaling factor used in the SIB addressing mode.
      */
     public enum Scale {
-        Times1(1, 0), Times2(2, 1), Times4(4, 2), Times8(8, 3);
+        Times1(1, 0),
+        Times2(2, 1),
+        Times4(4, 2),
+        Times8(8, 3);
 
-        private Scale(int value, int log2) {
+        Scale(int value, int log2) {
             this.value = value;
             this.log2 = log2;
         }
@@ -104,7 +123,22 @@ public final class AMD64Address implements AbstractAddress {
                 case 8:
                     return Times8;
                 default:
-                    throw new IllegalArgumentException(String.valueOf(scale));
+                    return null;
+            }
+        }
+
+        public static Scale fromShift(int shift) {
+            switch (shift) {
+                case 0:
+                    return Times1;
+                case 1:
+                    return Times2;
+                case 2:
+                    return Times4;
+                case 3:
+                    return Times8;
+                default:
+                    return null;
             }
         }
     }
@@ -114,11 +148,11 @@ public final class AMD64Address implements AbstractAddress {
         StringBuilder s = new StringBuilder();
         s.append("[");
         String sep = "";
-        if (getBase() != Register.None) {
+        if (!getBase().equals(Register.None)) {
             s.append(getBase());
             sep = " + ";
         }
-        if (getIndex() != Register.None) {
+        if (!getIndex().equals(Register.None)) {
             s.append(sep).append(getIndex()).append(" * ").append(getScale().value);
             sep = " + ";
         }

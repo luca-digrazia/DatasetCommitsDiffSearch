@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,55 @@
  */
 package com.oracle.graal.asm;
 
-import java.nio.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
-import com.oracle.graal.api.code.*;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.TargetDescription;
 
 /**
  * The platform-independent base class for the assembler.
  */
 public abstract class Assembler {
 
+    public abstract static class CodeAnnotation {
+        /**
+         * The position (bytes from the beginning of the method) of the annotated instruction.
+         */
+        public final int instructionPosition;
+
+        protected CodeAnnotation(int instructionStartPosition) {
+            this.instructionPosition = instructionStartPosition;
+        }
+    }
+
     public final TargetDescription target;
+    private List<LabelHint> jumpDisplacementHints;
 
     /**
      * Backing code buffer.
      */
     private final Buffer codeBuffer;
 
+    protected Consumer<CodeAnnotation> codePatchingAnnotationConsumer;
+
     public Assembler(TargetDescription target) {
         this.target = target;
-        if (target.arch.getByteOrder() == ByteOrder.BIG_ENDIAN) {
-            this.codeBuffer = new Buffer.BigEndian();
-        } else {
-            this.codeBuffer = new Buffer.LittleEndian();
-        }
+        this.codeBuffer = new Buffer(target.arch.getByteOrder());
+    }
+
+    public void setCodePatchingAnnotationConsumer(Consumer<CodeAnnotation> codeAnnotationConsumer) {
+        assert this.codePatchingAnnotationConsumer == null : "overwriting existing value";
+        this.codePatchingAnnotationConsumer = codeAnnotationConsumer;
     }
 
     /**
      * Returns the current position of the underlying code buffer.
-     * 
+     *
      * @return current position in code buffer
      */
     public int position() {
@@ -123,7 +143,7 @@ public abstract class Assembler {
 
     /**
      * Closes this assembler. No extra data can be written to this assembler after this call.
-     * 
+     *
      * @param trimmedCopy if {@code true}, then a copy of the underlying byte array up to (but not
      *            including) {@code position()} is returned
      * @return the data in this buffer or a trimmed copy if {@code trimmedCopy} is {@code true}
@@ -148,7 +168,7 @@ public abstract class Assembler {
 
     /**
      * Creates a name for a label.
-     * 
+     *
      * @param l the label for which a name is being created
      * @param id a label identifier that is unique with the scope of this assembler
      * @return a label name in the form of "L123"
@@ -181,6 +201,81 @@ public abstract class Assembler {
 
     /**
      * Returns a target specific placeholder address that can be used for code patching.
+     * 
+     * @param instructionStartPosition The start of the instruction, i.e., the value that is used as
+     *            the key for looking up placeholder patching information.
      */
-    public abstract AbstractAddress getPlaceholder();
+    public abstract AbstractAddress getPlaceholder(int instructionStartPosition);
+
+    /**
+     * Emits a NOP instruction to advance the current PC.
+     */
+    public abstract void ensureUniquePC();
+
+    public void reset() {
+        codeBuffer.reset();
+        captureLabelPositions();
+    }
+
+    private void captureLabelPositions() {
+        if (jumpDisplacementHints == null) {
+            return;
+        }
+        for (LabelHint request : this.jumpDisplacementHints) {
+            request.capture();
+        }
+    }
+
+    public LabelHint requestLabelHint(Label label) {
+        if (jumpDisplacementHints == null) {
+            jumpDisplacementHints = new ArrayList<>();
+        }
+        LabelHint hint = new LabelHint(label, position());
+        this.jumpDisplacementHints.add(hint);
+        return hint;
+    }
+
+    public InstructionCounter getInstructionCounter() {
+        throw new UnsupportedOperationException("Instruction counter is not implemented for " + this);
+    }
+
+    public static class LabelHint {
+        private Label label;
+        private int forPosition;
+        private int capturedTarget = -1;
+
+        protected LabelHint(Label label, int lastPosition) {
+            super();
+            this.label = label;
+            this.forPosition = lastPosition;
+        }
+
+        protected void capture() {
+            this.capturedTarget = label.position();
+        }
+
+        public int getTarget() {
+            assert isValid();
+            return capturedTarget;
+        }
+
+        public int getPosition() {
+            assert isValid();
+            return forPosition;
+        }
+
+        public boolean isValid() {
+            return capturedTarget >= 0;
+        }
+    }
+
+    /**
+     * Instruction counter class which gives the user of the assembler to count different kinds of
+     * instructions in the generated assembler code.
+     */
+    public interface InstructionCounter {
+        String[] getSupportedInstructionTypes();
+
+        int[] countInstructions(String[] instructionTypes, int beginPc, int endPc);
+    }
 }

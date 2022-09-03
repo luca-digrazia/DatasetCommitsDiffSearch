@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,49 @@
  */
 package com.oracle.graal.asm.amd64.test;
 
-import org.junit.*;
+import static org.junit.Assume.assumeTrue;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
-public class SimpleAssemblerTest extends AMD64AssemblerTest {
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.code.site.DataSectionReference;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+
+import org.junit.Before;
+import org.junit.Test;
+
+import com.oracle.graal.asm.amd64.AMD64Assembler;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.asm.test.AssemblerTest;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.code.DataSection.Data;
+import com.oracle.graal.code.DataSection.RawData;
+import com.oracle.graal.code.DataSection.SerializableData;
+
+public class SimpleAssemblerTest extends AssemblerTest {
+
+    @Before
+    public void checkAMD64() {
+        assumeTrue("skipping AMD64 specific test", codeCache.getTarget().arch instanceof AMD64);
+    }
 
     @Test
     public void intTest() {
         CodeGenTest test = new CodeGenTest() {
 
             @Override
-            public void generateCode(CompilationResult compResult, AMD64MacroAssembler asm, RegisterConfig registerConfig) {
-                Register ret = registerConfig.getReturnRegister(Kind.Int);
+            public byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
+                AMD64Assembler asm = new AMD64Assembler(target);
+                Register ret = registerConfig.getReturnRegister(JavaKind.Int);
                 asm.movl(ret, 8472);
                 asm.ret(0);
+                return asm.close(true);
             }
         };
         assertReturn("intStub", test, 8472);
@@ -49,11 +75,37 @@ public class SimpleAssemblerTest extends AMD64AssemblerTest {
         CodeGenTest test = new CodeGenTest() {
 
             @Override
-            public void generateCode(CompilationResult compResult, AMD64MacroAssembler asm, RegisterConfig registerConfig) {
-                Register ret = registerConfig.getReturnRegister(Kind.Double);
-                compResult.recordDataReference(asm.codeBuffer.position(), Constant.forDouble(84.72), 8, false);
-                asm.movdbl(ret, Address.Placeholder);
+            public byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
+                AMD64MacroAssembler asm = new AMD64MacroAssembler(target);
+                Register ret = registerConfig.getReturnRegister(JavaKind.Double);
+                Data data = new SerializableData(JavaConstant.forDouble(84.72), 8);
+                DataSectionReference ref = compResult.getDataSection().insertData(data);
+                compResult.recordDataPatch(asm.position(), ref);
+                asm.movdbl(ret, asm.getPlaceholder(-1));
                 asm.ret(0);
+                return asm.close(true);
+            }
+        };
+        assertReturn("doubleStub", test, 84.72);
+    }
+
+    @Test
+    public void rawDoubleTest() {
+        CodeGenTest test = new CodeGenTest() {
+
+            @Override
+            public byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
+                AMD64MacroAssembler asm = new AMD64MacroAssembler(target);
+                Register ret = registerConfig.getReturnRegister(JavaKind.Double);
+
+                byte[] rawBytes = new byte[8];
+                ByteBuffer.wrap(rawBytes).order(ByteOrder.nativeOrder()).putDouble(84.72);
+                Data data = new RawData(rawBytes, 8);
+                DataSectionReference ref = compResult.getDataSection().insertData(data);
+                compResult.recordDataPatch(asm.position(), ref);
+                asm.movdbl(ret, asm.getPlaceholder(-1));
+                asm.ret(0);
+                return asm.close(true);
             }
         };
         assertReturn("doubleStub", test, 84.72);

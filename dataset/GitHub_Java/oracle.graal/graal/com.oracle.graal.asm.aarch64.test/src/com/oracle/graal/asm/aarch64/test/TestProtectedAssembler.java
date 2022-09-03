@@ -336,7 +336,7 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public void rbit(int size, Register dst, Register src) {
+    protected void rbit(int size, Register dst, Register src) {
         super.rbit(size, dst, src);
     }
 
