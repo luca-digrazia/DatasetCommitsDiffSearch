@@ -113,7 +113,7 @@ public class StandardOp {
 
         @Override
         public void emitCode(CompilationResultBuilder crb) {
-            if (!crb.isSuccessorEdge(destination)) {
+            if (!destination.isCodeEmittingOrderSuccessorEdge(crb.getCurrentBlockIndex())) {
                 crb.asm.jmp(destination.label());
             }
         }
