@@ -213,10 +213,6 @@ public abstract class Assembler {
         return hint;
     }
 
-    public InstructionCounter getInstructionCounter() {
-        throw new UnsupportedOperationException("Instruction counter is not implemented for " + this);
-    }
-
     public static class LabelHint {
         private Label label;
         private int forPosition;
@@ -245,15 +241,5 @@ public abstract class Assembler {
         public boolean isValid() {
             return capturedTarget >= 0;
         }
-    }
-
-    /**
-     * Instruction counter class which gives the user of the assembler to count different kinds of
-     * instructions in the generated assembler code.
-     */
-    public interface InstructionCounter {
-        String[] getSupportedInstructionTypes();
-
-        int[] countInstructions(String[] instructionTypes, int beginPc, int endPc);
     }
 }

@@ -34,7 +34,7 @@ import sun.misc.*;
 public class Fields {
 
     protected final Class<?> clazz;
-    protected final long[] offsets;
+    private final long[] offsets;
     private final String[] names;
     private final Class<?>[] types;
 
@@ -120,13 +120,7 @@ public class Fields {
         return types[index];
     }
 
-    /**
-     * Checks that a given field is assignable from a given value.
-     *
-     * @param index the index of the field to check
-     * @param value a value that will be assigned to the field
-     */
-    private boolean checkAssignableFrom(int index, Object value) {
+    private boolean checkAssignable(int index, Object value) {
         assert value == null || getType(index).isAssignableFrom(value.getClass()) : String.format("%s.%s of type %s is not assignable from %s", clazz.getSimpleName(), getName(index),
                         getType(index).getSimpleName(), value.getClass().getSimpleName());
         return true;
@@ -156,7 +150,7 @@ public class Fields {
                 assert false : "unhandled property type: " + type;
             }
         } else {
-            assert checkAssignableFrom(index, value);
+            assert checkAssignable(index, value);
             unsafe.putObject(object, dataOffset, value);
         }
     }
@@ -212,8 +206,36 @@ public class Fields {
         return unsafe.getDouble(n, offsets[i]);
     }
 
-    public Object getObject(Object object, int i) {
-        assert !types[i].isPrimitive();
-        return unsafe.getObject(object, offsets[i]);
+    /**
+     * Gets the value of an object field.
+     *
+     * @param object the object whose field is to be read
+     * @param index the index of the field (between 0 and {@link #getCount()})
+     * @param asType the type to which the returned object is cast
+     * @return the value of the specified field cast to {@code c}
+     */
+    public <T> T getObject(Object object, int index, Class<T> asType) {
+        return getObject(object, offsets[index], asType);
     }
+
+    private static <T> T getObject(Object object, long offset, Class<T> asType) {
+        return asType.cast(unsafe.getObject(object, offset));
+    }
+
+    /**
+     * Sets the value of an object field.
+     *
+     * @param object the object whose field is to be written
+     * @param index the index of the field (between 0 and {@link #getCount()})
+     * @param value the value to be written to the field
+     */
+    protected void putObject(Object object, int index, Object value) {
+        assert checkAssignable(index, value);
+        putObject(object, offsets[index], value);
+    }
+
+    private static void putObject(Object object, long offset, Object value) {
+        unsafe.putObject(object, offset, value);
+    }
+
 }
