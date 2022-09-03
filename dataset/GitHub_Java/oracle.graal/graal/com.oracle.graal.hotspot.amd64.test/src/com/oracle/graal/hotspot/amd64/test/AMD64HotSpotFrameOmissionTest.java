@@ -24,6 +24,7 @@ package com.oracle.graal.hotspot.amd64.test;
 
 import static com.oracle.graal.amd64.AMD64.*;
 
+import java.lang.reflect.*;
 import java.util.*;
 
 import org.junit.*;
@@ -101,8 +102,9 @@ public class AMD64HotSpotFrameOmissionTest extends GraalCompilerTest {
     }
 
     private void testHelper(String name, CodeGenerator gen) {
-        ResolvedJavaMethod javaMethod = getResolvedJavaMethod(name);
-        InstalledCode installedCode = getCode(javaMethod, parseEager(javaMethod));
+        Method method = getMethod(name);
+        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
+        InstalledCode installedCode = getCode(javaMethod, parseEager(method));
 
         TargetDescription target = getCodeCache().getTarget();
         RegisterConfig registerConfig = getCodeCache().getRegisterConfig();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,14 +23,13 @@
 package com.oracle.graal.compiler.test.ea;
 
 import static org.junit.Assert.*;
-
 import java.util.*;
 
 import org.junit.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
@@ -88,7 +87,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
         ValueNode result = getReturn("testSimpleSnippet").result();
         assertTrue(graph.getNodes().filter(LoadFieldNode.class).isEmpty());
         assertTrue(result.isConstant());
-        assertDeepEquals(2, result.asJavaConstant().asInt());
+        assertDeepEquals(2, result.asConstant().asInt());
     }
 
     @SuppressWarnings("all")
@@ -244,8 +243,9 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
     }
 
     protected void processMethod(final String snippet) {
-        graph = parseEager(snippet, AllowAssumptions.NO);
-        HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        graph = parseEager(snippet);
+        Assumptions assumptions = new Assumptions(false);
+        HighTierContext context = new HighTierContext(getProviders(), assumptions, null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
         new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
         new PartialEscapePhase(false, true, new CanonicalizerPhase(true), null).apply(graph, context);
     }

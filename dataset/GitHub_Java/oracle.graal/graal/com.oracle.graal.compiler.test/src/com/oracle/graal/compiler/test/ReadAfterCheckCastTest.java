@@ -25,6 +25,7 @@ package com.oracle.graal.compiler.test;
 import org.junit.*;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
@@ -94,7 +95,7 @@ public class ReadAfterCheckCastTest extends GraphScheduleTest {
             for (FloatingReadNode node : graph.getNodes(ParameterNode.class).first().usages().filter(FloatingReadNode.class)) {
                 // Checking that the parameter a is not directly used for the access to field
                 // x10 (because x10 must be guarded by the checkcast).
-                Assert.assertTrue(node.location().getLocationIdentity().isImmutable());
+                Assert.assertTrue(node.location().getLocationIdentity() == LocationIdentity.FINAL_LOCATION);
             }
         } catch (Throwable e) {
             throw Debug.handle(e);

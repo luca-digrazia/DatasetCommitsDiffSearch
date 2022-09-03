@@ -26,7 +26,6 @@ import org.junit.*;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 
 /**
  * In the following tests, the correct removal of redundant phis during graph building is tested.
@@ -41,7 +40,7 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        StructuredGraph graph = parseEager("test1Snippet", AllowAssumptions.YES);
+        StructuredGraph graph = parseEager("test1Snippet");
         Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
 
@@ -54,7 +53,7 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test2() {
-        StructuredGraph graph = parseEager("test2Snippet", AllowAssumptions.YES);
+        StructuredGraph graph = parseEager("test2Snippet");
         Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
 
@@ -67,7 +66,7 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test3() {
-        StructuredGraph graph = parseEager("test3Snippet", AllowAssumptions.YES);
+        StructuredGraph graph = parseEager("test3Snippet");
         Debug.dump(graph, "Graph");
         Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
@@ -83,7 +82,7 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test4() {
-        StructuredGraph graph = parseEager("test4Snippet", AllowAssumptions.YES);
+        StructuredGraph graph = parseEager("test4Snippet");
         Debug.dump(graph, "Graph");
         Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }

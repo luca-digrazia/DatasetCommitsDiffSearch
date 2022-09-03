@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.test;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static org.junit.Assert.*;
-
 import java.util.*;
 
 import org.junit.*;
@@ -45,6 +44,7 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.schedule.SchedulePhase.MemoryScheduling;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
 import com.oracle.graal.phases.tiers.*;
 
@@ -458,7 +458,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
 
     @Test
     public void testBlockSchedule2() {
-        SchedulePhase schedule = getFinalSchedule("testBlockSchedule2Snippet", TestMode.WITHOUT_FRAMESTATES, SchedulingStrategy.LATEST);
+        SchedulePhase schedule = getFinalSchedule("testBlockSchedule2Snippet", TestMode.WITHOUT_FRAMESTATES, MemoryScheduling.OPTIMAL, SchedulingStrategy.LATEST);
         assertReadWithinStartBlock(schedule, false);
         assertReadWithinAllReturnBlocks(schedule, false);
         assertReadAndWriteInSameBlock(schedule, false);
@@ -592,10 +592,14 @@ public class MemoryScheduleTest extends GraphScheduleTest {
     }
 
     private SchedulePhase getFinalSchedule(final String snippet, final TestMode mode) {
-        return getFinalSchedule(snippet, mode, SchedulingStrategy.LATEST_OUT_OF_LOOPS);
+        return getFinalSchedule(snippet, mode, MemoryScheduling.OPTIMAL);
     }
 
-    private SchedulePhase getFinalSchedule(final String snippet, final TestMode mode, final SchedulingStrategy schedulingStrategy) {
+    private SchedulePhase getFinalSchedule(final String snippet, final TestMode mode, final MemoryScheduling memsched) {
+        return getFinalSchedule(snippet, mode, memsched, SchedulingStrategy.LATEST_OUT_OF_LOOPS);
+    }
+
+    private SchedulePhase getFinalSchedule(final String snippet, final TestMode mode, final MemoryScheduling memsched, final SchedulingStrategy schedulingStrategy) {
         final StructuredGraph graph = parseEager(snippet);
         try (Scope d = Debug.scope("FloatingReadTest", graph)) {
             try (OverrideScope s = OptionValue.override(OptScheduleOutOfLoops, schedulingStrategy == SchedulingStrategy.LATEST_OUT_OF_LOOPS, OptImplicitNullChecks, false)) {
@@ -628,7 +632,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
                 new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, midContext);
                 new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.LOW_TIER).apply(graph, midContext);
 
-                SchedulePhase schedule = new SchedulePhase(schedulingStrategy);
+                SchedulePhase schedule = new SchedulePhase(schedulingStrategy, memsched);
                 schedule.apply(graph);
                 assertDeepEquals(1, graph.getNodes().filter(StartNode.class).count());
                 return schedule;

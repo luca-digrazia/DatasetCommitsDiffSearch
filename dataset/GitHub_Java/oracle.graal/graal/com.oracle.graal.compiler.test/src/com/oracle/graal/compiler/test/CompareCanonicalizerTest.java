@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,8 +26,8 @@ import static org.junit.Assert.*;
 
 import org.junit.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
@@ -35,8 +35,8 @@ import com.oracle.graal.phases.tiers.*;
 public class CompareCanonicalizerTest extends GraalCompilerTest {
 
     private StructuredGraph getCanonicalizedGraph(String name) {
-        StructuredGraph graph = parseEager(name, AllowAssumptions.YES);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
+        StructuredGraph graph = parseEager(name);
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
         return graph;
     }
 
@@ -48,12 +48,13 @@ public class CompareCanonicalizerTest extends GraalCompilerTest {
 
     @Test
     public void testCanonicalComparison() {
-        StructuredGraph referenceGraph = parseEager("referenceCanonicalComparison", AllowAssumptions.NO);
+        StructuredGraph referenceGraph = parseEager("referenceCanonicalComparison");
         for (int i = 1; i < 4; i++) {
-            StructuredGraph graph = parseEager("canonicalCompare" + i, AllowAssumptions.NO);
+            StructuredGraph graph = parseEager("canonicalCompare" + i);
             assertEquals(referenceGraph, graph);
         }
-        new CanonicalizerPhase(true).apply(referenceGraph, new PhaseContext(getProviders()));
+        Assumptions assumptions = new Assumptions(false);
+        new CanonicalizerPhase(true).apply(referenceGraph, new PhaseContext(getProviders(), assumptions));
         for (int i = 1; i < 4; i++) {
             StructuredGraph graph = getCanonicalizedGraph("canonicalCompare" + i);
             assertEquals(referenceGraph, graph);
@@ -127,9 +128,9 @@ public class CompareCanonicalizerTest extends GraalCompilerTest {
     @Test
     public void testIntegerTestCanonicalization() {
         ValueNode result = getResult(getCanonicalizedGraph("integerTestCanonicalization1"));
-        assertTrue(result.isConstant() && result.asJavaConstant().asLong() == 1);
+        assertTrue(result.isConstant() && result.asConstant().asLong() == 1);
         result = getResult(getCanonicalizedGraph("integerTestCanonicalization2"));
-        assertTrue(result.isConstant() && result.asJavaConstant().asLong() == 1);
+        assertTrue(result.isConstant() && result.asConstant().asLong() == 1);
         StructuredGraph graph = getCanonicalizedGraph("integerTestCanonicalization3");
         assertDeepEquals(1, graph.getNodes(ReturnNode.class).count());
         assertTrue(graph.getNodes(ReturnNode.class).first().result() instanceof ConditionalNode);

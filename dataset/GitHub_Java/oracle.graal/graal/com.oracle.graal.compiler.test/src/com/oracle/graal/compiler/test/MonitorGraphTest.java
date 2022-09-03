@@ -23,7 +23,6 @@
 package com.oracle.graal.compiler.test;
 
 import static com.oracle.graal.graph.iterators.NodePredicates.*;
-
 import java.util.*;
 
 import org.junit.*;
@@ -71,7 +70,7 @@ public class MonitorGraphTest extends GraalCompilerTest {
         StructuredGraph graph = parseAndProcess("test2Snippet");
         NodeIterable<MonitorExitNode> monitors = graph.getNodes(MonitorExitNode.class);
         Assert.assertEquals(1, monitors.count());
-        Assert.assertEquals(monitors.first().stateAfter().bci(), 3);
+        Assert.assertEquals(monitors.first().stateAfter().bci, 3);
     }
 
     @SuppressWarnings("all")

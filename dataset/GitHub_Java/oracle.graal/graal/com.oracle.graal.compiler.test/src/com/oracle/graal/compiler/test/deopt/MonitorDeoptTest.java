@@ -24,6 +24,8 @@
  */
 package com.oracle.graal.compiler.test.deopt;
 
+import java.lang.reflect.*;
+
 import org.junit.*;
 
 import com.oracle.graal.api.code.*;
@@ -132,11 +134,12 @@ public final class MonitorDeoptTest extends GraalCompilerTest {
 
     @Test
     public void run0() throws Throwable {
-        ResolvedJavaMethod javaMethod = getResolvedJavaMethod("test");
+        Method method = getMethod("test");
 
-        StructuredGraph graph = parseEager(javaMethod);
+        StructuredGraph graph = parseEager(method);
         removeLoopSafepoint(graph);
 
+        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
         CompilationResult compilationResult = compile(javaMethod, graph);
         final InstalledCode installedCode = getProviders().getCodeCache().setDefaultMethod(javaMethod, compilationResult);
 

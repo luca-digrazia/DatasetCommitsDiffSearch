@@ -26,13 +26,14 @@ import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
 import static org.junit.Assert.*;
 
+import java.lang.reflect.*;
+
 import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.code.CompilationResult.Call;
 import com.oracle.graal.api.code.CompilationResult.Infopoint;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
@@ -57,7 +58,7 @@ public class InfopointReasonTest extends GraalCompilerTest {
 
     @Test
     public void callInfopoints() {
-        final ResolvedJavaMethod method = getResolvedJavaMethod("testMethod");
+        final Method method = getMethod("testMethod");
         final StructuredGraph graph = parseEager(method);
         CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
         final CompilationResult cr = compileGraph(graph, null, cc, graph.method(), getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(),
@@ -72,7 +73,7 @@ public class InfopointReasonTest extends GraalCompilerTest {
 
     @Test
     public void lineInfopoints() {
-        final ResolvedJavaMethod method = getResolvedJavaMethod("testMethod");
+        final Method method = getMethod("testMethod");
         final StructuredGraph graph = parseDebug(method);
         int graphLineSPs = 0;
         for (FullInfopointNode ipn : graph.getNodes().filter(FullInfopointNode.class)) {

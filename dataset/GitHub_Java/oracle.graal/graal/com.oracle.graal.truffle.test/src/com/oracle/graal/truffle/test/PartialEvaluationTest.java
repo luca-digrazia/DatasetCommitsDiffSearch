@@ -97,7 +97,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
 
         try (Scope s = Debug.scope("TruffleCompilation", new TruffleDebugJavaMethod(compilable))) {
 
-            StructuredGraph resultGraph = truffleCompiler.getPartialEvaluator().createGraph(compilable, assumptions, null);
+            StructuredGraph resultGraph = truffleCompiler.getPartialEvaluator().createGraph(compilable, assumptions);
             CanonicalizerPhase canonicalizer = new CanonicalizerPhase(canonicalizeReads);
             PhaseContext context = new PhaseContext(getProviders(), assumptions);
 
