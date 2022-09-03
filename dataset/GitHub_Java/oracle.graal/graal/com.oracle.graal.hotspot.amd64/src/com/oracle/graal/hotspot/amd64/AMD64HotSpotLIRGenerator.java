@@ -38,7 +38,6 @@ import com.oracle.graal.compiler.amd64.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.stubs.*;
@@ -342,15 +341,11 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        if (callTarget instanceof HotSpotIndirectCallTargetNode) {
-            AllocatableValue metaspaceMethod = AMD64.rbx.asValue();
-            emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
-            AllocatableValue targetAddress = AMD64.rax.asValue();
-            emitMove(targetAddress, operand(callTarget.computedAddress()));
-            append(new AMD64IndirectCallOp(callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
-        } else {
-            super.emitIndirectCall(callTarget, result, parameters, temps, callState);
-        }
+        AllocatableValue metaspaceMethod = AMD64.rbx.asValue();
+        emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
+        AllocatableValue targetAddress = AMD64.rax.asValue();
+        emitMove(targetAddress, operand(callTarget.computedAddress()));
+        append(new AMD64IndirectCallOp(callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
     }
 
     @Override
