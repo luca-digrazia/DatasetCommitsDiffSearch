@@ -40,6 +40,8 @@
  */
 package com.oracle.truffle.sl.builtins;
 
+import java.io.IOException;
+
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
@@ -57,10 +59,10 @@ import com.oracle.truffle.api.source.Source;
  * possibly inlined.
  */
 @NodeInfo(shortName = "eval")
-@SuppressWarnings("unused")
 public abstract class SLEvalBuiltin extends SLBuiltinNode {
 
-    @Specialization(guards = {"stringsEqual(cachedMimeType, mimeType)", "stringsEqual(cachedCode, code)"})
+    @SuppressWarnings("unused")
+    @Specialization(guards = {"stringsEqual(mimeType, cachedMimeType)", "stringsEqual(code, cachedCode)"})
     public Object evalCached(VirtualFrame frame, String mimeType, String code,
                     @Cached("mimeType") String cachedMimeType,
                     @Cached("code") String cachedCode,
@@ -79,13 +81,13 @@ public abstract class SLEvalBuiltin extends SLBuiltinNode {
 
         try {
             return getContext().parse(source);
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             throw new IllegalArgumentException(ex);
         }
     }
 
-    /* Work around findbugs warning in generate code. */
-    protected static boolean stringsEqual(String a, String b) {
+    protected boolean stringsEqual(String a, String b) {
         return a.equals(b);
     }
+
 }

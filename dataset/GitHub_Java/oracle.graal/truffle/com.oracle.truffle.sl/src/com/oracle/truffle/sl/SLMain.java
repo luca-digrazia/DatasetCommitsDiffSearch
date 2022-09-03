@@ -51,7 +51,6 @@ import com.oracle.truffle.api.debug.DebuggerTags;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine;
@@ -60,12 +59,7 @@ import com.oracle.truffle.sl.builtins.SLDefineFunctionBuiltin;
 import com.oracle.truffle.sl.builtins.SLNanoTimeBuiltin;
 import com.oracle.truffle.sl.builtins.SLPrintlnBuiltin;
 import com.oracle.truffle.sl.builtins.SLReadlnBuiltin;
-import com.oracle.truffle.sl.builtins.SLStackTraceBuiltin;
 import com.oracle.truffle.sl.nodes.SLTypes;
-import com.oracle.truffle.sl.nodes.access.SLReadPropertyCacheNode;
-import com.oracle.truffle.sl.nodes.access.SLReadPropertyNode;
-import com.oracle.truffle.sl.nodes.access.SLWritePropertyCacheNode;
-import com.oracle.truffle.sl.nodes.access.SLWritePropertyNode;
 import com.oracle.truffle.sl.nodes.call.SLDispatchNode;
 import com.oracle.truffle.sl.nodes.call.SLInvokeNode;
 import com.oracle.truffle.sl.nodes.controlflow.SLBlockNode;
@@ -102,7 +96,7 @@ import java.io.File;
 /**
  * SL is a simple language to demonstrate and showcase features of Truffle. The implementation is as
  * simple and clean as possible in order to help understanding the ideas and concepts of Truffle.
- * The language has first class functions, and objects are key-value stores.
+ * The language has first class functions, but no object model.
  * <p>
  * SL is dynamically typed, i.e., there are no type names specified by the programmer. SL is
  * strongly typed, i.e., there is no automatic conversion between types. If an operation is not
@@ -120,8 +114,6 @@ import java.io.File;
  * <li>Boolean: implemented as the Java primitive type {@code boolean}.
  * <li>String: implemented as the Java standard type {@link String}.
  * <li>Function: implementation type {@link SLFunction}.
- * <li>Object: efficient implementation using the object model provided by Truffle. The
- * implementation type of objects is a subclass of {@link DynamicObject}.
  * <li>Null (with only one value {@code null}): implemented as the singleton
  * {@link SLNull#SINGLETON}.
  * </ul>
@@ -147,9 +139,6 @@ import java.io.File;
  * {@link DebuggerTags#AlwaysHalt} tag to halt the execution when run under the debugger.
  * <li>Function calls: {@link SLInvokeNode invocations} are efficiently implemented with
  * {@link SLDispatchNode polymorphic inline caches}.
- * <li>Object access: {@link SLReadPropertyNode} uses {@link SLReadPropertyCacheNode} as the
- * polymorphic inline cache for property reads. {@link SLWritePropertyNode} uses
- * {@link SLWritePropertyCacheNode} as the polymorphic inline cache for property writes.
  * </ul>
  *
  * <p>
@@ -166,7 +155,7 @@ import java.io.File;
  * <b>Builtin functions:</b><br>
  * Library functions that are available to every SL source without prior definition are called
  * builtin functions. They are added to the {@link SLFunctionRegistry} when the {@link SLContext} is
- * created. Some of the current builtin functions are
+ * created. There current builtin functions are
  * <ul>
  * <li>{@link SLReadlnBuiltin readln}: Read a String from the {@link SLContext#getInput() standard
  * input}.
@@ -177,14 +166,12 @@ import java.io.File;
  * <li>{@link SLDefineFunctionBuiltin defineFunction}: Parses the functions provided as a String
  * argument and adds them to the function registry. Functions that are already defined are replaced
  * with the new version.
- * <li>{@link SLStackTraceBuiltin stckTrace}: Print all function activations with all local
- * variables.
  * </ul>
  */
 public final class SLMain {
 
     /**
-     * The main entry point.
+     * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
      */
     public static void main(String[] args) throws IOException {
         Source source;
@@ -249,7 +236,7 @@ public final class SLMain {
         result.append("Type error");
         if (ex.getNode() != null && ex.getNode().getSourceSection() != null) {
             SourceSection ss = ex.getNode().getSourceSection();
-            if (ss != null && ss.isAvailable()) {
+            if (ss != null && ss.getSource() != null) {
                 result.append(" at ").append(ss.getSource().getName()).append(" line ").append(ss.getStartLine()).append(" col ").append(ss.getStartColumn());
             }
         }

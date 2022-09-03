@@ -40,6 +40,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -177,11 +178,10 @@ public class SourceBuilderTest {
             text = "// Hello";
             w.write(text);
         }
-        final Source.Builder<Source, IOException> builder = Source.newBuilder(file.toURI().toURL()).name("Hello.java");
 
-        Source s1 = builder.build();
+        Source s1 = Source.newBuilder(file.toURI().toURL()).name("Hello.java").build();
         assertEquals("Recognized as Java", "text/x-java", s1.getMimeType());
-        Source s2 = builder.mimeType("text/x-c").build();
+        Source s2 = s1.withMimeType("text/x-c");
         assertEquals("They have the same content", s1.getCode(), s2.getCode());
         assertEquals("// Hello", s1.getCode());
         assertNotEquals("But different type", s1.getMimeType(), s2.getMimeType());

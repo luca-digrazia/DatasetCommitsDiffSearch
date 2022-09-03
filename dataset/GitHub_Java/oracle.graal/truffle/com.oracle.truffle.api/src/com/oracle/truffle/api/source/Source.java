@@ -1256,7 +1256,7 @@ class SourceSnippets {
         return source;
     }
 
-    public static Source fromURLWithOwnContent() throws Exception {
+    public static Source fromURLWithOwnContent() throws IOException, URISyntaxException {
         // BEGIN: SourceSnippets#fromURLWithOwnContent
         URL resource = SourceSnippets.class.getResource("sample.js");
         Source source = Source.newBuilder(resource)

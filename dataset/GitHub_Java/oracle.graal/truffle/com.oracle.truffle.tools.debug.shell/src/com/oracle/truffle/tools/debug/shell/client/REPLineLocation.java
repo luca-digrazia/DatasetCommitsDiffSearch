@@ -24,10 +24,10 @@
  */
 package com.oracle.truffle.tools.debug.shell.client;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.tools.debug.shell.*;
+import com.oracle.truffle.api.source.Source;
 
 final class REPLineLocation {
 
@@ -67,7 +67,11 @@ final class REPLineLocation {
             final String fileName = split[0];
             lineNumberText = split[1];
             try {
-                source = Source.fromFileName(fileName);
+                final File file = new File(fileName);
+                if (!file.canRead()) {
+                    throw new IllegalArgumentException("Can't read file " + fileName);
+                }
+                source = Source.newBuilder(file.getCanonicalFile()).build();
             } catch (IOException e1) {
                 throw new IllegalArgumentException("Can't find file \"" + fileName + "\"");
             }
@@ -102,11 +106,12 @@ final class REPLineLocation {
      *
      * @param op the operation to be performed on this location
      */
-    public REPLMessage createMessage(String op) {
-        final REPLMessage msg = new REPLMessage(REPLMessage.OP, op);
-        msg.put(REPLMessage.SOURCE_NAME, source.getShortName());
-        msg.put(REPLMessage.FILE_PATH, source.getPath());
-        msg.put(REPLMessage.LINE_NUMBER, Integer.toString(lineNumber));
+    @SuppressWarnings("deprecation")
+    public com.oracle.truffle.tools.debug.shell.REPLMessage createMessage(String op) {
+        final com.oracle.truffle.tools.debug.shell.REPLMessage msg = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, op);
+        msg.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, source.getShortName());
+        msg.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, source.getPath());
+        msg.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER, Integer.toString(lineNumber));
         return msg;
     }
 
