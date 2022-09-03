@@ -70,10 +70,10 @@ public final class IntegerDivNode extends IntegerArithmeticNode implements Canon
                 // no rounding if dividend is positive or if its low bits are always 0
                 if (stampX.canBeNegative() || (stampX.mask() & (abs - 1)) != 0) {
                     int bits;
-                    if (kind().getStackKind() == Kind.Int) {
+                    if (kind().isInt()) {
                         bits = 32;
                     } else {
-                        assert kind() == Kind.Long;
+                        assert kind().isLong();
                         bits = 64;
                     }
                     RightShiftNode sign = graph().unique(new RightShiftNode(kind(), x(), ConstantNode.forInt(bits - 1, graph())));

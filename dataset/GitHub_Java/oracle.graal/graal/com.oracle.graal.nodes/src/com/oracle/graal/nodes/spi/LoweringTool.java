@@ -24,9 +24,7 @@ package com.oracle.graal.nodes.spi;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
 
 public interface LoweringTool {
     GraalCodeCacheProvider getRuntime();
@@ -34,8 +32,6 @@ public interface LoweringTool {
     ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, long leafGraphId);
     ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId);
     Assumptions assumptions();
-
-    Block getBlockFor(Node node);
 
     /**
      * Gets the closest fixed node preceding the node currently being lowered.

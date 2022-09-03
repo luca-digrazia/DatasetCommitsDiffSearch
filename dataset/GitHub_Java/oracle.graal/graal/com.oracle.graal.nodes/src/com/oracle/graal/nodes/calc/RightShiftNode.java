@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = ">>")
 public final class RightShiftNode extends ShiftNode implements Canonicalizable, LIRLowerable {
@@ -69,22 +68,7 @@ public final class RightShiftNode extends ShiftNode implements Canonicalizable, 
                     if (other instanceof RightShiftNode) {
                         int total = amount + otherAmount;
                         if (total != (total & mask)) {
-                            assert other.x().stamp() instanceof IntegerStamp;
-                            IntegerStamp istamp = (IntegerStamp) other.x().stamp();
-
-                            if (istamp.isPositive()) {
-                                return ConstantNode.forIntegerKind(kind(), 0, graph());
-                            }
-                            if (istamp.isStrictlyNegative()) {
-                                return ConstantNode.forIntegerKind(kind(), -1L, graph());
-                            }
-
-                            /*
-                             * if we cannot replace both shifts with a constant, replace them by a
-                             * full shift for this kind
-                             */
-                            assert total >= mask;
-                            return graph().unique(new RightShiftNode(kind(), other.x(), ConstantNode.forInt(mask, graph())));
+                            return ConstantNode.forInt(0, graph());
                         }
                         return graph().unique(new RightShiftNode(kind(), other.x(), ConstantNode.forInt(total, graph())));
                     }

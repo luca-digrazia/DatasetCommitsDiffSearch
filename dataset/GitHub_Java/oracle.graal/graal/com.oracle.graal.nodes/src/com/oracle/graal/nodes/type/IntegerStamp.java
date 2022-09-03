@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.type;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -185,15 +184,10 @@ public class IntegerStamp extends Stamp {
     }
 
     public static long defaultMask(Kind kind) {
-        switch (kind) {
-            case Boolean: return 0x01L;
-            case Byte: return 0xffL;
-            case Char: return 0xffffL;
-            case Short: return 0xffffL;
-            case Jsr:
-            case Int: return 0xffffffffL;
-            case Long: return 0xffffffffffffffffL;
-            default: throw GraalInternalError.shouldNotReachHere();
+        if (kind == Kind.Int) {
+            return 0xFFFFFFFFL;
+        } else {
+            return 0xFFFFFFFFFFFFFFFFL;
         }
     }
 
@@ -206,13 +200,8 @@ public class IntegerStamp extends Stamp {
         }
     }
 
-    /**
-     * Checks if the 2 stamps represent values of the same sign.
-     * Returns true if the two stamps are both positive of null or if they are both strictly negative
-     * @return true if the two stamps are both positive of null or if they are both strictly negative
-     */
     public static boolean sameSign(IntegerStamp s1, IntegerStamp s2) {
-        return s1.isPositive() && s2.isPositive() || s1.isStrictlyNegative() && s2.isStrictlyNegative();
+        return s1.isPositive() && s2.isPositive() || s1.isNegative() && s2.isNegative();
     }
 
 }

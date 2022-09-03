@@ -30,9 +30,9 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.Snippet.VarargsParameter;
 
 /**
- * Placeholder node to denote to snippet preparation that the following loop must be completely
- * unrolled.
- * 
+ * Placeholder node to denote to snippet preparation that the following loop
+ * must be completely unrolled.
+ *
  * @see VarargsParameter
  */
 public final class ExplodeLoopNode extends FixedWithNextNode {
@@ -62,5 +62,7 @@ public final class ExplodeLoopNode extends FixedWithNextNode {
      * A call to this method must be placed immediately prior to the loop that is to be exploded.
      */
     @NodeIntrinsic
-    public static native void explodeLoop();
+    public static void explodeLoop() {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
 }

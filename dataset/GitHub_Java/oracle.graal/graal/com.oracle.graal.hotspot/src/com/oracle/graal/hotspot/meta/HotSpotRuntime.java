@@ -254,7 +254,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
                         // We use LocationNode.ANY_LOCATION for the reads that access the vtable entry and the compiled code entry
                         // as HotSpot does not guarantee they are final values.
                         int vtableEntryOffset = hsMethod.vtableEntryOffset();
-                        assert vtableEntryOffset > 0;
+                        assert vtableEntryOffset != 0;
                         SafeReadNode hub = safeReadHub(graph, receiver, StructuredGraph.INVALID_GRAPH_ID);
                         Kind wordKind = graalRuntime.getTarget().wordKind;
                         Stamp nonNullWordStamp = StampFactory.forWord(wordKind, true);
@@ -445,7 +445,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
     }
 
     private static IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index) {
-        return IndexedLocationNode.create(LocationNode.getArrayLocation(elementKind), elementKind, elementKind.getArrayBaseOffset(), index, graph, true);
+        return IndexedLocationNode.create(LocationNode.getArrayLocation(elementKind), elementKind, elementKind.arrayBaseOffset(), index, graph, true);
     }
 
     private SafeReadNode safeReadArrayLength(ValueNode array, long leafGraphId) {
@@ -554,6 +554,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
         return graalRuntime.getCompilerToVM().installMethod(new HotSpotCompilationResult((HotSpotResolvedJavaMethod) method, compResult), false, hsInfo);
     }
 
+    @Override
     public RegisterConfig getGlobalStubRegisterConfig() {
         return globalStubRegConfig;
     }
