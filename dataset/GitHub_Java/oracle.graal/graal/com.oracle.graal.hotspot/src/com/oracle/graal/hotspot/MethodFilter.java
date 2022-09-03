@@ -94,7 +94,7 @@ public class MethodFilter {
     }
 
     static String createGlobString(String pattern) {
-        return Pattern.quote(pattern).replace("?", "\\E.\\Q").replace("*", "\\E.*\\Q");
+        return pattern.replace("\\", "\\\\").replace(".", "\\.").replace('?', '.').replace("*", ".*").replace("[", "\\[").replace("]", "\\]");
     }
 
     private static Pattern createClassGlobPattern(String pattern) {

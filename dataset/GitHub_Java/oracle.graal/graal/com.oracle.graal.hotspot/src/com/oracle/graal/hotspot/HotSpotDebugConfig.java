@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.io.*;
 import java.util.*;
 
 import com.oracle.graal.compiler.*;
@@ -41,12 +40,10 @@ public class HotSpotDebugConfig implements DebugConfig {
     private final DebugFilter dumpFilter;
     private final MethodFilter[] methodFilter;
     private final List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
-    private final PrintStream output;
-
-    private static final PrintStream cachedOut = System.out;
 
 
-    public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter, String logFile) {
+
+    public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter) {
         this.logFilter = DebugFilter.parse(logFilter);
         this.meterFilter = DebugFilter.parse(meterFilter);
         this.timerFilter = DebugFilter.parse(timerFilter);
@@ -72,15 +69,6 @@ public class HotSpotDebugConfig implements DebugConfig {
             dumpHandlers.add(new IdealGraphPrinterDumpHandler(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort));
         }
         dumpHandlers.add(new CFGPrinterObserver());
-        if (logFile == null || logFile.isEmpty()) {
-            output = cachedOut;
-        } else {
-            try {
-                output = new PrintStream(logFile);
-            } catch (FileNotFoundException e) {
-                throw new RuntimeException("couldn't create log file: " + logFile, e);
-            }
-        }
     }
 
     public boolean isLogEnabled() {
@@ -97,10 +85,6 @@ public class HotSpotDebugConfig implements DebugConfig {
 
     public boolean isTimeEnabled() {
         return isEnabled(timerFilter);
-    }
-
-    public PrintStream output() {
-        return output;
     }
 
     private boolean isEnabled(DebugFilter filter) {
@@ -158,7 +142,7 @@ public class HotSpotDebugConfig implements DebugConfig {
         if (e instanceof CiBailout) {
             return null;
         }
-        Debug.setConfig(Debug.fixedConfig(true, true, false, false, dumpHandlers, output));
+        Debug.setConfig(Debug.fixedConfig(true, true, false, false, dumpHandlers));
         // sync "Exception occured in scope: " with mx/sanitycheck.py::Test.__init__
         Debug.log(String.format("Exception occured in scope: %s", Debug.currentScope()));
         for (Object o : Debug.context()) {
