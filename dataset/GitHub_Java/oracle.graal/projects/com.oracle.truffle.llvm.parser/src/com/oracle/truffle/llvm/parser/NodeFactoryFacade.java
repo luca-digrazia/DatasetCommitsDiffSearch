@@ -107,6 +107,8 @@ public interface NodeFactoryFacade {
 
     FrameSlotKind getFrameSlotKind(ResolvedType type);
 
+    FrameSlotKind getFrameSlotKind(LLVMBaseType llvmType);
+
     LLVMExpressionNode createIntegerComparison(LLVMExpressionNode left, LLVMExpressionNode right, LLVMBaseType llvmType, LLVMIntegerComparisonType type);
 
     LLVMExpressionNode createFloatComparison(LLVMExpressionNode left, LLVMExpressionNode right, LLVMBaseType llvmType, LLVMFloatComparisonType type);

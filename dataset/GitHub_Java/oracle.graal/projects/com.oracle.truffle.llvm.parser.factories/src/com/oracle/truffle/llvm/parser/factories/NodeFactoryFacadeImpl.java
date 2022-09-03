@@ -55,6 +55,7 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI32VectorNode;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMVectorNode;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMGlobalRootNode;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
@@ -309,36 +310,34 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
         return LLVMFunctionFactory.createGlobalRootNodeWrapping(mainCallTarget, returnType);
     }
 
-    @Override
     public LLVMExpressionNode createStructureConstantNode(boolean packed, int structureSize, ResolvedType[] types, LLVMExpressionNode[] constants) {
         return LLVMAggregateFactory.createStructConstantNode(runtime, packed, structureSize, types, constants);
     }
 
-    @Override
     public LLVMNode createMemCopyNode(LLVMExpressionNode globalVarAddress, LLVMExpressionNode constant, LLVMExpressionNode lengthNode, LLVMExpressionNode alignNode,
                     LLVMExpressionNode isVolatileNode) {
         return LLVMMemI32CopyFactory.create((LLVMAddressNode) globalVarAddress, (LLVMAddressNode) constant, (LLVMI32Node) lengthNode, (LLVMI32Node) alignNode,
                         (LLVMI1Node) isVolatileNode);
     }
 
-    @Override
     public LLVMNode createPhiNode() {
         return new LLVMPhiNode();
     }
 
-    @Override
     public LLVMNode createBasicBlockNode(LLVMNode[] statementNodes, LLVMNode terminatorNode) {
         return LLVMBlockFactory.createBasicBlock(statementNodes, (LLVMTerminatorNode) terminatorNode);
     }
 
-    @Override
     public LLVMExpressionNode createFunctionBlockNode(FrameSlot retSlot, List<LLVMNode> allFunctionNodes, LLVMStackFrameNuller[][] indexToSlotNuller) {
         return LLVMBlockFactory.createFunctionBlock(retSlot, allFunctionNodes.toArray(new LLVMBasicBlockNode[allFunctionNodes.size()]), indexToSlotNuller);
     }
 
-    @Override
     public RootNode createFunctionStartNode(LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, FrameDescriptor frameDescriptor, String functionName) {
         return new LLVMFunctionStartNode(functionBodyNode, beforeFunction, afterFunction, frameDescriptor, functionName);
+    }
+
+    public int getArgStartIndex() {
+        return LLVMCallNode.ARG_START_INDEX;
     }
 
 }
