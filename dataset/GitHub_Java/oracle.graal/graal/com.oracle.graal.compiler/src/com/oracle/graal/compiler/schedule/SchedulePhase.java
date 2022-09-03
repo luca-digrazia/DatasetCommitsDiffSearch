@@ -41,7 +41,7 @@ public class SchedulePhase extends Phase {
     /**
      * Map from blocks to the nodes in each block.
      */
-    private BlockMap<List<ScheduledNode>> blockToNodesMap;
+    private BlockMap<List<Node>> blockToNodesMap;
 
     public SchedulePhase() {
         super("Schedule");
@@ -57,20 +57,17 @@ public class SchedulePhase extends Phase {
         sortNodesWithinBlocks(graph);
     }
 
-    /**
-     * Sets {@link ScheduledNode#scheduledNext} on all scheduled nodes in all blocks using the scheduling built by @link {@link #run(StructuredGraph)}.
-     * This method should thus only be called when run has been successfully executed.
-     */
     public void scheduleGraph() {
-        assert blockToNodesMap != null : "cannot set scheduledNext before run has been executed";
         for (Block block : cfg.getBlocks()) {
-            List<ScheduledNode> nodeList = blockToNodesMap.get(block);
+            List<Node> nodeList = blockToNodesMap.get(block);
             ScheduledNode last = null;
-            for (ScheduledNode node : nodeList) {
-                if (last != null) {
-                    last.setScheduledNext(node);
+            for (Node node : nodeList) {
+                if (!(node instanceof FrameState)) {
+                    if (last != null) {
+                        last.setScheduledNext((ScheduledNode) node);
+                    }
+                    last = (ScheduledNode) node;
                 }
-                last = node;
             }
         }
     }
@@ -82,86 +79,79 @@ public class SchedulePhase extends Phase {
     /**
      * Gets the map from each block to the nodes in the block.
      */
-    public BlockMap<List<ScheduledNode>> getBlockToNodesMap() {
+    public BlockMap<List<Node>> getBlockToNodesMap() {
         return blockToNodesMap;
     }
 
     /**
      * Gets the nodes in a given block.
      */
-    public List<ScheduledNode> nodesFor(Block block) {
+    public List<Node> nodesFor(Block block) {
         return blockToNodesMap.get(block);
     }
 
     private void assignBlockToNodes(StructuredGraph graph) {
         for (Block block : cfg.getBlocks()) {
-            List<ScheduledNode> nodes = new ArrayList<>();
+            List<Node> nodes = new ArrayList<>();
             assert blockToNodesMap.get(block) == null;
             blockToNodesMap.put(block, nodes);
-            for (FixedNode node : block.getNodes()) {
+            for (Node node : block.getNodes()) {
                 nodes.add(node);
             }
         }
 
         for (Node n : graph.getNodes()) {
-            if (n instanceof ScheduledNode) {
-                assignBlockToNode((ScheduledNode) n);
-            }
+            assignBlockToNode(n);
         }
     }
 
-    /**
-     * Assigns a block to the given node. This method expects that PhiNodes and FixedNodes are already assigned to a
-     * block, since they should already have been placed by {@link ControlFlowGraph#identifyBlocks()}.
-     * This method will also try to
-     */
-    private void assignBlockToNode(ScheduledNode node) {
-        assert !node.isDeleted();
+    private void assignBlockToNode(Node n) {
+        if (n == null) {
+            return;
+        }
 
-        Block prevBlock = cfg.getNodeToBlock().get(node);
+        assert !n.isDeleted();
+
+        Block prevBlock = cfg.getNodeToBlock().get(n);
         if (prevBlock != null) {
             return;
         }
-        // PhiNodes and FixedNodes should already have been placed in blocks by ControlFlowGraph.identifyBlocks
-        assert !(node instanceof PhiNode) : node;
-        assert !(node instanceof FixedNode) : node;
+        assert !(n instanceof PhiNode) : n;
+        assert !(n instanceof MergeNode);
         // if in CFG, schedule at the latest position possible in the outermost loop possible
-        Block latestBlock = latestBlock(node);
+        Block latestBlock = latestBlock(n);
         Block block;
         if (latestBlock == null) {
-            block = earliestBlock(node);
-        } else if (GraalOptions.ScheduleOutOfLoops && !(node instanceof VirtualObjectFieldNode) && !(node instanceof VirtualObjectNode)) {
-            Block earliestBlock = earliestBlock(node);
-            block = scheduleOutOfLoops(node, latestBlock, earliestBlock);
-            assert earliestBlock.dominates(block) : "Graph can not be scheduled : inconsistent for " + node + " (" + earliestBlock + " needs to dominate " + block + ")";
+            block = earliestBlock(n);
+        } else if (GraalOptions.ScheduleOutOfLoops && !(n instanceof VirtualObjectFieldNode) && !(n instanceof VirtualObjectNode)) {
+            Block earliestBlock = earliestBlock(n);
+            block = scheduleOutOfLoops(n, latestBlock, earliestBlock);
+            assert earliestBlock.dominates(block) : "Graph can not be scheduled : inconsistent for " + n;
         } else {
             block = latestBlock;
         }
-        cfg.getNodeToBlock().set(node, block);
-        blockToNodesMap.get(block).add(node);
+        cfg.getNodeToBlock().set(n, block);
+        blockToNodesMap.get(block).add(n);
     }
 
-    /**
-     * Calculates the last block that the given node could be scheduled in, i.e., the common dominator of all usages.
-     * To do so all usages are also assigned to blocks.
-     */
-    private Block latestBlock(ScheduledNode node) {
-        CommonDominatorBlockClosure cdbc = new CommonDominatorBlockClosure(null);
-        for (Node succ : node.successors().nonNull()) {
-            assert cfg.getNodeToBlock().get(succ) != null;
-            cdbc.apply(cfg.getNodeToBlock().get(succ));
+    private Block latestBlock(Node n) {
+        Block block = null;
+        for (Node succ : n.successors()) {
+            if (succ == null) {
+                continue;
+            }
+            assignBlockToNode(succ);
+            block = getCommonDominator(block, cfg.getNodeToBlock().get(succ));
         }
-        ensureScheduledUsages(node);
-        for (Node usage : node.usages()) {
-            blocksForUsage(node, usage, cdbc);
+        ensureScheduledUsages(n);
+        CommonDominatorBlockClosure cdbc = new CommonDominatorBlockClosure(block);
+        for (Node usage : n.usages()) {
+            blocksForUsage(n, usage, cdbc);
         }
         return cdbc.block;
     }
 
-    /**
-     * A closure that will calculate the common dominator of all blocks passed to its {@link #apply(Block)} method.
-     */
-    private static class CommonDominatorBlockClosure implements BlockClosure {
+    private class CommonDominatorBlockClosure implements BlockClosure {
         public Block block;
         public CommonDominatorBlockClosure(Block block) {
             this.block = block;
@@ -172,45 +162,42 @@ public class SchedulePhase extends Phase {
         }
     }
 
-    /**
-     * Determines the earliest block in which the given node can be scheduled.
-     */
-    private Block earliestBlock(Node node) {
-        Block earliest = cfg.getNodeToBlock().get(node);
+    private Block earliestBlock(Node n) {
+        Block earliest = cfg.getNodeToBlock().get(n);
         if (earliest != null) {
             return earliest;
         }
-        earliest = earliestCache.get(node);
+        earliest = earliestCache.get(n);
         if (earliest != null) {
             return earliest;
         }
-        /*
-         * All inputs must be in a dominating block, otherwise the graph cannot be scheduled. This implies that the
-         * inputs' blocks have a total ordering via their dominance relation. So in order to find the earliest block
-         * placement for this node we need to find the input block that is dominated by all other input blocks.
-         *
-         * While iterating over the inputs a set of dominator blocks of the current earliest placement is maintained.
-         * When the block of an input is not within this set, it becomes the current earliest placement and the list of
-         * dominator blocks is updated.
-         */
-        BitSet dominators = new BitSet(cfg.getBlocks().length);
-
-        assert node.predecessor() == null;
-        for (Node input : node.inputs().nonNull()) {
-            assert input instanceof ValueNode;
-            Block inputEarliest = earliestBlock(input);
-            if (!dominators.get(inputEarliest.getId())) {
-                earliest = inputEarliest;
+        BitMap bits = new BitMap(cfg.getBlocks().length);
+        ArrayList<Node> before = new ArrayList<>();
+        if (n.predecessor() != null) {
+            before.add(n.predecessor());
+        }
+        for (Node input : n.inputs()) {
+            before.add(input);
+        }
+        for (Node pred : before) {
+            if (pred == null) {
+                continue;
+            }
+            Block b = earliestBlock(pred);
+            if (!bits.get(b.getId())) {
+                earliest = b;
                 do {
-                    dominators.set(inputEarliest.getId());
-                    inputEarliest = inputEarliest.getDominator();
-                } while(inputEarliest != null && !dominators.get(inputEarliest.getId()));
+                    bits.set(b.getId());
+                    b = b.getDominator();
+                } while(b != null && !bits.get(b.getId()));
             }
         }
         if (earliest == null) {
-            earliest = cfg.getStartBlock();
+            Block start = cfg.getNodeToBlock().get(((StructuredGraph) n.graph()).start());
+            assert start != null;
+            return start;
         }
-        earliestCache.set(node, earliest);
+        earliestCache.set(n, earliest);
         return earliest;
     }
 
@@ -229,20 +216,8 @@ public class SchedulePhase extends Phase {
         return result;
     }
 
-    /**
-     * Passes all blocks that a specific usage of a node is in to a given closure.
-     * This is more complex than just taking the usage's block because of of PhiNodes and FrameStates.
-     *
-     * @param node the node that needs to be scheduled
-     * @param usage the usage whose blocks need to be considered
-     * @param closure the closure that will be called for each block
-     */
-    private void blocksForUsage(ScheduledNode node, Node usage, BlockClosure closure) {
-        assert !(node instanceof PhiNode);
-
+    private void blocksForUsage(Node node, Node usage, BlockClosure closure) {
         if (usage instanceof PhiNode) {
-            // An input to a PhiNode is used at the end of the predecessor block that corresponds to the PhiNode input.
-            // One PhiNode can use an input multiple times, the closure will be called for each usage.
             PhiNode phi = (PhiNode) usage;
             MergeNode merge = phi.merge();
             Block mergeBlock = cfg.getNodeToBlock().get(merge);
@@ -260,34 +235,22 @@ public class SchedulePhase extends Phase {
                     closure.apply(mergeBlock.getPredecessors().get(i));
                 }
             }
-        } else if (usage instanceof FrameState) {
-            // The following logic does not work if node is a PhiNode, but this method is never called for PhiNodes.
-            for (Node frameStateUsage : usage.usages()) {
-                if (frameStateUsage instanceof FrameState) {
-                    // If a FrameState is an outer FrameState this method behaves as if the inner FrameState was the actual usage, by recursing.
-                    blocksForUsage(node, frameStateUsage, closure);
-                } else if (frameStateUsage instanceof MergeNode) {
-                    // If a FrameState belongs to a MergeNode then it's inputs will be placed at the common dominator of all EndNodes.
-                    for (Node pred : frameStateUsage.cfgPredecessors()) {
-                        closure.apply(cfg.getNodeToBlock().get(pred));
-                    }
-                } else {
-                    // Otherwise: Put the input into the same block as the usage.
-                    assert frameStateUsage instanceof StateSplit;
-                    assignBlockToNode((ScheduledNode) frameStateUsage);
-                    closure.apply(cfg.getNodeToBlock().get(frameStateUsage));
-                }
+        } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
+            MergeNode merge = ((FrameState) usage).block();
+            Block block = null;
+            for (Node pred : merge.cfgPredecessors()) {
+                block = getCommonDominator(block, cfg.getNodeToBlock().get(pred));
             }
+            closure.apply(block);
         } else {
-            // All other types of usages: Put the input into the same block as the usage.
-            assignBlockToNode((ScheduledNode) usage);
+            assignBlockToNode(usage);
             closure.apply(cfg.getNodeToBlock().get(usage));
         }
     }
 
     private void ensureScheduledUsages(Node node) {
-        for (Node usage : node.usages().filter(ScheduledNode.class)) {
-            assignBlockToNode((ScheduledNode) usage);
+        for (Node usage : node.usages().snapshot()) {
+            assignBlockToNode(usage);
         }
         // now true usages are ready
     }
@@ -303,25 +266,21 @@ public class SchedulePhase extends Phase {
     }
 
     private void sortNodesWithinBlocks(StructuredGraph graph) {
-        NodeBitMap visited = graph.createNodeBitMap();
+        NodeBitMap map = graph.createNodeBitMap();
         for (Block b : cfg.getBlocks()) {
-            sortNodesWithinBlock(b, visited);
+            sortNodesWithinBlocks(b, map);
         }
     }
 
-    /**
-     * Sorts the nodes within a block by adding the nodes to a list in a post-order iteration over all inputs.
-     * This means that a node is added to the list after all its inputs have been processed.
-     */
-    private void sortNodesWithinBlock(Block b, NodeBitMap visited) {
-        List<ScheduledNode> instructions = blockToNodesMap.get(b);
-        List<ScheduledNode> sortedInstructions = new ArrayList<>(instructions.size() + 2);
+    private void sortNodesWithinBlocks(Block b, NodeBitMap map) {
+        List<Node> instructions = blockToNodesMap.get(b);
+        List<Node> sortedInstructions = new ArrayList<>(instructions.size() + 2);
 
-        assert !visited.isMarked(b.getBeginNode()) && cfg.blockFor(b.getBeginNode()) == b;
-        assert !visited.isMarked(b.getEndNode()) && cfg.blockFor(b.getEndNode()) == b;
+        assert !map.isMarked(b.getBeginNode()) && cfg.blockFor(b.getBeginNode()) == b;
+        assert !map.isMarked(b.getEndNode()) && cfg.blockFor(b.getEndNode()) == b;
 
-        for (ScheduledNode i : instructions) {
-            addToSorting(b, i, sortedInstructions, visited);
+        for (Node i : instructions) {
+            addToSorting(b, i, sortedInstructions, map);
         }
 
         // Make sure that last node gets really last (i.e. when a frame state successor hangs off it).
@@ -351,44 +310,32 @@ public class SchedulePhase extends Phase {
         blockToNodesMap.put(b, sortedInstructions);
     }
 
-    private void addFrameStateToSorting(Block b, FrameState state, List<ScheduledNode> sortedInstructions, NodeBitMap visited) {
-        if (state != null) {
-            assert !visited.isMarked(state);
-
-            for (Node input : state.inputs()) {
-                if (input instanceof FrameState) {
-                    addFrameStateToSorting(b, (FrameState) input, sortedInstructions, visited);
-                } else {
-                    addToSorting(b, (ScheduledNode) input, sortedInstructions, visited);
-                }
-            }
-        }
-    }
-
-    private void addToSorting(Block b, ScheduledNode i, List<ScheduledNode> sortedInstructions, NodeBitMap visited) {
-        if (i == null || visited.isMarked(i) || cfg.getNodeToBlock().get(i) != b || i instanceof PhiNode || i instanceof LocalNode) {
+    private void addToSorting(Block b, Node i, List<Node> sortedInstructions, NodeBitMap map) {
+        if (i == null || map.isMarked(i) || cfg.getNodeToBlock().get(i) != b || i instanceof PhiNode || i instanceof LocalNode) {
             return;
         }
 
         FrameState state = null;
-        WriteNode write = null;
+        WriteNode writeNode = null;
         for (Node input : i.inputs()) {
-            if (input instanceof WriteNode && !visited.isMarked(input) && cfg.getNodeToBlock().get(input) == b) {
-                assert write == null;
-                write = (WriteNode) input;
+            if (input instanceof WriteNode && !map.isMarked(input) && cfg.getNodeToBlock().get(input) == b) {
+                writeNode = (WriteNode) input;
             } else if (input instanceof FrameState) {
-                assert state == null;
                 state = (FrameState) input;
             } else {
-                addToSorting(b, (ScheduledNode) input, sortedInstructions, visited);
+                addToSorting(b, input, sortedInstructions, map);
             }
         }
 
-        addToSorting(b, (ScheduledNode) i.predecessor(), sortedInstructions, visited);
-        visited.mark(i);
-        addFrameStateToSorting(b, state, sortedInstructions, visited);
-        assert write == null || !visited.isMarked(write);
-        addToSorting(b, write, sortedInstructions, visited);
+        if (i.predecessor() != null) {
+            addToSorting(b, i.predecessor(), sortedInstructions, map);
+        }
+
+        map.mark(i);
+
+        addToSorting(b, state, sortedInstructions, map);
+        assert writeNode == null || !map.isMarked(writeNode);
+        addToSorting(b, writeNode, sortedInstructions, map);
 
         // Now predecessors and inputs are scheduled => we can add this node.
         sortedInstructions.add(i);

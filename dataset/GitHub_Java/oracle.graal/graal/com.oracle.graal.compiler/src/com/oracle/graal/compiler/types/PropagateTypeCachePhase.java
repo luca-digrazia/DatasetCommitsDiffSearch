@@ -124,7 +124,7 @@ public class PropagateTypeCachePhase extends Phase {
 //            out.println(graph.method() + ": " + changes + " changes");
         }
 
-        CanonicalizerPhase.canonicalize(graph, changedNodes, runtime, target, assumptions, null);
+        CanonicalizerPhase.canonicalize(graph, changedNodes, runtime, target, assumptions);
 // outputGraph(graph);
     }
 
@@ -228,12 +228,7 @@ public class PropagateTypeCachePhase extends Phase {
                                 }
                             }
                             ValueNode replacement = canonical.replacement;
-                            if (node instanceof FloatingNode) {
-                                currentGraph.replaceFloating((FloatingNode) node, replacement);
-                            } else {
-                                assert node instanceof FixedWithNextNode;
-                                currentGraph.replaceFixed((FixedWithNextNode) node, replacement);
-                            }
+                            currentGraph.replaceFloating((FloatingNode) node, replacement);
                             changedNodes.addAll(replacement.usages());
                         }
                     }
