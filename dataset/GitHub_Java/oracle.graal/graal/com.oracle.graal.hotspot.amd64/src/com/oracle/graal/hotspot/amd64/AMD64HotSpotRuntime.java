@@ -54,10 +54,6 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
         Kind word = graalRuntime.getTarget().wordKind;
 
         // @formatter:off
-        addRuntimeCall(AMD64HotSpotUnwindOp.UNWIND_EXCEPTION, config.unwindExceptionStub,
-                        /*           temps */ null,
-                        /*             ret */ ret(Kind.Void),
-                        /* arg0: exception */ javaCallingConvention(Kind.Object));
 
         addRuntimeCall(DEOPTIMIZE, config.deoptimizeStub,
                 /*           temps */ null,
