@@ -39,30 +39,26 @@ public abstract class TypeCheckTest extends GraalCompilerTest {
     protected JavaTypeProfile currentProfile;
 
     @Override
-    protected StructuredGraph parseForCompile(ResolvedJavaMethod method) {
-        StructuredGraph graph = super.parseForCompile(method);
+    protected InstalledCode getCode(final ResolvedJavaMethod method, final StructuredGraph graph) {
+        boolean forceCompile = false;
         if (currentProfile != null) {
             replaceProfile(graph, currentProfile);
+            forceCompile = true;
         }
-        return graph;
+        return super.getCode(method, graph, forceCompile);
     }
 
-    @Override
-    protected InstalledCode getCode(final ResolvedJavaMethod method, final StructuredGraph graph) {
-        return getCode(method, graph, currentProfile != null);
-    }
-
-    protected JavaTypeProfile profile(Class<?>... types) {
+    protected JavaTypeProfile profile(Class... types) {
         return profile(TriState.FALSE, types);
     }
 
-    protected JavaTypeProfile profile(TriState nullSeen, Class<?>... types) {
+    protected JavaTypeProfile profile(TriState nullSeen, Class... types) {
         if (types.length == 0) {
             return null;
         }
         ProfiledType[] ptypes = new ProfiledType[types.length];
         for (int i = 0; i < types.length; i++) {
-            ptypes[i] = new ProfiledType(getMetaAccess().lookupJavaType(types[i]), 1.0D / types.length);
+            ptypes[i] = new ProfiledType(runtime.lookupJavaType(types[i]), 1.0D / types.length);
         }
         return new JavaTypeProfile(nullSeen, 0.0D, ptypes);
     }
