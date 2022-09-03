@@ -132,8 +132,8 @@ public class SplittingStrategyTest extends AbstractSplittingStrategyTest {
                     // Emulates builtin i.e. Split immediately
                     if (outsideCallNode == null) {
                         outsideCallNode = runtime.createDirectCallNode(mid);
-                        outsideCallNode.cloneCallTarget();
                         adoptChildren();
+                        outsideCallNode.cloneCallTarget();
                     }
                     return outsideCallNode.call(frame.getArguments());
                 }
