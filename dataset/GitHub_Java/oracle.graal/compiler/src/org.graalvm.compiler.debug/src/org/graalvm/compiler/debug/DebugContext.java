@@ -385,7 +385,6 @@ public final class DebugContext implements AutoCloseable {
                             MethodFilter.getValue(options),
                             logStream, dumpHandlers, verifyHandlers);
             currentScope = new ScopeImpl(this, Thread.currentThread());
-            currentScope.updateFlags(currentConfig);
             metricsEnabled = true;
         } else {
             metricsEnabled = immutable.hasUnscopedMetrics() || immutable.listMetrics;
