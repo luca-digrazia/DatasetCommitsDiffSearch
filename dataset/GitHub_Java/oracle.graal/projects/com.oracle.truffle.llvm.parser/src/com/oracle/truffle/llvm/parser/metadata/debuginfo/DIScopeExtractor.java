@@ -265,13 +265,7 @@ final class DIScopeExtractor {
 
         @Override
         public void visit(MDGlobalVariable md) {
-            MDBaseNode mdScope = md.getScope();
-            if (mdScope == MDReference.VOID) {
-                // in LLVM 3.2 metadata globals often do not have scopes attached, we fall back to
-                // the compileunit
-                mdScope = md.getCompileUnit();
-            }
-            visit(Kind.LOCATION, md, mdScope, md.getFile(), md.getLine());
+            visit(Kind.LOCATION, md, md.getScope(), md.getFile(), md.getLine());
         }
 
         @Override

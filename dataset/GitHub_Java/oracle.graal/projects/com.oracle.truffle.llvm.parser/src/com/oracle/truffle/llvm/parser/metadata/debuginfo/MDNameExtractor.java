@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.parser.metadata.debuginfo;
 
 import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
-import com.oracle.truffle.llvm.parser.metadata.MDBasicType;
 import com.oracle.truffle.llvm.parser.metadata.MDCompositeType;
 import com.oracle.truffle.llvm.parser.metadata.MDDerivedType;
 import com.oracle.truffle.llvm.parser.metadata.MDEnumerator;
@@ -42,15 +41,14 @@ import com.oracle.truffle.llvm.parser.metadata.MDNamedNode;
 import com.oracle.truffle.llvm.parser.metadata.MDNamespace;
 import com.oracle.truffle.llvm.parser.metadata.MDObjCProperty;
 import com.oracle.truffle.llvm.parser.metadata.MDString;
-import com.oracle.truffle.llvm.parser.metadata.MetadataVisitor;
 import com.oracle.truffle.llvm.parser.metadata.MDSubprogram;
 import com.oracle.truffle.llvm.parser.metadata.MDTemplateType;
 import com.oracle.truffle.llvm.parser.metadata.MDTemplateTypeParameter;
 import com.oracle.truffle.llvm.parser.metadata.MDTemplateValue;
 
-final class MDNameExtractor implements MetadataVisitor {
+final class MDNameExtractor implements MDFollowRefVisitor {
 
-    private static final String DEFAULT_STRING = "<anonymous>";
+    private static final String DEFAULT_STRING = "<unknown name>";
 
     static String getName(MDBaseNode container) {
         if (container == null) {
@@ -106,11 +104,6 @@ final class MDNameExtractor implements MetadataVisitor {
         if (DEFAULT_STRING.equals(str)) {
             md.getLinkageName().accept(this);
         }
-    }
-
-    @Override
-    public void visit(MDBasicType md) {
-        md.getName().accept(this);
     }
 
     @Override

@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
@@ -106,7 +105,6 @@ public abstract class LLVMToDebugDeclarationNode extends LLVMNode implements LLV
                 return fromAddress(LLVMAddress.fromLong(rawAddress));
             }
         } catch (UnsupportedMessageException ignored) {
-            CompilerDirectives.transferToInterpreter();
         }
         return unavailable();
     }
