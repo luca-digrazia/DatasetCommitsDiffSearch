@@ -106,7 +106,7 @@ public interface MetaAccessProvider {
      * {@link LocationIdentity#ANY_LOCATION} denotes that the call kills all memory locations.
      * Returning any empty array denotes that the call does not kill any memory locations.
      */
-    LocationIdentity[] getKilledLocations(ForeignCallDescriptor descriptor);
+    LocationIdentity[] getKilledLocationIdentities(ForeignCallDescriptor descriptor);
 
     /**
      * Determines if deoptimization can occur during a given foreign call.

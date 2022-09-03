@@ -66,7 +66,7 @@ public class ForeignCallNode extends AbstractStateSplit implements LIRLowerable,
 
     @Override
     public LocationIdentity[] getLocationIdentities() {
-        return runtime.getKilledLocations(descriptor);
+        return runtime.getKilledLocationIdentities(descriptor);
     }
 
     protected Value[] operands(LIRGeneratorTool gen) {
