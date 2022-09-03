@@ -22,13 +22,9 @@
  */
 package com.oracle.truffle.espresso.meta;
 
-import java.lang.reflect.Array;
-
-import com.oracle.truffle.espresso.descriptors.StaticSymbols;
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.Klass;
+
+import java.lang.reflect.Array;
 
 /**
  * Denotes the basic kinds of types in CRI, including the all the Java primitive types, for example,
@@ -79,8 +75,6 @@ public enum JavaKind {
     private final Class<?> boxedJavaClass;
     private final int slotCount;
     private final int basicType;
-    private final Symbol<Type> type;
-    private final Symbol<Name> name;
 
     JavaKind(char typeChar, int basicType, String javaName, int slotCount, boolean isStackInt, Class<?> primitiveJavaClass, Class<?> boxedJavaClass) {
         this.typeChar = typeChar;
@@ -90,8 +84,6 @@ public enum JavaKind {
         this.primitiveJavaClass = primitiveJavaClass;
         this.boxedJavaClass = boxedJavaClass;
         this.basicType = basicType;
-        this.type = (primitiveJavaClass != null) ? StaticSymbols.putType("" + typeChar) : null;
-        this.name = StaticSymbols.putName(javaName);
         assert primitiveJavaClass == null || javaName.equals(primitiveJavaClass.getName());
     }
 
@@ -251,9 +243,8 @@ public enum JavaKind {
                 return Long;
             case 'V':
                 return Void;
-            default:
-                throw new IllegalArgumentException("unknown primitive or void type character: " + ch);
         }
+        throw new IllegalArgumentException("unknown primitive or void type character: " + ch);
     }
 
     /**
@@ -409,20 +400,6 @@ public enum JavaKind {
     }
 
     /**
-     * Returns the Espresso type (symbol) of this kind.
-     *
-     * @return the Espresso type (symbol) of this kind
-     */
-    public Symbol<Type> getType() {
-        return type;
-    }
-
-    public Symbol<Name> getPrimitiveBinaryName() {
-        EspressoError.guarantee(isPrimitive(), "not a primitive");
-        return name;
-    }
-
-    /**
      * Marker interface for types that should be {@linkplain JavaKind#format(Object) formatted} with
      * their {@link Object#toString()} value. Calling {@link Object#toString()} on other objects
      * poses a security risk because it can potentially call user code.
@@ -459,7 +436,7 @@ public enum JavaKind {
                         return "String:\"" + s + '"';
                     }
                 } else if (value instanceof Klass) {
-                    return "JavaType:" + ((Klass) value).getType();
+                    return "JavaType:" + ((Klass) value).getName();
                 } else if (value instanceof Enum) {
                     return MetaUtil.getSimpleName(value.getClass(), true) + ":" + ((Enum<?>) value).name();
                 } else if (value instanceof FormatWithToString) {
