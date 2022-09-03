@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.CompareBranchOp;
@@ -44,14 +44,13 @@ public enum SPARCCompare {
 
     public static final class CompareOp extends SPARCLIRInstruction {
         public static final LIRInstructionClass<CompareOp> TYPE = LIRInstructionClass.create(CompareOp.class);
-        public static final SizeEstimate SIZE = SizeEstimate.create(1);
 
         @Opcode private final SPARCCompare opcode;
         @Use({REG}) protected Value x;
         @Use({REG, CONST}) protected Value y;
 
         public CompareOp(SPARCCompare opcode, Value x, Value y) {
-            super(TYPE, SIZE);
+            super(TYPE);
             this.opcode = opcode;
             this.x = x;
             this.y = y;
@@ -75,6 +74,7 @@ public enum SPARCCompare {
                     (name().startsWith("F") && x.getKind() == Kind.Float && y.getKind() == Kind.Float) ||
                     (name().startsWith("D") && x.getKind() == Kind.Double && y.getKind() == Kind.Double)
                     : "Name; " + name() + " x: " + x + " y: " + y;
+
             // @formatter:on
         }
     }
@@ -98,7 +98,7 @@ public enum SPARCCompare {
                     masm.fcmp(Fcc0, Fcmpd, asDoubleReg(x), asDoubleReg(y));
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         } else {
             assert isConstant(y);
@@ -116,7 +116,7 @@ public enum SPARCCompare {
                         masm.cmp(asObjectReg(x), 0);
                         break;
                     } else {
-                        throw JVMCIError.shouldNotReachHere("Only null object constants are allowed in comparisons");
+                        throw GraalInternalError.shouldNotReachHere("Only null object constants are allowed in comparisons");
                     }
                 case FCMP:
                     masm.fcmp(Fcc0, Fcmps, asFloatReg(x), asFloatReg(y));
@@ -125,7 +125,7 @@ public enum SPARCCompare {
                     masm.fcmp(Fcc0, Fcmpd, asDoubleReg(x), asDoubleReg(y));
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
     }

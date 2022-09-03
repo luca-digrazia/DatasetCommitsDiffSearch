@@ -22,22 +22,19 @@
  */
 package com.oracle.graal.lir.sparc;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.sparc.SPARC.CPUFeature;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.Assembler.LabelHint;
 import com.oracle.graal.asm.sparc.*;
@@ -46,11 +43,13 @@ import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.sparc.SPARC.CPUFeature;
 
 public class SPARCControlFlow {
 
@@ -109,7 +108,7 @@ public class SPARCControlFlow {
             this.unorderedIsTrue = unorderedIsTrue;
             this.trueDestinationProbability = trueDestinationProbability;
             CC conditionCodeReg = CC.forKind(kind);
-            conditionFlag = fromCondition(conditionCodeReg, condition, unorderedIsTrue);
+            conditionFlag = ConditionFlag.fromCondtition(conditionCodeReg, condition, unorderedIsTrue);
         }
 
         @Override
@@ -261,7 +260,7 @@ public class SPARCControlFlow {
                     }
                     break;
                 default:
-                    JVMCIError.shouldNotReachHere();
+                    GraalInternalError.shouldNotReachHere();
             }
         }
 
@@ -435,14 +434,14 @@ public class SPARCControlFlow {
                             break;
                         }
                         case Object: {
-                            conditionCode = crb.codeCache.getTarget().wordKind == Kind.Long ? CC.Xcc : CC.Icc;
+                            conditionCode = CC.Ptrcc;
                             scratchRegister = asObjectReg(scratch);
                             break;
                         }
                         default:
-                            throw new JVMCIError("switch only supported for int, long and object");
+                            throw new GraalInternalError("switch only supported for int, long and object");
                     }
-                    ConditionFlag conditionFlag = fromCondition(conditionCode, condition, false);
+                    ConditionFlag conditionFlag = ConditionFlag.fromCondtition(conditionCode, condition, false);
                     masm.cmp(keyRegister, scratchRegister);
                     masm.bpcc(conditionFlag, NOT_ANNUL, target, conditionCode, PREDICT_TAKEN);
                     masm.nop();  // delay slot
@@ -567,10 +566,6 @@ public class SPARCControlFlow {
 
     private static void cmove(SPARCMacroAssembler masm, CC cc, Value result, ConditionFlag cond, Value other) {
         switch (other.getKind()) {
-            case Boolean:
-            case Byte:
-            case Short:
-            case Char:
             case Int:
                 if (isConstant(other)) {
                     int constant;
@@ -605,57 +600,7 @@ public class SPARCControlFlow {
                 masm.fmovdcc(cond, cc, asDoubleReg(other), asDoubleReg(result));
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
-    }
-
-    public static ConditionFlag fromCondition(CC conditionFlagsRegister, Condition cond, boolean unorderedIsTrue) {
-        switch (conditionFlagsRegister) {
-            case Xcc:
-            case Icc:
-                switch (cond) {
-                    case EQ:
-                        return Equal;
-                    case NE:
-                        return NotEqual;
-                    case BT:
-                        return LessUnsigned;
-                    case LT:
-                        return Less;
-                    case BE:
-                        return LessEqualUnsigned;
-                    case LE:
-                        return LessEqual;
-                    case AE:
-                        return GreaterEqualUnsigned;
-                    case GE:
-                        return GreaterEqual;
-                    case AT:
-                        return GreaterUnsigned;
-                    case GT:
-                        return Greater;
-                }
-                throw JVMCIError.shouldNotReachHere("Unimplemented for: " + cond);
-            case Fcc0:
-            case Fcc1:
-            case Fcc2:
-            case Fcc3:
-                switch (cond) {
-                    case EQ:
-                        return unorderedIsTrue ? F_UnorderedOrEqual : F_Equal;
-                    case NE:
-                        return ConditionFlag.F_NotEqual;
-                    case LT:
-                        return unorderedIsTrue ? F_UnorderedOrLess : F_Less;
-                    case LE:
-                        return unorderedIsTrue ? F_UnorderedOrLessOrEqual : F_LessOrEqual;
-                    case GE:
-                        return unorderedIsTrue ? F_UnorderedGreaterOrEqual : F_GreaterOrEqual;
-                    case GT:
-                        return unorderedIsTrue ? F_UnorderedOrGreater : F_Greater;
-                }
-                throw JVMCIError.shouldNotReachHere("Unkown condition: " + cond);
-        }
-        throw JVMCIError.shouldNotReachHere("Unknown condition flag register " + conditionFlagsRegister);
     }
 }
