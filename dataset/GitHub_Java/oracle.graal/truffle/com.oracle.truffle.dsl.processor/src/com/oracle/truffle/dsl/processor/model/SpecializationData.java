@@ -22,14 +22,17 @@
  */
 package com.oracle.truffle.dsl.processor.model;
 
-import java.util.*;
-
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-
-import com.oracle.truffle.dsl.processor.*;
-import com.oracle.truffle.dsl.processor.expression.*;
-import com.oracle.truffle.dsl.processor.java.*;
+import com.oracle.truffle.dsl.processor.ProcessorContext;
+import com.oracle.truffle.dsl.processor.expression.DSLExpression;
+import com.oracle.truffle.dsl.processor.java.ElementUtils;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.TypeMirror;
 
 public final class SpecializationData extends TemplateMethod {
 
@@ -69,26 +72,47 @@ public final class SpecializationData extends TemplateMethod {
     }
 
     public boolean isCacheBoundByGuard(CacheExpression cacheExpression) {
+        VariableElement cachedVariable = cacheExpression.getParameter().getVariableElement();
+
         for (GuardExpression expression : getGuards()) {
-            if (expression.getExpression().findBoundVariableElements().contains(cacheExpression.getParameter().getVariableElement())) {
+            if (expression.getExpression().findBoundVariableElements().contains(cachedVariable)) {
                 return true;
             }
         }
 
-        // check all next binding caches if they are bound by guard
-        Set<VariableElement> boundVariables = cacheExpression.getExpression().findBoundVariableElements();
+        for (AssumptionExpression expression : getAssumptionExpressions()) {
+            if (expression.getExpression().findBoundVariableElements().contains(cachedVariable)) {
+                return true;
+            }
+        }
+
+        // check all next binding caches if they are bound to a guard and use this cache variable
         boolean found = false;
         for (CacheExpression expression : getCaches()) {
             if (cacheExpression == expression) {
                 found = true;
             } else if (found) {
-                if (boundVariables.contains(expression.getParameter().getVariableElement())) {
+                if (expression.getExpression().findBoundVariableElements().contains(cachedVariable)) {
                     if (isCacheBoundByGuard(expression)) {
                         return true;
                     }
                 }
             }
         }
+
+        return false;
+    }
+
+    public boolean isGuardBoundWithCache(GuardExpression guardExpression) {
+        Set<VariableElement> boundVars = guardExpression.getExpression().findBoundVariableElements();
+
+        for (CacheExpression cache : getCaches()) {
+            VariableElement cacheVar = cache.getParameter().getVariableElement();
+            if (boundVars.contains(cacheVar)) {
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -334,6 +358,41 @@ public final class SpecializationData extends TemplateMethod {
             }
         }
         return false;
+    }
+
+    public boolean isConstantLimit() {
+        if (hasMultipleInstances()) {
+            DSLExpression expression = getLimitExpression();
+            if (expression == null) {
+                return true;
+            } else {
+                Object constant = expression.resolveConstant();
+                if (constant != null && constant instanceof Integer) {
+                    return true;
+                }
+            }
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    public int getMaximumNumberOfInstances() {
+        if (hasMultipleInstances()) {
+            DSLExpression expression = getLimitExpression();
+            if (expression == null) {
+                return 3; // default limit
+            } else {
+                Object constant = expression.resolveConstant();
+                if (constant != null && constant instanceof Integer) {
+                    return (int) constant;
+                } else {
+                    return Integer.MAX_VALUE;
+                }
+            }
+        } else {
+            return 1;
+        }
     }
 
     public boolean isReachableAfter(SpecializationData prev) {

@@ -114,7 +114,7 @@ public class FlatNodeGenFactory {
     private final Set<TypeMirror> expectedTypes = new HashSet<>();
     private List<SpecializationData> reachableSpecializations;
 
-    private Map<String, TypeMirror> isValidSignatures = new HashMap<>();
+    private Set<TypeMirror> isValidSignatures = new HashSet<>();
 
     private final boolean boxingEliminationEnabled;
 
@@ -294,7 +294,7 @@ public class FlatNodeGenFactory {
             }
         }
 
-        for (TypeMirror assumptionType : isValidSignatures.values()) {
+        for (TypeMirror assumptionType : isValidSignatures) {
             clazz.add(createIsValid(assumptionType));
         }
 
@@ -2001,7 +2001,7 @@ public class FlatNodeGenFactory {
 
     private CodeTree createAssumptionGuard(CodeTreeBuilder builder, AssumptionExpression assumption, CodeTree assumptionValue) {
         CodeTree assumptionGuard = builder.create().startCall("isValid_").tree(assumptionValue).end().build();
-        isValidSignatures.put(ElementUtils.getQualifiedName(assumption.getExpression().getResolvedType()), assumption.getExpression().getResolvedType());
+        isValidSignatures.add(assumption.getExpression().getResolvedType());
         return assumptionGuard;
     }
 
@@ -2043,7 +2043,7 @@ public class FlatNodeGenFactory {
             builder.string("!");
 
             builder.startCall("isValid_").tree(createAssumptionReference(specialization, assumption)).end();
-            isValidSignatures.put(ElementUtils.getQualifiedName(assumption.getExpression().getResolvedType()), assumption.getExpression().getResolvedType());
+            isValidSignatures.add(assumption.getExpression().getResolvedType());
             sep = " || ";
         }
         builder.end().startBlock();
