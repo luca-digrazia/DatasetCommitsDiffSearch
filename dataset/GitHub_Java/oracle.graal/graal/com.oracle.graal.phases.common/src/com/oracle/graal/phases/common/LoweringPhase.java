@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -51,7 +51,11 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
     static class DummyGuardHandle extends ValueNode implements GuardedNode {
         @Input(InputType.Guard) GuardingNode guard;
 
-        public DummyGuardHandle(GuardingNode guard) {
+        public static DummyGuardHandle create(GuardingNode guard) {
+            return USE_GENERATED_NODES ? new LoweringPhase_DummyGuardHandleGen(guard) : new DummyGuardHandle(guard);
+        }
+
+        protected DummyGuardHandle(GuardingNode guard) {
             super(StampFactory.forVoid());
             this.guard = guard;
         }
@@ -127,30 +131,26 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             return context.getAssumptions();
         }
 
-        public StampProvider getStampProvider() {
-            return context.getStampProvider();
-        }
-
         @Override
         public GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
             if (OptEliminateGuards.getValue()) {
                 for (Node usage : condition.usages()) {
-                    if (!activeGuards.isNew(usage) && activeGuards.isMarked(usage) && ((GuardNode) usage).isNegated() == negated) {
+                    if (!activeGuards.isNew(usage) && activeGuards.isMarked(usage) && ((GuardNode) usage).negated() == negated) {
                         return (GuardNode) usage;
                     }
                 }
             }
             StructuredGraph graph = before.graph();
             if (condition.graph().getGuardsStage().ordinal() >= StructuredGraph.GuardsStage.FIXED_DEOPTS.ordinal()) {
-                FixedGuardNode fixedGuard = graph.add(new FixedGuardNode(condition, deoptReason, action, negated));
+                FixedGuardNode fixedGuard = graph.add(FixedGuardNode.create(condition, deoptReason, action, negated));
                 graph.addBeforeFixed(before, fixedGuard);
-                DummyGuardHandle handle = graph.add(new DummyGuardHandle(fixedGuard));
+                DummyGuardHandle handle = graph.add(DummyGuardHandle.create(fixedGuard));
                 fixedGuard.lower(this);
                 GuardingNode result = handle.getGuard();
                 handle.safeDelete();
                 return result;
             } else {
-                GuardNode newGuard = graph.unique(new GuardNode(condition, guardAnchor, deoptReason, action, negated, JavaConstant.NULL_POINTER));
+                GuardNode newGuard = graph.unique(GuardNode.create(condition, guardAnchor, deoptReason, action, negated, Constant.NULL_OBJECT));
                 if (OptEliminateGuards.getValue()) {
                     activeGuards.markAndGrow(newGuard);
                 }
@@ -343,7 +343,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                         // FixedWithNextNode is followed by some kind of BeginNode.
                         // For example the when a FixedGuard followed by a loop exit is lowered to a
                         // control-split + deopt.
-                        BeginNode begin = node.graph().add(new BeginNode());
+                        BeginNode begin = node.graph().add(BeginNode.create());
                         nextLastFixed.replaceFirstSuccessor(nextNode, begin);
                         begin.setNext(nextNode);
                         nextLastFixed = begin;
