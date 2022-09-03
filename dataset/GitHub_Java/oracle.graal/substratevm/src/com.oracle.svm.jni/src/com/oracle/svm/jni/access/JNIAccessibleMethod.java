@@ -27,7 +27,6 @@ package com.oracle.svm.jni.access;
 // Checkstyle: allow reflection
 
 import java.lang.reflect.Modifier;
-import java.util.stream.Stream;
 
 import org.graalvm.nativeimage.Platform.HOSTED_ONLY;
 import org.graalvm.nativeimage.Platforms;
@@ -47,7 +46,7 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 /**
  * Information on a method that can be looked up and called via JNI.
  */
-public final class JNIAccessibleMethod extends JNIAccessibleMember {
+public final class JNIAccessibleMethod {
 
     public static ResolvedJavaField getCallWrapperField(MetaAccessProvider metaAccess, CallVariant variant, boolean nonVirtual) {
         StringBuilder name = new StringBuilder(32);
@@ -71,7 +70,7 @@ public final class JNIAccessibleMethod extends JNIAccessibleMember {
         }
     }
 
-    @Platforms(HOSTED_ONLY.class) private final JNIAccessibleMethodDescriptor descriptor;
+    private final JNIAccessibleClass declaringClass;
     private final int modifiers;
     @SuppressWarnings("unused") private CFunctionPointer varargsCallWrapper;
     @SuppressWarnings("unused") private CFunctionPointer arrayCallWrapper;
@@ -86,8 +85,7 @@ public final class JNIAccessibleMethod extends JNIAccessibleMember {
     @Platforms(HOSTED_ONLY.class) private final JNIJavaCallWrapperMethod arrayNonvirtualCallWrapperMethod;
     @Platforms(HOSTED_ONLY.class) private final JNIJavaCallWrapperMethod valistNonvirtualCallWrapperMethod;
 
-    JNIAccessibleMethod(JNIAccessibleMethodDescriptor descriptor,
-                    int modifiers,
+    JNIAccessibleMethod(int modifiers,
                     JNIAccessibleClass declaringClass,
                     JNIJavaCallWrapperMethod varargsCallWrapper,
                     JNIJavaCallWrapperMethod arrayCallWrapper,
@@ -95,14 +93,13 @@ public final class JNIAccessibleMethod extends JNIAccessibleMember {
                     JNIJavaCallWrapperMethod varargsNonvirtualCallWrapperMethod,
                     JNIJavaCallWrapperMethod arrayNonvirtualCallWrapperMethod,
                     JNIJavaCallWrapperMethod valistNonvirtualCallWrapperMethod) {
-        super(declaringClass);
 
         assert varargsCallWrapper != null && arrayCallWrapper != null && valistCallWrapper != null;
         assert (Modifier.isStatic(modifiers) || Modifier.isAbstract(modifiers)) //
                         ? (varargsNonvirtualCallWrapperMethod == null && arrayNonvirtualCallWrapperMethod == null && valistNonvirtualCallWrapperMethod == null)
                         : (varargsNonvirtualCallWrapperMethod != null & arrayNonvirtualCallWrapperMethod != null && valistNonvirtualCallWrapperMethod != null);
-        this.descriptor = descriptor;
         this.modifiers = modifiers;
+        this.declaringClass = declaringClass;
         this.varargsCallWrapperMethod = varargsCallWrapper;
         this.arrayCallWrapperMethod = arrayCallWrapper;
         this.valistCallWrapperMethod = valistCallWrapper;
@@ -111,8 +108,8 @@ public final class JNIAccessibleMethod extends JNIAccessibleMember {
         this.valistNonvirtualCallWrapperMethod = valistNonvirtualCallWrapperMethod;
     }
 
-    public boolean isPublic() {
-        return Modifier.isPublic(modifiers);
+    public JNIAccessibleClass getDeclaringClass() {
+        return declaringClass;
     }
 
     public boolean isStatic() {
@@ -120,7 +117,7 @@ public final class JNIAccessibleMethod extends JNIAccessibleMember {
     }
 
     @Platforms(HOSTED_ONLY.class)
-    void finishBeforeCompilation(CompilationAccessImpl access) {
+    void resolveJavaCallWrapper(CompilationAccessImpl access) {
         HostedUniverse hUniverse = access.getUniverse();
         AnalysisUniverse aUniverse = access.getUniverse().getBigBang().getUniverse();
         varargsCallWrapper = MethodPointer.factory(hUniverse.lookup(aUniverse.lookup(varargsCallWrapperMethod)));
@@ -131,6 +128,5 @@ public final class JNIAccessibleMethod extends JNIAccessibleMember {
             arrayNonvirtualCallWrapper = MethodPointer.factory(hUniverse.lookup(aUniverse.lookup(arrayNonvirtualCallWrapperMethod)));
             valistNonvirtualCallWrapper = MethodPointer.factory(hUniverse.lookup(aUniverse.lookup(valistNonvirtualCallWrapperMethod)));
         }
-        setHidingSubclasses(access.getMetaAccess(), sub -> Stream.of(sub.getDeclaredMethods()).anyMatch(descriptor::matchesIgnoreReturnType));
     }
 }
