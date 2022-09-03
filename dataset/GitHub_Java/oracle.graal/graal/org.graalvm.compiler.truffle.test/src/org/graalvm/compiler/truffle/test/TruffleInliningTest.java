@@ -22,6 +22,8 @@
  */
 package org.graalvm.compiler.truffle.test;
 
+import static org.graalvm.compiler.test.GraalTest.assertTrue;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,7 +39,6 @@ import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.TruffleInlining;
 import org.graalvm.compiler.truffle.TruffleInliningDecision;
 import org.junit.AfterClass;
-import org.junit.Assert;
 import org.junit.BeforeClass;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -215,11 +216,11 @@ public class TruffleInliningTest {
     protected TruffleInliningTestScenarioBuilder builder = new TruffleInliningTestScenarioBuilder();
 
     void assertInlined(TruffleInlining decisions, String name) {
-        Assert.assertTrue(name + " was not inlined!", countInlines(decisions, name) > 0);
+        assertTrue(countInlines(decisions, name) > 0, name + " was not inlined!");
     }
 
     void assertNotInlined(TruffleInlining decisions, String name) {
-        Assert.assertTrue(name + " was inlined!", countInlines(decisions, name) == 0);
+        assertTrue(countInlines(decisions, name) == 0, name + " was inlined!");
     }
 
     void traverseDecisions(List<TruffleInliningDecision> decisions, Consumer<TruffleInliningDecision> f) {
