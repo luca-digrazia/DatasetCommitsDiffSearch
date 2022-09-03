@@ -30,7 +30,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.ServiceLoader;
+import java.util.Objects;
 
 /**
  * An option value.
@@ -216,21 +216,6 @@ public class OptionValue<T> {
     }
 
     /**
-     * Mechanism for lazily loading all available options which has the side effect of assigning
-     * names to the options.
-     */
-    static class Lazy {
-        static void init() {
-            ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
-            for (OptionDescriptors opts : loader) {
-                for (OptionDescriptor desc : opts) {
-                    desc.getName();
-                }
-            }
-        }
-    }
-
-    /**
      * Gets the name of this option. The name for an option value with a null
      * {@linkplain #setDescriptor(OptionDescriptor) descriptor} is the value of
      * {@link Object#toString()}.
@@ -239,7 +224,7 @@ public class OptionValue<T> {
         if (descriptor == null) {
             // Trigger initialization of OptionsLoader to ensure all option values have
             // a descriptor which is required for them to have meaningful names.
-            Lazy.init();
+            OptionsLoader.options.hashCode();
         }
         return descriptor == null ? super.toString() : descriptor.getName();
     }
@@ -259,6 +244,16 @@ public class OptionValue<T> {
             defaultValue = defaultValue();
         }
         return defaultValue;
+    }
+
+    /**
+     * Returns true if the option has the same value that was set in the source code.
+     */
+    public boolean hasDefaultValue() {
+        if (!(this instanceof StableOptionValue)) {
+            getValue(); // ensure initialized
+        }
+        return value == DEFAULT || Objects.equals(value, getDefaultValue());
     }
 
     /**
