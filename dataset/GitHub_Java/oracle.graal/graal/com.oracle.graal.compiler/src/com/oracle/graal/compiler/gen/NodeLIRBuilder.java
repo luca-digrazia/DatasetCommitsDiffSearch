@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,9 +38,9 @@ import java.util.Map.Entry;
 
 import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.InfopointReason;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.code.site.InfopointReason;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
@@ -74,7 +74,6 @@ import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.SwitchStrategy;
 import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.debug.LIRGenerationDebugContext;
-import com.oracle.graal.lir.gen.LIRGenerator;
 import com.oracle.graal.lir.gen.LIRGenerator.Options;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.BlockScope;
@@ -122,7 +121,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     private final NodeMap<Value> nodeOperands;
     private final DebugInfoBuilder debugInfoBuilder;
 
-    protected final LIRGenerator gen;
+    protected final LIRGeneratorTool gen;
 
     private ValueNode currentInstruction;
     private ValueNode lastInstructionPrinted; // Debugging only
@@ -133,7 +132,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     private Map<Class<? extends Node>, List<MatchStatement>> matchRules;
 
     public NodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool gen, NodeMatchRules nodeMatchRules) {
-        this.gen = (LIRGenerator) gen;
+        this.gen = gen;
         this.nodeMatchRules = nodeMatchRules;
         this.nodeOperands = graph.createNodeMap();
         this.debugInfoBuilder = createDebugInfoBuilder(graph, this);
@@ -452,7 +451,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             BytecodePosition position = node.getNodeContext(BytecodePosition.class);
             if (position != null && (lastPosition == null || !lastPosition.equals(position))) {
                 lastPosition = position;
-                recordSimpleInfopoint(InfopointReason.BYTECODE_POSITION, position);
+                recordSimpleInfopoint(InfopointReason.LINE_NUMBER, position);
             }
         }
         if (node instanceof LIRLowerable) {
@@ -463,7 +462,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     protected void emitPrologue(StructuredGraph graph) {
-        CallingConvention incomingArguments = gen.getResult().getCallingConvention();
+        CallingConvention incomingArguments = gen.getCallingConvention();
 
         Value[] params = new Value[incomingArguments.getArgumentCount()];
         for (int i = 0; i < params.length; i++) {
