@@ -40,7 +40,6 @@ import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
-import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
@@ -60,6 +59,7 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public SubstrateTruffleCompiler(TruffleCompilerRuntime runtime, Plugins plugins, Suites suites, LIRSuites lirSuites, Backend backend, SnippetReflectionProvider snippetReflection) {
+        // TODO: Add low tier compilation to Substrate.
         super(runtime, plugins, suites, lirSuites, backend, null, null, null, snippetReflection);
     }
 
@@ -105,7 +105,7 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
     }
 
     @Override
-    protected InstalledCode createInstalledCode(CompilableTruffleAST compilable, TruffleCompilationTask task) {
+    protected InstalledCode createInstalledCode(CompilableTruffleAST compilable) {
         return new SubstrateTruffleInstalledCodeBridge((SubstrateOptimizedCallTarget) compilable);
     }
 }

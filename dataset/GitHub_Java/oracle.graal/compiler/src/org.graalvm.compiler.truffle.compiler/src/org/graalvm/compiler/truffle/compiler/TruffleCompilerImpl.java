@@ -66,7 +66,6 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugContext.Scope;
 import org.graalvm.compiler.debug.DiagnosticsOutputDirectory;
 import org.graalvm.compiler.debug.MemUseTrackerKey;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
 import org.graalvm.compiler.lir.phases.LIRSuites;
@@ -428,7 +427,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
             Suites selectedSuites = suites;
             LIRSuites selectedLirSuites = lirSuites;
             Providers selectedProviders = providers;
-            // TTY.println(TruffleCompilerOptions.TruffleLowTierCompilation.getValue(TruffleCompilerOptions.getOptions()));
             if (TruffleCompilerOptions.TruffleLowTierCompilation.getValue(TruffleCompilerOptions.getOptions())) {
                 selectedSuites = lowTierSuites;
                 selectedLirSuites = lowTierLirSuites;
@@ -448,9 +446,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
         try (DebugCloseable a = CodeInstallationTime.start(debug); DebugCloseable c = CodeInstallationMemUse.start(debug)) {
             InstalledCode installedCode = createInstalledCode(compilable);
             backend.createInstalledCode(debug, graph.method(), compilationRequest, result, graph.getSpeculationLog(), installedCode, false);
-            if (!TruffleCompilerOptions.TruffleLowTierCompilation.getValue(graph.getOptions())) {
-                TTY.println("Not a low tier compilation. " + graph.name);
-            }
         } catch (Throwable e) {
             throw debug.handle(e);
         }

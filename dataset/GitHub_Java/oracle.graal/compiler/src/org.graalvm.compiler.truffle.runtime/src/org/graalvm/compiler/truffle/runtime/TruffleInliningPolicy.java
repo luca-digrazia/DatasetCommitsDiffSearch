@@ -25,7 +25,6 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import com.oracle.truffle.api.CompilerOptions;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 
@@ -36,8 +35,7 @@ public interface TruffleInliningPolicy {
     double calculateScore(TruffleInliningProfile profile);
 
     static TruffleInliningPolicy getInliningPolicy(OptionValues options) {
-        // TTY.println("inlining: " + TruffleCompilerOptions.TruffleLowGradeCompilation.getValue(TruffleCompilerOptions.getOptions()));
-        if (TruffleCompilerOptions.TruffleLowGradeCompilation.getValue(options)) {
+        if (TruffleCompilerOptions.TruffleLowTierCompilation.getValue(options)) {
             return new NoInliningPolicy();
         } else {
             return new DefaultInliningPolicy();
