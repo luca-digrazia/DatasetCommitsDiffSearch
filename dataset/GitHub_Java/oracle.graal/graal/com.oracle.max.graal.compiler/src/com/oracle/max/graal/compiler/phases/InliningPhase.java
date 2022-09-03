@@ -39,14 +39,8 @@ import com.sun.cri.ri.*;
 
 
 public class InliningPhase extends Phase {
-    /*
-     * - Detect method which only call another method with some parameters set to constants: void foo(a) -> void foo(a, b) -> void foo(a, b, c) ...
-     *   These should not be taken into account when determining inlining depth.
-     */
 
     public static final HashMap<RiMethod, Integer> methodCount = new HashMap<RiMethod, Integer>();
-
-    private static final int MAX_ITERATIONS = 1000;
 
     private final GraalCompilation compilation;
     private final IR ir;
@@ -78,7 +72,7 @@ public class InliningPhase extends Phase {
             }
         }
 
-        for (int iterations = 0; iterations < MAX_ITERATIONS; iterations++) {
+        for (int iterations = 0; iterations < GraalOptions.MaximumInlineLevel; iterations++) {
             Queue<Invoke> queue = newInvokes;
             newInvokes = new ArrayDeque<Invoke>();
             for (Invoke invoke : queue) {
@@ -125,20 +119,15 @@ public class InliningPhase extends Phase {
     private RiMethod inlineInvoke(Invoke invoke, int iterations, float ratio) {
         RiMethod parent = invoke.stateAfter().method();
         RiTypeProfile profile = parent.typeProfile(invoke.bci);
-        if (GraalOptions.Intrinsify) {
-            if (GraalOptions.Extend && intrinsicGraph(parent, invoke.bci, invoke.target, invoke.arguments()) != null) {
-                return invoke.target;
-            }
-            if (compilation.runtime.intrinsicGraph(parent, invoke.bci, invoke.target, invoke.arguments()) != null) {
-                // Always intrinsify.
-                return invoke.target;
-            }
+        if (GraalOptions.Intrinsify && compilation.runtime.intrinsicGraph(parent, invoke.bci, invoke.target, invoke.arguments()) != null) {
+            // Always intrinsify.
+            return invoke.target;
         }
         if (!checkInvokeConditions(invoke)) {
             return null;
         }
         if (invoke.opcode() == Bytecodes.INVOKESPECIAL || invoke.target.canBeStaticallyBound()) {
-            if (checkTargetConditions(invoke.target, iterations) && checkSizeConditions(parent, iterations, invoke.target, invoke, profile, ratio)) {
+            if (checkTargetConditions(invoke.target, iterations) && checkSizeConditions(invoke.target, invoke, profile, ratio)) {
                 return invoke.target;
             }
             return null;
@@ -147,7 +136,7 @@ public class InliningPhase extends Phase {
             RiType exact = invoke.receiver().exactType();
             assert exact.isSubtypeOf(invoke.target().holder()) : exact + " subtype of " + invoke.target().holder();
             RiMethod resolved = exact.resolveMethodImpl(invoke.target());
-            if (checkTargetConditions(resolved, iterations) && checkSizeConditions(parent, iterations, resolved, invoke, profile, ratio)) {
+            if (checkTargetConditions(resolved, iterations) && checkSizeConditions(resolved, invoke, profile, ratio)) {
                 return resolved;
             }
             return null;
@@ -165,7 +154,7 @@ public class InliningPhase extends Phase {
 
         RiMethod concrete = holder.uniqueConcreteMethod(invoke.target);
         if (concrete != null) {
-            if (checkTargetConditions(concrete, iterations) && checkSizeConditions(parent, iterations, concrete, invoke, profile, ratio)) {
+            if (checkTargetConditions(concrete, iterations) && checkSizeConditions(concrete, invoke, profile, ratio)) {
                 if (GraalOptions.TraceInlining) {
                     String targetName = CiUtil.format("%H.%n(%p):%r", invoke.target, false);
                     String concreteName = CiUtil.format("%H.%n(%p):%r", concrete, false);
@@ -180,7 +169,7 @@ public class InliningPhase extends Phase {
             if (GraalOptions.InlineWithTypeCheck) {
                 // type check and inlining...
                 concrete = profile.types[0].resolveMethodImpl(invoke.target);
-                if (concrete != null && checkTargetConditions(concrete, iterations) && checkSizeConditions(parent, iterations, concrete, invoke, profile, ratio)) {
+                if (concrete != null && checkTargetConditions(concrete, iterations) && checkSizeConditions(concrete, invoke, profile, ratio)) {
                     IsType isType = new IsType(invoke.receiver(), profile.types[0], compilation.graph);
                     FixedGuard guard = new FixedGuard(isType, graph);
                     assert invoke.predecessors().size() == 1;
@@ -284,6 +273,12 @@ public class InliningPhase extends Phase {
             }
             return false;
         }
+        if (method == compilation.method && iterations > GraalOptions.MaximumRecursiveInlineLevel) {
+            if (GraalOptions.TraceInlining) {
+                TTY.println("not inlining %s because of recursive inlining limit", methodName(method));
+            }
+            return false;
+        }
         return true;
     }
 
@@ -301,35 +296,27 @@ public class InliningPhase extends Phase {
         return true;
     }
 
-    private boolean checkSizeConditions(RiMethod caller, int iterations, RiMethod method, Invoke invoke, RiTypeProfile profile, float adjustedRatio) {
+    private boolean checkSizeConditions(RiMethod method, Invoke invoke, RiTypeProfile profile, float adjustedRatio) {
         int maximumSize = GraalOptions.MaximumTrivialSize;
-        double ratio = 0;
+        float ratio = 0;
         if (profile != null && profile.count > 0) {
             RiMethod parent = invoke.stateAfter().method();
-            if (GraalOptions.ProbabilityAnalysis) {
-                ratio = invoke.probability();
-            } else {
-                ratio = profile.count / (float) parent.invocationCount();
-            }
+            ratio = profile.count / (float) parent.invocationCount();
             if (ratio >= GraalOptions.FreqInlineRatio) {
                 maximumSize = GraalOptions.MaximumFreqInlineSize;
-            } else if (ratio >= 1 * (1 - adjustedRatio)) {
+            } else if (ratio >= (1 - adjustedRatio)) {
                 maximumSize = GraalOptions.MaximumInlineSize;
             }
         }
         if (hints != null && hints.contains(invoke)) {
             maximumSize = GraalOptions.MaximumFreqInlineSize;
         }
-        if (method.codeSize() > maximumSize || iterations >= GraalOptions.MaximumInlineLevel || (method == compilation.method && iterations > GraalOptions.MaximumRecursiveInlineLevel)) {
+        if (method.codeSize() > maximumSize) {
             if (GraalOptions.TraceInlining) {
-                TTY.println("not inlining %s because of code size (size: %d, max size: %d, ratio %5.3f, %s) or inling level", methodName(method, invoke), method.codeSize(), maximumSize, ratio, profile);
+                TTY.println("not inlining %s because of code size (size: %d, max size: %d, ratio %5.3f, %s)", methodName(method, invoke), method.codeSize(), maximumSize, ratio, profile);
             }
             if (GraalOptions.Extend) {
-                boolean newResult = overrideInliningDecision(iterations, caller, invoke.bci, method, false);
-                if (GraalOptions.TraceInlining && newResult) {
-                    TTY.println("overridden inlining decision");
-                }
-                return newResult;
+                return overrideInliningDecision(method, false);
             }
             return false;
         }
@@ -337,65 +324,17 @@ public class InliningPhase extends Phase {
             TTY.println("inlining %s (size: %d, max size: %d, ratio %5.3f, %s)", methodName(method, invoke), method.codeSize(), maximumSize, ratio, profile);
         }
         if (GraalOptions.Extend) {
-            boolean newResult = overrideInliningDecision(iterations, caller, invoke.bci, method, true);
-            if (GraalOptions.TraceInlining && !newResult) {
-                TTY.println("overridden inlining decision");
-            }
-            return newResult;
+            return overrideInliningDecision(method, true);
         }
         return true;
     }
 
-    public static ThreadLocal<ServiceLoader<InliningGuide>> guideLoader = new ThreadLocal<ServiceLoader<InliningGuide>>();
-
-    private boolean overrideInliningDecision(int iteration, RiMethod caller, int bci, RiMethod target, boolean previousDecision) {
-        ServiceLoader<InliningGuide> serviceLoader = guideLoader.get();
-        if (serviceLoader == null) {
-            serviceLoader = ServiceLoader.load(InliningGuide.class);
-            guideLoader.set(serviceLoader);
-        }
-
-        boolean neverInline = false;
-        boolean alwaysInline = false;
-        for (InliningGuide guide : serviceLoader) {
-            InliningHint hint = guide.getHint(iteration, caller, bci, target);
-
-            if (hint == InliningHint.ALWAYS) {
-                alwaysInline = true;
-            } else if (hint == InliningHint.NEVER) {
-                neverInline = true;
-            }
-        }
-
-        if (neverInline && alwaysInline) {
-            if (GraalOptions.TraceInlining) {
-                TTY.println("conflicting inlining hints");
-            }
-        } else if (neverInline) {
-            return false;
-        } else if (alwaysInline) {
-            return true;
+    private boolean overrideInliningDecision(RiMethod method, boolean previousDecision) {
+        ServiceLoader<InliningGuide> loader = ServiceLoader.load(InliningGuide.class);
+        for (InliningGuide guide : loader) {
+            TTY.println("inlining guide " + guide);
         }
         return previousDecision;
-    }
-
-
-    public static ThreadLocal<ServiceLoader<Intrinsifier>> intrinsicLoader = new ThreadLocal<ServiceLoader<Intrinsifier>>();
-
-    private Graph intrinsicGraph(RiMethod parent, int bci, RiMethod target, List<Value> arguments) {
-        ServiceLoader<Intrinsifier> serviceLoader = intrinsicLoader.get();
-        if (serviceLoader == null) {
-            serviceLoader = ServiceLoader.load(Intrinsifier.class);
-            intrinsicLoader.set(serviceLoader);
-        }
-
-        for (Intrinsifier intrinsifier : serviceLoader) {
-            Graph result = intrinsifier.intrinsicGraph(compilation.runtime, parent, bci, target, arguments);
-            if (result != null) {
-                return result;
-            }
-        }
-        return null;
     }
 
     private void inlineMethod(Invoke invoke, RiMethod method) {
@@ -422,12 +361,7 @@ public class InliningPhase extends Phase {
 
         CompilerGraph graph = null;
         if (GraalOptions.Intrinsify) {
-            if (GraalOptions.Extend) {
-                graph = (CompilerGraph) intrinsicGraph(parent, invoke.bci, method, invoke.arguments());
-            }
-            if (graph == null) {
-                graph = (CompilerGraph) compilation.runtime.intrinsicGraph(parent, invoke.bci, method, invoke.arguments());
-            }
+            graph = (CompilerGraph) compilation.runtime.intrinsicGraph(parent, invoke.bci, method, invoke.arguments());
         }
         if (graph != null) {
             if (GraalOptions.TraceInlining) {
@@ -447,10 +381,6 @@ public class InliningPhase extends Phase {
             }
             graph = new CompilerGraph(null);
             new GraphBuilderPhase(compilation, method, true).apply(graph);
-            if (GraalOptions.ProbabilityAnalysis) {
-                new DeadCodeEliminationPhase().apply(graph);
-                new ComputeProbabilityPhase().apply(graph);
-            }
         }
 
         invoke.inputs().clearAll();
@@ -496,14 +426,7 @@ public class InliningPhase extends Phase {
         Map<Node, Node> duplicates = compilation.graph.addDuplicate(nodes, replacements);
 
         FrameState stateBefore = null;
-        double invokeProbability = invoke.probability();
         for (Node node : duplicates.values()) {
-            if (GraalOptions.ProbabilityAnalysis) {
-                if (node instanceof FixedNode) {
-                    FixedNode fixed = (FixedNode) node;
-                    fixed.setProbability(fixed.probability() * invokeProbability);
-                }
-            }
             if (node instanceof Invoke && ((Invoke) node).canInline()) {
                 newInvokes.add((Invoke) node);
             } else if (node instanceof FrameState) {
