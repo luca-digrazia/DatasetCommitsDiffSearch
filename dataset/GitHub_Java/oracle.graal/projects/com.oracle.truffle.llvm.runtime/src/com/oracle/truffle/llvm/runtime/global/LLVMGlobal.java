@@ -82,15 +82,11 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         return new LLVMGlobal(name, context.getGlobalFrameSlot(symbol, type), type, sourceSymbol);
     }
 
-    public static Object toManagedStore(Object object) {
-        return new Managed(object);
-    }
-
-    public static Object fromManagedStore(Object store) {
-        if (store instanceof Managed) {
-            return ((Managed) store).wrapped;
+    public static Object assignManaged(Object object) {
+        if (object instanceof LLVMTruffleObject) {
+            return new Managed((LLVMTruffleObject) object);
         }
-        return store;
+        return object;
     }
 
     private LLVMGlobal(String name, FrameSlot slot, Type globalType, LLVMSourceSymbol sourceSymbol) {
@@ -142,10 +138,10 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
      * Used if a managed object is assign to a global to disambiguate from an assignment of a
      * pointer.
      */
-    private static final class Managed {
-        final Object wrapped;
+    static final class Managed {
+        final LLVMTruffleObject wrapped;
 
-        protected Managed(Object wrapped) {
+        protected Managed(LLVMTruffleObject wrapped) {
             this.wrapped = wrapped;
         }
     }
@@ -322,7 +318,7 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         public boolean isPointer(Object obj) {
             LLVMGlobal global = (LLVMGlobal) obj;
             Object value = getContext().getGlobalFrame().getValue(global.slot);
-            return getNativeLibrary().isPointer(value);
+            return value instanceof LLVMAddress || value instanceof Managed && getNativeLibrary().isPointer(((Managed) value).wrapped);
         }
 
         @Override
@@ -334,6 +330,10 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         public long asPointer(Object obj) throws InteropException {
             LLVMGlobal global = (LLVMGlobal) obj;
             Object value = getContext().getGlobalFrame().getValue(global.slot);
+            assert value instanceof LLVMAddress || value instanceof Managed;
+            if (value instanceof Managed) {
+                return getNativeLibrary().asPointer(((Managed) value).wrapped);
+            }
             return getNativeLibrary().asPointer(value);
         }
     }
