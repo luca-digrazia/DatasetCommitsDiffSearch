@@ -41,6 +41,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Objects;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.printer.AbstractGraphPrinter;
 import org.graalvm.compiler.truffle.GraphPrintVisitor.EdgeType;
 import org.graalvm.compiler.truffle.GraphPrintVisitor.NodeElement;
@@ -50,7 +52,7 @@ import org.graalvm.compiler.truffle.GraphPrintVisitor.NodeElement;
  *
  * @since 0.8 or earlier
  */
-final class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeElement, NodeClass, EdgeType, Void, Void, Void, Void, Void, GraphPrintVisitor.EdgeType> {
+class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeElement, NodeClass, EdgeType, Void> {
     private Map<Object, NodeElement> nodeMap;
     private List<EdgeElement> edgeList;
     private Map<Object, NodeElement> prevNodeMap;
@@ -58,12 +60,12 @@ final class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeE
     private String currentGraphName;
 
     @Override
-    protected RootCallTarget findGraph(RootCallTarget current, Object obj) {
+    protected RootCallTarget findGraph(Object obj) {
         return obj instanceof RootCallTarget ? (RootCallTarget) obj : null;
     }
 
     @Override
-    protected Void findMethod(Object obj) {
+    protected ResolvedJavaMethod findMethod(Object obj) {
         return null;
     }
 
@@ -159,7 +161,7 @@ final class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeE
     }
 
     @Override
-    protected String formatTitle(RootCallTarget graph, int ident, String format, Object... args) {
+    protected String formatTitle(int ident, String format, Object... args) {
         return String.format(format, args) + " [" + ident + "]";
     }
 
@@ -179,155 +181,19 @@ final class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeE
     }
 
     @Override
-    protected EdgeType findType(EdgeType edges, int i) {
-        return edges;
+    protected InputType findType(EdgeType edges, int i) {
+        return InputType.Association;
     }
 
     @Override
-    protected NodeElement findNode(RootCallTarget graph, NodeElement node, EdgeType edges, int i) {
-        List<NodeElement> nodes = findNodes(graph, node, edges, i);
+    protected NodeElement findNode(NodeElement node, EdgeType edges, int i) {
+        List<NodeElement> nodes = findNodes(node, edges, i);
         return nodes.isEmpty() ? null : nodes.get(0);
     }
 
     @Override
-    protected List<NodeElement> findNodes(RootCallTarget graph, NodeElement node, EdgeType edges, int i) {
+    protected List<NodeElement> findNodes(NodeElement node, EdgeType edges, int i) {
         return edges == EdgeType.PARENT ? Collections.emptyList() : node.out;
-    }
-
-    @Override
-    protected Object findEnumClass(Object enumValue) {
-        if (enumValue instanceof Enum<?>) {
-            return enumValue.getClass();
-        }
-        return null;
-    }
-
-    @Override
-    protected int findEnumOrdinal(Object obj) {
-        if (obj instanceof Enum<?>) {
-            return ((Enum<?>) obj).ordinal();
-        }
-        return -1;
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    protected String[] findEnumTypeValues(Object clazz) {
-        if (clazz instanceof Class<?>) {
-            Class<? extends Enum<?>> enumClass = (Class<? extends Enum<?>>) clazz;
-            Enum<?>[] constants = enumClass.getEnumConstants();
-            if (constants != null) {
-                String[] names = new String[constants.length];
-                for (int i = 0; i < constants.length; i++) {
-                    names[i] = constants[i].name();
-                }
-                return names;
-            }
-        }
-        return null;
-    }
-
-    @Override
-    protected String findJavaTypeName(Object obj) {
-        if (obj instanceof Class<?>) {
-            return ((Class<?>)obj).getName();
-        }
-        return null;
-    }
-
-    @Override
-    protected byte[] findMethodCode(Void method) {
-        return null;
-    }
-
-    @Override
-    protected int findMethodModifiers(Void method) {
-        return 0;
-    }
-
-    @Override
-    protected Void findMethodSignature(Void method) {
-        return null;
-    }
-
-    @Override
-    protected String findMethodName(Void method) {
-        return null;
-    }
-
-    @Override
-    protected Object findMethodDeclaringClass(Void method) {
-        return null;
-    }
-
-    @Override
-    protected int findFieldModifiers(Void field) {
-        return 0;
-    }
-
-    @Override
-    protected String findFieldTypeName(Void field) {
-        return null;
-    }
-
-    @Override
-    protected String findFieldName(Void field) {
-        return null;
-    }
-
-    @Override
-    protected Object findFieldDeclaringClass(Void field) {
-        return null;
-    }
-
-    @Override
-    protected Void findJavaField(Object object) {
-        return null;
-    }
-
-    @Override
-    protected Void findSignature(Object object) {
-        return null;
-    }
-
-    @Override
-    protected int findSignatureParameterCount(Void signature) {
-        return 0;
-    }
-
-    @Override
-    protected String findSignatureParameterTypeName(Void signature, int index) {
-        return null;
-    }
-
-    @Override
-    protected String findSignatureReturnTypeName(Void signature) {
-        return null;
-    }
-
-    @Override
-    protected Void findNodeSourcePosition(Object object) {
-        return null;
-    }
-
-    @Override
-    protected Void findNodeSourcePositionMethod(Void pos) {
-        return null;
-    }
-
-    @Override
-    protected Void findNodeSourcePositionCaller(Void pos) {
-        return null;
-    }
-
-    @Override
-    protected int findNodeSourcePositionBCI(Void pos) {
-        return 0;
-    }
-
-    @Override
-    protected StackTraceElement findMethodStackTraceElement(Void method, int bci, Void pos) {
-        return null;
     }
 
     static class NodeElement {
