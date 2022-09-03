@@ -49,12 +49,12 @@ public class InliningPhase extends Phase {
 
     private int inliningSize;
     private final boolean trace;
-    private final Collection<Invoke> hints;
+    private final Invoke hint;
 
-    public InliningPhase(GraalCompilation compilation, IR ir, Collection<Invoke> hints, boolean trace) {
+    public InliningPhase(GraalCompilation compilation, IR ir, Invoke hint, boolean trace) {
         this.compilation = compilation;
         this.ir = ir;
-        this.hints = hints;
+        this.hint = hint;
         this.trace = trace;
     }
 
@@ -74,8 +74,8 @@ public class InliningPhase extends Phase {
         float ratio = GraalOptions.MaximumInlineRatio;
         inliningSize = compilation.method.codeSize();
 
-        if (hints != null) {
-            newInvokes.addAll(hints);
+        if (hint != null) {
+            newInvokes.add(hint);
         } else {
             for (Invoke invoke : graph.getNodes(Invoke.class)) {
                 newInvokes.add(invoke);
@@ -269,7 +269,7 @@ public class InliningPhase extends Phase {
 
     private boolean checkStaticSizeConditions(RiMethod method, Invoke invoke) {
         int maximumSize = GraalOptions.MaximumInlineSize;
-        if (hints != null && hints.contains(invoke)) {
+        if (invoke == hint) {
             maximumSize = GraalOptions.MaximumFreqInlineSize;
         }
         if (method.codeSize() > maximumSize) {
@@ -293,7 +293,7 @@ public class InliningPhase extends Phase {
                 maximumSize = GraalOptions.MaximumInlineSize;
             }
         }
-        if (hints != null && hints.contains(invoke)) {
+        if (invoke == hint) {
             maximumSize = GraalOptions.MaximumFreqInlineSize;
         }
         if (method.codeSize() > maximumSize) {
@@ -311,9 +311,6 @@ public class InliningPhase extends Phase {
     private void inlineMethod(Invoke invoke, RiMethod method) {
         FrameState stateAfter = invoke.stateAfter();
         FixedNode exceptionEdge = invoke.exceptionEdge();
-        if (exceptionEdge instanceof Placeholder) {
-            exceptionEdge = ((Placeholder) exceptionEdge).next();
-        }
 
         CompilerGraph graph;
         Object stored = GraphBuilderPhase.cachedGraphs.get(method);

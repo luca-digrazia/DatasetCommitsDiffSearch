@@ -90,7 +90,7 @@ public class IR {
         //printGraph("After DeadCodeElimination", compilation.graph);
 
         if (GraalOptions.Inline) {
-            new InliningPhase(compilation, this, GraalOptions.TraceInlining).apply(compilation.graph);
+            new InliningPhase(compilation, this, null, GraalOptions.TraceInlining).apply(compilation.graph);
         }
 
         Graph graph = compilation.graph;
@@ -99,8 +99,11 @@ public class IR {
             new CanonicalizerPhase().apply(graph);
             new DeadCodeEliminationPhase().apply(graph);
         }
-//
-//        new EscapeAnalysisPhase().apply(graph);
+
+        new EscapeAnalysisPhase(compilation, this).apply(graph);
+        new DeadCodeEliminationPhase().apply(graph);
+        new CanonicalizerPhase().apply(graph);
+        new DeadCodeEliminationPhase().apply(graph);
 
         if (GraalOptions.OptLoops) {
             new LoopPhase().apply(graph);
@@ -108,8 +111,6 @@ public class IR {
 
         if (GraalOptions.Lower) {
             new LoweringPhase(compilation.runtime).apply(graph);
-            new MemoryPhase().apply(graph);
-            new ReadEliminationPhase().apply(graph);
         }
 
         IdentifyBlocksPhase schedule = new IdentifyBlocksPhase(true);
@@ -170,7 +171,6 @@ public class IR {
         if (GraalOptions.Time) {
             GraalTimers.COMPUTE_LINEAR_SCAN_ORDER.stop();
         }
-
     }
 
     /**
@@ -212,7 +212,7 @@ public class IR {
         return maxLocks;
     }
 
-    public FixedNodeWithNext getHIRStartBlock() {
-        return (FixedNodeWithNext) compilation.graph.start().successors().get(0);
+    public Instruction getHIRStartBlock() {
+        return (Instruction) compilation.graph.start().successors().get(0);
     }
 }

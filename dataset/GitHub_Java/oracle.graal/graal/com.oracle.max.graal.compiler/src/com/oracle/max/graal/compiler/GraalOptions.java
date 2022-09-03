@@ -56,7 +56,6 @@ public final class GraalOptions {
 
     // escape analysis settings
     public static int     ForcedInlineEscapeWeight           = 0;
-    public static int     MaximumEscapeAnalysisArrayLength   = 32;
 
     // debugging settings
     public static boolean VerifyPointerMaps                  = ____;
@@ -104,7 +103,6 @@ public final class GraalOptions {
     public static boolean TraceAssembler                     = ____;
     public static boolean TraceInlining                      = ____;
     public static boolean TraceDeadCodeElimination           = ____;
-    public static boolean TraceEscapeAnalysis                = ____;
     public static int     TraceBytecodeParserLevel           = 0;
     public static boolean QuietBailout                       = ____;
 

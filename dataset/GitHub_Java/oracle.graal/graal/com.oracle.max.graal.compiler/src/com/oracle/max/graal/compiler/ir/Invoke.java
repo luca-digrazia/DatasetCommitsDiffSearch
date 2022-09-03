@@ -34,7 +34,7 @@ import com.sun.cri.ri.*;
 /**
  * The {@code Invoke} instruction represents all kinds of method calls.
  */
-public final class Invoke extends AbstractMemoryCheckpointNode implements ExceptionEdgeInstruction {
+public final class Invoke extends StateSplit implements ExceptionEdgeInstruction {
 
     private final int argumentCount;
 
@@ -182,11 +182,6 @@ public final class Invoke extends AbstractMemoryCheckpointNode implements Except
             out.print(argument(i));
         }
         out.print(CiUtil.format(") [method: %H.%n(%p):%r]", target, false));
-    }
-
-    @Override
-    public String toString() {
-        return super.toString() + target;
     }
 
     @Override

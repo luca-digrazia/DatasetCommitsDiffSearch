@@ -50,7 +50,7 @@ public class DeadCodeEliminationPhase extends Phase {
                 FixedNode next = merge.next();
                 EndNode endNode = merge.endAt(0);
                 merge.delete();
-                endNode.replaceAndDelete(next);
+                endNode.replace(next);
             }
         }
         // remove if nodes with constant-value comparison
@@ -64,7 +64,7 @@ public class DeadCodeEliminationPhase extends Phase {
                     Boolean result = compare.condition().foldCondition(constX, constY, GraalCompilation.compilation().runtime);
                     if (result != null) {
                         Node actualSuccessor = result ? ifNode.trueSuccessor() : ifNode.falseSuccessor();
-                        ifNode.replaceAndDelete(actualSuccessor);
+                        ifNode.replace(actualSuccessor);
                     } else {
                         TTY.println("if not removed %s %s %s (%s %s)", constX, compare.condition(), constY, constX.kind, constY.kind);
                     }
@@ -74,7 +74,7 @@ public class DeadCodeEliminationPhase extends Phase {
         // remove unnecessary FixedGuards
         for (FixedGuard guard : graph.getNodes(FixedGuard.class)) {
             if (guard.node() instanceof IsNonNull && ((IsNonNull) guard.node()).object() instanceof NewInstance) {
-                guard.replaceAndDelete(guard.next());
+                guard.replace(guard.next());
             }
         }
 
@@ -93,6 +93,10 @@ public class DeadCodeEliminationPhase extends Phase {
         if (GraalOptions.TraceDeadCodeElimination) {
             TTY.println("dead code elimination finished");
         }
+    }
+
+    private static boolean isCFG(Node n) {
+        return n != null && ((n instanceof Instruction) || (n instanceof ControlSplit) || n == n.graph().start());
     }
 
     private void iterateSuccessors() {
@@ -128,10 +132,10 @@ public class DeadCodeEliminationPhase extends Phase {
             assert loop.predecessors().size() == 1;
             for (Node usage : new ArrayList<Node>(loop.usages())) {
                 assert usage instanceof Phi;
-                usage.replaceAndDelete(((Phi) usage).valueAt(0));
+                usage.replace(((Phi) usage).valueAt(0));
             }
 
-            loop.replaceAndDelete(loop.next());
+            loop.replace(loop.next());
         }
     }
 
