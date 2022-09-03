@@ -50,12 +50,6 @@ public class NFILanguage extends TruffleLanguage<NFIContext> {
     }
 
     @Override
-    protected boolean patchContext(NFIContext context, Env newEnv) {
-        context.initialize();
-        return true;
-    }
-
-    @Override
     protected void disposeContext(NFIContext context) {
         context.dispose();
     }
