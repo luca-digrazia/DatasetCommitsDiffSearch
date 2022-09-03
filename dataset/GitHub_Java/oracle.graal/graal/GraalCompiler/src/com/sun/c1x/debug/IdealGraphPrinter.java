@@ -27,7 +27,6 @@ import java.util.*;
 import java.util.Map.Entry;
 
 import com.oracle.graal.graph.*;
-import com.oracle.max.graal.schedule.*;
 
 /**
  * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the <a
@@ -51,7 +50,6 @@ public class IdealGraphPrinter {
 
     private final HashSet<Class<?>> omittedClasses = new HashSet<Class<?>>();
     private final PrintStream stream;
-    private final List<Node> noBlockNodes = new LinkedList<Node>();
 
     /**
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
@@ -111,10 +109,8 @@ public class IdealGraphPrinter {
     public void print(Graph graph, String title, boolean shortNames) {
         stream.printf(" <graph name='%s'>%n", escape(title));
 
-        Schedule schedule = new Schedule(graph);
-
         stream.println("  <nodes>");
-        List<Edge> edges = printNodes(graph.getNodes(), shortNames, schedule.getNodeToBlock());
+        List<Edge> edges = printNodes(graph.getNodes(), shortNames);
         stream.println("  </nodes>");
 
         stream.println("  <edges>");
@@ -123,17 +119,10 @@ public class IdealGraphPrinter {
         }
         stream.println("  </edges>");
 
-        stream.println("  <controlFlow>");
-        for (Block block : schedule.getBlocks()) {
-            printBlock(block);
-        }
-        printNoBlock();
-        stream.println("  </controlFlow>");
-
         stream.println(" </graph>");
     }
 
-    private List<Edge> printNodes(Collection<Node> nodes, boolean shortNames, NodeMap<Block> nodeToBlock) {
+    private List<Edge> printNodes(Collection<Node> nodes, boolean shortNames) {
         ArrayList<Edge> edges = new ArrayList<Edge>();
 
         for (Node node : nodes) {
@@ -145,7 +134,7 @@ public class IdealGraphPrinter {
             stream.printf("    <p name='idx'>%d</p>%n", node.id());
 
             Map<Object, Object> props = node.getDebugProperties();
-            if (!props.containsKey("name") || props.get("name").toString().trim().length() == 0) {
+            if (!props.containsKey("name")) {
                 String name;
                 if (shortNames) {
                     name = node.shortName();
@@ -153,13 +142,6 @@ public class IdealGraphPrinter {
                     name = node.toString();
                 }
                 stream.printf("    <p name='name'>%s</p>%n", escape(name));
-            }
-            Block block = nodeToBlock.get(node);
-            if (block != null) {
-                stream.printf("    <p name='block'>%d</p>%n", block.blockID());
-            } else {
-                stream.printf("    <p name='block'>noBlock</p>%n");
-                noBlockNodes.add(node);
             }
             for (Entry<Object, Object> entry : props.entrySet()) {
                 String key = entry.getKey().toString();
@@ -193,33 +175,6 @@ public class IdealGraphPrinter {
 
     private void printEdge(Edge edge) {
         stream.printf("   <edge from='%d' fromIndex='%d' to='%d' toIndex='%d'/>%n", edge.from, edge.fromIndex, edge.to, edge.toIndex);
-    }
-
-    private void printBlock(Block block) {
-        stream.printf("   <block name='%d'>%n", block.blockID());
-        stream.printf("    <successors>%n");
-        for (Block sux : block.getSuccessors()) {
-            stream.printf("     <successor name='%d'/>%n", sux.blockID());
-        }
-        stream.printf("    </successors>%n");
-        stream.printf("    <nodes>%n");
-        for (Node node : block.getInstructions()) {
-            stream.printf("     <node id='%d'/>%n", node.id());
-        }
-        stream.printf("    </nodes>%n");
-        stream.printf("   </block>%n", block.blockID());
-    }
-
-    private void printNoBlock() {
-        if (!noBlockNodes.isEmpty()) {
-            stream.printf("   <block name='noBlock'>%n");
-            stream.printf("    <nodes>%n");
-            for (Node node : noBlockNodes) {
-                stream.printf("     <node id='%d'/>%n", node.id());
-            }
-            stream.printf("    </nodes>%n");
-            stream.printf("   </block>%n");
-        }
     }
 
     private String escape(String s) {

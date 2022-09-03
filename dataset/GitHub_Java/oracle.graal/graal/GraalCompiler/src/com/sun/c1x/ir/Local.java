@@ -46,6 +46,11 @@ public final class Local extends Value {
         this.inputs().set(0, graph.start());
     }
 
+    @Override
+    public BlockBegin block() {
+        return null;
+    }
+
     /**
      * Gets the index of this local.
      * @return the index

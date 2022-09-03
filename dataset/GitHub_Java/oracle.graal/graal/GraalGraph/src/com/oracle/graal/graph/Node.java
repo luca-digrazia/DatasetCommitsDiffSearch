@@ -24,7 +24,9 @@ package com.oracle.graal.graph;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public abstract class Node {
 
@@ -37,7 +39,6 @@ public abstract class Node {
     final NodeArray successors;
     final ArrayList<Node> usages;
     final ArrayList<Node> predecessors;
-    final ArrayList<Integer> predecessorsIndex;
 
     public Node(int inputCount, int successorCount, Graph graph) {
         assert graph != null;
@@ -47,15 +48,10 @@ public abstract class Node {
         this.successors = new NodeArray(this, successorCount);
         this.predecessors = new ArrayList<Node>();
         this.usages = new ArrayList<Node>();
-        this.predecessorsIndex = new ArrayList<Integer>();
     }
 
     public List<Node> predecessors() {
         return Collections.unmodifiableList(predecessors);
-    }
-
-    public List<Integer> predecessorsIndex() {
-        return Collections.unmodifiableList(predecessorsIndex);
     }
 
     public List<Node> usages() {
@@ -88,20 +84,15 @@ public abstract class Node {
         for (Node usage : usages) {
             usage.inputs.replaceFirstOccurrence(this, other);
         }
-        int z = 0;
         for (Node predecessor : predecessors) {
-            int predIndex = predecessorsIndex.get(z);
-            predecessor.successors.nodes[predIndex] = other;
-            ++z;
+            predecessor.successors.replaceFirstOccurrence(this, other);
         }
         if (other != null) {
             other.usages.addAll(usages);
             other.predecessors.addAll(predecessors);
-            other.predecessorsIndex.addAll(predecessorsIndex);
         }
         usages.clear();
         predecessors.clear();
-        predecessorsIndex.clear();
         delete();
     }
 
@@ -112,7 +103,6 @@ public abstract class Node {
     public void delete() {
         assert !isDeleted();
         assert usages.size() == 0 && predecessors.size() == 0;
-        assert predecessorsIndex.size() == 0;
         for (int i = 0; i < inputs.size(); ++i) {
             inputs.set(i, Null);
         }
@@ -151,6 +141,19 @@ public abstract class Node {
      */
     protected int successorCount() {
         return 0;
+    }
+
+    /**
+     * Provides a {@link Map} of properties of this node for use in debugging (e.g., to view in the ideal graph
+     * visualizer). Subclasses overriding this method should add to the map returned by their superclass.
+     */
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> map = new HashMap<Object, Object>();
+        map.put("inputCount", inputCount());
+        map.put("usageCount", usages.size());
+        map.put("successorCount", successorCount());
+        map.put("predecessorCount", predecessors.size());
+        return map;
     }
 
     @Override
