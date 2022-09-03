@@ -80,16 +80,7 @@ final class HotSpotGraalRuntimeMBean implements DynamicMBean {
         return runtime;
     }
 
-    private static final boolean DEBUG = initDebug();
-
-    private static boolean initDebug() {
-        try {
-            return Boolean.getBoolean(HotSpotGraalRuntimeMBean.class.getSimpleName() + ".debug");
-        } catch (SecurityException e) {
-            // Swallow the exception
-            return false;
-        }
-    }
+    private static final boolean DEBUG = Boolean.getBoolean(HotSpotGraalRuntimeMBean.class.getSimpleName() + ".debug");
 
     @Override
     public Object getAttribute(String name) throws AttributeNotFoundException {
