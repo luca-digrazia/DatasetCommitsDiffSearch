@@ -688,6 +688,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         }
     }
 
+    // TODO use pullOutParentChain ONLY to get the dump data and not to extract root
     // TODO get rid of needsSplit in OptimizedDirectCallNode keep it only in the callTarget, profilePolluted goes away
     private boolean polluteProfile(int depth, List<Node> toDump) {
         if (depth > TruffleCompilerOptions.getValue(TruffleSplittingMaxPollutionDepth) || profilePolluted || knownCallNodes.size() == 0 ||
@@ -696,9 +697,11 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         }
         if (knownCallNodes.size() == 1) {
             final OptimizedDirectCallNode callNode = knownCallNodes.iterator().next();
-            final OptimizedCallTarget callTarget = (OptimizedCallTarget) callNode.getRootNode().getCallTarget();
+            final OptimizedCallTarget callTarget;
             if (TruffleCompilerOptions.getValue(TruffleDumpPolymorphicSpecialize)) {
-                pullOutParentChain(callNode, toDump);
+                callTarget = (OptimizedCallTarget) pullOutParentChain(callNode, toDump).getCallTarget();
+            } else {
+                callTarget = (OptimizedCallTarget) callNode.getRootNode().getCallTarget();
             }
             profilePolluted = callTarget.polluteProfile(depth + 1, toDump);
         } else {
@@ -713,12 +716,14 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return profilePolluted;
     }
 
-    private static void pullOutParentChain(Node node, List<Node> toDump) {
+    private static RootNode pullOutParentChain(Node node, List<Node> toDump) {
         Node rootNode = node;
         while (rootNode.getParent() != null) {
             toDump.add(rootNode);
             rootNode = rootNode.getParent();
         }
         toDump.add(rootNode);
+        return (RootNode) rootNode;
+
     }
 }
