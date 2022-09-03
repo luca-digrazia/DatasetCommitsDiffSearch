@@ -23,18 +23,18 @@
 package com.oracle.graal.hotspot.nodes;
 
 import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-public class WriteBarrierPost extends WriteBarrier implements Lowerable {
+public final class WriteBarrierPost extends FixedWithNextNode implements Lowerable {
 
     @Input private ValueNode object;
     @Input private ValueNode value;
-    @Input private ValueNode index;
     @Input private LocationNode location;
+    @Input private ValueNode length;
     private final boolean precise;
 
     public ValueNode getObject() {
@@ -45,6 +45,10 @@ public class WriteBarrierPost extends WriteBarrier implements Lowerable {
         return value;
     }
 
+    public ValueNode getLength() {
+        return length;
+    }
+
     public LocationNode getLocation() {
         return location;
     }
@@ -53,45 +57,39 @@ public class WriteBarrierPost extends WriteBarrier implements Lowerable {
         return precise;
     }
 
-    public WriteBarrierPost() {
-        this.precise = false;
-    }
-
-    public WriteBarrierPost(ValueNode object, ValueNode value, ValueNode index) {
-        this.object = object;
-        this.value = value;
-        this.index = index;
-        this.precise = true;
-        this.location = null;
-    }
-
     public WriteBarrierPost(ValueNode object, ValueNode value, LocationNode location, boolean precise) {
+        super(StampFactory.forVoid());
         this.object = object;
         this.value = value;
         this.location = location;
         this.precise = precise;
+        this.length = null;
+
+    }
+
+    public WriteBarrierPost(ValueNode array, ValueNode value, ValueNode index, ValueNode length) {
+        super(StampFactory.forVoid());
+        this.object = array;
+        this.location = IndexedLocationNode.create(LocationNode.getArrayLocation(Kind.Object), Kind.Object, arrayBaseOffset(Kind.Object), index, array.graph(), arrayIndexScale(Kind.Object));
+        this.length = length;
+        this.value = value;
+        this.precise = true;
     }
 
     @Override
     public void lower(LoweringTool generator) {
-        StructuredGraph graph = (StructuredGraph) this.graph();
-        if (location == null) { // Come from array copy intrinsic
-            LocationNode arrayLocation = IndexedLocationNode.create(LocationNode.getArrayLocation(Kind.Object), Kind.Object, arrayBaseOffset(Kind.Object), index, graph, arrayIndexScale(Kind.Object));
+        if (getLength() == null) {
+            generator.getRuntime().lower(this, generator);
+        } else {
+            StructuredGraph graph = (StructuredGraph) this.graph();
             if (useG1GC()) {
-                graph.replaceFixedWithFixed(this, graph().add(new G1WriteBarrierPost(object, value, arrayLocation, true)));
+                graph.replaceFixedWithFixed(this, graph().add(new WriteBarrierPost(getObject(), getValue(), getLocation(), usePrecise())));
             } else {
-                graph.replaceFixedWithFixed(this, graph().add(new SerialWriteBarrierPost(object, arrayLocation, true)));
-            }
-        } else { // Normal WriteBarrier
-            assert location != null;
-            if (useG1GC()) {
-                graph.replaceFixedWithFixed(this, graph().add(new G1WriteBarrierPost(object, value, location, precise)));
-            } else {
-                graph.replaceFixedWithFixed(this, graph().add(new SerialWriteBarrierPost(object, location, precise)));
+                graph.replaceFixedWithFixed(this, graph().add(new ArrayWriteBarrier(getObject(), getLocation())));
             }
         }
     }
 
     @NodeIntrinsic
-    public static native void arrayCopyWriteBarrier(Object array, Object value, long index);
+    public static native void arrayCopyWriteBarrier(Object array, Object value, int index, int length);
 }
