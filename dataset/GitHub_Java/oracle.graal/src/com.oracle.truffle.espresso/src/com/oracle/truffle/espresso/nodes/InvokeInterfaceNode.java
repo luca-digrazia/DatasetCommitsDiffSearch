@@ -25,9 +25,9 @@ package com.oracle.truffle.espresso.nodes;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.espresso.bytecode.OperandStack;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -71,12 +71,11 @@ public abstract class InvokeInterfaceNode extends InvokeNode {
     }
 
     @Override
-    public final void invoke(final VirtualFrame frame) {
+    public final void invoke(OperandStack stack) {
         // Method signature does not change.
-        EspressoRootNode root = (EspressoRootNode) getParent();
-        StaticObject receiver = nullCheck(root.peekReceiver(frame, resolutionSeed));
-        Object[] arguments = root.popArguments(frame, true, resolutionSeed.getSignature());
+        StaticObject receiver = nullCheck(stack.peekReceiver(resolutionSeed));
+        Object[] arguments = stack.popArguments(true, resolutionSeed.getSignature());
         Object result = executeVirtual(receiver, arguments);
-        root.pushKind(frame, result, resolutionSeed.getSignature().getReturnTypeDescriptor().toKind());
+        stack.pushKind(result, resolutionSeed.getSignature().getReturnTypeDescriptor().toKind());
     }
 }
