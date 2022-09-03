@@ -74,8 +74,9 @@ import com.oracle.truffle.api.vm.HostLanguage.HostContext;
 import com.oracle.truffle.api.vm.PolyglotLanguageContext.ToGuestValueNode;
 import com.oracle.truffle.api.vm.PolyglotLanguageContext.ToGuestValuesNode;
 import java.util.logging.Handler;
-import java.util.logging.Level;
+import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import org.graalvm.polyglot.io.FileSystem;
 
 /*
@@ -200,7 +201,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
                         INSTRUMENT.createDispatchOutput(System.err),
                         System.in,
                         TruffleOptions.AOT ? null : Thread.currentThread().getContextClassLoader(),
-                        PolyglotLogHandler.createStreamHandler(System.out, false, true));
+                        getAPIAccess().newStreamLogHandler(System.out));
         preInitializedEngineRef.set(preInitializedEngine);
     }
 
@@ -503,7 +504,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             return foundLanguage;
         }
 
-        static boolean isPrimitive(final Object value) {
+        private static boolean isPrimitive(final Object value) {
             final Class<?> valueClass = value.getClass();
             return valueClass == Boolean.class || valueClass == Byte.class || valueClass == Short.class || valueClass == Integer.class || valueClass == Long.class ||
                             valueClass == Float.class || valueClass == Double.class ||
@@ -935,18 +936,8 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public Handler getLogHandler() {
-            return PolyglotLogHandler.INSTANCE;
-        }
-
-        @Override
-        public LogRecord createLogRecord(Level level, String loggerName, String message, String className, String methodName, Object[] parameters, Throwable thrown) {
-            return PolyglotLogHandler.createLogRecord(level, loggerName, message, className, methodName, parameters, thrown);
-        }
-
-        @Override
-        public Object getCurrentOuterContext() {
-            return PolyglotLogHandler.getCurrentOuterContext();
+        public Logger getLogger(String loggerName, String resourceBundleName) {
+            return PolyglotLogger.LoggerCache.getInstance().getOrCreateLogger(loggerName, resourceBundleName);
         }
     }
 }
