@@ -22,105 +22,66 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.debug.Debug.*;
+import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
+
 import java.util.*;
-import java.util.concurrent.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
-import com.oracle.graal.phases.graph.*;
-import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.virtual.phases.ea.EffectList.Effect;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.tiers.*;
 
-public class IterativeInliningPhase extends Phase {
+public class IterativeInliningPhase extends AbstractInliningPhase {
 
-    private final PhasePlan plan;
+    private final CanonicalizerPhase canonicalizer;
 
-    private final GraalCodeCacheProvider runtime;
-    private final Assumptions assumptions;
-    private final GraphCache cache;
-    private final OptimisticOptimizations optimisticOpts;
-    private CustomCanonicalizer customCanonicalizer;
-
-    public IterativeInliningPhase(GraalCodeCacheProvider runtime, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
-        this.runtime = runtime;
-        this.assumptions = assumptions;
-        this.cache = cache;
-        this.plan = plan;
-        this.optimisticOpts = optimisticOpts;
-    }
-
-    public void setCustomCanonicalizer(CustomCanonicalizer customCanonicalizer) {
-        this.customCanonicalizer = customCanonicalizer;
+    public IterativeInliningPhase(CanonicalizerPhase canonicalizer) {
+        this.canonicalizer = canonicalizer;
     }
 
     public static final void trace(String format, Object... obj) {
-        if (GraalOptions.TraceEscapeAnalysis) {
-            Debug.log(format, obj);
+        if (TraceEscapeAnalysis.getValue() && Debug.isLogEnabled()) {
+            Debug.logv(format, obj);
         }
     }
 
-    public static final void error(String format, Object... obj) {
-        System.out.print(String.format(format, obj));
-    }
-
     @Override
-    protected void run(final StructuredGraph graph) {
-        runIterations(graph, true);
-        runIterations(graph, false);
+    protected void run(final StructuredGraph graph, final HighTierContext context) {
+        runIterations(graph, true, context);
+        runIterations(graph, false, context);
     }
 
-    private void runIterations(final StructuredGraph graph, final boolean simple) {
-        Boolean continueIteration = true;
-        for (int iteration = 0; iteration < GraalOptions.EscapeAnalysisIterations && continueIteration; iteration++) {
-            continueIteration = Debug.scope("iteration " + iteration, new Callable<Boolean>() {
+    private void runIterations(final StructuredGraph graph, final boolean simple, final HighTierContext context) {
+        for (int iteration = 0; iteration < EscapeAnalysisIterations.getValue(); iteration++) {
+            try (Scope s = Debug.scope(isEnabled() ? "iteration " + iteration : null)) {
+                boolean progress = false;
+                PartialEscapePhase ea = new PartialEscapePhase(false, canonicalizer);
+                boolean eaResult = ea.runAnalysis(graph, context);
+                progress |= eaResult;
 
-                @Override
-                public Boolean call() {
-                    SchedulePhase schedule = new SchedulePhase();
-                    schedule.apply(graph, false);
-                    PartialEscapeClosure closure = new PartialEscapeClosure(graph.createNodeBitMap(), schedule, runtime, assumptions);
-                    ReentrantBlockIterator.apply(closure, schedule.getCFG().getStartBlock(), new BlockState(), null);
+                Map<Invoke, Double> hints = PEAInliningHints.getValue() ? PartialEscapePhase.getHints(graph) : null;
 
-                    if (!closure.getEffects().isEmpty()) {
-                        // apply the effects collected during the escape analysis iteration
-                        ArrayList<Node> obsoleteNodes = new ArrayList<>();
-                        for (Effect effect : closure.getEffects()) {
-                            effect.apply(graph, obsoleteNodes);
-                        }
-                        trace("%s\n", closure.getEffects());
+                InliningPhase inlining = new InliningPhase(hints, new CanonicalizerPhase());
+                inlining.setMaxMethodsPerInlining(simple ? 1 : Integer.MAX_VALUE);
+                inlining.apply(graph, context);
+                progress |= inlining.getInliningCount() > 0;
 
-                        Debug.dump(graph, "after PartialEscapeAnalysis");
-                        assert PartialEscapeAnalysisPhase.noObsoleteNodes(graph, obsoleteNodes);
+                new DeadCodeEliminationPhase(Optional).apply(graph);
 
-                        new DeadCodeEliminationPhase().apply(graph);
-                        if (GraalOptions.OptCanonicalizer) {
-                            new CanonicalizerPhase(runtime, assumptions, null, customCanonicalizer).apply(graph);
-                        }
-                    }
-                    Map<Invoke, Double> hints = GraalOptions.PEAInliningHints ? PartialEscapeAnalysisPhase.getHints(graph) : null;
-
-                    InliningPhase inlining = new InliningPhase(runtime, hints, assumptions, cache, plan, optimisticOpts);
-                    inlining.setMaxMethodsPerInlining(simple ? 1 : Integer.MAX_VALUE);
-                    inlining.apply(graph);
-                    new DeadCodeEliminationPhase().apply(graph);
-
-                    if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
-                        new CanonicalizerPhase(runtime, assumptions).apply(graph);
-                        new IterativeConditionalEliminationPhase(runtime, assumptions).apply(graph);
-                    }
-
-                    if (closure.getEffects().isEmpty() && inlining.getInliningCount() == 0) {
-                        return false;
-                    }
-                    return true;
+                if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
+                    canonicalizer.apply(graph, context);
+                    new IterativeConditionalEliminationPhase(canonicalizer, false).apply(graph, context);
                 }
-            });
+                if (!progress) {
+                    break;
+                }
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
         }
     }
 }

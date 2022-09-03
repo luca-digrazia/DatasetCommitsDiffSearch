@@ -28,7 +28,6 @@ import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import java.util.*;
 import java.util.function.*;
 
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -170,7 +169,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 }
                 for (Node n : blockToNodes.apply(block)) {
                     if (n.isAlive()) {
-                        processNode(n, undoOperations);
+                        processNode(n, block, undoOperations);
                     }
                 }
                 return true;
@@ -180,26 +179,26 @@ public class DominatorConditionalEliminationPhase extends Phase {
             }
         }
 
-        private void processNode(Node node, List<Runnable> undoOperations) {
+        private void processNode(Node node, Block block, List<Runnable> undoOperations) {
             if (node instanceof AbstractBeginNode) {
                 processAbstractBegin((AbstractBeginNode) node, undoOperations);
             } else if (node instanceof FixedGuardNode) {
-                processFixedGuard((FixedGuardNode) node, undoOperations);
+                processFixedGuard((FixedGuardNode) node, block, undoOperations);
             } else if (node instanceof GuardNode) {
-                processGuard((GuardNode) node, undoOperations);
+                processGuard((GuardNode) node, block, undoOperations);
             } else if (node instanceof CheckCastNode) {
-                processCheckCast((CheckCastNode) node);
+                processCheckCast((CheckCastNode) node, block);
             } else if (node instanceof ConditionAnchorNode) {
-                processConditionAnchor((ConditionAnchorNode) node);
+                processConditionAnchor((ConditionAnchorNode) node, block);
             } else if (node instanceof IfNode) {
-                processIf((IfNode) node);
+                processIf((IfNode) node, block);
             } else {
                 return;
             }
         }
 
-        private void processCheckCast(CheckCastNode node) {
-            tryProofCondition(node, (guard, result) -> {
+        private void processCheckCast(CheckCastNode node, Block block) {
+            tryProofCondition(node, block, (guard, result) -> {
                 if (result) {
                     PiNode piNode = node.graph().unique(new PiNode(node.object(), node.stamp(), guard));
                     node.replaceAtUsages(piNode);
@@ -213,8 +212,8 @@ public class DominatorConditionalEliminationPhase extends Phase {
             });
         }
 
-        private void processIf(IfNode node) {
-            tryProofCondition(node.condition(), (guard, result) -> {
+        private void processIf(IfNode node, Block block) {
+            tryProofCondition(node.condition(), block, (guard, result) -> {
                 AbstractBeginNode survivingSuccessor = node.getSuccessor(result);
                 survivingSuccessor.replaceAtUsages(InputType.Guard, guard);
                 survivingSuccessor.replaceAtPredecessor(null);
@@ -259,15 +258,15 @@ public class DominatorConditionalEliminationPhase extends Phase {
             }
         }
 
-        private boolean rewireGuards(ValueNode guard, boolean result, BiConsumer<ValueNode, Boolean> rewireGuardFunction) {
+        private boolean rewireGuards(ValueNode guard, boolean result, Block block, BiConsumer<ValueNode, Boolean> rewireGuardFunction) {
             assert guard instanceof GuardingNode;
             metricStampsFound.increment();
-            ValueNode proxiedGuard = proxyGuard(guard);
+            ValueNode proxiedGuard = proxyGuard(guard, block);
             rewireGuardFunction.accept(proxiedGuard, result);
             return true;
         }
 
-        private ValueNode proxyGuard(ValueNode guard) {
+        private ValueNode proxyGuard(ValueNode guard, Block block) {
             ValueNode proxiedGuard = guard;
             if (!this.loopExits.isEmpty()) {
                 while (proxiedGuard instanceof GuardProxyNode) {
@@ -275,21 +274,33 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 }
                 Block guardBlock = nodeToBlock.apply(proxiedGuard);
                 assert guardBlock != null;
-                for (int i = 0; i < loopExits.size(); ++i) {
-                    LoopExitNode loopExitNode = loopExits.get(i);
-                    Block loopExitBlock = nodeToBlock.apply(loopExitNode);
-                    if (guardBlock != loopExitBlock && AbstractControlFlowGraph.dominates(guardBlock, loopExitBlock)) {
-                        Block loopBeginBlock = nodeToBlock.apply(loopExitNode.loopBegin());
-                        if (!AbstractControlFlowGraph.dominates(guardBlock, loopBeginBlock) || guardBlock == loopBeginBlock) {
-                            proxiedGuard = proxiedGuard.graph().unique(new GuardProxyNode((GuardingNode) proxiedGuard, loopExitNode));
+                Block curBlock = block;
+                if (guardBlock != curBlock) {
+                    int loopExitIndex = loopExits.size();
+                    do {
+                        LoopExitNode loopExitNode = loopExits.get(loopExitIndex - 1);
+                        Block loopExitBlock = nodeToBlock.apply(loopExitNode);
+                        assert loopExitBlock != null;
+                        if (loopExitBlock == curBlock) {
+                            assert curBlock != guardBlock;
+                            loopExitIndex--;
+                            if (loopExitIndex <= 0) {
+                                break;
+                            }
                         }
+                        curBlock = curBlock.getDominator();
+                    } while (guardBlock != curBlock);
+
+                    for (int i = loopExitIndex; i < loopExits.size(); ++i) {
+                        LoopExitNode loopExitNode = loopExits.get(i);
+                        proxiedGuard = proxiedGuard.graph().unique(new GuardProxyNode((GuardingNode) proxiedGuard, loopExitNode));
                     }
                 }
             }
             return proxiedGuard;
         }
 
-        private boolean tryProofCondition(Node node, BiConsumer<ValueNode, Boolean> rewireGuardFunction) {
+        private boolean tryProofCondition(Node node, Block block, BiConsumer<ValueNode, Boolean> rewireGuardFunction) {
             if (node instanceof UnaryOpLogicNode) {
                 UnaryOpLogicNode unaryLogicNode = (UnaryOpLogicNode) node;
                 ValueNode value = unaryLogicNode.getValue();
@@ -297,16 +308,16 @@ public class DominatorConditionalEliminationPhase extends Phase {
                     Stamp stamp = infoElement.getStamp();
                     Boolean result = unaryLogicNode.tryFold(stamp);
                     if (result != null) {
-                        return rewireGuards(infoElement.getGuard(), result, rewireGuardFunction);
+                        return rewireGuards(infoElement.getGuard(), result, block, rewireGuardFunction);
                     }
                 }
             } else if (node instanceof BinaryOpLogicNode) {
                 BinaryOpLogicNode binaryOpLogicNode = (BinaryOpLogicNode) node;
                 for (InfoElement infoElement : getInfoElements(binaryOpLogicNode)) {
                     if (infoElement.getStamp().equals(StampFactory.contradiction())) {
-                        return rewireGuards(infoElement.getGuard(), false, rewireGuardFunction);
+                        return rewireGuards(infoElement.getGuard(), false, block, rewireGuardFunction);
                     } else if (infoElement.getStamp().equals(StampFactory.tautology())) {
-                        return rewireGuards(infoElement.getGuard(), true, rewireGuardFunction);
+                        return rewireGuards(infoElement.getGuard(), true, block, rewireGuardFunction);
                     }
                 }
 
@@ -315,14 +326,14 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 for (InfoElement infoElement : getInfoElements(x)) {
                     Boolean result = binaryOpLogicNode.tryFold(infoElement.getStamp(), y.stamp());
                     if (result != null) {
-                        return rewireGuards(infoElement.getGuard(), result, rewireGuardFunction);
+                        return rewireGuards(infoElement.getGuard(), result, block, rewireGuardFunction);
                     }
                 }
 
                 for (InfoElement infoElement : getInfoElements(y)) {
                     Boolean result = binaryOpLogicNode.tryFold(x.stamp(), infoElement.getStamp());
                     if (result != null) {
-                        return rewireGuards(infoElement.getGuard(), result, rewireGuardFunction);
+                        return rewireGuards(infoElement.getGuard(), result, block, rewireGuardFunction);
                     }
                 }
             } else if (node instanceof CheckCastNode) {
@@ -330,19 +341,19 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 for (InfoElement infoElement : getInfoElements(checkCastNode.object())) {
                     Boolean result = checkCastNode.tryFold(infoElement.getStamp());
                     if (result != null) {
-                        return rewireGuards(infoElement.getGuard(), result, rewireGuardFunction);
+                        return rewireGuards(infoElement.getGuard(), result, block, rewireGuardFunction);
                     }
                 }
             } else if (node instanceof ShortCircuitOrNode) {
                 final ShortCircuitOrNode shortCircuitOrNode = (ShortCircuitOrNode) node;
                 if (this.loopExits.isEmpty()) {
-                    tryProofCondition(shortCircuitOrNode.getX(), (guard, result) -> {
+                    tryProofCondition(shortCircuitOrNode.getX(), block, (guard, result) -> {
                         if (result == !shortCircuitOrNode.isXNegated()) {
-                            rewireGuards(guard, result, rewireGuardFunction);
+                            rewireGuards(guard, result, block, rewireGuardFunction);
                         } else {
-                            tryProofCondition(shortCircuitOrNode.getY(), (innerGuard, innerResult) -> {
+                            tryProofCondition(shortCircuitOrNode.getY(), block, (innerGuard, innerResult) -> {
                                 if (innerGuard == guard) {
-                                    rewireGuards(guard, shortCircuitOrNode.isYNegated() ? !innerResult : innerResult, rewireGuardFunction);
+                                    rewireGuards(guard, shortCircuitOrNode.isYNegated() ? !innerResult : innerResult, block, rewireGuardFunction);
                                 }
                             });
                         }
@@ -368,8 +379,8 @@ public class DominatorConditionalEliminationPhase extends Phase {
             }
         }
 
-        private void processConditionAnchor(ConditionAnchorNode node) {
-            tryProofCondition(node.condition(), (guard, result) -> {
+        private void processConditionAnchor(ConditionAnchorNode node, Block block) {
+            tryProofCondition(node.condition(), block, (guard, result) -> {
                 if (result == node.isNegated()) {
                     node.replaceAtUsages(guard);
                     GraphUtil.unlinkFixedNode(node);
@@ -382,13 +393,12 @@ public class DominatorConditionalEliminationPhase extends Phase {
             });
         }
 
-        private void processGuard(GuardNode node, List<Runnable> undoOperations) {
-            if (!tryProofCondition(node.condition(), (guard, result) -> {
+        private void processGuard(GuardNode node, Block block, List<Runnable> undoOperations) {
+            if (!tryProofCondition(node.condition(), block, (guard, result) -> {
                 if (result != node.isNegated()) {
                     node.replaceAndDelete(guard);
                 } else {
                     DeoptimizeNode deopt = node.graph().add(new DeoptimizeNode(node.action(), node.reason()));
-                    Block block = nodeToBlock.apply(node);
                     FixedNode next = block.getBeginNode().next();
                     block.getBeginNode().setNext(deopt);
                     GraphUtil.killCFG(next);
@@ -398,8 +408,8 @@ public class DominatorConditionalEliminationPhase extends Phase {
             }
         }
 
-        private void processFixedGuard(FixedGuardNode node, List<Runnable> undoOperations) {
-            if (!tryProofCondition(node.condition(), (guard, result) -> {
+        private void processFixedGuard(FixedGuardNode node, Block block, List<Runnable> undoOperations) {
+            if (!tryProofCondition(node.condition(), block, (guard, result) -> {
                 if (result != node.isNegated()) {
                     node.replaceAtUsages(guard);
                     GraphUtil.unlinkFixedNode(node);

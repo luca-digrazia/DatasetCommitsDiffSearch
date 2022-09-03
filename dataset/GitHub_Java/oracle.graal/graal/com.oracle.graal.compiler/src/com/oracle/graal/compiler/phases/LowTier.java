@@ -22,27 +22,14 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import static com.oracle.graal.compiler.common.GraalOptions.ConditionalElimination;
-import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
-import static com.oracle.graal.compiler.common.GraalOptions.OptCanonicalizer;
-import static com.oracle.graal.compiler.common.GraalOptions.UseGraalQueries;
-import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Required;
-import jdk.internal.jvmci.options.Option;
-import jdk.internal.jvmci.options.OptionType;
-import jdk.internal.jvmci.options.OptionValue;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
 
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
-import com.oracle.graal.phases.common.ExpandLogicPhase;
-import com.oracle.graal.phases.common.IterativeConditionalEliminationPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.common.ProfileCompiledMethodsPhase;
-import com.oracle.graal.phases.common.RemoveValueProxyPhase;
-import com.oracle.graal.phases.common.UseTrappingNullChecksPhase;
-import com.oracle.graal.phases.common.query.InlineICGPhase;
-import com.oracle.graal.phases.tiers.LowTierContext;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class LowTier extends PhaseSuite<LowTierContext> {
 
@@ -66,9 +53,6 @@ public class LowTier extends PhaseSuite<LowTierContext> {
         }
 
         appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.LOW_TIER));
-        if (UseGraalQueries.getValue()) {
-            appendPhase(new InlineICGPhase());
-        }
 
         appendPhase(new RemoveValueProxyPhase());
 

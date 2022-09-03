@@ -22,17 +22,13 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.nodes.GuardNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.DominatorConditionalEliminationPhase;
-import com.oracle.graal.phases.common.FloatingReadPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * Collection of tests for
@@ -47,14 +43,14 @@ public class ConditionalEliminationTest2 extends ConditionalEliminationTestBase 
 
         final String name;
 
-        Entry(String name) {
+        public Entry(String name) {
             this.name = name;
         }
     }
 
     static class EntryWithNext extends Entry {
 
-        EntryWithNext(String name, Entry next) {
+        public EntryWithNext(String name, Entry next) {
             super(name);
             this.next = next;
         }

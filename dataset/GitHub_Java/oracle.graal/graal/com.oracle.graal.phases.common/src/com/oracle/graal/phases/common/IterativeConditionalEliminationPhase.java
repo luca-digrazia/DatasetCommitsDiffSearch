@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.phases.common;
 
-import jdk.internal.jvmci.code.*;
 import static com.oracle.graal.graph.Graph.NodeEvent.*;
 
-import com.oracle.graal.graph.Graph.NodeEventScope;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
@@ -46,7 +46,6 @@ public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext
     }
 
     @Override
-    @SuppressWarnings("try")
     protected void run(StructuredGraph graph, PhaseContext context) {
         HashSetNodeEventListener listener = new HashSetNodeEventListener().exclude(NODE_ADDED).exclude(ZERO_USAGES);
         int count = 0;
