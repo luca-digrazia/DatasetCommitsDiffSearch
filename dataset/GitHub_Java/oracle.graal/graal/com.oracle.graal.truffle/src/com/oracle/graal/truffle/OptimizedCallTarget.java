@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.truffle;
 
+import static com.oracle.graal.truffle.OptimizedCallTargetLog.*;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 import java.io.*;
@@ -33,7 +34,6 @@ import java.util.stream.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.truffle.debug.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.*;
@@ -52,14 +52,13 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private SpeculationLog speculationLog;
     protected final CompilationProfile compilationProfile;
     protected final CompilationPolicy compilationPolicy;
-    private final OptimizedCallTarget sourceCallTarget;
+    private OptimizedCallTarget splitSource;
     private final AtomicInteger callSitesKnown = new AtomicInteger(0);
     @CompilationFinal private Class<?>[] profiledArgumentTypes;
     @CompilationFinal private Assumption profiledArgumentTypesAssumption;
     @CompilationFinal private Class<?> profiledReturnType;
     @CompilationFinal private Assumption profiledReturnTypeAssumption;
 
-    private final RootNode uninitializedRootNode;
     private final RootNode rootNode;
 
     /* Experimental fields for new splitting. */
@@ -79,29 +78,20 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return rootNode;
     }
 
-    public OptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode, GraalTruffleRuntime runtime, CompilationPolicy compilationPolicy, SpeculationLog speculationLog) {
+    public OptimizedCallTarget(RootNode rootNode, GraalTruffleRuntime runtime, CompilationPolicy compilationPolicy, SpeculationLog speculationLog) {
         super(rootNode.toString());
-        this.sourceCallTarget = sourceCallTarget;
         this.runtime = runtime;
         this.speculationLog = speculationLog;
         this.rootNode = rootNode;
-        this.compilationPolicy = compilationPolicy;
         this.rootNode.adoptChildren();
         this.rootNode.setCallTarget(this);
-        this.uninitializedRootNode = sourceCallTarget == null ? cloneRootNode(rootNode) : sourceCallTarget.uninitializedRootNode;
+        this.compilationPolicy = compilationPolicy;
         if (TruffleCallTargetProfiling.getValue()) {
             this.compilationProfile = new TraceCompilationProfile();
         } else {
             this.compilationProfile = new CompilationProfile();
         }
         this.nodeRewritingAssumption = new CyclicAssumption("nodeRewritingAssumption of " + rootNode.toString());
-    }
-
-    private static RootNode cloneRootNode(RootNode root) {
-        if (root == null || !root.isCloningAllowed()) {
-            return null;
-        }
-        return NodeUtil.cloneNode(root);
     }
 
     public Assumption getNodeRewritingAssumption() {
@@ -116,19 +106,19 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return argumentStamp;
     }
 
-    private int cloneIndex;
+    private int splitIndex;
 
-    public int getCloneIndex() {
-        return cloneIndex;
+    public int getSplitIndex() {
+        return splitIndex;
     }
 
-    public OptimizedCallTarget cloneUninitialized() {
-        RootNode copiedRoot = cloneRootNode(uninitializedRootNode);
-        if (copiedRoot == null) {
+    public OptimizedCallTarget split() {
+        if (!getRootNode().isSplittable()) {
             return null;
         }
-        OptimizedCallTarget splitTarget = (OptimizedCallTarget) runtime.createClonedCallTarget(this, copiedRoot);
-        splitTarget.cloneIndex = cloneIndex++;
+        OptimizedCallTarget splitTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(getRootNode().split());
+        splitTarget.splitSource = this;
+        splitTarget.splitIndex = splitIndex++;
         return splitTarget;
     }
 
@@ -276,13 +266,19 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     @Override
     public void invalidate() {
-        invalidate(null, null);
+        this.runtime.invalidateInstalledCode(this);
     }
 
-    protected void invalidate(Node source, CharSequence reason) {
+    protected void invalidate(Node oldNode, Node newNode, CharSequence reason) {
         if (isValid()) {
-            this.runtime.invalidateInstalledCode(this, source, reason);
+            CompilerAsserts.neverPartOfCompilation();
+            invalidate();
+            compilationProfile.reportInvalidated();
+            logOptimizedInvalidated(this, oldNode, newNode, reason);
         }
+        /* Notify compiled method that have inlined this call target that the tree changed. */
+        nodeRewritingAssumption.invalidate();
+        cancelInstalledTask(oldNode, newNode, reason);
     }
 
     public TruffleInlining getInlining() {
@@ -293,8 +289,11 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         this.inlining = inliningDecision;
     }
 
-    private boolean cancelInstalledTask(Node source, CharSequence reason) {
-        return this.runtime.cancelInstalledTask(this, source, reason);
+    private void cancelInstalledTask(Node oldNode, Node newNode, CharSequence reason) {
+        if (this.runtime.cancelInstalledTask(this)) {
+            logOptimizingUnqueued(this, oldNode, newNode, reason);
+            compilationProfile.reportInvalidated();
+        }
     }
 
     private void interpreterCall() {
@@ -312,30 +311,34 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     public void compile() {
         if (!runtime.isCompiling(this)) {
+            logOptimizingQueued(this);
             runtime.compile(this, TruffleBackgroundCompilation.getValue() && !TruffleCompilationExceptionsAreThrown.getValue());
         }
     }
 
-    public void notifyCompilationFailed(Throwable t) {
-        if (!(t instanceof BailoutException) || ((BailoutException) t).isPermanent()) {
-            compilationPolicy.recordCompilationFailure(t);
-            if (TruffleCompilationExceptionsAreThrown.getValue()) {
-                throw new OptimizationFailedException(t, this);
+    public void compilationFinished(Throwable t) {
+        if (t == null) {
+            // Compilation was successful.
+            if (inlining != null) {
+                dequeueInlinedCallSites(inlining);
             }
-        }
+        } else {
+            if (!(t instanceof BailoutException) || ((BailoutException) t).isPermanent()) {
+                compilationPolicy.recordCompilationFailure(t);
+                logOptimizingFailed(this, t.toString());
+                if (TruffleCompilationExceptionsAreThrown.getValue()) {
+                    throw new OptimizationFailedException(t, this);
+                }
+            } else {
+                logOptimizingUnqueued(this, null, null, "Non permanent bailout: " + t.toString());
+            }
 
-        if (t instanceof BailoutException) {
-            // Bailout => move on.
-        } else if (TruffleCompilationExceptionsAreFatal.getValue()) {
-            t.printStackTrace(OUT);
-            System.exit(-1);
-        }
-    }
-
-    public void notifyCompilationFinished() {
-        // Compilation was successful.
-        if (inlining != null) {
-            dequeueInlinedCallSites(inlining);
+            if (t instanceof BailoutException) {
+                // Bailout => move on.
+            } else if (TruffleCompilationExceptionsAreFatal.getValue()) {
+                t.printStackTrace(OUT);
+                System.exit(-1);
+            }
         }
     }
 
@@ -343,7 +346,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         for (TruffleInliningDecision decision : parentDecision) {
             if (decision.isInline()) {
                 OptimizedCallTarget target = decision.getTarget();
-                target.cancelInstalledTask(decision.getProfile().getCallNode(), "Inlining caller compiled.");
+                if (runtime.cancelInstalledTask(target)) {
+                    logOptimizingUnqueued(target, null, null, "Inlining caller compiled.");
+                }
                 dequeueInlinedCallSites(decision);
             }
         }
@@ -370,8 +375,12 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         callSitesKnown.decrementAndGet();
     }
 
-    public final OptimizedCallTarget getSourceCallTarget() {
-        return sourceCallTarget;
+    public final OptimizedCallTarget getSplitSource() {
+        return splitSource;
+    }
+
+    public final void setSplitSource(OptimizedCallTarget splitSource) {
+        this.splitSource = splitSource;
     }
 
     @Override
@@ -380,8 +389,8 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         if (isValid()) {
             superString += " <opt>";
         }
-        if (sourceCallTarget != null) {
-            superString += " <split-" + cloneIndex + "-" + argumentStamp.toStringShort() + ">";
+        if (splitSource != null) {
+            superString += " <split-" + splitIndex + "-" + argumentStamp.toStringShort() + ">";
         }
         return superString;
     }
@@ -418,17 +427,8 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     @Override
     public void nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
-        if (isValid()) {
-            CompilerAsserts.neverPartOfCompilation();
-            invalidate(newNode, reason);
-        }
-        /* Notify compiled method that have inlined this call target that the tree changed. */
-        nodeRewritingAssumption.invalidate();
-
         compilationProfile.reportNodeReplaced();
-        if (cancelInstalledTask(newNode, reason)) {
-            compilationProfile.reportInvalidated();
-        }
+        invalidate(oldNode, newNode, reason);
     }
 
     public void accept(NodeVisitor visitor, boolean includeInlinedNodes) {
@@ -451,13 +451,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, 0), false);
     }
 
-    public int countNonTrivialNodes(final boolean inlined) {
-        return (int) nodeStream(inlined).filter(e -> e != null && !e.getCost().isTrivial()).count();
-    }
-
     public Map<String, Object> getDebugProperties() {
         Map<String, Object> properties = new LinkedHashMap<>();
-        AbstractDebugCompilationListener.addASTSizeProperty(this, properties);
+        addASTSizeProperty(this, properties);
         properties.putAll(getCompilationProfile().getDebugProperties());
         return properties;
     }
