@@ -60,18 +60,16 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, MoveFactory spillMoveFactory,
                     RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
-        boolean shouldEliminateSpillMoves = shouldEliminateSpillMoves(traceBuilderResult, allocator);
-        eliminateSpillMoves(allocator, shouldEliminateSpillMoves, traceBuilderResult);
-    }
-
-    private static boolean shouldEliminateSpillMoves(TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
-        return !traceBuilderResult.incomingSideEdges(traceBuilderResult.getTraceForBlock(allocator.sortedBlocks().get(0)));
+        int traceNr = traceBuilderResult.getTraceForBlock(allocator.sortedBlocks().get(0));
+        if (!traceBuilderResult.incomingEdges(traceNr)) {
+            eliminateSpillMoves(allocator);
+        }
     }
 
     // called once before assignment of register numbers
     @SuppressWarnings("try")
-    private static void eliminateSpillMoves(TraceLinearScan allocator, boolean shouldEliminateSpillMoves, TraceBuilderResult<?> traceBuilderResult) {
-        try (Indent indent = Debug.logAndIndent("Eliminating unnecessary spill moves: Trace%d", traceBuilderResult.getTraceForBlock(allocator.sortedBlocks().get(0)))) {
+    private static void eliminateSpillMoves(TraceLinearScan allocator) {
+        try (Indent indent = Debug.logAndIndent("Eliminating unnecessary spill moves")) {
 
             /*
              * collect all intervals that must be stored after their definition. The list is sorted
@@ -100,7 +98,7 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
                              * be correct. Only moves that have been inserted by LinearScan can be
                              * removed.
                              */
-                            if (shouldEliminateSpillMoves && canEliminateSpillMove(allocator, block, move)) {
+                            if (canEliminateSpillMove(allocator, block, move)) {
                                 /*
                                  * Move target is a stack slot that is always correct, so eliminate
                                  * instruction.
@@ -195,7 +193,7 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
         TraceInterval prev = null;
         TraceInterval temp = interval;
         while (temp != TraceInterval.EndMarker) {
-            assert temp.spillDefinitionPos() >= 0 : "invalid spill definition pos";
+            assert temp.spillDefinitionPos() > 0 : "invalid spill definition pos";
             if (prev != null) {
                 assert temp.from() >= prev.from() : "intervals not sorted";
                 assert temp.spillDefinitionPos() >= prev.spillDefinitionPos() : "when intervals are sorted by from :  then they must also be sorted by spillDefinitionPos";
