@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,10 +32,6 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
@@ -45,7 +41,7 @@ import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalContainer;
-import com.oracle.truffle.llvm.runtime.interop.convert.ToPointer;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -70,131 +66,116 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
 
     @Specialization
     protected LLVMDebugValue fromBoolean(boolean value) {
-        return new LLDBConstant.Integer(LLVMDebugTypeConstants.BOOLEAN_SIZE, value ? 1L : 0L);
+        return new LLVMConstantValueProvider.Integer(LLVMDebugTypeConstants.BOOLEAN_SIZE, value ? 1L : 0L);
     }
 
     @Specialization
     protected LLVMDebugValue fromByte(byte value) {
-        return new LLDBConstant.Integer(Byte.SIZE, value);
+        return new LLVMConstantValueProvider.Integer(Byte.SIZE, value);
     }
 
     @Specialization
     protected LLVMDebugValue fromShort(short value) {
-        return new LLDBConstant.Integer(Short.SIZE, value);
+        return new LLVMConstantValueProvider.Integer(Short.SIZE, value);
     }
 
     @Specialization
     protected LLVMDebugValue fromInt(int value) {
-        return new LLDBConstant.Integer(Integer.SIZE, value);
+        return new LLVMConstantValueProvider.Integer(Integer.SIZE, value);
     }
 
     @Specialization
     protected LLVMDebugValue fromLong(long value) {
-        return new LLDBConstant.Integer(Long.SIZE, value);
+        return new LLVMConstantValueProvider.Integer(Long.SIZE, value);
     }
 
     @Specialization
     protected LLVMDebugValue fromIVarBit(LLVMIVarBit value) {
-        return new LLDBConstant.IVarBit(value);
+        return new LLVMConstantValueProvider.IVarBit(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromBoxedPrimitive(LLVMBoxedPrimitive value) {
-        return new LLDBBoxedPrimitive(value);
+        return new LLVMDebugBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMDebugValue fromNativePointer(LLVMNativePointer value) {
-        return new LLDBConstant.Pointer(value);
-    }
-
-    protected static ToPointer createToPointer() {
-        return ToPointer.create();
-    }
-
-    @Specialization
-    protected LLVMDebugValue fromManagedPointer(LLVMManagedPointer value, @Cached("createIsBoxed()") Node isBoxed, @Cached("createUnbox()") Node unbox,
-                    @Cached("createToPointer()") ToPointer toPointer) {
-        final TruffleObject target = value.getObject();
-
-        if (target instanceof LLVMGlobalContainer) {
-            return fromGlobalContainer((LLVMGlobalContainer) target);
-        }
-
-        try {
-            if (ForeignAccess.sendIsBoxed(isBoxed, target)) {
-                final Object unboxedValue = ForeignAccess.sendUnbox(unbox, target);
-                final Object asPointer = toPointer.executeWithTarget(unboxedValue);
-                if (asPointer instanceof LLVMBoxedPrimitive) {
-                    // for a boxed primitive we can display the value to the user
-                    return fromBoxedPrimitive((LLVMBoxedPrimitive) asPointer);
-                }
-            }
-        } catch (UnsupportedMessageException ignored) {
-            // the default case is a sensible fallback for this
-        }
-
-        return new LLDBConstant.Pointer(value);
+    protected LLVMDebugValue fromAddress(LLVMNativePointer value,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return new LLVMConstantValueProvider.Pointer(memory, value);
     }
 
     @Specialization
     protected LLVMDebugValue fromFunctionHandle(LLVMFunctionDescriptor value) {
-        return new LLDBConstant.Function(value);
+        return new LLVMConstantValueProvider.Function(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromFloat(float value) {
-        return new LLDBConstant.Float(value);
+        return new LLVMConstantValueProvider.Float(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromDouble(double value) {
-        return new LLDBConstant.Double(value);
+        return new LLVMConstantValueProvider.Double(value);
     }
 
     @Specialization
     protected LLVMDebugValue from80BitFloat(LLVM80BitFloat value) {
-        return new LLDBConstant.BigFloat(value);
+        return new LLVMConstantValueProvider.BigFloat(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromI1Vector(LLVMI1Vector value) {
-        return new LLDBVector.I1(value);
+        return new LLVMConstantVectorValueProvider.I1(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromI8Vector(LLVMI8Vector value) {
-        return new LLDBVector.I8(value);
+        return new LLVMConstantVectorValueProvider.I8(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromI16Vector(LLVMI16Vector value) {
-        return new LLDBVector.I16(value);
+        return new LLVMConstantVectorValueProvider.I16(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromI32Vector(LLVMI32Vector value) {
-        return new LLDBVector.I32(value);
+        return new LLVMConstantVectorValueProvider.I32(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromI64Vector(LLVMI64Vector value) {
-        return new LLDBVector.I64(value);
+        return new LLVMConstantVectorValueProvider.I64(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromFloatVector(LLVMFloatVector value) {
-        return new LLDBVector.Float(value);
+        return new LLVMConstantVectorValueProvider.Float(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromDoubleVector(LLVMDoubleVector value) {
-        return new LLDBVector.Double(value);
+        return new LLVMConstantVectorValueProvider.Double(value);
     }
 
     @Specialization
     protected LLVMDebugValue fromAddressVector(LLVMPointerVector value) {
-        return new LLDBVector.Address(value);
+        return new LLVMConstantVectorValueProvider.Address(value);
+    }
+
+    @Specialization
+    protected LLVMDebugValue fromManagedPointer(LLVMManagedPointer value) {
+        final Object obj = value.getObject();
+        final long offset = value.getOffset();
+        if (offset == 0) {
+            final LLVMDebugValue unwrappedValue = executeWithTarget(obj);
+            if (unwrappedValue != LLVMDebugValue.UNAVAILABLE) {
+                return unwrappedValue;
+            }
+        }
+        return new LLVMConstantValueProvider.InteropValue(obj, offset);
     }
 
     @Specialization
@@ -207,20 +188,15 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
     }
 
     @Specialization
-    protected LLVMDebugValue fromGlobal(LLVMDebugGlobalVariable value) {
+    protected LLVMDebugValue fromGlobal(LLVMDebugGlobalVariable value,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         LLVMGlobal global = value.getDescriptor();
         Object target = global.getTarget();
-
-        if (LLVMManagedPointer.isInstance(target)) {
-            final LLVMManagedPointer managedPointer = LLVMManagedPointer.cast(target);
-            if (LLDBSupport.pointsToObjectAccess(LLVMManagedPointer.cast(target))) {
-                return new LLDBMemoryValue(managedPointer);
-            }
-        } else if (!LLVMPointer.isInstance(target)) {
+        if (!LLVMPointer.isInstance(target)) {
             // a non-pointer was stored as a pointer in this global
             return executeWithTarget(target);
         }
-        return new LLDBGlobalConstant(global);
+        return new LLVMConstantGlobalValueProvider(memory, global, this);
     }
 
     @Fallback

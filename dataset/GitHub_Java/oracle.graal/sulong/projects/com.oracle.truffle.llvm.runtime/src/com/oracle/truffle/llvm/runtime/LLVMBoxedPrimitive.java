@@ -80,11 +80,6 @@ public final class LLVMBoxedPrimitive implements LLVMObjectNativeLibrary.Provide
         }
 
         @Override
-        public boolean isNull(Object obj) {
-            return false;
-        }
-
-        @Override
         public long asPointer(Object obj) throws InteropException {
             if (toLLVM == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
