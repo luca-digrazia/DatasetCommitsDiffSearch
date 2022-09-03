@@ -32,14 +32,14 @@ import com.oracle.graal.nodes.type.GenericStamp.*;
 import com.oracle.graal.nodes.util.*;
 
 /**
- * This class represents a value within the graph, including local variables, phis, and all other
- * instructions.
+ * This class represents a value within the graph, including local variables, phis, and
+ * all other instructions.
  */
 public abstract class ValueNode extends ScheduledNode implements StampProvider {
 
     /**
      * The kind of this value. This is {@link Kind#Void} for instructions that produce no value.
-     * This kind is guaranteed to be a {@linkplain Kind#getStackKind() stack kind}.
+     * This kind is guaranteed to be a {@linkplain Kind#stackKind() stack kind}.
      */
     private Stamp stamp;
 
@@ -76,10 +76,9 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
     }
 
     /**
-     * Checks if the given stamp is different than the current one (
-     * {@code newStamp.equals(oldStamp) == false}). If it is different then the new stamp will
-     * become the current stamp for this node.
-     * 
+     * Checks if the given stamp is different than the current one ({@code newStamp.equals(oldStamp) == false}). If it
+     * is different then the new stamp will become the current stamp for this node.
+     *
      * @return true if the stamp has changed, false otherwise.
      */
     protected final boolean updateStamp(Stamp newStamp) {
@@ -92,11 +91,10 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
     }
 
     /**
-     * This method can be overridden by subclasses of {@link ValueNode} if they need to recompute
-     * their stamp if their inputs change. A typical implementation will compute the stamp and pass
-     * it to {@link #updateStamp(Stamp)}, whose return value can be used as the result of this
-     * method.
-     * 
+     * This method can be overridden by subclasses of {@link ValueNode} if they need to recompute their stamp if their
+     * inputs change. A typical implementation will compute the stamp and pass it to {@link #updateStamp(Stamp)}, whose
+     * return value can be used as the result of this method.
+     *
      * @return true if the stamp has changed, false otherwise.
      */
     public boolean inferStamp() {
@@ -104,12 +102,12 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
     }
 
     public Kind kind() {
-        return stamp().kind();
+        return stamp.kind();
     }
 
     /**
      * Checks whether this value is a constant (i.e. it is of type {@link ConstantNode}.
-     * 
+     *
      * @return {@code true} if this value is a constant
      */
     public final boolean isConstant() {
@@ -117,7 +115,6 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
     }
 
     private static final NodePredicate IS_CONSTANT = new NodePredicate() {
-
         @Override
         public boolean apply(Node n) {
             return n instanceof ValueNode && ((ValueNode) n).isConstant();
@@ -130,7 +127,7 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
 
     /**
      * Checks whether this value represents the null constant.
-     * 
+     *
      * @return {@code true} if this value represents the null constant
      */
     public final boolean isNullConstant() {
@@ -139,9 +136,8 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
 
     /**
      * Convert this value to a constant if it is a constant, otherwise return null.
-     * 
-     * @return the {@link Constant} represented by this value if it is a constant; {@code null}
-     *         otherwise
+     *
+     * @return the {@link Constant} represented by this value if it is a constant; {@code null} otherwise
      */
     public final Constant asConstant() {
         if (this instanceof ConstantNode) {
@@ -151,9 +147,9 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
     }
 
     public <T extends Stamp> boolean verifyStamp(Class<T> stampClass) {
-        assert stamp() != null;
-        assert stampClass.isInstance(stamp()) : this + " (" + GraphUtil.approxSourceLocation(this) + ") has unexpected stamp type: expected " + stampClass.getName() + ", got " +
-                        stamp().getClass().getName() + ", usages=" + usages();
+        assert stamp != null;
+        assert stampClass.isInstance(stamp) : this + " (" + GraphUtil.approxSourceLocation(this) + ") has unexpected stamp type: expected " + stampClass.getName() +
+            ", got " + stamp.getClass().getName();
         return true;
     }
 
@@ -178,7 +174,7 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
             assertTrue(!(v.stamp() instanceof GenericStamp) || ((GenericStamp) v.stamp()).type() == GenericStampType.Dependency, "cannot depend on node with stamp %s", v.stamp());
         }
         assertTrue(kind() != null, "Should have a valid kind");
-        assertTrue(kind() == kind().getStackKind(), "Should have a stack kind : %s", kind());
+        assertTrue(kind() == kind().stackKind(), "Should have a stack kind : %s", kind());
         return super.verify();
     }
 
