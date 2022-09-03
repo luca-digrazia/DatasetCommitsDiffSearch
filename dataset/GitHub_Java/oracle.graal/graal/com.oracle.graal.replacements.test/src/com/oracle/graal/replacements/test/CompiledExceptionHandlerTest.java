@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,11 +28,14 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.phases.HighTier;
 import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.graph.iterators.NodePredicates;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.BytecodeExceptionNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
 import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
@@ -81,7 +84,7 @@ public class CompiledExceptionHandlerTest extends GraalCompilerTest {
     @Override
     protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
         StructuredGraph graph = super.parseEager(m, allowAssumptions);
-        int handlers = graph.getNodes().filter(ExceptionObjectNode.class).count();
+        int handlers = graph.getNodes().filter(NodePredicates.isA(ExceptionObjectNode.class).or(BytecodeExceptionNode.class)).count();
         Assert.assertEquals(1, handlers);
         return graph;
     }
@@ -126,5 +129,22 @@ public class CompiledExceptionHandlerTest extends GraalCompilerTest {
             }
         }
         return m4 + m3;
+    }
+
+    @Test
+    @SuppressWarnings("try")
+    public void test3() {
+        try (OverrideScope s = OptionValue.override(GraalOptions.StressExplicitExceptionCode, true)) {
+            test("test3Snippet", (Object) null, "object2");
+            test("test3Snippet", "object1", "object2");
+        }
+    }
+
+    public static String test3Snippet(Object o, Object o2) {
+        try {
+            return o.toString();
+        } catch (NullPointerException e) {
+            return String.valueOf(o2);
+        }
     }
 }
