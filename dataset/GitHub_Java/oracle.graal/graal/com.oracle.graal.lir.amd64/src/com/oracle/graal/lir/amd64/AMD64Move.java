@@ -22,27 +22,23 @@
  */
 package com.oracle.graal.lir.amd64;
 
-import com.oracle.jvmci.amd64.*;
-import com.oracle.jvmci.code.Register;
-import com.oracle.jvmci.code.StackSlotValue;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.AllocatableValue;
-import com.oracle.jvmci.meta.Value;
-import com.oracle.jvmci.meta.JavaConstant;
-
-import static com.oracle.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static java.lang.Double.*;
 import static java.lang.Float.*;
 
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.*;
+import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
+import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.jvmci.common.*;
 
 public class AMD64Move {
 
@@ -143,14 +139,6 @@ public class AMD64Move {
             return result;
         }
 
-        public Register getScratchRegister() {
-            return scratch;
-        }
-
-        public StackSlotValue getBackupSlot() {
-            return backupSlot;
-        }
-
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
             // backup scratch register
@@ -161,73 +149,6 @@ public class AMD64Move {
             // restore scratch register
             move(backupSlot.getKind(), crb, masm, scratch.asValue(backupSlot.getLIRKind()), backupSlot);
 
-        }
-    }
-
-    @Opcode("MULTISTACKMOVE")
-    public static final class AMD64MultiStackMove extends AMD64LIRInstruction {
-        public static final LIRInstructionClass<AMD64MultiStackMove> TYPE = LIRInstructionClass.create(AMD64MultiStackMove.class);
-
-        @Def({STACK}) protected AllocatableValue[] results;
-        @Use({STACK}) protected Value[] inputs;
-        @Alive({OperandFlag.STACK, OperandFlag.UNINITIALIZED}) private StackSlotValue backupSlot;
-
-        private Register scratch;
-
-        public AMD64MultiStackMove(AllocatableValue[] results, Value[] inputs, Register scratch, StackSlotValue backupSlot) {
-            super(TYPE);
-            this.results = results;
-            this.inputs = inputs;
-            this.backupSlot = backupSlot;
-            this.scratch = scratch;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            // backup scratch register
-            move(backupSlot.getKind(), crb, masm, backupSlot, scratch.asValue(backupSlot.getLIRKind()));
-            for (int i = 0; i < results.length; i++) {
-                Value input = inputs[i];
-                AllocatableValue result = results[i];
-                // move stack slot
-                move(input.getKind(), crb, masm, scratch.asValue(input.getLIRKind()), input);
-                move(result.getKind(), crb, masm, result, scratch.asValue(result.getLIRKind()));
-            }
-            // restore scratch register
-            move(backupSlot.getKind(), crb, masm, scratch.asValue(backupSlot.getLIRKind()), backupSlot);
-
-        }
-    }
-
-    @Opcode("STACKMOVE")
-    public static final class AMD64PushPopStackMove extends AMD64LIRInstruction implements MoveOp {
-        public static final LIRInstructionClass<AMD64PushPopStackMove> TYPE = LIRInstructionClass.create(AMD64PushPopStackMove.class);
-
-        @Def({STACK}) protected AllocatableValue result;
-        @Use({STACK, HINT}) protected Value input;
-        private final OperandSize size;
-
-        public AMD64PushPopStackMove(OperandSize size, AllocatableValue result, Value input) {
-            super(TYPE);
-            this.result = result;
-            this.input = input;
-            this.size = size;
-        }
-
-        @Override
-        public Value getInput() {
-            return input;
-        }
-
-        @Override
-        public AllocatableValue getResult() {
-            return result;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            AMD64MOp.PUSH.emit(masm, size, (AMD64Address) crb.asAddress(input));
-            AMD64MOp.POP.emit(masm, size, (AMD64Address) crb.asAddress(result));
         }
     }
 
@@ -365,7 +286,7 @@ public class AMD64Move {
                     masm.cmpxchgq(asRegister(newValue), address.toAddress());
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
     }
@@ -402,7 +323,7 @@ public class AMD64Move {
                     masm.xaddq(address.toAddress(), asRegister(result));
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
     }
@@ -437,7 +358,7 @@ public class AMD64Move {
                     masm.xchgq(asRegister(result), address.toAddress());
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
     }
@@ -453,13 +374,13 @@ public class AMD64Move {
             } else if (isStackSlot(result)) {
                 reg2stack(moveKind, crb, masm, result, input);
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isStackSlot(input)) {
             if (isRegister(result)) {
                 stack2reg(moveKind, crb, masm, result, input);
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isConstant(input)) {
             if (isRegister(result)) {
@@ -467,10 +388,10 @@ public class AMD64Move {
             } else if (isStackSlot(result)) {
                 const2stack(crb, masm, result, (JavaConstant) input);
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -495,7 +416,7 @@ public class AMD64Move {
                 masm.movq(asRegister(result), asRegister(input));
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere("kind=" + result.getKind());
+                throw GraalInternalError.shouldNotReachHere("kind=" + result.getKind());
         }
     }
 
@@ -526,7 +447,7 @@ public class AMD64Move {
                 masm.movq(dest, asRegister(input));
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -561,7 +482,7 @@ public class AMD64Move {
                 masm.movq(asRegister(result), src);
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -638,7 +559,7 @@ public class AMD64Move {
                 }
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -663,11 +584,11 @@ public class AMD64Move {
                 if (input.isNull()) {
                     imm = 0;
                 } else {
-                    throw JVMCIError.shouldNotReachHere("Non-null object constants must be in register");
+                    throw GraalInternalError.shouldNotReachHere("Non-null object constants must be in register");
                 }
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
         switch (result.getKind()) {
             case Byte:
@@ -689,7 +610,7 @@ public class AMD64Move {
                 masm.movlong(dest, imm);
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere("Unknown result Kind: " + result.getKind());
+                throw GraalInternalError.shouldNotReachHere("Unknown result Kind: " + result.getKind());
         }
     }
 }
