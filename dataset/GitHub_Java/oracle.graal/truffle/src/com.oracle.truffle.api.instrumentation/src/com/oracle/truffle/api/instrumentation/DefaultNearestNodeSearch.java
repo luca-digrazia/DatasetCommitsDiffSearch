@@ -2,41 +2,25 @@
  * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api.instrumentation;
 
@@ -87,7 +71,7 @@ class DefaultNearestNodeSearch {
         int endIndex = getCharEndIndex(section);
         if (startIndex <= offset && offset <= endIndex) {
             Node parent = findParentTaggedNode(node, tags);
-            Node ch = findChildTaggedNode(node, offset, tags, parent != null, false, true);
+            Node ch = findChildTaggedNode(node, offset, tags, parent != null, false);
             while (ch == null) {
                 if (node == parent) {
                     return parent;
@@ -96,7 +80,7 @@ class DefaultNearestNodeSearch {
                 if (node == null) {
                     break;
                 }
-                ch = findChildTaggedNode(node, offset, tags, parent != null, false, true);
+                ch = findChildTaggedNode(node, offset, tags, parent != null, false);
             }
             return ch;
         } else if (endIndex < offset) {
@@ -110,7 +94,7 @@ class DefaultNearestNodeSearch {
      * Finds the nearest tagged {@link Node node}. See the algorithm description at
      * {@link InstrumentableNode#findNearestNodeAt(int, Set)}.
      */
-    private static Node findChildTaggedNode(Node node, int offset, Set<Class<? extends Tag>> tags, boolean haveOuterCandidate, boolean preferFirst, boolean doNest) {
+    private static Node findChildTaggedNode(Node node, int offset, Set<Class<? extends Tag>> tags, boolean haveOuterCandidate, boolean preferFirst) {
         Node[] highestLowerNode = new Node[]{null};
         Node[] highestLowerTaggedNode = new Node[]{null};
         Node[] lowestHigherNode = new Node[]{null};
@@ -122,10 +106,6 @@ class DefaultNearestNodeSearch {
             int highestLowerTaggedNodeIndex = 0;
             int lowestHigherNodeIndex = 0;
             int lowestHigherTaggedNodeIndex = 0;
-            int lowerTaggedParentStart = -1;
-            int lowerTaggedParentEnd = -1;
-            int higherTaggedParentStart = -1;
-            int higherTaggedParentEnd = -1;
 
             @Override
             public boolean visit(Node childNode) {
@@ -137,7 +117,7 @@ class DefaultNearestNodeSearch {
                 if (ch instanceof InstrumentableNode && ((InstrumentableNode) ch).isInstrumentable()) {
                     ch = (Node) ((InstrumentableNode) ch).materializeInstrumentableNodes(tags);
                     ss = ch.getSourceSection();
-                    if (ss == null || !ss.isAvailable()) {
+                    if (ss == null) {
                         return true;
                     }
                 } else {
@@ -155,13 +135,10 @@ class DefaultNearestNodeSearch {
                 }
                 if (i1 <= offset && offset <= i2) {
                     // In an encapsulating source section
-                    Node taggedNode;
-                    if (doNest) {
-                        taggedNode = findChildTaggedNode(ch, offset, tags, isTagged || haveOuterCandidate, preferFirst, doNest);
-                        if (taggedNode != null) {
-                            foundNode[0] = taggedNode;
-                            return false;
-                        }
+                    Node taggedNode = findChildTaggedNode(ch, offset, tags, isTagged || haveOuterCandidate, preferFirst);
+                    if (taggedNode != null) {
+                        foundNode[0] = taggedNode;
+                        return false;
                     }
                     if (isTagged) {
                         // If nothing in and is tagged, return it
@@ -169,7 +146,7 @@ class DefaultNearestNodeSearch {
                         return false;
                     }
                 }
-                if (offset < i1 && !(higherTaggedParentStart <= i1 && i2 <= higherTaggedParentEnd)) {
+                if (offset < i1) {
                     // We're after the offset
                     if (lowestHigherNode[0] == null || lowestHigherNodeIndex > i1) {
                         lowestHigherNode[0] = ch;
@@ -179,23 +156,19 @@ class DefaultNearestNodeSearch {
                         if (lowestHigherTaggedNode[0] == null || lowestHigherTaggedNodeIndex > i1) {
                             lowestHigherTaggedNode[0] = ch;
                             lowestHigherTaggedNodeIndex = i1;
-                            higherTaggedParentStart = i1;
-                            higherTaggedParentEnd = i2;
                         }
                     }
                 }
-                if (i2 < offset && !(lowerTaggedParentStart <= i1 && i2 <= lowerTaggedParentEnd)) {
+                if (i2 < offset) {
                     // We're before the offset
-                    if (highestLowerNode[0] == null || (highestLowerNodeIndex < i1)) {
+                    if (highestLowerNode[0] == null || (preferFirst ? i1 < highestLowerNodeIndex : highestLowerNodeIndex < i1)) {
                         highestLowerNode[0] = ch;
                         highestLowerNodeIndex = i1;
                     }
                     if (isTagged) {
-                        if (highestLowerTaggedNode[0] == null || (highestLowerTaggedNodeIndex < i1)) {
+                        if (highestLowerTaggedNode[0] == null || (preferFirst ? i1 < highestLowerTaggedNodeIndex : highestLowerTaggedNodeIndex < i1)) {
                             highestLowerTaggedNode[0] = ch;
                             highestLowerTaggedNodeIndex = i1;
-                            lowerTaggedParentStart = i1;
-                            lowerTaggedParentEnd = i2;
                         }
                     }
                 }
@@ -229,8 +202,8 @@ class DefaultNearestNodeSearch {
         // Try to go in the preferred node:
         Node taggedNode = null;
         if (!haveOuterCandidate) {
-            if (primaryNode != null && doNest) {
-                taggedNode = findChildTaggedNode(primaryNode, offset, tags, haveOuterCandidate, true, true);
+            if (primaryNode != null) {
+                taggedNode = findChildTaggedNode(primaryNode, offset, tags, haveOuterCandidate, true);
             }
         }
         if (taggedNode == null && primaryTaggedNode != null) {
@@ -241,8 +214,8 @@ class DefaultNearestNodeSearch {
         }
         // Try to go in a node before:
         if (!haveOuterCandidate) {
-            if (taggedNode == null && secondaryNode != null && doNest) {
-                taggedNode = findChildTaggedNode(secondaryNode, offset, tags, haveOuterCandidate, true, false);
+            if (taggedNode == null && secondaryNode != null) {
+                taggedNode = findChildTaggedNode(secondaryNode, offset, tags, haveOuterCandidate, true);
             }
         }
         if (taggedNode == null && secondaryTaggedNode != null) {

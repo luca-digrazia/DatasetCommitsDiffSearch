@@ -50,7 +50,6 @@ import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
@@ -206,45 +205,31 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     }
 
     /*
-     * Test onCreate, onFinalize and onDispose invocations for multiple instrument instances.
+     * Test onCreate and onDispose invocations for multiple instrument instances.
      */
     @Test
     public void testMultipleInstruments() throws IOException {
         run(""); // initialize
 
         MultipleInstanceInstrument.onCreateCounter = 0;
-        MultipleInstanceInstrument.onFinalizeCounter = 0;
         MultipleInstanceInstrument.onDisposeCounter = 0;
         MultipleInstanceInstrument.constructor = 0;
         Instrument instrument1 = engine.getInstruments().get("testMultipleInstruments");
-        engine.close();
-        engine = null;
-        Assert.assertEquals(0, MultipleInstanceInstrument.constructor);
-        Assert.assertEquals(0, MultipleInstanceInstrument.onCreateCounter);
-        Assert.assertEquals(0, MultipleInstanceInstrument.onFinalizeCounter);
-        Assert.assertEquals(0, MultipleInstanceInstrument.onDisposeCounter);
-
-        engine = getEngine();
-        MultipleInstanceInstrument.onCreateCounter = 0;
-        instrument1 = engine.getInstruments().get("testMultipleInstruments");
         instrument1.lookup(Object.class); // enabled
         Assert.assertEquals(1, MultipleInstanceInstrument.constructor);
         Assert.assertEquals(1, MultipleInstanceInstrument.onCreateCounter);
-        Assert.assertEquals(0, MultipleInstanceInstrument.onFinalizeCounter);
         Assert.assertEquals(0, MultipleInstanceInstrument.onDisposeCounter);
 
         Instrument instrument2 = engine.getInstruments().get("testMultipleInstruments");
         instrument2.lookup(Object.class); // the same enabled
         Assert.assertEquals(1, MultipleInstanceInstrument.constructor);
         Assert.assertEquals(1, MultipleInstanceInstrument.onCreateCounter);
-        Assert.assertEquals(0, MultipleInstanceInstrument.onFinalizeCounter);
         Assert.assertEquals(0, MultipleInstanceInstrument.onDisposeCounter);
 
         engine.close();
         engine = null;
         Assert.assertEquals(1, MultipleInstanceInstrument.constructor);
         Assert.assertEquals(1, MultipleInstanceInstrument.onCreateCounter);
-        Assert.assertEquals(1, MultipleInstanceInstrument.onFinalizeCounter);
         Assert.assertEquals(1, MultipleInstanceInstrument.onDisposeCounter);
     }
 
@@ -252,7 +237,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public static class MultipleInstanceInstrument extends TruffleInstrument {
 
         private static int onCreateCounter = 0;
-        private static int onFinalizeCounter = 0;
         private static int onDisposeCounter = 0;
         private static int constructor = 0;
 
@@ -268,14 +252,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         }
 
         @Override
-        protected void onFinalize(Env env) {
-            assertEquals(0, onDisposeCounter); // no dispose yet
-            onFinalizeCounter++;
-        }
-
-        @Override
         protected void onDispose(Env env) {
-            assertEquals(1, onFinalizeCounter); // finalized already
             onDisposeCounter++;
         }
     }
@@ -379,12 +356,9 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     @Test
     public void testInstrumentException1() {
-        try {
-            assureEnabled(engine.getInstruments().get("testInstrumentException1"));
-            Assert.fail();
-        } catch (PolyglotException e) {
-            Assert.assertTrue(e.getMessage().contains("MyLanguageException"));
-        }
+        assureEnabled(engine.getInstruments().get("testInstrumentException1"));
+
+        Assert.assertTrue(getErr().contains("MyLanguageException"));
     }
 
     @Registration(name = "", version = "", id = "testInstrumentException1", services = Object.class)
@@ -1275,7 +1249,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
      * Use tags that are not declarded as required.
      */
     @Test
-    @Ignore // InstrumentClientInstrumenter.verifyFilter() is empty
     public void testUsedTagNotRequired1() throws IOException {
         TestInstrumentNonInstrumentable1.onStatement = 0;
 
@@ -1534,14 +1507,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         // valide service, should trigger onCreate
         assertNotNull(access.env.lookup(other, TestAccessInstrumentsOther.class));
         assertEquals(1, TestAccessInstrumentsOther.initializedCount);
-
-        // Check the order of onFinalize and onDispose calls
-        StringBuilder onCallsLogger = new StringBuilder();
-        instrument.lookup(TestAccessInstruments.class).onCallsLogger = onCallsLogger;
-        access.env.lookup(other, TestAccessInstrumentsOther.class).onCallsLogger = onCallsLogger;
-        engine.close();
-        engine = null;
-        assertEquals("FFDD", onCallsLogger.toString());
     }
 
     @Test
@@ -1564,7 +1529,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public static class TestAccessInstruments extends TruffleInstrument {
 
         Env env;
-        StringBuilder onCallsLogger;
 
         @Override
         protected void onCreate(final Env env) {
@@ -1573,17 +1537,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         }
 
         @Override
-        protected void onFinalize(Env env) {
-            if (onCallsLogger != null) {
-                onCallsLogger.append("F");
-            }
-        }
-
-        @Override
         protected void onDispose(Env env) {
-            if (onCallsLogger != null) {
-                onCallsLogger.append("D");
-            }
         }
 
     }
@@ -1592,7 +1546,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public static class TestAccessInstrumentsOther extends TruffleInstrument {
 
         static int initializedCount = 0;
-        StringBuilder onCallsLogger;
 
         @Override
         protected void onCreate(final Env env) {
@@ -1601,17 +1554,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         }
 
         @Override
-        protected void onFinalize(Env env) {
-            if (onCallsLogger != null) {
-                onCallsLogger.append("F");
-            }
-        }
-
-        @Override
         protected void onDispose(Env env) {
-            if (onCallsLogger != null) {
-                onCallsLogger.append("D");
-            }
         }
 
     }

@@ -46,6 +46,7 @@ import java.util.regex.Pattern;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugScope;
@@ -64,6 +65,7 @@ import com.oracle.truffle.tools.chromeinspector.domains.DebuggerDomain;
 import com.oracle.truffle.tools.chromeinspector.events.Event;
 import com.oracle.truffle.tools.chromeinspector.ScriptsHandler.LoadScriptListener;
 import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext.CancellableRunnable;
+import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext.GuestLanguageException;
 import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext.NoSuspendedThreadException;
 import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext.SuspendedThreadExecutor;
 import com.oracle.truffle.tools.chromeinspector.commands.Result;
@@ -126,7 +128,7 @@ public final class TruffleDebugger extends DebuggerDomain {
         Debugger tdbg = context.getEnv().lookup(context.getEnv().getInstruments().get("debugger"), Debugger.class);
         ds = tdbg.startSession(new SuspendedCallbackImpl());
         ds.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(true).includeInternal(false).build());
-        slh = context.acquireScriptsHandler();
+        slh = context.getScriptsHandler();
         bph = new BreakpointsHandler(ds, slh, () -> eventHandler);
     }
 
@@ -477,26 +479,19 @@ public final class TruffleDebugger extends DebuggerDomain {
                     }
                     CallFrame cf = suspendedInfo.getCallFrames()[frameId];
                     JSONObject json = new JSONObject();
-                    DebugValue value = cf.getFrame().eval(expression);
-                    RemoteObject ro = new RemoteObject(value, context.getErr());
-                    context.getRemoteObjectsHandler().register(ro);
-                    json.put("result", ro.toJSON());
-                    return json;
-                }
-
-                @Override
-                public JSONObject processException(DebugException dex) {
-                    JSONObject json = new JSONObject();
-                    TruffleRuntime.fillExceptionDetails(json, dex, context);
-                    DebugValue exceptionObject = dex.getExceptionObject();
-                    if (exceptionObject != null) {
-                        RemoteObject ro = context.createAndRegister(exceptionObject);
+                    try {
+                        DebugValue value = cf.getFrame().eval(expression);
+                        RemoteObject ro = new RemoteObject(value, context.getErr());
+                        context.getRemoteObjectsHandler().register(ro);
                         json.put("result", ro.toJSON());
-                    } else {
-                        JSONObject err = new JSONObject();
-                        err.putOpt("value", dex.getLocalizedMessage());
-                        err.putOpt("type", "string");
-                        json.put("result", err);
+                    } catch (Throwable t) {
+                        if (t instanceof TruffleException && !((TruffleException) t).isInternalError()) {
+                            JSONObject err = new JSONObject();
+                            err.putOpt("value", t.getLocalizedMessage());
+                            json.put("result", err);
+                        } else {
+                            throw t;
+                        }
                     }
                     return json;
                 }
@@ -506,6 +501,9 @@ public final class TruffleDebugger extends DebuggerDomain {
             JSONObject err = new JSONObject();
             err.putOpt("value", e.getLocalizedMessage());
             jsonResult.put("result", err);
+        } catch (GuestLanguageException e) {
+            jsonResult = new JSONObject();
+            TruffleRuntime.fillExceptionDetails(jsonResult, e, context);
         }
         return new Params(jsonResult);
     }
