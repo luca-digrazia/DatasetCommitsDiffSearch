@@ -1883,7 +1883,6 @@ public final class LinearScan {
     }
 
     private DebugMetric betterSpillPos = Debug.metric("BetterSpillPosition");
-    private DebugMetric betterSpillPosWithLowerProbability = Debug.metric("BetterSpillPositionWithLowerProbability");
 
     private void findSpillPosition() {
         for (Interval interval : intervals) {
@@ -1917,15 +1916,7 @@ public final class LinearScan {
                             assert dominates(defBlock, spillBlock);
                             betterSpillPos.increment();
                             Debug.log("Better spill position found (Block %s)", spillBlock);
-
-                            if (defBlock.probability() <= spillBlock.probability()) {
-                                // better spill block has the same probability -> do nothing
-                                assert defBlock.probability() == spillBlock.probability();
-                                interval.setSpillState(SpillState.StoreAtDefinition);
-                            } else {
-                                betterSpillPosWithLowerProbability.increment();
-                                interval.setSpillDefinitionPos(getFirstLirInstructionId(spillBlock));
-                            }
+                            interval.setSpillDefinitionPos(getFirstLirInstructionId(spillBlock));
                         } else {
                             // definition is the best choice
                             interval.setSpillState(SpillState.StoreAtDefinition);
