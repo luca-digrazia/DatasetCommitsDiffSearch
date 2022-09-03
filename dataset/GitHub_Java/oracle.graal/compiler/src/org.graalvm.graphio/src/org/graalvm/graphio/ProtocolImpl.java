@@ -34,9 +34,9 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
     private final GraphBlocks<Graph, Block, Node> blocks;
     private final GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements;
 
-    ProtocolImpl(int major, int minor, GraphStructure<Graph, Node, NodeClass, Port> structure, GraphTypes enums, GraphBlocks<Graph, Block, Node> blocks,
+    ProtocolImpl(GraphStructure<Graph, Node, NodeClass, Port> structure, GraphTypes enums, GraphBlocks<Graph, Block, Node> blocks,
                     GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements, WritableByteChannel channel) throws IOException {
-        super(channel, major, minor);
+        super(channel);
         this.structure = structure;
         this.types = enums;
         this.blocks = blocks;
@@ -50,18 +50,6 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
 
     @Override
     protected NodeClass findNodeClass(Object obj) {
-        NodeClass res = structure.nodeClass(obj);
-        if (res == null) {
-            return null;
-        }
-        if (versionMajor != 4) {
-            return res.equals(obj) ? res : null;
-        }
-        return res;
-    }
-
-    @Override
-    protected NodeClass getNodeClass(Node obj) {
         return structure.nodeClass(obj);
     }
 

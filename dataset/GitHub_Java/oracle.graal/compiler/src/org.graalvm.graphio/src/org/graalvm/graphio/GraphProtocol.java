@@ -527,7 +527,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             final int bci = findNodeSourcePositionBCI(pos);
             writeInt(bci);
             StackTraceElement ste = findMethodStackTraceElement(method, bci, pos);
-            if (ste != null && ste.getFileName() != null) {
+            if (ste != null) {
                 writePoolObject(ste.getFileName());
                 writeInt(ste.getLineNumber());
             } else {
