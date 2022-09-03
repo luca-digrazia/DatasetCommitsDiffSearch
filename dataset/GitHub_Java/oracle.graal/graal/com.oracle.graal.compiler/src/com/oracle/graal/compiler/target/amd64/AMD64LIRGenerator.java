@@ -44,7 +44,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.ValueUtil;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.DivOp;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.Op1Reg;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.Op1Stack;
@@ -219,56 +218,39 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public void emitBranch(CiValue left, CiValue right, Condition cond, boolean unorderedIsTrue, LabelRef label, LIRDebugInfo info) {
-        boolean mirrored = emitCompare(left, right);
-        Condition finalCondition = mirrored ? cond.mirror() : cond;
-        switch (left.kind.stackKind()) {
+        emitCompare(left, right);
+        switch (left.kind) {
+            case Boolean:
             case Int:
             case Long:
-            case Object: append(new BranchOp(finalCondition, label, info)); break;
+            case Object: append(new BranchOp(cond, label, info)); break;
             case Float:
-            case Double: append(new FloatBranchOp(finalCondition, unorderedIsTrue, label, info)); break;
+            case Double: append(new FloatBranchOp(cond, unorderedIsTrue, label, info)); break;
             default: throw GraalInternalError.shouldNotReachHere("" + left.kind);
         }
     }
 
     @Override
     public Variable emitCMove(CiValue left, CiValue right, Condition cond, boolean unorderedIsTrue, CiValue trueValue, CiValue falseValue) {
-        boolean mirrored = emitCompare(left, right);
-        Condition finalCondition = mirrored ? cond.mirror() : cond;
+        emitCompare(left, right);
 
         Variable result = newVariable(trueValue.kind);
-        switch (left.kind.stackKind()) {
+        switch (left.kind) {
+            case Boolean:
             case Int:
             case Long:
-            case Object: append(new CondMoveOp(result, finalCondition, load(trueValue), loadNonConst(falseValue))); break;
+            case Object: append(new CondMoveOp(result, cond, load(trueValue), loadNonConst(falseValue))); break;
             case Float:
-            case Double: append(new FloatCondMoveOp(result, finalCondition, unorderedIsTrue, load(trueValue), load(falseValue))); break;
+            case Double: append(new FloatCondMoveOp(result, cond, unorderedIsTrue, load(trueValue), load(falseValue))); break;
 
         }
         return result;
     }
 
-    /**
-     * This method emits the compare instruction, and may reorder the operands. It returns true if it did so.
-     *
-     * @param a the left operand of the comparison
-     * @param b the right operand of the comparison
-     * @return true if the left and right operands were switched, false otherwise
-     */
-    private boolean emitCompare(CiValue a, CiValue b) {
-        Variable left;
-        CiValue right;
-        boolean mirrored;
-        if (ValueUtil.isVariable(b)) {
-            left = load(b);
-            right = loadNonConst(a);
-            mirrored = true;
-        } else {
-            left = load(a);
-            right = loadNonConst(b);
-            mirrored = false;
-        }
-        switch (left.kind.stackKind()) {
+    private void emitCompare(CiValue a, CiValue b) {
+        Variable left = load(a);
+        CiValue right = loadNonConst(b);
+        switch (left.kind) {
             case Jsr:
             case Int: append(new CompareOp(ICMP, left, right)); break;
             case Long: append(new CompareOp(LCMP, left, right)); break;
@@ -277,7 +259,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             case Double: append(new CompareOp(DCMP, left, right)); break;
             default: throw GraalInternalError.shouldNotReachHere();
         }
-        return mirrored;
     }
 
     @Override
@@ -579,6 +560,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     protected void emitNullCheckGuard(NullCheckNode node, long leafGraphId) {
+        assert !node.expectedNull;
         Variable value = load(operand(node.object()));
         LIRDebugInfo info = state(leafGraphId);
         append(new NullCheckOp(value, info));

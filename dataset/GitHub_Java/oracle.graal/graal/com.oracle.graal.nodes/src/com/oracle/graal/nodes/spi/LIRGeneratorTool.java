@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 public abstract class LIRGeneratorTool {
-    public abstract TargetDescription target();
+    public abstract CiTarget target();
 
     /**
      * Checks whether the supplied constant can be used without loading it into a register
@@ -38,7 +38,7 @@ public abstract class LIRGeneratorTool {
      * @param c The constant to check.
      * @return True if the constant can be used directly, false if the constant needs to be in a register.
      */
-    public abstract boolean canInlineConstant(Constant c);
+    public abstract boolean canInlineConstant(CiConstant c);
 
     /**
      * Checks whether the supplied constant can be used without loading it into a register
@@ -46,51 +46,49 @@ public abstract class LIRGeneratorTool {
      * @param c The constant to check.
      * @return True if the constant can be used directly, false if the constant needs to be in a register.
      */
-    public abstract boolean canStoreConstant(Constant c);
+    public abstract boolean canStoreConstant(CiConstant c);
 
-    public abstract RegisterAttributes attributes(Register register);
+    public abstract CiValue operand(ValueNode object);
+    public abstract CiValue newVariable(CiKind kind);
+    public abstract CiValue setResult(ValueNode x, CiValue operand);
 
-    public abstract Value operand(ValueNode object);
-    public abstract Value newVariable(Kind kind);
-    public abstract Value setResult(ValueNode x, Value operand);
+    public abstract CiAddress makeAddress(LocationNode location, ValueNode object);
 
-    public abstract Address makeAddress(LocationNode location, ValueNode object);
+    public abstract CiValue emitMove(CiValue input);
+    public abstract void emitMove(CiValue src, CiValue dst);
+    public abstract CiValue emitLoad(CiValue loadAddress, boolean canTrap);
+    public abstract void emitStore(CiValue storeAddress, CiValue input, boolean canTrap);
+    public abstract CiValue emitLea(CiValue address);
 
-    public abstract Value emitMove(Value input);
-    public abstract void emitMove(Value src, Value dst);
-    public abstract Value emitLoad(Value loadAddress, boolean canTrap);
-    public abstract void emitStore(Value storeAddress, Value input, boolean canTrap);
-    public abstract Value emitLea(Value address);
+    public abstract CiValue emitNegate(CiValue input);
+    public abstract CiValue emitAdd(CiValue a, CiValue b);
+    public abstract CiValue emitSub(CiValue a, CiValue b);
+    public abstract CiValue emitMul(CiValue a, CiValue b);
+    public abstract CiValue emitDiv(CiValue a, CiValue b);
+    public abstract CiValue emitRem(CiValue a, CiValue b);
+    public abstract CiValue emitUDiv(CiValue a, CiValue b);
+    public abstract CiValue emitURem(CiValue a, CiValue b);
 
-    public abstract Value emitNegate(Value input);
-    public abstract Value emitAdd(Value a, Value b);
-    public abstract Value emitSub(Value a, Value b);
-    public abstract Value emitMul(Value a, Value b);
-    public abstract Value emitDiv(Value a, Value b);
-    public abstract Value emitRem(Value a, Value b);
-    public abstract Value emitUDiv(Value a, Value b);
-    public abstract Value emitURem(Value a, Value b);
+    public abstract CiValue emitAnd(CiValue a, CiValue b);
+    public abstract CiValue emitOr(CiValue a, CiValue b);
+    public abstract CiValue emitXor(CiValue a, CiValue b);
 
-    public abstract Value emitAnd(Value a, Value b);
-    public abstract Value emitOr(Value a, Value b);
-    public abstract Value emitXor(Value a, Value b);
+    public abstract CiValue emitShl(CiValue a, CiValue b);
+    public abstract CiValue emitShr(CiValue a, CiValue b);
+    public abstract CiValue emitUShr(CiValue a, CiValue b);
 
-    public abstract Value emitShl(Value a, Value b);
-    public abstract Value emitShr(Value a, Value b);
-    public abstract Value emitUShr(Value a, Value b);
-
-    public abstract Value emitConvert(ConvertNode.Op opcode, Value inputVal);
+    public abstract CiValue emitConvert(ConvertNode.Op opcode, CiValue inputVal);
     public abstract void emitMembar(int barriers);
-    public abstract void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo);
-    public abstract void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo, long leafGraphId);
-    public abstract Value emitCall(Object target, Kind result, Kind[] arguments, boolean canTrap, Value... args);
-    public final Value emitCall(RuntimeCall runtimeCall, boolean canTrap, Value... args) {
+    public abstract void emitDeoptimizeOnOverflow(RiDeoptAction action, RiDeoptReason reason, Object deoptInfo);
+    public abstract void emitDeoptimize(RiDeoptAction action, RiDeoptReason reason, Object deoptInfo, long leafGraphId);
+    public abstract CiValue emitCall(Object target, CiKind result, CiKind[] arguments, boolean canTrap, CiValue... args);
+    public final CiValue emitCall(CiRuntimeCall runtimeCall, boolean canTrap, CiValue... args) {
         return emitCall(runtimeCall, runtimeCall.resultKind, runtimeCall.arguments, canTrap, args);
     }
 
     public abstract void emitIf(IfNode i);
     public abstract void emitConditional(ConditionalNode i);
-    public abstract void emitGuardCheck(BooleanNode comp, DeoptimizationReason deoptReason, DeoptimizationAction deoptAction, boolean negated, long leafGraphId);
+    public abstract void emitGuardCheck(BooleanNode comp, RiDeoptReason deoptReason, RiDeoptAction deoptAction, long leafGraphId);
 
     public abstract void emitLookupSwitch(LookupSwitchNode i);
     public abstract void emitTableSwitch(TableSwitchNode i);
