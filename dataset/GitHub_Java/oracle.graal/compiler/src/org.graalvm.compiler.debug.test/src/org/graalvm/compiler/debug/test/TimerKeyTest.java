@@ -57,7 +57,7 @@ public class TimerKeyTest {
         try {
             /* Trigger loading of the management library using the bootstrap class loader. */
             GraalServices.getCurrentThreadAllocatedBytes();
-        } catch (UnsatisfiedLinkError | NoClassDefFoundError | UnsupportedOperationException e) {
+        } catch (UnsatisfiedLinkError | NoClassDefFoundError e) {
             throw new AssumptionViolatedException("Management interface is unavailable: " + e);
         }
     }
