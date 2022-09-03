@@ -1965,7 +1965,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                             masm.movl(new CiAddress(CiKind.Int, AMD64.rsp.asValue(), i * intSize), 0xC1C1C1C1);
                         }
                     }
-                    CiCalleeSaveLayout csa = compilation.registerConfig.getCalleeSaveLayout();
+                    CiCalleeSaveArea csa = compilation.registerConfig.getCalleeSaveArea();
                     if (csa.size != 0) {
                         int frameToCSA = frameMap.offsetToCalleeSaveAreaStart();
                         assert frameToCSA >= 0;
@@ -1976,7 +1976,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 case PopFrame: {
                     int frameSize = initialFrameSizeInBytes();
 
-                    CiCalleeSaveLayout csa = compilation.registerConfig.getCalleeSaveLayout();
+                    CiCalleeSaveArea csa = compilation.registerConfig.getCalleeSaveArea();
                     if (csa.size != 0) {
                         registerRestoreEpilogueOffset = masm.codeBuffer.position();
                         // saved all registers, restore all registers
