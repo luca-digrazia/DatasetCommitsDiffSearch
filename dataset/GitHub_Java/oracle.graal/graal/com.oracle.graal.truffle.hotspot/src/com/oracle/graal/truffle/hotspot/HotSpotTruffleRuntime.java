@@ -22,6 +22,19 @@
  */
 package com.oracle.graal.truffle.hotspot;
 
+import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
+import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.withNodeSourcePosition;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleStackTraceLimit;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleTransferToInterpreter;
+import static com.oracle.graal.truffle.hotspot.UnsafeAccess.UNSAFE;
+
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.ListIterator;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
 import com.oracle.graal.api.runtime.GraalRuntime;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.target.Backend;
@@ -47,7 +60,7 @@ import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.common.AbstractInliningPhase;
+import com.oracle.graal.phases.common.inlining.InliningPhase;
 import com.oracle.graal.phases.tiers.HighTierContext;
 import com.oracle.graal.phases.tiers.Suites;
 import com.oracle.graal.phases.tiers.SuitesProvider;
@@ -70,6 +83,7 @@ import com.oracle.truffle.api.frame.FrameInstanceVisitor;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
+
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.CompiledCode;
 import jdk.vm.ci.code.stack.StackIntrospection;
@@ -82,19 +96,6 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.runtime.JVMCI;
-
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.ListIterator;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-
-import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
-import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.withNodeSourcePosition;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleStackTraceLimit;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleTransferToInterpreter;
-import static com.oracle.graal.truffle.hotspot.UnsafeAccess.UNSAFE;
 
 /**
  * Implementation of the Truffle runtime when running on top of Graal.
@@ -263,7 +264,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     private static void removeInliningPhase(Suites suites) {
-        ListIterator<BasePhase<? super HighTierContext>> inliningPhase = suites.getHighTier().findPhase(AbstractInliningPhase.class);
+        ListIterator<BasePhase<? super HighTierContext>> inliningPhase = suites.getHighTier().findPhase(InliningPhase.class);
         if (inliningPhase != null) {
             inliningPhase.remove();
         }
