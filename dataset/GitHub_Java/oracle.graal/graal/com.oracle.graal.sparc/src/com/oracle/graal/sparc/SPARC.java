@@ -291,14 +291,9 @@ public class SPARC extends Architecture {
         return features;
     }
 
-    public boolean hasFeature(CPUFeature feature) {
-        return features.contains(feature);
-    }
-
     public enum CPUFeature {
         VIS1,
         VIS2,
-        VIS3,
-        CBCOND
+        VIS3
     }
 }

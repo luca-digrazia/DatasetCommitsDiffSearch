@@ -62,6 +62,7 @@ import com.oracle.graal.lir.sparc.SPARCMove.MoveToRegOp;
 import com.oracle.graal.lir.sparc.SPARCMove.StackLoadAddressOp;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.sparc.*;
+import com.oracle.graal.sparc.SPARC.*;
 
 /**
  * This class implements the SPARC specific portion of the LIR generator.
@@ -865,8 +866,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     private void moveBetweenFpGp(AllocatableValue dst, AllocatableValue src) {
+// boolean isVis3 = getArchitecture().features.contains(CPUFeature.VIS3);
+// if (isVis3) {
+//
+// } else {
         StackSlot tempSlot = getTempSlot(LIRKind.derive(dst));
         append(new MoveFpGp(dst, src, tempSlot));
+// }
     }
 
     private StackSlot getTempSlot(LIRKind kind) {
