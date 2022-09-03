@@ -510,8 +510,6 @@ public class BytecodeParser implements GraphBuilderContext {
          */
         private void processPlaceholderFrameStates(IntrinsicContext intrinsic) {
             StructuredGraph graph = parser.getGraph();
-            graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "Before processPlaceholderFrameStates in %s", parser.method);
-            boolean sawInvalidFrameState = false;
             for (Node node : graph.getNewNodes(mark)) {
                 if (node instanceof FrameState) {
                     FrameState frameState = (FrameState) node;
@@ -549,7 +547,6 @@ public class BytecodeParser implements GraphBuilderContext {
                                     FrameState newFrameState = graph.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI));
                                     newFrameState.setNodeSourcePosition(frameState.getNodeSourcePosition());
                                     frameState.replaceAndDelete(newFrameState);
-                                    sawInvalidFrameState = true;
                                 } else {
                                     // An intrinsic for a void method.
                                     FrameState newFrameState = frameStateBuilder.create(parser.stream.nextBCI(), null);
@@ -588,17 +585,6 @@ public class BytecodeParser implements GraphBuilderContext {
                     }
                 }
             }
-            if (sawInvalidFrameState) {
-                JavaKind returnKind = parser.getInvokeReturnType().getJavaKind();
-                FrameStateBuilder frameStateBuilder = parser.frameState;
-                ValueNode returnValue = frameStateBuilder.pop(returnKind);
-                StateSplitProxyNode proxy = graph.add(new StateSplitProxyNode(returnValue));
-                parser.lastInstr.setNext(proxy);
-                frameStateBuilder.push(returnKind, proxy);
-                proxy.setStateAfter(parser.createFrameState(parser.stream.nextBCI(), proxy));
-                parser.lastInstr = proxy;
-            }
-            graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "After processPlaceholderFrameStates in %s", parser.method);
         }
     }
 
@@ -2202,14 +2188,6 @@ public class BytecodeParser implements GraphBuilderContext {
                     lastInstr = finishInstruction(returnMergeNode, frameState);
                 }
             }
-            /*
-             * Propagate any side effects into the caller when parsing intrinsics.
-             */
-            if (parser.frameState.isAfterSideEffect() && parsingIntrinsic()) {
-                for (StateSplit sideEffect : parser.frameState.sideEffects()) {
-                    frameState.addSideEffect(sideEffect);
-                }
-            }
 
             FixedWithNextNode calleeBeforeUnwindNode = parser.getBeforeUnwindNode();
             if (calleeBeforeUnwindNode != null) {
@@ -3059,7 +3037,7 @@ public class BytecodeParser implements GraphBuilderContext {
         ConstantNode falseValue = graph.unique(ConstantNode.forInt(falseBlockInt));
         ValueNode conditionalNode = ConditionalNode.create(condition, trueValue, falseValue);
         if (conditionalNode.graph() == null) {
-            conditionalNode = graph.addOrUniqueWithInputs(conditionalNode);
+            conditionalNode = graph.addOrUnique(conditionalNode);
         }
         if (genReturn) {
             JavaKind returnKind = method.getSignature().getReturnKind().getStackKind();
