@@ -56,9 +56,7 @@ public class InstanceOfTest extends TypeCheckTest {
     @Override
     protected void replaceProfile(StructuredGraph graph, JavaTypeProfile profile) {
         TypeProfileNode ion = graph.getNodes().filter(TypeProfileNode.class).first();
-        if (ion != null) {
-            ion.setProfile(profile);
-        }
+        ion.setProfile(profile);
     }
 
     @Test

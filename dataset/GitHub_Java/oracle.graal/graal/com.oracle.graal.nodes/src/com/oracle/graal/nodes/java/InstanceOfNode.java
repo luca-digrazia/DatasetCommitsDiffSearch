@@ -31,7 +31,6 @@ import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.LogicConstantNode;
 import com.oracle.graal.nodes.LogicNegationNode;
@@ -53,7 +52,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
     public static final NodeClass<InstanceOfNode> TYPE = NodeClass.create(InstanceOfNode.class);
 
     protected final ObjectStamp checkedStamp;
-    @OptionalInput(InputType.Anchor) protected TypeProfileNode anchor;
+    @Input protected TypeProfileNode anchor;
 
     private InstanceOfNode(ObjectStamp checkedStamp, ValueNode object, TypeProfileNode profile) {
         this(TYPE, checkedStamp, object, profile);
