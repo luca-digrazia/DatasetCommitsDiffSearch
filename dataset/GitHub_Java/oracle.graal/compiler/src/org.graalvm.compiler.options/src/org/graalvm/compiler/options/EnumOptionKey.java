@@ -31,6 +31,7 @@ import org.graalvm.collections.EconomicMap;
 public class EnumOptionKey<T extends Enum<T>> extends OptionKey<T> {
     final Class<T> enumClass;
 
+    @SuppressWarnings("unchecked")
     public EnumOptionKey(T value) {
         super(value);
         if (value == null) {
