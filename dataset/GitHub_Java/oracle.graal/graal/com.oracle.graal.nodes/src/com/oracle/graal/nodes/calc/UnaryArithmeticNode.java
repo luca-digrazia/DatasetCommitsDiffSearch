@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
@@ -33,7 +32,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public abstract class UnaryArithmeticNode extends UnaryNode implements ArithmeticLIRLowerable {
 
-    protected UnaryOp op;
+    protected final UnaryOp op;
 
     protected UnaryArithmeticNode(UnaryOp op, ValueNode value) {
         super(op.foldStamp(value.stamp()), value);
@@ -51,7 +50,6 @@ public abstract class UnaryArithmeticNode extends UnaryNode implements Arithmeti
 
     @Override
     public boolean inferStamp() {
-        op = ArithmeticOpTable.forStamp(getValue().stamp()).getUnaryOp(op);
         return updateStamp(op.foldStamp(getValue().stamp()));
     }
 

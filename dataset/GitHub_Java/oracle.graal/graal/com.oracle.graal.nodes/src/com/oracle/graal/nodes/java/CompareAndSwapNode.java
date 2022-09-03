@@ -46,7 +46,12 @@ public class CompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowe
     protected final Kind valueKind;
     protected final LocationIdentity locationIdentity;
 
-    public CompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
+    public static CompareAndSwapNode create(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
+        return USE_GENERATED_NODES ? new CompareAndSwapNodeGen(object, offset, expected, newValue, valueKind, locationIdentity) : new CompareAndSwapNode(object, offset, expected, newValue, valueKind,
+                        locationIdentity);
+    }
+
+    protected CompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
         super(StampFactory.forKind(Kind.Boolean.getStackKind()));
         assert expected.stamp().isCompatible(newValue.stamp());
         this.object = object;

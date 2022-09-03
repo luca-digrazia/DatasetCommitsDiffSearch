@@ -50,7 +50,7 @@ public class MemoryMapNode extends FloatingNode implements MemoryMap, LIRLowerab
     }
 
     public static MemoryMapNode create(Map<LocationIdentity, MemoryNode> mmap) {
-        return new MemoryMapNode(mmap);
+        return USE_GENERATED_NODES ? new MemoryMapNodeGen(mmap) : new MemoryMapNode(mmap);
     }
 
     protected MemoryMapNode(Map<LocationIdentity, MemoryNode> mmap) {
@@ -73,7 +73,7 @@ public class MemoryMapNode extends FloatingNode implements MemoryMap, LIRLowerab
     }
 
     public MemoryNode getLastLocationAccess(LocationIdentity locationIdentity) {
-        if (locationIdentity.isImmutable()) {
+        if (locationIdentity == FINAL_LOCATION) {
             return null;
         } else {
             int index = locationIdentities.indexOf(locationIdentity);

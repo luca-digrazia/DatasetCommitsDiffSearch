@@ -68,8 +68,6 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
         return result;
     }
 
-    private final HotSpotGraalRuntimeProvider runtime;
-
     private void emitCompareCompressedMemory(Kind kind, IfNode ifNode, ValueNode valueNode, CompressionNode compress, ConstantLocationNode location, Access access, CompareNode compare) {
         Value value = gen.load(operand(valueNode));
         AMD64AddressValue address = makeCompressedAddress(compress, location);
@@ -86,9 +84,8 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
         getGen().emitCompareBranchMemory(kind, value, address, getState(access), cond, compare.unorderedIsTrue(), trueLabel, falseLabel, trueLabelProbability);
     }
 
-    public AMD64HotSpotNodeLIRBuilder(HotSpotGraalRuntimeProvider runtime, StructuredGraph graph, LIRGeneratorTool gen) {
+    public AMD64HotSpotNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool gen) {
         super(graph, gen);
-        this.runtime = runtime;
         assert gen instanceof AMD64HotSpotLIRGenerator;
         assert getDebugInfoBuilder() instanceof HotSpotDebugInfoBuilder;
         ((AMD64HotSpotLIRGenerator) gen).setLockStack(((HotSpotDebugInfoBuilder) getDebugInfoBuilder()).lockStack());
@@ -108,7 +105,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
 
     @Override
     protected DebugInfoBuilder createDebugInfoBuilder(StructuredGraph graph, NodeMap<Value> nodeOperands) {
-        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMapBuilder(), LIRKind.value(Kind.Long));
+        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMap(), LIRKind.value(Kind.Long));
         return new HotSpotDebugInfoBuilder(nodeOperands, lockStack);
     }
 
@@ -136,7 +133,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
 
         for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
             Value paramValue = params[param.index()];
-            assert paramValue.getLIRKind().equals(getLIRGeneratorTool().getLIRKind(param.stamp()));
+            assert paramValue.getKind() == param.getKind().getStackKind();
             setResult(param, gen.emitMove(paramValue));
         }
     }
@@ -151,7 +148,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
     protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         InvokeKind invokeKind = ((HotSpotDirectCallTargetNode) callTarget).invokeKind();
         if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
-            append(new AMD64HotspotDirectVirtualCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind, runtime.getConfig()));
+            append(new AMD64HotspotDirectVirtualCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind));
         } else {
             assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
             HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
@@ -224,14 +221,14 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
     }
 
     boolean canFormCompressedMemory(CompressionNode compress, ConstantLocationNode location) {
-        HotSpotVMConfig config = runtime.getConfig();
+        HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
         if (config.useCompressedOops && compress.getEncoding().shift <= 3 && NumUtil.isInt(location.getDisplacement())) {
             Stamp compressedStamp = compress.getValue().stamp();
             if (compressedStamp instanceof NarrowOopStamp) {
                 return true;
-            } else if (compressedStamp instanceof KlassPointerStamp) {
-                assert ((KlassPointerStamp) compressedStamp).isCompressed();
-                return config.narrowKlassBase == config.narrowOopBase;
+            } else if (compressedStamp instanceof IntegerStamp) {
+                IntegerStamp is = (IntegerStamp) compressedStamp;
+                return is.getBits() == 32 && config.narrowKlassBase == config.narrowOopBase;
             }
         }
         return false;

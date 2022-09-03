@@ -27,6 +27,7 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -50,19 +51,19 @@ public class AllocaNode extends FixedWithNextNode implements LIRLowerable {
      */
     protected final BitSet objects;
 
-    public static AllocaNode create(int slots, Kind wordKind, BitSet objects) {
-        return new AllocaNode(slots, wordKind, objects);
+    public static AllocaNode create(int slots, BitSet objects) {
+        return USE_GENERATED_NODES ? new AllocaNodeGen(slots, objects) : new AllocaNode(slots, objects);
     }
 
-    protected AllocaNode(int slots, Kind wordKind, BitSet objects) {
-        super(StampFactory.forKind(wordKind));
+    protected AllocaNode(int slots, BitSet objects) {
+        super(StampFactory.forKind(HotSpotGraalRuntime.getHostWordKind()));
         this.slots = slots;
         this.objects = objects;
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        VirtualStackSlot array = gen.getLIRGeneratorTool().getResult().getFrameMapBuilder().allocateStackSlots(slots, objects, null);
+        StackSlot array = gen.getLIRGeneratorTool().getResult().getFrameMap().allocateStackSlots(slots, objects, null);
         Value result = gen.getLIRGeneratorTool().emitAddress(array);
         gen.setResult(this, result);
     }

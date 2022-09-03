@@ -32,7 +32,11 @@ public class VirtualBoxingNode extends VirtualInstanceNode {
 
     protected final Kind boxingKind;
 
-    public VirtualBoxingNode(ResolvedJavaType type, Kind boxingKind) {
+    public static VirtualBoxingNode create(ResolvedJavaType type, Kind boxingKind) {
+        return USE_GENERATED_NODES ? new VirtualBoxingNodeGen(type, boxingKind) : new VirtualBoxingNode(type, boxingKind);
+    }
+
+    protected VirtualBoxingNode(ResolvedJavaType type, Kind boxingKind) {
         super(type, false);
         this.boxingKind = boxingKind;
     }
@@ -43,13 +47,13 @@ public class VirtualBoxingNode extends VirtualInstanceNode {
 
     @Override
     public VirtualBoxingNode duplicate() {
-        return new VirtualBoxingNode(type(), boxingKind);
+        return VirtualBoxingNode.create(type(), boxingKind);
     }
 
     @Override
     public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
         assert entries.length == 1;
         assert locks == null;
-        return new BoxNode(entries[0], type(), boxingKind);
+        return BoxNode.create(entries[0], type(), boxingKind);
     }
 }

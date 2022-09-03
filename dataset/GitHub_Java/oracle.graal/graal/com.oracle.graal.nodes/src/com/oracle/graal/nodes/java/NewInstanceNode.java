@@ -40,7 +40,18 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
 
     protected final ResolvedJavaType instanceClass;
 
-    public NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
+    /**
+     * Constructs a NewInstanceNode.
+     *
+     * @param type the class being allocated
+     * @param fillContents determines whether the new object's fields should be initialized to
+     *            zero/null.
+     */
+    public static NewInstanceNode create(ResolvedJavaType type, boolean fillContents) {
+        return USE_GENERATED_NODES ? new NewInstanceNodeGen(type, fillContents) : new NewInstanceNode(type, fillContents);
+    }
+
+    protected NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
         super(StampFactory.exactNonNull(type), fillContents);
         assert !type.isArray() && !type.isInterface() && !type.isPrimitive();
         this.instanceClass = type;
@@ -74,7 +85,7 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
     }
 
     protected VirtualInstanceNode createVirtualInstanceNode(boolean hasIdentity) {
-        return new VirtualInstanceNode(instanceClass(), hasIdentity);
+        return VirtualInstanceNode.create(instanceClass(), hasIdentity);
     }
 
     /* Factored out in a separate method so that subclasses can override it. */

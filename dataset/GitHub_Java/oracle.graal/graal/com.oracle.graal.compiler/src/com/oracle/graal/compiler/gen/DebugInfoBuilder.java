@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 package com.oracle.graal.compiler.gen;
+
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
 
 import java.util.*;
 import java.util.Map.Entry;
@@ -47,8 +49,8 @@ public class DebugInfoBuilder {
         this.nodeOperands = nodeOperands;
     }
 
-    protected final Map<VirtualObjectNode, VirtualObject> virtualObjects = Node.newMap();
-    protected final Map<VirtualObjectNode, EscapeObjectState> objectStates = Node.newIdentityMap();
+    protected final Map<VirtualObjectNode, VirtualObject> virtualObjects = new HashMap<>();
+    protected final Map<VirtualObjectNode, EscapeObjectState> objectStates = newNodeIdentityMap();
 
     public LIRFrameState build(FrameState topState, LabelRef exceptionEdge) {
         assert virtualObjects.size() == 0;
@@ -77,18 +79,18 @@ public class DebugInfoBuilder {
             boolean changed;
             do {
                 changed = false;
-                Map<VirtualObjectNode, VirtualObject> virtualObjectsCopy = Node.newIdentityMap(virtualObjects);
+                Map<VirtualObjectNode, VirtualObject> virtualObjectsCopy = newIdentityMap(virtualObjects);
                 for (Entry<VirtualObjectNode, VirtualObject> entry : virtualObjectsCopy.entrySet()) {
                     if (entry.getValue().getValues() == null) {
                         VirtualObjectNode vobj = entry.getKey();
-                        JavaValue[] values = new JavaValue[vobj.entryCount()];
+                        Value[] values = new Value[vobj.entryCount()];
                         if (values.length > 0) {
                             changed = true;
                             VirtualObjectState currentField = (VirtualObjectState) objectStates.get(vobj);
                             assert currentField != null;
                             int pos = 0;
                             for (int i = 0; i < vobj.entryCount(); i++) {
-                                if (!currentField.values().get(i).isConstant() || currentField.values().get(i).asJavaConstant().getKind() != Kind.Illegal) {
+                                if (!currentField.values().get(i).isConstant() || currentField.values().get(i).asConstant().getKind() != Kind.Illegal) {
                                     values[pos++] = toValue(currentField.values().get(i));
                                 } else {
                                     assert currentField.values().get(i - 1).getKind() == Kind.Double || currentField.values().get(i - 1).getKind() == Kind.Long : vobj + " " + i + " " +
@@ -131,7 +133,7 @@ public class DebugInfoBuilder {
             int numStack = state.stackSize();
             int numLocks = state.locksSize();
 
-            JavaValue[] values = new JavaValue[numLocals + numStack + numLocks];
+            Value[] values = new Value[numLocals + numStack + numLocks];
             computeLocals(state, numLocals, values);
             computeStack(state, numLocals, numStack, values);
             computeLocks(state, values);
@@ -146,33 +148,33 @@ public class DebugInfoBuilder {
         }
     }
 
-    protected void computeLocals(FrameState state, int numLocals, JavaValue[] values) {
+    protected void computeLocals(FrameState state, int numLocals, Value[] values) {
         for (int i = 0; i < numLocals; i++) {
             values[i] = computeLocalValue(state, i);
         }
     }
 
-    protected JavaValue computeLocalValue(FrameState state, int i) {
+    protected Value computeLocalValue(FrameState state, int i) {
         return toValue(state.localAt(i));
     }
 
-    protected void computeStack(FrameState state, int numLocals, int numStack, JavaValue[] values) {
+    protected void computeStack(FrameState state, int numLocals, int numStack, Value[] values) {
         for (int i = 0; i < numStack; i++) {
             values[numLocals + i] = computeStackValue(state, i);
         }
     }
 
-    protected JavaValue computeStackValue(FrameState state, int i) {
+    protected Value computeStackValue(FrameState state, int i) {
         return toValue(state.stackAt(i));
     }
 
-    protected void computeLocks(FrameState state, JavaValue[] values) {
+    protected void computeLocks(FrameState state, Value[] values) {
         for (int i = 0; i < state.locksSize(); i++) {
             values[state.localsSize() + state.stackSize() + i] = computeLockValue(state, i);
         }
     }
 
-    protected JavaValue computeLockValue(FrameState state, int i) {
+    protected Value computeLockValue(FrameState state, int i) {
         return toValue(state.lockAt(i));
     }
 
@@ -181,7 +183,7 @@ public class DebugInfoBuilder {
     private static final DebugMetric STATE_VARIABLES = Debug.metric("StateVariables");
     private static final DebugMetric STATE_CONSTANTS = Debug.metric("StateConstants");
 
-    protected JavaValue toValue(ValueNode value) {
+    protected Value toValue(ValueNode value) {
         try {
             if (value instanceof VirtualObjectNode) {
                 VirtualObjectNode obj = (VirtualObjectNode) value;
@@ -207,13 +209,13 @@ public class DebugInfoBuilder {
                 ValueNode unproxied = GraphUtil.unproxify(value);
                 if (unproxied instanceof ConstantNode) {
                     STATE_CONSTANTS.increment();
-                    return unproxied.asJavaConstant();
+                    return ((ConstantNode) unproxied).getValue();
 
                 } else if (value != null) {
                     STATE_VARIABLES.increment();
                     Value operand = nodeOperands.get(value);
-                    assert operand != null && (operand instanceof Variable || operand instanceof JavaConstant) : operand + " for " + value;
-                    return (JavaValue) operand;
+                    assert operand != null && (operand instanceof Variable || operand instanceof Constant) : operand + " for " + value;
+                    return operand;
 
                 } else {
                     // return a dummy value because real value not needed

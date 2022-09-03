@@ -139,13 +139,8 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
         assert node == null || !node.isDeleted();
         self.incModCount();
         incModCount();
-        int length = nodes.length;
-        if (length == 0) {
-            nodes = new Node[2];
-        } else if (size == length) {
-            Node[] newNodes = new Node[nodes.length * 2 + 1];
-            System.arraycopy(nodes, 0, newNodes, 0, length);
-            nodes = newNodes;
+        if (size == nodes.length) {
+            nodes = Arrays.copyOf(nodes, nodes.length * 2 + 1);
         }
         nodes[size++] = node;
         update(null, (T) node);
@@ -155,13 +150,8 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
     @Override
     @SuppressWarnings("unchecked")
     public T get(int index) {
-        assert assertInRange(index);
-        return (T) nodes[index];
-    }
-
-    private boolean assertInRange(int index) {
         assert index < size() : index + " < " + size();
-        return true;
+        return (T) nodes[index];
     }
 
     public T last() {
@@ -173,7 +163,7 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
     public T set(int index, Node node) {
         incModCount();
         T oldValue = (T) nodes[index];
-        assert assertInRange(index);
+        assert index < size();
         update((T) nodes[index], (T) node);
         nodes[index] = node;
         return oldValue;
@@ -188,9 +178,7 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
     void copy(NodeList<? extends Node> other) {
         self.incModCount();
         incModCount();
-        Node[] newNodes = new Node[other.size];
-        System.arraycopy(other.nodes, 0, newNodes, 0, newNodes.length);
-        nodes = newNodes;
+        nodes = Arrays.copyOf(other.nodes, other.size);
         size = other.size;
     }
 
@@ -335,12 +323,8 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
 
     @Override
     @SuppressWarnings("unchecked")
-    public <A> A[] toArray(A[] a) {
-        if (a.length <= size) {
-            System.arraycopy(nodes, 0, a, 0, size);
-            return a;
-        }
-        return (A[]) Arrays.copyOf(nodes, size, a.getClass());
+    public <A> A[] toArray(A[] template) {
+        return (A[]) Arrays.copyOf(nodes, size, template.getClass());
     }
 
     @Override

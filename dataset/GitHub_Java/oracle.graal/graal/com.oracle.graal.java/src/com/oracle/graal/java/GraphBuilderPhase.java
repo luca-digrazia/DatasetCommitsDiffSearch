@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,6 +32,7 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
+import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
@@ -110,7 +111,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             protected final Object nextPlaceholder;
 
             public static BlockPlaceholderNode create(BytecodeParser builder) {
-                return new BlockPlaceholderNode(builder);
+                return USE_GENERATED_NODES ? new GraphBuilderPhase_Instance_BlockPlaceholderNodeGen(builder) : new BlockPlaceholderNode(builder);
             }
 
             protected BlockPlaceholderNode(BytecodeParser builder) {
@@ -230,7 +231,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                     // compute the block map, setup exception handlers and get the entrypoint(s)
                     BciBlockMapping blockMap = BciBlockMapping.create(method, graphBuilderConfig.doLivenessAnalysis());
-                    loopHeaders = blockMap.getLoopHeaders();
+                    loopHeaders = blockMap.loopHeaders;
                     liveness = blockMap.liveness;
 
                     lastInstr = currentGraph.start();
@@ -336,7 +337,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             protected void handleUnresolvedCheckCast(JavaType type, ValueNode object) {
                 assert !graphBuilderConfig.eagerResolving();
                 append(FixedGuardNode.create(currentGraph.unique(IsNullNode.create(object)), Unresolved, InvalidateRecompile));
-                frameState.apush(appendConstant(JavaConstant.NULL_POINTER));
+                frameState.apush(appendConstant(Constant.NULL_OBJECT));
             }
 
             /**
@@ -350,7 +351,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 DeoptimizeNode deopt = currentGraph.add(DeoptimizeNode.create(InvalidateRecompile, Unresolved));
                 append(IfNode.create(currentGraph.unique(IsNullNode.create(object)), successor, deopt, 1));
                 lastInstr = successor;
-                frameState.ipush(appendConstant(JavaConstant.INT_0));
+                frameState.ipush(appendConstant(Constant.INT_0));
             }
 
             /**
@@ -406,10 +407,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             /**
+             * @param representation
              * @param type
              */
             @Override
-            protected void handleUnresolvedExceptionType(JavaType type) {
+            protected void handleUnresolvedExceptionType(Representation representation, JavaType type) {
                 assert !graphBuilderConfig.eagerResolving();
                 append(DeoptimizeNode.create(InvalidateRecompile, Unresolved));
             }
@@ -652,7 +654,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected void emitNullCheck(ValueNode receiver) {
-                if (StampTool.isPointerNonNull(receiver.stamp())) {
+                if (StampTool.isObjectNonNull(receiver.stamp())) {
                     return;
                 }
                 BlockPlaceholderNode trueSucc = currentGraph.add(BlockPlaceholderNode.create(this));
@@ -713,7 +715,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     if (!holder.isInitialized() && ResolveClassBeforeStaticInvoke.getValue()) {
                         handleUnresolvedInvoke(target, InvokeKind.Static);
                     } else {
-                        ValueNode[] args = frameState.popArguments(resolvedTarget.getSignature().getParameterCount(false));
+                        ValueNode[] args = frameState.popArguments(resolvedTarget.getSignature().getParameterSlots(false), resolvedTarget.getSignature().getParameterCount(false));
                         appendInvoke(InvokeKind.Static, resolvedTarget, args);
                     }
                 } else {
@@ -724,7 +726,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             @Override
             protected void genInvokeInterface(JavaMethod target) {
                 if (callTargetIsResolved(target)) {
-                    ValueNode[] args = frameState.popArguments(target.getSignature().getParameterCount(true));
+                    ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(true), target.getSignature().getParameterCount(true));
                     appendInvoke(InvokeKind.Interface, (ResolvedJavaMethod) target, args);
                 } else {
                     handleUnresolvedInvoke(target, InvokeKind.Interface);
@@ -734,11 +736,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             @Override
             protected void genInvokeDynamic(JavaMethod target) {
                 if (target instanceof ResolvedJavaMethod) {
-                    JavaConstant appendix = constantPool.lookupAppendix(stream.readCPI4(), Bytecodes.INVOKEDYNAMIC);
+                    Constant appendix = constantPool.lookupAppendix(stream.readCPI4(), Bytecodes.INVOKEDYNAMIC);
                     if (appendix != null) {
                         frameState.apush(ConstantNode.forConstant(appendix, metaAccess, currentGraph));
                     }
-                    ValueNode[] args = frameState.popArguments(target.getSignature().getParameterCount(false));
+                    ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(false), target.getSignature().getParameterCount(false));
                     appendInvoke(InvokeKind.Static, (ResolvedJavaMethod) target, args);
                 } else {
                     handleUnresolvedInvoke(target, InvokeKind.Static);
@@ -756,11 +758,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                      * +and+invokedynamic
                      */
                     boolean hasReceiver = !((ResolvedJavaMethod) target).isStatic();
-                    JavaConstant appendix = constantPool.lookupAppendix(stream.readCPI(), Bytecodes.INVOKEVIRTUAL);
+                    Constant appendix = constantPool.lookupAppendix(stream.readCPI(), Bytecodes.INVOKEVIRTUAL);
                     if (appendix != null) {
                         frameState.apush(ConstantNode.forConstant(appendix, metaAccess, currentGraph));
                     }
-                    ValueNode[] args = frameState.popArguments(target.getSignature().getParameterCount(hasReceiver));
+                    ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(hasReceiver), target.getSignature().getParameterCount(hasReceiver));
                     if (hasReceiver) {
                         appendInvoke(InvokeKind.Virtual, (ResolvedJavaMethod) target, args);
                     } else {
@@ -777,7 +779,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 if (callTargetIsResolved(target)) {
                     assert target != null;
                     assert target.getSignature() != null;
-                    ValueNode[] args = frameState.popArguments(target.getSignature().getParameterCount(true));
+                    ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(true), target.getSignature().getParameterCount(true));
                     appendInvoke(InvokeKind.Special, (ResolvedJavaMethod) target, args);
                 } else {
                     handleUnresolvedInvoke(target, InvokeKind.Special);
@@ -909,7 +911,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             private ConstantNode getJsrConstant(long bci) {
-                JavaConstant nextBciConstant = new RawConstant(bci);
+                Constant nextBciConstant = new RawConstant(bci);
                 Stamp nextBciStamp = StampFactory.forConstant(nextBciConstant);
                 ConstantNode nextBciNode = ConstantNode.create(nextBciConstant, nextBciStamp);
                 return currentGraph.unique(nextBciNode);
@@ -925,7 +927,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             @Override
-            protected ConstantNode appendConstant(JavaConstant constant) {
+            protected ConstantNode appendConstant(Constant constant) {
                 assert constant != null;
                 return ConstantNode.forConstant(constant, metaAccess, currentGraph);
             }
@@ -1134,7 +1136,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             private ValueNode synchronizedObject(HIRFrameStateBuilder state, ResolvedJavaMethod target) {
                 if (target.isStatic()) {
-                    return appendConstant(target.getDeclaringClass().getJavaClass());
+                    return appendConstant(target.getDeclaringClass().getEncoding(Representation.JavaClass));
                 } else {
                     return state.loadLocal(0);
                 }
@@ -1254,7 +1256,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     checkCast.setNext(catchSuccessor);
                     append(IfNode.create(currentGraph.unique(InstanceOfNode.create((ResolvedJavaType) catchType, exception, null)), checkCast, nextDispatch, 0.5));
                 } else {
-                    handleUnresolvedExceptionType(catchType);
+                    handleUnresolvedExceptionType(Representation.ObjectHub, catchType);
                 }
             }
 
@@ -1344,7 +1346,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         frameState.clearNonLiveLocals(currentBlock, liveness, false);
                     }
                     if (lastInstr instanceof StateSplit) {
-                        if (lastInstr.getClass() == BeginNode.class) {
+                        if (lastInstr.getNodeClass().is(BeginNode.class)) {
                             // BeginNodes do not need a frame state
                         } else {
                             StateSplit stateSplit = (StateSplit) lastInstr;
@@ -1386,20 +1388,16 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             private void traceState() {
-                if (Debug.isEnabled() && Options.TraceBytecodeParserLevel.getValue() >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
-                    traceStateHelper();
-                }
-            }
-
-            private void traceStateHelper() {
-                Debug.log(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
-                for (int i = 0; i < frameState.localsSize(); ++i) {
-                    ValueNode value = frameState.localAt(i);
-                    Debug.log(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.getKind().getJavaName(), value));
-                }
-                for (int i = 0; i < frameState.stackSize(); ++i) {
-                    ValueNode value = frameState.stackAt(i);
-                    Debug.log(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.getKind().getJavaName(), value));
+                if (traceLevel >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
+                    Debug.log(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
+                    for (int i = 0; i < frameState.localsSize(); ++i) {
+                        ValueNode value = frameState.localAt(i);
+                        Debug.log(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.getKind().getJavaName(), value));
+                    }
+                    for (int i = 0; i < frameState.stackSize(); ++i) {
+                        ValueNode value = frameState.stackAt(i);
+                        Debug.log(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.getKind().getJavaName(), value));
+                    }
                 }
             }
 

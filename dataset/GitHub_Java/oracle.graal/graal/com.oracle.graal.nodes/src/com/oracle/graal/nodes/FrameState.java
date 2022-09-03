@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.bytecode.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
@@ -54,7 +53,7 @@ public class FrameState extends VirtualState implements IterableNodeType {
      */
     protected boolean rethrowException;
 
-    protected final boolean duringCall;
+    protected boolean duringCall;
 
     @OptionalInput(value = InputType.State) FrameState outerFrameState;
 
@@ -90,7 +89,8 @@ public class FrameState extends VirtualState implements IterableNodeType {
      */
     public static FrameState create(FrameState outerFrameState, ResolvedJavaMethod method, int bci, List<ValueNode> values, int localsSize, int stackSize, boolean rethrowException,
                     boolean duringCall, List<MonitorIdNode> monitorIds, List<EscapeObjectState> virtualObjectMappings) {
-        return new FrameState(outerFrameState, method, bci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, virtualObjectMappings);
+        return USE_GENERATED_NODES ? new FrameStateGen(outerFrameState, method, bci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, virtualObjectMappings) : new FrameState(
+                        outerFrameState, method, bci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, virtualObjectMappings);
     }
 
     protected FrameState(FrameState outerFrameState, ResolvedJavaMethod method, int bci, List<ValueNode> values, int localsSize, int stackSize, boolean rethrowException, boolean duringCall,
@@ -117,7 +117,7 @@ public class FrameState extends VirtualState implements IterableNodeType {
      * @param bci marker bci, needs to be &lt; 0
      */
     public static FrameState create(int bci) {
-        return new FrameState(bci);
+        return USE_GENERATED_NODES ? new FrameStateGen(bci) : new FrameState(bci);
     }
 
     protected FrameState(int bci) {
@@ -128,7 +128,8 @@ public class FrameState extends VirtualState implements IterableNodeType {
 
     public static FrameState create(ResolvedJavaMethod method, int bci, ValueNode[] locals, List<ValueNode> stack, ValueNode[] locks, MonitorIdNode[] monitorIds, boolean rethrowException,
                     boolean duringCall) {
-        return new FrameState(method, bci, locals, stack, locks, monitorIds, rethrowException, duringCall);
+        return USE_GENERATED_NODES ? new FrameStateGen(method, bci, locals, stack, locks, monitorIds, rethrowException, duringCall) : new FrameState(method, bci, locals, stack, locks, monitorIds,
+                        rethrowException, duringCall);
     }
 
     protected FrameState(ResolvedJavaMethod method, int bci, ValueNode[] locals, List<ValueNode> stack, ValueNode[] locks, MonitorIdNode[] monitorIds, boolean rethrowException, boolean duringCall) {
@@ -178,6 +179,10 @@ public class FrameState extends VirtualState implements IterableNodeType {
 
     public boolean duringCall() {
         return duringCall;
+    }
+
+    public void setDuringCall(boolean b) {
+        this.duringCall = b;
     }
 
     public ResolvedJavaMethod method() {
@@ -236,30 +241,20 @@ public class FrameState extends VirtualState implements IterableNodeType {
      * stack and the values in pushedValues pushed on the stack. The pushedValues will be formatted
      * correctly in slot encoding: a long or double will be followed by a null slot.
      */
-    public FrameState duplicateModifiedDuringCall(int newBci, Kind popKind, ValueNode... pushedValues) {
-        return duplicateModified(newBci, rethrowException, true, popKind, pushedValues);
-    }
-
     public FrameState duplicateModified(int newBci, boolean newRethrowException, Kind popKind, ValueNode... pushedValues) {
-        return duplicateModified(newBci, newRethrowException, duringCall, popKind, pushedValues);
-    }
-
-    /**
-     * Creates a copy of this frame state with the top of stack replaced with with
-     * {@code pushedValue} which must be of type {@code popKind}.
-     */
-    public FrameState duplicateModified(Kind popKind, ValueNode pushedValue) {
-        assert pushedValue != null && pushedValue.getKind() == popKind;
-        return duplicateModified(bci, rethrowException, duringCall, popKind, pushedValue);
+        return duplicateModified(newBci, method, newRethrowException, popKind, pushedValues);
     }
 
     /**
      * Creates a copy of this frame state with one stack element of type popKind popped from the
      * stack and the values in pushedValues pushed on the stack. The pushedValues will be formatted
-     * correctly in slot encoding: a long or double will be followed by a null slot. The bci will be
-     * changed to newBci.
+     * correctly in slot encoding: a long or double will be followed by a null slot.
      */
-    private FrameState duplicateModified(int newBci, boolean newRethrowException, boolean newDuringCall, Kind popKind, ValueNode... pushedValues) {
+    public FrameState duplicateModified(Kind popKind, ValueNode... pushedValues) {
+        return duplicateModified(bci, method, rethrowException, popKind, pushedValues);
+    }
+
+    private FrameState duplicateModified(int newBci, ResolvedJavaMethod newMethod, boolean newRethrowException, Kind popKind, ValueNode... pushedValues) {
         ArrayList<ValueNode> copy = new ArrayList<>(values.subList(0, localsSize + stackSize));
         if (popKind != Kind.Void) {
             if (stackAt(stackSize() - 1) == null) {
@@ -278,30 +273,7 @@ public class FrameState extends VirtualState implements IterableNodeType {
         int newStackSize = copy.size() - localsSize;
         copy.addAll(values.subList(localsSize + stackSize, values.size()));
 
-        assert checkStackDepth(bci, stackSize, duringCall, newBci, newStackSize, newDuringCall);
-        return graph().add(FrameState.create(outerFrameState(), method, newBci, copy, localsSize, newStackSize, newRethrowException, newDuringCall, monitorIds, virtualObjectMappings));
-    }
-
-    /**
-     * Perform a few sanity checks on the transformation of the stack state. The current expectation
-     * is that a stateAfter is being transformed into a stateDuring, so the stack depth may change.
-     */
-    private boolean checkStackDepth(int oldBci, int oldStackSize, boolean oldDuringCall, int newBci, int newStackSize, boolean newDuringCall) {
-        /*
-         * It would be nice to have a complete check of the shape of the FrameState based on a
-         * dataflow of the bytecodes but for now just check for obvious expression stack depth
-         * mistakes.
-         */
-        byte[] codes = method.getCode();
-        byte newCode = codes[newBci];
-        if (oldBci == newBci) {
-            assert oldStackSize == newStackSize || oldDuringCall != newDuringCall : "bci is unchanged, stack depth shouldn't change";
-        } else {
-            byte oldCode = codes[oldBci];
-            assert Bytecodes.lengthOf(newCode) + newBci == oldBci || Bytecodes.lengthOf(oldCode) + oldBci == newBci : "expecting roll back or forward";
-        }
-        assert !newDuringCall || Bytecodes.isInvoke(newCode) || newStackSize + Bytecodes.stackEffectOf(newCode) >= 0 : "stack underflow at " + Bytecodes.nameOf(newCode);
-        return true;
+        return graph().add(FrameState.create(outerFrameState(), newMethod, newBci, copy, localsSize, newStackSize, newRethrowException, false, monitorIds, virtualObjectMappings));
     }
 
     /**

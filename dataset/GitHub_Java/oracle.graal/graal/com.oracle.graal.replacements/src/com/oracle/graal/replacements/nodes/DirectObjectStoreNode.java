@@ -42,30 +42,31 @@ public class DirectObjectStoreNode extends FixedWithNextNode implements Lowerabl
     @Input ValueNode offset;
     protected final int displacement;
     protected final LocationIdentity locationIdentity;
-    protected final Kind storeKind;
 
-    public DirectObjectStoreNode(ValueNode object, int displacement, ValueNode offset, ValueNode value, LocationIdentity locationIdentity, Kind storeKind) {
+    public static DirectObjectStoreNode create(ValueNode object, int displacement, ValueNode offset, ValueNode value, LocationIdentity locationIdentity) {
+        return USE_GENERATED_NODES ? new DirectObjectStoreNodeGen(object, displacement, offset, value, locationIdentity) : new DirectObjectStoreNode(object, displacement, offset, value,
+                        locationIdentity);
+    }
+
+    protected DirectObjectStoreNode(ValueNode object, int displacement, ValueNode offset, ValueNode value, LocationIdentity locationIdentity) {
         super(StampFactory.forVoid());
         this.object = object;
         this.value = value;
         this.offset = offset;
         this.displacement = displacement;
         this.locationIdentity = locationIdentity;
-        this.storeKind = storeKind;
     }
 
     @NodeIntrinsic
-    public static native void storeObject(Object obj, @ConstantNodeParameter int displacement, long offset, Object value, @ConstantNodeParameter LocationIdentity locationIdentity,
-                    @ConstantNodeParameter Kind storeKind);
+    public static native void storeObject(Object obj, @ConstantNodeParameter int displacement, long offset, Object value, @ConstantNodeParameter LocationIdentity locationIdentity);
 
     @NodeIntrinsic
-    public static native void storeLong(Object obj, @ConstantNodeParameter int displacement, long offset, long value, @ConstantNodeParameter LocationIdentity locationIdenity,
-                    @ConstantNodeParameter Kind storeKind);
+    public static native void storeLong(Object obj, @ConstantNodeParameter int displacement, long offset, long value, @ConstantNodeParameter LocationIdentity locationIdenity);
 
     @Override
     public void lower(LoweringTool tool) {
-        IndexedLocationNode location = graph().unique(new IndexedLocationNode(locationIdentity, displacement, offset, 1));
-        JavaWriteNode write = graph().add(new JavaWriteNode(storeKind, object, value, location, BarrierType.NONE, storeKind == Kind.Object, false));
+        IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, value.getKind(), displacement, offset, graph(), 1);
+        JavaWriteNode write = graph().add(JavaWriteNode.create(object, value, location, BarrierType.NONE, value.getKind() == Kind.Object, false));
         graph().replaceFixedWithFixed(this, write);
 
         tool.getLowerer().lower(write, tool);

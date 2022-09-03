@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -34,12 +33,15 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class JavaWriteNode extends AbstractWriteNode implements Lowerable, StateSplit, MemoryAccess, MemoryCheckpoint.Single {
 
-    protected final Kind writeKind;
     protected final boolean compressible;
 
-    public JavaWriteNode(Kind writeKind, ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible, boolean initialization) {
+    public static JavaWriteNode create(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible, boolean initialization) {
+        return USE_GENERATED_NODES ? new JavaWriteNodeGen(object, value, location, barrierType, compressible, initialization) : new JavaWriteNode(object, value, location, barrierType, compressible,
+                        initialization);
+    }
+
+    protected JavaWriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible, boolean initialization) {
         super(object, value, location, barrierType, initialization);
-        this.writeKind = writeKind;
         this.compressible = compressible;
     }
 
@@ -49,10 +51,6 @@ public class JavaWriteNode extends AbstractWriteNode implements Lowerable, State
 
     public boolean canNullCheck() {
         return true;
-    }
-
-    public Kind getWriteKind() {
-        return writeKind;
     }
 
     public boolean isCompressible() {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -74,10 +74,7 @@ import com.oracle.graal.word.*;
  */
 public class SnippetTemplate {
 
-    // Checkstyle: stop
     public static boolean LAZY_SNIPPETS = true;
-
-    // Checkstyle: resume
 
     /**
      * Holds the {@link ResolvedJavaMethod} of the snippet, together with some information about the
@@ -390,7 +387,7 @@ public class SnippetTemplate {
         protected final Varargs varargs;
 
         public static VarargsPlaceholderNode create(Varargs varargs, MetaAccessProvider metaAccess) {
-            return new VarargsPlaceholderNode(varargs, metaAccess);
+            return USE_GENERATED_NODES ? new SnippetTemplate_VarargsPlaceholderNodeGen(varargs, metaAccess) : new VarargsPlaceholderNode(varargs, metaAccess);
         }
 
         protected VarargsPlaceholderNode(Varargs varargs, MetaAccessProvider metaAccess) {
@@ -575,9 +572,9 @@ public class SnippetTemplate {
             if (args.info.isConstantParameter(i)) {
                 Object arg = args.values[i];
                 Kind kind = signature.getParameterKind(i);
-                JavaConstant constantArg;
-                if (arg instanceof JavaConstant) {
-                    constantArg = (JavaConstant) arg;
+                Constant constantArg;
+                if (arg instanceof Constant) {
+                    constantArg = (Constant) arg;
                 } else {
                     constantArg = snippetReflection.forBoxed(kind, arg);
                 }
@@ -772,7 +769,7 @@ public class SnippetTemplate {
     private static boolean checkConstantArgument(MetaAccessProvider metaAccess, final ResolvedJavaMethod method, Signature signature, int i, String name, Object arg, Kind kind) {
         ResolvedJavaType type = signature.getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass());
         if (metaAccess.lookupJavaType(WordBase.class).isAssignableFrom(type)) {
-            assert arg instanceof JavaConstant : method + ": word constant parameters must be passed boxed in a Constant value: " + arg;
+            assert arg instanceof Constant : method + ": word constant parameters must be passed boxed in a Constant value: " + arg;
             return true;
         }
         if (kind != Kind.Object) {
@@ -862,7 +859,7 @@ public class SnippetTemplate {
                 } else {
                     Kind kind = ((ParameterNode) parameter).getKind();
                     assert argument != null || kind == Kind.Object : this + " cannot accept null for non-object parameter named " + args.info.getParameterName(i);
-                    JavaConstant constant = forBoxed(argument, kind);
+                    Constant constant = forBoxed(argument, kind);
                     replacements.put((ParameterNode) parameter, ConstantNode.forConstant(constant, metaAccess, replaceeGraph));
                 }
             } else if (parameter instanceof ParameterNode[]) {
@@ -887,7 +884,7 @@ public class SnippetTemplate {
                     if (value instanceof ValueNode) {
                         replacements.put(param, (ValueNode) value);
                     } else {
-                        JavaConstant constant = forBoxed(value, param.getKind());
+                        Constant constant = forBoxed(value, param.getKind());
                         ConstantNode element = ConstantNode.forConstant(constant, metaAccess, replaceeGraph);
                         replacements.put(param, element);
                     }
@@ -900,17 +897,17 @@ public class SnippetTemplate {
     }
 
     /**
-     * Converts a Java boxed value to a {@link JavaConstant} of the right kind. This adjusts for the
+     * Converts a Java boxed value to a {@link Constant} of the right kind. This adjusts for the
      * limitation that a {@link Local}'s kind is a {@linkplain Kind#getStackKind() stack kind} and
      * so cannot be used for re-boxing primitives smaller than an int.
      *
      * @param argument a Java boxed value
      * @param localKind the kind of the {@link Local} to which {@code argument} will be bound
      */
-    protected JavaConstant forBoxed(Object argument, Kind localKind) {
+    protected Constant forBoxed(Object argument, Kind localKind) {
         assert localKind == localKind.getStackKind();
         if (localKind == Kind.Int) {
-            return JavaConstant.forBoxedPrimitive(argument);
+            return Constant.forBoxedPrimitive(argument);
         }
         return snippetReflection.forBoxed(localKind, argument);
     }
@@ -952,7 +949,7 @@ public class SnippetTemplate {
                 for (Node usage : oldNode.usages().snapshot()) {
                     LocationIdentity identity = getLocationIdentity(usage);
                     boolean usageReplaced = false;
-                    if (identity != null && !identity.isImmutable()) {
+                    if (identity != null && identity != FINAL_LOCATION) {
                         // lastLocationAccess points into the snippet graph. find a proper
                         // MemoryCheckPoint inside the snippet graph
                         MemoryNode lastAccess = mmap.getLastLocationAccess(identity);

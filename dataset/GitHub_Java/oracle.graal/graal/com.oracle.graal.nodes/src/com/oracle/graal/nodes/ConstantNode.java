@@ -177,12 +177,9 @@ public class ConstantNode extends FloatingNode implements LIRLowerable {
             assert constant.getKind().isNumericInteger() && stamp.getStackKind() == constant.getKind().getStackKind();
             IntegerStamp istamp = (IntegerStamp) stamp;
             return forIntegerBits(istamp.getBits(), constant);
-        } else if (stamp instanceof FloatStamp) {
+        } else {
             assert constant.getKind().isNumericFloat() && stamp.getStackKind() == constant.getKind();
             return forConstant(constant, null);
-        } else {
-            assert !(stamp instanceof AbstractObjectStamp);
-            return ConstantNode.create(constant, stamp.constant(constant, null));
         }
     }
 

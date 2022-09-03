@@ -116,13 +116,20 @@ public class HSAILMathIntrinsicsNode extends FloatingNode implements Canonicaliz
     }
 
     /**
+     * Converts a constant to a boxed double.
+     */
+    public Constant evalConst(Constant... inputs) {
+        assert inputs.length == 1;
+        return Constant.forDouble(compute(inputs[0].asDouble(), operation()));
+    }
+
+    /**
      * Converts the result of the math operation to a boxed Double constant node.
      */
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (getParameter().isConstant()) {
-            double ret = compute(getParameter().asConstant().asDouble(), operation());
-            return ConstantNode.forDouble(ret);
+            return ConstantNode.forPrimitive(evalConst(getParameter().asConstant()));
         }
         return this;
     }

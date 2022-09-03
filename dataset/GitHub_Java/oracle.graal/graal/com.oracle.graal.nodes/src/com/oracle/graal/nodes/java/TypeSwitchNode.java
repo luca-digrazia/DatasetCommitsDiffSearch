@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@ package com.oracle.graal.nodes.java;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
@@ -42,24 +43,37 @@ public class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifi
 
     protected final ResolvedJavaType[] keys;
 
-    public TypeSwitchNode(ValueNode value, BeginNode[] successors, ResolvedJavaType[] keys, double[] keyProbabilities, int[] keySuccessors) {
+    /**
+     * Constructs a type switch instruction. The keyProbabilities array contain key.length + 1
+     * entries. The last entry in every array describes the default case.
+     *
+     * @param value the instruction producing the value being switched on, the object hub
+     * @param successors the list of successors
+     * @param keys the list of types
+     * @param keyProbabilities the probabilities of the keys
+     * @param keySuccessors the successor index for each key
+     */
+    public static TypeSwitchNode create(ValueNode value, BeginNode[] successors, ResolvedJavaType[] keys, double[] keyProbabilities, int[] keySuccessors) {
+        return USE_GENERATED_NODES ? new TypeSwitchNodeGen(value, successors, keys, keyProbabilities, keySuccessors) : new TypeSwitchNode(value, successors, keys, keyProbabilities, keySuccessors);
+    }
+
+    protected TypeSwitchNode(ValueNode value, BeginNode[] successors, ResolvedJavaType[] keys, double[] keyProbabilities, int[] keySuccessors) {
         super(value, successors, keySuccessors, keyProbabilities);
         assert successors.length <= keys.length + 1;
         assert keySuccessors.length == keyProbabilities.length;
         this.keys = keys;
-        assert value.stamp() instanceof AbstractPointerStamp;
+        assert assertValues();
         assert assertKeys();
     }
 
     /**
-     * Don't allow duplicate keys.
+     * Don't allow duplicate keys
      */
     private boolean assertKeys() {
         for (int i = 0; i < keys.length; i++) {
             for (int j = 0; j < keys.length; j++) {
-                if (i == j) {
+                if (i == j)
                     continue;
-                }
                 assert !keys[i].equals(keys[j]);
             }
         }
@@ -70,9 +84,9 @@ public class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifi
     public boolean isSorted() {
         Kind kind = value().getKind();
         if (kind.isNumericInteger()) {
-            JavaConstant lastKey = null;
+            Constant lastKey = null;
             for (int i = 0; i < keyCount(); i++) {
-                JavaConstant key = keyAt(i);
+                Constant key = keyAt(i);
                 if (lastKey != null && key.asLong() <= lastKey.asLong()) {
                     return false;
                 }
@@ -90,8 +104,8 @@ public class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifi
     }
 
     @Override
-    public JavaConstant keyAt(int index) {
-        return (JavaConstant) keys[index].getObjectHub();
+    public Constant keyAt(int index) {
+        return keys[index].getEncoding(Representation.ObjectHub);
     }
 
     @Override
@@ -115,11 +129,11 @@ public class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifi
     @Override
     public void simplify(SimplifierTool tool) {
         if (value() instanceof ConstantNode) {
-            JavaConstant constant = value().asJavaConstant();
+            Constant constant = value().asConstant();
 
             int survivingEdge = keySuccessorIndex(keyCount());
             for (int i = 0; i < keyCount(); i++) {
-                JavaConstant typeHub = keyAt(i);
+                Constant typeHub = keyAt(i);
                 assert constant.getKind() == typeHub.getKind();
                 Boolean equal = tool.getConstantReflection().constantEquals(constant, typeHub);
                 if (equal == null) {
@@ -191,7 +205,7 @@ public class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifi
                     }
 
                     BeginNode[] successorsArray = newSuccessors.toArray(new BeginNode[newSuccessors.size()]);
-                    TypeSwitchNode newSwitch = graph().add(new TypeSwitchNode(value(), successorsArray, newKeys, newKeyProbabilities, newKeySuccessors));
+                    TypeSwitchNode newSwitch = graph().add(TypeSwitchNode.create(value(), successorsArray, newKeys, newKeyProbabilities, newKeySuccessors));
                     ((FixedWithNextNode) predecessor()).setNext(newSwitch);
                     GraphUtil.killWithUnusedFloatingInputs(this);
                 }

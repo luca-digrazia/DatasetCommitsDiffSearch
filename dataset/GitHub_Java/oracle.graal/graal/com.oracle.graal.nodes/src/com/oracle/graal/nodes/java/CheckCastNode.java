@@ -60,11 +60,11 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
      * @param object the instruction producing the object
      */
     public static CheckCastNode create(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
-        return new CheckCastNode(type, object, profile, forStoreCheck);
+        return USE_GENERATED_NODES ? new CheckCastNodeGen(type, object, profile, forStoreCheck) : new CheckCastNode(type, object, profile, forStoreCheck);
     }
 
     protected CheckCastNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
-        super(StampFactory.declaredTrusted(type));
+        super(StampFactory.declared(type, false, true));
         assert type != null;
         this.type = type;
         this.object = object;
@@ -104,7 +104,7 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
      */
     @Override
     public void lower(LoweringTool tool) {
-        Stamp newStamp = StampFactory.declaredTrusted(type);
+        Stamp newStamp = StampFactory.declared(type, false, true);
         if (stamp() instanceof ObjectStamp && object().stamp() instanceof ObjectStamp) {
             newStamp = ((ObjectStamp) object().stamp()).castTo((ObjectStamp) newStamp);
         }
@@ -113,7 +113,7 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
         if (newStamp instanceof IllegalStamp) {
             // This is a check cast that will always fail
             condition = LogicConstantNode.contradiction(graph());
-            newStamp = StampFactory.declaredTrusted(type);
+            newStamp = StampFactory.declared(type, false, true);
         } else if (StampTool.isObjectNonNull(object)) {
             condition = graph().addWithoutUnique(InstanceOfNode.create(type, object, profile));
         } else {
@@ -146,7 +146,7 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
     @Override
     public boolean inferStamp() {
         if (object().stamp() instanceof ObjectStamp) {
-            ObjectStamp castStamp = (ObjectStamp) StampFactory.declaredTrusted(type);
+            ObjectStamp castStamp = (ObjectStamp) StampFactory.declared(type, false, true);
             return updateStamp(((ObjectStamp) object().stamp()).castTo(castStamp));
         }
         return false;

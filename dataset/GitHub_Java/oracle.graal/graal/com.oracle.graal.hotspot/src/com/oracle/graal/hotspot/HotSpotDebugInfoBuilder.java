@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,14 +47,14 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
     }
 
     @Override
-    protected JavaValue computeLockValue(FrameState state, int lockIndex) {
+    protected Value computeLockValue(FrameState state, int lockIndex) {
         int lockDepth = lockIndex;
         if (state.outerFrameState() != null) {
             lockDepth += state.outerFrameState().nestedLockDepth();
         }
-        StackSlotValue slot = lockStack.makeLockSlot(lockDepth);
+        StackSlot slot = lockStack.makeLockSlot(lockDepth);
         ValueNode lock = state.lockAt(lockIndex);
-        JavaValue object = toValue(lock);
+        Value object = toValue(lock);
         boolean eliminated = object instanceof VirtualObject && state.monitorIdAt(lockIndex) != null;
         assert state.monitorIdAt(lockIndex) == null || state.monitorIdAt(lockIndex).getLockDepth() == lockDepth;
         return new HotSpotMonitorValue(object, slot, eliminated);
@@ -67,7 +67,7 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
 
     @Override
     protected BytecodeFrame computeFrameForState(FrameState state) {
-        assert state.bci >= 0 || state.bci == BytecodeFrame.BEFORE_BCI : state.bci;
+        assert state.bci >= 0 || state.bci == BytecodeFrame.BEFORE_BCI;
         return super.computeFrameForState(state);
     }
 }

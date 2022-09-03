@@ -39,8 +39,8 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.lir.sparc.SPARCMove.CompareAndSwapOp;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 
 public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements HotSpotNodeLIRBuilder {
 
@@ -53,7 +53,7 @@ public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements H
 
     @Override
     protected DebugInfoBuilder createDebugInfoBuilder(StructuredGraph graph, NodeMap<Value> nodeOperands) {
-        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMapBuilder(), LIRKind.value(Kind.Long));
+        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMap(), LIRKind.value(Kind.Long));
         return new HotSpotDebugInfoBuilder(nodeOperands, lockStack);
     }
 

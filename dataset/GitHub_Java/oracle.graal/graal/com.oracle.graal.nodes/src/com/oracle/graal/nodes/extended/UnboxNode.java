@@ -35,7 +35,11 @@ public class UnboxNode extends UnaryNode implements Virtualizable, Lowerable {
 
     protected final Kind boxingKind;
 
-    public UnboxNode(ValueNode value, Kind boxingKind) {
+    public static UnboxNode create(ValueNode value, Kind boxingKind) {
+        return USE_GENERATED_NODES ? new UnboxNodeGen(value, boxingKind) : new UnboxNode(value, boxingKind);
+    }
+
+    protected UnboxNode(ValueNode value, Kind boxingKind) {
         super(StampFactory.forKind(boxingKind.getStackKind()), value);
         this.boxingKind = boxingKind;
     }
@@ -64,8 +68,8 @@ public class UnboxNode extends UnaryNode implements Virtualizable, Lowerable {
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            JavaConstant constant = forValue.asJavaConstant();
-            JavaConstant unboxed = tool.getConstantReflection().unboxPrimitive(constant);
+            Constant constant = forValue.asConstant();
+            Constant unboxed = tool.getConstantReflection().unboxPrimitive(constant);
             if (unboxed != null && unboxed.getKind() == boxingKind) {
                 return ConstantNode.forConstant(unboxed, tool.getMetaAccess());
             }

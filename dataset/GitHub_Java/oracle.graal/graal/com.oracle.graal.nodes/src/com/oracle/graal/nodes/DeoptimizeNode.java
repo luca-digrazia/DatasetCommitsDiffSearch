@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,13 +32,21 @@ public class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowerable,
     protected final DeoptimizationAction action;
     protected final DeoptimizationReason reason;
     protected final int debugId;
-    protected final JavaConstant speculation;
+    protected final Constant speculation;
 
-    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason) {
-        this(action, reason, 0, JavaConstant.NULL_POINTER, null);
+    public static DeoptimizeNode create(DeoptimizationAction action, DeoptimizationReason reason) {
+        return USE_GENERATED_NODES ? new DeoptimizeNodeGen(action, reason) : new DeoptimizeNode(action, reason);
     }
 
-    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, int debugId, JavaConstant speculation, FrameState stateBefore) {
+    protected DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason) {
+        this(action, reason, 0, Constant.NULL_OBJECT, null);
+    }
+
+    public static DeoptimizeNode create(DeoptimizationAction action, DeoptimizationReason reason, int debugId, Constant speculation, FrameState stateBefore) {
+        return USE_GENERATED_NODES ? new DeoptimizeNodeGen(action, reason, debugId, speculation, stateBefore) : new DeoptimizeNode(action, reason, debugId, speculation, stateBefore);
+    }
+
+    protected DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, int debugId, Constant speculation, FrameState stateBefore) {
         super(stateBefore);
         assert action != null;
         assert reason != null;
@@ -77,7 +85,7 @@ public class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowerable,
         return ConstantNode.forConstant(speculation, metaAccess, graph());
     }
 
-    public JavaConstant getSpeculation() {
+    public Constant getSpeculation() {
         return speculation;
     }
 

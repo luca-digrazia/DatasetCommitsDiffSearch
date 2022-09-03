@@ -23,8 +23,6 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -34,25 +32,16 @@ import com.oracle.graal.nodes.spi.*;
  * barriers, implicit conversions and optionally oop uncompression.
  */
 @NodeInfo
-public class JavaReadNode extends FixedAccessNode implements Lowerable, GuardingNode, Canonicalizable {
+public class JavaReadNode extends FixedAccessNode implements Lowerable, GuardingNode {
 
     protected final boolean compressible;
 
     public static JavaReadNode create(ValueNode object, LocationNode location, BarrierType barrierType, boolean compressible) {
-        return new JavaReadNode(object, location, barrierType, compressible);
-    }
-
-    public static JavaReadNode create(ValueNode object, LocationNode location, Stamp readStamp, BarrierType barrierType, boolean compressible) {
-        return new JavaReadNode(object, location, readStamp, barrierType, compressible);
+        return USE_GENERATED_NODES ? new JavaReadNodeGen(object, location, barrierType, compressible) : new JavaReadNode(object, location, barrierType, compressible);
     }
 
     protected JavaReadNode(ValueNode object, LocationNode location, BarrierType barrierType, boolean compressible) {
         super(object, location, StampFactory.forKind(location.getValueKind()), barrierType);
-        this.compressible = compressible;
-    }
-
-    protected JavaReadNode(ValueNode object, LocationNode location, Stamp readStamp, BarrierType barrierType, boolean compressible) {
-        super(object, location, readStamp, barrierType);
         this.compressible = compressible;
     }
 
@@ -66,10 +55,5 @@ public class JavaReadNode extends FixedAccessNode implements Lowerable, Guarding
 
     public boolean isCompressible() {
         return compressible;
-    }
-
-    @Override
-    public Node canonical(CanonicalizerTool tool) {
-        return ReadNode.canonicalizeRead(this, location(), object(), tool);
     }
 }

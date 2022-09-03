@@ -66,7 +66,11 @@ public class MacroNode extends FixedWithNextNode implements Lowerable {
     protected final JavaType returnType;
     protected final InvokeKind invokeKind;
 
-    public MacroNode(Invoke invoke) {
+    public static MacroNode create(Invoke invoke) {
+        return USE_GENERATED_NODES ? new MacroNodeGen(invoke) : new MacroNode(invoke);
+    }
+
+    protected MacroNode(Invoke invoke) {
         super(StampFactory.forKind(((MethodCallTargetNode) invoke.callTarget()).targetMethod().getSignature().getReturnKind()));
         MethodCallTargetNode methodCallTarget = (MethodCallTargetNode) invoke.callTarget();
         this.arguments = new NodeInputList<>(this, methodCallTarget.arguments());
@@ -129,7 +133,7 @@ public class MacroNode extends FixedWithNextNode implements Lowerable {
      * @param replacementGraph a replacement (i.e., snippet or method substitution) graph
      */
     protected StructuredGraph lowerReplacement(final StructuredGraph replacementGraph, LoweringTool tool) {
-        final PhaseContext c = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.assumptions(), tool.getStampProvider());
+        final PhaseContext c = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.assumptions());
         if (!graph().hasValueProxies()) {
             new RemoveValueProxyPhase().apply(replacementGraph);
         }
@@ -184,8 +188,8 @@ public class MacroNode extends FixedWithNextNode implements Lowerable {
     }
 
     protected InvokeNode createInvoke() {
-        MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(invokeKind, targetMethod, arguments.toArray(new ValueNode[arguments.size()]), returnType));
-        InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci));
+        MethodCallTargetNode callTarget = graph().add(MethodCallTargetNode.create(invokeKind, targetMethod, arguments.toArray(new ValueNode[arguments.size()]), returnType));
+        InvokeNode invoke = graph().add(InvokeNode.create(callTarget, bci));
         if (stateAfter() != null) {
             invoke.setStateAfter(stateAfter().duplicate());
             if (getKind() != Kind.Void) {

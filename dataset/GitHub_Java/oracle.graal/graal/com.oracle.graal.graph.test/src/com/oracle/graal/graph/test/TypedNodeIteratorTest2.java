@@ -36,7 +36,11 @@ public class TypedNodeIteratorTest2 {
 
         protected final String name;
 
-        public NodeA(String name) {
+        public static NodeA create(String name) {
+            return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeAGen(name) : new NodeA(name);
+        }
+
+        protected NodeA(String name) {
             this.name = name;
         }
 
@@ -48,33 +52,42 @@ public class TypedNodeIteratorTest2 {
     @NodeInfo
     static class NodeB extends NodeA implements IterableNodeType {
 
-        public NodeB(String name) {
-            super(name);
+        public static NodeB create(String name) {
+            return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeBGen(name) : new NodeB(name);
         }
 
+        protected NodeB(String name) {
+            super(name);
+        }
     }
 
     @NodeInfo
     static class NodeC extends NodeB {
-        public NodeC(String name) {
-            super(name);
+        public static NodeC create(String name) {
+            return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeCGen(name) : new NodeC(name);
         }
 
+        protected NodeC(String name) {
+            super(name);
+        }
     }
 
     @NodeInfo
     static class NodeD extends NodeC {
-        public NodeD(String name) {
-            super(name);
+        public static NodeD create(String name) {
+            return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeDGen(name) : new NodeD(name);
         }
 
+        protected NodeD(String name) {
+            super(name);
+        }
     }
 
     @Test
     public void simpleSubclassTest() {
         Graph graph = new Graph();
-        graph.add(new NodeB("b"));
-        graph.add(new NodeD("d"));
+        graph.add(NodeB.create("b"));
+        graph.add(NodeD.create("d"));
 
         Assert.assertEquals("bd", TypedNodeIteratorTest.toString(graph.getNodes(NodeB.class)));
         Assert.assertEquals("d", TypedNodeIteratorTest.toString(graph.getNodes(NodeD.class)));
@@ -83,19 +96,19 @@ public class TypedNodeIteratorTest2 {
     @Test
     public void addingNodeDuringIterationTest() {
         Graph graph = new Graph();
-        graph.add(new NodeB("b1"));
-        NodeD d1 = graph.add(new NodeD("d1"));
+        graph.add(NodeB.create("b1"));
+        NodeD d1 = graph.add(NodeD.create("d1"));
         StringBuilder sb = new StringBuilder();
         for (NodeB tn : graph.getNodes(NodeB.class)) {
             if (tn == d1) {
-                graph.add(new NodeB("b2"));
+                graph.add(NodeB.create("b2"));
             }
             sb.append(tn.getName());
         }
         assertEquals("b1d1b2", sb.toString());
         for (NodeB tn : graph.getNodes(NodeB.class)) {
             if (tn == d1) {
-                graph.add(new NodeB("b3"));
+                graph.add(NodeB.create("b3"));
             }
             assertNotNull(tn);
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -355,7 +355,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
             double[] probability = new double[concretes.size()];
             for (int i = 0; i < concretes.size(); ++i) {
                 ResolvedJavaMethod firstMethod = concretes.get(i);
-                JavaConstant firstMethodConstant = firstMethod.getEncoding();
+                Constant firstMethodConstant = firstMethod.getEncoding();
 
                 ConstantNode firstMethodConstantNode = ConstantNode.forConstant(firstMethodConstant, metaAccess, graph);
                 constantMethods[i] = firstMethodConstantNode;
@@ -498,7 +498,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
 
             ExceptionObjectNode newExceptionEdge = (ExceptionObjectNode) exceptionEdge.copyWithInputs();
             // set new state (pop old exception object, push new one)
-            newExceptionEdge.setStateAfter(stateAfterException.duplicateModified(Kind.Object, newExceptionEdge));
+            newExceptionEdge.setStateAfter(stateAfterException.duplicateModified(stateAfterException.bci, stateAfterException.rethrowException(), Kind.Object, newExceptionEdge));
 
             AbstractEndNode endNode = graph.add(EndNode.create());
             newExceptionEdge.setNext(endNode);
@@ -529,9 +529,9 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
             // we have a vtable entry for the interface method and can use a less expensive
             // virtual call
             if (!leastCommonType.isInterface() && targetMethod.getDeclaringClass().isAssignableFrom(leastCommonType)) {
-                ResolvedJavaMethod baseClassTargetMethod = leastCommonType.resolveConcreteMethod(targetMethod, contextType);
+                ResolvedJavaMethod baseClassTargetMethod = leastCommonType.resolveMethod(targetMethod, contextType);
                 if (baseClassTargetMethod != null) {
-                    devirtualizeWithTypeSwitch(graph, InvokeKind.Virtual, leastCommonType.resolveConcreteMethod(targetMethod, contextType), metaAccess);
+                    devirtualizeWithTypeSwitch(graph, InvokeKind.Virtual, leastCommonType.resolveMethod(targetMethod, contextType), metaAccess);
                 }
             }
         }

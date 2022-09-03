@@ -40,7 +40,17 @@ public class AbstractNewObjectNode extends DeoptimizingFixedWithNextNode impleme
 
     protected final boolean fillContents;
 
-    public AbstractNewObjectNode(Stamp stamp, boolean fillContents) {
+    /**
+     * Constructs a new AbstractNewObjectNode.
+     *
+     * @param stamp the stamp of the newly created object
+     * @param fillContents determines if the object's contents should be initialized to zero/null.
+     */
+    public static AbstractNewObjectNode create(Stamp stamp, boolean fillContents) {
+        return USE_GENERATED_NODES ? new AbstractNewObjectNodeGen(stamp, fillContents) : new AbstractNewObjectNode(stamp, fillContents);
+    }
+
+    protected AbstractNewObjectNode(Stamp stamp, boolean fillContents) {
         super(stamp);
         this.fillContents = fillContents;
     }

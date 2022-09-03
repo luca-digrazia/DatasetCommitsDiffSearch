@@ -31,14 +31,14 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo
-public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable {
+public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Canonicalizable {
     protected final JavaType returnType;
 
     /**
      * @param arguments
      */
     public static MethodCallTargetNode create(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType) {
-        return new MethodCallTargetNode(invokeKind, targetMethod, arguments, returnType);
+        return USE_GENERATED_NODES ? new MethodCallTargetNodeGen(invokeKind, targetMethod, arguments, returnType) : new MethodCallTargetNode(invokeKind, targetMethod, arguments, returnType);
     }
 
     protected MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType) {
@@ -100,14 +100,14 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
     }
 
     @Override
-    public void simplify(SimplifierTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         if (invokeKind() == InvokeKind.Interface || invokeKind() == InvokeKind.Virtual) {
             // attempt to devirtualize the call
 
             // check for trivial cases (e.g. final methods, nonvirtual methods)
             if (targetMethod().canBeStaticallyBound()) {
                 setInvokeKind(InvokeKind.Special);
-                return;
+                return this;
             }
 
             // check if the type of the receiver can narrow the result
@@ -118,21 +118,21 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                  * either the holder class is exact, or the receiver object has an exact type, or
                  * it's an array type
                  */
-                ResolvedJavaMethod resolvedMethod = type.resolveConcreteMethod(targetMethod(), invoke().getContextType());
+                ResolvedJavaMethod resolvedMethod = type.resolveMethod(targetMethod(), invoke().getContextType());
                 if (resolvedMethod != null && (resolvedMethod.canBeStaticallyBound() || StampTool.isExactType(receiver) || type.isArray())) {
                     setInvokeKind(InvokeKind.Special);
                     setTargetMethod(resolvedMethod);
-                    return;
+                    return this;
                 }
                 if (tool.assumptions() != null && tool.assumptions().useOptimisticAssumptions()) {
                     ResolvedJavaType uniqueConcreteType = type.findUniqueConcreteSubtype();
                     if (uniqueConcreteType != null) {
-                        ResolvedJavaMethod methodFromUniqueType = uniqueConcreteType.resolveConcreteMethod(targetMethod(), invoke().getContextType());
+                        ResolvedJavaMethod methodFromUniqueType = uniqueConcreteType.resolveMethod(targetMethod(), invoke().getContextType());
                         if (methodFromUniqueType != null) {
                             tool.assumptions().recordConcreteSubtype(type, uniqueConcreteType);
                             setInvokeKind(InvokeKind.Special);
                             setTargetMethod(methodFromUniqueType);
-                            return;
+                            return this;
                         }
                     }
 
@@ -141,32 +141,12 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                         tool.assumptions().recordConcreteMethod(targetMethod(), type, uniqueConcreteMethod);
                         setInvokeKind(InvokeKind.Special);
                         setTargetMethod(uniqueConcreteMethod);
-                        return;
-                    }
-                }
-            }
-            ResolvedJavaType receiverType = targetMethod().getDeclaringClass();
-            if (receiverType.isInterface()) {
-                ResolvedJavaType single = receiverType.getSingleImplementor();
-                if (single != null && !single.equals(receiverType)) {
-                    ResolvedJavaMethod newResolvedMethod = single.resolveMethod(targetMethod(), invoke().getContextType(), true);
-                    // TODO (je): we can not yet deal with default methods
-                    if (newResolvedMethod != null && !newResolvedMethod.isDefault()) {
-                        ProfilingInfo profilingInfo = invoke().getContextMethod().getProfilingInfo();
-                        JavaTypeProfile profile = profilingInfo.getTypeProfile(invoke().bci());
-                        LogicNode condition = graph().unique(InstanceOfNode.create(single, receiver, profile));
-                        assert graph().getGuardsStage().ordinal() < StructuredGraph.GuardsStage.FIXED_DEOPTS.ordinal() : "Graph already fixed!";
-                        GuardNode guard = graph().unique(
-                                        GuardNode.create(condition, BeginNode.prevBegin(invoke().asNode()), DeoptimizationReason.OptimizedTypeCheckViolated, DeoptimizationAction.InvalidateRecompile,
-                                                        false, JavaConstant.NULL_OBJECT));
-                        PiNode piNode = graph().unique(PiNode.create(receiver, StampFactory.declared(single), guard));
-                        arguments().set(0, piNode);
-                        setInvokeKind(InvokeKind.Virtual);
-                        setTargetMethod(newResolvedMethod);
+                        return this;
                     }
                 }
             }
         }
+        return this;
     }
 
     @Override

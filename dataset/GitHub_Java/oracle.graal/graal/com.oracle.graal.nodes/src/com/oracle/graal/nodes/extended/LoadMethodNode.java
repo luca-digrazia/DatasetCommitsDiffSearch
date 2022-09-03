@@ -45,13 +45,17 @@ public class LoadMethodNode extends FixedWithNextNode implements Lowerable, Cano
         return hub;
     }
 
-    public LoadMethodNode(@InjectedNodeParameter Stamp stamp, ResolvedJavaMethod method, ResolvedJavaType receiverType, ValueNode hub) {
-        super(stamp);
+    public static LoadMethodNode create(ResolvedJavaMethod method, ResolvedJavaType receiverType, ValueNode hub, Kind kind) {
+        return USE_GENERATED_NODES ? new LoadMethodNodeGen(method, receiverType, hub, kind) : new LoadMethodNode(method, receiverType, hub, kind);
+    }
+
+    protected LoadMethodNode(ResolvedJavaMethod method, ResolvedJavaType receiverType, ValueNode hub, Kind kind) {
+        super(kind == Kind.Object ? StampFactory.objectNonNull() : StampFactory.forKind(kind));
         this.receiverType = receiverType;
         this.hub = hub;
         this.method = method;
-        assert method.isConcrete() : "Cannot load abstract method from a hub";
-        assert method.hasReceiver() : "Cannot load a static method from a hub";
+        assert !method.isAbstract() : "Cannot load abstract method from a hub";
+        assert !method.isStatic() : "Cannot load a static method from a hub";
         assert method.isInVirtualMethodTable(receiverType);
     }
 
@@ -72,7 +76,7 @@ public class LoadMethodNode extends FixedWithNextNode implements Lowerable, Cano
                 ResolvedJavaMethod resolvedMethod = type.findUniqueConcreteMethod(method);
                 if (resolvedMethod != null && !type.isInterface() && method.getDeclaringClass().isAssignableFrom(type)) {
                     tool.assumptions().recordConcreteMethod(method, type, resolvedMethod);
-                    return ConstantNode.forConstant(stamp(), resolvedMethod.getEncoding(), tool.getMetaAccess());
+                    return ConstantNode.forConstant(resolvedMethod.getEncoding(), tool.getMetaAccess());
                 }
             }
         }
@@ -92,15 +96,15 @@ public class LoadMethodNode extends FixedWithNextNode implements Lowerable, Cano
      *         the method
      */
     private Node resolveExactMethod(CanonicalizerTool tool, ResolvedJavaType type) {
-        ResolvedJavaMethod newMethod = type.resolveConcreteMethod(method, type);
+        ResolvedJavaMethod newMethod = type.resolveMethod(method, type);
         if (newMethod == null) {
             /*
              * This really represent a misuse of LoadMethod since we're loading from a class which
              * isn't known to implement the original method but for now at least fold it away.
              */
-            return ConstantNode.forConstant(JavaConstant.NULL_POINTER, null);
+            return ConstantNode.forConstant(Constant.NULL_OBJECT, null);
         } else {
-            return ConstantNode.forConstant(stamp(), newMethod.getEncoding(), tool.getMetaAccess());
+            return ConstantNode.forConstant(newMethod.getEncoding(), tool.getMetaAccess());
         }
     }
 

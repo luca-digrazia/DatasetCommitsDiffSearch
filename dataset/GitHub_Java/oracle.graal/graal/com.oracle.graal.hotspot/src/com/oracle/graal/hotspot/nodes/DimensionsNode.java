@@ -43,7 +43,11 @@ public class DimensionsNode extends FixedWithNextNode implements LIRLowerable {
 
     protected final int rank;
 
-    public DimensionsNode(int rank) {
+    public static DimensionsNode create(int rank) {
+        return USE_GENERATED_NODES ? new DimensionsNodeGen(rank) : new DimensionsNode(rank);
+    }
+
+    protected DimensionsNode(int rank) {
         super(null);
         this.rank = rank;
     }
@@ -54,7 +58,7 @@ public class DimensionsNode extends FixedWithNextNode implements LIRLowerable {
         int size = rank * 4;
         int wordSize = lirGen.target().wordSize;
         int slots = roundUp(size, wordSize) / wordSize;
-        VirtualStackSlot array = lirGen.getResult().getFrameMapBuilder().allocateStackSlots(slots, new BitSet(0), null);
+        StackSlot array = lirGen.getResult().getFrameMap().allocateStackSlots(slots, new BitSet(0), null);
         Value result = lirGen.emitAddress(array);
         gen.setResult(this, result);
     }

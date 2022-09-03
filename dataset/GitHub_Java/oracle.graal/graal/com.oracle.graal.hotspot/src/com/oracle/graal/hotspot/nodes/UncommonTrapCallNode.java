@@ -45,7 +45,11 @@ public class UncommonTrapCallNode extends FixedWithNextNode implements LIRLowera
     @Input SaveAllRegistersNode registerSaver;
     protected final ForeignCallsProvider foreignCalls;
 
-    public UncommonTrapCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode registerSaver, ValueNode trapRequest) {
+    public static UncommonTrapCallNode create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode registerSaver, ValueNode trapRequest) {
+        return USE_GENERATED_NODES ? new UncommonTrapCallNodeGen(foreignCalls, registerSaver, trapRequest) : new UncommonTrapCallNode(foreignCalls, registerSaver, trapRequest);
+    }
+
+    protected UncommonTrapCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode registerSaver, ValueNode trapRequest) {
         super(StampFactory.forKind(Kind.fromJavaClass(UNCOMMON_TRAP.getResultType())));
         this.trapRequest = trapRequest;
         this.registerSaver = (SaveAllRegistersNode) registerSaver;

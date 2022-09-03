@@ -28,6 +28,7 @@ import java.lang.reflect.*;
 
 import sun.misc.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -43,7 +44,14 @@ public class MembarNode extends FixedWithNextNode implements LIRLowerable, Memor
 
     protected final int barriers;
 
-    public MembarNode(int barriers) {
+    /**
+     * @param barriers a mask of the barrier constants defined in {@link MemoryBarriers}
+     */
+    public static MembarNode create(int barriers) {
+        return USE_GENERATED_NODES ? new MembarNodeGen(barriers) : new MembarNode(barriers);
+    }
+
+    protected MembarNode(int barriers) {
         super(StampFactory.forVoid());
         this.barriers = barriers;
     }

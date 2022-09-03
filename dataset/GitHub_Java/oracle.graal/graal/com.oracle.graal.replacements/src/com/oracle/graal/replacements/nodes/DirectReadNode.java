@@ -41,7 +41,11 @@ public class DirectReadNode extends FixedWithNextNode implements LIRLowerable {
     @Input protected ValueNode address;
     protected final Kind readKind;
 
-    public DirectReadNode(ValueNode address, Kind readKind) {
+    public static DirectReadNode create(ValueNode address, Kind readKind) {
+        return USE_GENERATED_NODES ? new DirectReadNodeGen(address, readKind) : new DirectReadNode(address, readKind);
+    }
+
+    protected DirectReadNode(ValueNode address, Kind readKind) {
         super(StampFactory.forKind(readKind.getStackKind()));
         this.address = address;
         this.readKind = readKind;
@@ -54,7 +58,7 @@ public class DirectReadNode extends FixedWithNextNode implements LIRLowerable {
     /**
      * If we are sub it sizes, we try to sign/zero extend the value to at least int as it is done in
      * the {@link com.oracle.graal.replacements.DefaultJavaLoweringProvider#implicitLoadConvert} and
-     * {@link com.oracle.graal.replacements.DefaultJavaLoweringProvider#createUnsafeRead}.
+     * {@link com.oracle.graal.replacements.DefaultJavaLoweringProvider#createUnsafeRead}
      *
      * @see com.oracle.graal.replacements.DefaultJavaLoweringProvider#implicitLoadConvert
      * @see com.oracle.graal.replacements.DefaultJavaLoweringProvider#createUnsafeRead

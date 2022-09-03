@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
@@ -36,7 +35,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public abstract class BinaryArithmeticNode extends BinaryNode implements ArithmeticLIRLowerable {
 
-    protected BinaryOp op;
+    protected final BinaryOp op;
 
     public BinaryArithmeticNode(BinaryOp op, ValueNode x, ValueNode y) {
         super(op.foldStamp(x.stamp(), y.stamp()), x, y);
@@ -64,9 +63,6 @@ public abstract class BinaryArithmeticNode extends BinaryNode implements Arithme
 
     @Override
     public boolean inferStamp() {
-        ArithmeticOpTable ops = ArithmeticOpTable.forStamp(getX().stamp());
-        assert ops == ArithmeticOpTable.forStamp(getY().stamp());
-        op = ops.getBinaryOp(op);
         return updateStamp(op.foldStamp(getX().stamp(), getY().stamp()));
     }
 

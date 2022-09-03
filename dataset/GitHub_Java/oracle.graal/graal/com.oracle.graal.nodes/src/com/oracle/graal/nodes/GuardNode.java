@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,19 +42,19 @@ import com.oracle.graal.nodes.extended.*;
  * control flow would have reached the guarded node (without taking exceptions into account).
  */
 @NodeInfo(nameTemplate = "Guard(!={p#negated}) {p#reason/s}", allowedUsageTypes = {InputType.Guard})
-public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, GuardingNode {
+public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, IterableNodeType, GuardingNode {
 
     @Input(InputType.Condition) protected LogicNode condition;
     protected final DeoptimizationReason reason;
-    protected JavaConstant speculation;
+    protected Constant speculation;
     protected DeoptimizationAction action;
     protected boolean negated;
 
-    public static GuardNode create(LogicNode condition, AnchoringNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, JavaConstant speculation) {
-        return new GuardNode(condition, anchor, reason, action, negated, speculation);
+    public static GuardNode create(LogicNode condition, AnchoringNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, Constant speculation) {
+        return USE_GENERATED_NODES ? new GuardNodeGen(condition, anchor, reason, action, negated, speculation) : new GuardNode(condition, anchor, reason, action, negated, speculation);
     }
 
-    protected GuardNode(LogicNode condition, AnchoringNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, JavaConstant speculation) {
+    protected GuardNode(LogicNode condition, AnchoringNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, Constant speculation) {
         super(StampFactory.forVoid(), anchor);
         this.condition = condition;
         this.reason = reason;
@@ -70,7 +70,7 @@ public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, 
         return condition;
     }
 
-    public boolean isNegated() {
+    public boolean negated() {
         return negated;
     }
 
@@ -82,11 +82,11 @@ public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, 
         return action;
     }
 
-    public JavaConstant getSpeculation() {
+    public Constant getSpeculation() {
         return speculation;
     }
 
-    public void setSpeculation(JavaConstant speculation) {
+    public void setSpeculation(Constant speculation) {
         this.speculation = speculation;
     }
 

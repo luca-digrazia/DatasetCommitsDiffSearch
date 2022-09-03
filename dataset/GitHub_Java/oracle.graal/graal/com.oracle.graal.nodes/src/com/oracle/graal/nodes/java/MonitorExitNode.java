@@ -41,7 +41,14 @@ public class MonitorExitNode extends AccessMonitorNode implements Virtualizable,
 
     @OptionalInput ValueNode escapedReturnValue;
 
-    public MonitorExitNode(ValueNode object, MonitorIdNode monitorId, ValueNode escapedReturnValue) {
+    /**
+     * Creates a new MonitorExitNode.
+     */
+    public static MonitorExitNode create(ValueNode object, MonitorIdNode monitorId, ValueNode escapedReturnValue) {
+        return USE_GENERATED_NODES ? new MonitorExitNodeGen(object, monitorId, escapedReturnValue) : new MonitorExitNode(object, monitorId, escapedReturnValue);
+    }
+
+    protected MonitorExitNode(ValueNode object, MonitorIdNode monitorId, ValueNode escapedReturnValue) {
         super(object, monitorId);
         this.escapedReturnValue = escapedReturnValue;
     }

@@ -53,7 +53,7 @@ public class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRL
      * @param bci the bytecode index of the original invoke (used for debug infos)
      */
     public static InvokeNode create(CallTargetNode callTarget, int bci) {
-        return new InvokeNode(callTarget, bci);
+        return USE_GENERATED_NODES ? new InvokeNodeGen(callTarget, bci) : new InvokeNode(callTarget, bci);
     }
 
     protected InvokeNode(CallTargetNode callTarget, int bci) {
@@ -68,7 +68,7 @@ public class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRL
      * @param stamp the stamp to be used for this value
      */
     public static InvokeNode create(CallTargetNode callTarget, int bci, Stamp stamp) {
-        return new InvokeNode(callTarget, bci, stamp);
+        return USE_GENERATED_NODES ? new InvokeNodeGen(callTarget, bci, stamp) : new InvokeNode(callTarget, bci, stamp);
     }
 
     protected InvokeNode(CallTargetNode callTarget, int bci, Stamp stamp) {
@@ -163,10 +163,6 @@ public class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRL
         if (node instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) node;
             stateSplit.setStateAfter(currentStateAfter);
-        }
-        if (node instanceof ForeignCallNode) {
-            ForeignCallNode foreign = (ForeignCallNode) node;
-            foreign.setBci(bci());
         }
         if (node instanceof FixedWithNextNode) {
             graph().replaceFixedWithFixed(this, (FixedWithNextNode) node);
