@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +22,9 @@
  */
 package org.graalvm.compiler.core.test;
 
-import org.graalvm.compiler.debug.DebugContext;
+import org.junit.Test;
+
+import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FrameState;
@@ -32,7 +32,6 @@ import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
@@ -40,7 +39,7 @@ import org.graalvm.compiler.phases.common.FloatingReadPhase;
 import org.graalvm.compiler.phases.common.GuardLoweringPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
 import org.graalvm.compiler.phases.tiers.MidTierContext;
-import org.junit.Test;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 
 /**
  * In the following tests, the usages of local variable "a" are replaced with the integer constant
@@ -226,7 +225,7 @@ public class IfCanonicalizerTest extends GraalCompilerTest {
 
     private void testCombinedIf(String snippet, int count) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-        CoreProviders context = getProviders();
+        PhaseContext context = new PhaseContext(getProviders());
         new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
         new FloatingReadPhase().apply(graph);
         MidTierContext midContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.getProfilingInfo());
@@ -238,7 +237,6 @@ public class IfCanonicalizerTest extends GraalCompilerTest {
 
     private void test(String snippet) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-        DebugContext debug = graph.getDebug();
         ParameterNode param = graph.getNodes(ParameterNode.TYPE).iterator().next();
         ConstantNode constant = ConstantNode.forInt(0, graph);
         for (Node n : param.usages().snapshot()) {
@@ -246,8 +244,8 @@ public class IfCanonicalizerTest extends GraalCompilerTest {
                 n.replaceFirstInput(param, constant);
             }
         }
-        debug.dump(DebugContext.BASIC_LEVEL, graph, "Graph");
-        new CanonicalizerPhase().apply(graph, getProviders());
+        Debug.dump(Debug.BASIC_LEVEL, graph, "Graph");
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
         for (FrameState fs : param.usages().filter(FrameState.class).snapshot()) {
             fs.replaceFirstInput(param, null);
             param.safeDelete();

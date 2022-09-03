@@ -30,6 +30,7 @@ import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugCounter;
 import org.graalvm.compiler.debug.DebugMemUseTracker;
 import org.graalvm.compiler.debug.DebugTimer;
+import org.graalvm.compiler.debug.Fingerprint;
 import org.graalvm.compiler.debug.GraalDebugConfig;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Graph.Mark;
@@ -195,6 +196,10 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
             if (dumpGraph && Debug.isEnabled()) {
                 dumpAfter(graph, isTopLevel, dumpedBefore);
             }
+            if (Fingerprint.ENABLED) {
+                String graphDesc = graph.method() == null ? graph.name : graph.method().format("%H.%n(%p)");
+                Fingerprint.submit("After phase %s nodes in %s are %s", getName(), graphDesc, graph.getNodes().snapshot());
+            }
             if (Debug.isVerifyEnabled()) {
                 Debug.verify(graph, "%s", getName());
             }
@@ -268,7 +273,17 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     }
 
     protected CharSequence getName() {
-        return new ClassTypeSequence(BasePhase.this.getClass());
+        String className = BasePhase.this.getClass().getName();
+        String s = className.substring(className.lastIndexOf(".") + 1); // strip the package name
+        int innerClassPos = s.indexOf('$');
+        if (innerClassPos > 0) {
+            /* Remove inner class name. */
+            s = s.substring(0, innerClassPos);
+        }
+        if (s.endsWith("Phase")) {
+            s = s.substring(0, s.length() - "Phase".length());
+        }
+        return s;
     }
 
     protected abstract void run(StructuredGraph graph, C context);
