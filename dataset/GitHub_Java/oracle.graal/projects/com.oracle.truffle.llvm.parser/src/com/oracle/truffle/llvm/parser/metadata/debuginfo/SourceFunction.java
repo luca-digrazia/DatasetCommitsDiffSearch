@@ -35,7 +35,6 @@ import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -43,7 +42,7 @@ public final class SourceFunction {
 
     private final Map<Instruction, LLVMSourceLocation> instructions = new HashMap<>();
 
-    private Map<LLVMSourceSymbol, SourceVariable> locals;
+    private final Map<LLVMSourceSymbol, SourceVariable> locals = new HashMap<>();
 
     private final LLVMSourceLocation lexicalScope;
 
@@ -64,9 +63,7 @@ public final class SourceFunction {
     }
 
     SourceVariable getLocal(LLVMSourceSymbol symbol) {
-        if (locals == null) {
-            locals = new HashMap<>();
-        } else if (locals.containsKey(symbol)) {
+        if (locals.containsKey(symbol)) {
             return locals.get(symbol);
         }
 
@@ -80,6 +77,6 @@ public final class SourceFunction {
     }
 
     public Collection<SourceVariable> getVariables() {
-        return locals == null ? Collections.emptySet() : locals.values();
+        return locals.values();
     }
 }
