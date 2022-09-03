@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -91,21 +89,29 @@ public class JTTTest extends GraalCompilerTest {
     }
 
     protected void runTest(OptionValues options, String name, Object... args) {
-        runTest(options, EMPTY, name, args);
+        runTest(options, EMPTY, true, false, name, args);
     }
 
     protected void runTest(Set<DeoptimizationReason> shouldNotDeopt, String name, Object... args) {
-        runTest(getInitialOptions(), shouldNotDeopt, name, args);
+        runTest(getInitialOptions(), shouldNotDeopt, true, false, name, args);
     }
 
-    protected void runTest(OptionValues options, Set<DeoptimizationReason> shouldNotDeopt, String name, Object... args) {
+    protected void runTest(OptionValues options, Set<DeoptimizationReason> shouldNotDeopt, boolean bind, boolean noProfile, String name, Object... args) {
         ResolvedJavaMethod method = getResolvedJavaMethod(name);
         Object receiver = method.isStatic() ? null : this;
 
         Result expect = executeExpected(method, receiver, args);
 
+        if (noProfile) {
+            method.reprofile();
+        }
+
         testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
-        if (args.length > 0) {
+        if (args.length > 0 && bind) {
+            if (noProfile) {
+                method.reprofile();
+            }
+
             this.argsToBind = args;
             testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
             this.argsToBind = null;
