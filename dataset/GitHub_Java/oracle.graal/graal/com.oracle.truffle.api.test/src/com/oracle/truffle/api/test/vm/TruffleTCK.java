@@ -22,18 +22,22 @@
  */
 package com.oracle.truffle.api.test.vm;
 
-import com.oracle.truffle.api.vm.TruffleVM;
-import java.util.Random;
+import java.util.*;
+
+import org.junit.*;
+
+import com.oracle.truffle.api.vm.*;
+import static org.junit.Assert.*;
 
 /**
  * A collection of tests that can certify language implementaiton to be complient with most recent
  * requirements of the Truffle infrastructure and tooling. Subclass, implement abstract methods and
  * include in your test suite.
  */
-public abstract class TruffleTCK {
-    private TruffleVM vm;
+public class TruffleTCK { // abstract
+    private TruffleVM tckVM;
 
-    protected TruffleTCK() {
+    public TruffleTCK() { // protected
     }
 
     /**
@@ -45,8 +49,11 @@ public abstract class TruffleTCK {
      * for internal testing.
      *
      * @return initialized Truffle virtual machine
+     * @throws java.lang.Exception thrown when the VM preparation fails
      */
-    protected abstract TruffleVM prepareVM() throws Exception;
+    protected TruffleVM prepareVM() throws Exception { // abstract
+        return null;
+    }
 
     /**
      * Name of function which will return value 42 as a number. The return value of the method
@@ -55,7 +62,21 @@ public abstract class TruffleTCK {
      *
      * @return name of globally exported symbol
      */
-    protected abstract String fourtyTwo();
+    protected String fourtyTwo() { // abstract
+        return null;
+    }
+
+    /**
+     * Name of a function that returns <code>null</code>. Truffle languages are encouraged to have
+     * their own type representing <code>null</code>, but when such value is returned from
+     * {@link TruffleVM#eval}, it needs to be converted to real Java <code>null</code> by sending a
+     * foreign access <em>isNull</em> message. There is a test to verify it is really true.
+     *
+     * @return name of globally exported symbol
+     */
+    protected String returnsNull() { // abstract
+        return null;
+    }
 
     /**
      * Name of function to add two integer values together. The symbol will be invoked with two
@@ -64,20 +85,26 @@ public abstract class TruffleTCK {
      *
      * @return name of globally exported symbol
      */
-    protected abstract String plusInt();
+    protected String plusInt() {  // abstract
+        return null;
+    }
 
     private TruffleVM vm() throws Exception {
-        if (vm == null) {
-            vm = prepareVM();
+        if (tckVM == null) {
+            tckVM = prepareVM();
         }
-        return vm;
+        return tckVM;
     }
 
     //
     // The tests
     //
 
+    @Test
     public void testFortyTwo() throws Exception {
+        if (getClass() == TruffleTCK.class) {
+            return;
+        }
         TruffleVM.Symbol fourtyTwo = findGlobalSymbol(fourtyTwo());
 
         Object res = fourtyTwo.invoke(null);
@@ -89,7 +116,23 @@ public abstract class TruffleTCK {
         assert 42 == n.intValue() : "The value is 42 =  " + n.intValue();
     }
 
+    @Test
+    public void testNull() throws Exception {
+        if (getClass() == TruffleTCK.class) {
+            return;
+        }
+        TruffleVM.Symbol retNull = findGlobalSymbol(returnsNull());
+
+        Object res = retNull.invoke(null);
+
+        assertNull("Should yield real Java null", res);
+    }
+
+    @Test
     public void testPlusWithInts() throws Exception {
+        if (getClass() == TruffleTCK.class) {
+            return;
+        }
         Random r = new Random();
         int a = r.nextInt(100);
         int b = r.nextInt(100);

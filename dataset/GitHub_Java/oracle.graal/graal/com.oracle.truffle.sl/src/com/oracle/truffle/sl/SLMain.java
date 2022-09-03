@@ -359,16 +359,12 @@ public class SLMain extends TruffleLanguage {
 
     @Override
     protected Object eval(Source code) throws IOException {
-        try {
-            context.executeMain(code);
-        } catch (Exception e) {
-            throw new IOException(e);
-        }
+        context.executeMain(code);
         return null;
     }
 
     @Override
-    protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
+    protected Object findExportedSymbol(String globalName) {
         for (SLFunction f : context.getFunctionRegistry().getFunctions()) {
             if (globalName.equals(f.getName())) {
                 return f;

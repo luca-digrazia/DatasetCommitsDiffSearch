@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.compiler.common;
 
-import jdk.internal.jvmci.options.*;
+import com.oracle.jvmci.options.*;
 
 /**
  * This class encapsulates options that control the behavior of the Graal compiler.
@@ -287,7 +287,7 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> MatchExpressions = new OptionValue<>(true);
 
     @Option(help = "Generate SSA LIR.", type = OptionType.Debug)
-    public static final OptionValue<Boolean> SSA_LIR = new OptionValue<>(true);
+    public static final OptionValue<Boolean> SSA_LIR = new OptionValue<>(false);
 
     /**
      * Counts the various paths taken through snippets.

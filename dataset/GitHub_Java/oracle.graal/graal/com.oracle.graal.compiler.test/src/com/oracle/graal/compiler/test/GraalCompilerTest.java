@@ -369,7 +369,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected HighTierContext getDefaultHighTierContext() {
-        return new HighTierContext(getProviders(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, null);
+        return new HighTierContext(getProviders(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
     }
 
     protected SnippetReflectionProvider getSnippetReflection() {
