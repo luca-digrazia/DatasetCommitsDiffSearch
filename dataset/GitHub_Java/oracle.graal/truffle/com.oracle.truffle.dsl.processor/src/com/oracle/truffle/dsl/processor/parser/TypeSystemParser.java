@@ -22,35 +22,59 @@
  */
 package com.oracle.truffle.dsl.processor.parser;
 
-import java.lang.annotation.*;
-import java.util.*;
+import java.lang.annotation.Annotation;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-import javax.lang.model.util.*;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Types;
 
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
-import com.oracle.truffle.dsl.processor.java.*;
-import com.oracle.truffle.dsl.processor.model.*;
+import com.oracle.truffle.api.dsl.TypeCast;
+import com.oracle.truffle.api.dsl.TypeCheck;
+import com.oracle.truffle.api.dsl.TypeSystem;
+import com.oracle.truffle.dsl.processor.java.ElementUtils;
+import com.oracle.truffle.dsl.processor.model.ImplicitCastData;
+import com.oracle.truffle.dsl.processor.model.Template;
+import com.oracle.truffle.dsl.processor.model.TypeCastData;
+import com.oracle.truffle.dsl.processor.model.TypeCheckData;
+import com.oracle.truffle.dsl.processor.model.TypeSystemData;
 
-@DSLOptions
+@SuppressWarnings("deprecation")
+@com.oracle.truffle.api.dsl.internal.DSLOptions
 public class TypeSystemParser extends AbstractParser<TypeSystemData> {
-
-    public static final List<Class<TypeSystem>> ANNOTATIONS = Arrays.asList(TypeSystem.class);
 
     @Override
     public Class<? extends Annotation> getAnnotationType() {
         return TypeSystem.class;
     }
 
+    /**
+     * @see "https://bugs.openjdk.java.net/browse/JDK-8039214"
+     */
+    @SuppressWarnings("unused")
+    private static List<Element> newElementList(List<? extends Element> src) {
+        List<Element> workaround = new ArrayList<Element>(src);
+        return workaround;
+    }
+
     @Override
     protected TypeSystemData parse(Element element, AnnotationMirror mirror) {
         TypeElement templateType = (TypeElement) element;
         AnnotationMirror templateTypeAnnotation = mirror;
-        DSLOptions options = element.getAnnotation(DSLOptions.class);
+        com.oracle.truffle.api.dsl.internal.DSLOptions options = element.getAnnotation(com.oracle.truffle.api.dsl.internal.DSLOptions.class);
         if (options == null) {
-            options = TypeSystemParser.class.getAnnotation(DSLOptions.class);
+            options = TypeSystemParser.class.getAnnotation(com.oracle.truffle.api.dsl.internal.DSLOptions.class);
         }
         assert options != null;
 
@@ -78,7 +102,7 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
 
         verifyExclusiveMethodAnnotation(typeSystem, TypeCast.class, TypeCheck.class);
 
-        List<Element> elements = new ArrayList<>(context.getEnvironment().getElementUtils().getAllMembers(templateType));
+        List<Element> elements = newElementList(context.getEnvironment().getElementUtils().getAllMembers(templateType));
         List<ImplicitCastData> implicitCasts = new ImplicitCastParser(context, typeSystem).parse(elements);
         List<TypeCastData> casts = new TypeCastParser(context, typeSystem).parse(elements);
         List<TypeCheckData> checks = new TypeCheckParser(context, typeSystem).parse(elements);
