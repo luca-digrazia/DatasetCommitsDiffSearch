@@ -233,9 +233,7 @@ public class ReplacementsImpl implements Replacements {
         } else {
             original = metaAccess.lookupJavaConstructor((Constructor) originalMember);
         }
-        if (Debug.isLogEnabled()) {
-            Debug.log("substitution: %s --> %s", MetaUtil.format("%H.%n(%p) %r", original), MetaUtil.format("%H.%n(%p) %r", substitute));
-        }
+        Debug.log("substitution: " + MetaUtil.format("%H.%n(%p) %r", original) + " --> " + MetaUtil.format("%H.%n(%p) %r", substitute));
 
         registeredMethodSubstitutions.put(original, substitute);
         return original;

@@ -73,7 +73,7 @@ public abstract class BasePhase<C> {
             BasePhase.this.run(graph, context);
             phaseMetric.increment();
             if (dumpGraph) {
-                Debug.dump(graph, "After phase %s", getName());
+                Debug.dump(graph, "After phase %s", name);
             }
             assert graph.verify();
         } catch (Throwable t) {

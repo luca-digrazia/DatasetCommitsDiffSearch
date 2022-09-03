@@ -22,16 +22,45 @@
  */
 package com.oracle.graal.hotspot.meta;
 
+import static com.oracle.graal.api.meta.MetaUtil.*;
+import static com.oracle.graal.debug.Debug.*;
+import static java.util.FormattableFlags.*;
+
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
 
-public abstract class HotSpotMethod extends CompilerObject implements JavaMethod {
+public abstract class HotSpotMethod extends CompilerObject implements JavaMethod, Formattable {
 
     private static final long serialVersionUID = 7167491397941960839L;
     protected String name;
 
+    /**
+     * Controls whether {@link #toString()} includes the qualified or simple name of the class in
+     * which the method is declared.
+     */
+    public static final boolean FULLY_QUALIFIED_METHOD_NAME = false;
+
+    protected HotSpotMethod(String name) {
+        this.name = name;
+    }
+
     @Override
-    public final String name() {
+    public final String getName() {
         return name;
+    }
+
+    @Override
+    public final String toString() {
+        char h = FULLY_QUALIFIED_METHOD_NAME ? 'H' : 'h';
+        String suffix = this instanceof ResolvedJavaMethod ? "" : ", unresolved";
+        String fmt = String.format("HotSpotMethod<%%%c.%%n(%%p)%s>", h, suffix);
+        return format(fmt, this);
+    }
+
+    public void formatTo(Formatter formatter, int flags, int width, int precision) {
+        String base = (flags & ALTERNATE) == ALTERNATE ? getName() : toString();
+        formatter.format(applyFormattingFlagsAndWidth(base, flags & ~ALTERNATE, width));
     }
 }
