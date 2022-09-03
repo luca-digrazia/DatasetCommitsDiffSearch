@@ -61,8 +61,6 @@ public class LLVMContext extends ExecutionContext {
 
     private Source sourceFile;
 
-    private boolean parseOnly;
-
     public LLVMContext(NodeFactoryFacade facade, LLVMOptimizationConfiguration optimizationConfig) {
         nativeLookup = new NativeLookup(facade);
         this.registry = new LLVMFunctionRegistry(optimizationConfig, facade);
@@ -156,14 +154,6 @@ public class LLVMContext extends ExecutionContext {
 
     public List<RootCallTarget> getStaticInitializers() {
         return staticInitializers;
-    }
-
-    public void setParseOnly(boolean parseOnly) {
-        this.parseOnly = parseOnly;
-    }
-
-    public boolean isParseOnly() {
-        return parseOnly;
     }
 
 }
