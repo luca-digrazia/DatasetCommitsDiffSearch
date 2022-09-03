@@ -38,7 +38,6 @@ import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.LogicNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -119,7 +118,7 @@ public interface GraphBuilderContext extends GraphBuilderTool {
     }
 
     default ValueNode addNonNullCast(ValueNode value) {
-        AbstractPointerStamp valueStamp = (AbstractPointerStamp) value.stamp(NodeView.DEFAULT);
+        AbstractPointerStamp valueStamp = (AbstractPointerStamp) value.stamp();
         if (valueStamp.nonNull()) {
             return value;
         } else {
@@ -278,7 +277,7 @@ public interface GraphBuilderContext extends GraphBuilderTool {
     default ValueNode nullCheckedValue(ValueNode value, DeoptimizationAction action) {
         if (!StampTool.isPointerNonNull(value)) {
             LogicNode condition = getGraph().unique(IsNullNode.create(value));
-            ObjectStamp receiverStamp = (ObjectStamp) value.stamp(NodeView.DEFAULT);
+            ObjectStamp receiverStamp = (ObjectStamp) value.stamp();
             Stamp stamp = receiverStamp.join(objectNonNull());
             FixedGuardNode fixedGuard = append(new FixedGuardNode(condition, NullCheckException, action, true));
             ValueNode nonNullReceiver = getGraph().addOrUniqueWithInputs(PiNode.create(value, stamp, fixedGuard));

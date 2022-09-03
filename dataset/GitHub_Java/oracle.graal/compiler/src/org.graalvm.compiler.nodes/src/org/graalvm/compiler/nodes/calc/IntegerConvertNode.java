@@ -35,7 +35,6 @@ import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ArithmeticOperation;
 import org.graalvm.compiler.nodes.ConstantNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.spi.ArithmeticLIRLowerable;
@@ -62,12 +61,12 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements A
 
     protected IntegerConvertNode(NodeClass<? extends IntegerConvertNode<OP, REV>> c, SerializableIntegerConvertFunction<OP> getOp, SerializableIntegerConvertFunction<REV> getReverseOp, int inputBits,
                     int resultBits, ValueNode input) {
-        super(c, getOp.apply(ArithmeticOpTable.forStamp(input.stamp(NodeView.DEFAULT))).foldStamp(inputBits, resultBits, input.stamp(NodeView.DEFAULT)), input);
+        super(c, getOp.apply(ArithmeticOpTable.forStamp(input.stamp())).foldStamp(inputBits, resultBits, input.stamp()), input);
         this.getOp = getOp;
         this.getReverseOp = getReverseOp;
         this.inputBits = inputBits;
         this.resultBits = resultBits;
-        assert ((PrimitiveStamp) input.stamp(NodeView.DEFAULT)).getBits() == inputBits;
+        assert ((PrimitiveStamp) input.stamp()).getBits() == inputBits;
     }
 
     public int getInputBits() {
@@ -79,7 +78,7 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements A
     }
 
     protected final IntegerConvertOp<OP> getOp(ValueNode forValue) {
-        return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp(NodeView.DEFAULT)));
+        return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp()));
     }
 
     @Override
@@ -94,19 +93,19 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements A
 
     @Override
     public Constant reverse(Constant c, ConstantReflectionProvider constantReflection) {
-        IntegerConvertOp<REV> reverse = getReverseOp.apply(ArithmeticOpTable.forStamp(stamp(NodeView.DEFAULT)));
+        IntegerConvertOp<REV> reverse = getReverseOp.apply(ArithmeticOpTable.forStamp(stamp()));
         return reverse.foldConstant(getResultBits(), getInputBits(), c);
     }
 
     @Override
     public Stamp foldStamp(Stamp newStamp) {
-        assert newStamp.isCompatible(getValue().stamp(NodeView.DEFAULT));
+        assert newStamp.isCompatible(getValue().stamp());
         return getArithmeticOp().foldStamp(inputBits, resultBits, newStamp);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        ValueNode synonym = findSynonym(getOp(forValue), forValue, inputBits, resultBits, stamp(NodeView.DEFAULT));
+        ValueNode synonym = findSynonym(getOp(forValue), forValue, inputBits, resultBits, stamp());
         if (synonym != null) {
             return synonym;
         }
@@ -140,7 +139,7 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements A
     }
 
     public static ValueNode convert(ValueNode input, Stamp stamp, boolean zeroExtend) {
-        IntegerStamp fromStamp = (IntegerStamp) input.stamp(NodeView.DEFAULT);
+        IntegerStamp fromStamp = (IntegerStamp) input.stamp();
         IntegerStamp toStamp = (IntegerStamp) stamp;
 
         ValueNode result;
@@ -156,7 +155,7 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements A
             result = SignExtendNode.create(input, toStamp.getBits());
         }
 
-        IntegerStamp resultStamp = (IntegerStamp) result.stamp(NodeView.DEFAULT);
+        IntegerStamp resultStamp = (IntegerStamp) result.stamp();
         assert toStamp.getBits() == resultStamp.getBits();
         return result;
     }
