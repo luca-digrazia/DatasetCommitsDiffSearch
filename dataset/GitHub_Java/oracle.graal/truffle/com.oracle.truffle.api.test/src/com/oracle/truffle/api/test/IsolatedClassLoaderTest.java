@@ -34,13 +34,11 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class IsolatedClassLoaderTest {
-    private static final boolean JDK8 = System.getProperty("java.specification.version").compareTo("1.9") < 0;
-
     @Test
     public void loadLanguageByOwnClassLoaderOnJDK8() throws Exception {
         final ProtectionDomain domain = TruffleLocator.class.getProtectionDomain();
         final CodeSource source = domain.getCodeSource();
-        if (source == null || !JDK8) {
+        if (source == null) {
             // skip the test
             return;
         }
