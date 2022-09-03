@@ -22,11 +22,12 @@
  */
 package com.oracle.graal.compiler.common;
 
-import jdk.vm.ci.options.DerivedOptionValue;
-import jdk.vm.ci.options.DerivedOptionValue.OptionSupplier;
-import jdk.vm.ci.options.Option;
-import jdk.vm.ci.options.OptionType;
-import jdk.vm.ci.options.OptionValue;
+import jdk.internal.jvmci.options.DerivedOptionValue;
+import jdk.internal.jvmci.options.DerivedOptionValue.OptionSupplier;
+import jdk.internal.jvmci.options.Option;
+import jdk.internal.jvmci.options.OptionType;
+import jdk.internal.jvmci.options.OptionValue;
+import jdk.internal.jvmci.options.StableOptionValue;
 
 /**
  * Options to control the backend configuration.
@@ -42,7 +43,7 @@ public final class BackendOptions {
         @Option(help = "Enable experimental Trace Register Allocation.", type = OptionType.Debug)
         public static final OptionValue<Boolean> TraceRA = new OptionValue<>(false);
         @Option(help = "Never spill constant intervals.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> NeverSpillConstants = new OptionValue<>(false);
+        public static final OptionValue<Boolean> NeverSpillConstants = new StableOptionValue<>(false);
         // @formatter:on
     }
 

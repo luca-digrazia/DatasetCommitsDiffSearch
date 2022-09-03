@@ -22,18 +22,19 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.printer.NoDeadCodeVerifyHandler.Options.*;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-import java.util.*;
-import java.util.concurrent.*;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.options.Option;
+import jdk.internal.jvmci.options.OptionType;
+import jdk.internal.jvmci.options.OptionValue;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.options.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
+import com.oracle.graal.debug.DebugVerifyHandler;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
 
 /**
  * Verifies that graphs have no dead code.
@@ -42,37 +43,43 @@ public class NoDeadCodeVerifyHandler implements DebugVerifyHandler {
 
     // The options below will be removed once all phases clean up their own dead code.
 
+    private static final int OFF = 0;
+    private static final int INFO = 1;
+    private static final int VERBOSE = 2;
+    private static final int FATAL = 3;
+
     static class Options {
         // @formatter:off
-        @Option(help = "Enable NoDeadCodeVerifyHandler")
-        public static final OptionValue<Boolean> NDCV = new OptionValue<>(false);
-        @Option(help = "Issues caught by NoDeadCodeVerifyHandler raise an error")
-        public static final OptionValue<Boolean> NDCVFatal = new OptionValue<>(false);
+        @Option(help = "Run level for NoDeadCodeVerifyHandler (0 = off, 1 = info, 2 = verbose, 3 = fatal)", type = OptionType.Debug)
+        public static final OptionValue<Integer> NDCV = new OptionValue<>(0);
         // @formatter:on
     }
 
-    private static final Map<Class<?>, Boolean> discovered = new ConcurrentHashMap<>();
+    /**
+     * Only the first instance of failure at any point is shown. This will also be removed once all
+     * phases clean up their own dead code.
+     */
+    private static final Map<String, Boolean> discovered = new ConcurrentHashMap<>();
 
-    public void verify(Object object, Object... context) {
-        if (NDCV.getValue()) {
-            StructuredGraph graph = extract(StructuredGraph.class, object);
-            BasePhase<?> phase = extract(BasePhase.class, context);
-            if (graph != null) {
-                List<Node> before = graph.getNodes().snapshot();
-                new DeadCodeEliminationPhase().run(graph);
-                List<Node> after = graph.getNodes().snapshot();
-                assert after.size() <= before.size();
-                if (before.size() != after.size()) {
+    public void verify(Object object, String message) {
+        if (Options.NDCV.getValue() != OFF && object instanceof StructuredGraph) {
+            StructuredGraph graph = (StructuredGraph) object;
+            List<Node> before = graph.getNodes().snapshot();
+            new DeadCodeEliminationPhase().run(graph);
+            List<Node> after = graph.getNodes().snapshot();
+            assert after.size() <= before.size();
+            if (before.size() != after.size()) {
+                if (discovered.put(message, Boolean.TRUE) == null) {
                     before.removeAll(after);
-                    if (NDCVFatal.getValue() || discovered.put(phase.getClass(), Boolean.TRUE) == null) {
-                        String message = extract(String.class, context);
-                        String prefix = message == null ? "" : message + ": ";
-                        String phaseClass = phase == null ? null : phase.getClass().getName();
-                        GraalInternalError error = new GraalInternalError("%sfound dead nodes in %s (phase class=%s): %s", prefix, graph, phaseClass, before);
-                        if (NDCVFatal.getValue()) {
-                            throw error;
-                        }
+                    String prefix = message == null ? "" : message + ": ";
+                    JVMCIError error = new JVMCIError("%sfound dead nodes in %s: %s", prefix, graph, before);
+                    if (Options.NDCV.getValue() == INFO) {
+                        System.out.println(error.getMessage());
+                    } else if (Options.NDCV.getValue() == VERBOSE) {
                         error.printStackTrace(System.out);
+                    } else {
+                        assert Options.NDCV.getValue() == FATAL;
+                        throw error;
                     }
                 }
             }

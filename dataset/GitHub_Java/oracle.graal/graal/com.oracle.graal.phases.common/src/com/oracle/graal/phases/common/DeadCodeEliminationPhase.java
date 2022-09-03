@@ -22,15 +22,18 @@
  */
 package com.oracle.graal.phases.common;
 
+import java.util.function.BiConsumer;
+
+import jdk.internal.jvmci.options.Option;
+import jdk.internal.jvmci.options.OptionType;
+import jdk.internal.jvmci.options.OptionValue;
+
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeFlood;
 import com.oracle.graal.nodes.AbstractEndNode;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.Phase;
 
 public class DeadCodeEliminationPhase extends Phase {
@@ -91,40 +94,32 @@ public class DeadCodeEliminationPhase extends Phase {
     }
 
     private static void iterateSuccessorsAndInputs(NodeFlood flood) {
-        Node.EdgeVisitor consumer = new Node.EdgeVisitor() {
-            @Override
-            public Node apply(Node n, Node succOrInput) {
-                assert succOrInput.isAlive() : "dead successor or input " + succOrInput + " in " + n;
-                flood.add(succOrInput);
-                return succOrInput;
-            }
+        BiConsumer<Node, Node> consumer = (n, succOrInput) -> {
+            assert succOrInput.isAlive() : "dead successor or input " + succOrInput + " in " + n;
+            flood.add(succOrInput);
         };
         for (Node current : flood) {
             if (current instanceof AbstractEndNode) {
                 AbstractEndNode end = (AbstractEndNode) current;
                 flood.add(end.merge());
             } else {
-                current.applySuccessors(consumer);
-                current.applyInputs(consumer);
+                current.acceptSuccessors(consumer);
+                current.acceptInputs(consumer);
             }
         }
     }
 
     private static void deleteNodes(NodeFlood flood, StructuredGraph graph) {
-        Node.EdgeVisitor consumer = new Node.EdgeVisitor() {
-            @Override
-            public Node apply(Node n, Node input) {
-                if (input.isAlive() && flood.isMarked(input)) {
-                    input.removeUsage(n);
-                }
-                return input;
+        BiConsumer<Node, Node> consumer = (n, input) -> {
+            if (input.isAlive() && flood.isMarked(input)) {
+                input.removeUsage(n);
             }
         };
 
         for (Node node : graph.getNodes()) {
             if (!flood.isMarked(node)) {
                 node.markDeleted();
-                node.applyInputs(consumer);
+                node.acceptInputs(consumer);
                 metricNodesRemoved.increment();
             }
         }
