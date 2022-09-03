@@ -43,7 +43,7 @@ final class JavaObjectForeignAccess implements ForeignAccess.Factory10 {
 
     @Override
     public CallTarget accessIsBoxed() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(Boolean.FALSE));
+        return null;
     }
 
     @Override

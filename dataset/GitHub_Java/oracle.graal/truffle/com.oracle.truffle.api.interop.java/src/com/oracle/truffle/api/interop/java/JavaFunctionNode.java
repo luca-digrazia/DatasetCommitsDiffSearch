@@ -24,11 +24,9 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.nodes.RootNode;
-
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -50,7 +48,6 @@ final class JavaFunctionNode extends RootNode {
     }
 
     @SuppressWarnings("paramAssign")
-    @TruffleBoundary
     static Object execute(Method method, Object obj, Object[] args) {
         for (int i = 0; i < args.length; i++) {
             if (args[i] instanceof JavaInterop.JavaObject) {
