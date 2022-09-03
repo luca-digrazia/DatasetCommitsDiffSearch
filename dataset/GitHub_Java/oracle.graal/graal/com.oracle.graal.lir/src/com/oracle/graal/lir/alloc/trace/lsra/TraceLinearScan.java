@@ -30,7 +30,6 @@ import static jdk.vm.ci.code.ValueUtil.asRegisterValue;
 import static jdk.vm.ci.code.ValueUtil.isIllegal;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
@@ -41,7 +40,7 @@ import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRInstruction;
@@ -75,8 +74,8 @@ import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.Value;
 
 /**
- * An implementation of the linear scan register allocator algorithm described in
- * <a href="http://doi.acm.org/10.1145/1064979.1064998" >
+ * An implementation of the linear scan register allocator algorithm described in <a
+ * href="http://doi.acm.org/10.1145/1064979.1064998" >
  * "Optimized Interval Splitting in a Linear Scan Register Allocator"</a> by Christian Wimmer and
  * Hanspeter Moessenboeck.
  */
@@ -106,7 +105,7 @@ public final class TraceLinearScan {
     /**
      * List of blocks in linear-scan order. This is only correct as long as the CFG does not change.
      */
-    private final ArrayList<? extends AbstractBlockBase<?>> sortedBlocks;
+    private final List<? extends AbstractBlockBase<?>> sortedBlocks;
 
     /**
      * Intervals sorted by {@link TraceInterval#from()}.
@@ -238,8 +237,8 @@ public final class TraceLinearScan {
         return registerAttributes[reg.number];
     }
 
-    private static final DebugCounter globalStackSlots = Debug.counter("TraceRA[GlobalStackSlots]");
-    private static final DebugCounter allocatedStackSlots = Debug.counter("TraceRA[AllocatedStackSlots]");
+    private static final DebugMetric globalStackSlots = Debug.metric("TraceRA[GlobalStackSlots]");
+    private static final DebugMetric allocatedStackSlots = Debug.metric("TraceRA[AllocatedStackSlots]");
 
     void assignSpillSlot(TraceInterval interval) {
         /*
@@ -885,7 +884,7 @@ public final class TraceLinearScan {
         return frameMapBuilder;
     }
 
-    public ArrayList<? extends AbstractBlockBase<?>> sortedBlocks() {
+    public List<? extends AbstractBlockBase<?>> sortedBlocks() {
         return sortedBlocks;
     }
 

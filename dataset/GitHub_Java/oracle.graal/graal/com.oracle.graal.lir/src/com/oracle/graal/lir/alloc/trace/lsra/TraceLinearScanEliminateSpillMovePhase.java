@@ -29,7 +29,9 @@ import static jdk.vm.ci.code.ValueUtil.isRegister;
 
 import java.util.List;
 
-import com.oracle.graal.compiler.common.alloc.Trace;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
+
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
@@ -44,9 +46,6 @@ import com.oracle.graal.lir.alloc.trace.lsra.TraceInterval.SpillState;
 import com.oracle.graal.lir.alloc.trace.lsra.TraceLinearScan.IntervalPredicate;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-
 final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAllocationPhase {
 
     private static final IntervalPredicate spilledIntervals = new TraceLinearScan.IntervalPredicate() {
@@ -58,8 +57,9 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
     };
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, Trace<B> trace, TraceLinearScanAllocationContext context) {
-        TraceBuilderResult<?> traceBuilderResult = context.resultTraces;
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
+                    TraceLinearScanAllocationContext context) {
+        TraceBuilderResult<?> traceBuilderResult = context.traceBuilderResult;
         TraceLinearScan allocator = context.allocator;
         boolean shouldEliminateSpillMoves = shouldEliminateSpillMoves(traceBuilderResult, allocator);
         eliminateSpillMoves(allocator, shouldEliminateSpillMoves, traceBuilderResult);
@@ -174,13 +174,13 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
                                 }
                             }
                         }
-                    }   // end of instruction iteration
+                    } // end of instruction iteration
 
                     if (insertionBuffer.initialized()) {
                         insertionBuffer.finish();
                     }
                 }
-            }   // end of block iteration
+            } // end of block iteration
 
             assert interval == TraceInterval.EndMarker : "missed an interval";
         }
