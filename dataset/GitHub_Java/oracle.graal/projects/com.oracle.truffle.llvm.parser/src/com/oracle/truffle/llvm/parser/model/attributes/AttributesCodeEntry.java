@@ -44,21 +44,11 @@ public class AttributesCodeEntry {
     }
 
     public Optional<AttributesGroup> getFunctionAttributesGroup() {
-        for (AttributesGroup entry : codeEntry) {
-            if (entry.isFunctionAttribute()) {
-                return Optional.of(entry);
-            }
-        }
-        return Optional.empty();
+        return codeEntry.stream().filter(a -> a.isFunctionAttribute()).findAny();
     }
 
     public Optional<AttributesGroup> getReturnAttributesGroup() {
-        for (AttributesGroup entry : codeEntry) {
-            if (entry.isReturnValueAttribute()) {
-                return Optional.of(entry);
-            }
-        }
-        return Optional.empty();
+        return codeEntry.stream().filter(a -> a.isReturnValueAttribute()).findAny();
     }
 
     public Optional<AttributesGroup> getParameterAttributesGroup(int idx) {
@@ -66,12 +56,7 @@ public class AttributesCodeEntry {
          * parameter index enumeration is starting with 1 in the code entry, which means we need to
          * increment index by one to find the correct attribution.
          */
-        for (AttributesGroup entry : codeEntry) {
-            if (entry.isParameterAttribute() && entry.getParamIdx() == idx + 1) {
-                return Optional.of(entry);
-            }
-        }
-        return Optional.empty();
+        return codeEntry.stream().filter(a -> a.isParameterAttribute() && a.getParamIdx() == idx + 1).findAny();
     }
 
     @Override

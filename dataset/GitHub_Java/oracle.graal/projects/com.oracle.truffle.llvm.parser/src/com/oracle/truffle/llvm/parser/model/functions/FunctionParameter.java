@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.parser.model.functions;
 
+import java.util.Optional;
+
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
@@ -42,12 +44,12 @@ public final class FunctionParameter implements ValueSymbol {
 
     private String name = LLVMIdentifier.UNKNOWN;
 
-    private final AttributesGroup parameterAttribute;
+    private final Optional<AttributesGroup> paramattr;
 
-    FunctionParameter(Type type, int index, AttributesGroup parameterAttribute) {
+    FunctionParameter(Type type, int index, Optional<AttributesGroup> paramattr) {
         this.type = type;
         this.index = index;
-        this.parameterAttribute = parameterAttribute;
+        this.paramattr = paramattr;
     }
 
     @Override
@@ -65,8 +67,8 @@ public final class FunctionParameter implements ValueSymbol {
         return type;
     }
 
-    public AttributesGroup getParameterAttribute() {
-        return parameterAttribute;
+    public Optional<AttributesGroup> getParamattr() {
+        return paramattr;
     }
 
     @Override

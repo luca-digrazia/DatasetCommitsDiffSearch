@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.parser.listeners;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
@@ -97,16 +98,14 @@ public class ParameterAttributes implements ParserListener {
         final List<AttributesGroup> attrGroup = new ArrayList<>();
 
         for (long groupId : args) {
-            for (AttributesGroup attr : attributes) {
-                if (attr.getGroupId() == groupId) {
-                    attrGroup.add(attr);
-                    break;
-                }
-            }
-        }
+            // @formatter:off
+            Optional<AttributesGroup> attr = attributes.stream().
+                            filter(a -> a.getGroupId() == groupId).
+                            findAny();
+            // @formatter:on
 
-        if (attrGroup.size() != args.length) {
-            throw new AssertionError("there is a mismatch between defined and found group id's");
+            // attr should be present, otherwise the bitcode file is malformed
+            attrGroup.add(attr.get());
         }
 
         parameterCodeEntry.add(new AttributesCodeEntry(attrGroup));

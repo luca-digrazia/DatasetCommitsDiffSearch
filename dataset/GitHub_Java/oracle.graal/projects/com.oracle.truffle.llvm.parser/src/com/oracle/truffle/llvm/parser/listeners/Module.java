@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
-import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.enums.Visibility;
 import com.oracle.truffle.llvm.parser.model.generators.FunctionGenerator;
 import com.oracle.truffle.llvm.parser.model.generators.ModuleGenerator;
@@ -71,7 +70,6 @@ public final class Module implements ParserListener {
 
     private static final int FUNCTION_TYPE = 0;
     private static final int FUNCTION_ISPROTOTYPE = 2;
-    private static final int FUNCTION_LINKAGE = 3;
     private static final int FUNCTION_PARAMATTR = 4;
 
     private void createFunction(long[] args) {
@@ -82,11 +80,10 @@ public final class Module implements ParserListener {
 
         final FunctionType functionType = (FunctionType) type;
         final boolean isPrototype = args[FUNCTION_ISPROTOTYPE] != 0;
-        final Linkage linkage = Linkage.decode(args[FUNCTION_LINKAGE]);
 
         final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(args[FUNCTION_PARAMATTR]);
 
-        generator.createFunction(functionType, isPrototype, linkage, paramAttr);
+        generator.createFunction(functionType, isPrototype, paramAttr);
         symbols.add(functionType);
         if (!isPrototype) {
             functions.add(functionType);
@@ -190,7 +187,7 @@ public final class Module implements ParserListener {
 
             case METADATA:
             case METADATA_KIND:
-                return new Metadata(types, generator);
+                return new Metadata(types, symbols, generator);
 
             default:
                 LLVMLogger.info("Entering Unknown Block inside Module: " + block);
