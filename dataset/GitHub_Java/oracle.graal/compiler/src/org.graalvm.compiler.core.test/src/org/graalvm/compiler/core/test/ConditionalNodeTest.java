@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +22,6 @@
  */
 package org.graalvm.compiler.core.test;
 
-import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.junit.Test;
 
 public class ConditionalNodeTest extends GraalCompilerTest {
@@ -106,24 +103,5 @@ public class ConditionalNodeTest extends GraalCompilerTest {
         }
         sink0 = 1;
         return Math.min(-1, value);
-    }
-
-    @Test
-    public void test4() {
-        test("conditionalTest4", this, 0);
-        test("conditionalTest4", this, 1);
-    }
-
-    int a;
-    InvokeKind b;
-
-    public static int conditionalTest4(ConditionalNodeTest node, int a) {
-        if (a == 1) {
-            node.b = InvokeKind.Virtual;
-        } else {
-            node.b = InvokeKind.Special;
-        }
-        node.a = a;
-        return a;
     }
 }
