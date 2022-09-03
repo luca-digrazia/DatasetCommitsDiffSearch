@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +27,7 @@ import static jdk.vm.ci.aarch64.AArch64.cpuRegisters;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ADD;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ADDS;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ADR;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ADRP;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.AND;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ANDS;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ASRV;
@@ -35,7 +37,6 @@ import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.BICS
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.BLR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.BR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.BRK;
-import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CAS;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CLREX;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CLS;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CLZ;
@@ -121,7 +122,6 @@ import org.graalvm.compiler.debug.GraalError;
 
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.aarch64.AArch64.CPUFeature;
-import jdk.vm.ci.aarch64.AArch64.Flag;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.TargetDescription;
 
@@ -475,9 +475,6 @@ public abstract class AArch64Assembler extends Assembler {
     private static final int BarrierOp = 0xD503301F;
     private static final int BarrierKindOffset = 8;
 
-    private static final int CASAcquireOffset = 22;
-    private static final int CASReleaseOffset = 15;
-
     /**
      * Encoding for all instructions.
      */
@@ -507,8 +504,6 @@ public abstract class AArch64Assembler extends Assembler {
 
         LDP(0b1 << 22),
         STP(0b0 << 22),
-
-        CAS(0x08A07C00),
 
         ADR(0x00000000),
         ADRP(0x80000000),
@@ -751,10 +746,6 @@ public abstract class AArch64Assembler extends Assembler {
 
     public boolean supports(CPUFeature feature) {
         return ((AArch64) target.arch).getFeatures().contains(feature);
-    }
-
-    public boolean isFlagSet(Flag flag) {
-        return ((AArch64) target.arch).getFlags().contains(flag);
     }
 
     /* Conditional Branch (5.2.1) */
@@ -1328,45 +1319,18 @@ public abstract class AArch64Assembler extends Assembler {
         emitInt(transferSizeEncoding | instr.encoding | rs2(rs) | rn(rn) | rt(rt));
     }
 
-    /**
-     * Compare And Swap word or doubleword in memory. This reads a value from an address rn,
-     * compares it against a given value rs, and, if equal, stores the value rt to memory. The value
-     * read from address rn is stored in register rs.
-     *
-     * @param size size of bits read from memory. Must be 32 or 64.
-     * @param rs general purpose register to be compared and loaded. May not be null.
-     * @param rt general purpose register to be conditionally stored. May not be null.
-     * @param rn general purpose register containing the address from which to read.
-     * @param acquire boolean value signifying if the load should use acquire semantics.
-     * @param release boolean value signifying if the store should use release semantics.
-     */
-    public void cas(int size, Register rs, Register rt, Register rn, boolean acquire, boolean release) {
-        assert size == 32 || size == 64;
-        int transferSize = NumUtil.log2Ceil(size / 8);
-        compareAndSwapInstruction(CAS, rs, rt, rn, transferSize, acquire, release);
-    }
-
-    private void compareAndSwapInstruction(Instruction instr, Register rs, Register rt, Register rn, int log2TransferSize, boolean acquire, boolean release) {
-        assert log2TransferSize >= 0 && log2TransferSize < 4;
-        assert rt.getRegisterCategory().equals(CPU) && rs.getRegisterCategory().equals(CPU) && !rs.equals(rt);
-        int transferSizeEncoding = log2TransferSize << LoadStoreTransferSizeOffset;
-        emitInt(transferSizeEncoding | instr.encoding | rs2(rs) | rn(rn) | rt(rt) | (acquire ? 1 : 0) << CASAcquireOffset | (release ? 1 : 0) << CASReleaseOffset);
-    }
-
     /* PC-relative Address Calculation (5.4.4) */
 
     /**
      * Address of page: sign extends 21-bit offset, shifts if left by 12 and adds it to the value of
-     * the PC with its bottom 12-bits cleared, writing the result to dst.
+     * the PC with its bottom 12-bits cleared, writing the result to dst. No offset is emitted; the
+     * instruction will be patched later.
      *
      * @param dst general purpose register. May not be null, zero-register or stackpointer.
-     * @param imm Signed 33-bit offset with lower 12bits clear.
      */
-    // protected void adrp(Register dst, long imm) {
-    // assert (imm & NumUtil.getNbitNumberInt(12)) == 0 : "Lower 12-bit of immediate must be zero.";
-    // assert NumUtil.isSignedNbit(33, imm);
-    // addressCalculationInstruction(dst, (int) (imm >>> 12), Instruction.ADRP);
-    // }
+    public void adrp(Register dst) {
+        emitInt(ADRP.encoding | PcRelImmOp | rd(dst));
+    }
 
     /**
      * Adds a 21-bit signed offset to the program counter and writes the result to dst.
@@ -1378,6 +1342,13 @@ public abstract class AArch64Assembler extends Assembler {
         emitInt(ADR.encoding | PcRelImmOp | rd(dst) | getPcRelativeImmEncoding(imm21));
     }
 
+    /**
+     * Adds a 21-bit signed offset to the program counter and writes the result to dst.
+     *
+     * @param dst general purpose register. May not be null, zero-register or stackpointer.
+     * @param imm21 Signed 21-bit offset.
+     * @param pos the position in the code that the instruction is emitted.
+     */
     public void adr(Register dst, int imm21, int pos) {
         emitInt(ADR.encoding | PcRelImmOp | rd(dst) | getPcRelativeImmEncoding(imm21), pos);
     }
@@ -1618,7 +1589,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param r must be in the range 0 to size - 1
      * @param s must be in the range 0 to size - 1
      */
-    public void bfm(int size, Register dst, Register src, int r, int s) {
+    protected void bfm(int size, Register dst, Register src, int r, int s) {
         bitfieldInstruction(BFM, dst, src, r, s, generalFromSize(size));
     }
 
@@ -1631,7 +1602,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param r must be in the range 0 to size - 1
      * @param s must be in the range 0 to size - 1
      */
-    public void ubfm(int size, Register dst, Register src, int r, int s) {
+    protected void ubfm(int size, Register dst, Register src, int r, int s) {
         bitfieldInstruction(UBFM, dst, src, r, s, generalFromSize(size));
     }
 
