@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,93 +22,80 @@
  */
 package com.oracle.graal.api.code;
 
+import com.oracle.graal.api.code.CompilationResult.Data;
+import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.meta.*;
 
 /**
- * Encapsulates the main functionality of the runtime for the compiler, including access
- * to constant pools, OSR frames, inlining requirements, and runtime calls such as checkcast.
-s */
-public interface CodeCacheProvider extends MetaAccessProvider {
+ * Access to code cache related details and requirements.
+ */
+public interface CodeCacheProvider {
 
     /**
-     * Get the size in bytes for locking information on the stack.
-     */
-    int sizeOfLockData();
-
-    /**
-     * Returns a disassembly of the given installed code.
+     * Adds the given compilation result as an implementation of the given method without making it
+     * the default implementation.
      *
-     * @param code the code that should be disassembled
-     * @return a disassembly. This will be of length 0 if the runtime does not support disassembling.
+     * @param method a method to which the executable code is begin added
+     * @param compResult the compilation result to be added
+     * @param speculationLog the speculation log to be used
+     * @return a reference to the compiled and ready-to-run code or null if the code installation
+     *         failed
      */
-    String disassemble(CodeInfo code, CompilationResult tm);
+    InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, SpeculationLog speculationLog);
 
     /**
-     * Returns the disassembly of the given method in a {@code javap}-like format.
+     * Sets the given compilation result as the default implementation of the given method.
      *
-     * @param method the method that should be disassembled
-     * @return the disassembly. This will be of length 0 if the runtime does not support disassembling.
+     * @param method a method to which the executable code is begin added
+     * @param compResult the compilation result to be added
+     * @return a reference to the compiled and ready-to-run code or null if the code installation
+     *         failed
      */
-    String disassemble(ResolvedJavaMethod method);
+    InstalledCode setDefaultMethod(ResolvedJavaMethod method, CompilationResult compResult);
+
+    /**
+     * Returns a disassembly of some compiled code.
+     *
+     * @param compResult some compiled code
+     * @param installedCode the result of installing the code in {@code compResult} or null if the
+     *            code has not yet been installed
+     *
+     * @return a disassembly. This will be of length 0 if the runtime does not support
+     *         disassembling.
+     */
+    String disassemble(CompilationResult compResult, InstalledCode installedCode);
 
     /**
      * Gets the register configuration to use when compiling a given method.
+     */
+    RegisterConfig getRegisterConfig();
+
+    /**
+     * Minimum size of the stack area reserved for outgoing parameters. This area is reserved in all
+     * cases, even when the compiled method has no regular call instructions.
      *
-     * @param method the top level method of a compilation
-     */
-    RegisterConfig getRegisterConfig(JavaMethod method);
-
-    RegisterConfig getGlobalStubRegisterConfig();
-
-    /**
-     * Custom area on the stack of each compiled method that the VM can use for its own purposes.
-     * @return the size of the custom area in bytes
-     */
-    int getCustomStackAreaSize();
-
-    /**
-     * Minimum size of the stack area reserved for outgoing parameters. This area is reserved in all cases, even when
-     * the compiled method has no regular call instructions.
      * @return the minimum size of the outgoing parameter area in bytes
      */
     int getMinimumOutgoingSize();
 
     /**
-     * Performs any runtime-specific conversion on the object used to describe the target of a call.
+     * Determines if a {@link DataPatch} should be created for a given primitive constant that is
+     * part of a {@link CompilationResult}. A data patch is always created for an object constant.
      */
-    Object asCallTarget(Object target);
+    boolean needsDataPatch(Constant constant);
 
     /**
-     * Returns the maximum absolute offset of a runtime call target from any position in the code cache or -1
-     * when not known or not applicable. Intended for determining the required size of address/offset fields.
+     * Create a {@link Data} item for a {@link Constant}, that can be used in a {@link DataPatch}.
      */
-    long getMaxCallTargetOffset(RuntimeCall rtcall);
+    Data createDataItem(Constant constant, int alignment);
 
     /**
-     * Adds the given machine code as an implementation of the given method without making it the default implementation.
-     * @param method a method to which the executable code is begin added
-     * @param code the code to be added
-     * @param info the object into which details of the installed code will be written.
-     *        Ignored if null, otherwise the info is written to index 0 of this array.
-     * @return a reference to the compiled and ready-to-run code
+     * Gets a description of the target architecture.
      */
-    InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult code, CodeInfo[] info);
+    TargetDescription getTarget();
 
     /**
-     * Encodes a deoptimization action and a deoptimization reason in an integer value.
-     * @return the encoded value as an integer
+     * Create a new speculation log for the target runtime.
      */
-    int encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason);
-
-    /**
-     * Converts a RiDeoptReason into an integer value.
-     * @return An integer value representing the given RiDeoptReason.
-     */
-    int convertDeoptReason(DeoptimizationReason reason);
-
-    /**
-     * Converts a RiDeoptAction into an integer value.
-     * @return An integer value representing the given RiDeoptAction.
-     */
-    int convertDeoptAction(DeoptimizationAction action);
+    SpeculationLog createSpeculationLog();
 }

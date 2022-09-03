@@ -35,8 +35,8 @@ import com.oracle.graal.api.code.CompilationResult.Infopoint;
 import com.oracle.graal.api.code.CompilationResult.Mark;
 import com.oracle.graal.api.code.CompilationResult.PrimitiveData;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
@@ -196,7 +196,7 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
         return runtime.getConfig().runtimeCallStackSize;
     }
 
-    public InstalledCode logOrDump(InstalledCode installedCode, CompilationResult compResult) {
+    public HotSpotInstalledCode logOrDump(HotSpotInstalledCode installedCode, CompilationResult compResult) {
         if (Debug.isDumpEnabled()) {
             Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
         }
@@ -206,37 +206,33 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
         return installedCode;
     }
 
-    public InstalledCode installMethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long ctask) {
+    public HotSpotInstalledCode installMethod(HotSpotResolvedJavaMethod method, CompilationResult compResult) {
         if (compResult.getId() == -1) {
             compResult.setId(method.allocateCompileId(compResult.getEntryBCI()));
         }
         HotSpotInstalledCode installedCode = new HotSpotNmethod(method, compResult.getName(), true);
-        runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(target, method, compResult, ctask), installedCode, method.getSpeculationLog());
+        runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(target, method, compResult), installedCode, method.getSpeculationLog());
         return logOrDump(installedCode, compResult);
     }
 
     @Override
-    public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, SpeculationLog log, InstalledCode predefinedInstalledCode) {
+    public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, SpeculationLog log) {
         HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
         if (compResult.getId() == -1) {
             compResult.setId(hotspotMethod.allocateCompileId(compResult.getEntryBCI()));
         }
-        InstalledCode installedCode = predefinedInstalledCode;
-        if (installedCode == null) {
-            HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, compResult.getName(), false);
-            installedCode = code;
-        }
-        CodeInstallResult result = runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(target, hotspotMethod, compResult), installedCode, log);
+        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, compResult.getName(), false);
+        CodeInstallResult result = runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(target, hotspotMethod, compResult), code, log);
         if (result != CodeInstallResult.OK) {
-            throw new BailoutException("Code installation failed: " + result);
+            return null;
         }
-        return logOrDump(installedCode, compResult);
+        return logOrDump(code, compResult);
     }
 
     @Override
     public InstalledCode setDefaultMethod(ResolvedJavaMethod method, CompilationResult compResult) {
         HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
-        return installMethod(hotspotMethod, compResult, 0L);
+        return installMethod(hotspotMethod, compResult);
     }
 
     public HotSpotNmethod addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult) {
@@ -260,9 +256,7 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
 
     public Data createDataItem(Constant constant, int alignment) {
         if (constant instanceof HotSpotMetaspaceConstant) {
-            // constant.getKind() == target.wordKind for uncompressed pointers
-            // otherwise, it's a compressed pointer
-            return new MetaspaceData(alignment, constant.asLong(), HotSpotMetaspaceConstant.getMetaspaceObject(constant), constant.getKind() != target.wordKind);
+            return new MetaspaceData(alignment, constant.asLong(), HotSpotMetaspaceConstant.getMetaspaceObject(constant), false);
         } else if (constant.getKind().isObject()) {
             return new OopData(alignment, HotSpotObjectConstant.asObject(constant), false);
         } else {
@@ -277,7 +271,7 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
 
     public String disassemble(InstalledCode code) {
         if (code.isValid()) {
-            long codeBlob = ((HotSpotInstalledCode) code).getAddress();
+            long codeBlob = ((HotSpotInstalledCode) code).getCodeBlob();
             return runtime.getCompilerToVM().disassembleCodeBlob(codeBlob);
         }
         return null;
