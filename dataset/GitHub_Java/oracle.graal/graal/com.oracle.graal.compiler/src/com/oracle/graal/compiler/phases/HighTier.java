@@ -60,6 +60,10 @@ public class HighTier extends PhaseSuite<HighTierContext> {
         }
         appendPhase(new RemoveValueProxyPhase());
 
+        if (CullFrameStates.getValue()) {
+            appendPhase(new CullFrameStatesPhase());
+        }
+
         if (OptCanonicalizer.getValue()) {
             appendPhase(canonicalizer);
         }
