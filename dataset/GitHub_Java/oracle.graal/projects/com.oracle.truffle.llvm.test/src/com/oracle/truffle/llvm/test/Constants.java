@@ -27,27 +27,12 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.tools;
+package com.oracle.truffle.llvm.test;
 
-import java.io.File;
+public class Constants {
 
-import com.oracle.truffle.llvm.tools.util.PathUtil;
-import com.oracle.truffle.llvm.tools.util.ProcessUtil;
-
-public final class LLVMAssembler {
-
-    private LLVMAssembler() {
-    }
-
-    public static void assembleToBitcodeFile(File irFile) {
-        String compilationCommand = LLVMToolPaths.LLVM_ASSEMBLER + " " + irFile.getAbsolutePath();
-        ProcessUtil.executeNativeCommandZeroReturn(compilationCommand);
-    }
-
-    public static void assembleToBitcodeFile(File irFile, File destFile) {
-        final String args = " -o=" + destFile.getAbsolutePath() + " " + irFile.getAbsolutePath();
-        final String compilationCommand = LLVMToolPaths.LLVM_ASSEMBLER + args;
-        ProcessUtil.executeNativeCommandZeroReturn(compilationCommand);
-    }
+    static final String LLVM_BINARYFILE_EXTENSION = ".bc";
+    static final String LLVM_BITFILE_EXTENSION = ".ll";
+    static final String TMP_EXTENSION = ".temp";
 
 }

@@ -39,8 +39,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOption;
 import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOption;
 import com.oracle.truffle.llvm.tools.Clang;
 import com.oracle.truffle.llvm.tools.Clang.ClangOptions;
 import com.oracle.truffle.llvm.tools.GCC;
@@ -161,16 +161,6 @@ public class TestHelper {
      * @param bitcodeFile the bitcode file to be compiled
      */
     public static ProcessResult executeLLVMBinary(File bitcodeFile) {
-        return executeLLVMBinary(bitcodeFile, null);
-    }
-
-    /**
-     * Executes the bitcode file that is beforehand compiled by the native LLVM compiler.
-     *
-     * @param bitcodeFile the bitcode file to be compiled
-     * @param args the arguments to the main function of the executable
-     */
-    public static ProcessResult executeLLVMBinary(File bitcodeFile, Object[] args) {
         try {
             File objectFile = File.createTempFile(absolutePathToFileName(bitcodeFile), ".o");
             objectFile.deleteOnExit();
@@ -178,14 +168,8 @@ public class TestHelper {
             executable.deleteOnExit();
             LLC.compileBitCodeToObjectFile(bitcodeFile, objectFile);
             GCC.compileObjectToMachineCode(objectFile, executable);
-            StringBuilder commandBuilder = new StringBuilder(executable.getAbsolutePath());
-            if (args != null) {
-                for (int i = 0; i < args.length; i++) {
-                    commandBuilder.append(" ");
-                    commandBuilder.append(args[i]);
-                }
-            }
-            return ProcessUtil.executeNativeCommand(commandBuilder.toString());
+            String command = executable.getAbsolutePath();
+            return ProcessUtil.executeNativeCommand(command);
         } catch (Exception e) {
             throw new AssertionError(e);
         }
