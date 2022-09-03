@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.code.*;
@@ -34,7 +32,6 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.sparc.SPARCMove.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 
@@ -63,14 +60,16 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public void emitTailcall(Value[] args, Value address) {
-        throw new InternalError("NYI");
+        // TODO Auto-generated method stub
     }
 
     @Override
     protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         InvokeKind invokeKind = ((HotSpotDirectCallTargetNode) callTarget).invokeKind();
         if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
-            append(new SPARCHotspotDirectVirtualCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind));
+// append(new SPARCHotspotDirectVirtualCallOp(callTarget.target(), result, parameters, temps,
+// callState, invokeKind));
+            throw new InternalError("NYI");
         } else {
             assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
             HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.target();
@@ -94,52 +93,33 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason) {
-        throw new InternalError("NYI");
+        // TODO Auto-generated method stub
     }
 
     @Override
     public void emitPatchReturnAddress(ValueNode address) {
-        throw new InternalError("NYI");
+        // TODO Auto-generated method stub
     }
 
     @Override
     public void emitJumpToExceptionHandlerInCaller(ValueNode handlerInCallerPc, ValueNode exception, ValueNode exceptionPc) {
-        throw new InternalError("NYI");
+        // TODO Auto-generated method stub
     }
 
     @Override
     public void visitDirectCompareAndSwap(DirectCompareAndSwapNode x) {
-        Kind kind = x.newValue().kind();
-        assert kind == x.expectedValue().kind();
-
-        Variable address = load(operand(x.object()));
-        Value offset = operand(x.offset());
-        Variable cmpValue = (Variable) loadNonConst(operand(x.expectedValue()));
-        Variable newValue = load(operand(x.newValue()));
-
-        if (ValueUtil.isConstant(offset)) {
-            assert !runtime.needsDataPatch(asConstant(offset));
-            address = emitAdd(address, asConstant(offset));
-        } else {
-            if (isLegal(offset)) {
-                address = emitAdd(address, offset);
-            }
-        }
-
-        append(new CompareAndSwapOp(address, cmpValue, newValue));
-
-        Variable result = newVariable(x.kind());
-        emitMove(result, newValue);
-        setResult(x, result);
+        // TODO Auto-generated method stub
     }
 
     @Override
     public StackSlot getLockSlot(int lockDepth) {
-        throw new InternalError("NYI");
+        // TODO Auto-generated method stub
+        return null;
     }
 
     public Stub getStub() {
-        throw new InternalError("NYI");
+        // TODO Auto-generated method stub
+        return null;
     }
 
 }

@@ -271,9 +271,13 @@ public enum SPARCArithmetic {
                     // new Sdivx(masm, asIntReg(src1), asIntReg(src2),
                     // asIntReg(dst));
                 case FSUB:
+                    throw new InternalError("NYI");
                 case FDIV:
+                    throw new InternalError("NYI");
                 case DSUB:
+                    throw new InternalError("NYI");
                 case DDIV:
+                    throw new InternalError("NYI");
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
@@ -301,34 +305,34 @@ public enum SPARCArithmetic {
                     break;
                 case ISHR:
                     assert isSimm13(tasm.asIntConst(src2));
-                    new Sra(asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst)).emit(masm);
+                    new Srl(asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst)).emit(masm);
                     break;
                 case IUSHR:
                     assert isSimm13(tasm.asIntConst(src2));
-                    new Srl(asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst)).emit(masm);
+                    new Sra(asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst)).emit(masm);
                     break;
                 case IXOR:
                     assert isSimm13(tasm.asIntConst(src2));
                     new Xor(asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst)).emit(masm);
-                    break;
-                case LMUL:
-                    assert isSimm13(tasm.asIntConst(src2));
-                    new Mulx(asLongReg(src1), tasm.asIntConst(src2), asLongReg(dst)).emit(masm);
                     break;
                 case LXOR:
                     assert isSimm13(tasm.asIntConst(src2));
                     new Add(asLongReg(src1), tasm.asIntConst(src2), asLongReg(dst)).emit(masm);
                     break;
                 case LUSHR:
-                    assert isSimm13(tasm.asIntConst(src2));
-                    new Srl(asLongReg(src1), tasm.asIntConst(src2), asLongReg(dst)).emit(masm);
-                    break;
+                    throw new InternalError("NYI");
                 case FADD:
+                    throw new InternalError("NYI");
                 case FMUL:
+                    throw new InternalError("NYI");
                 case FDIV:
+                    throw new InternalError("NYI");
                 case DADD:
+                    throw new InternalError("NYI");
                 case DMUL:
+                    throw new InternalError("NYI");
                 case DDIV:
+                    throw new InternalError("NYI");
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
@@ -449,8 +453,8 @@ public enum SPARCArithmetic {
                     new Sra(asIntReg(src), 0, asLongReg(dst)).emit(masm);
                     break;
                 case I2B:
-                    new Sll(asIntReg(src), 24, asIntReg(dst)).emit(masm);
-                    new Srl(asIntReg(dst), 24, asIntReg(dst)).emit(masm);
+                    new Sll(asIntReg(src), 24, asIntReg(src)).emit(masm);
+                    new Srl(asIntReg(dst), 24, asIntReg(src)).emit(masm);
                     break;
                 case I2F:
                     new Fstoi(masm, asIntReg(src), asFloatReg(dst));
@@ -463,6 +467,12 @@ public enum SPARCArithmetic {
                     break;
                 case DNEG:
                     new Fnegd(masm, asDoubleReg(src), asDoubleReg(dst));
+                    break;
+                case LSHL:
+                    new Sllx(asLongReg(dst), asIntReg(src), asLongReg(dst)).emit(masm);
+                    break;
+                case LSHR:
+                    new Srlx(asLongReg(dst), asIntReg(src), asLongReg(dst)).emit(masm);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere("missing: " + opcode);

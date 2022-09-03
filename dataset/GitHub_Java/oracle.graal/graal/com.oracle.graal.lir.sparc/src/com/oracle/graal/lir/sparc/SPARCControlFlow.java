@@ -58,18 +58,6 @@ public class SPARCControlFlow {
                 case EQ:
                     new Bpe(CC.Xcc, destination.label()).emit(masm);
                     break;
-                case NE:
-                    new Bpne(CC.Xcc, destination.label()).emit(masm);
-                    break;
-                case BE:
-                    new Bpleu(CC.Xcc, destination.label()).emit(masm);
-                    break;
-                case LE:
-                    new Bple(CC.Xcc, destination.label()).emit(masm);
-                    break;
-                case AE:
-                    new Bpgeu(CC.Xcc, destination.label()).emit(masm);
-                    break;
                 case GT:
                     new Bpg(CC.Xcc, destination.label()).emit(masm);
                     break;

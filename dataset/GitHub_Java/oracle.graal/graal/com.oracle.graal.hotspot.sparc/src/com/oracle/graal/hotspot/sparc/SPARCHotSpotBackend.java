@@ -85,8 +85,9 @@ public class SPARCHotSpotBackend extends HotSpotBackend {
                     if (SPARCAssembler.isSimm13(address.getDisplacement())) {
                         new Stx(g0, address).emit(masm);
                     } else {
-                        new Setx(address.getDisplacement(), g3).emit(masm);
-                        new Stx(g0, new SPARCAddress(sp, g3)).emit(masm);
+                        // TODO Can't use g3 as scratch here.
+                        new Setx(address.getDisplacement(), g3, g3).emit(masm);
+                        new Stx(g0, sp, g3).emit(masm);
                     }
                 }
             }
