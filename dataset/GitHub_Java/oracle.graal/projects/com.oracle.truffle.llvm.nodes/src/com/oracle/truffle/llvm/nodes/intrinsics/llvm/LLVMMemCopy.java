@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,42 +29,119 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-public abstract class LLVMMemCopy {
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "destination"), @NodeChild(type = LLVMExpressionNode.class, value = "source"),
+                @NodeChild(type = LLVMExpressionNode.class, value = "length"),
+                @NodeChild(type = LLVMExpressionNode.class, value = "align"), @NodeChild(type = LLVMExpressionNode.class, value = "isVolatile")})
+public abstract class LLVMMemCopy extends LLVMBuiltin {
 
-    @GenerateNodeFactory
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class, value = "destination"), @NodeChild(type = LLVMAddressNode.class, value = "source"), @NodeChild(type = LLVMI32Node.class, value = "length"),
-                    @NodeChild(type = LLVMI32Node.class, value = "align"), @NodeChild(type = LLVMI1Node.class, value = "isVolatile")})
-    public abstract static class LLVMMemI32Copy extends LLVMNode {
+    @Child private LLVMMemMoveNode memMove;
 
-        @Specialization
-        public void executeVoid(LLVMAddress target, LLVMAddress source, int length, int align, boolean isVolatile) {
-            LLVMHeap.memCopy(target, source, length, align, isVolatile);
-        }
-
+    public LLVMMemCopy(LLVMMemMoveNode memMove) {
+        this.memMove = memMove;
     }
 
-    @GenerateNodeFactory
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class, value = "destination"), @NodeChild(type = LLVMAddressNode.class, value = "source"), @NodeChild(type = LLVMI64Node.class, value = "length"),
-                    @NodeChild(type = LLVMI32Node.class, value = "align"), @NodeChild(type = LLVMI1Node.class, value = "isVolatile")})
-    public abstract static class LLVMMemI64Copy extends LLVMNode {
+    // TODO: remove duplication for length argument with a cast node
 
-        @Specialization
-        public void executeVoid(LLVMAddress target, LLVMAddress source, long length, int align, boolean isVolatile) {
-            LLVMHeap.memCopy(target, source, length, align, isVolatile);
-        }
-
+    @Specialization
+    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, int length, int align, boolean isVolatile,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
+        return doVoid(target, source, (long) length, align, isVolatile, arrayAccess);
     }
 
+    @Specialization
+    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMNativePointer source, int length, int align, boolean isVolatile,
+                    @Cached("getLLVMMemory()") LLVMMemory memory,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
+        return doVoid(target, source, (long) length, align, isVolatile, memory, arrayAccess);
+    }
+
+    @Specialization
+    protected Object doVoid(LLVMNativePointer target, LLVMVirtualAllocationAddress source, int length, int align, boolean isVolatile,
+                    @Cached("getLLVMMemory()") LLVMMemory memory,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
+        return doVoid(target, source, (long) length, align, isVolatile, memory, arrayAccess);
+    }
+
+    @Specialization
+    protected Object doVoid(LLVMPointer target, LLVMPointer source, int length, int align, boolean isVolatile) {
+        return doVoid(target, source, (long) length, align, isVolatile);
+    }
+
+    @SuppressWarnings("unused")
+    @Specialization
+    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, long length, int align, boolean isVolatile,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
+        copy(arrayAccess, target, source, length);
+        return null;
+    }
+
+    @SuppressWarnings("unused")
+    @Specialization
+    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMNativePointer source, long length, int align, boolean isVolatile,
+                    @Cached("getLLVMMemory()") LLVMMemory memory,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
+        copy(arrayAccess, memory, target, source.asNative(), length);
+        return null;
+    }
+
+    @SuppressWarnings("unused")
+    @Specialization
+    protected Object doVoid(LLVMNativePointer target, LLVMVirtualAllocationAddress source, long length, int align, boolean isVolatile,
+                    @Cached("getLLVMMemory()") LLVMMemory memory,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
+        copy(arrayAccess, memory, target.asNative(), source, length);
+        return null;
+    }
+
+    @SuppressWarnings("unused")
+    @Specialization
+    protected Object doVoid(LLVMPointer target, LLVMPointer source, long length, int align, boolean isVolatile) {
+        memMove.executeWithTarget(target, source, length);
+        return null;
+    }
+
+    private static void copy(UnsafeArrayAccess arrayAccess, LLVMMemory memory, LLVMVirtualAllocationAddress target, long source, long length) {
+        long sourcePointer = source;
+        LLVMVirtualAllocationAddress targetAddress = target;
+        for (long i = 0; i < length; i++) {
+            byte value = memory.getI8(sourcePointer);
+            targetAddress.writeI8(arrayAccess, value);
+            targetAddress = targetAddress.increment(1);
+            sourcePointer++;
+        }
+    }
+
+    private static void copy(UnsafeArrayAccess arrayAccess, LLVMMemory memory, long target, LLVMVirtualAllocationAddress source, long length) {
+        LLVMVirtualAllocationAddress sourcePointer = source;
+        long targetAddress = target;
+        for (long i = 0; i < length; i++) {
+            byte value = sourcePointer.getI8(arrayAccess);
+            sourcePointer = sourcePointer.increment(1);
+            memory.putI8(targetAddress, value);
+            targetAddress++;
+        }
+    }
+
+    private static void copy(UnsafeArrayAccess memory, LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, long length) {
+        LLVMVirtualAllocationAddress sourcePointer = source;
+        LLVMVirtualAllocationAddress targetAddress = target;
+        for (long i = 0; i < length; i++) {
+            byte value = sourcePointer.getI8(memory);
+            sourcePointer = sourcePointer.increment(1);
+            targetAddress.writeI8(memory, value);
+            targetAddress = targetAddress.increment(1);
+        }
+    }
 }

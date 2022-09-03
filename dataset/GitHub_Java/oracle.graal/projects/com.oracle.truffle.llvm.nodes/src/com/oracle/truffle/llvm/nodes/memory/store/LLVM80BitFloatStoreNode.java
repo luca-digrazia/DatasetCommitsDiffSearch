@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,35 +29,44 @@
  */
 package com.oracle.truffle.llvm.nodes.memory.store;
 
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
-public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNode {
+public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNodeCommon {
 
-    public LLVM80BitFloatStoreNode(SourceSection source) {
-        super(PrimitiveType.X86_FP80, source);
+    public LLVM80BitFloatStoreNode() {
+        this(null);
     }
 
+    public LLVM80BitFloatStoreNode(LLVMSourceLocation sourceLocation) {
+        super(sourceLocation);
+    }
+
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
+    protected void doOp(LLVMNativePointer addr, LLVM80BitFloat value) {
+        getLLVMMemoryCached().put80BitFloat(addr, value);
+    }
+
+    @Specialization(guards = "isAutoDerefHandle(addr)")
+    protected void doOpDerefHandle(LLVMNativePointer addr, LLVM80BitFloat value) {
+        doForeign(getDerefHandleGetReceiverNode().execute(addr), value);
+    }
+
+    // TODO (chaeubl): we could store this in a more efficient way (short + long)
     @Specialization
-    public Object execute(LLVMGlobalVariable address, LLVM80BitFloat value, @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        LLVMMemory.put80BitFloat(globalAccess.getNativeLocation(address), value);
-        return null;
+    @ExplodeLoop
+    protected void doForeign(LLVMManagedPointer address, LLVM80BitFloat value) {
+        byte[] bytes = value.getBytes();
+        assert bytes.length == LLVM80BitFloat.BYTE_WIDTH;
+        LLVMManagedPointer currentPtr = address;
+        for (int i = 0; i < LLVM80BitFloat.BYTE_WIDTH; i++) {
+            getForeignWriteNode(ForeignToLLVMType.I8).execute(currentPtr, bytes[i]);
+            currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
+        }
     }
-
-    @Specialization
-    public Object execute(LLVMAddress address, LLVM80BitFloat value) {
-        LLVMMemory.put80BitFloat(address, value);
-        return null;
-    }
-
 }

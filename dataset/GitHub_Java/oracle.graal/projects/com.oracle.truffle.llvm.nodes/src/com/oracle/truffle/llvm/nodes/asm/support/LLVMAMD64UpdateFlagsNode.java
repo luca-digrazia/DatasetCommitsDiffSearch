@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,10 +31,9 @@ package com.oracle.truffle.llvm.nodes.asm.support;
 
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
-public class LLVMAMD64UpdateFlagsNode extends Node {
+public class LLVMAMD64UpdateFlagsNode extends LLVMNode {
     public static class LLVMAMD64UpdatePZSFlagsNode extends LLVMAMD64UpdateFlagsNode {
         private final FrameSlot pf;
         private final FrameSlot zf;
@@ -55,19 +54,19 @@ public class LLVMAMD64UpdateFlagsNode extends Node {
         public void execute(VirtualFrame frame, short value) {
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
 
         public void execute(VirtualFrame frame, int value) {
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
 
         public void execute(VirtualFrame frame, long value) {
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
     }
 
@@ -95,21 +94,21 @@ public class LLVMAMD64UpdateFlagsNode extends Node {
             frame.setBoolean(of, overflow);
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
 
         public void execute(VirtualFrame frame, boolean overflow, int value) {
             frame.setBoolean(of, overflow);
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
 
         public void execute(VirtualFrame frame, boolean overflow, long value) {
             frame.setBoolean(of, overflow);
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
     }
 
@@ -141,7 +140,7 @@ public class LLVMAMD64UpdateFlagsNode extends Node {
             frame.setBoolean(cf, carry);
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
 
         public void execute(VirtualFrame frame, boolean overflow, boolean carry, int value) {
@@ -149,7 +148,7 @@ public class LLVMAMD64UpdateFlagsNode extends Node {
             frame.setBoolean(cf, carry);
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
 
         public void execute(VirtualFrame frame, boolean overflow, boolean carry, long value) {
@@ -157,7 +156,7 @@ public class LLVMAMD64UpdateFlagsNode extends Node {
             frame.setBoolean(cf, carry);
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
     }
 
@@ -193,7 +192,7 @@ public class LLVMAMD64UpdateFlagsNode extends Node {
             frame.setBoolean(af, adjust);
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
 
         public void execute(VirtualFrame frame, boolean overflow, boolean carry, boolean adjust, int value) {
@@ -202,7 +201,7 @@ public class LLVMAMD64UpdateFlagsNode extends Node {
             frame.setBoolean(af, adjust);
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
 
         public void execute(VirtualFrame frame, boolean overflow, boolean carry, boolean adjust, long value) {
@@ -211,17 +210,23 @@ public class LLVMAMD64UpdateFlagsNode extends Node {
             frame.setBoolean(af, adjust);
             frame.setBoolean(sf, value < 0);
             frame.setBoolean(zf, value == 0);
-            frame.setBoolean(pf, getParity((byte) value));
+            frame.setBoolean(pf, getParity(value));
         }
     }
 
     public static boolean getParity(byte value) {
-        boolean result = true;
-        for (int i = 0; i < LLVMExpressionNode.I8_SIZE_IN_BITS; i++) {
-            if ((value & (1 << i)) != 0) {
-                result = !result;
-            }
-        }
-        return result;
+        return getParity((int) value);
+    }
+
+    public static boolean getParity(short value) {
+        return getParity((int) value);
+    }
+
+    public static boolean getParity(int value) {
+        return (Integer.bitCount(value & 0xFF) & 1) == 0;
+    }
+
+    public static boolean getParity(long value) {
+        return (Long.bitCount(value & 0xFFL) & 1) == 0;
     }
 }

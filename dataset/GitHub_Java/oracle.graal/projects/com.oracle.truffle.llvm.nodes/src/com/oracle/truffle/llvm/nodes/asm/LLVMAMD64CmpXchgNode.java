@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,140 +29,147 @@
  */
 package com.oracle.truffle.llvm.nodes.asm;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdateCPAZSOFlagsNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI16RegisterNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI32RegisterNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI64RegisterNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI8RegisterNode;
+import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteValueNode;
+import com.oracle.truffle.llvm.nodes.op.ToComparableValue;
+import com.oracle.truffle.llvm.nodes.op.ToComparableValueNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@NodeChildren({@NodeChild("a"), @NodeChild("src"), @NodeChild("dst")})
-public abstract class LLVMAMD64CmpXchgNode extends LLVMExpressionNode {
+@NodeChildren({@NodeChild(value = "a", type = LLVMExpressionNode.class), @NodeChild(value = "src", type = LLVMExpressionNode.class), @NodeChild(value = "dst", type = LLVMExpressionNode.class)})
+public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
     @Child protected LLVMAMD64UpdateCPAZSOFlagsNode flags;
 
-    private LLVMAMD64CmpXchgNode(LLVMAMD64UpdateCPAZSOFlagsNode flags) {
+    @Child protected LLVMAMD64WriteValueNode out1;
+    @Child protected LLVMAMD64WriteValueNode out2;
+
+    protected final ConditionProfile profile;
+
+    private LLVMAMD64CmpXchgNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteValueNode out1, LLVMAMD64WriteValueNode out2) {
         this.flags = flags;
+        this.out1 = out1;
+        this.out2 = out2;
+        profile = ConditionProfile.createCountingProfile();
     }
 
     public abstract static class LLVMAMD64CmpXchgbNode extends LLVMAMD64CmpXchgNode {
-        @Child LLVMAMD64WriteI8RegisterNode out2;
-
-        public LLVMAMD64CmpXchgbNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteI8RegisterNode out2) {
-            super(flags);
-            this.out2 = out2;
+        public LLVMAMD64CmpXchgbNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteValueNode dst1, LLVMAMD64WriteValueNode dst2) {
+            super(flags, dst1, dst2);
         }
 
         @Specialization
-        protected byte executeI8(VirtualFrame frame, byte a, byte src, byte dst) {
+        protected void doOp(VirtualFrame frame, byte a, byte src, byte dst) {
             int result = a - dst;
             boolean carry = Byte.toUnsignedInt(a) < Byte.toUnsignedInt(dst);
             boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
             flags.execute(frame, false, carry, adjust, result);
-            if (a == dst) {
-                return src;
+            if (profile.profile(a == dst)) {
+                out1.execute(frame, src);
             } else {
                 out2.execute(frame, dst);
-                return dst;
             }
         }
     }
 
     public abstract static class LLVMAMD64CmpXchgwNode extends LLVMAMD64CmpXchgNode {
-        @Child LLVMAMD64WriteI16RegisterNode out2;
-
-        public LLVMAMD64CmpXchgwNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteI16RegisterNode out2) {
-            super(flags);
-            this.out2 = out2;
+        public LLVMAMD64CmpXchgwNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteValueNode dst1, LLVMAMD64WriteValueNode dst2) {
+            super(flags, dst1, dst2);
         }
 
         @Specialization
-        protected short executeI16(VirtualFrame frame, short a, short src, short dst) {
+        protected void doOp(VirtualFrame frame, short a, short src, short dst) {
             int result = a - dst;
             boolean carry = Short.toUnsignedInt(a) < Short.toUnsignedInt(dst);
             boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
             flags.execute(frame, false, carry, adjust, result);
-            if (a == dst) {
-                return src;
+            if (profile.profile(a == dst)) {
+                out1.execute(frame, src);
             } else {
                 out2.execute(frame, dst);
-                return dst;
             }
         }
     }
 
     public abstract static class LLVMAMD64CmpXchglNode extends LLVMAMD64CmpXchgNode {
-        @Child LLVMAMD64WriteI32RegisterNode out2;
-
-        public LLVMAMD64CmpXchglNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteI32RegisterNode out2) {
-            super(flags);
-            this.out2 = out2;
+        public LLVMAMD64CmpXchglNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteValueNode dst1, LLVMAMD64WriteValueNode dst2) {
+            super(flags, dst1, dst2);
         }
 
         @Specialization
-        protected int executeI32(VirtualFrame frame, int a, int src, int dst) {
+        protected void doOp(VirtualFrame frame, int a, int src, int dst) {
             int result = a - dst;
             boolean carry = Integer.compareUnsigned(a, dst) < 0;
             boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
             flags.execute(frame, false, carry, adjust, result);
-            if (a == dst) {
-                return src;
-            } else {
-                out2.execute(frame, dst);
-                return dst;
-            }
-        }
-    }
-
-    public abstract static class LLVMAMD64CmpXchglrNode extends LLVMAMD64CmpXchgNode {
-        @Child LLVMAMD64WriteI32RegisterNode out1;
-        @Child LLVMAMD64WriteI32RegisterNode out2;
-
-        public LLVMAMD64CmpXchglrNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteI32RegisterNode out1, LLVMAMD64WriteI32RegisterNode out2) {
-            super(flags);
-            this.out1 = out1;
-            this.out2 = out2;
-        }
-
-        @Specialization
-        protected Object executeObject(VirtualFrame frame, int a, int src, int dst) {
-            int result = a - dst;
-            boolean carry = Integer.compareUnsigned(a, dst) < 0;
-            boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
-            flags.execute(frame, false, carry, adjust, result);
-            if (a == dst) {
+            if (profile.profile(a == dst)) {
                 out1.execute(frame, src);
-                return null;
             } else {
                 out2.execute(frame, dst);
-                return null;
             }
         }
     }
 
     public abstract static class LLVMAMD64CmpXchgqNode extends LLVMAMD64CmpXchgNode {
-        private final LLVMAMD64WriteI64RegisterNode out2;
-
-        public LLVMAMD64CmpXchgqNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteI64RegisterNode out2) {
-            super(flags);
-            this.out2 = out2;
+        public LLVMAMD64CmpXchgqNode(LLVMAMD64UpdateCPAZSOFlagsNode flags, LLVMAMD64WriteValueNode dst1, LLVMAMD64WriteValueNode dst2) {
+            super(flags, dst1, dst2);
         }
 
         @Specialization
-        protected long executeI64(VirtualFrame frame, long a, long src, long dst) {
+        protected void doOp(VirtualFrame frame, long a, long src, long dst) {
             long result = a - dst;
             boolean carry = Long.compareUnsigned(a, dst) < 0;
             boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
             flags.execute(frame, false, carry, adjust, result);
-            if (a == dst) {
-                return src;
+            if (profile.profile(a == dst)) {
+                out1.execute(frame, src);
             } else {
                 out2.execute(frame, dst);
-                return dst;
             }
+        }
+
+        @Specialization
+        protected void doOp(VirtualFrame frame, LLVMNativePointer a, LLVMNativePointer src, LLVMNativePointer dst) {
+            long result = a.asNative() - dst.asNative();
+            boolean carry = Long.compareUnsigned(a.asNative(), dst.asNative()) < 0;
+            boolean adjust = (((a.asNative() ^ dst.asNative()) ^ result) & 0x10) != 0;
+            flags.execute(frame, false, carry, adjust, result);
+            if (profile.profile(a.equals(dst))) {
+                out1.execute(frame, src);
+            } else {
+                out2.execute(frame, dst);
+            }
+        }
+
+        @Specialization
+        protected void doOp(VirtualFrame frame, LLVMManagedPointer pointerA, LLVMNativePointer pointerSrc, LLVMManagedPointer pointerDst,
+                        @Cached("createToComparable()") ToComparableValue toComparableA,
+                        @Cached("createToComparable()") ToComparableValue toComparableB) {
+            long a = toComparableA.executeWithTarget(pointerA);
+            long dst = toComparableB.executeWithTarget(pointerDst);
+
+            long result = a - dst;
+            boolean carry = Long.compareUnsigned(a, dst) < 0;
+            boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
+            flags.execute(frame, false, carry, adjust, result);
+            if (profile.profile(pointerA.equals(pointerDst))) {
+                out1.execute(frame, pointerSrc);
+            } else {
+                out2.execute(frame, pointerDst);
+            }
+        }
+
+        @TruffleBoundary
+        protected static ToComparableValue createToComparable() {
+            return ToComparableValueNodeGen.create();
         }
     }
 }
