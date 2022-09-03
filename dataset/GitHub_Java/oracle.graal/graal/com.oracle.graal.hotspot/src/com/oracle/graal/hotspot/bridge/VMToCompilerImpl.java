@@ -31,7 +31,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
@@ -39,6 +38,7 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.phases.*;
+import com.oracle.graal.hotspot.snippets.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
@@ -51,6 +51,7 @@ import com.oracle.graal.snippets.*;
 public class VMToCompilerImpl implements VMToCompiler {
 
     private final HotSpotGraalRuntime graalRuntime;
+    private IntrinsifyArrayCopyPhase intrinsifyArrayCopy;
 
     public final HotSpotTypePrimitive typeBoolean;
     public final HotSpotTypePrimitive typeChar;
@@ -134,10 +135,10 @@ public class VMToCompilerImpl implements VMToCompiler {
 
                 @Override
                 public void run() {
-                    Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
-                    SnippetInstaller installer = new SnippetInstaller(runtime, runtime.getGraalRuntime().getTarget(), HotSpotGraalRuntime.wordStamp(), assumptions);
+                    VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
+                    SnippetInstaller installer = new SnippetInstaller(runtime, runtime.getGraalRuntime().getTarget(), HotSpotGraalRuntime.wordStamp());
                     GraalIntrinsics.installIntrinsics(installer);
-                    runtime.installSnippets(installer, assumptions);
+                    runtime.installSnippets(installer);
                 }
             });
 
@@ -527,7 +528,6 @@ public class VMToCompilerImpl implements VMToCompiler {
             // lost the race - return the existing value instead
             type = (HotSpotResolvedJavaType) unsafe.getObject(javaMirror, offset);
         }
-        AddressMap.log(metaspaceKlass, type.toJava().getName());
         return type;
     }
 
@@ -570,6 +570,9 @@ public class VMToCompilerImpl implements VMToCompiler {
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(graalRuntime.getRuntime(), GraphBuilderConfiguration.getDefault(), optimisticOpts));
         if (onStackReplacement) {
             phasePlan.addPhase(PhasePosition.AFTER_PARSING, new OnStackReplacementPhase());
+        }
+        if (GraalOptions.Intrinsify) {
+            phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
         }
         return phasePlan;
     }
