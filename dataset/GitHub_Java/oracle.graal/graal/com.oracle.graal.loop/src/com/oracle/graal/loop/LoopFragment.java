@@ -28,6 +28,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.VirtualState.VirtualClosure;
 import com.oracle.graal.nodes.cfg.*;
@@ -312,20 +313,7 @@ public abstract class LoopFragment {
                 final ValueNode replaceWith;
                 ProxyNode newVpn = getDuplicatedNode(vpn);
                 if (newVpn != null) {
-                    PhiNode phi;
-                    switch (vpn.type()) {
-                        case Value:
-                            phi = graph.addWithoutUnique(new PhiNode(vpn.kind(), merge));
-                            break;
-                        case Guard:
-                            phi = graph.addWithoutUnique(new PhiNode(vpn.type(), merge));
-                            break;
-                        case Memory:
-                            phi = graph.addWithoutUnique(new MemoryPhiNode(merge, ((MemoryProxyNode) vpn).getLocationIdentity()));
-                            break;
-                        default:
-                            throw GraalInternalError.shouldNotReachHere();
-                    }
+                    PhiNode phi = graph.addWithoutUnique(vpn.type() == PhiType.Value ? new PhiNode(vpn.kind(), merge) : new PhiNode(vpn.type(), merge, vpn.getIdentity()));
                     phi.addInput(vpn);
                     phi.addInput(newVpn);
                     replaceWith = phi;
