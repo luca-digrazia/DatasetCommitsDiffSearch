@@ -23,7 +23,6 @@
 package com.oracle.graal.compiler.common.alloc;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
@@ -32,20 +31,20 @@ import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
  * Represents a list of sequentially executed {@code AbstractBlockBase blocks}.
  */
 public class Trace {
-    private final AbstractBlockBase<?>[] blocks;
+    private final ArrayList<AbstractBlockBase<?>> blocks;
     private final ArrayList<Trace> successors;
     private int id = -1;
 
     public Trace(Collection<AbstractBlockBase<?>> blocks) {
-        this(blocks.toArray(new AbstractBlockBase<?>[0]));
+        this(new ArrayList<>(blocks));
     }
 
-    public Trace(AbstractBlockBase<?>[] blocks) {
+    public Trace(ArrayList<AbstractBlockBase<?>> blocks) {
         this.blocks = blocks;
         this.successors = new ArrayList<>();
     }
 
-    public AbstractBlockBase<?>[] getBlocks() {
+    public ArrayList<AbstractBlockBase<?>> getBlocks() {
         return blocks;
     }
 
@@ -54,12 +53,12 @@ public class Trace {
     }
 
     public int size() {
-        return getBlocks().length;
+        return getBlocks().size();
     }
 
     @Override
     public String toString() {
-        return "Trace" + Arrays.toString(blocks);
+        return "Trace" + blocks;
     }
 
     public int getId() {

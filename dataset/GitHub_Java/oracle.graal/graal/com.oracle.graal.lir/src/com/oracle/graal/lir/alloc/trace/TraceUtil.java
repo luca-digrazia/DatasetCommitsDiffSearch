@@ -63,7 +63,7 @@ public class TraceUtil {
         if (trace.size() != 1) {
             return false;
         }
-        List<LIRInstruction> instructions = lir.getLIRforBlock(trace.getBlocks()[0]);
+        List<LIRInstruction> instructions = lir.getLIRforBlock(trace.getBlocks().iterator().next());
         if (instructions.size() != 2) {
             return false;
         }
