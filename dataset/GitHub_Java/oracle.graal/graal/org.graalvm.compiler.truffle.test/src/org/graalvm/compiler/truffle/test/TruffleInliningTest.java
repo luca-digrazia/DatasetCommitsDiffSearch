@@ -22,7 +22,7 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import static org.graalvm.compiler.test.GraalTest.assertTrue;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.overrideOptions;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -37,20 +37,20 @@ import org.graalvm.compiler.truffle.OptimizedDirectCallNode;
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.TruffleInlining;
 import org.graalvm.compiler.truffle.TruffleInliningDecision;
-import org.junit.Test;
+import org.graalvm.compiler.truffle.TruffleInliningPolicy;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
-public class TruffleInliningTest {
+public abstract class TruffleInliningTest {
 
     class InlineTestRootNode extends RootNode {
 
         @Children final Node[] children;
-        @CompilationFinal FrameSlot param1;
         String name;
 
         @Override
@@ -82,12 +82,12 @@ public class TruffleInliningTest {
         @Override
         public Object execute(VirtualFrame frame) {
 
-            int depth = (int) frame.getArguments()[0];
-            if (depth < 100) {
+            int maxRecursionDepth = (int) frame.getArguments()[0];
+            if (maxRecursionDepth < 100) {
                 for (Node child : children) {
                     if (child instanceof OptimizedDirectCallNode) {
                         OptimizedDirectCallNode callNode = (OptimizedDirectCallNode) child;
-                        frame.getArguments()[0] = depth + 1;
+                        frame.getArguments()[0] = maxRecursionDepth + 1;
                         callNode.call(frame.getArguments());
                     }
                 }
@@ -97,99 +97,155 @@ public class TruffleInliningTest {
     }
 
     class TruffleInliningTestScenarioBuilder {
-        private Map<String, OptimizedCallTarget> targets = new HashMap<>();
+
+        class CallInstruction {
+            public String target;
+            public int count;
+
+            CallInstruction(String target, int count) {
+                this.target = target;
+                this.count = count;
+            }
+        }
+
+        class TargetInstruction {
+            public int size;
+            public int execCount;
+
+            TargetInstruction(int size, int execCount) {
+                this.size = size;
+                this.execCount = execCount;
+            }
+        }
+
+        private final Map<String, TargetInstruction> targetInstructions = new HashMap<>();
+        private final Map<String, OptimizedCallTarget> targets = new HashMap<>();
+        private final Map<String, List<CallInstruction>> callInstructions = new HashMap<>();
+
         private String lastAddedTargetName = null;
-        private Map<String, Integer> targetInstructions = new HashMap<>();
-        private Map<String, List<String>> callInstructions = new HashMap<>();
 
         TruffleInliningTestScenarioBuilder target(String name) {
             return target(name, 0);
         }
 
         TruffleInliningTestScenarioBuilder target(String name, int size) {
-            targetInstructions.put(name, size);
+            targetInstructions.put(name, new TargetInstruction(size, 0));
             lastAddedTargetName = name;
             return this;
         }
 
+        TruffleInliningTestScenarioBuilder execute() {
+            execute(1);
+            return this;
+        }
+
+        TruffleInliningTestScenarioBuilder execute(int times) {
+            try {
+                targetInstructions.get(lastAddedTargetName).execCount = times;
+            } catch (NullPointerException e) {
+                throw new IllegalStateException("Call to execute before defining a target!");
+            }
+            return this;
+        }
+
         TruffleInliningTestScenarioBuilder calls(String name) {
+            return calls(name, 0);
+        }
+
+        TruffleInliningTestScenarioBuilder calls(String name, int count) {
             // Increment the caller size to make room for the call
-            int targetSize = targetInstructions.get(lastAddedTargetName);
-            targetInstructions.replace(lastAddedTargetName, targetSize, targetSize + 1);
+            targetInstructions.get(lastAddedTargetName).size++;
 
             // Update call Instructions
-            List<String> existingCalls = callInstructions.get(lastAddedTargetName);
+            List<CallInstruction> existingCalls = callInstructions.get(lastAddedTargetName);
             if (existingCalls == null) {
                 existingCalls = new ArrayList<>();
                 callInstructions.put(lastAddedTargetName, existingCalls);
             }
-            existingCalls.add(name);
+            existingCalls.add(new CallInstruction(name, count));
             return this;
         }
 
-        TruffleInlining build(boolean withCall) {
+        OptimizedCallTarget buildTarget() {
+            return buildTarget(false);
+        }
+
+        OptimizedCallTarget buildTarget(boolean andExecute) {
             try {
                 buildTargets();
                 buildCalls();
-                if (withCall) {
-                    targets.get(lastAddedTargetName).call(0);
+                OptimizedCallTarget target = targets.get(lastAddedTargetName);
+                if (andExecute) {
+                    target.call(0);
                 }
-                return new TruffleInlining(targets.get(lastAddedTargetName), new DefaultInliningPolicy());
+                return target;
             } finally {
                 cleanup();
             }
         }
 
-        TruffleInlining build() {
-            return build(true);
+        TruffleInlining buildDecisions() {
+            return buildDecisions(false);
+        }
+
+        TruffleInlining buildDecisions(boolean andExecute) {
+            return new TruffleInlining(buildTarget(andExecute), policy);
+        }
+
+        private void buildTargets() {
+            for (String targetName : targetInstructions.keySet()) {
+                TargetInstruction instruction = targetInstructions.get(targetName);
+                OptimizedCallTarget newTarget = new OptimizedCallTarget(null, new InlineTestRootNode(instruction.size, targetName));
+                for (int i = 0; i < instruction.execCount; i++) {
+                    newTarget.call(0);
+                }
+                targets.put(targetName, newTarget);
+            }
         }
 
         private void buildCalls() {
             for (String callerName : callInstructions.keySet()) {
                 OptimizedCallTarget caller = targets.get(callerName);
                 List<OptimizedDirectCallNode> callSites = new ArrayList<>();
-                for (String targetName : callInstructions.get(callerName)) {
-                    OptimizedCallTarget target = targets.get(targetName);
+                for (CallInstruction instruction : callInstructions.get(callerName)) {
+                    OptimizedCallTarget target = targets.get(instruction.target);
                     if (target == null) {
-                        throw new IllegalStateException("Call to undefined target: " + targetName);
+                        throw new IllegalStateException("Call to undefined target: " + instruction.target);
                     }
                     OptimizedDirectCallNode callNode = new OptimizedDirectCallNode(GraalTruffleRuntime.getRuntime(), target);
                     callSites.add(callNode);
+                    for (int i = 0; i < instruction.count; i++) {
+                        Integer[] args = {0};
+                        callNode.call(args);
+                    }
                 }
                 InlineTestRootNode rootNode = (InlineTestRootNode) caller.getRootNode();
-                rootNode.addCallSites((OptimizedDirectCallNode[]) callSites.toArray(new OptimizedDirectCallNode[0]));
+                rootNode.addCallSites(callSites.toArray(new OptimizedDirectCallNode[0]));
                 rootNode.adoptChildren();
             }
         }
 
-        private void buildTargets() {
-            for (String targetName : targetInstructions.keySet()) {
-                int size = targetInstructions.get(targetName);
-                OptimizedCallTarget newTarget = new OptimizedCallTarget(null, new InlineTestRootNode(size, targetName));
-                targets.put(targetName, newTarget);
-            }
-        }
-
         private void cleanup() {
-            targets = new HashMap<>();
+            targets.clear();
+            targetInstructions.clear();
+            callInstructions.clear();
             lastAddedTargetName = null;
-            callInstructions = new HashMap<>();
         }
 
     }
 
-    TruffleInliningTestScenarioBuilder builder = new TruffleInliningTestScenarioBuilder();
+    protected TruffleInliningTestScenarioBuilder builder = new TruffleInliningTestScenarioBuilder();
+    protected TruffleInliningPolicy policy = new DefaultInliningPolicy();
 
     void assertInlined(TruffleInlining decisions, String name) {
-        assertTrue(countInlines(decisions, name) > 0, name + " was not inlined!");
+        Assert.assertTrue(name + " was not inlined!", countInlines(decisions, name) > 0);
     }
 
     void assertNotInlined(TruffleInlining decisions, String name) {
-        assertTrue(countInlines(decisions, name) == 0, name + " was not inlined!");
+        Assert.assertTrue(name + " was inlined!", countInlines(decisions, name) == 0);
     }
 
     void traverseDecisions(List<TruffleInliningDecision> decisions, Consumer<TruffleInliningDecision> f) {
-        int count = 0;
         for (TruffleInliningDecision decision : decisions) {
             f.accept(decision);
             traverseDecisions(decision.getCallSites(), f);
@@ -200,66 +256,22 @@ public class TruffleInliningTest {
     int countInlines(TruffleInlining decisions, String name) {
         final int[] count = {0};
         traverseDecisions(decisions.getCallSites(), (TruffleInliningDecision d) -> {
-            if (d.isInline() && d.getTarget().toString().equals(name))
+            if (d.isInline() && d.getTarget().toString().equals(name)) {
                 count[0]++;
+            }
         });
         return count[0];
     }
 
-    @Test
-    public void testSimpleInline() {
-        TruffleInlining decisions = builder.target("callee").target("caller").calls("callee").build();
-        assertInlined(decisions, "callee");
+    private TruffleCompilerOptions.TruffleOptionsOverrideScope scope = null;
+
+    @Before
+    public void before() {
+        scope = overrideOptions(TruffleCompilerOptions.TruffleCompilationThreshold, Integer.MAX_VALUE);
     }
 
-    @Test
-    public void testMultipleInline() {
-        TruffleInlining decisions = builder.target("callee").target("caller", 2).calls("callee").calls("callee").build();
-        assertTrue(countInlines(decisions, "callee") == 2);
-
-        decisions = builder.target("callee").target("caller", 3).calls("callee").calls("callee").calls("callee").build();
-        assertTrue(countInlines(decisions, "callee") == 3);
-
-        builder.target("callee").target("caller", 100);
-        for (int i = 0; i < 100; i++) {
-            builder.calls("callee");
-        }
-        assertTrue(countInlines(builder.build(), "callee") == 100);
-    }
-
-    @Test
-    public void testDontInlineBigFunctions() {
-        TruffleInlining decisions = builder.target("callee", TruffleCompilerOptions.TruffleInliningMaxCallerSize.getValue()).target("caller").calls("callee").build();
-        assertNotInlined(decisions, "callee");
-    }
-
-    @Test
-    public void testDontInlineIntoBigFunctions() {
-        TruffleInlining decisions = builder.target("callee").target("caller", TruffleCompilerOptions.TruffleInliningMaxCallerSize.getValue()).calls("callee").build();
-        assertNotInlined(decisions, "callee");
-    }
-
-    @Test
-    public void testRecursiveInline() {
-        TruffleInlining decisions = builder.target("recursive").calls("recursive").build();
-        assertTrue(countInlines(decisions, "recursive") == TruffleCompilerOptions.TruffleMaximumRecursiveInlining.getValue());
-    }
-
-    @Test
-    public void testDontInlineBigWithCallSites() {
-        // Do not inline a function if it's size * cappedCallSites is too big
-        TruffleInlining decisions = builder.target("callee", TruffleCompilerOptions.TruffleInliningMaxCallerSize.getValue() / 3).target("caller").calls("callee").calls("callee").calls(
-                        "callee").build();
-        assertNotInlined(decisions, "callee");
-    }
-
-    @Test
-    public void testDeepInline() {
-        TruffleInlining decisions = builder.target("a").target("b").calls("a").target("c").calls("b").target("d").calls("c").target("e").calls("d").target("f").calls("e").build();
-        assertInlined(decisions, "a");
-        assertInlined(decisions, "b");
-        assertInlined(decisions, "c");
-        assertInlined(decisions, "d");
-        assertInlined(decisions, "e");
+    @After
+    public void after() {
+        scope.close();
     }
 }
