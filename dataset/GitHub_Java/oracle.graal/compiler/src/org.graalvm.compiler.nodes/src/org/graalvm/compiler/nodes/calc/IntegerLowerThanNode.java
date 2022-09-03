@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -89,7 +87,7 @@ public abstract class IntegerLowerThanNode extends CompareNode {
                 aStamp = (IntegerStamp) addNode.getX().stamp(NodeView.DEFAULT);
             }
             if (aStamp != null) {
-                IntegerStamp result = getOp().getSucceedingStampForXLowerXPlusA(mirror, strict, aStamp, xStamp);
+                IntegerStamp result = getOp().getSucceedingStampForXLowerXPlusA(mirror, strict, aStamp);
                 result = (IntegerStamp) xStamp.tryImproveWith(result);
                 if (result != null) {
                     if (s != null) {
@@ -185,8 +183,7 @@ public abstract class IntegerLowerThanNode extends CompareNode {
             if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
                 return LogicConstantNode.contradiction();
             }
-            Stamp xStampGeneric = forX.stamp(view);
-            TriState fold = tryFold(xStampGeneric, forY.stamp(view));
+            TriState fold = tryFold(forX.stamp(view), forY.stamp(view));
             if (fold.isTrue()) {
                 return LogicConstantNode.tautology();
             } else if (fold.isFalse()) {
@@ -194,7 +191,6 @@ public abstract class IntegerLowerThanNode extends CompareNode {
             }
             if (forY.stamp(view) instanceof IntegerStamp) {
                 IntegerStamp yStamp = (IntegerStamp) forY.stamp(view);
-                IntegerStamp xStamp = (IntegerStamp) xStampGeneric;
                 int bits = yStamp.getBits();
                 if (forX.isJavaConstant() && !forY.isConstant()) {
                     // bring the constant on the right
@@ -206,23 +202,14 @@ public abstract class IntegerLowerThanNode extends CompareNode {
                 }
                 if (forY.isJavaConstant()) {
                     long yValue = forY.asJavaConstant().asLong();
-
-                    // x < MAX <=> x != MAX
                     if (yValue == maxValue(bits)) {
+                        // x < MAX <=> x != MAX
                         return LogicNegationNode.create(IntegerEqualsNode.create(forX, forY, view));
                     }
-
-                    // x < MIN + 1 <=> x <= MIN <=> x == MIN
                     if (yValue == minValue(bits) + 1) {
+                        // x < MIN + 1 <=> x <= MIN <=> x == MIN
                         return IntegerEqualsNode.create(forX, ConstantNode.forIntegerStamp(yStamp, minValue(bits)), view);
                     }
-
-                    // (x < c && x >= c - 1) => x == c - 1
-                    // If the constant is negative, only signed comparison is allowed.
-                    if (yValue != minValue(bits) && xStamp.lowerBound() == yValue - 1 && (yValue > 0 || getCondition() == CanonicalCondition.LT)) {
-                        return IntegerEqualsNode.create(forX, ConstantNode.forIntegerStamp(yStamp, yValue - 1), view);
-                    }
-
                 } else if (forY instanceof AddNode) {
                     AddNode addNode = (AddNode) forY;
                     LogicNode canonical = canonicalizeXLowerXPlusA(forX, addNode, false, true, view);
@@ -243,17 +230,15 @@ public abstract class IntegerLowerThanNode extends CompareNode {
 
         private LogicNode canonicalizeXLowerXPlusA(ValueNode forX, AddNode addNode, boolean mirrored, boolean strict, NodeView view) {
             // x < x + a
-            // x |<| x + a
-            IntegerStamp xStamp = (IntegerStamp) forX.stamp(view);
             IntegerStamp succeedingXStamp;
             boolean exact;
             if (addNode.getX() == forX && addNode.getY().stamp(view) instanceof IntegerStamp) {
                 IntegerStamp aStamp = (IntegerStamp) addNode.getY().stamp(view);
-                succeedingXStamp = getSucceedingStampForXLowerXPlusA(mirrored, strict, aStamp, xStamp);
+                succeedingXStamp = getSucceedingStampForXLowerXPlusA(mirrored, strict, aStamp);
                 exact = aStamp.lowerBound() == aStamp.upperBound();
             } else if (addNode.getY() == forX && addNode.getX().stamp(view) instanceof IntegerStamp) {
                 IntegerStamp aStamp = (IntegerStamp) addNode.getX().stamp(view);
-                succeedingXStamp = getSucceedingStampForXLowerXPlusA(mirrored, strict, aStamp, xStamp);
+                succeedingXStamp = getSucceedingStampForXLowerXPlusA(mirrored, strict, aStamp);
                 exact = aStamp.lowerBound() == aStamp.upperBound();
             } else {
                 return null;
@@ -263,6 +248,7 @@ public abstract class IntegerLowerThanNode extends CompareNode {
             } else if (exact && !succeedingXStamp.isEmpty()) {
                 int bits = succeedingXStamp.getBits();
                 if (compare(lowerBound(succeedingXStamp), minValue(bits)) > 0) {
+                    assert upperBound(succeedingXStamp) == maxValue(bits);
                     // x must be in [L..MAX] <=> x >= L <=> !(x < L)
                     return LogicNegationNode.create(create(forX, ConstantNode.forIntegerStamp(succeedingXStamp, lowerBound(succeedingXStamp)), view));
                 } else if (compare(upperBound(succeedingXStamp), maxValue(bits)) < 0) {
@@ -317,11 +303,10 @@ public abstract class IntegerLowerThanNode extends CompareNode {
             return null;
         }
 
-        protected IntegerStamp getSucceedingStampForXLowerXPlusA(boolean mirrored, boolean strict, IntegerStamp aStamp, IntegerStamp xStamp) {
-            int bits = aStamp.getBits();
+        protected IntegerStamp getSucceedingStampForXLowerXPlusA(boolean mirrored, boolean strict, IntegerStamp a) {
+            int bits = a.getBits();
             long min = minValue(bits);
             long max = maxValue(bits);
-
             /*
              * if x < x + a <=> x + a didn't overflow:
              *
@@ -337,14 +322,14 @@ public abstract class IntegerLowerThanNode extends CompareNode {
              * addition not the comparison.
              */
             if (mirrored) {
-                if (aStamp.contains(0)) {
+                if (a.contains(0)) {
                     // a may be zero
-                    return aStamp.unrestricted();
+                    return a.unrestricted();
                 }
-                return forInteger(bits, min(max - aStamp.lowerBound() + 1, max - aStamp.upperBound() + 1, bits), min(max, upperBound(xStamp)));
+                return forInteger(bits, min(max - a.lowerBound() + 1, max - a.upperBound() + 1, bits), max);
             } else {
-                long aLower = aStamp.lowerBound();
-                long aUpper = aStamp.upperBound();
+                long aLower = a.lowerBound();
+                long aUpper = a.upperBound();
                 if (strict) {
                     if (aLower == 0) {
                         aLower = 1;
@@ -354,12 +339,12 @@ public abstract class IntegerLowerThanNode extends CompareNode {
                     }
                     if (aLower > aUpper) {
                         // impossible
-                        return aStamp.empty();
+                        return a.empty();
                     }
                 }
                 if (aLower < 0 && aUpper > 0) {
                     // a may be zero
-                    return aStamp.unrestricted();
+                    return a.unrestricted();
                 }
                 return forInteger(bits, min, max(max - aLower, max - aUpper, bits));
             }
