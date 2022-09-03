@@ -24,7 +24,6 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -132,7 +131,7 @@ public abstract class PhiNode extends FloatingNode implements Simplifiable {
 
     public void addInput(ValueNode x) {
         assert !(x instanceof ValuePhiNode) || ((ValuePhiNode) x).merge() instanceof LoopBeginNode || ((ValuePhiNode) x).merge() != this.merge();
-        assert !(this instanceof ValuePhiNode) || x.stamp().isCompatible(stamp()) || (stamp().getStackKind() == Kind.Int && x.stamp().getStackKind().getBitCount() >= Kind.Int.getBitCount());
+        assert !(this instanceof ValuePhiNode) || x.stamp().isCompatible(stamp());
         values().add(x);
     }
 
@@ -144,7 +143,7 @@ public abstract class PhiNode extends FloatingNode implements Simplifiable {
     static class MultipleValuesNode extends ValueNode {
 
         public static MultipleValuesNode create() {
-            return new MultipleValuesNode();
+            return USE_GENERATED_NODES ? new PhiNode_MultipleValuesNodeGen() : new MultipleValuesNode();
         }
 
         protected MultipleValuesNode() {
