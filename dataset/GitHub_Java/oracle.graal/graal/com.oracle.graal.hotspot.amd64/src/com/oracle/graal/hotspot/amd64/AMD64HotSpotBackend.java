@@ -125,6 +125,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
             Address address;
             Value index = operand(x.offset());
             if (ValueUtil.isConstant(index) && NumUtil.isInt(ValueUtil.asConstant(index).asLong() + disp)) {
+                assert !runtime.needsDataPatch(asConstant(index));
                 disp += (int) ValueUtil.asConstant(index).asLong();
                 address = new Address(kind, load(operand(x.object())), disp);
             } else {
@@ -231,7 +232,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         //  - has no callee-saved registers
         //  - has no incoming arguments passed on the stack
         //  - has no instructions with debug info
-        boolean canOmitFrame = GraalOptions.CanOmitFrame &&
+        boolean canOmitFrame =
             frameMap.frameSize() == frameMap.initialFrameSize &&
             frameMap.registerConfig.getCalleeSaveLayout().registers.length == 0 &&
             !lir.hasArgInCallerFrame() &&
