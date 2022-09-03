@@ -1866,8 +1866,7 @@ public final class LinearScan {
         Debug.dump(Arrays.copyOf(intervals, intervalsSize), label);
     }
 
-    void printLir(String label, @SuppressWarnings("unused") boolean hirValid) {
-        // TODO(tw): Fix printing.
+    void printLir(String label, boolean hirValid) {
         if (GraalOptions.TraceLinearScanLevel >= 1 && !TTY.isSuppressed()) {
             TTY.println();
             TTY.println(label);

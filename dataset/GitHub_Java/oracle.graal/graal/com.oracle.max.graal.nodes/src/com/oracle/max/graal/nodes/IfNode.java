@@ -44,8 +44,8 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         return compare;
     }
 
-    public IfNode(BooleanNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double takenProbability) {
-        super(StampFactory.illegal(), new BeginNode[] {BeginNode.begin(trueSuccessor), BeginNode.begin(falseSuccessor)}, new double[] {takenProbability, 1 - takenProbability});
+    public IfNode(BooleanNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double probability) {
+        super(StampFactory.illegal(), new BeginNode[] {BeginNode.begin(trueSuccessor), BeginNode.begin(falseSuccessor)}, new double[] {probability, 1 - probability});
         this.compare = condition;
     }
 
@@ -140,7 +140,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                                 return;
                             }
                             if (trueValue.isConstant() && falseValue.isConstant()) {
-                                MaterializeNode materialize = MaterializeNode.create(compare(), graph(), trueValue, falseValue);
+                                MaterializeNode materialize = MaterializeNode.create(compare(), graph(), (ConstantNode) trueValue, (ConstantNode) falseValue);
                                 ((StructuredGraph) graph()).replaceFloating(singlePhi, materialize);
                                 removeEmptyIf(tool);
                             }

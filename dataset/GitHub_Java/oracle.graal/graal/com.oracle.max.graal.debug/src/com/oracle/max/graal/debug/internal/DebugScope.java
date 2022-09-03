@@ -47,7 +47,7 @@ public final class DebugScope {
 
     private boolean logEnabled;
     private boolean meterEnabled;
-    private boolean timeEnabled;
+    private boolean timerEnabled;
     private boolean dumpEnabled;
 
     public static DebugScope getInstance() {
@@ -82,8 +82,8 @@ public final class DebugScope {
         return meterEnabled;
     }
 
-    public boolean isTimeEnabled() {
-        return timeEnabled;
+    public boolean isTimerEnabled() {
+        return timerEnabled;
     }
 
     public void log(String msg, Object... args) {
@@ -151,12 +151,12 @@ public final class DebugScope {
         if (config == null) {
             logEnabled = false;
             meterEnabled = false;
-            timeEnabled = false;
+            timerEnabled = false;
             dumpEnabled = false;
         } else {
             logEnabled = config.isLogEnabled();
             meterEnabled = config.isMeterEnabled();
-            timeEnabled = config.isTimeEnabled();
+            timerEnabled = config.isTimerEnabled();
             dumpEnabled = config.isDumpEnabled();
         }
     }
