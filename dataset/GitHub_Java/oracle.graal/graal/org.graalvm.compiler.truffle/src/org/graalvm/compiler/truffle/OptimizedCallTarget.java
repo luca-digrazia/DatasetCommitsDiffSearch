@@ -298,7 +298,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         if (isValid()) {
             runtime().invalidateInstalledCode(this, source, reason);
         }
-        runtime().cancelInstalledTask(this, source, reason);
     }
 
     private static RootNode cloneRootNode(RootNode root) {

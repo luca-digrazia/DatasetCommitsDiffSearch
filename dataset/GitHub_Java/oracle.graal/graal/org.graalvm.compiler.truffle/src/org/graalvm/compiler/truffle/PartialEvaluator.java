@@ -35,17 +35,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.code.SourceStackTraceBailoutException;
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.core.common.EconomicMap;
-import org.graalvm.compiler.core.common.MapCursor;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Debug.Scope;
@@ -494,19 +491,15 @@ public class PartialEvaluator {
             }
         }
 
-        EconomicMap<String, ArrayList<ValueNode>> groupedByType = CollectionsFactory.newMap(CompareStrategy.EQUALS);
+        HashMap<String, ArrayList<ValueNode>> groupedByType = new HashMap<>();
         for (InstanceOfNode instanceOf : graph.getNodes().filter(InstanceOfNode.class)) {
             if (!instanceOf.type().isExact()) {
                 warnings.add(instanceOf);
-                String name = instanceOf.type().getType().getName();
-                if (!groupedByType.containsKey(name)) {
-                    groupedByType.put(name, new ArrayList<>());
-                }
-                groupedByType.get(name).add(instanceOf);
+                groupedByType.putIfAbsent(instanceOf.type().getType().getName(), new ArrayList<>());
+                groupedByType.get(instanceOf.type().getType().getName()).add(instanceOf);
             }
         }
-        MapCursor<String, ArrayList<ValueNode>> entry = groupedByType.getEntries();
-        while (entry.advance()) {
+        for (Map.Entry<String, ArrayList<ValueNode>> entry : groupedByType.entrySet()) {
             logPerformanceInfo(target, entry.getValue(), String.format("non-leaf type check: %s", entry.getKey()), Collections.singletonMap("Nodes", entry.getValue()));
         }
 

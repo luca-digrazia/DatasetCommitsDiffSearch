@@ -57,9 +57,9 @@ public class OptimizedCompilationProfile {
     private long timestamp;
 
     @CompilationFinal(dimensions = 1) private Class<?>[] profiledArgumentTypes;
-    @CompilationFinal private OptimizedAssumption profiledArgumentTypesAssumption;
+    @CompilationFinal private Assumption profiledArgumentTypesAssumption;
     @CompilationFinal private Class<?> profiledReturnType;
-    @CompilationFinal private OptimizedAssumption profiledReturnTypeAssumption;
+    @CompilationFinal private Assumption profiledReturnTypeAssumption;
     @CompilationFinal private Class<?> exceptionType;
 
     private volatile boolean compilationFailed;
@@ -125,7 +125,7 @@ public class OptimizedCompilationProfile {
             // for immediate compiles.
             if (TruffleReturnTypeSpeculation.getValue()) {
                 profiledReturnType = classOf(result);
-                profiledReturnTypeAssumption = createAssumption("Profiled Return Type");
+                profiledReturnTypeAssumption = Truffle.getRuntime().createAssumption("Profiled Return Type");
             }
         } else if (profiledReturnType != null) {
             if (result == null || profiledReturnType != result.getClass()) {
@@ -256,7 +256,7 @@ public class OptimizedCompilationProfile {
 
     private void initializeProfiledArgumentTypes(Object[] args) {
         CompilerAsserts.neverPartOfCompilation();
-        profiledArgumentTypesAssumption = createAssumption("Profiled Argument Types");
+        profiledArgumentTypesAssumption = Truffle.getRuntime().createAssumption("Profiled Argument Types");
         if (TruffleArgumentTypeSpeculation.getValue()) {
             Class<?>[] result = new Class<?>[args.length];
             for (int i = 0; i < args.length; i++) {
@@ -272,7 +272,7 @@ public class OptimizedCompilationProfile {
         for (int j = 0; j < types.length; j++) {
             types[j] = joinTypes(types[j], classOf(args[j]));
         }
-        profiledArgumentTypesAssumption = createAssumption("Profiled Argument Types");
+        profiledArgumentTypesAssumption = Truffle.getRuntime().createAssumption("Profiled Argument Types");
     }
 
     private static Class<?> classOf(Object arg) {
@@ -342,7 +342,4 @@ public class OptimizedCompilationProfile {
         return new OptimizedCompilationProfile();
     }
 
-    private static OptimizedAssumption createAssumption(String name) {
-        return (OptimizedAssumption) Truffle.getRuntime().createAssumption(name);
-    }
 }
