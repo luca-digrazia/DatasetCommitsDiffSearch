@@ -139,8 +139,10 @@ public final class LinuxNIOSubstitutions {
             // 079
             // 080     RESTARTABLE(epoll_ctl(epfd, (int)opcode, (int)fd, &event), res);
             do {
-                res = LinuxEPoll.epoll_ctl(epfd, opcode, fd, event);
-            } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+                do {
+                    res = LinuxEPoll.epoll_ctl(epfd, opcode, fd, event);
+                } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+            } while (false);
             // 082     return (res == 0) ? 0 : errno;
             return (res == 0) ? 0 : Errno.errno();
         }
@@ -168,8 +170,10 @@ public final class LinuxNIOSubstitutions {
             // 091
             // 092     RESTARTABLE(epoll_wait(epfd, events, numfds, -1), res);
             do {
-                res = LinuxEPoll.epoll_wait(epfd, events, numfds, -1);
-            } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+                do {
+                    res = LinuxEPoll.epoll_wait(epfd, events, numfds, -1);
+                } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+            } while (false);
             // 093     if (res < 0) {
             if (res < 0) {
                 // 094         JNU_ThrowIOExceptionWithLastError(env, "epoll_wait failed");
@@ -212,10 +216,6 @@ public final class LinuxNIOSubstitutions {
     @TargetClass(className = "sun.nio.ch.EPollArrayWrapper", onlyWith = JDK8OrEarlier.class)
     static final class Target_sun_nio_ch_EPollArrayWrapper {
 
-        /* The translation of RESTARTABLE is to expand the body without the wrapper
-         *     do { .... } while (0)
-         * whose purpose is to make the macro expansion into a single C statement.
-         */
         // 037 #define RESTARTABLE(_cmd, _result) do { \
         // 038   do { \
         // 039     _result = _cmd; \
@@ -287,8 +287,10 @@ public final class LinuxNIOSubstitutions {
             // 114
             // 115     RESTARTABLE(epoll_ctl(epfd, (int)opcode, (int)fd, &event), res);
             do {
-                res = LinuxEPoll.epoll_ctl(epfd, opcode, fd, event);
-            } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+                do {
+                    res = LinuxEPoll.epoll_ctl(epfd, opcode, fd, event);
+                } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+            } while (false);
             // 117     /*
             // 118      * A channel may be registered with several Selectors. When each Selector
             // 119      * is polled a EPOLL_CTL_DEL op will be inserted into its pending update
@@ -323,8 +325,10 @@ public final class LinuxNIOSubstitutions {
             if (timeout <= 0) {
                 // 141         RESTARTABLE(epoll_wait(epfd, events, numfds, timeout), res);
                 do {
-                    res = LinuxEPoll.epoll_wait(epfd, events, numfds, (int) timeout);
-                } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+                    do {
+                        res = LinuxEPoll.epoll_wait(epfd, events, numfds, (int) timeout);
+                    } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+                } while (false);
             } else {                      /* Bounded wait; bounded restarts */
                 // 143         res = iepoll(epfd, events, numfds, timeout);
                 res = Util_sun_nio_ch_EPollArrayWrapper.iepoll(epfd, events, numfds, timeout);
@@ -479,8 +483,10 @@ public final class LinuxNIOSubstitutions {
             buf.write(0, 1);
             // 056     RESTARTABLE(write(fd, buf, 1), res);
             do {
-                res = (int) Unistd.write(fd, buf, WordFactory.unsigned(1)).rawValue();
-            } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+                do {
+                    res = (int) Unistd.write(fd, buf, WordFactory.unsigned(1)).rawValue();
+                } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+            } while (false);
             // 057     if (res < 0) {
             if (res < 0) {
                 // 058         JNU_ThrowIOExceptionWithLastError(env, "write failed");
@@ -499,8 +505,10 @@ public final class LinuxNIOSubstitutions {
             CCharPointer buf = StackValue.get(CCharPointer.class);
             // 066     RESTARTABLE(read(fd, buf, 1), res);
             do {
-                res = (int) Unistd.read(fd, buf, WordFactory.unsigned(1)).rawValue();
-            } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+                do {
+                    res = (int) Unistd.read(fd, buf, WordFactory.unsigned(1)).rawValue();
+                } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+            } while (false);
             // 067     if (res < 0) {
             if (res < 0) {
                 // 068         JNU_ThrowIOExceptionWithLastError(env, "drain1 failed");
@@ -517,8 +525,10 @@ public final class LinuxNIOSubstitutions {
             int res;
             // 075     RESTARTABLE(close(fd), res);
             do {
-                res = Unistd.close(fd);
-            } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+                do {
+                    res = Unistd.close(fd);
+                } while ((res == -1) && (Errno.errno() == Errno.EINTR()));
+            } while (false);
         }
     }
     /* } @formatter:on */
