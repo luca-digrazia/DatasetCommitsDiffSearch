@@ -56,6 +56,12 @@ public class LIR {
      */
     private final List<Block> codeEmittingOrder;
 
+    /**
+     * Various out-of-line stubs to be emitted near the end of the method after all other LIR code
+     * has been emitted.
+     */
+    public final List<Code> stubs;
+
     private int numVariables;
 
     public SpillMoveFactory spillMoveFactory;
@@ -64,12 +70,25 @@ public class LIR {
 
     public interface SpillMoveFactory {
 
-        LIRInstruction createMove(AllocatableValue result, Value input);
+        LIRInstruction createMove(Value result, Value input);
     }
 
     private boolean hasArgInCallerFrame;
 
     private final SpeculationLog speculationLog;
+
+    /**
+     * An opaque chunk of machine code.
+     */
+    public interface Code {
+
+        void emitCode(TargetMethodAssembler tasm);
+
+        /**
+         * A description of this code stub useful for commenting the code in a disassembly.
+         */
+        String description();
+    }
 
     /**
      * Creates a new LIR instance for the specified compilation.
@@ -80,6 +99,8 @@ public class LIR {
         this.codeEmittingOrder = codeEmittingOrder;
         this.linearScanOrder = linearScanOrder;
         this.lirInstructions = new BlockMap<>(cfg);
+
+        stubs = new ArrayList<>();
         this.speculationLog = speculationLog;
     }
 
@@ -146,6 +167,11 @@ public class LIR {
         for (Block b : codeEmittingOrder()) {
             emitBlock(tasm, b);
         }
+
+        // generate code stubs
+        for (Code c : stubs) {
+            emitCodeStub(tasm, c);
+        }
     }
 
     private void emitBlock(TargetMethodAssembler tasm, Block block) {
@@ -174,6 +200,13 @@ public class LIR {
         } catch (GraalInternalError e) {
             throw e.addContext("lir instruction", op);
         }
+    }
+
+    private static void emitCodeStub(TargetMethodAssembler tasm, Code code) {
+        if (Debug.isDumpEnabled()) {
+            tasm.blockComment(String.format("code stub: %s", code.description()));
+        }
+        code.emitCode(tasm);
     }
 
     public void setHasArgInCallerFrame() {

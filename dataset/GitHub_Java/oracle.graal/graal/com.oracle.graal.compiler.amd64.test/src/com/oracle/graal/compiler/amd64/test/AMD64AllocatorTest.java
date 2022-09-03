@@ -26,14 +26,7 @@ import org.junit.*;
 
 import com.oracle.graal.compiler.test.backend.*;
 
-import static org.junit.Assume.*;
-
 public class AMD64AllocatorTest extends AllocatorTest {
-
-    @Before
-    public void setUp() {
-        assumeTrue(isArchitecture("x86_64"));
-    }
 
     @Test
     public void test1() {
