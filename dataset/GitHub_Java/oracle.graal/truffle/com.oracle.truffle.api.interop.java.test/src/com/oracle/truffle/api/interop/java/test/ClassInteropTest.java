@@ -24,18 +24,19 @@
  */
 package com.oracle.truffle.api.interop.java.test;
 
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.JavaInterop;
-
+import com.oracle.truffle.api.interop.InteropException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 
 public class ClassInteropTest {
     private TruffleObject obj;
@@ -54,12 +55,6 @@ public class ClassInteropTest {
     public void initObjects() {
         obj = JavaInterop.asTruffleObject(ClassInteropTest.class);
         xyp = JavaInterop.asJavaObject(XYPlus.class, obj);
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
     }
 
     @Test
@@ -74,26 +69,21 @@ public class ClassInteropTest {
         assertEquals("Field read", 42, xyp.CONST(), 0.01);
     }
 
-    @Test
-    public void cannotReadValueAsItIsNotStatic() {
-        try {
-            assertEquals("Field read", 42, xyp.value());
-        } catch (NoSuchFieldError ex) {
-            // OK
-            return;
-        }
+    @Test(expected = UnknownIdentifierException.class)
+    public void cannotReadValueAsItIsNotStatic() throws Exception {
+        assertEquals("Field read", 42, xyp.value());
         fail("value isn't static field");
     }
 
     @Test
-    public void canReadValueAfterCreatingNewInstance() {
+    public void canReadValueAfterCreatingNewInstance() throws Exception {
         Object objInst = JavaInteropTest.message(Message.createNew(0), obj);
         assertTrue("It is truffle object", objInst instanceof TruffleObject);
         XYPlus inst = JavaInterop.asJavaObject(XYPlus.class, (TruffleObject) objInst);
         assertEquals("Field read", 42, inst.value());
     }
 
-    @Test(expected = NoSuchFieldError.class)
+    @Test(expected = UnknownIdentifierException.class)
     public void noNonStaticMethods() {
         Object res = JavaInteropTest.message(Message.READ, obj, "readCONST");
         assertNull("not found", res);
@@ -111,6 +101,6 @@ public class ClassInteropTest {
 
         // Checkstyle: resume method name check
 
-        int value();
+        int value() throws InteropException;
     }
 }
