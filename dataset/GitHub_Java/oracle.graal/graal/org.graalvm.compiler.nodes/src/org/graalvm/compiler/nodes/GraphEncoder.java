@@ -168,8 +168,9 @@ public class GraphEncoder {
      */
     public void prepare(StructuredGraph graph) {
         for (Node node : graph.getNodes()) {
-            NodeClass<? extends Node> nodeClass = node.getNodeClass();
-            nodeClasses.addObject(nodeClass);
+            nodeClasses.addObject(node.getNodeClass());
+
+            NodeClass<?> nodeClass = node.getNodeClass();
             objects.addObject(node.getNodeSourcePosition());
             for (int i = 0; i < nodeClass.getData().getCount(); i++) {
                 if (!nodeClass.getData().getType(i).isPrimitive()) {
