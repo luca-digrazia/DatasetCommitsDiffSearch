@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,129 +29,658 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.c;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMDoubleIntrinsic;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMI32Intrinsic;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMI64Intrinsic;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMBuiltin;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVM80BitFloatStoreNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVM80BitFloatStoreNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMDoubleStoreNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMDoubleStoreNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMFloatStoreNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMFloatStoreNodeGen;
+import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 
 /**
  * Implements the C functions from math.h.
  */
 public abstract class LLVMCMathsIntrinsics {
 
-    @NodeChild(type = LLVMDoubleNode.class)
-    public abstract static class LLVMSqrt extends LLVMDoubleIntrinsic {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMSqrt extends LLVMBuiltin {
 
         @Specialization
-        public double executeIntrinsic(double value) {
+        protected float doIntrinsic(float value) {
+            return (float) Math.sqrt(value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
             return Math.sqrt(value);
         }
 
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
     }
 
-    @NodeChild(type = LLVMDoubleNode.class)
-    public abstract static class LLVMLog extends LLVMDoubleIntrinsic {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMLog extends LLVMBuiltin {
 
         @Specialization
-        public double executeIntrinsic(double value) {
+        protected float doIntrinsic(float value) {
+            return (float) Math.log(value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
             return Math.log(value);
         }
 
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
     }
 
-    @NodeChild(type = LLVMDoubleNode.class)
-    public abstract static class LLVMLog10 extends LLVMDoubleIntrinsic {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMLog2 extends LLVMBuiltin {
+
+        private static final double LOG_2 = Math.log(2);
 
         @Specialization
-        public double executeIntrinsic(double value) {
+        protected float doIntrinsic(float value) {
+            return (float) (Math.log(value) / LOG_2);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.log(value) / LOG_2;
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMLog10 extends LLVMBuiltin {
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.log10(value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
             return Math.log10(value);
         }
 
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
     }
 
-    @NodeChild(type = LLVMDoubleNode.class)
-    public abstract static class LLVMRint extends LLVMDoubleIntrinsic {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMLog1p extends LLVMBuiltin {
 
         @Specialization
-        public double executeIntrinsic(double value) {
+        protected float doIntrinsic(float value) {
+            return (float) Math.log1p(value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.log1p(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMRint extends LLVMBuiltin {
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.rint(value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
             return Math.rint(value);
         }
 
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
     }
 
-    @NodeChild(type = LLVMDoubleNode.class)
-    public abstract static class LLVMCeil extends LLVMDoubleIntrinsic {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMCeil extends LLVMBuiltin {
 
         @Specialization
-        public double executeIntrinsic(double value) {
+        protected float doIntrinsic(float value) {
+            return (float) Math.ceil(value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
             return Math.ceil(value);
         }
 
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
     }
 
-    @NodeChild(type = LLVMDoubleNode.class)
-    public abstract static class LLVMFloor extends LLVMDoubleIntrinsic {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMFloor extends LLVMBuiltin {
 
         @Specialization
-        public double executeIntrinsic(double value) {
+        protected float doIntrinsic(float value) {
+            return (float) Math.floor(value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
             return Math.floor(value);
         }
 
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
     }
 
-    @NodeChild(type = LLVMI32Node.class)
-    public abstract static class LLVMAbs extends LLVMI32Intrinsic {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMAbs extends LLVMIntrinsic {
 
         @Specialization
-        public int executeIntrinsic(int value) {
+        protected int doIntrinsic(int value) {
             return Math.abs(value);
         }
 
+        @Specialization
+        protected long doIntrinsic(long value) {
+            return Math.abs(value);
+        }
     }
 
-    @NodeChild(type = LLVMDoubleNode.class)
-    public abstract static class LLVMFAbs extends LLVMDoubleIntrinsic {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMFAbs extends LLVMBuiltin {
 
         @Specialization
-        public double executeIntrinsic(double value) {
+        protected float doIntrinsic(float value) {
             return Math.abs(value);
         }
 
-    }
-
-    @NodeChild(type = LLVMDoubleNode.class)
-    public abstract static class LLVMExp extends LLVMDoubleIntrinsic {
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.abs(value);
+        }
 
         @Specialization
-        public double executeIntrinsic(double value) {
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            return value.abs();
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeField(name = "vectorLength", type = int.class)
+    public abstract static class LLVMFAbsVectorNode extends LLVMBuiltin {
+        protected abstract int getVectorLength();
+
+        @Specialization
+        @ExplodeLoop
+        protected LLVMDoubleVector doVector(LLVMDoubleVector value) {
+            assert value.getLength() == getVectorLength();
+            double[] result = new double[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = Math.abs(value.getValue(i));
+            }
+            return LLVMDoubleVector.create(result);
+        }
+
+        @Specialization
+        @ExplodeLoop
+        protected LLVMFloatVector doVector(LLVMFloatVector value) {
+            assert value.getLength() == getVectorLength();
+            float[] result = new float[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = Math.abs(value.getValue(i));
+            }
+            return LLVMFloatVector.create(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMExp extends LLVMBuiltin {
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.exp(value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
             return Math.exp(value);
         }
 
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMDoubleNode.class), @NodeChild(type = LLVMDoubleNode.class)})
-    public abstract static class LLVMPow extends LLVMDoubleIntrinsic {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMExpm1 extends LLVMBuiltin {
 
         @Specialization
-        public double executeIntrinsic(double a, double b) {
+        protected float doIntrinsic(float value) {
+            return (float) Math.expm1(value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.expm1(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMExp2 extends LLVMBuiltin {
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.pow(2, value);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.pow(2, value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMLdexp extends LLVMIntrinsic {
+
+        @Specialization
+        protected float doIntrinsic(float value, int exp) {
+            return value * (float) Math.pow(2, exp);
+        }
+
+        @Specialization
+        protected double doIntrinsic(double value, int exp) {
+            return value * Math.pow(2, exp);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value, int exp) {
+            double result = doIntrinsic(value.getDoubleValue(), exp);
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMModf extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double value, LLVMPointer integralAddr,
+                        @Cached("createDoubleStore()") LLVMDoubleStoreNode store) {
+            double fractional = value % 1;
+            double integral = value - fractional;
+            store.executeWithTarget(integralAddr, integral);
+            return fractional;
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value, LLVMPointer integralAddr,
+                        @Cached("createFloatStore()") LLVMFloatStoreNode store) {
+            float fractional = value % 1;
+            float integral = value - fractional;
+            store.executeWithTarget(integralAddr, integral);
+            return fractional;
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat longDoubleValue, LLVMPointer integralAddr,
+                        @Cached("create80BitFloatStore()") LLVM80BitFloatStoreNode store) {
+            double value = longDoubleValue.getDoubleValue();
+            double fractional = value % 1;
+            double integral = value - fractional;
+            store.executeWithTarget(integralAddr, integral);
+            return LLVM80BitFloat.fromDouble(fractional);
+        }
+
+        @TruffleBoundary
+        protected static LLVMDoubleStoreNode createDoubleStore() {
+            return LLVMDoubleStoreNodeGen.create(null, null);
+        }
+
+        @TruffleBoundary
+        protected static LLVMFloatStoreNode createFloatStore() {
+            return LLVMFloatStoreNodeGen.create(null, null);
+        }
+
+        @TruffleBoundary
+        protected static LLVM80BitFloatStoreNode create80BitFloatStore() {
+            return LLVM80BitFloatStoreNodeGen.create(null, null);
+        }
+    }
+
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMFmod extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double numer, double denom) {
+            return numer % denom;
+        }
+
+        @Specialization
+        protected float doIntrinsic(float numer, float denom) {
+            return numer % denom;
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value, LLVM80BitFloat denom) {
+            double result = doIntrinsic(value.getDoubleValue(), denom.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMPow extends LLVMBuiltin {
+
+        @Specialization
+        protected float doFloat(float val, int pow) {
+            return (float) Math.pow(val, pow);
+        }
+
+        @Specialization
+        protected float doFloat(float val, float pow) {
+            return (float) Math.pow(val, pow);
+        }
+
+        @Specialization
+        protected double doDouble(double a, int b) {
             return Math.pow(a, b);
         }
 
-    }
-
-    @NodeChild(type = LLVMI64Node.class)
-    public abstract static class LLVMLAbs extends LLVMI64Intrinsic {
-
         @Specialization
-        public long executeIntrinsic(long value) {
-            return Math.abs(value);
+        protected double doDouble(double a, double b) {
+            return Math.pow(a, b);
         }
 
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value, int pow) {
+            double result = doDouble(value.getDoubleValue(), pow);
+            return LLVM80BitFloat.fromDouble(result);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat a, LLVM80BitFloat b) {
+            double result = doDouble(a.getDoubleValue(), b.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
     }
 
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMSin extends LLVMBuiltin {
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.sin(value);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.sin(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMSinh extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.sinh(value);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.sinh(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMASin extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.asin(value);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.asin(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMCos extends LLVMBuiltin {
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.cos(value);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.cos(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMCosh extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.cosh(value);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.cosh(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMACos extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.acos(value);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.acos(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMTan extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.tan(value);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.tan(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMTanh extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.tanh(value);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.tanh(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMATan extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double value) {
+            return Math.atan(value);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value) {
+            return (float) Math.atan(value);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
+            double result = doIntrinsic(value.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMATan2 extends LLVMIntrinsic {
+
+        @Specialization
+        protected double doIntrinsic(double value1, double value2) {
+            return Math.atan2(value1, value2);
+        }
+
+        @Specialization
+        protected float doIntrinsic(float value1, float value2) {
+            return (float) Math.atan2(value1, value2);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value1, LLVM80BitFloat value2) {
+            double result = doIntrinsic(value1.getDoubleValue(), value2.getDoubleValue());
+            return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChildren({@NodeChild(value = "magnitude", type = LLVMExpressionNode.class), @NodeChild(value = "sign", type = LLVMExpressionNode.class)})
+    public abstract static class LLVMCopySign extends LLVMBuiltin {
+
+        @Specialization
+        protected float doFloat(float magnitude, float sign) {
+            return Math.copySign(magnitude, sign);
+        }
+
+        @Specialization
+        protected double doDouble(double magnitude, double sign) {
+            return Math.copySign(magnitude, sign);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloat(LLVM80BitFloat magnitude, LLVM80BitFloat sign) {
+            if (magnitude.getSign() != sign.getSign()) {
+                return magnitude.negate();
+            } else {
+                return magnitude;
+            }
+        }
+    }
 }
