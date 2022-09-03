@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.lang;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -59,12 +60,12 @@ public class Math_tan extends JTTTest {
 
     @Test
     public void run3() throws Throwable {
-        runTestWithDelta(0, "test", -0.0d);
+        runTest("test", -0.0d);
     }
 
     @Test
     public void run4() throws Throwable {
-        runTestWithDelta(0, "test", 0.0d);
+        runTest("test", 0.0d);
     }
 
 }

@@ -24,8 +24,9 @@
  */
 package com.oracle.graal.jtt.except;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 public class BC_fastore extends JTTTest {
 
@@ -49,7 +50,7 @@ public class BC_fastore extends JTTTest {
 
     @Test
     public void run2() throws Throwable {
-        runTestWithDelta(0, "test", 0, 0.01f);
+        runTest("test", 0, 0.01f);
     }
 
     @Test

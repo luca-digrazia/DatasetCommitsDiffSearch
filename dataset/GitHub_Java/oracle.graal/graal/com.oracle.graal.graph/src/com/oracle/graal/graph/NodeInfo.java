@@ -22,21 +22,19 @@
  */
 package com.oracle.graal.graph;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 
-import com.oracle.graal.graph.Node.*;
-
+import com.oracle.graal.graph.Node.Verbosity;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface NodeInfo {
+
     String shortName() default "";
+
     /**
-     * The template used to build the {@link Verbosity#Name} version.
-     * Variable part are specified using &#123;i#inputName&#125; or &#123;p#propertyName&#125;.
+     * The template used to build the {@link Verbosity#Name} version. Variable part are specified
+     * using &#123;i#inputName&#125; or &#123;p#propertyName&#125;.
      */
     String nameTemplate() default "";
 }

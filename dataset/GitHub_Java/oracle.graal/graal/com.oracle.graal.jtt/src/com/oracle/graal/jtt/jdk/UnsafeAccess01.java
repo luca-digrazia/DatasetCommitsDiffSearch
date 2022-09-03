@@ -24,17 +24,16 @@ package com.oracle.graal.jtt.jdk;
 
 import java.lang.reflect.*;
 
-import com.oracle.graal.jtt.*;
-import org.junit.*;
-
 import sun.misc.*;
+
+import com.oracle.graal.jtt.*;
+import com.oracle.graal.test.*;
 
 /*
  */
 public class UnsafeAccess01 extends JTTTest {
 
-    @SuppressWarnings("unused")
-    private int field = 42;
+    @SuppressWarnings("unused") private int field = 42;
 
     public static int test() throws SecurityException, NoSuchFieldException {
         final Unsafe unsafe = getUnsafe();
@@ -56,7 +55,7 @@ public class UnsafeAccess01 extends JTTTest {
         }
     }
 
-    @Test
+    @LongTest
     public void run0() throws Throwable {
         runTest("test");
     }

@@ -25,8 +25,9 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -38,7 +39,7 @@ public class BC_ldc_02 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTestWithDelta(0, "test");
+        runTest("test");
     }
 
 }

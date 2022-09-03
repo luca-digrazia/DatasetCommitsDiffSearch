@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot.sparc;
 import static com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind.*;
 import static com.oracle.graal.sparc.SPARC.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
@@ -56,8 +55,7 @@ final class SPARCHotspotDirectVirtualCallOp extends DirectCallOp {
         // The mark for an invocation that uses an inline cache must be placed at the
         // instruction that loads the Klass from the inline cache.
         MarkId.recordMark(crb, invokeKind == Virtual ? MarkId.INVOKEVIRTUAL : MarkId.INVOKEINTERFACE);
-        Register scratchRegister = g5;
-        new Setx(HotSpotGraalRuntime.runtime().getConfig().nonOopBits, scratchRegister, true).emit(masm);
+        new Setx(HotSpotGraalRuntime.runtime().getConfig().nonOopBits, g3, true).emit(masm);
         super.emitCode(crb, masm);
     }
 }

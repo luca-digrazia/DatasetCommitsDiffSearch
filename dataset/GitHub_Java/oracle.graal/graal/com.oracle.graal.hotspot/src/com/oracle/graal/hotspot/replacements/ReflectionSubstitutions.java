@@ -22,13 +22,8 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-
-import java.lang.reflect.*;
-
-import com.oracle.graal.api.directives.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Substitutions for {@link sun.reflect.Reflection} methods.
@@ -36,14 +31,7 @@ import com.oracle.graal.hotspot.word.*;
 @ClassSubstitution(sun.reflect.Reflection.class)
 public class ReflectionSubstitutions {
 
-    @MethodSubstitution
-    public static int getClassAccessFlags(Class<?> aClass) {
-        KlassPointer klass = ClassGetHubNode.readClass(GraalDirectives.guardingNonNull(aClass));
-        if (klass.isNull()) {
-            // Class for primitive type
-            return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
-        } else {
-            return klass.readInt(klassAccessFlagsOffset(), KLASS_ACCESS_FLAGS_LOCATION) & jvmAccWrittenFlags();
-        }
-    }
+    @MacroSubstitution(macro = ReflectionGetCallerClassNode.class, optional = true)
+    public static native Class<?> getCallerClass();
+
 }

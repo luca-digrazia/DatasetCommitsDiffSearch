@@ -50,7 +50,7 @@ public class Thread_join02 extends JTTTest implements Runnable {
         cont = false;
     }
 
-    @LongTest(timeout = 20000)
+    @LongTest
     public void run0() throws Throwable {
         runTest("test");
     }

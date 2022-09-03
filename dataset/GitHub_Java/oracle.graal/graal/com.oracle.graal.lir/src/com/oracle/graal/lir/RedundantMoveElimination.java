@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,12 +28,12 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.MoveOp;
+import com.oracle.graal.nodes.cfg.*;
 
 /**
  * Removes move instructions, where the destination value is already in place.
@@ -340,7 +340,7 @@ public final class RedundantMoveElimination {
                 int sourceIdx = getStateIdx(moveOp.getInput());
                 int destIdx = getStateIdx(moveOp.getResult());
                 if (sourceIdx >= 0 && destIdx >= 0) {
-                    assert isObjectValue(state[sourceIdx]) || moveOp.getInput().getLIRKind().isValue() : "move op moves object but input is not defined as object";
+                    assert isObjectValue(state[sourceIdx]) || (moveOp.getInput().getKind() != Kind.Object) : "move op moves object but input is not defined as object";
                     state[destIdx] = state[sourceIdx];
                     Debug.log("move value %d from %d to %d", state[sourceIdx], sourceIdx, destIdx);
                     return initValueNum;
@@ -378,7 +378,7 @@ public final class RedundantMoveElimination {
                         /*
                          * Assign a unique number to the output or temp location.
                          */
-                        state[stateIdx] = encodeValueNum(opValueNum++, !operand.getLIRKind().isValue());
+                        state[stateIdx] = encodeValueNum(opValueNum++, operand.getKind() == Kind.Object);
                         Debug.log("set def %d for register %s(%d): %d", opValueNum, operand, stateIdx, state[stateIdx]);
                     }
                     return operand;
@@ -510,7 +510,7 @@ public final class RedundantMoveElimination {
             /*
              * Moves with mismatching kinds are not moves, but memory loads/stores!
              */
-            return source.getLIRKind().equals(dest.getLIRKind());
+            return source.getKind() == dest.getKind() && source.getPlatformKind() == dest.getPlatformKind() && source.getKind() != Kind.Illegal;
         }
         return false;
     }

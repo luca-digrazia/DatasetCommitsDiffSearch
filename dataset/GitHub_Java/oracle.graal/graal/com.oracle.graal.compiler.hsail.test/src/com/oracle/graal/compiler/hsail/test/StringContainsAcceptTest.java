@@ -23,14 +23,9 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import org.junit.Test;
-
-import com.oracle.graal.options.*;
-import com.oracle.graal.options.OptionValue.*;
-import com.oracle.graal.phases.*;
-
-import static com.oracle.graal.phases.GraalOptions.*;
 import static org.junit.Assume.*;
+
+import org.junit.*;
 
 /**
  * Tests codegen for String.contains() but with a wrapper method such as one would get in the
@@ -47,18 +42,15 @@ public class StringContainsAcceptTest extends StringContainsTest {
 
     @Override
     public void runTest() {
+        assumeTrue(aggressiveInliningEnabled() || canHandleHSAILMethodCalls());
         setupArrays();
 
         dispatchMethodKernel(NUM);
     }
 
-    // fails on 3rd workitem
     @Test
     @Override
     public void test() {
-        try (OverrideScope s = OptionValue.override(InlineEverything, true, getOptionFromField(GraalOptions.class, "RemoveNeverExecutedCode"), false)) {
-            assumeTrue(aggressiveInliningEnabled() || canHandleHSAILMethodCalls());
-            testGeneratedHsail();
-        }
+        testGeneratedHsail();
     }
 }

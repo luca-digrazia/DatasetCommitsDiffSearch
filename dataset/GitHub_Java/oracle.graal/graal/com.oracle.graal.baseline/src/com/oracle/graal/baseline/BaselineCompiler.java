@@ -22,24 +22,22 @@
  */
 package com.oracle.graal.baseline;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-
-import java.util.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 
 /**
  * The {@code GraphBuilder} class parses the bytecode of a method and builds the IR graph.
  */
+@SuppressWarnings("all")
 public class BaselineCompiler {
 
     public BaselineCompiler(GraphBuilderConfiguration graphBuilderConfig, MetaAccessProvider metaAccess) {
@@ -51,26 +49,28 @@ public class BaselineCompiler {
 
     private final GraphBuilderConfiguration graphBuilderConfig;
 
-    public CompilationResult generate(ResolvedJavaMethod method, @SuppressWarnings("unused") int entryBCI, Backend backend, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner,
-                    CompilationResultBuilderFactory factory, OptimisticOptimizations optimisticOpts, @SuppressWarnings("unused") Replacements replacements) {
+    public CompilationResult generate(ResolvedJavaMethod method, int entryBCI, Backend backend, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner,
+                    CompilationResultBuilderFactory factory, OptimisticOptimizations optimisticOpts) {
+        ProfilingInfo profilingInfo = method.getProfilingInfo();
         assert method.getCode() != null : "method must contain bytecodes: " + method;
+        BytecodeStream stream = new BytecodeStream(method.getCode());
+        ConstantPool constantPool = method.getConstantPool();
         TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
 
-        BaselineFrameStateBuilder frameState = new BaselineFrameStateBuilder(method);
+        LIRFrameStateBuilder frameState = new LIRFrameStateBuilder(method);
 
-        BaselineBytecodeParser parser = new BaselineBytecodeParser(metaAccess, method, graphBuilderConfig, optimisticOpts, frameState, backend);
+        BaselineBytecodeParser parser = new BaselineBytecodeParser(metaAccess, method, graphBuilderConfig, optimisticOpts, frameState, stream, profilingInfo, constantPool, entryBCI, backend);
 
         // build blocks and LIR instructions
-        final LIRGenerationResult res;
         try {
-            res = parser.build();
+            parser.build();
         } finally {
             filter.remove();
         }
 
         // emitCode
-        Assumptions assumptions = OptAssumptions.getValue() ? new Assumptions() : null;
-        GraalCompiler.emitCode(backend, assumptions, Collections.emptySet(), res, compilationResult, installedCodeOwner, factory);
+        Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
+        GraalCompiler.emitCode(backend, assumptions, parser.getLIRGenerationResult(), compilationResult, installedCodeOwner, factory);
 
         return compilationResult;
     }

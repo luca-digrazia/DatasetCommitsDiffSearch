@@ -30,13 +30,18 @@ import com.oracle.graal.hotspot.meta.*;
 
 public class PTXHotSpotCodeCacheProvider extends HotSpotCodeCacheProvider {
 
-    public PTXHotSpotCodeCacheProvider(HotSpotGraalRuntimeProvider runtime, TargetDescription target) {
-        super(runtime, target, new PTXHotSpotRegisterConfig());
+    public PTXHotSpotCodeCacheProvider(HotSpotGraalRuntime runtime, TargetDescription target) {
+        super(runtime, target);
     }
 
     @Override
     public String disassemble(CompilationResult compResult, InstalledCode installedCode) {
         byte[] code = installedCode == null ? Arrays.copyOf(compResult.getTargetCode(), compResult.getTargetCodeSize()) : installedCode.getCode();
         return new String(code);
+    }
+
+    @Override
+    protected RegisterConfig createRegisterConfig() {
+        return new PTXHotSpotRegisterConfig();
     }
 }

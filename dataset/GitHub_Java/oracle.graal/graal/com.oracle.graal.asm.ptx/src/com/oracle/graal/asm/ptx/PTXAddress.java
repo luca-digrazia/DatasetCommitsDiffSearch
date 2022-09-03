@@ -24,14 +24,15 @@ package com.oracle.graal.asm.ptx;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.lir.*;
 
 /**
  * Represents an address in target machine memory, specified via some combination of a base register
  * and a displacement.
  */
-public final class PTXAddress implements AbstractAddress {
+public final class PTXAddress extends AbstractAddress {
 
-    private final Register base;
+    private final Variable base;
     private final long displacement;
 
     /**
@@ -39,7 +40,7 @@ public final class PTXAddress implements AbstractAddress {
      * 
      * @param base the base register
      */
-    public PTXAddress(Register base) {
+    public PTXAddress(Variable base) {
         this(base, 0);
     }
 
@@ -50,7 +51,7 @@ public final class PTXAddress implements AbstractAddress {
      * @param base the base register
      * @param displacement the displacement
      */
-    public PTXAddress(Register base, long displacement) {
+    public PTXAddress(Variable base, long displacement) {
         this.base = base;
         this.displacement = displacement;
     }
@@ -59,7 +60,7 @@ public final class PTXAddress implements AbstractAddress {
      * @return Base register that defines the start of the address computation. If not present, is
      *         denoted by {@link Value#ILLEGAL}.
      */
-    public Register getBase() {
+    public Variable getBase() {
         return base;
     }
 

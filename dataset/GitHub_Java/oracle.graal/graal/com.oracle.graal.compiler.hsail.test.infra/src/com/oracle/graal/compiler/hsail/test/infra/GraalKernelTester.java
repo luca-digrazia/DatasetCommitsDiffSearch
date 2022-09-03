@@ -103,10 +103,6 @@ public abstract class GraalKernelTester extends KernelTester {
         return (canGenerateCalls && canExecuteCalls);
     }
 
-    public boolean canHandleObjectAllocation() {
-        return true;
-    }
-
     /**
      * Determines if the runtime has the capabilities required by this test.
      */
@@ -130,7 +126,7 @@ public abstract class GraalKernelTester extends KernelTester {
         }
     }
 
-    public static OptionValue<?> getOptionFromField(Class<?> declaringClass, String fieldName) {
+    public static OptionValue<?> getOptionFromField(Class declaringClass, String fieldName) {
         try {
             Field f = declaringClass.getDeclaredField(fieldName);
             f.setAccessible(true);
@@ -160,7 +156,6 @@ public abstract class GraalKernelTester extends KernelTester {
     @Override
     public void testGeneratedHsailUsingLambdaMethod() {
         try (OverrideScope s = getOverrideScope()) {
-            assumeTrue(supportsRequiredCapabilities());
             super.testGeneratedHsailUsingLambdaMethod();
         }
     }

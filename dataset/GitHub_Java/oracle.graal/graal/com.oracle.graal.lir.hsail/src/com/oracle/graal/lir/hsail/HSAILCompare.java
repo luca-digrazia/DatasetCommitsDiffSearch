@@ -35,17 +35,11 @@ import com.oracle.graal.nodes.calc.*;
  * Implementation of compare operations.
  */
 public enum HSAILCompare {
-    ICMP(Kind.Int),
-    LCMP(Kind.Long),
-    ACMP(Kind.Object),
-    FCMP(Kind.Float),
-    DCMP(Kind.Double);
-
-    public final Kind kind;
-
-    private HSAILCompare(Kind kind) {
-        this.kind = kind;
-    }
+    ICMP,
+    LCMP,
+    ACMP,
+    FCMP,
+    DCMP;
 
     public static class CompareOp extends HSAILLIRInstruction {
 
@@ -66,7 +60,7 @@ public enum HSAILCompare {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            emit(crb, masm, opcode, condition, x, y, z, unordered);
+            emit(crb, masm, condition, x, y, z, unordered);
         }
 
         @Override
@@ -78,8 +72,8 @@ public enum HSAILCompare {
     }
 
     @SuppressWarnings("unused")
-    public static void emit(CompilationResultBuilder crb, HSAILAssembler masm, HSAILCompare opcode, Condition condition, Value x, Value y, Value z, boolean unorderedIsTrue) {
-        masm.emitCompare(opcode.kind, x, y, conditionToString(condition), unorderedIsTrue, isUnsignedCompare(condition));
+    public static void emit(CompilationResultBuilder crb, HSAILAssembler masm, Condition condition, Value x, Value y, Value z, boolean unorderedIsTrue) {
+        emitCompare(masm, condition, x, y, unorderedIsTrue);
     }
 
     public static String conditionToString(Condition condition) {
@@ -116,4 +110,9 @@ public enum HSAILCompare {
                 return false;
         }
     }
+
+    private static void emitCompare(HSAILAssembler masm, Condition condition, Value src0, Value src1, boolean unordered) {
+        masm.emitCompare(src0, src1, conditionToString(condition), unordered, isUnsignedCompare(condition));
+    }
+
 }

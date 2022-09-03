@@ -24,6 +24,8 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
+import java.lang.reflect.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 
@@ -36,7 +38,9 @@ import com.oracle.graal.api.meta.*;
  * instance to be anything but weak. This is due to the fact that HotSpot does not treat nmethods as
  * strong GC roots.
  */
-public class HotSpotNmethod extends HotSpotInstalledCode {
+public final class HotSpotNmethod extends HotSpotInstalledCode {
+
+    private static final long serialVersionUID = -1784683588947054103L;
 
     /**
      * This (indirect) Method* reference is safe since class redefinition preserves all methods
@@ -67,8 +71,14 @@ public class HotSpotNmethod extends HotSpotInstalledCode {
         return isExternal;
     }
 
+    @Override
     public ResolvedJavaMethod getMethod() {
         return method;
+    }
+
+    @Override
+    public boolean isValid() {
+        return getCodeBlob() != 0;
     }
 
     @Override
@@ -78,14 +88,14 @@ public class HotSpotNmethod extends HotSpotInstalledCode {
 
     @Override
     public String toString() {
-        return String.format("InstalledNmethod[method=%s, codeBlob=0x%x, isDefault=%b, name=%s]", method, getAddress(), isDefault, name);
+        return String.format("InstalledNmethod[method=%s, codeBlob=0x%x, isDefault=%b, name=%s]", method, getCodeBlob(), isDefault, name);
     }
 
     protected boolean checkThreeObjectArgs() {
-        assert method.getSignature().getParameterCount(!method.isStatic()) == 3;
+        assert method.getSignature().getParameterCount(!Modifier.isStatic(method.getModifiers())) == 3;
         assert method.getSignature().getParameterKind(0) == Kind.Object;
         assert method.getSignature().getParameterKind(1) == Kind.Object;
-        assert !method.isStatic() || method.getSignature().getParameterKind(2) == Kind.Object;
+        assert !Modifier.isStatic(method.getModifiers()) || method.getSignature().getParameterKind(2) == Kind.Object;
         return true;
     }
 

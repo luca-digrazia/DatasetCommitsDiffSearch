@@ -26,21 +26,19 @@ import static java.lang.Thread.*;
 
 import java.io.*;
 import java.lang.annotation.*;
+import java.lang.management.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.hotspot.*;
-
-import com.oracle.graal.debug.*;
-import com.sun.management.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.sun.management.ThreadMXBean;
 
 @SuppressWarnings("unused")
 public final class CompilationStatistics {
 
     private static final long RESOLUTION = 100000000;
-    private static final boolean ENABLED = Boolean.getBoolean("jvmci.comp.stats");
+    private static final boolean ENABLED = Boolean.getBoolean("graal.comp.stats");
 
     private static final CompilationStatistics DUMMY = new CompilationStatistics(null, false);
 
@@ -67,7 +65,7 @@ public final class CompilationStatistics {
     private static long zeroTime = System.nanoTime();
 
     private static long getThreadAllocatedBytes() {
-        ThreadMXBean thread = (ThreadMXBean) Management.getThreadMXBean();
+        ThreadMXBean thread = (ThreadMXBean) ManagementFactory.getThreadMXBean();
         return thread.getThreadAllocatedBytes(currentThread().getId());
     }
 
@@ -88,7 +86,7 @@ public final class CompilationStatistics {
         if (method != null) {
             holder = method.getDeclaringClass().getName();
             name = method.getName();
-            signature = method.getSignature().toMethodDescriptor();
+            signature = method.getSignature().getMethodDescriptor();
             startTime = System.nanoTime();
             bytecodeCount = method.getCodeSize();
             threadAllocatedBytesStart = getThreadAllocatedBytes();

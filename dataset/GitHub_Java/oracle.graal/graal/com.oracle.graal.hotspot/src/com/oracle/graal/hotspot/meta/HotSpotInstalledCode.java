@@ -26,28 +26,41 @@ import static com.oracle.graal.graph.UnsafeAccess.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
-
-import edu.umd.cs.findbugs.annotations.*;
+import com.oracle.graal.hotspot.*;
 
 /**
  * Implementation of {@link InstalledCode} for HotSpot.
  */
-public abstract class HotSpotInstalledCode extends InstalledCode {
+public abstract class HotSpotInstalledCode extends CompilerObject implements InstalledCode {
+
+    private static final long serialVersionUID = 156632908220561612L;
+
+    /**
+     * Raw address of this code blob.
+     */
+    private long codeBlob;
 
     /**
      * Total size of the code blob.
      */
-    @SuppressFBWarnings(value = "UWF_UNWRITTEN_FIELD", justification = "field is set by the native part") private int size;
+    private int size;
 
     /**
      * Start address of the code.
      */
-    @SuppressFBWarnings(value = "UWF_UNWRITTEN_FIELD", justification = "field is set by the native part") private long codeStart;
+    private long codeStart;
 
     /**
      * Size of the code.
      */
-    @SuppressFBWarnings(value = "UWF_UNWRITTEN_FIELD", justification = "field is set by the native part") private int codeSize;
+    private int codeSize;
+
+    /**
+     * @return the address of this code blob
+     */
+    public long getCodeBlob() {
+        return codeBlob;
+    }
 
     /**
      * @return the total size of this code blob
@@ -64,14 +77,13 @@ public abstract class HotSpotInstalledCode extends InstalledCode {
             return null;
         }
         byte[] blob = new byte[size];
-        unsafe.copyMemory(null, getAddress(), blob, Unsafe.ARRAY_BYTE_BASE_OFFSET, size);
+        unsafe.copyMemory(null, codeBlob, blob, Unsafe.ARRAY_BYTE_BASE_OFFSET, size);
         return blob;
     }
 
     @Override
     public abstract String toString();
 
-    @Override
     public long getStart() {
         return codeStart;
     }
@@ -80,7 +92,6 @@ public abstract class HotSpotInstalledCode extends InstalledCode {
         return codeSize;
     }
 
-    @Override
     public byte[] getCode() {
         if (!isValid()) {
             return null;

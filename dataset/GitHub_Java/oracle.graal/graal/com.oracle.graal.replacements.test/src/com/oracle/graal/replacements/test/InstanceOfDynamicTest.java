@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.replacements.test;
 
-import org.junit.Test;
-
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.nodes.java.TypeProfileNode;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.test.*;
 
 /**
- * Tests for {@link TypeProfileNode}.
+ * Tests for {@link InstanceOfDynamicNode}.
  */
 public class InstanceOfDynamicTest extends GraalCompilerTest {
 
@@ -36,7 +35,7 @@ public class InstanceOfDynamicTest extends GraalCompilerTest {
         return value;
     }
 
-    @Test
+    @LongTest
     public void test100() {
         final Object nul = null;
         test("isStringDynamic", nul);
@@ -44,7 +43,7 @@ public class InstanceOfDynamicTest extends GraalCompilerTest {
         test("isStringDynamic", Object.class);
     }
 
-    @Test
+    @LongTest
     public void test101() {
         final Object nul = null;
         test("isStringIntDynamic", nul);
@@ -52,7 +51,7 @@ public class InstanceOfDynamicTest extends GraalCompilerTest {
         test("isStringIntDynamic", Object.class);
     }
 
-    @Test
+    @LongTest
     public void test103() {
         test("isInstanceDynamic", String.class, null);
         test("isInstanceDynamic", String.class, "object");
@@ -62,7 +61,7 @@ public class InstanceOfDynamicTest extends GraalCompilerTest {
         test("isInstanceDynamic", int.class, Object.class);
     }
 
-    @Test
+    @LongTest
     public void test104() {
         test("isInstanceIntDynamic", String.class, null);
         test("isInstanceIntDynamic", String.class, "object");
@@ -83,11 +82,11 @@ public class InstanceOfDynamicTest extends GraalCompilerTest {
         return o.getClass().getName().length();
     }
 
-    public static boolean isInstanceDynamic(Class<?> c, Object o) {
+    public static boolean isInstanceDynamic(Class c, Object o) {
         return c.isInstance(o);
     }
 
-    public static int isInstanceIntDynamic(Class<?> c, Object o) {
+    public static int isInstanceIntDynamic(Class c, Object o) {
         if (c.isInstance(o)) {
             return o.toString().length();
         }

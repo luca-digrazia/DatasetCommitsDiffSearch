@@ -22,11 +22,12 @@
  */
 package com.oracle.graal.jtt.jdk;
 
+import java.lang.reflect.*;
+
 import org.junit.*;
 
 import sun.misc.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.jtt.*;
 
 public class Unsafe_compareAndSwap extends JTTTest {
@@ -55,7 +56,7 @@ public class Unsafe_compareAndSwap extends JTTTest {
     private static final Unsafe_compareAndSwap instance = new Unsafe_compareAndSwap();
 
     @Override
-    protected void before(ResolvedJavaMethod m) {
+    protected void before(Method m) {
         instance.value = "a";
     }
 

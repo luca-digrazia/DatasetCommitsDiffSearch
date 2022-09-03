@@ -57,7 +57,9 @@ import com.oracle.graal.phases.tiers.*;
 
 import edu.umd.cs.findbugs.annotations.*;
 
-public class CompilationTask implements Runnable, Comparable<Object> {
+public class CompilationTask implements Runnable, Comparable {
+
+    private static final long TIMESTAMP_START = System.currentTimeMillis();
 
     // Keep static finals in a group with withinEnqueue as the last one. CompilationTask can be
     // called from within it's own clinit so it needs to be careful about accessing state. Once
@@ -370,18 +372,18 @@ public class CompilationTask implements Runnable, Comparable<Object> {
         }
         HotSpotVMConfig config = backend.getRuntime().getConfig();
         int compLevel = config.compilationLevelFullOptimization;
-        String compLevelString;
+        char compLevelChar;
         if (config.tieredCompilation) {
-            compLevelString = "- ";
+            compLevelChar = '-';
             if (compLevel != -1) {
-                compLevelString = (char) ('0' + compLevel) + " ";
+                compLevelChar = (char) ('0' + compLevel);
             }
         } else {
-            compLevelString = "";
+            compLevelChar = ' ';
         }
         boolean hasExceptionHandlers = method.getExceptionHandlers().length > 0;
-        TTY.println(String.format("%s%7d %4d %c%c%c%c%c %s      %s %s(%d bytes)", compilerName, backend.getRuntime().compilerToVm.getTimeStamp(), id, isOSR ? '%' : ' ',
-                        Modifier.isSynchronized(mod) ? 's' : ' ', hasExceptionHandlers ? '!' : ' ', blocking ? 'b' : ' ', Modifier.isNative(mod) ? 'n' : ' ', compLevelString,
+        TTY.println(String.format("%s%7d %4d %c%c%c%c%c%c      %s %s(%d bytes)", compilerName, (System.currentTimeMillis() - TIMESTAMP_START), id, isOSR ? '%' : ' ',
+                        Modifier.isSynchronized(mod) ? 's' : ' ', hasExceptionHandlers ? '!' : ' ', blocking ? 'b' : ' ', Modifier.isNative(mod) ? 'n' : ' ', compLevelChar,
                         MetaUtil.format("%H::%n(%p)", method), isOSR ? "@ " + entryBCI + " " : "", method.getCodeSize()));
     }
 

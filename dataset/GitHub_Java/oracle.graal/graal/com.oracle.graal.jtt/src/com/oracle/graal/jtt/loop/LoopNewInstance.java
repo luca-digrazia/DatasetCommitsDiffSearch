@@ -22,9 +22,10 @@
  */
 package com.oracle.graal.jtt.loop;
 
+import java.lang.reflect.*;
+
 import org.junit.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.jtt.*;
 
 /*
@@ -56,7 +57,7 @@ public class LoopNewInstance extends JTTTest {
     }
 
     @Override
-    protected void before(ResolvedJavaMethod m) {
+    protected void before(Method m) {
         count = 0;
     }
 

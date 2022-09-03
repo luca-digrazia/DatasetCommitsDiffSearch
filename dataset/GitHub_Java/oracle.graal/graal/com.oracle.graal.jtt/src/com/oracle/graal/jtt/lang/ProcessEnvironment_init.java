@@ -24,13 +24,11 @@
  */
 package com.oracle.graal.jtt.lang;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.jtt.*;
 
 public final class ProcessEnvironment_init extends JTTTest {
 
@@ -55,7 +53,7 @@ public final class ProcessEnvironment_init extends JTTTest {
     private static final class StringEnvironment extends HashMap<Object, Object> {
 
         @SuppressWarnings("unused")
-        StringEnvironment(HashMap<Object, Object> theenvironment) {
+        public StringEnvironment(HashMap<Object, Object> theenvironment) {
         }
     }
 

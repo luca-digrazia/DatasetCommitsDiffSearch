@@ -22,26 +22,26 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
 public class BC_dneg2 extends JTTTest {
 
-// @NEVER_INLINE
     public static double test(double a) {
         return 1 / (-a);
     }
 
     @Test
     public void run0() throws Throwable {
-        runTestWithDelta(0, "test", -0.0d);
+        runTest("test", -0.0d);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTestWithDelta(0, "test", 0.0d);
+        runTest("test", 0.0d);
     }
 
 }

@@ -22,12 +22,10 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
 
-/*
- * TODO: test roundoff behavior
- */
+import com.oracle.graal.jtt.*;
+
 public class BC_l2i extends JTTTest {
 
     public static int test(long a) {

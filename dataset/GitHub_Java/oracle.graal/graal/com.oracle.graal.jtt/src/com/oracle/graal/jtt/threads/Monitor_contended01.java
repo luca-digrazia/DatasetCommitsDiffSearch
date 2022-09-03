@@ -71,7 +71,7 @@ public final class Monitor_contended01 extends JTTTest implements Runnable {
         }
     }
 
-    @LongTest(timeout = 20000)
+    @LongTest
     public void run0() throws Throwable {
         runTest("test");
     }

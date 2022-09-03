@@ -23,9 +23,28 @@
 package com.oracle.graal.jtt.loop;
 
 import com.oracle.graal.jtt.*;
-import org.junit.*;
+import com.oracle.graal.test.*;
 
 public class LoopParseLong extends JTTTest {
+
+    @SuppressWarnings("unused")
+    public static long testShortened(String s, int radix) throws NumberFormatException {
+        long result = 0;
+        boolean negative = false;
+        int len = s.length();
+        char firstChar = s.charAt(0);
+        if (firstChar < '0') {
+            if (firstChar == '-') {
+                negative = true;
+            } else if (firstChar != '+') {
+                throw new NumberFormatException();
+            }
+            if (len == 1) {
+                throw new NumberFormatException();
+            }
+        }
+        return result;
+    }
 
     public static long test(String s, int radix) throws NumberFormatException {
         if (s == null) {
@@ -79,8 +98,10 @@ public class LoopParseLong extends JTTTest {
         return negative ? result : -result;
     }
 
-    @Test
+    @LongTest
     public void run0() throws Throwable {
+        runTest("testShortened", "7", 10);
+        runTest("testShortened", "-100", 10);
         runTest("test", "7", 10);
         runTest("test", "-100", 10);
     }

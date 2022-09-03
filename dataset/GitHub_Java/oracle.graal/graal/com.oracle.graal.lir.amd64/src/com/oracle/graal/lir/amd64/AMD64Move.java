@@ -396,15 +396,12 @@ public class AMD64Move {
     @Opcode("CAS")
     public static class CompareAndSwapOp extends AMD64LIRInstruction {
 
-        private final Kind accessKind;
-
         @Def protected AllocatableValue result;
         @Use({COMPOSITE}) protected AMD64AddressValue address;
         @Use protected AllocatableValue cmpValue;
         @Use protected AllocatableValue newValue;
 
-        public CompareAndSwapOp(Kind accessKind, AllocatableValue result, AMD64AddressValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
-            this.accessKind = accessKind;
+        public CompareAndSwapOp(AllocatableValue result, AMD64AddressValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
             this.result = result;
             this.address = address;
             this.cmpValue = cmpValue;
@@ -413,22 +410,7 @@ public class AMD64Move {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            assert asRegister(cmpValue).equals(AMD64.rax) && asRegister(result).equals(AMD64.rax);
-
-            if (crb.target.isMP) {
-                masm.lock();
-            }
-            switch (accessKind) {
-                case Int:
-                    masm.cmpxchgl(asRegister(newValue), address.toAddress());
-                    break;
-                case Long:
-                case Object:
-                    masm.cmpxchgq(asRegister(newValue), address.toAddress());
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
+            compareAndSwap(crb, masm, result, address, cmpValue, newValue);
         }
     }
 
@@ -654,6 +636,26 @@ public class AMD64Move {
                 } else {
                     throw GraalInternalError.shouldNotReachHere("Non-null object constants must be in register");
                 }
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+    }
+
+    protected static void compareAndSwap(CompilationResultBuilder crb, AMD64MacroAssembler masm, AllocatableValue result, AMD64AddressValue address, AllocatableValue cmpValue,
+                    AllocatableValue newValue) {
+        assert asRegister(cmpValue).equals(AMD64.rax) && asRegister(result).equals(AMD64.rax);
+
+        if (crb.target.isMP) {
+            masm.lock();
+        }
+        switch (cmpValue.getKind()) {
+            case Int:
+                masm.cmpxchgl(asRegister(newValue), address.toAddress());
+                break;
+            case Long:
+            case Object:
+                masm.cmpxchgq(asRegister(newValue), address.toAddress());
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();

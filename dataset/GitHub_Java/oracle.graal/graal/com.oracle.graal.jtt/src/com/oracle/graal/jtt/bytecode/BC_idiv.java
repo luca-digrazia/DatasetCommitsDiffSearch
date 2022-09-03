@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -52,15 +52,6 @@ public class BC_idiv extends JTTTest {
     @Test
     public void run3() throws Throwable {
         runTest("test", 135, 7);
-    }
-
-    public static int testStrictlyPositive(int b) {
-        return 64 / ((b & 7) + 1);
-    }
-
-    @Test
-    public void run4() throws Throwable {
-        runTest("testStrictlyPositive", 6);
     }
 
 }

@@ -39,8 +39,4 @@ public class BC_fdiv extends JTTTest {
         runTest("test", 311.0f, 10f);
     }
 
-    @Test
-    public void run1() throws Throwable {
-        runTest("test", 311.0f, 0f);
-    }
 }

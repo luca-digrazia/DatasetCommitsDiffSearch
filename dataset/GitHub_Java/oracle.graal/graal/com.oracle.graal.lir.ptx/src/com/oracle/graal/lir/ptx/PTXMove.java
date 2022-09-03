@@ -24,33 +24,34 @@ package com.oracle.graal.lir.ptx;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.ptx.*;
+import com.oracle.graal.asm.ptx.PTXMacroAssembler.Mov;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.StandardOp.MoveOp;
+import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.ptx.*;
 
 public class PTXMove {
 
     @Opcode("MOVE")
     public static class SpillMoveOp extends PTXLIRInstruction implements MoveOp {
 
-        @Def({REG, STACK}) protected Value result;
+        @Def({REG, STACK}) protected AllocatableValue result;
         @Use({REG, STACK, CONST}) protected Value input;
 
-        public SpillMoveOp(Value result, Value input) {
+        public SpillMoveOp(AllocatableValue result, Value input) {
             this.result = result;
             this.input = input;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            move(tasm, masm, getResult(), getInput());
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            move(crb, masm, getResult(), getInput());
         }
 
         @Override
@@ -59,7 +60,7 @@ public class PTXMove {
         }
 
         @Override
-        public Value getResult() {
+        public AllocatableValue getResult() {
             return result;
         }
     }
@@ -67,17 +68,17 @@ public class PTXMove {
     @Opcode("MOVE")
     public static class MoveToRegOp extends PTXLIRInstruction implements MoveOp {
 
-        @Def({REG, HINT}) protected Value result;
+        @Def({REG, HINT}) protected AllocatableValue result;
         @Use({REG, STACK, CONST}) protected Value input;
 
-        public MoveToRegOp(Value result, Value input) {
+        public MoveToRegOp(AllocatableValue result, Value input) {
             this.result = result;
             this.input = input;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            move(tasm, masm, getResult(), getInput());
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            move(crb, masm, getResult(), getInput());
         }
 
         @Override
@@ -86,7 +87,7 @@ public class PTXMove {
         }
 
         @Override
-        public Value getResult() {
+        public AllocatableValue getResult() {
             return result;
         }
     }
@@ -94,17 +95,17 @@ public class PTXMove {
     @Opcode("MOVE")
     public static class MoveFromRegOp extends PTXLIRInstruction implements MoveOp {
 
-        @Def({REG, STACK}) protected Value result;
+        @Def({REG, STACK}) protected AllocatableValue result;
         @Use({REG, CONST, HINT}) protected Value input;
 
-        public MoveFromRegOp(Value result, Value input) {
+        public MoveFromRegOp(AllocatableValue result, Value input) {
             this.result = result;
             this.input = input;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            move(tasm, masm, getResult(), getInput());
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            move(crb, masm, getResult(), getInput());
         }
 
         @Override
@@ -113,59 +114,39 @@ public class PTXMove {
         }
 
         @Override
-        public Value getResult() {
+        public AllocatableValue getResult() {
             return result;
-        }
-    }
-
-    public static class LoadOp extends PTXLIRInstruction {
-
-        @Def({REG}) protected Value result;
-        @Use({ADDR}) protected Value address;
-        @State protected LIRFrameState state;
-
-        public LoadOp(Value result, Value address, LIRFrameState state) {
-            this.result = result;
-            this.address = address;
-            this.state = state;
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            load(tasm, masm, result, (PTXAddress) address, state);
-        }
-    }
-
-    public static class StoreOp extends PTXLIRInstruction {
-
-        @Use({ADDR}) protected Value address;
-        @Use({REG, CONST}) protected Value input;
-        @State protected LIRFrameState state;
-
-        public StoreOp(Value address, Value input, LIRFrameState state) {
-            this.address = address;
-            this.input = input;
-            this.state = state;
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            store(tasm, masm, (PTXAddress) address, input, state);
         }
     }
 
     public static class LeaOp extends PTXLIRInstruction {
 
-        @Def({REG}) protected Value result;
-        @Use({ADDR, STACK, UNINITIALIZED}) protected Value address;
+        @Def({REG}) protected AllocatableValue result;
+        @Use({COMPOSITE, UNINITIALIZED}) protected PTXAddressValue address;
 
-        public LeaOp(Value result, Value address) {
+        public LeaOp(AllocatableValue result, PTXAddressValue address) {
             this.result = result;
             this.address = address;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            throw new InternalError("NYI");
+        }
+    }
+
+    public static class StackLeaOp extends PTXLIRInstruction {
+
+        @Def({REG}) protected AllocatableValue result;
+        @Use({STACK, UNINITIALIZED}) protected StackSlot slot;
+
+        public StackLeaOp(AllocatableValue result, StackSlot slot) {
+            this.result = result;
+            this.slot = slot;
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
             throw new InternalError("NYI");
         }
     }
@@ -173,12 +154,12 @@ public class PTXMove {
     @Opcode("CAS")
     public static class CompareAndSwapOp extends PTXLIRInstruction {
 
-        @Def protected Value result;
-        @Use({ADDR}) protected Value address;
-        @Use protected Value cmpValue;
-        @Use protected Value newValue;
+        @Def protected AllocatableValue result;
+        @Use({COMPOSITE}) protected PTXAddressValue address;
+        @Use protected AllocatableValue cmpValue;
+        @Use protected AllocatableValue newValue;
 
-        public CompareAndSwapOp(Value result, Address address, Value cmpValue, Value newValue) {
+        public CompareAndSwapOp(AllocatableValue result, PTXAddressValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
             this.result = result;
             this.address = address;
             this.cmpValue = cmpValue;
@@ -186,21 +167,21 @@ public class PTXMove {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            compareAndSwap(tasm, masm, result, (Address) address, cmpValue, newValue);
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            compareAndSwap(crb, masm, result, address, cmpValue, newValue);
         }
     }
 
-    public static void move(TargetMethodAssembler tasm, PTXAssembler masm, Value result, Value input) {
-        if (isRegister(input)) {
-            if (isRegister(result)) {
+    public static void move(CompilationResultBuilder crb, PTXMacroAssembler masm, Value result, Value input) {
+        if (isVariable(input)) {
+            if (isVariable(result)) {
                 reg2reg(masm, result, input);
             } else {
                 throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isConstant(input)) {
-            if (isRegister(result)) {
-                const2reg(tasm, masm, result, (Constant) input);
+            if (isVariable(result)) {
+                const2reg(crb, masm, result, (Constant) input);
             } else {
                 throw GraalInternalError.shouldNotReachHere();
             }
@@ -209,77 +190,79 @@ public class PTXMove {
         }
     }
 
-    private static void reg2reg(PTXAssembler masm, Value result, Value input) {
-        if (asRegister(input).equals(asRegister(result))) {
+    private static void reg2reg(PTXMacroAssembler masm, Value result, Value input) {
+        Variable dest = (Variable) result;
+        Variable source = (Variable) input;
+
+        if (dest.index == source.index) {
             return;
         }
         switch (input.getKind()) {
             case Int:
-                masm.mov_s32(asRegister(result), asRegister(input));
-                break;
+            case Long:
+            case Float:
+            case Double:
             case Object:
-                masm.mov_u64(asRegister(result), asRegister(input));
+                new Mov(dest, source).emit(masm);
                 break;
             default:
-                throw GraalInternalError.shouldNotReachHere("kind=" + result.getKind());
+                throw GraalInternalError.shouldNotReachHere("missing: " + input.getKind());
         }
     }
 
-    private static void const2reg(TargetMethodAssembler tasm, PTXAssembler masm, Value result, Constant input) {
+    private static void const2reg(CompilationResultBuilder crb, PTXMacroAssembler masm, Value result, Constant input) {
+        Variable dest = (Variable) result;
+
         switch (input.getKind().getStackKind()) {
             case Int:
-                if (tasm.runtime.needsDataPatch(input)) {
-                    tasm.recordDataReferenceInCode(input, 0, true);
+            case Long:
+                if (crb.codeCache.needsDataPatch(input)) {
+                    crb.recordInlineDataInCode(input);
                 }
-                masm.mov_s32(asRegister(result), input.asInt());
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static void load(TargetMethodAssembler tasm, PTXAssembler masm, Value result, PTXAddress loadAddr, LIRFrameState info) {
-        Register a = asRegister(loadAddr.getBase());
-        long immOff = loadAddr.getDisplacement();
-        switch (loadAddr.getKind()) {
-            case Int:
-                masm.ld_global_s32(asRegister(result), a, immOff);
+                new Mov(dest, input).emit(masm);
                 break;
             case Object:
-                masm.ld_global_u32(asRegister(result), a, immOff);
+                if (input.isNull()) {
+                    new Mov(dest, Constant.forLong(0x0L)).emit(masm);
+                } else if (crb.target.inlineObjects) {
+                    crb.recordInlineDataInCode(input);
+                    new Mov(dest, Constant.forLong(0xDEADDEADDEADDEADL)).emit(masm);
+                } else {
+                    // new Mov(dest, crb.recordDataReferenceInCode(input, 0, false));
+                }
                 break;
             default:
-                throw GraalInternalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere("missing: " + input.getKind());
         }
     }
 
     @SuppressWarnings("unused")
-    public static void store(TargetMethodAssembler tasm, PTXAssembler masm, PTXAddress storeAddr, Value input, LIRFrameState info) {
-        Register a = asRegister(storeAddr.getBase());
-        long immOff = storeAddr.getDisplacement();
-        if (isRegister(input)) {
-            switch (storeAddr.getKind()) {
-                case Int:
-                    masm.st_global_s32(a, immOff, asRegister(input));
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
-        } else if (isConstant(input)) {
-            Constant c = (Constant) input;
-            switch (storeAddr.getKind()) {
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
-
-        } else {
-            throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    @SuppressWarnings("unused")
-    protected static void compareAndSwap(TargetMethodAssembler tasm, PTXAssembler masm, Value result, Address address, Value cmpValue, Value newValue) {
+    protected static void compareAndSwap(CompilationResultBuilder crb, PTXAssembler masm, AllocatableValue result, PTXAddressValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
         throw new InternalError("NYI");
+    }
+
+    public static class NullCheckOp extends PTXLIRInstruction implements NullCheck {
+
+        @Use({REG}) protected AllocatableValue input;
+        @State protected LIRFrameState state;
+
+        public NullCheckOp(Variable input, LIRFrameState state) {
+            this.input = input;
+            this.state = state;
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            crb.recordImplicitException(masm.position(), state);
+            masm.nullCheck(asRegister(input));
+        }
+
+        public Value getCheckedValue() {
+            return input;
+        }
+
+        public LIRFrameState getState() {
+            return state;
+        }
     }
 }

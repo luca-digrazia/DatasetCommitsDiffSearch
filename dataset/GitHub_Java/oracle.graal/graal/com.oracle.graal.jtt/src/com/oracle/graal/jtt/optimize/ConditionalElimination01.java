@@ -22,9 +22,10 @@
  */
 package com.oracle.graal.jtt.optimize;
 
+import java.lang.reflect.*;
+
 import org.junit.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.jtt.*;
 
 public class ConditionalElimination01 extends JTTTest {
@@ -42,7 +43,7 @@ public class ConditionalElimination01 extends JTTTest {
     }
 
     @Override
-    protected void before(ResolvedJavaMethod method) {
+    protected void before(Method method) {
         super.before(method);
         x = 0;
     }

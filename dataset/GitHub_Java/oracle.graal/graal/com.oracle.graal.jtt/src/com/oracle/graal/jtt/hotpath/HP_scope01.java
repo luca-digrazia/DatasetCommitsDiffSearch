@@ -23,8 +23,9 @@
 // Checkstyle: stop
 package com.oracle.graal.jtt.hotpath;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -82,6 +83,7 @@ public class HP_scope01 extends JTTTest {
         return sum;
     }
 
+    @Ignore
     @Test
     public void run0() throws Throwable {
         runTest("test", 40);

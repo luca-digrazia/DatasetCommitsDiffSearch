@@ -49,6 +49,7 @@ public abstract class OptimizedCallTarget extends DefaultCallTarget implements L
     protected TruffleInliningResult inliningResult;
     protected final CompilationProfile compilationProfile;
     protected final CompilationPolicy compilationPolicy;
+    private final SpeculationLog speculationLog = new SpeculationLog();
     private OptimizedCallTarget splitSource;
 
     private final AtomicInteger callSitesKnown = new AtomicInteger(0);
@@ -162,14 +163,10 @@ public abstract class OptimizedCallTarget extends DefaultCallTarget implements L
 
     public final Object executeHelper(Object[] args) {
         VirtualFrame frame = createFrame(getRootNode().getFrameDescriptor(), args);
-        return callProxy(frame);
+        return getRootNode().execute(frame);
     }
 
     public static FrameWithoutBoxing createFrame(FrameDescriptor descriptor, Object[] args) {
-        return new FrameWithoutBoxing(descriptor, args);
-    }
-
-    public static FrameWithoutBoxing createMaterializedFrame(FrameDescriptor descriptor, Object[] args) {
         return new FrameWithoutBoxing(descriptor, args);
     }
 
@@ -184,7 +181,9 @@ public abstract class OptimizedCallTarget extends DefaultCallTarget implements L
         invalidate(oldNode, newNode, reason);
     }
 
-    public abstract SpeculationLog getSpeculationLog();
+    public SpeculationLog getSpeculationLog() {
+        return speculationLog;
+    }
 
     public Map<String, Object> getDebugProperties() {
         Map<String, Object> properties = new LinkedHashMap<>();

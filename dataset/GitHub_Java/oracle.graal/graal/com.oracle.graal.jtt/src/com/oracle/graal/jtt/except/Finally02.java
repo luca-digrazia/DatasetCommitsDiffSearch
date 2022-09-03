@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.except;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -39,12 +40,10 @@ public class Finally02 extends JTTTest {
         return c();
     }
 
-// @NEVER_INLINE
     static int a() {
         return 0;
     }
 
-// @NEVER_INLINE
     static int b() {
         return -3;
     }

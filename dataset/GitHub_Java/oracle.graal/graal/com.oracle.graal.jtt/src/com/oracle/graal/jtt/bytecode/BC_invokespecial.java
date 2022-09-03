@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -35,8 +36,8 @@ public class BC_invokespecial extends JTTTest {
         return object.id(a);
     }
 
-        @SuppressWarnings("static-method")
-        private int id(int i) {
+    @SuppressWarnings("static-method")
+    private int id(int i) {
         return i;
     }
 

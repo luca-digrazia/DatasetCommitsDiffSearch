@@ -24,16 +24,20 @@ package com.oracle.graal.jtt.lang;
 
 import java.io.*;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 public final class Class_getModifiers01 extends JTTTest {
 
-    private static class PrivateStatic {}
+    private static class PrivateStatic {
+    }
 
-    private static final class PrivateStaticFinal {}
+    private static final class PrivateStaticFinal {
+    }
 
-    private static class Private {}
+    private static class Private {
+    }
 
     public static int test(Class c) {
         return c.getModifiers();

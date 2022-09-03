@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,30 @@
  */
 package com.oracle.graal.lir.amd64;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.common.UnsafeAccess.*;
 
 import java.lang.reflect.*;
 
-import jdk.internal.jvmci.amd64.*;
-import jdk.internal.jvmci.amd64.AMD64.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.amd64.AMD64.CPUFeature;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Address.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.*;
+import com.oracle.graal.asm.amd64.AMD64Address.Scale;
+import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Emits code which compares two arrays of the same length. If the CPU supports any vector
  * instructions specialized code is emitted to leverage these instructions.
  */
 @Opcode("ARRAY_EQUALS")
-public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
-    public static final LIRInstructionClass<AMD64ArrayEqualsOp> TYPE = LIRInstructionClass.create(AMD64ArrayEqualsOp.class);
+public class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
 
     private final Kind kind;
     private final int arrayBaseOffset;
@@ -61,11 +59,10 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
     @Temp({REG}) protected Value temp2;
     @Temp({REG}) protected Value temp3;
     @Temp({REG}) protected Value temp4;
-    @Temp({REG, ILLEGAL}) protected Value vectorTemp1;
-    @Temp({REG, ILLEGAL}) protected Value vectorTemp2;
+    @Temp({REG}) protected Value vectorTemp1;
+    @Temp({REG}) protected Value vectorTemp2;
 
     public AMD64ArrayEqualsOp(LIRGeneratorTool tool, Kind kind, Value result, Value array1, Value array2, Value length) {
-        super(TYPE);
         this.kind = kind;
 
         Class<?> arrayClass = Array.newInstance(kind.toJavaClass(), 0).getClass();
@@ -78,18 +75,15 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
         this.lengthValue = length;
 
         // Allocate some temporaries.
-        this.temp1 = tool.newVariable(LIRKind.unknownReference(tool.target().wordKind));
-        this.temp2 = tool.newVariable(LIRKind.unknownReference(tool.target().wordKind));
-        this.temp3 = tool.newVariable(LIRKind.value(tool.target().wordKind));
-        this.temp4 = tool.newVariable(LIRKind.value(tool.target().wordKind));
+        this.temp1 = tool.newVariable(tool.target().wordKind);
+        this.temp2 = tool.newVariable(tool.target().wordKind);
+        this.temp3 = tool.newVariable(tool.target().wordKind);
+        this.temp4 = tool.newVariable(tool.target().wordKind);
 
         // We only need the vector temporaries if we generate SSE code.
         if (supportsSSE41(tool.target())) {
-            this.vectorTemp1 = tool.newVariable(LIRKind.value(Kind.Double));
-            this.vectorTemp2 = tool.newVariable(LIRKind.value(Kind.Double));
-        } else {
-            this.vectorTemp1 = Value.ILLEGAL;
-            this.vectorTemp2 = Value.ILLEGAL;
+            this.vectorTemp1 = tool.newVariable(Kind.Double);
+            this.vectorTemp2 = tool.newVariable(Kind.Double);
         }
     }
 
@@ -134,7 +128,7 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
 
     /**
      * Returns if the underlying AMD64 architecture supports SSE 4.1 instructions.
-     *
+     * 
      * @param target target description of the underlying architecture
      * @return true if the underlying architecture supports SSE 4.1
      */

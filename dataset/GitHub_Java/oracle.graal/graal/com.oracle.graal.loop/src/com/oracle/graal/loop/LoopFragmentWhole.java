@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.loop;
 
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.iterators.*;
@@ -57,15 +56,10 @@ public class LoopFragmentWhole extends LoopFragment {
     @Override
     public NodeIterable<Node> nodes() {
         if (nodes == null) {
-            Loop<Block> lirLoop = loop().lirLoop();
-            nodes = LoopFragment.computeNodes(graph(), LoopFragment.toHirBlocks(lirLoop.getBlocks()), LoopFragment.toHirExits(lirLoop.getExits()));
+            Loop lirLoop = loop().lirLoop();
+            nodes = LoopFragment.computeNodes(graph(), LoopFragment.toHirBlocks(lirLoop.blocks), LoopFragment.toHirBlocks(lirLoop.exits));
         }
         return nodes;
-    }
-
-    @Override
-    protected ValueNode prim(ValueNode b) {
-        return getDuplicatedNode(b);
     }
 
     @Override

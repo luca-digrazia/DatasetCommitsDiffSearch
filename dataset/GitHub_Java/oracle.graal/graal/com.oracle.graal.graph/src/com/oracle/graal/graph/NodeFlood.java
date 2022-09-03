@@ -22,15 +22,12 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.ArrayDeque;
-import java.util.Iterator;
-import java.util.Queue;
+import java.util.*;
 
-public final class NodeFlood implements Iterable<Node> {
+public class NodeFlood implements Iterable<Node> {
 
     private final NodeBitMap visited;
     private final Queue<Node> worklist;
-    private int totalMarkedCount;
 
     public NodeFlood(Graph graph) {
         visited = graph.createNodeBitMap();
@@ -41,22 +38,13 @@ public final class NodeFlood implements Iterable<Node> {
         if (node != null && !visited.isMarked(node)) {
             visited.mark(node);
             worklist.add(node);
-            totalMarkedCount++;
         }
-    }
-
-    public int getTotalMarkedCount() {
-        return totalMarkedCount;
     }
 
     public void addAll(Iterable<? extends Node> nodes) {
         for (Node node : nodes) {
             this.add(node);
         }
-    }
-
-    public NodeBitMap getVisited() {
-        return visited;
     }
 
     public boolean isMarked(Node node) {
@@ -71,7 +59,7 @@ public final class NodeFlood implements Iterable<Node> {
 
         private final Queue<Node> queue;
 
-        QueueConsumingIterator(Queue<Node> queue) {
+        public QueueConsumingIterator(Queue<Node> queue) {
             this.queue = queue;
         }
 
@@ -102,7 +90,7 @@ public final class NodeFlood implements Iterable<Node> {
         private Iterator<Node> nodes;
         private Node nextNode;
 
-        UnmarkedNodeIterator(NodeBitMap visited, Iterator<Node> nodes) {
+        public UnmarkedNodeIterator(NodeBitMap visited, Iterator<Node> nodes) {
             this.visited = visited;
             this.nodes = nodes;
             forward();

@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
 
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.*;
@@ -41,6 +41,6 @@ final class AMD64DeoptimizeOp extends AMD64LIRInstruction implements BlockEndOp 
 
     @Override
     public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-        AMD64Call.directCall(crb, masm, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP_HANDLER), null, false, info);
+        AMD64Call.directCall(crb, masm, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP), null, false, info);
     }
 }

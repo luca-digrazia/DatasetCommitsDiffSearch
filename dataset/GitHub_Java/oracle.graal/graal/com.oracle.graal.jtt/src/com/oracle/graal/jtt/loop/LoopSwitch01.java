@@ -23,7 +23,7 @@
 package com.oracle.graal.jtt.loop;
 
 import com.oracle.graal.jtt.*;
-import org.junit.*;
+import com.oracle.graal.test.*;
 
 /*
  */
@@ -58,7 +58,7 @@ public class LoopSwitch01 extends JTTTest {
         return "" + ('a' + count);
     }
 
-    @Test
+    @LongTest
     public void run0() throws Throwable {
         runTest("test");
     }

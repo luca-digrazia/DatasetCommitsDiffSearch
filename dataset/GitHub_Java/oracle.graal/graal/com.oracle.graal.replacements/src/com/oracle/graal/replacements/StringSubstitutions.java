@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.replacements.nodes.*;
 
 import edu.umd.cs.findbugs.annotations.*;
@@ -35,7 +35,7 @@ import edu.umd.cs.findbugs.annotations.*;
 /**
  * Substitutions for {@link java.lang.String} methods.
  */
-@ClassSubstitution(value = java.lang.String.class, defaultGuard = UnsafeSubstitutions.GetAndSetGuard.class)
+@ClassSubstitution(java.lang.String.class)
 public class StringSubstitutions {
 
     /**

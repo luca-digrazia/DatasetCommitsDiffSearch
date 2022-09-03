@@ -131,14 +131,10 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
     }
 
     public SPARCHotSpotRegisterConfig(TargetDescription target, HotSpotVMConfig config) {
-        this(target, initAllocatable(config.useCompressedOops));
-    }
-
-    public SPARCHotSpotRegisterConfig(TargetDescription target, Register[] allocatable) {
         this.architecture = target.arch;
 
         csl = new CalleeSaveLayout(target, -1, -1, target.arch.getWordSize(), calleeSaveRegisters);
-        this.allocatable = allocatable.clone();
+        allocatable = initAllocatable(config.useCompressedOops);
         attributesMap = RegisterAttributes.createMap(this, SPARC.allRegisters);
     }
 

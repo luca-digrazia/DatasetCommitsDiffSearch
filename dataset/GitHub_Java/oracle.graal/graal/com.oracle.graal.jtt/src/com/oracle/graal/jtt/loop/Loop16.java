@@ -23,8 +23,9 @@
 // Checkstyle: stop
 package com.oracle.graal.jtt.loop;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  * Tests exiting 2 loops at the same time with escape-analysed values flowing out of loops
@@ -40,7 +41,7 @@ public class Loop16 extends JTTTest {
     }
 
     public int run(int count) {
-    l1: for (int i = 0; i <= count; i++) {
+        l1: for (int i = 0; i <= count; i++) {
             if (i > 5) {
                 for (int j = 0; j < i; j++) {
                     a += i;
@@ -51,7 +52,7 @@ public class Loop16 extends JTTTest {
             } else if (i > 7) {
                 b += i;
             } else {
-                    c += i;
+                c += i;
             }
         }
         return a + b + c;

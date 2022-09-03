@@ -28,11 +28,38 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Add;
+import com.oracle.graal.asm.sparc.SPARCAssembler.And;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Faddd;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fadds;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fdivd;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fdivs;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fdtoi;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fmuld;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fmuls;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fnegd;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fnegs;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fstoi;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fsubd;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fsubs;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Mulx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Or;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Sdivx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Sll;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Sllx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Sra;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Srax;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Srl;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Srlx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Sub;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Xor;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Neg;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Not;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Signx;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodes.spi.*;
 
 public enum SPARCArithmetic {
     // @formatter:off
@@ -41,7 +68,7 @@ public enum SPARCArithmetic {
     FADD, FSUB, FMUL, FDIV, FREM, FAND, FOR, FXOR,
     DADD, DSUB, DMUL, DDIV, DREM, DAND, DOR, DXOR,
     INEG, LNEG, FNEG, DNEG, INOT, LNOT,
-    L2I, B2I, S2I, B2L, S2L, I2L,
+    I2L, L2I, I2B, I2C, I2S,
     F2D, D2F,
     I2F, I2D, F2I, D2I,
     L2F, L2D, F2L, D2L,
@@ -303,7 +330,7 @@ public enum SPARCArithmetic {
                     new Sdivx(asIntReg(src1), crb.asIntConst(src2), asIntReg(dst)).emit(masm);
                     break;
                 case IAND:
-                    assert isSimm13(crb.asIntConst(src2)) : src2;
+                    assert isSimm13(crb.asIntConst(src2));
                     new And(asIntReg(src1), crb.asIntConst(src2), asIntReg(dst)).emit(masm);
                     break;
                 case ISHL:
@@ -512,17 +539,6 @@ public enum SPARCArithmetic {
         } else {
             switch (opcode) {
                 case LREM:
-                    new Sdivx(asLongReg(src1), asLongReg(src2), asLongReg(scratch1)).emit(masm);
-                    exceptionOffset = masm.position();
-                    new Mulx(asLongReg(scratch1), asLongReg(src2), asLongReg(scratch2)).emit(masm);
-                    new Sub(asLongReg(src1), asLongReg(scratch2), asLongReg(dst)).emit(masm);
-                    break;
-                case IREM:
-                    new Sdivx(asIntReg(src1), asIntReg(src2), asIntReg(scratch1)).emit(masm);
-                    exceptionOffset = masm.position();
-                    new Mulx(asIntReg(scratch1), asIntReg(src2), asIntReg(scratch2)).emit(masm);
-                    new Sub(asIntReg(src1), asIntReg(scratch2), asIntReg(dst)).emit(masm);
-                    break;
                 case LUREM:
                     throw GraalInternalError.unimplemented();
                 default:
@@ -544,9 +560,6 @@ public enum SPARCArithmetic {
                 case INEG:
                     new Neg(asIntReg(src), asIntReg(dst)).emit(masm);
                     break;
-                case LNEG:
-                    new Neg(asLongReg(src), asLongReg(dst)).emit(masm);
-                    break;
                 case INOT:
                     new Not(asIntReg(src), asIntReg(dst)).emit(masm);
                     break;
@@ -559,17 +572,16 @@ public enum SPARCArithmetic {
                 case L2I:
                     new Signx(asLongReg(src), asIntReg(dst)).emit(masm);
                     break;
-                case B2I:
+                case I2B:
                     new Sll(asIntReg(src), 24, asIntReg(dst)).emit(masm);
                     new Srl(asIntReg(dst), 24, asIntReg(dst)).emit(masm);
                     break;
-                case S2I:
+                case I2C:
                     new Sll(asIntReg(src), 16, asIntReg(dst)).emit(masm);
                     new Srl(asIntReg(dst), 16, asIntReg(dst)).emit(masm);
                     break;
                 case I2F:
-                    new Movwtos(asIntReg(src), asFloatReg(dst)).emit(masm);
-                    new Fitos(masm, asFloatReg(dst), asFloatReg(dst));
+                    new Fstoi(masm, asIntReg(src), asFloatReg(dst));
                     break;
                 case I2D:
                     new Fdtoi(masm, asIntReg(src), asDoubleReg(dst));

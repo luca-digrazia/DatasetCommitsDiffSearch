@@ -123,7 +123,7 @@ public class TestResolvedJavaType extends TypeUniverse {
     public void isInstanceTest() {
         for (Constant c : constants) {
             if (c.getKind() == Kind.Object && !c.isNull()) {
-                Object o = snippetReflection.asObject(c);
+                Object o = c.asObject();
                 Class<? extends Object> cls = o.getClass();
                 while (cls != null) {
                     ResolvedJavaType type = metaAccess.lookupJavaType(cls);

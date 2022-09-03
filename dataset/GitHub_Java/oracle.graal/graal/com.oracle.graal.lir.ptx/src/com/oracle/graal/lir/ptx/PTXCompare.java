@@ -25,33 +25,41 @@ package com.oracle.graal.lir.ptx;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.ptx.*;
+import com.oracle.graal.asm.ptx.PTXAssembler.Setp;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.calc.*;
 
 public enum PTXCompare {
-    ICMP, LCMP, ACMP, FCMP, DCMP;
+    ICMP,
+    LCMP,
+    ACMP,
+    FCMP,
+    DCMP;
 
     public static class CompareOp extends PTXLIRInstruction {
 
         @Opcode private final PTXCompare opcode;
-        @Use({REG}) protected Value x;
+        @Use({REG, STACK, CONST}) protected Value x;
         @Use({REG, STACK, CONST}) protected Value y;
+        // Number of predicate register that would be set by this instruction.
+        protected int predRegNum;
         private final Condition condition;
 
-        public CompareOp(PTXCompare opcode, Condition condition, Value x, Value y) {
+        public CompareOp(PTXCompare opcode, Condition condition, Value x, Value y, int predReg) {
             this.opcode = opcode;
             this.condition = condition;
             this.x = x;
             this.y = y;
+            predRegNum = predReg;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            emit(tasm, masm, opcode, condition, x, y);
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            emit(masm, opcode, condition, x, y, predRegNum);
         }
 
         @Override
@@ -63,36 +71,17 @@ public enum PTXCompare {
         }
     }
 
-    public static void emit(TargetMethodAssembler tasm, PTXAssembler masm, PTXCompare opcode, Condition condition, Value x, Value y) {
+    public static void emit(PTXAssembler masm, PTXCompare opcode, Condition condition, Value x, Value y, int p) {
         if (isConstant(x)) {
-            int a = tasm.asIntConst(x);
-            Register b = asIntReg(y);
-            switch (opcode) {
-                case ICMP:
-                    emitCompareConstReg(masm, condition, a, b);
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
+            new Setp(condition, x, y, p).emit(masm);
         } else if (isConstant(y)) {
-            Register a = asIntReg(x);
-            int b = tasm.asIntConst(y);
             switch (opcode) {
                 case ICMP:
-                    emitCompareRegConst(masm, condition, a, b);
+                    new Setp(condition, x, y, p).emit(masm);
                     break;
                 case ACMP:
                     if (((Constant) y).isNull()) {
-                        switch (condition) {
-                            case EQ:
-                                masm.setp_eq_s32(a, b);
-                                break;
-                            case NE:
-                                masm.setp_ne_s32(a, b);
-                                break;
-                            default:
-                                throw GraalInternalError.shouldNotReachHere();
-                        }
+                        new Setp(condition, x, y, p).emit(masm);
                     } else {
                         throw GraalInternalError.shouldNotReachHere("Only null object constants are allowed in comparisons");
                     }
@@ -101,126 +90,8 @@ public enum PTXCompare {
                     throw GraalInternalError.shouldNotReachHere();
             }
         } else {
-            Register a = asIntReg(x);
-            Register b = asIntReg(y);
-            switch (opcode) {
-                case ICMP:
-                    emitCompareRegReg(masm, condition, a, b);
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
+            new Setp(condition, x, y, p).emit(masm);
         }
     }
 
-    private static void emitCompareConstReg(PTXAssembler masm, Condition condition, int a, Register b) {
-        switch (condition) {
-            case EQ:
-                masm.setp_eq_s32(a, b);
-                break;
-            case NE:
-                masm.setp_ne_s32(a, b);
-                break;
-            case LT:
-                masm.setp_lt_s32(a, b);
-                break;
-            case LE:
-                masm.setp_le_s32(a, b);
-                break;
-            case GT:
-                masm.setp_gt_s32(a, b);
-                break;
-            case GE:
-                masm.setp_ge_s32(a, b);
-                break;
-            case AT:
-                masm.setp_gt_u32(a, b);
-                break;
-            case AE:
-                masm.setp_ge_u32(a, b);
-                break;
-            case BT:
-                masm.setp_lt_u32(a, b);
-                break;
-            case BE:
-                masm.setp_le_u32(a, b);
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    private static void emitCompareRegConst(PTXAssembler masm, Condition condition, Register a, int b) {
-        switch (condition) {
-            case EQ:
-                masm.setp_eq_s32(a, b);
-                break;
-            case NE:
-                masm.setp_ne_s32(a, b);
-                break;
-            case LT:
-                masm.setp_lt_s32(a, b);
-                break;
-            case LE:
-                masm.setp_le_s32(a, b);
-                break;
-            case GT:
-                masm.setp_gt_s32(a, b);
-                break;
-            case GE:
-                masm.setp_ge_s32(a, b);
-                break;
-            case AT:
-                masm.setp_gt_u32(a, b);
-                break;
-            case AE:
-                masm.setp_ge_u32(a, b);
-                break;
-            case BT:
-                masm.setp_lt_u32(a, b);
-                break;
-            case BE:
-                masm.setp_le_u32(a, b);
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    private static void emitCompareRegReg(PTXAssembler masm, Condition condition, Register a, Register b) {
-        switch (condition) {
-            case EQ:
-                masm.setp_eq_s32(a, b);
-                break;
-            case NE:
-                masm.setp_ne_s32(a, b);
-                break;
-            case LT:
-                masm.setp_lt_s32(a, b);
-                break;
-            case LE:
-                masm.setp_le_s32(a, b);
-                break;
-            case GT:
-                masm.setp_gt_s32(a, b);
-                break;
-            case GE:
-                masm.setp_ge_s32(a, b);
-                break;
-            case AT:
-                masm.setp_gt_u32(a, b);
-                break;
-            case AE:
-                masm.setp_ge_u32(a, b);
-                break;
-            case BT:
-                masm.setp_lt_u32(a, b);
-                break;
-            case BE:
-                masm.setp_le_u32(a, b);
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
 }

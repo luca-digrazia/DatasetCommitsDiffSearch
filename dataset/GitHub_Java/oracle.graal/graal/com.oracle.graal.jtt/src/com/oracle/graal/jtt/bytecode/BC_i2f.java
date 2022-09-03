@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -35,17 +36,17 @@ public class BC_i2f extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTestWithDelta(0, "test", 0);
+        runTest("test", 0);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTestWithDelta(0, "test", 1);
+        runTest("test", 1);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTestWithDelta(0, "test", -34);
+        runTest("test", -34);
     }
 
 }

@@ -30,10 +30,7 @@ import com.oracle.graal.jtt.*;
  */
 public class Finally01 extends JTTTest {
 
-    /**
-     * @param arg
-     */
-    @SuppressWarnings("finally")
+    @SuppressWarnings("all")
     public static int test(int arg) {
         try {
             return 0;

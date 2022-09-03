@@ -22,12 +22,14 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
 public class BC_ldiv3 extends JTTTest {
+
     public static long PLUS7 = 7;
     public static long PLUS3 = 3;
     public static long MIN7 = -7;

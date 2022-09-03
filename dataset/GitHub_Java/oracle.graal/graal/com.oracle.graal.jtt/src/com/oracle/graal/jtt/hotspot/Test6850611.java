@@ -23,13 +23,15 @@
 package com.oracle.graal.jtt.hotspot;
 
 import com.oracle.graal.jtt.*;
-import org.junit.*;
+import com.oracle.graal.test.*;
+
+//@formatter:off
 
 /**
  * @test
  * @bug 6850611
  * @summary int / long arithmetic seems to be broken in 1.6.0_14 HotSpot Server VM (Win XP)
- * 
+ *
  * @run main Test6850611
  */
 
@@ -48,7 +50,7 @@ public class Test6850611 extends JTTTest {
         return 95;
     }
 
-    @Test
+    @LongTest
     public void run0() throws Throwable {
         runTest("test");
     }

@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.jtt.lang;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -82,10 +82,5 @@ public class Math_pow extends JTTTest {
     @Test
     public void run9() throws Throwable {
         runTest("test", Double.NaN, 23d);
-    }
-
-    @Test
-    public void run10() throws Throwable {
-        runTest("test", 0.999998, 1500000.0);
     }
 }

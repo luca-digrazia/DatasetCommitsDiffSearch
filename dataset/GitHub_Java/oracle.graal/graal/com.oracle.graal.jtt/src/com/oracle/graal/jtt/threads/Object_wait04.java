@@ -67,32 +67,32 @@ public class Object_wait04 extends JTTTest implements Runnable {
         }
     }
 
-    @LongTest(timeout = 20000)
+    @LongTest
     public void run0() throws Throwable {
         runTest("test", 0);
     }
 
-    @LongTest(timeout = 20000)
+    @LongTest
     public void run1() throws Throwable {
         runTest("test", 1);
     }
 
-    @LongTest(timeout = 20000)
+    @LongTest
     public void run2() throws Throwable {
         runTest("test", 2);
     }
 
-    @LongTest(timeout = 20000)
+    @LongTest
     public void run3() throws Throwable {
         runTest("test", 3);
     }
 
-    @LongTest(timeout = 20000)
+    @LongTest
     public void run4() throws Throwable {
         runTest("test", 4);
     }
 
-    @LongTest(timeout = 20000)
+    @LongTest
     public void run5() throws Throwable {
         runTest("test", 5);
     }

@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.jtt.hotspot;
 
-import java.util.ArrayList;
+import java.util.*;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.compiler.common.util.ArraySet;
-import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.jtt.*;
 
 // @formatter:off
 public class Test6186134 extends JTTTest {
@@ -45,7 +43,7 @@ public class Test6186134 extends JTTTest {
             return num-- > 0;
         }
 
-        public ArrayList<?> test1() {
+        public ArrayList test1() {
             ArrayList<Object> res = new ArrayList<>();
             int maxResults = Integer.MAX_VALUE;
             int n = 0;
@@ -68,12 +66,6 @@ public class Test6186134 extends JTTTest {
             }
         }
         return 0;
-    }
-
-    @Before
-    public void setUp() {
-        /* Ensure that ArrayList is _not_ a leaf class (otherwise code installation may fail due to a failed leaf type dependency). */
-        UNSAFE.ensureClassInitialized(ArraySet.class);
     }
 
     @Test

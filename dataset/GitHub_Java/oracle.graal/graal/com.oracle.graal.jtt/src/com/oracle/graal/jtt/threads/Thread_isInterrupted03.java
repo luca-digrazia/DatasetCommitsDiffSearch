@@ -68,7 +68,7 @@ public class Thread_isInterrupted03 extends JTTTest {
         }
     }
 
-    @LongTest(timeout = 20000)
+    @LongTest
     public void run0() throws Throwable {
         runTest("test");
     }

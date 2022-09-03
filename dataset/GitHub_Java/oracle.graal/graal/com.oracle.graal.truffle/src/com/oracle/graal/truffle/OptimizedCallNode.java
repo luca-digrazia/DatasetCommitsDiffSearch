@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.*;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.NodeUtil.NodeCountFilter;
@@ -75,14 +74,14 @@ public final class OptimizedCallNode extends DefaultCallNode {
     }
 
     @Override
-    public Object call(VirtualFrame frame, Object[] arguments) {
+    public Object call(Object[] arguments) {
         if (CompilerDirectives.inInterpreter()) {
             interpreterCall();
             if (inliningCounter.get() > 0 || inliningForced) {
                 return getCurrentCallTarget().callInlined(arguments);
             }
         }
-        return callProxy(this, getCurrentCallTarget(), frame, arguments);
+        return getCurrentCallTarget().call(arguments);
     }
 
     private void interpreterCall() {

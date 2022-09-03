@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,16 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.nodes.GuardingPiNode.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.*;
@@ -93,7 +93,7 @@ public class ArrayCopySnippets implements Snippets {
         UnsafeArrayCopyNode.arraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, baseKind);
     }
 
-    private static int checkArrayType(TypePointer hub) {
+    private static int checkArrayType(Word hub) {
         int layoutHelper = readLayoutHelper(hub);
         if (probability(SLOW_PATH_PROBABILITY, layoutHelper >= 0)) {
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
@@ -183,9 +183,9 @@ public class ArrayCopySnippets implements Snippets {
     public static void arraycopy(Object src, int srcPos, Object dest, int destPos, int length) {
         Object nonNullSrc = guardingNonNull(src);
         Object nonNullDest = guardingNonNull(dest);
-        TypePointer srcHub = loadHub(nonNullSrc);
-        TypePointer destHub = loadHub(nonNullDest);
-        if (probability(FAST_PATH_PROBABILITY, Word.equal(srcHub, destHub)) && probability(FAST_PATH_PROBABILITY, nonNullSrc != nonNullDest)) {
+        Word srcHub = loadHub(nonNullSrc);
+        Word destHub = loadHub(nonNullDest);
+        if (probability(FAST_PATH_PROBABILITY, srcHub.equal(destHub)) && probability(FAST_PATH_PROBABILITY, nonNullSrc != nonNullDest)) {
             int layoutHelper = checkArrayType(srcHub);
             final boolean isObjectArray = ((layoutHelper & layoutHelperElementTypePrimitiveInPlace()) == 0);
 

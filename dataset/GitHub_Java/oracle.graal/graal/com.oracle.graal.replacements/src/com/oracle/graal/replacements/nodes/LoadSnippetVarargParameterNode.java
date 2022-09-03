@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
 
 /**
@@ -35,18 +35,18 @@ public final class LoadSnippetVarargParameterNode extends FixedWithNextNode impl
 
     @Input private ValueNode index;
 
-    @Input private final NodeInputList<ParameterNode> parameters;
+    private final ParameterNode[] parameters;
 
     public LoadSnippetVarargParameterNode(ParameterNode[] locals, ValueNode index, Stamp stamp) {
         super(stamp);
         this.index = index;
-        this.parameters = new NodeInputList<>(this, locals);
+        this.parameters = locals;
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (index.isConstant()) {
-            return parameters.get(index.asConstant().asInt());
+            return parameters[index.asConstant().asInt()];
         }
         return this;
     }

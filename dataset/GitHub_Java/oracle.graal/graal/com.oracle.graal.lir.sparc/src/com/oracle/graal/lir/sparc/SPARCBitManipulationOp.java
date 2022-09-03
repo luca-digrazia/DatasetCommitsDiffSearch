@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,10 +37,10 @@ import com.oracle.graal.asm.sparc.SPARCAssembler.Srlx;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Sub;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Mov;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodes.spi.*;
 
 public class SPARCBitManipulationOp extends SPARCLIRInstruction {
 
@@ -62,7 +62,7 @@ public class SPARCBitManipulationOp extends SPARCLIRInstruction {
         this.result = result;
         this.input = input;
         if (opcode == IntrinsicOpcode.IBSR || opcode == IntrinsicOpcode.LBSR) {
-            scratch = gen.newVariable(LIRKind.derive(input));
+            scratch = gen.newVariable(input.getKind());
         }
     }
 

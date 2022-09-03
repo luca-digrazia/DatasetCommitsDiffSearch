@@ -24,9 +24,8 @@ package com.oracle.graal.jtt.jdk;
 
 import java.io.*;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import com.oracle.graal.test.*;
 
 /*
  */
@@ -59,8 +58,7 @@ public class System_setOut extends JTTTest {
         out.println(test(10000));
     }
 
-    @Test
-    @Ignore("Ignored temporarily as under certain conditions it creates too large code in TraceRA gate")
+    @LongTest
     public void run0() throws Throwable {
         runTest("test", 10000);
     }

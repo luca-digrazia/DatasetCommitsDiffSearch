@@ -22,14 +22,13 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import jdk.internal.jvmci.code.*;
 import static com.oracle.graal.hotspot.nodes.JumpToExceptionHandlerInCallerNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
 import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
@@ -38,6 +37,7 @@ import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.word.*;
 
 /**
@@ -46,8 +46,8 @@ import com.oracle.graal.word.*;
  */
 public class UnwindExceptionToCallerStub extends SnippetStub {
 
-    public UnwindExceptionToCallerStub(HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
-        super("unwindExceptionToCaller", providers, linkage);
+    public UnwindExceptionToCallerStub(HotSpotProviders providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
+        super(providers, target, linkage);
     }
 
     /**
@@ -110,8 +110,7 @@ public class UnwindExceptionToCallerStub extends SnippetStub {
         return enabled || cAssertionsEnabled();
     }
 
-    public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_RETURN_ADDRESS = newDescriptor(UnwindExceptionToCallerStub.class, "exceptionHandlerForReturnAddress", Word.class, Word.class,
-                    Word.class);
+    public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_RETURN_ADDRESS = descriptorFor(UnwindExceptionToCallerStub.class, "exceptionHandlerForReturnAddress");
 
     @NodeIntrinsic(value = StubForeignCallNode.class, setStampFromReturnType = true)
     public static native Word exceptionHandlerForReturnAddress(@ConstantNodeParameter ForeignCallDescriptor exceptionHandlerForReturnAddress, Word thread, Word returnAddress);

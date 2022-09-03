@@ -31,9 +31,9 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.word.*;
 
 /**
@@ -43,15 +43,8 @@ import com.oracle.graal.word.*;
 public class CRC32Substitutions {
 
     public static class Guard implements SubstitutionGuard {
-
-        private HotSpotGraalRuntime runtime;
-
-        public Guard(HotSpotGraalRuntime runtime) {
-            this.runtime = runtime;
-        }
-
         public boolean execute() {
-            return runtime.getConfig().useCRC32Intrinsics;
+            return runtime().getConfig().useCRC32Intrinsics;
         }
     }
 

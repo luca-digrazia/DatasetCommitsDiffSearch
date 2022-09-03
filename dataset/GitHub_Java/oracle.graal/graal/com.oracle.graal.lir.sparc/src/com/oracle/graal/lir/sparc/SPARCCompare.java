@@ -29,7 +29,7 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Cmp;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -79,11 +79,11 @@ public enum SPARCCompare {
                     new Cmp(asObjectReg(x), asObjectReg(y)).emit(masm);
                     break;
                 case FCMP:
-                    new Fcmp(CC.Fcc0, Opfs.Fcmps, asFloatReg(x), asFloatReg(y)).emit(masm);
-                    break;
+                    // masm.ucomiss(asFloatReg(x), asFloatReg(y));
+                    // break;
                 case DCMP:
-                    new Fcmp(CC.Fcc0, Opfs.Fcmpd, asDoubleReg(x), asDoubleReg(y)).emit(masm);
-                    break;
+                    // masm.ucomisd(asDoubleReg(x), asDoubleReg(y));
+                    // break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }

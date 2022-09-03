@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.optimize;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  * Tests optimization of double operations.
@@ -64,22 +65,22 @@ public class Reduce_Double01 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTestWithDelta(0, "test", 0d);
+        runTest("test", 0d);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTestWithDelta(0, "test", 1d);
+        runTest("test", 1d);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTestWithDelta(0, "test", 2d);
+        runTest("test", 2d);
     }
 
     @Test
     public void run3() throws Throwable {
-        runTestWithDelta(0, "test", 3d);
+        runTest("test", 3d);
     }
 
 }

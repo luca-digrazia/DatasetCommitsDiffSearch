@@ -22,15 +22,13 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.api.code.MemoryBarriers.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
@@ -41,6 +39,8 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
@@ -72,7 +72,7 @@ public class WriteBarrierSnippets implements Snippets {
         Object fixedObject = FixedValueAnchorNode.getObject(object);
         Pointer oop;
         if (usePrecise) {
-            oop = Word.fromArray(fixedObject, SnippetLocationProxyNode.location(location));
+            oop = Word.fromArray(fixedObject, location);
         } else {
             oop = Word.fromObject(fixedObject);
         }
@@ -117,7 +117,7 @@ public class WriteBarrierSnippets implements Snippets {
         Object fixedObject = FixedValueAnchorNode.getObject(object);
         verifyOop(fixedObject);
         Object fixedExpectedObject = FixedValueAnchorNode.getObject(expectedObject);
-        Word field = (Word) Word.fromArray(fixedObject, SnippetLocationProxyNode.location(location));
+        Word field = (Word) Word.fromArray(fixedObject, location);
         Word previousOop = (Word) Word.fromObject(fixedExpectedObject);
         byte markingValue = thread.readByte(g1SATBQueueMarkingOffset());
         Word bufferAddress = thread.readWord(g1SATBQueueBufferOffset());
@@ -174,7 +174,7 @@ public class WriteBarrierSnippets implements Snippets {
         validateObject(fixedObject, fixedValue);
         Word oop;
         if (usePrecise) {
-            oop = (Word) Word.fromArray(fixedObject, SnippetLocationProxyNode.location(location));
+            oop = (Word) Word.fromArray(fixedObject, location);
         } else {
             oop = (Word) Word.fromObject(fixedObject);
         }
@@ -214,26 +214,22 @@ public class WriteBarrierSnippets implements Snippets {
                 g1EffectiveAfterNullPostWriteBarrierCounter.inc();
 
                 // If the card is already dirty, (hence already enqueued) skip the insertion.
-                if (probability(NOT_FREQUENT_PROBABILITY, cardByte != g1YoungCardValue())) {
-                    MembarNode.memoryBarrier(STORE_LOAD);
-                    byte cardByteReload = cardAddress.readByte(0);
-                    if (probability(NOT_FREQUENT_PROBABILITY, cardByteReload != dirtyCardValue())) {
-                        log(trace, "[%d] G1-Post Thread: %p Card: %p \n", gcCycle, thread.rawValue(), Word.unsigned(cardByte).rawValue());
-                        cardAddress.writeByte(0, (byte) 0, GC_CARD_LOCATION);
-                        g1ExecutedPostWriteBarrierCounter.inc();
+                if (probability(NOT_FREQUENT_PROBABILITY, cardByte != (byte) 0)) {
+                    log(trace, "[%d] G1-Post Thread: %p Card: %p \n", gcCycle, thread.rawValue(), Word.unsigned(cardByte).rawValue());
+                    cardAddress.writeByte(0, (byte) 0, GC_CARD_LOCATION);
+                    g1ExecutedPostWriteBarrierCounter.inc();
 
-                        // If the thread local card queue is full, issue a native call which will
-                        // initialize a new one and add the card entry.
-                        if (probability(FREQUENT_PROBABILITY, indexValue.notEqual(0))) {
-                            Word nextIndex = indexValue.subtract(wordSize());
-                            Word logAddress = bufferAddress.add(nextIndex);
-                            // Log the object to be scanned as well as update
-                            // the card queue's next index.
-                            logAddress.writeWord(0, cardAddress, GC_LOG_LOCATION);
-                            indexAddress.writeWord(0, nextIndex, GC_INDEX_LOCATION);
-                        } else {
-                            g1PostBarrierStub(G1WBPOSTCALL, cardAddress);
-                        }
+                    // If the thread local card queue is full, issue a native call which will
+                    // initialize a new one and add the card entry.
+                    if (probability(FREQUENT_PROBABILITY, indexValue.notEqual(0))) {
+                        Word nextIndex = indexValue.subtract(wordSize());
+                        Word logAddress = bufferAddress.add(nextIndex);
+                        // Log the object to be scanned as well as update
+                        // the card queue's next index.
+                        logAddress.writeWord(0, cardAddress, GC_LOG_LOCATION);
+                        indexAddress.writeWord(0, nextIndex, GC_INDEX_LOCATION);
+                    } else {
+                        g1PostBarrierStub(G1WBPOSTCALL, cardAddress);
                     }
                 }
             }
@@ -298,23 +294,19 @@ public class WriteBarrierSnippets implements Snippets {
             Word cardAddress = Word.unsigned((start + cardStart) + count);
             byte cardByte = cardAddress.readByte(0);
             // If the card is already dirty, (hence already enqueued) skip the insertion.
-            if (probability(NOT_FREQUENT_PROBABILITY, cardByte != g1YoungCardValue())) {
-                MembarNode.memoryBarrier(STORE_LOAD);
-                byte cardByteReload = cardAddress.readByte(0);
-                if (probability(NOT_FREQUENT_PROBABILITY, cardByteReload != dirtyCardValue())) {
-                    cardAddress.writeByte(0, (byte) 0, GC_CARD_LOCATION);
-                    // If the thread local card queue is full, issue a native call which will
-                    // initialize a new one and add the card entry.
-                    if (indexValue != 0) {
-                        indexValue = indexValue - wordSize();
-                        Word logAddress = bufferAddress.add(Word.unsigned(indexValue));
-                        // Log the object to be scanned as well as update
-                        // the card queue's next index.
-                        logAddress.writeWord(0, cardAddress, GC_LOG_LOCATION);
-                        indexAddress.writeWord(0, Word.unsigned(indexValue), GC_INDEX_LOCATION);
-                    } else {
-                        g1PostBarrierStub(G1WBPOSTCALL, cardAddress);
-                    }
+            if (cardByte != (byte) 0) {
+                cardAddress.writeByte(0, (byte) 0, GC_CARD_LOCATION);
+                // If the thread local card queue is full, issue a native call which will
+                // initialize a new one and add the card entry.
+                if (indexValue != 0) {
+                    indexValue = indexValue - wordSize();
+                    Word logAddress = bufferAddress.add(Word.unsigned(indexValue));
+                    // Log the object to be scanned as well as update
+                    // the card queue's next index.
+                    logAddress.writeWord(0, cardAddress, GC_LOG_LOCATION);
+                    indexAddress.writeWord(0, Word.unsigned(indexValue), GC_INDEX_LOCATION);
+                } else {
+                    g1PostBarrierStub(G1WBPOSTCALL, cardAddress);
                 }
             }
         }
@@ -342,8 +334,8 @@ public class WriteBarrierSnippets implements Snippets {
 
         private final CompressEncoding oopEncoding;
 
-        public Templates(HotSpotProviders providers, TargetDescription target, CompressEncoding oopEncoding) {
-            super(providers, providers.getSnippetReflection(), target);
+        public Templates(Providers providers, TargetDescription target, CompressEncoding oopEncoding) {
+            super(providers, target);
             this.oopEncoding = oopEncoding;
         }
 

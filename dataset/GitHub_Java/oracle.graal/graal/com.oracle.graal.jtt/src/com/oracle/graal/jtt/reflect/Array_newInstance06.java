@@ -26,14 +26,15 @@ package com.oracle.graal.jtt.reflect;
 
 import java.lang.reflect.*;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 public class Array_newInstance06 extends JTTTest {
 
     public static boolean test(int i) {
         final int[] dims = {i, 3};
-        Class< ? > javaClass;
+        Class<?> javaClass;
         if (i == 2) {
             javaClass = int.class;
         } else if (i == 3) {

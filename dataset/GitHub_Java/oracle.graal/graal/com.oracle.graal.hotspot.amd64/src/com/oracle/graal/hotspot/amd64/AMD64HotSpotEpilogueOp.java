@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,6 +29,7 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
@@ -36,18 +37,14 @@ import com.oracle.graal.lir.asm.*;
 /**
  * Superclass for operations that use the value of RBP saved in a method's prologue.
  */
-abstract class AMD64HotSpotEpilogueOp extends AMD64LIRInstruction {
-
-    protected AMD64HotSpotEpilogueOp(LIRInstructionClass<? extends AMD64HotSpotEpilogueOp> c) {
-        super(c);
-    }
+abstract class AMD64HotSpotEpilogueOp extends AMD64LIRInstruction implements BlockEndOp {
 
     /**
      * The type of location (i.e., stack or register) in which RBP is saved is not known until
      * initial LIR generation is finished. Until then, we use a placeholder variable so that LIR
      * verification is successful.
      */
-    private static final Variable PLACEHOLDER = new Variable(LIRKind.value(Kind.Long), Integer.MAX_VALUE);
+    private static final Variable PLACEHOLDER = new Variable(Kind.Long, Integer.MAX_VALUE);
 
     @Use({REG, STACK}) protected AllocatableValue savedRbp = PLACEHOLDER;
 

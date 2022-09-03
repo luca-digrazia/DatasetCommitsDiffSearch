@@ -24,11 +24,11 @@
 
 package com.oracle.graal.jtt.hotpath;
 
-import java.util.Random;
+import java.util.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.jtt.*;
 
 public class HP_idea extends JTTTest {
 
@@ -151,7 +151,7 @@ public class HP_idea extends JTTTest {
             j = i % 8;
             if (j < 6) {
                 Z[i] = ((Z[i - 7] >>> 9) | (Z[i - 6] << 7)) // Shift and combine.
-                                & 0xFFFF; // Just 16 bits.
+                & 0xFFFF; // Just 16 bits.
                 continue; // Next iteration.
             }
 
@@ -395,7 +395,8 @@ public class HP_idea extends JTTTest {
      * the interpretation of the bits within is strictly unsigned 16-bit.
      */
 
-    public int inv(int x) {
+    @SuppressWarnings("static-method")
+    private int inv(int x) {
         int x2 = x;
         int t0, t1;
         int q, y;
@@ -461,8 +462,4 @@ public class HP_idea extends JTTTest {
         runTest("test");
     }
 
-    @Test
-    public void runInv() {
-        runTest("inv", 724);
-    }
 }

@@ -23,8 +23,9 @@
 // Checkstyle: stop
 package com.oracle.graal.jtt.loop;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  * Test around an object that escapes directly from inside a loop (no virtual phi on the loop)
@@ -32,9 +33,11 @@ import org.junit.*;
 public class Loop17 extends JTTTest {
 
     private static class L {
+
         public int a;
         public int b;
         public int c;
+
         public L(int a, int b, int c) {
             this.a = a;
             this.b = b;
@@ -42,12 +45,11 @@ public class Loop17 extends JTTTest {
         }
     }
 
-
     public static int test(int count) {
         int i = 0;
         L l;
         do {
-            l = new L(i, i+1, i+2);
+            l = new L(i, i + 1, i + 2);
         } while (++i < count);
 
         return l.a + l.b * 10 + l.c * 100;
@@ -55,6 +57,6 @@ public class Loop17 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", new L(4,4,4).a);
+        runTest("test", new L(4, 4, 4).a);
     }
 }

@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.optimize;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -42,7 +43,6 @@ public class Phi02 extends JTTTest {
         return test2(new Phi(arg), arg);
     }
 
-// @NEVER_INLINE
     private static int test2(Phi p, int a) {
         int arg = a;
         if (arg > 2) {
@@ -69,7 +69,6 @@ public class Phi02 extends JTTTest {
         return arg + p.f;
     }
 
-// @NEVER_INLINE
     private static void inc(Phi p, int inc) {
         p.f += inc;
     }

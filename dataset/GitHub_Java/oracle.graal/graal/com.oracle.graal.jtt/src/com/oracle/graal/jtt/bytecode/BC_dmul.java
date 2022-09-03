@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -35,12 +36,12 @@ public class BC_dmul extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTestWithDelta(0, "test", 311.0D, 10D);
+        runTest("test", 311.0D, 10D);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTestWithDelta(0, "test", 11.2D, 2.0D);
+        runTest("test", 11.2D, 2.0D);
     }
 
 }
