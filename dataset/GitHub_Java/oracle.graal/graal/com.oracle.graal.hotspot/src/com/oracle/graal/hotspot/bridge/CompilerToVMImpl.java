@@ -78,7 +78,10 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
     public native RiField RiConstantPool_lookupField(HotSpotTypeResolved pool, int cpi, byte byteCode);
 
     @Override
-    public native HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean makeDefault, HotSpotCodeInfo info);
+    public native HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean installCode, HotSpotCodeInfo info);
+
+    @Override
+    public native long installStub(HotSpotTargetMethod targetMethod, HotSpotCodeInfo info);
 
     @Override
     public native HotSpotVMConfig getConfiguration();
@@ -167,9 +170,6 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
 
     @Override
     public native long[] getDeoptedLeafGraphIds();
-
-    @Override
-    public native String decodePC(long pc);
 
     // Checkstyle: resume
 }
