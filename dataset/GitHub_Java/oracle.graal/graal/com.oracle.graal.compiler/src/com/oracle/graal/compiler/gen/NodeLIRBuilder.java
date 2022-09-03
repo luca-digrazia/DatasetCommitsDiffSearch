@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -55,19 +55,19 @@ import com.oracle.graal.nodes.virtual.*;
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
 @MatchableNode(nodeClass = ConstantNode.class, shareable = true)
-@MatchableNode(nodeClass = FloatConvertNode.class, inputs = {"value"})
+@MatchableNode(nodeClass = FloatConvertNode.class, inputs = {"input"})
 @MatchableNode(nodeClass = FloatSubNode.class, inputs = {"x", "y"})
 @MatchableNode(nodeClass = FloatingReadNode.class, inputs = {"object", "location"})
 @MatchableNode(nodeClass = IfNode.class, inputs = {"condition"})
 @MatchableNode(nodeClass = IntegerSubNode.class, inputs = {"x", "y"})
 @MatchableNode(nodeClass = LeftShiftNode.class, inputs = {"x", "y"})
-@MatchableNode(nodeClass = NarrowNode.class, inputs = {"value"})
+@MatchableNode(nodeClass = NarrowNode.class, inputs = {"input"})
 @MatchableNode(nodeClass = ReadNode.class, inputs = {"object", "location"})
 @MatchableNode(nodeClass = ReinterpretNode.class, inputs = {"value"})
-@MatchableNode(nodeClass = SignExtendNode.class, inputs = {"value"})
+@MatchableNode(nodeClass = SignExtendNode.class, inputs = {"input"})
 @MatchableNode(nodeClass = UnsignedRightShiftNode.class, inputs = {"x", "y"})
 @MatchableNode(nodeClass = WriteNode.class, inputs = {"object", "location", "value"})
-@MatchableNode(nodeClass = ZeroExtendNode.class, inputs = {"value"})
+@MatchableNode(nodeClass = ZeroExtendNode.class, inputs = {"input"})
 @MatchableNode(nodeClass = AndNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = FloatAddNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = FloatEqualsNode.class, inputs = {"x", "y"}, commutative = true)
@@ -372,8 +372,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
         append(new JumpOp(getLIRBlock(merge)));
     }
 
-    protected LIRKind getPhiKind(PhiNode phi) {
-        return gen.getLIRKind(phi.stamp());
+    protected PlatformKind getPhiKind(PhiNode phi) {
+        return gen.getPlatformKind(phi.stamp());
     }
 
     private Value operandForPhi(ValuePhiNode phi) {
@@ -408,12 +408,12 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
     }
 
     private void emitNullCheckBranch(IsNullNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, double trueSuccessorProbability) {
-        PlatformKind kind = gen.getLIRKind(node.object().stamp()).getPlatformKind();
+        PlatformKind kind = gen.getPlatformKind(node.object().stamp());
         gen.emitCompareBranch(kind, operand(node.object()), kind.getDefaultValue(), Condition.EQ, false, trueSuccessor, falseSuccessor, trueSuccessorProbability);
     }
 
     public void emitCompareBranch(CompareNode compare, LabelRef trueSuccessor, LabelRef falseSuccessor, double trueSuccessorProbability) {
-        PlatformKind kind = gen.getLIRKind(compare.x().stamp()).getPlatformKind();
+        PlatformKind kind = gen.getPlatformKind(compare.x().stamp());
         gen.emitCompareBranch(kind, operand(compare.x()), operand(compare.y()), compare.condition(), compare.unorderedIsTrue(), trueSuccessor, falseSuccessor, trueSuccessorProbability);
     }
 
@@ -436,11 +436,11 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
     public Variable emitConditional(LogicNode node, Value trueValue, Value falseValue) {
         if (node instanceof IsNullNode) {
             IsNullNode isNullNode = (IsNullNode) node;
-            PlatformKind kind = gen.getLIRKind(isNullNode.object().stamp()).getPlatformKind();
+            PlatformKind kind = gen.getPlatformKind(isNullNode.object().stamp());
             return gen.emitConditionalMove(kind, operand(isNullNode.object()), kind.getDefaultValue(), Condition.EQ, false, trueValue, falseValue);
         } else if (node instanceof CompareNode) {
             CompareNode compare = (CompareNode) node;
-            PlatformKind kind = gen.getLIRKind(compare.x().stamp()).getPlatformKind();
+            PlatformKind kind = gen.getPlatformKind(compare.x().stamp());
             return gen.emitConditionalMove(kind, operand(compare.x()), operand(compare.y()), compare.condition(), compare.unorderedIsTrue(), trueValue, falseValue);
         } else if (node instanceof LogicConstantNode) {
             return gen.emitMove(((LogicConstantNode) node).getValue() ? trueValue : falseValue);
@@ -527,7 +527,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
             if (keyCount == 1) {
                 assert defaultTarget != null;
                 double probability = x.probability(x.keySuccessor(0));
-                PlatformKind kind = gen.getLIRKind(x.value().stamp()).getPlatformKind();
+                PlatformKind kind = gen.getPlatformKind(x.value().stamp());
                 gen.emitCompareBranch(kind, gen.load(operand(x.value())), x.keyAt(0), Condition.EQ, false, getLIRBlock(x.keySuccessor(0)), defaultTarget, probability);
             } else {
                 LabelRef[] keyTargets = new LabelRef[keyCount];
@@ -599,6 +599,26 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
 
     public void emitOverflowCheckBranch(BeginNode overflowSuccessor, BeginNode next, double probability) {
         gen.emitOverflowCheckBranch(getLIRBlock(overflowSuccessor), getLIRBlock(next), probability);
+    }
+
+    public final void emitArrayEquals(Kind kind, Variable result, Value array1, Value array2, Value length) {
+        gen.emitArrayEquals(kind, result, array1, array2, length);
+    }
+
+    public final Variable newVariable(Kind i) {
+        return gen.newVariable(i);
+    }
+
+    public final void emitBitCount(Variable result, Value operand) {
+        gen.emitBitCount(result, operand);
+    }
+
+    public final void emitBitScanForward(Variable result, Value operand) {
+        gen.emitBitScanForward(result, operand);
+    }
+
+    final void emitBitScanReverse(Variable result, Value operand) {
+        gen.emitBitScanReverse(result, operand);
     }
 
     @Override

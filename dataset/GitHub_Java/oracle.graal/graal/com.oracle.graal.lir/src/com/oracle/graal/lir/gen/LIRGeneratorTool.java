@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,9 +52,9 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     void doBlockEnd(AbstractBlock<?> block);
 
-    Value emitLoad(LIRKind kind, Value address, LIRFrameState state);
+    Value emitLoad(PlatformKind kind, Value address, LIRFrameState state);
 
-    void emitStore(LIRKind kind, Value address, Value input, LIRFrameState state);
+    void emitStore(PlatformKind kind, Value address, Value input, LIRFrameState state);
 
     void emitNullCheck(Value address, LIRFrameState state);
 
@@ -106,15 +106,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     RegisterAttributes attributes(Register register);
 
-    /**
-     * Create a new {@link Variable}.
-     *
-     * @param kind The type of the value that will be stored in this {@link Variable}. See
-     *            {@link LIRKind} for documentation on what to pass here. Note that in most cases,
-     *            simply passing {@link Value#getLIRKind()} is wrong.
-     * @return A new {@link Variable}.
-     */
-    Variable newVariable(LIRKind kind);
+    Variable newVariable(PlatformKind kind);
 
     Variable emitMove(Value input);
 
@@ -174,7 +166,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
      * @return the operand representing the ABI defined location used return a value of kind
      *         {@code kind}
      */
-    AllocatableValue resultOperandFor(LIRKind kind);
+    AllocatableValue resultOperandFor(Kind kind);
 
     void append(LIRInstruction op);
 
@@ -197,14 +189,14 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     CallingConvention getCallingConvention();
 
-    Value emitBitCount(Value operand);
+    void emitBitCount(Variable result, Value operand);
 
-    Value emitBitScanForward(Value operand);
+    void emitBitScanForward(Variable result, Value operand);
 
-    Value emitBitScanReverse(Value operand);
+    void emitBitScanReverse(Variable result, Value operand);
 
-    Value emitByteSwap(Value operand);
+    void emitByteSwap(Variable result, Value operand);
 
-    Value emitArrayEquals(Kind kind, Value array1, Value array2, Value length);
+    void emitArrayEquals(Kind kind, Variable result, Value array1, Value array2, Value length);
 
 }
