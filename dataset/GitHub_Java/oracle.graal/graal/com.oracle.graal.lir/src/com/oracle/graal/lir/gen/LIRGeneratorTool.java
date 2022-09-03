@@ -22,28 +22,14 @@
  */
 package com.oracle.graal.lir.gen;
 
-import com.oracle.jvmci.code.CallingConvention;
-import com.oracle.jvmci.code.ForeignCallLinkage;
-import com.oracle.jvmci.code.RegisterAttributes;
-import com.oracle.jvmci.code.TargetDescription;
-import com.oracle.jvmci.code.StackSlotValue;
-import com.oracle.jvmci.code.CodeCacheProvider;
-import com.oracle.jvmci.code.Register;
-import com.oracle.jvmci.code.ForeignCallsProvider;
-import com.oracle.jvmci.meta.PlatformKind;
-import com.oracle.jvmci.meta.Constant;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.JavaConstant;
-import com.oracle.jvmci.meta.Value;
-import com.oracle.jvmci.meta.LIRKind;
-import com.oracle.jvmci.meta.AllocatableValue;
-import com.oracle.jvmci.meta.MetaAccessProvider;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.StackMove;
-import com.oracle.jvmci.common.*;
 
 public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCounterFactory {
 
@@ -101,7 +87,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
      * @param delta the value to be added
      */
     default Value emitAtomicReadAndAdd(Value address, Value delta) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     /**
@@ -111,7 +97,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
      * @param newValue the new value to be written
      */
     default Value emitAtomicReadAndWrite(Value address, Value newValue) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     void emitDeoptimize(Value actionAndReason, Value failedSpeculation, LIRFrameState state);
@@ -141,6 +127,8 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
      * @param data the data to be installed with the generated code
      */
     void emitData(AllocatableValue dst, byte[] data);
+
+    Value emitAddress(Value base, long displacement, Value index, int scale);
 
     Variable emitAddress(StackSlotValue slot);
 
@@ -217,12 +205,12 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
 
     @SuppressWarnings("unused")
     default Value emitCountLeadingZeros(Value value) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     @SuppressWarnings("unused")
     default Value emitCountTrailingZeros(Value value) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
 }
