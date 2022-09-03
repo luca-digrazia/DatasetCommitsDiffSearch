@@ -370,7 +370,6 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -1563,7 +1562,7 @@ public class BasicNodeFactory implements NodeFactory {
 
     private static LLVMLandingpadNode.LandingpadEntryNode getLandingpadFilterEntry(LLVMExpressionNode exp) {
         LLVMAddressArrayLiteralNode array = (LLVMAddressArrayLiteralNode) exp;
-        LLVMToNativeNode[] types = array == null ? new LLVMToNativeNode[]{} : array.getValues();
+        LLVMExpressionNode[] types = array == null ? new LLVMExpressionNode[]{} : array.getValues();
         return new LLVMLandingpadNode.LandingpadFilterEntryNode(types);
     }
 
@@ -1673,6 +1672,7 @@ public class BasicNodeFactory implements NodeFactory {
             case "@llvm.fabs.f32":
             case "@llvm.fabs.f64":
             case "@llvm.fabs.f80":
+            case "@llvm.fabs.v2f64":
                 return LLVMFAbsNodeGen.create(args[1], sourceSection);
             case "@llvm.returnaddress":
                 return LLVMReturnAddressNodeGen.create(args[1], sourceSection);
