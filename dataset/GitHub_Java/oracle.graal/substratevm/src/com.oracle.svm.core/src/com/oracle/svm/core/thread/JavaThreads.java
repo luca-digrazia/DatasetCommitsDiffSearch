@@ -59,7 +59,6 @@ import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.heap.FeebleReferenceList;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.jdk.StackTraceBuilder;
@@ -146,11 +145,6 @@ public abstract class JavaThreads {
 
     public Thread fromVMThread(IsolateThread vmThread) {
         return currentThread.get(vmThread);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible codet st.", calleeMustBe = false)
-    public static Thread getCurrentThread() {
-        return currentThread.get();
     }
 
     public Thread createIfNotExisting(IsolateThread vmThread) {

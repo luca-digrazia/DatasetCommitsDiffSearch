@@ -33,6 +33,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import org.graalvm.compiler.word.Word;
+import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.nativeimage.c.struct.SizeOf;
@@ -50,6 +51,7 @@ import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.c.function.CEntryPointOptions.NoEpilogue;
 import com.oracle.svm.core.c.function.CEntryPointOptions.NoPrologue;
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
+import com.oracle.svm.core.c.function.CEntryPointSetup.EnterCreateIsolatePrologue;
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveDetachThreadEpilogue;
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveTearDownIsolateEpilogue;
 import com.oracle.svm.core.option.RuntimeOptionParser;
@@ -61,6 +63,7 @@ import com.oracle.svm.jni.JNIThreadLocalEnvironment;
 import com.oracle.svm.jni.JNIThreadOwnedMonitors;
 import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIJavaVMEnterAttachThreadPrologue;
 import com.oracle.svm.jni.functions.JNIInvocationInterface.Support.JNIGetEnvPrologue;
+import com.oracle.svm.jni.hosted.JNIFeature;
 import com.oracle.svm.jni.nativeapi.JNIEnvironmentPointer;
 import com.oracle.svm.jni.nativeapi.JNIErrors;
 import com.oracle.svm.jni.nativeapi.JNIJavaVM;
@@ -83,36 +86,30 @@ final class JNIInvocationInterface {
     // Checkstyle: stop
 
     static class Exports {
+        private static boolean explicitlyInitialized = false;
+
+        // TODO: refactor these for the changed CEntryPoint entry action CreateIsolate.
+
         /*
          * jint JNI_GetCreatedJavaVMs(JavaVM **vmBuf, jsize bufLen, jsize *nVMs);
          */
-
         @CEntryPoint(name = "JNI_GetCreatedJavaVMs")
-        @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
-        @Uninterruptible(reason = "No Java context", calleeMustBe = false)
+        @CEntryPointOptions(prologue = EnterCreateIsolatePrologue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
         static int JNI_GetCreatedJavaVMs(JNIJavaVMPointer vmBuf, int bufLen, CIntPointer nVMs) {
             /*
-             * TODO: still less than ideal because it requires us to briefly attach to the isolate
-             * to get the global Java VM pointer. Revisit when isolates are fully supported.
+             * NOTE: just by entering this method, we eagerly attach the calling thread. JNI does
+             * not intend for this to happen, but we currently need it to safely execute the
+             * following code. However, calling AttachCurrentThread() later is not an error.
              */
-            boolean didAttach = false;
-            if (CEntryPointActions.enterIsolate(Word.nullPointer()) != 0) {
-                // Either there is no isolate, or the current thread is not attached to it
-                if (CEntryPointActions.enterAttachThread(Word.nullPointer()) != 0) {
-                    // Could not attach: there is no isolate (or there was some problem)
-                    nVMs.write(0);
-                    return JNIErrors.JNI_OK();
-                }
-                didAttach = true;
+            int count = 0;
+            if (explicitlyInitialized || !JNIFeature.Options.JNICreateJavaVM.getValue()) {
+                count = 1;
             }
-            // We have successfully entered the isolate at this point
-            JNIJavaVM jvm = Support.getGlobalJavaVM();
-            vmBuf.write(jvm);
-            nVMs.write(1);
-            if (didAttach) {
-                CEntryPointActions.leaveDetachThread();
-            } else {
-                CEntryPointActions.leave();
+            if (count > 0 && bufLen > 0) {
+                vmBuf.write(JNIFunctionTables.singleton().getGlobalJavaVM());
+            }
+            if (nVMs.isNonNull()) {
+                nVMs.write(count);
             }
             return JNIErrors.JNI_OK();
         }
@@ -120,22 +117,15 @@ final class JNIInvocationInterface {
         /*
          * jint JNI_CreateJavaVM(JavaVM **p_vm, void **p_env, void *vm_args);
          */
-
-        static class JNICreateJavaVMPrologue {
-            static void enter(JNIJavaVMPointer vmBuf, JNIEnvironmentPointer penv, JNIJavaVMInitArgs vmArgs) {
-                if (CEntryPointActions.enterIsolate(Word.nullPointer()) == 0) {
-                    CEntryPointActions.leave();
-                    CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_EEXIST()); // isolate exists
-                }
-                if (CEntryPointActions.enterCreateIsolate(Word.nullPointer()) != 0) {
-                    CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_ERR());
-                }
-            }
-        }
-
         @CEntryPoint(name = "JNI_CreateJavaVM")
-        @CEntryPointOptions(prologue = JNICreateJavaVMPrologue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
+        @CEntryPointOptions(prologue = EnterCreateIsolatePrologue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
         static int JNI_CreateJavaVM(JNIJavaVMPointer vmBuf, JNIEnvironmentPointer penv, JNIJavaVMInitArgs vmArgs) {
+            if (explicitlyInitialized || !JNIFeature.Options.JNICreateJavaVM.getValue()) {
+                return JNIErrors.JNI_EEXIST();
+            }
+            if (vmBuf.isNull() || penv.isNull()) {
+                return JNIErrors.JNI_ERR();
+            }
             // NOTE: could check version, extra options (-verbose etc.), hooks etc.
             if (vmArgs.isNonNull()) {
                 Pointer p = (Pointer) vmArgs.getOptions();
@@ -157,6 +147,7 @@ final class JNIInvocationInterface {
                 JNIThreadLocalEnvironment.initialize();
             }
             penv.write(JNIThreadLocalEnvironment.getAddress());
+            explicitlyInitialized = true;
             return JNIErrors.JNI_OK();
         }
 
@@ -249,11 +240,11 @@ final class JNIInvocationInterface {
                     env.write(Word.nullPointer());
                     CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_EVERSION());
                 }
-                if (!CEntryPointContext.isCurrentThreadAttachedTo(vm.getFunctions().getIsolate())) {
+                if (!CEntryPointContext.isCurrentThreadAttachedTo((Isolate) vm)) {
                     env.write(Word.nullPointer());
                     CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_EDETACHED());
                 }
-                if (CEntryPointActions.enterIsolate(vm.getFunctions().getIsolate()) != 0) {
+                if (CEntryPointActions.enterIsolate((Isolate) vm) != 0) {
                     CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_ERR());
                 }
             }
@@ -297,10 +288,6 @@ final class JNIInvocationInterface {
                 }
                 assert !Thread.holdsLock(obj);
             });
-        }
-
-        public static JNIJavaVM getGlobalJavaVM() {
-            return JNIFunctionTables.singleton().getGlobalJavaVM();
         }
     }
 }

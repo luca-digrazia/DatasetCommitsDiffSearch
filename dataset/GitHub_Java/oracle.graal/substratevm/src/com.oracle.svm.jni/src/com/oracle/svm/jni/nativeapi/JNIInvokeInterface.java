@@ -46,7 +46,4 @@ public interface JNIInvokeInterface extends PointerBase {
 
     @CField("DestroyJavaVM")
     void setDestroyJavaVM(CFunctionPointer p);
-
-    @CField("DestroyJavaVM")
-    <T extends CFunctionPointer> T getDestroyJavaVM();
 }
