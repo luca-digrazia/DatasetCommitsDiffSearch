@@ -46,8 +46,13 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.KeyInfo;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 
 @SuppressWarnings("deprecation")
@@ -73,7 +78,8 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     @CompilationFinal private volatile Object polyglotGuestBindings;
     private volatile Value hostBindings;
     @CompilationFinal volatile Env env;
-
+    private final Node keyInfoNode = Message.KEY_INFO.createNode();
+    private final Node readNode = Message.READ.createNode();
     final Thread.UncaughtExceptionHandler uncaughtExceptionHandler = new PolyglotUncaughtExceptionHandler();
 
     PolyglotLanguageContext(PolyglotContextImpl context, PolyglotLanguage language, OptionValuesImpl optionValues, String[] applicationArguments, Map<String, Object> config, boolean eventsEnabled) {
@@ -588,7 +594,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                 CompilerDirectives.transferToInterpreter();
                 throw PolyglotImpl.engineError(new IllegalArgumentException(String.format("Values cannot be passed from one context to another. " +
                                 "The current value originates from context 0x%s and the argument originates from context 0x%s.",
-                                Integer.toHexString(languageContext.context.hashCode()), Integer.toHexString(valueImpl.languageContext.context.hashCode()))));
+                                Integer.toHexString(languageContext.context.api.hashCode()), Integer.toHexString(valueImpl.languageContext.context.api.hashCode()))));
             }
             return languageContext.getAPIAccess().getReceiver(receiverValue);
         } else if (PolyglotImpl.isGuestPrimitive(receiver)) {
@@ -710,6 +716,34 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             args[i] = toHostValue(values[i]);
         }
         return args;
+    }
+
+    Object lookupGuest(String symbolName) {
+        ensureInitialized(null);
+        Iterable<?> topScopes = VMAccessor.instrumentAccess().findTopScopes(env);
+        for (Object topScope : topScopes) {
+            Scope scope = (Scope) topScope;
+            TruffleObject variables = (TruffleObject) scope.getVariables();
+            int symbolInfo = ForeignAccess.sendKeyInfo(keyInfoNode, variables, symbolName);
+            if (KeyInfo.isExisting(symbolInfo) && KeyInfo.isReadable(symbolInfo)) {
+                try {
+                    return ForeignAccess.sendRead(readNode, variables, symbolName);
+                } catch (InteropException ex) {
+                    throw new AssertionError(symbolName, ex);
+                }
+            }
+        }
+        return null;
+    }
+
+    Value lookupHost(String symbolName) {
+        Object symbol = lookupGuest(symbolName);
+        Value resolvedSymbol = null;
+        if (symbol != null) {
+            assert PolyglotImpl.isGuestInteropValue(symbol);
+            resolvedSymbol = toHostValue(symbol);
+        }
+        return resolvedSymbol;
     }
 
     @Override
