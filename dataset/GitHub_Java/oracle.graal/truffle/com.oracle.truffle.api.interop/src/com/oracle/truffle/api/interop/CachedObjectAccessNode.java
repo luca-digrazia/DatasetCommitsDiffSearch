@@ -28,30 +28,38 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 
 final class CachedObjectAccessNode extends ObjectAccessNode {
-    @Child private DirectCallNode callNode;
+    @Child private DirectCallNode callTarget;
     @Child private ObjectAccessNode next;
     private final ForeignAccess languageCheck;
 
     @Child private ForeignAccessArguments accessArguments = new ForeignAccessArguments();
 
-    protected CachedObjectAccessNode(DirectCallNode callNode, ObjectAccessNode next, ForeignAccess languageCheck) {
-        this.callNode = callNode;
+    protected CachedObjectAccessNode(DirectCallNode callTarget, ObjectAccessNode next, ForeignAccess languageCheck) {
+        this.callTarget = callTarget;
         this.next = next;
         this.languageCheck = languageCheck;
-        this.callNode.forceInlining();
+        this.callTarget.forceInlining();
     }
 
     protected CachedObjectAccessNode(CachedObjectAccessNode prev) {
-        this(prev.callNode, prev.next, prev.languageCheck);
+        this(prev.callTarget, prev.next, prev.languageCheck);
     }
 
     @Override
     public Object executeWith(VirtualFrame frame, TruffleObject receiver, Object[] arguments) {
+        return doAccess(frame, receiver, arguments);
+    }
+
+    private Object doAccess(VirtualFrame frame, TruffleObject receiver, Object[] arguments) {
         if (languageCheck.canHandle(receiver)) {
-            return callNode.call(frame, accessArguments.executeCreate(receiver, arguments));
+            return callTarget.call(frame, accessArguments.executeCreate(receiver, arguments));
         } else {
-            return next.executeWith(frame, receiver, arguments);
+            return doNext(frame, receiver, arguments);
         }
+    }
+
+    private Object doNext(VirtualFrame frame, TruffleObject receiver, Object[] arguments) {
+        return next.executeWith(frame, receiver, arguments);
     }
 
 }
