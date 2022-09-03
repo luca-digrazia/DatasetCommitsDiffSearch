@@ -42,7 +42,6 @@ public class CompareAndSwapNode extends AbstractStateSplit implements StateSplit
     @Input private ValueNode offset;
     @Input private ValueNode expected;
     @Input private ValueNode newValue;
-    @Input private LocationNode location;
     private final int displacement;
     private WriteBarrierType barrierType;
 
@@ -64,15 +63,6 @@ public class CompareAndSwapNode extends AbstractStateSplit implements StateSplit
 
     public int displacement() {
         return displacement;
-    }
-
-    public LocationNode getLocation() {
-        return location;
-    }
-
-    public void setLocation(LocationNode location) {
-        updateUsages(this.location, location);
-        this.location = location;
     }
 
     public WriteBarrierType getWriteBarrierType() {
@@ -105,7 +95,7 @@ public class CompareAndSwapNode extends AbstractStateSplit implements StateSplit
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 

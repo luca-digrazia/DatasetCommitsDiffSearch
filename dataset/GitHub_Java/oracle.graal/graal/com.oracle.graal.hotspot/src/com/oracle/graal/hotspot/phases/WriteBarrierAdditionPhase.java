@@ -23,8 +23,8 @@
 package com.oracle.graal.hotspot.phases;
 
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.HeapAccess.WriteBarrierType;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.extended.WriteNode.WriteBarrierType;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 
@@ -61,9 +61,11 @@ public class WriteBarrierAdditionPhase extends Phase {
     private static void addCASBarriers(CompareAndSwapNode node, StructuredGraph graph) {
         WriteBarrierType barrierType = node.getWriteBarrierType();
         if (barrierType == WriteBarrierType.PRECISE) {
-            graph.addAfterFixed(node, graph.add(new SerialWriteBarrier(node.object(), node.getLocation(), true)));
+            LocationNode location = IndexedLocationNode.create(LocationNode.ANY_LOCATION, node.expected().kind(), node.displacement(), node.offset(), graph, 1);
+            graph.addAfterFixed(node, graph.add(new SerialWriteBarrier(node.object(), location, true)));
         } else if (barrierType == WriteBarrierType.IMPRECISE) {
-            graph.addAfterFixed(node, graph.add(new SerialWriteBarrier(node.object(), node.getLocation(), false)));
+            LocationNode location = IndexedLocationNode.create(LocationNode.ANY_LOCATION, node.expected().kind(), node.displacement(), node.offset(), graph, 1);
+            graph.addAfterFixed(node, graph.add(new SerialWriteBarrier(node.object(), location, false)));
         } else {
             assert barrierType == WriteBarrierType.NONE;
         }

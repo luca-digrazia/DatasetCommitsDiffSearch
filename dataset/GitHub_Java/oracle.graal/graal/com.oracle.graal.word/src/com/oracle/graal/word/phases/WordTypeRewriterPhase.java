@@ -29,8 +29,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
-import com.oracle.graal.nodes.extended.WriteNode.WriteBarrierType;
+import com.oracle.graal.nodes.extended.WriteNode.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
@@ -104,27 +103,9 @@ public class WordTypeRewriterPhase extends Phase {
             }
         }
 
-        for (AccessIndexedNode node : graph.getNodes().filter(AccessIndexedNode.class).snapshot()) {
-            ValueNode array = node.array();
-            if (array.objectStamp().type() == null) {
-                // There are cases where the array does not have a known type yet. Assume it is not
-                // a word type.
-                continue;
-            }
-            assert array.objectStamp().type().isArray();
-            if (isWord(array.objectStamp().type().getComponentType())) {
-                /*
-                 * The elementKind of the node is a final field, and other information such as the
-                 * stamp depends on elementKind. Therefore, just create a new node and replace the
-                 * old one.
-                 */
-                if (node instanceof LoadIndexedNode) {
-                    graph.replaceFixedWithFixed(node, graph.add(new LoadIndexedNode(node.array(), node.index(), wordKind)));
-                } else if (node instanceof StoreIndexedNode) {
-                    graph.replaceFixedWithFixed(node, graph.add(new StoreIndexedNode(node.array(), node.index(), wordKind, ((StoreIndexedNode) node).value())));
-                } else {
-                    throw GraalInternalError.shouldNotReachHere();
-                }
+        for (LoadIndexedNode load : graph.getNodes().filter(LoadIndexedNode.class).snapshot()) {
+            if (isWord(load)) {
+                load.setStamp(StampFactory.forKind(wordKind));
             }
         }
 
@@ -160,14 +141,14 @@ public class WordTypeRewriterPhase extends Phase {
                     case READ:
                         assert arguments.size() == 2 || arguments.size() == 3;
                         Kind readKind = asKind(callTargetNode.returnType());
-                        LocationIdentity readLocation = arguments.size() == 2 ? LocationNode.ANY_LOCATION : (LocationIdentity) arguments.get(2).asConstant().asObject();
+                        Object readLocation = arguments.size() == 2 ? LocationNode.ANY_LOCATION : arguments.get(2).asConstant().asObject();
                         replace(invoke, readOp(graph, arguments.get(0), arguments.get(1), invoke, readKind, readLocation));
                         break;
 
                     case WRITE:
                         assert arguments.size() == 3 || arguments.size() == 4;
                         Kind writeKind = asKind(targetMethod.getSignature().getParameterType(1, targetMethod.getDeclaringClass()));
-                        LocationIdentity writeLocation = arguments.size() == 3 ? LocationNode.ANY_LOCATION : (LocationIdentity) arguments.get(3).asConstant().asObject();
+                        Object writeLocation = arguments.size() == 3 ? LocationNode.ANY_LOCATION : arguments.get(3).asConstant().asObject();
                         replace(invoke, writeOp(graph, arguments.get(0), arguments.get(1), arguments.get(2), invoke, writeKind, writeLocation));
                         break;
 
@@ -203,7 +184,7 @@ public class WordTypeRewriterPhase extends Phase {
 
                     case TO_OBJECT:
                         assert arguments.size() == 1;
-                        replace(invoke, graph.unique(new UnsafeCastNode(arguments.get(0), invoke.asNode().stamp())));
+                        replace(invoke, graph.unique(new UnsafeCastNode(arguments.get(0), invoke.node().stamp())));
                         break;
 
                     default:
@@ -247,7 +228,7 @@ public class WordTypeRewriterPhase extends Phase {
             Constructor<? extends ValueNode> constructor = nodeClass.getConstructor(Kind.class, ValueNode.class, ValueNode.class);
             ValueNode result = graph.add(constructor.newInstance(wordKind, left, right));
             if (result instanceof FixedWithNextNode) {
-                graph.addBeforeFixed(invoke.asNode(), (FixedWithNextNode) result);
+                graph.addBeforeFixed(invoke.node(), (FixedWithNextNode) result);
             }
             return result;
         } catch (Throwable ex) {
@@ -285,30 +266,30 @@ public class WordTypeRewriterPhase extends Phase {
         return materialize;
     }
 
-    private static ValueNode readOp(StructuredGraph graph, ValueNode base, ValueNode offset, Invoke invoke, Kind readKind, LocationIdentity locationIdentity) {
+    private static ValueNode readOp(StructuredGraph graph, ValueNode base, ValueNode offset, Invoke invoke, Kind readKind, Object locationIdentity) {
         IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, readKind, 0, offset, graph, 1);
-        ReadNode read = graph.add(new ReadNode(base, location, invoke.asNode().stamp()));
-        graph.addBeforeFixed(invoke.asNode(), read);
+        ReadNode read = graph.add(new ReadNode(base, location, invoke.node().stamp()));
+        graph.addBeforeFixed(invoke.node(), read);
         // The read must not float outside its block otherwise it may float above an explicit zero
         // check on its base address
-        read.dependencies().add(AbstractBeginNode.prevBegin(invoke.asNode()));
+        read.dependencies().add(BeginNode.prevBegin(invoke.node()));
         return read;
     }
 
-    private static ValueNode writeOp(StructuredGraph graph, ValueNode base, ValueNode offset, ValueNode value, Invoke invoke, Kind writeKind, LocationIdentity locationIdentity) {
+    private static ValueNode writeOp(StructuredGraph graph, ValueNode base, ValueNode offset, ValueNode value, Invoke invoke, Kind writeKind, Object locationIdentity) {
         IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, writeKind, 0, offset, graph, 1);
         WriteNode write = graph.add(new WriteNode(base, value, location, WriteBarrierType.NONE));
         write.setStateAfter(invoke.stateAfter());
-        graph.addBeforeFixed(invoke.asNode(), write);
+        graph.addBeforeFixed(invoke.node(), write);
         return write;
     }
 
     private static void replace(Invoke invoke, ValueNode value) {
         FixedNode next = invoke.next();
         invoke.setNext(null);
-        invoke.asNode().replaceAtPredecessor(next);
-        invoke.asNode().replaceAtUsages(value);
-        GraphUtil.killCFG(invoke.asNode());
+        invoke.node().replaceAtPredecessor(next);
+        invoke.node().replaceAtUsages(value);
+        GraphUtil.killCFG(invoke.node());
     }
 
     public boolean isWord(ValueNode node) {
@@ -327,6 +308,16 @@ public class WordTypeRewriterPhase extends Phase {
     private boolean isWord0(ValueNode node) {
         if (node.stamp() == StampFactory.forWord()) {
             return true;
+        }
+        if (node instanceof LoadIndexedNode) {
+            ValueNode array = ((LoadIndexedNode) node).array();
+            if (array.objectStamp().type() == null) {
+                // There are cases where the array does not have a known type yet. Assume it is not
+                // a word type.
+                // TODO disallow LoadIndexedNode for word arrays?
+                return false;
+            }
+            return isWord(array.objectStamp().type().getComponentType());
         }
         if (node.kind() == Kind.Object) {
             return isWord(node.objectStamp().type());
