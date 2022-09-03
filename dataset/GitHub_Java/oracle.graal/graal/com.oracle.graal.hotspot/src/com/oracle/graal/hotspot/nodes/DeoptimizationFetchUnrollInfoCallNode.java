@@ -22,14 +22,12 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -43,12 +41,9 @@ public class DeoptimizationFetchUnrollInfoCallNode extends FixedWithNextNode imp
 
     @Input private SaveAllRegistersNode registerSaver;
     private final ForeignCallsProvider foreignCalls;
+    public static final ForeignCallDescriptor FETCH_UNROLL_INFO = new ForeignCallDescriptor("fetchUnrollInfo", Word.class, Word.class);
 
-    public static DeoptimizationFetchUnrollInfoCallNode create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode registerSaver) {
-        return new DeoptimizationFetchUnrollInfoCallNodeGen(foreignCalls, registerSaver);
-    }
-
-    protected DeoptimizationFetchUnrollInfoCallNode(ForeignCallsProvider foreignCalls, ValueNode registerSaver) {
+    public DeoptimizationFetchUnrollInfoCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode registerSaver) {
         super(StampFactory.forKind(Kind.fromJavaClass(FETCH_UNROLL_INFO.getResultType())));
         this.registerSaver = (SaveAllRegistersNode) registerSaver;
         this.foreignCalls = foreignCalls;
@@ -71,4 +66,12 @@ public class DeoptimizationFetchUnrollInfoCallNode extends FixedWithNextNode imp
 
     @NodeIntrinsic
     public static native Word fetchUnrollInfo(long registerSaver);
+
+    public MemoryCheckpoint asMemoryCheckpoint() {
+        return null;
+    }
+
+    public MemoryPhiNode asMemoryPhi() {
+        return null;
+    }
 }

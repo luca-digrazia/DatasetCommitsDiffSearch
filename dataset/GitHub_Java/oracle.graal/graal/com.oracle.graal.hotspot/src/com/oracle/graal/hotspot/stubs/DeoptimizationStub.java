@@ -22,15 +22,11 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.*;
-import static com.oracle.graal.hotspot.HotSpotBackend.Options.*;
-import static com.oracle.graal.hotspot.nodes.DeoptimizationFetchUnrollInfoCallNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.hotspot.stubs.UncommonTrapStub.*;
+import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
@@ -39,7 +35,7 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.replacements.Snippet.*;
 import com.oracle.graal.word.*;
 
 /**
@@ -84,9 +80,8 @@ public class DeoptimizationStub extends SnippetStub {
     private final TargetDescription target;
 
     public DeoptimizationStub(HotSpotProviders providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
-        super(DeoptimizationStub.class, "deoptimizationHandler", providers, target, linkage);
+        super(providers, target, linkage);
         this.target = target;
-        assert PreferGraalStubs.getValue();
     }
 
     @Override
@@ -115,7 +110,7 @@ public class DeoptimizationStub extends SnippetStub {
         final Word thread = registerAsWord(threadRegister);
         final long registerSaver = SaveAllRegistersNode.saveAllRegisters();
 
-        final Word unrollBlock = fetchUnrollInfo(registerSaver);
+        final Word unrollBlock = DeoptimizationFetchUnrollInfoCallNode.fetchUnrollInfo(registerSaver);
 
         // Pop all the frames we must move/replace.
         //
@@ -146,7 +141,7 @@ public class DeoptimizationStub extends SnippetStub {
         Word stackPointer = readRegister(stackPointerRegister);
 
         for (int i = 1; i < bangPages; i++) {
-            stackPointer.writeInt((-i * pageSize()) + stackBias(), 0, STACK_BANG_LOCATION);
+            stackPointer.writeInt((-i * pageSize()) + stackBias(), 0);
         }
 
         // Load number of interpreter frames.
@@ -274,6 +269,12 @@ public class DeoptimizationStub extends SnippetStub {
     private static int deoptimizationUnpackUncommonTrap() {
         return config().deoptimizationUnpackUncommonTrap;
     }
+
+    public static final ForeignCallDescriptor FETCH_UNROLL_INFO = descriptorFor(DeoptimizationStub.class, "fetchUnrollInfo");
+    public static final ForeignCallDescriptor UNPACK_FRAMES = descriptorFor(DeoptimizationStub.class, "unpackFrames");
+
+    @NodeIntrinsic(value = StubForeignCallNode.class, setStampFromReturnType = true)
+    public static native Word fetchUnrollInfo(@ConstantNodeParameter ForeignCallDescriptor fetchUnrollInfo, Word thread);
 
     @NodeIntrinsic(value = StubForeignCallNode.class, setStampFromReturnType = true)
     public static native int unpackFrames(@ConstantNodeParameter ForeignCallDescriptor unpackFrames, Word thread, int mode);

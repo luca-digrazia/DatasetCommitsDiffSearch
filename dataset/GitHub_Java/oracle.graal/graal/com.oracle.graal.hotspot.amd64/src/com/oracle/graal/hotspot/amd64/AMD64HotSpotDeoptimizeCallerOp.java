@@ -26,7 +26,7 @@ import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
 
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.BlockEndOp;
+import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -35,12 +35,6 @@ import com.oracle.graal.lir.asm.*;
  */
 @Opcode("DEOPT_CALLER")
 final class AMD64HotSpotDeoptimizeCallerOp extends AMD64HotSpotEpilogueOp implements BlockEndOp {
-
-    public static final LIRInstructionClass<AMD64HotSpotDeoptimizeCallerOp> TYPE = LIRInstructionClass.create(AMD64HotSpotDeoptimizeCallerOp.class);
-
-    protected AMD64HotSpotDeoptimizeCallerOp() {
-        super(TYPE);
-    }
 
     @Override
     public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {

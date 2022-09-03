@@ -47,7 +47,7 @@ final class AMD64HotSpotLeaveCurrentStackFrameOp extends AMD64HotSpotEpilogueOp 
     @Override
     public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         FrameMap frameMap = crb.frameMap;
-        RegisterConfig registerConfig = frameMap.getRegisterConfig();
+        RegisterConfig registerConfig = frameMap.registerConfig;
         RegisterSaveLayout registerSaveLayout = saveRegisterOp.getMap(frameMap);
         Register stackPointer = registerConfig.getFrameRegister();
 

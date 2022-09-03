@@ -26,7 +26,6 @@ import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-
 import java.util.*;
 
 import sun.misc.*;
@@ -78,7 +77,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public LIRGenerationResult newLIRGenerationResult(LIR lir, FrameMap frameMap, ResolvedJavaMethod method, Object stub) {
+    public LIRGenerationResult newLIRGenerationResult(LIR lir, FrameMap frameMap, Object stub) {
         return new AMD64HotSpotLIRGenerationResult(lir, frameMap, stub);
     }
 
@@ -191,6 +190,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
                 CalleeSaveLayout csl = crb.frameMap.registerConfig.getCalleeSaveLayout();
 
                 if (csl != null && csl.size != 0) {
+                    crb.compilationResult.setRegisterRestoreEpilogueOffset(asm.position());
                     // saved all registers, restore all registers
                     int frameToCSA = crb.frameMap.offsetToCalleeSaveArea();
                     asm.restore(csl, frameToCSA);

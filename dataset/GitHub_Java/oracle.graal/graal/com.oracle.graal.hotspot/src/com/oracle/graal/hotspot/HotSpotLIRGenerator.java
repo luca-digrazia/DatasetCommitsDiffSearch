@@ -127,18 +127,10 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
         throw GraalInternalError.unimplemented();
     }
 
-    default Value emitCardTableShift() {
-        throw GraalInternalError.unimplemented();
-    }
-
-    default Value emitCardTableAddress() {
-        throw GraalInternalError.unimplemented();
-    }
-
     /**
      * Gets a stack slot for a lock at a given lock nesting depth.
      */
-    StackSlotValue getLockSlot(int lockDepth);
+    StackSlot getLockSlot(int lockDepth);
 
     HotSpotProviders getProviders();
 

@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.code.*;
@@ -48,7 +48,7 @@ final class AMD64HotSpotLeaveDeoptimizedStackFrameOp extends AMD64HotSpotEpilogu
 
     @Override
     public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-        Register stackPointer = crb.frameMap.getRegisterConfig().getFrameRegister();
+        Register stackPointer = crb.frameMap.registerConfig.getFrameRegister();
         masm.addq(stackPointer, asRegister(frameSize));
 
         /*
