@@ -1021,9 +1021,8 @@ public abstract class Launcher {
         }
 
         private void execNativePolyglot(List<String> args, Map<String, String> polyglotOptions) {
-            List<String> command = new ArrayList<>(args.size() + (polyglotOptions == null ? 0 : polyglotOptions.size()) + 3);
+            List<String> command = new ArrayList<>(args.size() + (polyglotOptions == null ? 0 : polyglotOptions.size()) + 2);
             Path executable = getGraalVMBinaryPath("polyglot");
-            command.add("--native");
             serializePolyglotOptions(polyglotOptions, command);
             command.add("--use-launcher");
             command.add(getMainClass());
