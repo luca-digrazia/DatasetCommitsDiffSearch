@@ -29,6 +29,7 @@ import static org.graalvm.compiler.graph.UnsafeAccess.UNSAFE;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Formattable;
@@ -67,6 +68,21 @@ import sun.misc.Unsafe;
  * this field points to.
  * <p>
  * Nodes which are be value numberable should implement the {@link ValueNumberable} interface.
+ *
+ * <h1>Replay Compilation</h1>
+ *
+ * To enable deterministic replay compilation, node sets and node maps should be instantiated with
+ * the following methods:
+ * <ul>
+ * <li>{@link NodeCollectionsFactory#newSet()}</li>
+ * <li>{@link NodeCollectionsFactory#newSet(Collection)}</li>
+ * <li>{@link NodeCollectionsFactory#newMap()}</li>
+ * <li>{@link NodeCollectionsFactory#newMap(int)}</li>
+ * <li>{@link NodeCollectionsFactory#newMap(Map)}</li>
+ * <li>{@link NodeCollectionsFactory#newIdentityMap()}</li>
+ * <li>{@link NodeCollectionsFactory#newIdentityMap(int)}</li>
+ * <li>{@link NodeCollectionsFactory#newIdentityMap(Map)}</li>
+ * </ul>
  *
  * <h1>Assertions and Verification</h1>
  *
@@ -465,16 +481,12 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         }
     }
 
-    public final boolean isDeleted() {
+    public boolean isDeleted() {
         return id <= DELETED_ID_START;
     }
 
-    public final boolean isAlive() {
+    public boolean isAlive() {
         return id >= ALIVE_ID_START;
-    }
-
-    public final boolean isUnregistered() {
-        return id == INITIAL_ID;
     }
 
     /**
@@ -872,7 +884,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
             if (input == null) {
                 assertTrue(pos.isInputOptional(), "non-optional input %s cannot be null in %s (fix nullness or use @OptionalInput)", pos, this);
             } else {
-                assertFalse(input.isDeleted(), "input was deleted %s", input);
+                assertFalse(input.isDeleted(), "input was deleted");
                 assertTrue(input.isAlive(), "input is not alive yet, i.e., it was not yet added to the graph");
                 assertTrue(pos.getInputType() == InputType.Unchecked || input.isAllowedUsageType(pos.getInputType()), "invalid usage type %s %s", input, pos.getInputType());
             }
@@ -964,23 +976,20 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     /**
-     * Nodes using their {@link #id} as the hash code. This works very well when nodes of the same
-     * graph are stored in sets. It can give bad behavior when storing nodes of different graphs in
-     * the same set.
+     * Nodes always use an {@linkplain System#identityHashCode(Object) identity} hash code.
      */
     @Override
     public final int hashCode() {
-        assert !this.isUnregistered() : "node not yet constructed";
-        if (this.isDeleted()) {
-            return -id + DELETED_ID_START;
-        }
-        return id;
+        return System.identityHashCode(this);
     }
 
     /**
-     * Do not overwrite the equality test of a node in subclasses. Equality tests must rely solely
-     * on identity.
+     * Equality tests must rely solely on identity.
      */
+    @Override
+    public final boolean equals(Object obj) {
+        return super.equals(obj);
+    }
 
     /**
      * Provides a {@link Map} of properties of this node for use in debugging (e.g., to view in the

@@ -28,12 +28,13 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+
 import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
-import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Debug.Scope;
+import org.graalvm.compiler.graph.NodeCollectionsFactory;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -42,8 +43,8 @@ import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 
 public class LoopsData {
 
-    private EconomicMap<Loop<?>, LoopEx> loopToEx = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
-    private EconomicMap<LoopBeginNode, LoopEx> loopBeginToEx = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+    private Map<Loop<Block>, LoopEx> loopToEx = CollectionsFactory.newIdentityMap();
+    private Map<LoopBeginNode, LoopEx> loopBeginToEx = NodeCollectionsFactory.newIdentityMap();
     private ControlFlowGraph cfg;
 
     @SuppressWarnings("try")
@@ -69,15 +70,12 @@ public class LoopsData {
         return loopBeginToEx.get(loopBegin);
     }
 
-    public Iterable<LoopEx> loops() {
-        return loopToEx.getValues();
+    public Collection<LoopEx> loops() {
+        return loopToEx.values();
     }
 
     public List<LoopEx> outerFirst() {
-        ArrayList<LoopEx> loops = new ArrayList<>();
-        for (LoopEx l : loops()) {
-            loops.add(l);
-        }
+        ArrayList<LoopEx> loops = new ArrayList<>(loops());
         Collections.sort(loops, new Comparator<LoopEx>() {
 
             @Override
@@ -89,10 +87,7 @@ public class LoopsData {
     }
 
     public List<LoopEx> innerFirst() {
-        ArrayList<LoopEx> loops = new ArrayList<>();
-        for (LoopEx l : loops()) {
-            loops.add(l);
-        }
+        ArrayList<LoopEx> loops = new ArrayList<>(loops());
         Collections.sort(loops, new Comparator<LoopEx>() {
 
             @Override

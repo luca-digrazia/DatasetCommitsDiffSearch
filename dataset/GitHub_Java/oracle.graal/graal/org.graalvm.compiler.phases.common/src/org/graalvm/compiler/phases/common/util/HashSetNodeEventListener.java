@@ -26,12 +26,10 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
-import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.graph.Graph.NodeEvent;
 import org.graalvm.compiler.graph.Graph.NodeEventListener;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.graph.NodeCollectionsFactory;
 import org.graalvm.compiler.graph.Node.IndirectCanonicalization;
 
 /**
@@ -40,14 +38,14 @@ import org.graalvm.compiler.graph.Node.IndirectCanonicalization;
  */
 public class HashSetNodeEventListener implements NodeEventListener {
 
-    private final EconomicSet<Node> nodes;
+    private final Set<Node> nodes;
     private final Set<NodeEvent> filter;
 
     /**
      * Creates a {@link NodeEventListener} that collects nodes from all events.
      */
     public HashSetNodeEventListener() {
-        this.nodes = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
+        this.nodes = NodeCollectionsFactory.newSet();
         this.filter = EnumSet.allOf(NodeEvent.class);
     }
 
@@ -56,7 +54,7 @@ public class HashSetNodeEventListener implements NodeEventListener {
      * filter.
      */
     public HashSetNodeEventListener(Set<NodeEvent> filter) {
-        this.nodes = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
+        this.nodes = NodeCollectionsFactory.newSet();
         this.filter = filter;
     }
 
@@ -83,7 +81,7 @@ public class HashSetNodeEventListener implements NodeEventListener {
     /**
      * Gets the set being used to accumulate the nodes communicated to this listener.
      */
-    public EconomicSet<Node> getNodes() {
+    public Set<Node> getNodes() {
         return nodes;
     }
 }

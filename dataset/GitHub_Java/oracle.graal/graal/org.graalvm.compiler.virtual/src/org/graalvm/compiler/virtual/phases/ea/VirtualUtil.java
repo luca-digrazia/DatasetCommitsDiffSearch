@@ -25,14 +25,13 @@ package org.graalvm.compiler.virtual.phases.ea;
 import static org.graalvm.compiler.core.common.GraalOptions.TraceEscapeAnalysis;
 
 import java.util.List;
+import java.util.Map;
 
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
-import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.graph.NodeCollectionsFactory;
 import org.graalvm.compiler.graph.NodeFlood;
 import org.graalvm.compiler.nodes.AbstractEndNode;
 import org.graalvm.compiler.nodes.FixedNode;
@@ -50,7 +49,7 @@ public final class VirtualUtil {
         // helper code that determines the paths that keep obsolete nodes alive:
 
         NodeFlood flood = graph.createNodeFlood();
-        EconomicMap<Node, Node> path = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+        Map<Node, Node> path = NodeCollectionsFactory.newIdentityMap();
         flood.add(graph.start());
         for (Node current : flood) {
             if (current instanceof AbstractEndNode) {

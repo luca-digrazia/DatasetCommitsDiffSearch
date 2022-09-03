@@ -25,13 +25,12 @@ package org.graalvm.compiler.phases.graph;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.Map;
 import java.util.Set;
 
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
-import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeBitMap;
+import org.graalvm.compiler.graph.NodeCollectionsFactory;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.ControlSinkNode;
@@ -62,7 +61,7 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
 
     private final NodeBitMap visitedEnds;
     private final Deque<AbstractBeginNode> nodeQueue;
-    private final EconomicMap<FixedNode, T> nodeStates;
+    private final Map<FixedNode, T> nodeStates;
     private final FixedNode start;
 
     protected T state;
@@ -71,7 +70,7 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
         StructuredGraph graph = start.graph();
         visitedEnds = graph.createNodeBitMap();
         nodeQueue = new ArrayDeque<>();
-        nodeStates = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+        nodeStates = NodeCollectionsFactory.newIdentityMap();
         this.start = start;
         this.state = initialState;
     }
@@ -161,7 +160,7 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
                 }
             } else {
                 assert node.predecessor() != null;
-                state = nodeStates.get((FixedNode) node.predecessor()).clone();
+                state = nodeStates.get(node.predecessor()).clone();
                 state.afterSplit(node);
                 return node;
             }

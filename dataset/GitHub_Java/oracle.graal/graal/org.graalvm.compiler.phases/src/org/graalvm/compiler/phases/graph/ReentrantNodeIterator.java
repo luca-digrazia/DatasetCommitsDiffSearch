@@ -27,12 +27,10 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
-import org.graalvm.compiler.core.common.EconomicMap;
-import org.graalvm.compiler.core.common.MapCursor;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.graph.NodeCollectionsFactory;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractEndNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
@@ -47,12 +45,12 @@ public final class ReentrantNodeIterator {
 
     public static class LoopInfo<StateT> {
 
-        public final EconomicMap<LoopEndNode, StateT> endStates;
-        public final EconomicMap<LoopExitNode, StateT> exitStates;
+        public final Map<LoopEndNode, StateT> endStates;
+        public final Map<LoopExitNode, StateT> exitStates;
 
         public LoopInfo(int endCount, int exitCount) {
-            endStates = CollectionsFactory.newMap(CompareStrategy.IDENTITY, endCount);
-            exitStates = CollectionsFactory.newMap(CompareStrategy.IDENTITY, exitCount);
+            endStates = NodeCollectionsFactory.newIdentityMap(endCount);
+            exitStates = NodeCollectionsFactory.newIdentityMap(exitCount);
         }
     }
 
@@ -64,7 +62,7 @@ public final class ReentrantNodeIterator {
 
         protected abstract StateT afterSplit(AbstractBeginNode node, StateT oldState);
 
-        protected abstract EconomicMap<LoopExitNode, StateT> processLoop(LoopBeginNode loop, StateT initialState);
+        protected abstract Map<LoopExitNode, StateT> processLoop(LoopBeginNode loop, StateT initialState);
 
         /**
          * Determine whether iteration should continue in the current state.
@@ -81,7 +79,7 @@ public final class ReentrantNodeIterator {
     }
 
     public static <StateT> LoopInfo<StateT> processLoop(NodeIteratorClosure<StateT> closure, LoopBeginNode loop, StateT initialState) {
-        EconomicMap<FixedNode, StateT> blockEndStates = apply(closure, loop, initialState, loop);
+        Map<FixedNode, StateT> blockEndStates = apply(closure, loop, initialState, loop);
 
         LoopInfo<StateT> info = new LoopInfo<>(loop.loopEnds().count(), loop.loopExits().count());
         for (LoopEndNode end : loop.loopEnds()) {
@@ -101,10 +99,10 @@ public final class ReentrantNodeIterator {
         apply(closure, start, initialState, null);
     }
 
-    private static <StateT> EconomicMap<FixedNode, StateT> apply(NodeIteratorClosure<StateT> closure, FixedNode start, StateT initialState, LoopBeginNode boundary) {
+    private static <StateT> Map<FixedNode, StateT> apply(NodeIteratorClosure<StateT> closure, FixedNode start, StateT initialState, LoopBeginNode boundary) {
         assert start != null;
         Deque<AbstractBeginNode> nodeQueue = new ArrayDeque<>();
-        EconomicMap<FixedNode, StateT> blockEndStates = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+        Map<FixedNode, StateT> blockEndStates = NodeCollectionsFactory.newIdentityMap();
 
         StateT state = initialState;
         FixedNode current = start;
@@ -132,9 +130,8 @@ public final class ReentrantNodeIterator {
                             // add the end node and see if the merge is ready for processing
                             AbstractMergeNode merge = ((EndNode) current).merge();
                             if (merge instanceof LoopBeginNode) {
-                                EconomicMap<LoopExitNode, StateT> loopExitState = closure.processLoop((LoopBeginNode) merge, state);
-                                MapCursor<LoopExitNode, StateT> entry = loopExitState.getEntries();
-                                while (entry.advance()) {
+                                Map<LoopExitNode, StateT> loopExitState = closure.processLoop((LoopBeginNode) merge, state);
+                                for (Map.Entry<LoopExitNode, StateT> entry : loopExitState.entrySet()) {
                                     blockEndStates.put(entry.getKey(), entry.getValue());
                                     nodeQueue.add(entry.getKey());
                                 }
@@ -151,7 +148,7 @@ public final class ReentrantNodeIterator {
                                     for (int i = 0; i < merge.forwardEndCount(); i++) {
                                         AbstractEndNode forwardEnd = merge.forwardEndAt(i);
                                         assert forwardEnd == current || blockEndStates.containsKey(forwardEnd);
-                                        StateT other = forwardEnd == current ? state : blockEndStates.removeKey(forwardEnd);
+                                        StateT other = forwardEnd == current ? state : blockEndStates.remove(forwardEnd);
                                         states.add(other);
                                     }
                                     state = closure.merge(merge, states);
@@ -192,7 +189,7 @@ public final class ReentrantNodeIterator {
             } else {
                 current = nodeQueue.removeFirst();
                 assert blockEndStates.containsKey(current);
-                state = blockEndStates.removeKey(current);
+                state = blockEndStates.remove(current);
                 assert !(current instanceof AbstractMergeNode) && current instanceof AbstractBeginNode;
             }
         } while (true);

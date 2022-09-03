@@ -22,13 +22,13 @@
  */
 package org.graalvm.compiler.graph;
 
+import static org.graalvm.compiler.core.common.Fields.translateInto;
 import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
 import static org.graalvm.compiler.graph.Edges.translateInto;
 import static org.graalvm.compiler.graph.Graph.isModificationCountsEnabled;
 import static org.graalvm.compiler.graph.InputEdges.translateInto;
 import static org.graalvm.compiler.graph.Node.WithAllEdges;
 import static org.graalvm.compiler.graph.UnsafeAccess.UNSAFE;
-import static org.graalvm.compiler.options.OptionValues.GLOBAL;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
@@ -68,7 +68,8 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
+import org.graalvm.compiler.options.OptionValue;
+import org.graalvm.compiler.options.StableOptionValue;
 
 /**
  * Metadata for every {@link Node} type. The metadata includes:
@@ -83,7 +84,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     public static class Options {
         // @formatter:off
         @Option(help = "Verifies that receivers of NodeInfo#size() and NodeInfo#cycles() do not have UNSET values.")
-        public static final OptionKey<Boolean> VerifyNodeCostOnAccess = new OptionKey<>(false);
+        public static final OptionValue<Boolean> VerifyNodeCostOnAccess = new StableOptionValue<>(false);
         // @formatter:on
     }
 
@@ -275,14 +276,14 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     private final NodeSize size;
 
     public NodeCycles cycles() {
-        if (Options.VerifyNodeCostOnAccess.getValue(GLOBAL) && cycles == NodeCycles.CYCLES_UNSET) {
+        if (Options.VerifyNodeCostOnAccess.getValue() && cycles == NodeCycles.CYCLES_UNSET) {
             throw new GraalError("Missing NodeCycles specification in the @NodeInfo annotation of the node %s", this);
         }
         return cycles;
     }
 
     public NodeSize size() {
-        if (Options.VerifyNodeCostOnAccess.getValue(GLOBAL) && size == NodeSize.SIZE_UNSET) {
+        if (Options.VerifyNodeCostOnAccess.getValue() && size == NodeSize.SIZE_UNSET) {
             throw new GraalError("Missing NodeSize specification in the @NodeInfo annotation of the node %s", this);
         }
         return size;

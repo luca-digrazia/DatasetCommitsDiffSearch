@@ -25,16 +25,14 @@ package org.graalvm.compiler.phases.common.instrumentation;
 import static org.graalvm.compiler.core.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 
 import java.util.Collections;
+import java.util.Map;
 
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
-import org.graalvm.compiler.core.common.ImmutableEconomicMap;
-import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeBitMap;
+import org.graalvm.compiler.graph.NodeCollectionsFactory;
 import org.graalvm.compiler.graph.NodeFlood;
 import org.graalvm.compiler.graph.Position;
 import org.graalvm.compiler.nodeinfo.InputType;
@@ -164,7 +162,7 @@ public class ExtractInstrumentationPhase extends BasePhase<HighTierContext> {
         StructuredGraph genInstrumentationGraph(StructuredGraph oldGraph, InstrumentationNode instrumentationNode) {
 
             StructuredGraph instrumentationGraph = new StructuredGraph(AllowAssumptions.YES, INVALID_COMPILATION_ID);
-            EconomicMap<Node, Node> replacements = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+            Map<Node, Node> replacements = NodeCollectionsFactory.newMap();
             int index = 0; // for ParameterNode index
             for (Node current : nodes) {
                 // mark any input that is not included in the instrumentation a weak dependency
@@ -182,10 +180,10 @@ public class ExtractInstrumentationPhase extends BasePhase<HighTierContext> {
                     }
                 }
             }
-            ImmutableEconomicMap<Node, Node> duplicates = instrumentationGraph.addDuplicates(nodes, oldGraph, nodes.count(), replacements);
-            instrumentationGraph.start().setNext((FixedNode) duplicates.get(begin.next()));
-            instrumentationGraph.start().setStateAfter((FrameState) duplicates.get(begin.stateAfter()));
-            duplicates.get(end).replaceAtPredecessor(instrumentationGraph.addWithoutUnique(new ReturnNode(null)));
+            replacements = instrumentationGraph.addDuplicates(nodes, oldGraph, nodes.count(), replacements);
+            instrumentationGraph.start().setNext((FixedNode) replacements.get(begin.next()));
+            instrumentationGraph.start().setStateAfter((FrameState) replacements.get(begin.stateAfter()));
+            replacements.get(end).replaceAtPredecessor(instrumentationGraph.addWithoutUnique(new ReturnNode(null)));
             return instrumentationGraph;
         }
 
