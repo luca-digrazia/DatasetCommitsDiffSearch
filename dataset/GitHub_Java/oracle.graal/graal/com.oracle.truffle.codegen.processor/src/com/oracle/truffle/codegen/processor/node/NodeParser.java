@@ -147,7 +147,7 @@ public class NodeParser extends TemplateParser<NodeData> {
         nodeData.setExecutableTypes(executableTypes.toArray(new ExecutableTypeData[executableTypes.size()]));
 
         parsedNodes.put(Utils.getQualifiedName(type), nodeData); // node fields will resolve node
-        // types, to avoid endless loops
+// types, to avoid endless loops
 
         NodeFieldData[] fields = parseFields(nodeData, elements, typeHierarchy);
         if (fields == null) {
@@ -435,9 +435,9 @@ public class NodeParser extends TemplateParser<NodeData> {
                 // TODO redirect errors from resolve.
                 context.getLog().error(errorElement, "Node type '%s' is invalid.", Utils.getQualifiedName(nodeType));
                 return null;
-            } else if (fieldNodeData.findGenericExecutableTypes(context).isEmpty()) {
+            } else if (fieldNodeData.findGenericExecutableType(context) == null) {
                 // TODO better error handling for (no or multiple?)
-                context.getLog().error(errorElement, "No executable generic types found for node '%s'.", Utils.getQualifiedName(nodeType));
+                context.getLog().error(errorElement, "No or multiple executable generic types found for node '%s'.", Utils.getQualifiedName(nodeType));
                 return null;
             }
         }
@@ -612,21 +612,13 @@ public class NodeParser extends TemplateParser<NodeData> {
         return valid;
     }
 
-    private boolean isGenericShortCutMethod(NodeData node, TemplateMethod method) {
+    private static boolean isGenericShortCutMethod(NodeData node, TemplateMethod method) {
         for (NodeFieldData field : node.getFields()) {
             ActualParameter parameter = method.findParameter(field.getName());
             if (parameter == null) {
                 continue;
             }
-            ExecutableTypeData found = null;
-            List<ExecutableTypeData> executableElements = field.getNodeData().findGenericExecutableTypes(context);
-            for (ExecutableTypeData executable : executableElements) {
-                if (executable.getType().equalsType(parameter.getActualTypeData(node.getTypeSystem()))) {
-                    found = executable;
-                    break;
-                }
-            }
-            if (found == null) {
+            if (!Utils.typeEquals(node.getTypeSystem().getGenericType(), parameter.getActualType())) {
                 return false;
             }
         }
