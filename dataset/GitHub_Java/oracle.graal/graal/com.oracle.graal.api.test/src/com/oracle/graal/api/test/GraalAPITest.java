@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,41 +20,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-/*
- */
-package com.oracle.graal.jtt.except;
+package com.oracle.graal.api.test;
 
-import com.oracle.graal.jtt.*;
+import static org.junit.Assert.*;
+
 import org.junit.*;
 
-public class Except_Locals extends JTTTest {
+import com.oracle.graal.api.runtime.*;
 
-    public static int test(String a, String b) {
-        int x = 0;
-        try {
-            x = 1;
-            a.toString();
-            x = 2;
-            b.toString();
-        } catch (NullPointerException e) {
-            return x;
-        }
-        return -1;
+public class GraalAPITest {
+
+    @Test
+    public void testRuntimeAvailable() {
+        assertNotNull(Graal.getRuntime());
     }
 
     @Test
-    public void run0() throws Throwable {
-        runTest("test", null, null);
+    public void testRuntimeNamed() {
+        assertNotNull(Graal.getRuntime().getName());
     }
-
-    @Test
-    public void run1() throws Throwable {
-        runTest("test", "", null);
-    }
-
-    @Test
-    public void run2() throws Throwable {
-        runTest("test", "", "");
-    }
-
 }

@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.ptx.test;
 
-import java.lang.reflect.*;
-
 import org.junit.*;
 
 import com.oracle.graal.api.code.*;
@@ -37,7 +35,7 @@ import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.phases.PhasePlan.*;
 import com.oracle.graal.ptx.*;
 
 /**
@@ -92,12 +90,7 @@ public class BasicPTXTest extends GraalCompilerTest {
 
     public static void main(String[] args) {
         BasicPTXTest basicPTXTest = new BasicPTXTest();
-        Method[] methods = BasicPTXTest.class.getMethods();
-        for (Method m : methods) {
-            if (m.getAnnotation(Test.class) != null) {
-                String name = m.getName() + "Snippet";
-                System.out.println(name + ": \n" + new String(basicPTXTest.test(name).getTargetCode()));
-            }
-        }
+        System.out.println("testAddSnippet: \n" + new String(basicPTXTest.test("testAddSnippet").getTargetCode()));
+        System.out.println("testArraySnippet: \n" + new String(basicPTXTest.test("testArraySnippet").getTargetCode()));
     }
 }
