@@ -35,7 +35,7 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
 
     @Input private final NodeInputList<VirtualObjectNode> virtualObjects = new NodeInputList<>(this);
     @Input private final NodeInputList<ValueNode> values = new NodeInputList<>(this);
-    private List<int[]> locks = new ArrayList<>();
+    private List<Integer> lockCounts = new ArrayList<>();
 
     public CommitAllocationNode() {
         super(StampFactory.forVoid());
@@ -49,13 +49,13 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
         return values;
     }
 
-    public List<int[]> getLocks() {
-        return locks;
+    public List<Integer> getLockCounts() {
+        return lockCounts;
     }
 
     @Override
     public boolean verify() {
-        assertTrue(virtualObjects.size() == locks.size(), "lockCounts size doesn't match");
+        assertTrue(virtualObjects.size() == lockCounts.size(), "lockCounts size doesn't match");
         int valueCount = 0;
         for (VirtualObjectNode virtual : virtualObjects) {
             valueCount += virtual.entryCount();
@@ -66,13 +66,15 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
 
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
-        tool.getRuntime().lower(this, tool);
+        if (loweringType == LoweringType.AFTER_GUARDS) {
+            tool.getRuntime().lower(this, tool);
+        }
     }
 
     @Override
     public Node clone(Graph into) {
         CommitAllocationNode clone = (CommitAllocationNode) super.clone(into);
-        clone.locks = new ArrayList<>(locks);
+        clone.lockCounts = new ArrayList<>(lockCounts);
         return clone;
     }
 
@@ -82,7 +84,7 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
         for (int i = 0; i < virtualObjects.size(); i++) {
             VirtualObjectNode virtualObject = virtualObjects.get(i);
             int entryCount = virtualObject.entryCount();
-            tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), locks.get(i));
+            tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), lockCounts.get(i));
             pos += entryCount;
         }
         tool.delete();
@@ -101,8 +103,8 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
                 s.append(i == 0 ? "" : ",").append(value == null ? "_" : value.toString(Verbosity.Id));
             }
             s.append("]");
-            if (locks.get(objIndex).length > 0) {
-                s.append(" locked(").append(Arrays.toString(locks.get(objIndex))).append(")");
+            if (lockCounts.get(objIndex) > 0) {
+                s.append(" locked(").append(lockCounts.get(objIndex)).append(")");
             }
             properties.put("object(" + virtual.toString(Verbosity.Id) + ")", s.toString());
         }
@@ -143,22 +145,22 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
 
         if (usedCount < virtualObjects.size()) {
             List<VirtualObjectNode> newVirtualObjects = new ArrayList<>(usedCount);
-            List<int[]> newLocks = new ArrayList<>(usedCount);
+            List<Integer> newLockCounts = new ArrayList<>(usedCount);
             List<ValueNode> newValues = new ArrayList<>();
             int valuePos = 0;
             for (int objIndex = 0; objIndex < virtualObjects.size(); objIndex++) {
                 VirtualObjectNode virtualObject = virtualObjects.get(objIndex);
                 if (used[objIndex]) {
                     newVirtualObjects.add(virtualObject);
-                    newLocks.add(locks.get(objIndex));
+                    newLockCounts.add(lockCounts.get(objIndex));
                     newValues.addAll(values.subList(valuePos, valuePos + virtualObject.entryCount()));
                 }
                 valuePos += virtualObject.entryCount();
             }
             virtualObjects.clear();
             virtualObjects.addAll(newVirtualObjects);
-            locks.clear();
-            locks.addAll(newLocks);
+            lockCounts.clear();
+            lockCounts.addAll(newLockCounts);
             values.clear();
             values.addAll(newValues);
         }
