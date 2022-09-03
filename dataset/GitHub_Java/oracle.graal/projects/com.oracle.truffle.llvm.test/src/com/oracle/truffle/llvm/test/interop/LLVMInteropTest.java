@@ -32,7 +32,8 @@ package com.oracle.truffle.llvm.test.interop;
 import java.io.File;
 import java.nio.file.Path;
 
-import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
+import org.graalvm.polyglot.PolyglotContext;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
@@ -622,7 +623,7 @@ public final class LLVMInteropTest {
     static Object staticStorage;
 
     @FunctionalInterface
-    public interface ReturnObject {
+    interface ReturnObject {
         void storeObject(Object o);
     }
 
@@ -1083,12 +1084,14 @@ public final class LLVMInteropTest {
     private static final String FILE_SUFFIX = "_clang_v38_O0_MEM2REG.bc";
 
     private static final class Runner {
+        private final Engine engine;
         private final String fileName;
-        private final Context context;
+        private final PolyglotContext context;
 
         Runner(String fileName) {
             this.fileName = fileName;
-            this.context = Context.create();
+            this.engine = Engine.newBuilder().build();
+            this.context = engine.createPolyglotContext();
         }
 
         public Value findGlobalSymbol(String string) {
@@ -1102,8 +1105,8 @@ public final class LLVMInteropTest {
         int run() {
             try {
                 File file = new File(TEST_DIR.toFile(), "/" + fileName + "/" + fileName + FILE_SUFFIX);
-                Source source = Source.newBuilder("llvm", file).build();
-                return context.eval(source).asInt();
+                Source source = Source.newBuilder(file).build();
+                return context.eval("llvm", source).asInt();
             } catch (RuntimeException e) {
                 throw e;
             } catch (Exception e) {
