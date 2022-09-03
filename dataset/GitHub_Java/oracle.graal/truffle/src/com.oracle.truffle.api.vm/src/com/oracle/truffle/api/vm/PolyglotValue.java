@@ -746,7 +746,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
             this.newInstance = createTarget(new NewInstanceNode(this));
             this.canInstantiate = createTarget(new CanInstantiateNode(this));
             this.canExecute = createTarget(new CanExecuteNode(this));
-            this.hasMembers = createTarget(new HasMembersNode(this));
             this.asPrimitive = createTarget(new AsPrimitiveNode(this));
             this.isProxy = PolyglotProxy.isProxyGuestObject(receiver);
             this.isJava = JavaInterop.isJavaObject(receiver);
@@ -1373,11 +1372,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
             }
 
             @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{interop.receiverType};
-            }
-
-            @Override
             protected String getOperationName() {
                 return "hasMembers";
             }
@@ -1447,11 +1441,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
             protected CanInstantiateNode(Interop interop) {
                 super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{interop.receiverType};
             }
 
             @Override
@@ -1645,11 +1634,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
             protected NewInstanceNode(Interop interop) {
                 super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{interop.receiverType, Object[].class};
             }
 
             @Override

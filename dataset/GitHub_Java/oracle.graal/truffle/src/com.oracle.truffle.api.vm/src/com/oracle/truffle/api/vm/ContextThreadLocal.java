@@ -139,10 +139,12 @@ final class ContextThreadLocal extends ThreadLocal<Object> {
         }
         Thread currentThread = Thread.currentThread();
         Thread storeThread = firstThread;
-        Object prev = this.firstContext;
+        Object prev;
         if (currentThread == storeThread) {
+            prev = this.firstContext;
             this.firstContext = context;
         } else {
+            prev = this.firstContext;
             if (storeThread == null) {
                 this.firstThread = currentThread;
                 this.firstContext = context;

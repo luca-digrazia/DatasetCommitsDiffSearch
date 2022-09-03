@@ -24,6 +24,8 @@
  */
 package com.oracle.truffle.api.vm;
 
+import java.util.LinkedList;
+
 final class PolyglotThreadInfo {
 
     static final PolyglotThreadInfo NULL = new PolyglotThreadInfo(null);
@@ -31,6 +33,7 @@ final class PolyglotThreadInfo {
     final Thread thread;
 
     private int enteredCount;
+    final LinkedList<Object> explicitContextStack = new LinkedList<>();
     volatile boolean cancelled;
 
     PolyglotThreadInfo(Thread thread) {
@@ -46,8 +49,11 @@ final class PolyglotThreadInfo {
         enteredCount++;
     }
 
-    boolean isPolyglotThread() {
-        return thread instanceof PolyglotThread;
+    boolean isPolyglotThread(PolyglotContextImpl c) {
+        if (thread instanceof PolyglotThread) {
+            return ((PolyglotThread) thread).isOwner(c);
+        }
+        return false;
     }
 
     void leave() {
@@ -56,7 +62,8 @@ final class PolyglotThreadInfo {
     }
 
     boolean isLastActive() {
-        return thread != null && enteredCount <= 1 && !cancelled;
+        assert Thread.currentThread() == thread;
+        return thread != null && enteredCount == 1 && !cancelled;
     }
 
     boolean isActive() {

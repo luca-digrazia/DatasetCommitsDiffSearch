@@ -60,7 +60,6 @@ import org.graalvm.polyglot.Value;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleContext;
@@ -545,7 +544,6 @@ public class MultiThreadedLanguageTest {
     }
 
     @Test
-    @Ignore("GR-5832")
     public void testAsssertionIfThreadStillActive() throws InterruptedException {
         MultiThreadedLanguage.isThreadAccessAllowed = (req) -> {
             return true;

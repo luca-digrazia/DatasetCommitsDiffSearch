@@ -33,7 +33,6 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.net.URI;
 import java.net.URL;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -49,7 +48,6 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.PolyglotException.StackFrame;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
-import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 
 @SuppressWarnings("unused")
@@ -227,8 +225,6 @@ public abstract class AbstractPolyglotImpl {
         public abstract Engine getEngineImpl();
 
         public abstract void close(boolean interuptExecution);
-
-        public abstract Value asValue(Object hostValue);
 
         public abstract void explicitEnter();
 
@@ -416,7 +412,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public Set<String> getMemberKeys(Object receiver) {
-            return Collections.emptySet();
+            throw unsupported(receiver, "getMemberKeys()", "hasMembers()");
         }
 
         public void putMember(Object receiver, String key, Object member) {
@@ -472,11 +468,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public String asString(Object receiver) {
-            if (isNull(receiver)) {
-                throw npe(receiver, "asString()", "isString()");
-            } else {
-                throw classcast(receiver, "asString()", "isString()");
-            }
+            throw unsupported(receiver, "asString()", "isString()");
         }
 
         public boolean isBoolean(Object receiver) {
@@ -484,11 +476,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public boolean asBoolean(Object receiver) {
-            if (isNull(receiver)) {
-                throw npe(receiver, "asBoolean()", "isBoolean()");
-            } else {
-                throw classcast(receiver, "asBoolean()", "isBoolean()");
-            }
+            throw unsupported(receiver, "asBoolean()", "isBoolean()");
         }
 
         public boolean fitsInInt(Object receiver) {
@@ -496,11 +484,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public int asInt(Object receiver) {
-            if (isNull(receiver)) {
-                throw npe(receiver, "asInt()", "fitsInInt()");
-            } else {
-                throw classcast(receiver, "asInt()", "fitsInInt()");
-            }
+            throw unsupported(receiver, "asInt()", "isNumber()");
         }
 
         public boolean fitsInLong(Object receiver) {
@@ -508,11 +492,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public long asLong(Object receiver) {
-            if (isNull(receiver)) {
-                throw npe(receiver, "asLong()", "fitsInLong()");
-            } else {
-                throw classcast(receiver, "asLong()", "fitsInLong()");
-            }
+            throw unsupported(receiver, "asLong()", "isNumber()");
         }
 
         public boolean fitsInDouble(Object receiver) {
@@ -520,11 +500,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public double asDouble(Object receiver) {
-            if (isNull(receiver)) {
-                throw npe(receiver, "asDouble()", "fitsInDouble()");
-            } else {
-                throw classcast(receiver, "asDouble()", "fitsInDouble()");
-            }
+            throw unsupported(receiver, "asDouble()", "isNumber()");
         }
 
         public boolean fitsInFloat(Object receiver) {
@@ -532,11 +508,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public float asFloat(Object receiver) {
-            if (isNull(receiver)) {
-                throw npe(receiver, "asFloat()", "fitsInFloat()");
-            } else {
-                throw classcast(receiver, "asFloat()", "fitsInFloat()");
-            }
+            throw unsupported(receiver, "asFloat()", "isNumber()");
         }
 
         public boolean isNull(Object receiver) {
@@ -547,71 +519,39 @@ public abstract class AbstractPolyglotImpl {
             return false;
         }
 
-        public boolean fitsInByte(Object receiver) {
-            return false;
-        }
-
-        public byte asByte(Object receiver) {
-            if (isNull(receiver)) {
-                throw npe(receiver, "asByte()", "fitsInByte()");
-            } else {
-                throw classcast(receiver, "asByte()", "fitsInByte()");
-            }
-        }
-
-        public boolean fitsInShort(Object receiver) {
-            return false;
-        }
-
-        public short asShort(Object receiver) {
-            if (isNull(receiver)) {
-                throw npe(receiver, "asShort()", "fitsInShort()");
-            } else {
-                throw classcast(receiver, "asShort()", "fitsInShort()");
-            }
-        }
-
         public long asNativePointer(Object receiver) {
             return asNativePointerUnsupported(receiver);
         }
 
         public final long asNativePointerUnsupported(Object receiver) {
-            throw classcast(receiver, "asNativePointer()", "isNativeObject()");
+            throw unsupported(receiver, "asNativePointer()", "isNativeObject()");
         }
 
         public boolean isHostObject(Object receiver) {
             return false;
         }
 
-        public boolean isProxyObject(Object receiver) {
-            return false;
-        }
-
         public Object asHostObject(Object receiver) {
-            throw classcast(receiver, "asHostObject()", "isHostObject()");
-        }
-
-        public Object asProxyObject(Object receiver) {
-            throw classcast(receiver, "asProxyObject()", "isProxyObject()");
+            throw unsupported(receiver, "asHostObject()", "isHostObject()");
         }
 
         protected abstract RuntimeException unsupported(Object receiver, String message, String useToCheck);
-
-        protected abstract RuntimeException classcast(Object receiver, String message, String useToCheck);
-
-        protected abstract RuntimeException npe(Object receiver, String message, String useToCheck);
 
         public abstract String toString(Object receiver);
 
         public abstract Value getMetaObject(Object receiver);
 
-        public boolean isNumber(Object receiver) {
+        public boolean fitsInByte(Object receiver) {
             return false;
         }
 
-        public abstract <T> T as(Object receiver, Class<T> targetType);
+        public byte asByte(Object receiver) {
+            throw unsupported(receiver, "asByte()", "isNumber()");
+        }
 
-        public abstract <T> T as(Object receiver, TypeLiteral<T> targetType);
+        public boolean isNumber(Object receiver) {
+            return false;
+        }
 
     }
 
