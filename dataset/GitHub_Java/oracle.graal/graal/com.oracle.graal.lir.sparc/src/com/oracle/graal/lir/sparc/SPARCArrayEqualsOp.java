@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,21 @@
  */
 package com.oracle.graal.lir.sparc;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.RCondition.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.common.UnsafeAccess.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
-import static jdk.internal.jvmci.sparc.SPARC.CPUFeature.*;
+import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.CPUFeature.*;
 
 import java.lang.reflect.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.sparc.SPARC.CPUFeature;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
@@ -46,14 +44,13 @@ import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.sparc.SPARC.CPUFeature;
 
 /**
  * Emits code which compares two arrays of the same length.
  */
 @Opcode("ARRAY_EQUALS")
-public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
-    public static final LIRInstructionClass<SPARCArrayEqualsOp> TYPE = LIRInstructionClass.create(SPARCArrayEqualsOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(32);
+public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
 
     private final Kind kind;
     private final int arrayBaseOffset;
@@ -70,7 +67,6 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
     @Temp({REG}) protected Value temp5;
 
     public SPARCArrayEqualsOp(LIRGeneratorTool tool, Kind kind, Value result, Value array1, Value array2, Value length) {
-        super(TYPE, SIZE);
         this.kind = kind;
 
         Class<?> arrayClass = Array.newInstance(kind.toJavaClass(), 0).getClass();
@@ -135,7 +131,6 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
      * Emits code that uses 8-byte vector compares.
      */
     private void emit8ByteCompare(SPARCMacroAssembler masm, Register result, Register array1, Register array2, Register length, Label trueLabel, Label falseLabel) {
-        assert lengthValue.getPlatformKind().equals(Kind.Int);
         Label loop = new Label();
         Label compareTail = new Label();
         Label compareTailCorrectVectorEnd = new Label();
@@ -145,7 +140,6 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
 
         boolean hasCBcond = masm.hasFeature(CPUFeature.CBCOND);
 
-        masm.sra(length, 0, length);
         masm.and(result, VECTOR_SIZE - 1, result); // tail count (in bytes)
         masm.andcc(length, ~(VECTOR_SIZE - 1), length);  // vector count (in bytes)
         masm.bpcc(ConditionFlag.Equal, NOT_ANNUL, compareTail, CC.Xcc, PREDICT_NOT_TAKEN);

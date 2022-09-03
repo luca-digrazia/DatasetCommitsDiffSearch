@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,6 +29,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
@@ -41,7 +42,6 @@ import edu.umd.cs.findbugs.annotations.*;
  */
 @Opcode("SAFEPOINT")
 public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
-    public static final LIRInstructionClass<SPARCHotSpotSafepointOp> TYPE = LIRInstructionClass.create(SPARCHotSpotSafepointOp.class);
 
     @State protected LIRFrameState state;
     @SuppressFBWarnings(value = "BC_IMPOSSIBLE_CAST", justification = "changed by the register allocator") @Temp({OperandFlag.REG}) private AllocatableValue temp;
@@ -49,10 +49,9 @@ public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
     private final HotSpotVMConfig config;
 
     public SPARCHotSpotSafepointOp(LIRFrameState state, HotSpotVMConfig config, LIRGeneratorTool tool) {
-        super(TYPE);
         this.state = state;
         this.config = config;
-        this.temp = tool.newVariable(LIRKind.value(tool.target().wordKind));
+        temp = tool.newVariable(LIRKind.value(tool.target().wordKind));
     }
 
     @Override
@@ -63,7 +62,7 @@ public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
 
     public static void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm, HotSpotVMConfig config, boolean atReturn, LIRFrameState state, Register scratch) {
         new Setx(config.safepointPollingAddress, scratch).emit(masm);
-        crb.recordMark(atReturn ? config.MARKID_POLL_RETURN_FAR : config.MARKID_POLL_FAR);
+        MarkId.recordMark(crb, atReturn ? MarkId.POLL_RETURN_FAR : MarkId.POLL_FAR);
         final int pos = masm.position();
         masm.ldx(new SPARCAddress(scratch, 0), g0);
         if (state != null) {

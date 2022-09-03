@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,7 @@ import static com.oracle.graal.sparc.SPARC.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
@@ -45,13 +45,11 @@ public class SPARCMove {
 
     @Opcode("MOVE_TOREG")
     public static class MoveToRegOp extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<MoveToRegOp> TYPE = LIRInstructionClass.create(MoveToRegOp.class);
 
         @Def({REG, HINT}) protected AllocatableValue result;
         @Use({REG, STACK, CONST}) protected Value input;
 
         public MoveToRegOp(AllocatableValue result, Value input) {
-            super(TYPE);
             this.result = result;
             this.input = input;
         }
@@ -73,14 +71,12 @@ public class SPARCMove {
     }
 
     @Opcode("MOVE_FROMREG")
-    public static final class MoveFromRegOp extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<MoveFromRegOp> TYPE = LIRInstructionClass.create(MoveFromRegOp.class);
+    public static class MoveFromRegOp extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
 
         @Def({REG, STACK}) protected AllocatableValue result;
         @Use({REG, CONST, HINT}) protected Value input;
 
         public MoveFromRegOp(AllocatableValue result, Value input) {
-            super(TYPE);
             this.result = result;
             this.input = input;
         }
@@ -105,15 +101,14 @@ public class SPARCMove {
      * Move between floating-point and general purpose register domain (WITHOUT VIS3).
      */
     @Opcode("MOVE")
-    public static final class MoveFpGp extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<MoveFpGp> TYPE = LIRInstructionClass.create(MoveFpGp.class);
+    public static class MoveFpGp extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue input;
         @Use({STACK}) protected StackSlotValue temp;
 
         public MoveFpGp(AllocatableValue result, AllocatableValue input, StackSlotValue temp) {
-            super(TYPE);
+            super();
             this.result = result;
             this.input = input;
             this.temp = temp;
@@ -133,7 +128,7 @@ public class SPARCMove {
             Kind inputKind = (Kind) input.getPlatformKind();
             Kind resultKind = (Kind) result.getPlatformKind();
             int resultKindSize = crb.target.getSizeInBytes(resultKind);
-            try (ScratchRegister sc = masm.getScratchRegister()) {
+            try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                 Register scratch = sc.getRegister();
                 SPARCAddress tempAddress = generateSimm13OffsetLoad((SPARCAddress) crb.asAddress(temp), masm, scratch);
                 switch (inputKind) {
@@ -200,14 +195,13 @@ public class SPARCMove {
      * Move between floating-point and general purpose register domain (WITH VIS3).
      */
     @Opcode("MOVE")
-    public static final class MoveFpGpVIS3 extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<MoveFpGpVIS3> TYPE = LIRInstructionClass.create(MoveFpGpVIS3.class);
+    public static class MoveFpGpVIS3 extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue input;
 
         public MoveFpGpVIS3(AllocatableValue result, AllocatableValue input) {
-            super(TYPE);
+            super();
             this.result = result;
             this.input = input;
         }
@@ -254,14 +248,12 @@ public class SPARCMove {
     }
 
     public abstract static class MemOp extends SPARCLIRInstruction implements ImplicitNullCheck {
-        public static final LIRInstructionClass<MemOp> TYPE = LIRInstructionClass.create(MemOp.class);
 
         protected final Kind kind;
         @Use({COMPOSITE}) protected SPARCAddressValue address;
         @State protected LIRFrameState state;
 
-        public MemOp(LIRInstructionClass<? extends MemOp> c, Kind kind, SPARCAddressValue address, LIRFrameState state) {
-            super(c);
+        public MemOp(Kind kind, SPARCAddressValue address, LIRFrameState state) {
             this.kind = kind;
             this.address = address;
             this.state = state;
@@ -283,19 +275,18 @@ public class SPARCMove {
         }
     }
 
-    public static final class LoadOp extends MemOp implements SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<LoadOp> TYPE = LIRInstructionClass.create(LoadOp.class);
+    public static class LoadOp extends MemOp implements SPARCTailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
 
         public LoadOp(Kind kind, AllocatableValue result, SPARCAddressValue address, LIRFrameState state) {
-            super(TYPE, kind, address, state);
+            super(kind, address, state);
             this.result = result;
         }
 
         @Override
         public void emitMemAccess(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            try (ScratchRegister sc = masm.getScratchRegister()) {
+            try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                 Register scratch = sc.getRegister();
                 final SPARCAddress addr = generateSimm13OffsetLoad(address.toAddress(), masm, scratch);
                 final Register dst = asRegister(result);
@@ -336,14 +327,12 @@ public class SPARCMove {
         }
     }
 
-    public static final class LoadAddressOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<LoadAddressOp> TYPE = LIRInstructionClass.create(LoadAddressOp.class);
+    public static class LoadAddressOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
         @Use({COMPOSITE, UNINITIALIZED}) protected SPARCAddressValue addressValue;
 
         public LoadAddressOp(AllocatableValue result, SPARCAddressValue address) {
-            super(TYPE);
             this.result = result;
             this.addressValue = address;
         }
@@ -355,14 +344,12 @@ public class SPARCMove {
         }
     }
 
-    public static final class LoadDataAddressOp extends SPARCLIRInstruction {
-        public static final LIRInstructionClass<LoadDataAddressOp> TYPE = LIRInstructionClass.create(LoadDataAddressOp.class);
+    public static class LoadDataAddressOp extends SPARCLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
         private final byte[] data;
 
         public LoadDataAddressOp(AllocatableValue result, byte[] data) {
-            super(TYPE);
             this.result = result;
             this.data = data;
         }
@@ -377,13 +364,11 @@ public class SPARCMove {
         }
     }
 
-    public static final class MembarOp extends SPARCLIRInstruction {
-        public static final LIRInstructionClass<MembarOp> TYPE = LIRInstructionClass.create(MembarOp.class);
+    public static class MembarOp extends SPARCLIRInstruction {
 
         private final int barriers;
 
         public MembarOp(final int barriers) {
-            super(TYPE);
             this.barriers = barriers;
         }
 
@@ -393,14 +378,12 @@ public class SPARCMove {
         }
     }
 
-    public static final class NullCheckOp extends SPARCLIRInstruction implements NullCheck, SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<NullCheckOp> TYPE = LIRInstructionClass.create(NullCheckOp.class);
+    public static class NullCheckOp extends SPARCLIRInstruction implements NullCheck, SPARCTailDelayedLIRInstruction {
 
         @Use({REG}) protected AllocatableValue input;
         @State protected LIRFrameState state;
 
         public NullCheckOp(Variable input, LIRFrameState state) {
-            super(TYPE);
             this.input = input;
             this.state = state;
         }
@@ -422,8 +405,7 @@ public class SPARCMove {
     }
 
     @Opcode("CAS")
-    public static final class CompareAndSwapOp extends SPARCLIRInstruction {
-        public static final LIRInstructionClass<CompareAndSwapOp> TYPE = LIRInstructionClass.create(CompareAndSwapOp.class);
+    public static class CompareAndSwapOp extends SPARCLIRInstruction {
 
         @Def({REG, HINT}) protected AllocatableValue result;
         @Alive({REG}) protected AllocatableValue address;
@@ -431,7 +413,6 @@ public class SPARCMove {
         @Use({REG}) protected AllocatableValue newValue;
 
         public CompareAndSwapOp(AllocatableValue result, AllocatableValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
-            super(TYPE);
             this.result = result;
             this.address = address;
             this.cmpValue = cmpValue;
@@ -445,14 +426,12 @@ public class SPARCMove {
         }
     }
 
-    public static final class StackLoadAddressOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<StackLoadAddressOp> TYPE = LIRInstructionClass.create(StackLoadAddressOp.class);
+    public static class StackLoadAddressOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
         @Use({STACK, UNINITIALIZED}) protected StackSlotValue slot;
 
         public StackLoadAddressOp(AllocatableValue result, StackSlotValue address) {
-            super(TYPE);
             this.result = result;
             this.slot = address;
         }
@@ -483,19 +462,18 @@ public class SPARCMove {
     }
 
     public static class StoreOp extends MemOp implements SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<StoreOp> TYPE = LIRInstructionClass.create(StoreOp.class);
 
         @Use({REG}) protected AllocatableValue input;
 
         public StoreOp(Kind kind, SPARCAddressValue address, AllocatableValue input, LIRFrameState state) {
-            super(TYPE, kind, address, state);
+            super(kind, address, state);
             this.input = input;
         }
 
         @Override
         public void emitMemAccess(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             assert isRegister(input);
-            try (ScratchRegister sc = masm.getScratchRegister()) {
+            try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                 Register scratch = sc.getRegister();
                 SPARCAddress addr = generateSimm13OffsetLoad(address.toAddress(), masm, scratch);
                 delayedControlTransfer.emitControlTransfer(crb, masm);
@@ -533,13 +511,12 @@ public class SPARCMove {
         }
     }
 
-    public static final class StoreConstantOp extends MemOp implements SPARCTailDelayedLIRInstruction {
-        public static final LIRInstructionClass<StoreConstantOp> TYPE = LIRInstructionClass.create(StoreConstantOp.class);
+    public static class StoreConstantOp extends MemOp implements SPARCTailDelayedLIRInstruction {
 
         protected final JavaConstant input;
 
         public StoreConstantOp(Kind kind, SPARCAddressValue address, JavaConstant input, LIRFrameState state) {
-            super(TYPE, kind, address, state);
+            super(kind, address, state);
             this.input = input;
             if (!input.isDefaultForKind()) {
                 throw GraalInternalError.shouldNotReachHere("Can only store null constants to memory");
@@ -548,7 +525,7 @@ public class SPARCMove {
 
         @Override
         public void emitMemAccess(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            try (ScratchRegister sc = masm.getScratchRegister()) {
+            try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                 Register scratch = sc.getRegister();
                 SPARCAddress addr = generateSimm13OffsetLoad(address.toAddress(), masm, scratch);
                 delayedControlTransfer.emitControlTransfer(crb, masm);
@@ -604,7 +581,7 @@ public class SPARCMove {
                 if (constant.isDefaultForKind() || constant.isNull()) {
                     reg2stack(crb, masm, result, g0.asValue(LIRKind.derive(input)), delaySlotLir);
                 } else {
-                    try (ScratchRegister sc = masm.getScratchRegister()) {
+                    try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                         Register scratch = sc.getRegister();
                         long value = constant.asLong();
                         if (isSimm13(value)) {
@@ -681,7 +658,7 @@ public class SPARCMove {
 
     private static void reg2stack(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, SPARCDelayedControlTransfer delaySlotLir) {
         SPARCAddress dst = (SPARCAddress) crb.asAddress(result);
-        try (ScratchRegister sc = masm.getScratchRegister()) {
+        try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
             Register scratch = sc.getRegister();
             dst = generateSimm13OffsetLoad(dst, masm, scratch);
             Register src = asRegister(input);
@@ -716,7 +693,7 @@ public class SPARCMove {
 
     private static void stack2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, SPARCDelayedControlTransfer delaySlotLir) {
         SPARCAddress src = (SPARCAddress) crb.asAddress(input);
-        try (ScratchRegister sc = masm.getScratchRegister()) {
+        try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
             Register scratch = sc.getRegister();
             src = generateSimm13OffsetLoad(src, masm, scratch);
             Register dst = asRegister(result);
@@ -752,7 +729,7 @@ public class SPARCMove {
     }
 
     private static void const2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, JavaConstant input, SPARCDelayedControlTransfer delaySlotLir) {
-        try (ScratchRegister sc = masm.getScratchRegister()) {
+        try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
             Register scratch = sc.getRegister();
             boolean hasVIS3 = ((SPARC) masm.target.arch).getFeatures().contains(CPUFeature.VIS3);
             switch (input.getKind().getStackKind()) {

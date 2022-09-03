@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
@@ -34,8 +34,6 @@ import com.oracle.graal.lir.sparc.*;
 
 @Opcode("CRUNTIME_CALL_EPILOGUE")
 final class SPARCHotSpotCRuntimeCallEpilogueOp extends SPARCLIRInstruction {
-    public static final LIRInstructionClass<SPARCHotSpotCRuntimeCallEpilogueOp> TYPE = LIRInstructionClass.create(SPARCHotSpotCRuntimeCallEpilogueOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(11);
 
     private final int threadLastJavaSpOffset;
     private final int threadLastJavaPcOffset;
@@ -44,7 +42,6 @@ final class SPARCHotSpotCRuntimeCallEpilogueOp extends SPARCLIRInstruction {
     @Use({REG, STACK}) protected Value threadTemp;
 
     public SPARCHotSpotCRuntimeCallEpilogueOp(int threadLastJavaSpOffset, int threadLastJavaPcOffset, int threadJavaFrameAnchorFlagsOffset, Register thread, Value threadTemp) {
-        super(TYPE, SIZE);
         this.threadLastJavaSpOffset = threadLastJavaSpOffset;
         this.threadLastJavaPcOffset = threadLastJavaPcOffset;
         this.threadJavaFrameAnchorFlagsOffset = threadJavaFrameAnchorFlagsOffset;

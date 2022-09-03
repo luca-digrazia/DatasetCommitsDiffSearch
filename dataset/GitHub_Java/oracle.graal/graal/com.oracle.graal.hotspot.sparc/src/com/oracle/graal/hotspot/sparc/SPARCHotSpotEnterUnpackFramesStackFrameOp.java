@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.meta.LIRKind.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.*;
@@ -41,7 +40,6 @@ import com.oracle.graal.lir.sparc.*;
  */
 @Opcode("ENTER_UNPACK_FRAMES_STACK_FRAME")
 final class SPARCHotSpotEnterUnpackFramesStackFrameOp extends SPARCLIRInstruction {
-    public static final LIRInstructionClass<SPARCHotSpotEnterUnpackFramesStackFrameOp> TYPE = LIRInstructionClass.create(SPARCHotSpotEnterUnpackFramesStackFrameOp.class);
 
     private final Register thread;
     private final int threadLastJavaSpOffset;
@@ -49,18 +47,14 @@ final class SPARCHotSpotEnterUnpackFramesStackFrameOp extends SPARCLIRInstructio
     @Alive(REG) AllocatableValue framePc;
     @Alive(REG) AllocatableValue senderSp;
     @Temp(REG) AllocatableValue scratch;
-    @Temp(REG) AllocatableValue callerReturnPc;
 
-    SPARCHotSpotEnterUnpackFramesStackFrameOp(Register thread, int threadLastJavaSpOffset, int threadLastJavaPcOffset, AllocatableValue framePc, AllocatableValue senderSp, AllocatableValue scratch,
-                    PlatformKind wordKind) {
-        super(TYPE);
+    SPARCHotSpotEnterUnpackFramesStackFrameOp(Register thread, int threadLastJavaSpOffset, int threadLastJavaPcOffset, AllocatableValue framePc, AllocatableValue senderSp, AllocatableValue scratch) {
         this.thread = thread;
         this.threadLastJavaSpOffset = threadLastJavaSpOffset;
         this.threadLastJavaPcOffset = threadLastJavaPcOffset;
         this.framePc = framePc;
         this.senderSp = senderSp;
         this.scratch = scratch;
-        callerReturnPc = o7.asValue(value(wordKind));
     }
 
     @Override
@@ -74,7 +68,7 @@ final class SPARCHotSpotEnterUnpackFramesStackFrameOp extends SPARCLIRInstructio
         masm.mov(senderSpRegister, o5);
 
         // Load final frame PC.
-        masm.mov(framePcRegister, asRegister(callerReturnPc));
+        masm.mov(framePcRegister, o7);
 
         // Allocate a full sized frame.
         masm.save(sp, -totalFrameSize, sp);

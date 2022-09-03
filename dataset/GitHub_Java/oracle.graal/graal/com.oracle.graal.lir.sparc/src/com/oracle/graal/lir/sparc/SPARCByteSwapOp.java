@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,27 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Asi;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
 
 @Opcode("BSWAP")
-public final class SPARCByteSwapOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
-    public static final LIRInstructionClass<SPARCByteSwapOp> TYPE = LIRInstructionClass.create(SPARCByteSwapOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(3);
+public class SPARCByteSwapOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+
     @Def({REG, HINT}) protected Value result;
     @Use({REG}) protected Value input;
     @Temp({REG}) protected Value tempIndex;
     @Use({STACK}) protected StackSlotValue tmpSlot;
 
     public SPARCByteSwapOp(LIRGeneratorTool tool, Value result, Value input) {
-        super(TYPE, SIZE);
         this.result = result;
         this.input = input;
         this.tmpSlot = tool.getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(Kind.Long));
@@ -53,7 +51,7 @@ public final class SPARCByteSwapOp extends SPARCLIRInstruction implements SPARCT
 
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        SPARCMove.reg2stack(crb, masm, tmpSlot, input, SPARCDelayedControlTransfer.DUMMY);
+        SPARCMove.move(crb, masm, tmpSlot, input, SPARCDelayedControlTransfer.DUMMY);
         SPARCAddress addr = (SPARCAddress) crb.asAddress(tmpSlot);
         if (addr.getIndex().equals(Register.None)) {
             Register tempReg = ValueUtil.asLongReg(tempIndex);
@@ -69,7 +67,7 @@ public final class SPARCByteSwapOp extends SPARCLIRInstruction implements SPARCT
                 masm.ldxa(addr.getBase(), addr.getIndex(), asLongReg(result), Asi.ASI_PRIMARY_LITTLE);
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 }

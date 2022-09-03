@@ -22,19 +22,18 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.sparc.*;
 
 /**
  * Emits code that leaves a stack frame which is tailored to call the C++ method
- * {@link DeoptimizationStub#UNPACK_FRAMES Deoptimization::unpack_frames}.
+ * {@link HotSpotBackend#UNPACK_FRAMES Deoptimization::unpack_frames}.
  */
 @Opcode("LEAVE_UNPACK_FRAMES_STACK_FRAME")
 final class SPARCHotSpotLeaveUnpackFramesStackFrameOp extends SPARCLIRInstruction {
@@ -57,11 +56,17 @@ final class SPARCHotSpotLeaveUnpackFramesStackFrameOp extends SPARCLIRInstructio
          * Safe thread register manually since we are not using LEAF_SP for {@link
          * DeoptimizationStub#UNPACK_FRAMES}.
          */
-        new Mov(l7, thread).emit(masm);
+        masm.mov(l7, thread);
+
+        SPARCAddress lastJavaPc = new SPARCAddress(thread, threadLastJavaPcOffset);
+
+        // We borrow the threads lastJavaPC to transfer the value from float to i0
+        masm.stdf(SPARCSaveRegistersOp.RETURN_REGISTER_STORAGE, lastJavaPc);
+        masm.ldx(lastJavaPc, i0);
 
         // Clear last Java frame values.
-        new Stx(g0, new SPARCAddress(thread, threadLastJavaSpOffset)).emit(masm);
-        new Stx(g0, new SPARCAddress(thread, threadLastJavaPcOffset)).emit(masm);
-        new Stw(g0, new SPARCAddress(thread, threadJavaFrameAnchorFlagsOffset)).emit(masm);
+        masm.stx(g0, lastJavaPc);
+        masm.stx(g0, new SPARCAddress(thread, threadLastJavaSpOffset));
+        masm.stw(g0, new SPARCAddress(thread, threadJavaFrameAnchorFlagsOffset));
     }
 }

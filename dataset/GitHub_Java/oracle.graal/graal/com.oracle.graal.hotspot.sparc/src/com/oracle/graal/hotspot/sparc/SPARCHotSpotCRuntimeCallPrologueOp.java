@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
@@ -34,8 +34,6 @@ import com.oracle.graal.lir.sparc.*;
 
 @Opcode("CRUNTIME_CALL_PROLOGUE")
 final class SPARCHotSpotCRuntimeCallPrologueOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
-    public static final LIRInstructionClass<SPARCHotSpotCRuntimeCallPrologueOp> TYPE = LIRInstructionClass.create(SPARCHotSpotCRuntimeCallPrologueOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(10);
 
     private final int threadLastJavaSpOffset;
     private final Register thread;
@@ -43,7 +41,6 @@ final class SPARCHotSpotCRuntimeCallPrologueOp extends SPARCLIRInstruction imple
     @Def({REG, STACK}) protected Value threadTemp;
 
     public SPARCHotSpotCRuntimeCallPrologueOp(int threadLastJavaSpOffset, Register thread, Register stackPointer, Value threadTemp) {
-        super(TYPE, SIZE);
         this.threadLastJavaSpOffset = threadLastJavaSpOffset;
         this.thread = thread;
         this.stackPointer = stackPointer;

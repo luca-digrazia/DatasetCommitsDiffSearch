@@ -38,7 +38,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
@@ -113,7 +113,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
                     if (SPARCAssembler.isSimm13(address.getDisplacement())) {
                         masm.stx(g0, address);
                     } else {
-                        try (ScratchRegister sc = masm.getScratchRegister()) {
+                        try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                             Register scratch = sc.getRegister();
                             new Setx(address.getDisplacement(), scratch).emit(masm);
                             masm.stx(g0, new SPARCAddress(sp, scratch));
@@ -148,7 +148,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
             if (SPARCAssembler.isSimm13(stackpoinerChange)) {
                 masm.save(sp, stackpoinerChange, sp);
             } else {
-                try (ScratchRegister sc = masm.getScratchRegister()) {
+                try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                     Register scratch = sc.getRegister();
                     new Setx(stackpoinerChange, scratch).emit(masm);
                     masm.save(sp, scratch, sp);
@@ -227,7 +227,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
                 CallingConvention cc = regConfig.getCallingConvention(JavaCall, null, new JavaType[]{getProviders().getMetaAccess().lookupJavaType(Object.class)}, getTarget(), false);
                 Register inlineCacheKlass = g5; // see MacroAssembler::ic_call
 
-                try (ScratchRegister sc = masm.getScratchRegister()) {
+                try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                     Register scratch = sc.getRegister();
                     Register receiver = asRegister(cc.getArgument(0));
                     SPARCAddress src = new SPARCAddress(receiver, config.hubOffset);
@@ -261,7 +261,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
         if (unverifiedStub != null) {
             masm.bind(unverifiedStub);
-            try (ScratchRegister sc = masm.getScratchRegister()) {
+            try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                 Register scratch = sc.getRegister();
                 SPARCCall.indirectJmp(crb, masm, scratch, foreignCalls.lookupForeignCall(IC_MISS_HANDLER));
             }
@@ -269,7 +269,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     }
 
     private static void resetDelayedControlTransfers(LIR lir) {
-        for (AbstractBlockBase<?> block : lir.codeEmittingOrder()) {
+        for (AbstractBlock<?> block : lir.codeEmittingOrder()) {
             for (LIRInstruction inst : lir.getLIRforBlock(block)) {
                 if (inst instanceof SPARCDelayedControlTransfer) {
                     ((SPARCDelayedControlTransfer) inst).resetState();
@@ -281,11 +281,11 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     /**
      * Fix-up over whole LIR.
      *
-     * @see #stuffDelayedControlTransfers(LIR, AbstractBlockBase)
+     * @see #stuffDelayedControlTransfers(LIR, AbstractBlock)
      * @param l
      */
     private static void stuffDelayedControlTransfers(LIR l) {
-        for (AbstractBlockBase<?> b : l.codeEmittingOrder()) {
+        for (AbstractBlock<?> b : l.codeEmittingOrder()) {
             stuffDelayedControlTransfers(l, b);
         }
     }
@@ -295,7 +295,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
      * it tries to move the DelayedLIRInstruction to the DelayedControlTransfer instruction, if
      * possible.
      */
-    private static void stuffDelayedControlTransfers(LIR l, AbstractBlockBase<?> block) {
+    private static void stuffDelayedControlTransfers(LIR l, AbstractBlock<?> block) {
         List<LIRInstruction> instructions = l.getLIRforBlock(block);
         if (instructions.size() >= 2) {
             LIRDependencyAccumulator acc = new LIRDependencyAccumulator();
