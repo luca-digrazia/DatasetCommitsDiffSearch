@@ -37,13 +37,20 @@ public final class TimerImpl extends DebugValue implements DebugTimer {
         }
     };
 
-    /**
-     * Records the most recent active timer.
-     */
-    private static ThreadLocal<AbstractTimer> currentTimer = new ThreadLocal<>();
+    private ThreadLocal<Long> valueToSubstract = new ThreadLocal<>();
+    private boolean conditional;
 
     public TimerImpl(String name, boolean conditional) {
-        super(name, conditional);
+        super(name);
+        this.conditional = conditional;
+    }
+
+    public void setConditional(boolean flag) {
+        conditional = flag;
+    }
+
+    public boolean isConditional() {
+        return conditional;
     }
 
     @Override
@@ -55,50 +62,44 @@ public final class TimerImpl extends DebugValue implements DebugTimer {
             } else {
                 startTime = System.nanoTime();
             }
-
+            if (valueToSubstract.get() == null) {
+                valueToSubstract.set(0L);
+            }
+            long previousValueToSubstract = valueToSubstract.get();
             AbstractTimer result;
             if (threadMXBean.isCurrentThreadCpuTimeSupported()) {
-                result = new CpuTimeTimer(startTime);
+                result = new CpuTimeTimer(startTime, previousValueToSubstract);
             } else {
-                result = new SystemNanosTimer(startTime);
+                result = new SystemNanosTimer(startTime, previousValueToSubstract);
             }
-            currentTimer.set(result);
+            valueToSubstract.set(0L);
             return result;
         } else {
             return VOID_CLOSEABLE;
         }
     }
 
-    public static String valueToString(long value) {
-        return String.format("%d.%d ms", value / 1000000, (value / 100000) % 10);
-    }
-
     @Override
     public String toString(long value) {
-        return valueToString(value);
+        return String.format("%d.%d ms", value / 1000000, (value / 100000) % 10);
     }
 
     private abstract class AbstractTimer implements TimerCloseable {
 
-        private final AbstractTimer parent;
         private final long startTime;
-        private long nestedTimeToSubtract;
+        private final long previousValueToSubstract;
 
-        private AbstractTimer(long startTime) {
-            this.parent = currentTimer.get();
+        private AbstractTimer(long startTime, long previousValueToSubstract) {
             this.startTime = startTime;
+            this.previousValueToSubstract = previousValueToSubstract;
         }
 
         @Override
         public void close() {
-            long endTime = currentTime();
-            long timeSpan = endTime - startTime;
-            if (parent != null) {
-                parent.nestedTimeToSubtract += timeSpan;
-            }
-            currentTimer.set(parent);
-            long flatTime = timeSpan - nestedTimeToSubtract;
-            TimerImpl.this.addToCurrentValue(flatTime);
+            long timeSpan = currentTime() - startTime;
+            long oldValueToSubstract = valueToSubstract.get();
+            valueToSubstract.set(timeSpan + previousValueToSubstract);
+            TimerImpl.this.addToCurrentValue(timeSpan - oldValueToSubstract);
         }
 
         protected abstract long currentTime();
@@ -106,8 +107,8 @@ public final class TimerImpl extends DebugValue implements DebugTimer {
 
     private final class SystemNanosTimer extends AbstractTimer {
 
-        public SystemNanosTimer(long startTime) {
-            super(startTime);
+        public SystemNanosTimer(long startTime, long previousValueToSubstract) {
+            super(startTime, previousValueToSubstract);
         }
 
         @Override
@@ -118,8 +119,8 @@ public final class TimerImpl extends DebugValue implements DebugTimer {
 
     private final class CpuTimeTimer extends AbstractTimer {
 
-        public CpuTimeTimer(long startTime) {
-            super(startTime);
+        public CpuTimeTimer(long startTime, long previousValueToSubstract) {
+            super(startTime, previousValueToSubstract);
         }
 
         @Override
