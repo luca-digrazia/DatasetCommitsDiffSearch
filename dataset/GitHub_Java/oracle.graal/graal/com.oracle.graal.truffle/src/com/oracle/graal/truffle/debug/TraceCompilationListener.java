@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,22 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleCompilation;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleCompilationDetails;
 
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.truffle.*;
-import com.oracle.truffle.api.source.*;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.truffle.GraalTruffleRuntime;
+import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.truffle.OptimizedDirectCallNode;
+import com.oracle.graal.truffle.TruffleInlining;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.source.SourceSection;
 
-public class TraceCompilationListener extends AbstractDebugCompilationListener {
+public final class TraceCompilationListener extends AbstractDebugCompilationListener {
 
     private final ThreadLocal<LocalCompilation> currentCompilation = new ThreadLocal<>();
 
@@ -47,7 +53,7 @@ public class TraceCompilationListener extends AbstractDebugCompilationListener {
     @Override
     public void notifyCompilationQueued(OptimizedCallTarget target) {
         if (TraceTruffleCompilationDetails.getValue()) {
-            log(0, "opt queued", target.toString(), target.getDebugProperties());
+            log(0, "opt queued", target.toString(), target.getDebugProperties(null));
         }
     }
 
@@ -73,7 +79,7 @@ public class TraceCompilationListener extends AbstractDebugCompilationListener {
     @Override
     public void notifyCompilationStarted(OptimizedCallTarget target) {
         if (TraceTruffleCompilationDetails.getValue()) {
-            log(0, "opt start", target.toString(), target.getDebugProperties());
+            log(0, "opt start", target.toString(), target.getDebugProperties(null));
         }
         LocalCompilation compilation = new LocalCompilation();
         compilation.timeCompilationStarted = System.nanoTime();
@@ -81,33 +87,37 @@ public class TraceCompilationListener extends AbstractDebugCompilationListener {
     }
 
     @Override
-    public void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, StructuredGraph graph) {
-        super.notifyCompilationTruffleTierFinished(target, graph);
+    public void notifyCompilationDeoptimized(OptimizedCallTarget target, Frame frame) {
+        log(0, "opt deopt", target.toString(), target.getDebugProperties(null));
+    }
+
+    @Override
+    public void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph) {
+        super.notifyCompilationTruffleTierFinished(target, inliningDecision, graph);
         LocalCompilation compilation = currentCompilation.get();
         compilation.timePartialEvaluationFinished = System.nanoTime();
         compilation.nodeCountPartialEval = graph.getNodeCount();
     }
 
     @Override
-    public void notifyCompilationSuccess(OptimizedCallTarget target, StructuredGraph graph, CompilationResult result) {
+    public void notifyCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph, CompilationResult result) {
         long timeCompilationFinished = System.nanoTime();
         int nodeCountLowered = graph.getNodeCount();
         LocalCompilation compilation = currentCompilation.get();
-        TruffleInlining inlining = target.getInlining();
 
         int calls;
         int inlinedCalls;
-        if (inlining == null) {
-            calls = (int) target.nodeStream(false).filter(node -> (node instanceof OptimizedDirectCallNode)).count();
+        if (inliningDecision == null) {
+            calls = (int) target.nodeStream(null).filter(node -> (node instanceof OptimizedDirectCallNode)).count();
             inlinedCalls = 0;
         } else {
-            calls = inlining.countCalls();
-            inlinedCalls = inlining.countInlinedCalls();
+            calls = inliningDecision.countCalls();
+            inlinedCalls = inliningDecision.countInlinedCalls();
         }
 
         int dispatchedCalls = calls - inlinedCalls;
         Map<String, Object> properties = new LinkedHashMap<>();
-        addASTSizeProperty(target, properties);
+        addASTSizeProperty(target, inliningDecision, properties);
         properties.put("Time", String.format("%5.0f(%4.0f+%-4.0f)ms", //
                         (timeCompilationFinished - compilation.timeCompilationStarted) / 1e6, //
                         (compilation.timePartialEvaluationFinished - compilation.timeCompilationStarted) / 1e6, //
@@ -118,7 +128,7 @@ public class TraceCompilationListener extends AbstractDebugCompilationListener {
         properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
 
         log(0, "opt done", target.toString(), properties);
-        super.notifyCompilationSuccess(target, graph, result);
+        super.notifyCompilationSuccess(target, inliningDecision, graph, result);
         currentCompilation.set(null);
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,56 +22,75 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import java.io.*;
-import java.util.*;
+import java.util.Map;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.truffle.*;
-import com.oracle.truffle.api.*;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.truffle.GraalTruffleCompilationListener;
+import com.oracle.graal.truffle.GraalTruffleRuntime;
+import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.truffle.OptimizedDirectCallNode;
+import com.oracle.graal.truffle.TruffleInlining;
+import com.oracle.truffle.api.frame.Frame;
 
-public class AbstractDebugCompilationListener implements GraalTruffleCompilationListener {
+public abstract class AbstractDebugCompilationListener implements GraalTruffleCompilationListener {
 
-    protected static final PrintStream OUT = TTY.out().out();
-
+    @Override
     public void notifyCompilationQueued(OptimizedCallTarget target) {
     }
 
+    @Override
     public void notifyCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason) {
     }
 
+    @Override
     public void notifyCompilationFailed(OptimizedCallTarget target, StructuredGraph graph, Throwable t) {
     }
 
+    @Override
     public void notifyCompilationStarted(OptimizedCallTarget target) {
     }
 
-    public void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, StructuredGraph graph) {
+    @Override
+    public void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph) {
     }
 
+    @Override
     public void notifyCompilationGraalTierFinished(OptimizedCallTarget target, StructuredGraph graph) {
     }
 
+    @Override
     public void notifyCompilationSplit(OptimizedDirectCallNode callNode) {
     }
 
-    public void notifyCompilationSuccess(OptimizedCallTarget target, StructuredGraph graph, CompilationResult result) {
+    @Override
+    public void notifyCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph, CompilationResult result) {
     }
 
+    @Override
+    public void notifyCompilationDeoptimized(OptimizedCallTarget target, Frame frame) {
+    }
+
+    @Override
     public void notifyCompilationInvalidated(OptimizedCallTarget target, Object source, CharSequence reason) {
     }
 
-    public void notifyShutdown(TruffleRuntime runtime) {
+    @Override
+    public void notifyShutdown(GraalTruffleRuntime runtime) {
+    }
+
+    @Override
+    public void notifyStartup(GraalTruffleRuntime runtime) {
     }
 
     public static void log(int indent, String msg, String details, Map<String, Object> properties) {
+        int spaceIndent = indent * 2;
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("[truffle] %-16s ", msg));
-        for (int i = 0; i < indent; i++) {
+        for (int i = 0; i < spaceIndent; i++) {
             sb.append(' ');
         }
-        sb.append(String.format("%-" + (60 - indent) + "s", details));
+        sb.append(String.format("%-" + (60 - spaceIndent) + "s", details));
         if (properties != null) {
             for (String property : properties.keySet()) {
                 Object value = properties.get(property);
@@ -94,15 +113,14 @@ public class AbstractDebugCompilationListener implements GraalTruffleCompilation
                 sb.append(String.format(" %" + length + "s ", propertyBuilder.toString()));
             }
         }
-        OUT.println(sb.toString());
+        OptimizedCallTarget.log(sb.toString());
     }
 
-    public static void addASTSizeProperty(OptimizedCallTarget target, Map<String, Object> properties) {
-        int nodeCount = target.countNonTrivialNodes(false);
+    public static void addASTSizeProperty(OptimizedCallTarget target, TruffleInlining inliningDecision, Map<String, Object> properties) {
+        int nodeCount = target.getNonTrivialNodeCount();
         int deepNodeCount = nodeCount;
-        TruffleInlining inlining = target.getInlining();
-        if (inlining != null) {
-            deepNodeCount += inlining.getInlinedNodeCount();
+        if (inliningDecision != null) {
+            deepNodeCount += inliningDecision.getInlinedNodeCount();
         }
         properties.put("ASTSize", String.format("%5d/%5d", nodeCount, deepNodeCount));
 
