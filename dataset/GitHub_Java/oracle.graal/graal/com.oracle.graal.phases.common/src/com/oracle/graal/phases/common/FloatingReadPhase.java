@@ -42,7 +42,7 @@ public class FloatingReadPhase extends Phase {
         CREATE_FLOATING_READS
     }
 
-    public static class MemoryMapImpl implements MemoryMap {
+    public static class MemoryMapImpl extends MemoryMapNode {
 
         private final Map<LocationIdentity, MemoryNode> lastMemorySnapshot;
 
@@ -74,13 +74,33 @@ public class FloatingReadPhase extends Phase {
             }
         }
 
+        public boolean isEmpty() {
+            if (lastMemorySnapshot.size() == 0) {
+                return true;
+            }
+            if (lastMemorySnapshot.size() == 1) {
+                if (lastMemorySnapshot.get(ANY_LOCATION) instanceof StartNode) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         @Override
-        public Collection<LocationIdentity> getLocations() {
+        public Set<LocationIdentity> getLocations() {
             return lastMemorySnapshot.keySet();
         }
 
-        public Map<LocationIdentity, MemoryNode> getMap() {
-            return lastMemorySnapshot;
+        @Override
+        public boolean replaceLastLocationAccess(MemoryNode oldNode, MemoryNode newNode) {
+            boolean replaced = false;
+            for (Map.Entry<LocationIdentity, MemoryNode> entry : lastMemorySnapshot.entrySet()) {
+                if (entry.getValue() == oldNode) {
+                    entry.setValue(newNode);
+                    replaced = true;
+                }
+            }
+            return replaced;
         }
     }
 
@@ -105,11 +125,11 @@ public class FloatingReadPhase extends Phase {
         }
     }
 
-    public static MemoryMapImpl mergeMemoryMaps(MergeNode merge, List<? extends MemoryMap> states) {
+    public static MemoryMapImpl mergeMemoryMaps(MergeNode merge, List<? extends MemoryMapNode> states) {
         MemoryMapImpl newState = new MemoryMapImpl();
 
         Set<LocationIdentity> keys = new HashSet<>();
-        for (MemoryMap other : states) {
+        for (MemoryMapNode other : states) {
             keys.addAll(other.getLocations());
         }
         assert !keys.contains(FINAL_LOCATION);
@@ -118,7 +138,7 @@ public class FloatingReadPhase extends Phase {
             int mergedStatesCount = 0;
             boolean isPhi = false;
             MemoryNode merged = null;
-            for (MemoryMap state : states) {
+            for (MemoryMapNode state : states) {
                 MemoryNode last = state.getLastLocationAccess(key);
                 if (isPhi) {
                     merged.asMemoryPhi().addInput(ValueNodeUtil.asNode(last));
@@ -223,7 +243,7 @@ public class FloatingReadPhase extends Phase {
             assert MemoryCheckpoint.TypeAssertion.correctType(node) : node;
 
             if (execmode == ExecutionMode.ANALYSIS_ONLY && node instanceof ReturnNode) {
-                ((ReturnNode) node).setMemoryMap(node.graph().unique(new MemoryMapNode(state.lastMemorySnapshot)));
+                ((ReturnNode) node).setMemoryMap(node.graph().unique(new MemoryMapImpl(state)));
             }
             return state;
         }
