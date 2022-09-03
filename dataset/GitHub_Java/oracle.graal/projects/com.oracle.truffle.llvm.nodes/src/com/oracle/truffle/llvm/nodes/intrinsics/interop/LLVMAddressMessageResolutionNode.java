@@ -35,7 +35,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
-import com.oracle.truffle.llvm.runtime.LLVMPerformance;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
@@ -80,8 +79,7 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
         }
 
         @Specialization(replaces = {"doCachedTypeCachedOffset", "doCachedType"})
-        public Object doRegular(LLVMTruffleAddress receiver, int index) {
-            LLVMPerformance.warn(this);
+        public static Object doRegular(LLVMTruffleAddress receiver, int index) {
             return doRead(receiver, receiver.getType(), index);
         }
 
@@ -134,7 +132,6 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
 
         @Specialization(replaces = {"doCachedTypeCachedOffset", "doCachedType"})
         public Object doRegular(VirtualFrame frame, LLVMTruffleAddress receiver, int index, Object value) {
-            LLVMPerformance.warn(this);
             if (slowConvert == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 this.slowConvert = insert(ToLLVMNode.createNode(null));
