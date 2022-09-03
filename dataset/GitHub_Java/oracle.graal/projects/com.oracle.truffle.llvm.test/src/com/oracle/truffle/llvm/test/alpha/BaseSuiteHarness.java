@@ -41,10 +41,13 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.oracle.truffle.llvm.LLVM;
+import com.oracle.truffle.llvm.pipe.CaptureOutput;
 import com.oracle.truffle.llvm.test.options.SulongTestOptions;
 import com.oracle.truffle.llvm.test.util.ProcessUtil;
 import com.oracle.truffle.llvm.test.util.ProcessUtil.ProcessResult;
@@ -57,15 +60,10 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
     @Override
     @Test
     public void test() throws Exception {
-        final List<Path> files = Files.walk(getTestDirectory()).filter(isExecutable).collect(Collectors.toList());
-        if (files.isEmpty()) {
-            // some tests do not compile with certain versions of clang
-            return;
-        }
-        Path referenceFile = files.get(0);
+        Path referenceFile = Files.walk(getTestDirectory()).filter(isExecutable).collect(Collectors.toList()).get(0);
         List<Path> testCandidates = Files.walk(getTestDirectory()).filter(isFile).filter(isSulong).collect(Collectors.toList());
         ProcessResult processResult = ProcessUtil.executeNativeCommand(referenceFile.toAbsolutePath().toString());
-        String referenceStdOut = processResult.getStdOutput();
+        String referenceStdOut = getReferenceResult(processResult);
         final int referenceReturnValue = processResult.getReturnValue();
 
         for (Path candidate : testCandidates) {
@@ -76,9 +74,13 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
             if (!candidate.toAbsolutePath().toFile().exists()) {
                 fail(getTestName(), new AssertionError("File " + candidate.toAbsolutePath().toFile() + " does not exist."));
             }
-            ProcessResult out = ProcessUtil.executeSulongTestMain(candidate.toAbsolutePath().toFile());
-            int sulongResult = out.getReturnValue();
-            String sulongStdOut = out.getStdOutput();
+            int sulongResult = -1;
+            String sulongStdOut;
+            try (CaptureOutput out = new CaptureOutput()) {
+                sulongResult = LLVM.executeMain(candidate.toAbsolutePath().toFile());
+                System.out.flush();
+                sulongStdOut = out.getResult();
+            }
 
             if (sulongResult != (sulongResult & 0xFF)) {
                 fail(getTestName(), new AssertionError("Broken unittest " + getTestDirectory() + ". Test exits with invalid value."));
@@ -93,6 +95,14 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
             }
         }
         pass(getTestName());
+    }
+
+    private static String getReferenceResult(ProcessResult processResult) {
+        final StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < LLVMOptions.ENGINE.executionCount(); i++) {
+            builder.append(processResult.getStdOutput());
+        }
+        return builder.toString();
     }
 
     protected static void fail(String testName, AssertionError error) {
