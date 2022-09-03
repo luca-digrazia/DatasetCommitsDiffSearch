@@ -28,7 +28,6 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.aarch64.AArch64Address;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
@@ -37,6 +36,7 @@ import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.AllocatableValue;
 
 /**
@@ -49,9 +49,9 @@ public class AArch64HotSpotSafepointOp extends AArch64LIRInstruction {
     @State protected LIRFrameState state;
     @Temp protected AllocatableValue scratchValue;
 
-    private final GraalHotSpotVMConfig config;
+    private final HotSpotVMConfig config;
 
-    public AArch64HotSpotSafepointOp(LIRFrameState state, GraalHotSpotVMConfig config, AllocatableValue scratch) {
+    public AArch64HotSpotSafepointOp(LIRFrameState state, HotSpotVMConfig config, AllocatableValue scratch) {
         super(TYPE);
         this.state = state;
         this.config = config;
@@ -71,12 +71,12 @@ public class AArch64HotSpotSafepointOp extends AArch64LIRInstruction {
      * @return true if it is guaranteed that polling page offset will always fit into a 21-bit
      *         signed integer, false otherwise.
      */
-    private static boolean isPollingPageFar(GraalHotSpotVMConfig config) {
+    private static boolean isPollingPageFar(HotSpotVMConfig config) {
         final long pollingPageAddress = config.safepointPollingAddress;
         return !NumUtil.isSignedNbit(21, pollingPageAddress - config.codeCacheLowBound) || !NumUtil.isSignedNbit(21, pollingPageAddress - config.codeCacheHighBound);
     }
 
-    public static void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm, GraalHotSpotVMConfig config, boolean onReturn, Register scratch, LIRFrameState state) {
+    public static void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm, HotSpotVMConfig config, boolean onReturn, Register scratch, LIRFrameState state) {
         int pos = masm.position();
         if (isPollingPageFar(config)) {
             crb.recordMark(onReturn ? config.MARKID_POLL_RETURN_FAR : config.MARKID_POLL_FAR);

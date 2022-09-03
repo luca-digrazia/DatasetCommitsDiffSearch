@@ -465,24 +465,7 @@ public class AArch64Move {
         Register dst = asRegister(result);
         switch (input.getJavaKind().getStackKind()) {
             case Int:
-                final int value = input.asInt();
-                int maskedValue;
-                switch (input.getJavaKind()) {
-                    case Boolean:
-                    case Byte:
-                        maskedValue = value & 0xFF;
-                        break;
-                    case Char:
-                    case Short:
-                        maskedValue = value & 0xFFFF;
-                        break;
-                    case Int:
-                        maskedValue = value;
-                        break;
-                    default:
-                        throw JVMCIError.shouldNotReachHere();
-                }
-                masm.mov(dst, maskedValue);
+                masm.mov(dst, input.asInt());
                 break;
             case Long:
                 masm.mov(dst, input.asLong());
