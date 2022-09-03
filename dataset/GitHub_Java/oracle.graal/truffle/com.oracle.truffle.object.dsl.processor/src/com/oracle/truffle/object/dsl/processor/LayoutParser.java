@@ -87,7 +87,7 @@ public class LayoutParser {
         }
 
         for (AnnotationMirror annotationMirror : layoutElement.getAnnotationMirrors()) {
-            if (isSameType(annotationMirror.getAnnotationType(), Layout.class)) {
+            if (ElementUtils.getQualifiedName(annotationMirror.getAnnotationType()).equals(Layout.class.getCanonicalName())) {
                 objectTypeSuperclass = ElementUtils.getAnnotationValue(TypeMirror.class, annotationMirror, "objectTypeSuperclass");
 
                 if (ElementUtils.getAnnotationValue(Boolean.class, annotationMirror, "implicitCastIntToLong")) {
@@ -216,7 +216,7 @@ public class LayoutParser {
                                 firstParameter.getSimpleName());
             }
 
-            if (!isSameType(firstParameter.asType(), DynamicObjectFactory.class)) {
+            if (!ElementUtils.getQualifiedName(firstParameter.asType()).equals(DynamicObjectFactory.class.getName())) {
                 processor.reportError(firstParameter, "If an @Layout has shape properties, the first parameter of the constructor must be of type DynamicObjectFactory (was %s)",
                                 firstParameter.asType());
             }
@@ -263,7 +263,7 @@ public class LayoutParser {
                                 n, parameter.getSimpleName(), superLayoutProperty.getName());
             }
 
-            if (!isSameType(parameter.asType(), superLayoutProperty.getType())) {
+            if (!parameter.asType().equals(superLayoutProperty.getType())) {
                 processor.reportError(element, "@Layout constructor parameter %d needs to have the same type as the super layout constructor (is %s, should be %s)",
                                 n, parameter.asType(), superLayoutProperty.getType());
             }
@@ -297,17 +297,17 @@ public class LayoutParser {
 
         final VariableElement parameter = methodElement.getParameters().get(0);
 
-        final TypeMirror type = parameter.asType();
+        final String type = ElementUtils.getQualifiedName(parameter.asType());
 
         final String expectedParameterName;
 
-        if (isSameType(type, DynamicObject.class)) {
+        if (type.equals(DynamicObject.class.getName())) {
             hasDynamicObjectGuard = true;
             expectedParameterName = "object";
-        } else if (isSameType(type, ObjectType.class)) {
+        } else if (type.equals(ObjectType.class.getName())) {
             hasObjectTypeGuard = true;
             expectedParameterName = "objectType";
-        } else if (isSameType(type, Object.class)) {
+        } else if (type.equals(Object.class.getName())) {
             hasObjectGuard = true;
             expectedParameterName = "object";
         } else {
@@ -326,21 +326,21 @@ public class LayoutParser {
         }
 
         final VariableElement parameter = methodElement.getParameters().get(0);
-        final TypeMirror parameterType = parameter.asType();
+        final String parameterType = ElementUtils.getQualifiedName(parameter.asType());
 
         final boolean isShapeGetter;
         final boolean isObjectTypeGetter;
         final String expectedParameterName;
 
-        if (isSameType(parameterType, DynamicObject.class)) {
+        if (parameterType.equals(DynamicObject.class.getName())) {
             isShapeGetter = false;
             isObjectTypeGetter = false;
             expectedParameterName = "object";
-        } else if (isSameType(parameterType, DynamicObjectFactory.class)) {
+        } else if (parameterType.equals(DynamicObjectFactory.class.getName())) {
             isShapeGetter = true;
             isObjectTypeGetter = false;
             expectedParameterName = "factory";
-        } else if (isSameType(parameterType, ObjectType.class)) {
+        } else if (parameterType.equals(ObjectType.class.getName())) {
             isShapeGetter = false;
             isObjectTypeGetter = true;
             expectedParameterName = "objectType";
@@ -375,15 +375,15 @@ public class LayoutParser {
         }
 
         final VariableElement parameter = methodElement.getParameters().get(0);
-        final TypeMirror parameterType = parameter.asType();
+        final String parameterType = ElementUtils.getQualifiedName(parameter.asType());
 
         final boolean isShapeSetter;
         final String expectedParameterName;
 
-        if (isSameType(parameterType, DynamicObject.class)) {
+        if (parameterType.equals(DynamicObject.class.getName())) {
             isShapeSetter = false;
             expectedParameterName = "object";
-        } else if (isSameType(parameterType, DynamicObjectFactory.class)) {
+        } else if (parameterType.equals(DynamicObjectFactory.class.getName())) {
             isShapeSetter = true;
             expectedParameterName = "factory";
         } else {
@@ -432,7 +432,7 @@ public class LayoutParser {
         final VariableElement currentValueParameter = methodElement.getParameters().get(1);
         final VariableElement newValueParameter = methodElement.getParameters().get(2);
 
-        if (!isSameType(objectParameter.asType(), DynamicObject.class)) {
+        if (!ElementUtils.getQualifiedName(objectParameter.asType()).equals(DynamicObject.class.getName())) {
             processor.reportError(methodElement, "@Layout compare and set method should have a first parameter of type DynamicObject");
         }
 
@@ -465,7 +465,7 @@ public class LayoutParser {
         final VariableElement objectParameter = methodElement.getParameters().get(0);
         final VariableElement newValueParameter = methodElement.getParameters().get(1);
 
-        if (!isSameType(objectParameter.asType(), DynamicObject.class)) {
+        if (!ElementUtils.getQualifiedName(objectParameter.asType()).equals(DynamicObject.class.getName())) {
             processor.reportError(methodElement, "@Layout get and set method should have a first parameter of type DynamicObject");
         }
 
@@ -496,26 +496,10 @@ public class LayoutParser {
         }
     }
 
-    private TypeMirror getType(Class<?> klass) {
-        return ElementUtils.getType(processor.getProcessingEnv(), klass);
-    }
-
-    private boolean isSameType(TypeMirror a, TypeMirror b) {
-        return processor.getProcessingEnv().getTypeUtils().isSameType(a, b);
-    }
-
-    private boolean isSameType(TypeMirror a, Class<?> klass) {
-        return processor.getProcessingEnv().getTypeUtils().isSameType(a, getType(klass));
-    }
-
-    public static boolean isGeneratedName(String name) {
-        return name.length() > 3 && name.startsWith("arg") && Character.isDigit(name.charAt(3));
-    }
-
     private void setPropertyType(Element element, PropertyBuilder builder, TypeMirror type) {
         if (builder.getType() == null) {
             builder.setType(type);
-        } else if (!isSameType(type, builder.getType())) {
+        } else if (!ElementUtils.getQualifiedName(type).equals(ElementUtils.getQualifiedName(builder.getType()))) {
             processor.reportError(element, "@Layout property types are inconsistent - was previously %s but now %s",
                             builder.getType(), type);
         }
