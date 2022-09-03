@@ -213,42 +213,6 @@ public final class NodeUtil {
         return replaceChild(parent, oldChild, newChild, false);
     }
 
-    /*
-     * Fast version of child adoption.
-     */
-    static void adoptChildrenHelper(Node currentNode) {
-        NodeClass clazz = currentNode.getNodeClass();
-        for (Object field : clazz.getNodeFields()) {
-            if (clazz.isChildField(field)) {
-                Object child = clazz.getFieldObject(field, currentNode);
-                if (child != null) {
-                    Node node = (Node) child;
-                    if (node.getParent() != currentNode) {
-                        currentNode.adoptHelper(node);
-                    }
-                }
-            } else if (clazz.isChildrenField(field)) {
-                Object arrayObject = clazz.getFieldObject(field, currentNode);
-                if (arrayObject == null) {
-                    continue;
-                }
-                Object[] array = (Object[]) arrayObject;
-                for (int i = 0; i < array.length; i++) {
-                    Object child = array[i];
-                    if (child != null) {
-                        Node node = (Node) child;
-                        if (node.getParent() != currentNode) {
-                            currentNode.adoptHelper(node);
-                        }
-                    }
-                }
-            } else if (clazz.nodeFieldsOrderedByKind()) {
-                break;
-            }
-        }
-
-    }
-
     static boolean replaceChild(Node parent, Node oldChild, Node newChild, boolean adopt) {
         CompilerAsserts.neverPartOfCompilation("do not replace Node child from compiled code");
         NodeClass nodeClass = parent.getNodeClass();
@@ -790,12 +754,7 @@ public final class NodeUtil {
     }
 
     private static String nodeName(Node node) {
-        return className(node.getClass());
-    }
-
-    static String className(Class<?> clazz) {
-        String name = clazz.getName();
-        return name.substring(name.lastIndexOf('.') + 1);
+        return node.getClass().getSimpleName();
     }
 
     private static String displaySourceAttribution(Node node) {
@@ -880,7 +839,7 @@ public final class NodeUtil {
                 cost = "?";
                 break;
         }
-        return cost + " " + nodeName(node);
+        return cost + " " + node.getClass().getSimpleName();
     }
 
     private static boolean filterByKind(Node node, NodeCost cost) {
