@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,37 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import com.oracle.graal.asm.amd64.AMD64Address;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.amd64.AMD64LIRInstruction;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
-import com.oracle.graal.lir.amd64.*;
-import com.oracle.graal.lir.asm.*;
+import jdk.vm.ci.code.Register;
 
 @Opcode("CRUNTIME_CALL_EPILOGUE")
 final class AMD64HotSpotCRuntimeCallEpilogueOp extends AMD64LIRInstruction {
+    public static final LIRInstructionClass<AMD64HotSpotCRuntimeCallEpilogueOp> TYPE = LIRInstructionClass.create(AMD64HotSpotCRuntimeCallEpilogueOp.class);
 
-    @Use({REG, ILLEGAL}) protected Value thread;
+    private final int threadLastJavaSpOffset;
+    private final int threadLastJavaFpOffset;
+    private final int threadLastJavaPcOffset;
+    private final Register thread;
 
-    AMD64HotSpotCRuntimeCallEpilogueOp(Value thread) {
+    AMD64HotSpotCRuntimeCallEpilogueOp(int threadLastJavaSpOffset, int threadLastJavaFpOffset, int threadLastJavaPcOffset, Register thread) {
+        super(TYPE);
+        this.threadLastJavaSpOffset = threadLastJavaSpOffset;
+        this.threadLastJavaFpOffset = threadLastJavaFpOffset;
+        this.threadLastJavaPcOffset = threadLastJavaPcOffset;
         this.thread = thread;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         // reset last Java frame:
-        HotSpotVMConfig config = graalRuntime().getConfig();
-        masm.movslq(new AMD64Address(asRegister(thread), config.threadLastJavaSpOffset), 0);
-        masm.movslq(new AMD64Address(asRegister(thread), config.threadLastJavaFpOffset), 0);
+        masm.movslq(new AMD64Address(thread, threadLastJavaSpOffset), 0);
+        masm.movslq(new AMD64Address(thread, threadLastJavaFpOffset), 0);
+        masm.movslq(new AMD64Address(thread, threadLastJavaPcOffset), 0);
     }
 }
