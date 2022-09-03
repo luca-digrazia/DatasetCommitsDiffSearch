@@ -29,7 +29,6 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
 
 
 public class DeadCodeEliminationPhase extends Phase {
@@ -46,6 +45,7 @@ public class DeadCodeEliminationPhase extends Phase {
         iterateSuccessors();
         disconnectCFGNodes();
         iterateInputs();
+        disconnectNodes();
         deleteNodes();
 
         // remove chained Merges
@@ -99,9 +99,8 @@ public class DeadCodeEliminationPhase extends Phase {
                         }
                         ((LoopEnd) node).setLoopBegin(null);
                         EndNode endNode = loop.endAt(0);
-                        assert endNode.predecessor() != null;
-                        // replacePhis(loop);
-
+                        assert endNode.predecessors().size() == 1 : endNode.predecessors().size();
+                        replacePhis(loop);
                         endNode.replaceAndDelete(loop.next());
                         loop.delete();
                     }
@@ -111,7 +110,7 @@ public class DeadCodeEliminationPhase extends Phase {
     }
 
     private void replacePhis(Merge merge) {
-        for (Node usage : merge.usages().snapshot()) {
+        for (Node usage : new ArrayList<Node>(merge.usages())) {
             assert usage instanceof Phi;
             usage.replaceAndDelete(((Phi) usage).valueAt(0));
         }
@@ -120,7 +119,12 @@ public class DeadCodeEliminationPhase extends Phase {
     private void deleteNodes() {
         for (Node node : graph.getNodes()) {
             if (!flood.isMarked(node)) {
-                node.clearEdges();
+                for (int i = 0; i < node.inputs().size(); i++) {
+                    node.inputs().set(i, Node.Null);
+                }
+                for (int i = 0; i < node.successors().size(); i++) {
+                    node.successors().set(i, Node.Null);
+                }
             }
         }
         for (Node node : graph.getNodes()) {
@@ -148,4 +152,16 @@ public class DeadCodeEliminationPhase extends Phase {
         }
     }
 
+    private void disconnectNodes() {
+        for (Node node : graph.getNodes()) {
+            if (!flood.isMarked(node)) {
+                for (int i = 0; i < node.inputs().size(); i++) {
+                    Node input = node.inputs().get(i);
+                    if (input != Node.Null && flood.isMarked(input)) {
+                        node.inputs().set(i, Node.Null);
+                    }
+                }
+            }
+        }
+    }
 }
