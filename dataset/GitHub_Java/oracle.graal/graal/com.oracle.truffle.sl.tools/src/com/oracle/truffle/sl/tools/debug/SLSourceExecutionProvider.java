@@ -24,10 +24,13 @@
  */
 package com.oracle.truffle.sl.tools.debug;
 
+import java.io.*;
+
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.sl.*;
 import com.oracle.truffle.sl.nodes.instrument.*;
 import com.oracle.truffle.sl.runtime.*;
 import com.oracle.truffle.tools.debug.engine.*;
@@ -38,7 +41,7 @@ import com.oracle.truffle.tools.debug.engine.*;
  */
 public final class SLSourceExecutionProvider extends SourceExecutionProvider {
 
-    private final SLContext slContext;
+    @SuppressWarnings("unused") private final SLContext slContext;
 
     public SLSourceExecutionProvider(SLContext context) {
         this.slContext = context;
@@ -47,7 +50,11 @@ public final class SLSourceExecutionProvider extends SourceExecutionProvider {
 
     @Override
     public void languageRun(Source source) {
-        slContext.executeMain(source);
+        try {
+            SLMain.run(source);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
