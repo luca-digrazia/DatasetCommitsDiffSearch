@@ -676,7 +676,12 @@ public final class SchedulePhase extends Phase {
         }
     }
 
-    public String printScheduleHelper(String desc) {
+    @Override
+    public String toString() {
+        return printScheduleHelper("Schedule");
+    }
+
+    private String printScheduleHelper(String desc) {
         Formatter buf = new Formatter();
         buf.format("=== %s / %s / %s ===%n", getCFG().getStartBlock().getBeginNode().graph(), selectedStrategy, desc);
         for (Block b : getCFG().getBlocks()) {
