@@ -427,7 +427,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
                 asm.mark(MARK_IMPLICIT_NULL);
             }
             asm.pstore(kind, object, fieldOffset, value, is(NULL_CHECK, flags));
-            if (is(WRITE_BARRIER, flags) && kind == CiKind.Object) {
+            if (is(WRITE_BARRIER, flags)) {
                 XirOperand temp = asm.createTemp("temp", CiKind.Word);
                 asm.mov(temp, object);
                 writeBarrier(asm, temp);
@@ -710,8 +710,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             asm.jneq(end, objHub, asm.o(null));
             XirOperand scratch = asm.createRegisterTemp("scratch", CiKind.Object, AMD64.r10);
             asm.mov(scratch, object);
-
-            asm.callRuntime(CiRuntimeCall.Deoptimize, null);
+            asm.callRuntime(config.throwClassCastException, null);
             asm.shouldNotReachHere();
 
             if (is(UNRESOLVED, flags)) {
@@ -877,7 +876,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             XirLabel store = null;
             XirLabel slowStoreCheck = null;
 
-            if (is(STORE_CHECK, flags) && kind == CiKind.Object) {
+            if (is(STORE_CHECK, flags)) {
                 valueHub = asm.createRegisterTemp("valueHub", CiKind.Word, AMD64.rdi);
                 compHub = asm.createRegisterTemp("compHub", CiKind.Word, AMD64.rsi);
                 temp = asm.createRegisterTemp("temp", CiKind.Word, AMD64.r10);
@@ -1079,7 +1078,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             if (kind == CiKind.Object) {
                 verifyPointer(asm, value);
             }
-            if (is(WRITE_BARRIER, flags) && kind == CiKind.Object) {
+            if (is(WRITE_BARRIER, flags)) {
                 asm.lea(temp, array, index, disp, scale);
                 asm.pstore(kind, temp, value, implicitNullException);
                 writeBarrier(asm, temp);

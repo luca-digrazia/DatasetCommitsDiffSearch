@@ -24,7 +24,7 @@ package com.sun.c1x.ir;
 
 import java.util.*;
 
-import com.oracle.graal.graph.*;
+import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
@@ -34,38 +34,8 @@ import com.sun.cri.ci.*;
  */
 public abstract class BlockEnd extends Instruction {
 
-    private static final int INPUT_COUNT = 0;
-
-    private final int blockSuccessorCount;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
-    }
-
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + blockSuccessorCount;
-    }
-
-    /**
-     * The list of instructions that produce input for this instruction.
-     */
-    public BlockBegin blockSuccessor(int index) {
-        assert index >= 0 && index < blockSuccessorCount;
-        return (BlockBegin) successors().get(super.successorCount() + index);
-    }
-
-    public BlockBegin setBlockSuccessor(int index, BlockBegin n) {
-        assert index >= 0 && index < blockSuccessorCount;
-        return (BlockBegin) successors().set(super.successorCount() + index, n);
-    }
-
-    public int blockSuccessorCount() {
-        return blockSuccessorCount;
-    }
-
     BlockBegin begin;
+    final List<BlockBegin> successors;
     FrameState stateAfter;
     boolean isSafepoint;
 
@@ -76,22 +46,15 @@ public abstract class BlockEnd extends Instruction {
      * @param isSafepoint {@code true} if this instruction is a safepoint instruction
      * @param successors the list of successor blocks. If {@code null}, a new one will be created.
      */
-    public BlockEnd(CiKind kind, FrameState stateAfter, boolean isSafepoint, List<BlockBegin> blockSuccessors, int inputCount, int successorCount, Graph graph) {
-        this(kind, stateAfter, isSafepoint, blockSuccessors.size(), inputCount, successorCount, graph);
-        for (int i = 0; i < blockSuccessors.size(); i++) {
-            setBlockSuccessor(i, blockSuccessors.get(i));
-        }
-    }
-
-    public BlockEnd(CiKind kind, FrameState stateAfter, boolean isSafepoint, int blockSuccessorCount, int inputCount, int successorCount, Graph graph) {
-        super(kind, inputCount + INPUT_COUNT, successorCount + blockSuccessorCount, graph);
-        this.blockSuccessorCount = blockSuccessorCount;
+    public BlockEnd(CiKind kind, FrameState stateAfter, boolean isSafepoint, List<BlockBegin> successors) {
+        super(kind);
+        this.successors = successors == null ? new ArrayList<BlockBegin>(2) : successors;
         setStateAfter(stateAfter);
         this.isSafepoint = isSafepoint;
     }
 
-    public BlockEnd(CiKind kind, FrameState stateAfter, boolean isSafepoint, Graph graph) {
-        this(kind, stateAfter, isSafepoint, 2, 0, 0, graph);
+    public BlockEnd(CiKind kind, FrameState stateAfter, boolean isSafepoint) {
+        this(kind, stateAfter, isSafepoint, null);
     }
 
     /**
@@ -140,11 +103,7 @@ public abstract class BlockEnd extends Instruction {
      */
     public void substituteSuccessor(BlockBegin oldSucc, BlockBegin newSucc) {
         assert newSucc != null;
-        for (int i = 0; i < blockSuccessorCount; i++) {
-            if (blockSuccessor(i) == oldSucc) {
-                setBlockSuccessor(i, newSucc);
-            }
-        }
+        Util.replaceAllInList(oldSucc, newSucc, successors);
     }
 
     /**
@@ -152,7 +111,7 @@ public abstract class BlockEnd extends Instruction {
      * @return the default successor
      */
     public BlockBegin defaultSuccessor() {
-        return blockSuccessor(blockSuccessorCount - 1);
+        return successors.get(successors.size() - 1);
     }
 
     /**
@@ -162,8 +121,9 @@ public abstract class BlockEnd extends Instruction {
      * @return the index of the block in the list if found; <code>-1</code> otherwise
      */
     public int successorIndex(BlockBegin b) {
-        for (int i = 0; i < blockSuccessorCount; i++) {
-            if (blockSuccessor(i) == b) {
+        final int max = successors.size();
+        for (int i = 0; i < max; i++) {
+            if (successors.get(i) == b) {
                 return i;
             }
         }
@@ -174,9 +134,16 @@ public abstract class BlockEnd extends Instruction {
      * Gets this block end's list of successors.
      * @return the successor list
      */
-    public List<BlockBegin> blockSuccessors() {
-        List<BlockBegin> list = (List) successors().subList(super.successorCount(), super.successorCount() + blockSuccessorCount);
-        return Collections.unmodifiableList(list);
+    public List<BlockBegin> successors() {
+        return successors;
     }
 
+    /**
+     * Gets the successor at a specified index.
+     * @param index the index of the successor
+     * @return the successor
+     */
+    public BlockBegin suxAt(int index) {
+        return successors.get(index);
+    }
 }

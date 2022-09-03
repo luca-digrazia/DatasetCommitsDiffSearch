@@ -24,7 +24,6 @@ package com.sun.c1x.ir;
 
 import java.lang.reflect.*;
 
-import com.oracle.graal.graph.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -34,32 +33,7 @@ import com.sun.cri.ri.*;
  */
 public abstract class AccessField extends StateSplit {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_OBJECT = 0;
-
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
-    }
-
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The instruction that produces the receiver object of this field access (for instance field accesses).
-     */
-     public Value object() {
-        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
-    }
-
-    public Value setObject(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
-    }
-
+    private Value object;
     protected final RiField field;
 
     /**
@@ -67,16 +41,24 @@ public abstract class AccessField extends StateSplit {
      * @param kind the result kind of the access
      * @param object the instruction producing the receiver object
      * @param field the compiler interface representation of the field
+     * @param isStatic indicates if the field is static
      * @param stateBefore the state before the field access
-     * @param inputCount
-     * @param successorCount
-     * @param graph
+     * @param isLoaded indicates if the class is loaded
      */
-    public AccessField(CiKind kind, Value object, RiField field, FrameState stateBefore, int inputCount, int successorCount, Graph graph) {
-        super(kind, stateBefore, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
-        assert object != null : "every field access must reference some object";
+    public AccessField(CiKind kind, Value object, RiField field, FrameState stateBefore) {
+        super(kind, stateBefore);
+        this.object = object;
         this.field = field;
-        setObject(object);
+        assert object != null : "every field access must reference some object";
+    }
+
+    /**
+     * Gets the instruction that produces the receiver object of this field access
+     * (for instance field accesses).
+     * @return the instruction that produces the receiver object
+     */
+    public Value object() {
+        return object;
     }
 
     /**
@@ -109,5 +91,10 @@ public abstract class AccessField extends StateSplit {
      */
     public boolean isVolatile() {
         return isLoaded() && Modifier.isVolatile(field.accessFlags());
+    }
+
+    @Override
+    public void inputValuesDo(ValueClosure closure) {
+        object = closure.apply(object);
     }
 }

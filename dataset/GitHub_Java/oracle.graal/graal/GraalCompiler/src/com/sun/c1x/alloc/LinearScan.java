@@ -2084,6 +2084,14 @@ public final class LinearScan {
     }
 
     CiFrame computeFrameForState(int opId, FrameState state, CiBitMap frameRefMap) {
+        CiFrame callerFrame = null;
+
+        FrameState callerState = state.callerState();
+        if (callerState != null) {
+            // process recursively to compute outermost scope first
+            callerFrame = computeFrameForState(opId, callerState, frameRefMap);
+        }
+
         CiValue[] values = new CiValue[state.valuesSize() + state.locksSize()];
         int valueIndex = 0;
 
@@ -2109,7 +2117,7 @@ public final class LinearScan {
             }
         }
 
-        return new CiFrame(null, state.method, state.bci, values, state.localsSize(), state.stackSize(), state.locksSize());
+        return new CiFrame(callerFrame, state.scope().method, state.bci, values, state.localsSize(), state.stackSize(), state.locksSize());
     }
 
     private void computeDebugInfo(IntervalWalker iw, LIRInstruction op) {
