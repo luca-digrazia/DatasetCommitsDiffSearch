@@ -81,8 +81,4 @@ public class TargetDescription {
         this.implicitNullCheckLimit = implicitNullCheckLimit;
         this.inlineObjects = inlineObjects;
     }
-
-    public int getSizeInBytes(PlatformKind kind) {
-        return arch.getSizeInBytes(kind);
-    }
 }

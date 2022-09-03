@@ -24,6 +24,7 @@ package com.oracle.graal.lir.ptx;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 
 /**
@@ -32,7 +33,7 @@ import com.oracle.graal.lir.*;
  * This is the format of a PTX stack frame:
  * 
  * <pre>
- * TODO stack frame layout
+ * TODO
  * </pre>
  */
 public final class PTXFrameMap extends FrameMap {
@@ -43,21 +44,17 @@ public final class PTXFrameMap extends FrameMap {
 
     @Override
     public int totalFrameSize() {
-        // FIXME this is amd64 code
-        return frameSize() + returnAddressSize();
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
     public int currentFrameSize() {
-        // FIXME this is amd64 code
-        return alignFrameSize(outgoingSize + spillSize - returnAddressSize());
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
     protected int alignFrameSize(int size) {
-        // FIXME this is amd64 code
-        int x = size + returnAddressSize() + (target.stackAlignment - 1);
-        return (x / target.stackAlignment) * target.stackAlignment - returnAddressSize();
+        throw GraalInternalError.unimplemented();
     }
 
     @Override

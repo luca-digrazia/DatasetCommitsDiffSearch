@@ -69,8 +69,8 @@ import com.oracle.graal.lir.*;
  */
 public final class SPARCFrameMap extends FrameMap {
 
-    public SPARCFrameMap(CodeCacheProvider codeCache) {
-        super(codeCache);
+    public SPARCFrameMap(CodeCacheProvider runtime, TargetDescription target, RegisterConfig registerConfig) {
+        super(runtime, target, registerConfig);
         // offset relative to sp + total frame size
         initialSpillSize = 0;
         spillSize = initialSpillSize;
@@ -100,10 +100,5 @@ public final class SPARCFrameMap extends FrameMap {
     @Override
     protected StackSlot allocateNewSpillSlot(PlatformKind kind, int additionalOffset) {
         return StackSlot.get(kind, -spillSize + additionalOffset, true);
-    }
-
-    @Override
-    public LIRInstruction createSpillMove(AllocatableValue result, Value input) {
-        return SPARCMove.createMove(result, input);
     }
 }
