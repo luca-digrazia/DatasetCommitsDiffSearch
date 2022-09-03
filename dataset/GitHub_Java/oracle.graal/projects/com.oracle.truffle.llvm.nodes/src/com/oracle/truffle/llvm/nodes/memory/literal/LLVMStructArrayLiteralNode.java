@@ -61,7 +61,7 @@ public abstract class LLVMStructArrayLiteralNode extends LLVMExpressionNode {
 
     @Specialization
     protected LLVMAddress write(VirtualFrame frame, LLVMGlobal global,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+                    @Cached(value = "toNative()") LLVMToNativeNode globalAccess) {
         return writeDouble(frame, globalAccess.executeWithTarget(frame, global));
     }
 

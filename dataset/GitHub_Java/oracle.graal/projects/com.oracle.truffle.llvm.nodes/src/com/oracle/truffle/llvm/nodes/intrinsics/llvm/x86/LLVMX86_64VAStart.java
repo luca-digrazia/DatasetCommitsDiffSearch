@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.func.LLVMCallNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNode.LLVMIncrementPointerNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
@@ -44,22 +45,22 @@ import com.oracle.truffle.llvm.nodes.memory.store.LLVMStoreNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVarArgCompoundValue;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
-import com.oracle.truffle.llvm.runtime.memory.VarargsAreaStackAllocationNode;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 
 @NodeChild
 public abstract class LLVMX86_64VAStart extends LLVMExpressionNode {
 
     private final int numberOfExplicitArguments;
-    private final LLVMSourceLocation source;
-    @Child private VarargsAreaStackAllocationNode stackAllocationNode;
+    private final SourceSection sourceSection;
+    @Child private LLVMStackAllocationNode stackAllocationNode;
 
     @Child private LLVMStoreNode i64RegSaveAreaStore;
     @Child private LLVMStoreNode i32RegSaveAreaStore;
@@ -79,11 +80,11 @@ public abstract class LLVMX86_64VAStart extends LLVMExpressionNode {
 
     @Child private LLVMMemMoveNode memmove;
 
-    public LLVMX86_64VAStart(int numberOfExplicitArguments, LLVMSourceLocation source,
-                    VarargsAreaStackAllocationNode stackAllocationNode,
+    public LLVMX86_64VAStart(int numberOfExplicitArguments, SourceSection sourceSection,
+                    LLVMStackAllocationNode stackAllocationNode,
                     LLVMMemMoveNode memmove) {
         this.numberOfExplicitArguments = numberOfExplicitArguments;
-        this.source = source;
+        this.sourceSection = sourceSection;
         this.stackAllocationNode = stackAllocationNode;
 
         this.i64RegSaveAreaStore = LLVMI64StoreNodeGen.create();
@@ -99,8 +100,8 @@ public abstract class LLVMX86_64VAStart extends LLVMExpressionNode {
         this.pointerArithmeticStructInit = LLVMIncrementPointerNodeGen.create();
         this.gpOffsetStore = LLVMI32StoreNodeGen.create();
         this.fpOffsetStore = LLVMI32StoreNodeGen.create();
-        this.overflowArgAreaStore = LLVMAddressStoreNodeGen.create(PointerType.VOID);
-        this.regSaveAreaStore = LLVMAddressStoreNodeGen.create(PointerType.VOID);
+        this.overflowArgAreaStore = LLVMAddressStoreNodeGen.create(new PointerType(VoidType.INSTANCE));
+        this.regSaveAreaStore = LLVMAddressStoreNodeGen.create(new PointerType(VoidType.INSTANCE));
 
         this.memmove = memmove;
     }
@@ -116,12 +117,12 @@ public abstract class LLVMX86_64VAStart extends LLVMExpressionNode {
     }
 
     private void setOverflowArgArea(VirtualFrame frame, Object address, Object value) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.OVERFLOW_ARG_AREA, PointerType.VOID);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.OVERFLOW_ARG_AREA, new PointerType(VoidType.INSTANCE));
         overflowArgAreaStore.executeWithTarget(frame, p, value);
     }
 
     private void setRegSaveArea(VirtualFrame frame, Object address, Object value) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.REG_SAVE_AREA, PointerType.VOID);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.REG_SAVE_AREA, new PointerType(VoidType.INSTANCE));
         regSaveAreaStore.executeWithTarget(frame, p, value);
     }
 
@@ -273,8 +274,8 @@ public abstract class LLVMX86_64VAStart extends LLVMExpressionNode {
     }
 
     @Override
-    public LLVMSourceLocation getSourceLocation() {
-        return source;
+    public SourceSection getSourceSection() {
+        return sourceSection;
     }
 
     private static int storeArgument(VirtualFrame frame, Object ptr, long offset, LLVMMemMoveNode memmove, LLVMIncrementPointerNode pointerArithmetic, LLVMStoreNode storeI64Node,

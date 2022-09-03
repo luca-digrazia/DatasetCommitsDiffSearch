@@ -58,13 +58,13 @@ public abstract class LLVMToI64Node extends LLVMExpressionNode {
 
     @Specialization
     protected long doI64(VirtualFrame frame, LLVMFunctionDescriptor from,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+                    @Cached("toNative()") LLVMToNativeNode toNative) {
         return toNative.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
     protected long doGlobal(VirtualFrame frame, LLVMGlobal from,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
+                    @Cached("toNative()") LLVMToNativeNode access) {
         return access.executeWithTarget(frame, from).getVal();
     }
 
@@ -72,7 +72,7 @@ public abstract class LLVMToI64Node extends LLVMExpressionNode {
 
     @Specialization
     protected long doTruffleObject(VirtualFrame frame, LLVMTruffleObject from,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toAddress) {
+                    @Cached("toNative()") LLVMToNativeNode toAddress) {
         return toAddress.executeWithTarget(frame, from).getVal();
     }
 

@@ -96,7 +96,7 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
 
         @Specialization
         protected LLVMAddress executePointee(VirtualFrame frame, LLVMGlobal addr, int incr, @SuppressWarnings("unused") Type targetType,
-                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
             return globalAccess.executeWithTarget(frame, addr).increment(incr);
         }
 
@@ -137,7 +137,7 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
 
         @Specialization
         protected LLVMAddress executePointee(VirtualFrame frame, LLVMGlobal addr, long incr, @SuppressWarnings("unused") Type targetType,
-                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
             return globalAccess.executeWithTarget(frame, addr).increment(incr);
         }
     }

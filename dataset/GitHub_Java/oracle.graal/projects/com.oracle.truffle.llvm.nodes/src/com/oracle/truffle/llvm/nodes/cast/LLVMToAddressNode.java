@@ -82,7 +82,7 @@ public abstract class LLVMToAddressNode extends LLVMExpressionNode {
 
     @Specialization
     protected LLVMAddress doFunctionDescriptor(VirtualFrame frame, LLVMFunctionDescriptor from,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+                    @Cached("toNative()") LLVMToNativeNode toNative) {
         return toNative.executeWithTarget(frame, from);
     }
 

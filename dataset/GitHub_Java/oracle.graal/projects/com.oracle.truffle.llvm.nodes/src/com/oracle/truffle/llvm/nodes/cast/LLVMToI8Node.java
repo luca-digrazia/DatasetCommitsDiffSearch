@@ -54,13 +54,13 @@ public abstract class LLVMToI8Node extends LLVMExpressionNode {
 
     @Specialization
     protected byte doI8(VirtualFrame frame, LLVMFunctionDescriptor from,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+                    @Cached("toNative()") LLVMToNativeNode toNative) {
         return (byte) toNative.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
     protected byte doGlobal(VirtualFrame frame, LLVMGlobal from,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
+                    @Cached("toNative()") LLVMToNativeNode access) {
         return (byte) access.executeWithTarget(frame, from).getVal();
     }
 
@@ -68,7 +68,7 @@ public abstract class LLVMToI8Node extends LLVMExpressionNode {
 
     @Specialization
     protected byte doLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject from,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+                    @Cached("toNative()") LLVMToNativeNode toNative) {
         return (byte) toNative.executeWithTarget(frame, from).getVal();
     }
 

@@ -32,20 +32,18 @@ package com.oracle.truffle.llvm.runtime.types;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class MetaType extends Type {
-    public static final MetaType UNKNOWN = new MetaType("unknown");
-    public static final MetaType LABEL = new MetaType("label");
-    public static final MetaType TOKEN = new MetaType("token");
-    public static final MetaType METADATA = new MetaType("metadata");
-    public static final MetaType X86MMX = new MetaType("x86mmx");
+    public static final MetaType UNKNOWN = new MetaType();
+    public static final MetaType LABEL = new MetaType();
+    public static final MetaType TOKEN = new MetaType();
+    public static final MetaType METADATA = new MetaType();
+    public static final MetaType X86MMX = new MetaType();
 
     // this type is only used to enter debug information into the truffle ast
-    public static final MetaType DEBUG = new MetaType("debug");
+    public static final MetaType DEBUG = new MetaType();
 
-    private final String name;
     private final Object identity;
 
-    private MetaType(String name) {
-        this.name = name;
+    private MetaType() {
         this.identity = new Object();
     }
 
@@ -102,10 +100,5 @@ public final class MetaType extends Type {
     @Override
     public int getSize(DataSpecConverter targetDataLayout) {
         return 0;
-    }
-
-    @Override
-    public String toString() {
-        return name;
     }
 }

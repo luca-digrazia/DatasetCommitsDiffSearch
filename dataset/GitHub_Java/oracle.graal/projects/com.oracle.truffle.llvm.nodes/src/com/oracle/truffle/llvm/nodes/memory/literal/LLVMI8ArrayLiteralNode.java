@@ -57,19 +57,17 @@ public abstract class LLVMI8ArrayLiteralNode extends LLVMExpressionNode {
 
     @Specialization
     protected LLVMAddress write(VirtualFrame frame, LLVMGlobal global,
-                    @Cached(value = "toNative()") LLVMToNativeNode globalAccess,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return writeI8(frame, globalAccess.executeWithTarget(frame, global), memory);
+                    @Cached(value = "toNative()") LLVMToNativeNode globalAccess) {
+        return writeI8(frame, globalAccess.executeWithTarget(frame, global));
     }
 
     @Specialization
     @ExplodeLoop
-    protected LLVMAddress writeI8(VirtualFrame frame, LLVMAddress addr,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+    protected LLVMAddress writeI8(VirtualFrame frame, LLVMAddress addr) {
         long currentPtr = addr.getVal();
         for (int i = 0; i < values.length; i++) {
             byte currentValue = values[i].executeI8(frame);
-            memory.putI8(currentPtr, currentValue);
+            LLVMMemory.putI8(currentPtr, currentValue);
             currentPtr += stride;
         }
         return addr;

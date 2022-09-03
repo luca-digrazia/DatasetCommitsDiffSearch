@@ -33,17 +33,18 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNodeGen;
 
 public final class LLVMTypeIdForExceptionNode extends LLVMExpressionNode {
 
-    @Child private LLVMToNativeNode thrownTypeID;
+    @Child private LLVMExpressionNode thrownTypeID;
+    @Child private LLVMToNativeNode thrownTypeIDToAddress;
 
     private final SourceSection sourceSection;
 
     public LLVMTypeIdForExceptionNode(LLVMExpressionNode thrownTypeID, SourceSection sourceSection) {
-        this.thrownTypeID = LLVMToNativeNodeGen.create(thrownTypeID);
+        this.thrownTypeID = thrownTypeID;
         this.sourceSection = sourceSection;
+        this.thrownTypeIDToAddress = LLVMToNativeNode.toNative();
     }
 
     @Override
@@ -53,6 +54,6 @@ public final class LLVMTypeIdForExceptionNode extends LLVMExpressionNode {
 
     @Override
     public Object executeGeneric(VirtualFrame frame) {
-        return (int) thrownTypeID.executeGeneric(frame).getVal();
+        return (int) thrownTypeIDToAddress.executeWithTarget(frame, thrownTypeID.executeGeneric(frame)).getVal();
     }
 }

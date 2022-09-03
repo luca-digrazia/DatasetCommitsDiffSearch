@@ -29,44 +29,24 @@
  */
 package com.oracle.truffle.llvm.nodes.others;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.ImportStatic;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@ImportStatic(LLVMGlobalVariableDescriptorGuards.class)
-public abstract class LLVMAccessGlobalVariableStorageNode extends LLVMAddressNode {
+public final class LLVMAccessGlobalVariableStorageNode extends LLVMExpressionNode {
 
-    protected final LLVMGlobalVariableDescriptor descriptor;
+    protected final LLVMGlobal descriptor;
 
-    public LLVMAccessGlobalVariableStorageNode(LLVMGlobalVariableDescriptor descriptor) {
+    public LLVMAccessGlobalVariableStorageNode(LLVMGlobal descriptor) {
         this.descriptor = descriptor;
     }
 
-    @Specialization(guards = "needsTransition(frame, descriptor)")
-    public LLVMAddress executeTransition(VirtualFrame frame) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        descriptor.transition(false, false);
-        return executeNative(frame);
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization(guards = "isNative(frame, descriptor)")
-    public LLVMAddress executeNative(VirtualFrame frame) {
-        return descriptor.getNativeStorage();
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization(guards = "isManaged(frame, descriptor)")
-    public Object executeManaged(VirtualFrame frame) {
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
         return descriptor;
     }
 
-    public LLVMGlobalVariableDescriptor getGlobalVariableStorage() {
+    public LLVMGlobal getDescriptor() {
         return descriptor;
     }
-
 }

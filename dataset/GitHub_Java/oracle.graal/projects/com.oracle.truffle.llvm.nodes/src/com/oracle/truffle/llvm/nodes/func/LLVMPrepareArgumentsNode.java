@@ -51,6 +51,7 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType.PrimitiveKind;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public class LLVMPrepareArgumentsNode extends LLVMNode {
     private static final long AT_NULL = 0;
@@ -59,6 +60,7 @@ public class LLVMPrepareArgumentsNode extends LLVMNode {
 
     private static final String PLATFORM = "x86_64";
 
+    private final Type returnType;
     @CompilationFinal(dimensions = 1) private final Type[] types;
 
     @Child private LLVMMalloc malloc;
@@ -69,7 +71,8 @@ public class LLVMPrepareArgumentsNode extends LLVMNode {
     @Child private LLVMStoreNode storeAddress;
     @Child private LLVMStoreCStringNode cstr;
 
-    public LLVMPrepareArgumentsNode(Source source, Type[] types) {
+    public LLVMPrepareArgumentsNode(Source source, Type returnType, Type[] types) {
+        this.returnType = returnType;
         this.types = types;
         getargs = new LLVMGetArgumentsNode(source);
         memorySize = new LLVMGetArgumentSizeNode();
@@ -93,39 +96,54 @@ public class LLVMPrepareArgumentsNode extends LLVMNode {
                 type = 1;
             }
         }
+        if (returnType instanceof VoidType) {
+            type = 2;
+        } else if (returnType instanceof PrimitiveType) {
+            switch (((PrimitiveType) returnType).getPrimitiveKind()) {
+                case I8:
+                    type = 3;
+                    break;
+                case I16:
+                    type = 4;
+                    break;
+                case I64:
+                    type = 5;
+                    break;
+            }
+        }
 
         Type ptrType = new PointerType(PrimitiveType.I8);
         int ptrsz = LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
         String[] args = getStringArgs(mainArgs);
-        String[] env = getenv(getContext().getEnvironment());
+        String[] env = getenv(getContextReference().get().getEnvironment());
         // argc, two NULL pointers and 3 auxv entries
         int offset = (args.length + env.length + 3 + 3 * 2) * ptrsz;
 
         Object memory = malloc.executeGeneric(frame);
         Object ptr = memory;
-        Object valuePtr = inc.executeWithTarget(memory, offset, PrimitiveType.I8);
+        Object valuePtr = inc.executeWithTarget(frame, memory, offset, PrimitiveType.I8);
 
         // argc
         storeI64.executeWithTarget(frame, ptr, (long) args.length);
-        ptr = inc.executeWithTarget(ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, ptrType);
+        ptr = inc.executeWithTarget(frame, ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, ptrType);
 
         // argv
         for (String arg : args) {
             storeAddress.executeWithTarget(frame, ptr, valuePtr);
-            ptr = inc.executeWithTarget(ptr, ptrsz, ptrType);
+            ptr = inc.executeWithTarget(frame, ptr, ptrsz, ptrType);
             valuePtr = cstr.executeWithTarget(frame, valuePtr, arg);
         }
         storeAddress.executeWithTarget(frame, ptr, LLVMAddress.nullPointer());
 
         // env
-        ptr = inc.executeWithTarget(ptr, ptrsz, ptrType);
+        ptr = inc.executeWithTarget(frame, ptr, ptrsz, ptrType);
         for (String var : env) {
             storeAddress.executeWithTarget(frame, ptr, valuePtr);
-            ptr = inc.executeWithTarget(ptr, ptrsz, ptrType);
+            ptr = inc.executeWithTarget(frame, ptr, ptrsz, ptrType);
             valuePtr = cstr.executeWithTarget(frame, valuePtr, var);
         }
         storeAddress.executeWithTarget(frame, ptr, LLVMAddress.nullPointer());
-        ptr = inc.executeWithTarget(ptr, ptrsz, ptrType);
+        ptr = inc.executeWithTarget(frame, ptr, ptrsz, ptrType);
 
         // auxv
         Object platform = valuePtr;
@@ -135,17 +153,17 @@ public class LLVMPrepareArgumentsNode extends LLVMNode {
 
         // AT_EXECFN = argv[0]
         storeI64.executeWithTarget(frame, ptr, AT_EXECFN);
-        ptr = inc.executeWithTarget(ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, ptrType);
+        ptr = inc.executeWithTarget(frame, ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, ptrType);
         storeAddress.executeWithTarget(frame, ptr, execfn);
-        ptr = inc.executeWithTarget(ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, PrimitiveType.I64);
+        ptr = inc.executeWithTarget(frame, ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, PrimitiveType.I64);
         // AT_PLATFORM = "x86_64"
         storeI64.executeWithTarget(frame, ptr, AT_PLATFORM);
-        ptr = inc.executeWithTarget(ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, ptrType);
+        ptr = inc.executeWithTarget(frame, ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, ptrType);
         storeAddress.executeWithTarget(frame, ptr, platform);
-        ptr = inc.executeWithTarget(ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, PrimitiveType.I64);
+        ptr = inc.executeWithTarget(frame, ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, PrimitiveType.I64);
         // AT_NULL = 0
         storeI64.executeWithTarget(frame, ptr, AT_NULL);
-        ptr = inc.executeWithTarget(ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, PrimitiveType.I64);
+        ptr = inc.executeWithTarget(frame, ptr, LLVMExpressionNode.I64_SIZE_IN_BYTES, PrimitiveType.I64);
         storeI64.executeWithTarget(frame, ptr, 0L);
 
         return new Object[]{memory, type};
@@ -160,7 +178,7 @@ public class LLVMPrepareArgumentsNode extends LLVMNode {
 
         @Override
         public Object executeGeneric(VirtualFrame frame) {
-            Object[] sulongArgs = getContext().getMainArguments();
+            Object[] sulongArgs = getContextReference().get().getMainArguments();
             if (types.length > 3) {
                 throw new AssertionError(sourceFile + " " + Arrays.toString(types));
             }
@@ -180,7 +198,7 @@ public class LLVMPrepareArgumentsNode extends LLVMNode {
         public Object executeGeneric(VirtualFrame frame) {
             int ptrsz = LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
             String[] args = getStringArgs((Object[]) getargs.executeGeneric(frame));
-            String[] env = getenv(getContext().getEnvironment());
+            String[] env = getenv(getContextReference().get().getEnvironment());
 
             // argc, two NULL pointers and 3 auxv entries
             int size = (args.length + env.length + 3 + 3 * 2) * ptrsz;
@@ -225,10 +243,10 @@ public class LLVMPrepareArgumentsNode extends LLVMNode {
             Object ptr = address;
             for (byte b : getBytes(string)) { // automatic charset conversion
                 storeI8.executeWithTarget(frame, ptr, b);
-                ptr = inc.executeWithTarget(ptr, 1, PrimitiveType.I8);
+                ptr = inc.executeWithTarget(frame, ptr, 1, PrimitiveType.I8);
             }
             storeI8.executeWithTarget(frame, ptr, (byte) 0);
-            return inc.executeWithTarget(ptr, 1, PrimitiveType.I8);
+            return inc.executeWithTarget(frame, ptr, 1, PrimitiveType.I8);
         }
     }
 }

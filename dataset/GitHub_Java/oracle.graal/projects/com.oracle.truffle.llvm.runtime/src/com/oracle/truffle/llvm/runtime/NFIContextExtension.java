@@ -45,7 +45,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -55,7 +54,7 @@ import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public final class NFIContextExtension implements ContextExtension {
     private final TruffleObject defaultLibrary;
-    private final Map<ExternalLibrary, TruffleObject> libraryHandles = new HashMap<>();
+    private final Map<Path, TruffleObject> libraryHandles = new HashMap<>();
     private final TruffleLanguage.Env env;
     private final LLVMNativeFunctions nativeFunctions;
 
@@ -119,19 +118,19 @@ public final class NFIContextExtension implements ContextExtension {
     private void addLibraries(LLVMContext context) {
         CompilerAsserts.neverPartOfCompilation();
         context.addExternalLibrary("libsulong." + getNativeLibrarySuffix());
-        List<ExternalLibrary> libraries = context.getExternalLibraries(lib -> lib.getPath().toString().contains("." + getNativeLibrarySuffix()));
-        for (ExternalLibrary l : libraries) {
+        List<Path> libraries = context.getExternalLibraries(f -> f.toString().contains("." + getNativeLibrarySuffix()));
+        for (Path l : libraries) {
             addLibrary(l);
         }
     }
 
-    private void addLibrary(ExternalLibrary lib) throws UnsatisfiedLinkError {
+    private void addLibrary(Path l) throws UnsatisfiedLinkError {
         CompilerAsserts.neverPartOfCompilation();
-        if (!libraryHandles.containsKey(lib) && !handledBySulong(lib.getPath())) {
+        if (!libraryHandles.containsKey(l) && !handeledBySulong(l)) {
             try {
-                libraryHandles.put(lib, loadLibrary(lib));
+                libraryHandles.put(l, loadLibrary(l));
             } catch (UnsatisfiedLinkError e) {
-                System.err.println(lib.toString() + " not found!\n" + e.getMessage());
+                System.err.println(l.toString() + " not found!\n" + e.getMessage());
                 throw e;
             }
         }
@@ -145,15 +144,14 @@ public final class NFIContextExtension implements ContextExtension {
         }
     }
 
-    private static boolean handledBySulong(Path l) {
+    private static boolean handeledBySulong(Path l) {
         String fileName = l.getFileName().toString().trim();
         return fileName.startsWith("libstdc++.so") || fileName.startsWith("libc.so");
     }
 
-    private TruffleObject loadLibrary(ExternalLibrary lib) {
+    private TruffleObject loadLibrary(Path lib) {
         CompilerAsserts.neverPartOfCompilation();
-        assert lib.getLibraryToReplace() == null;
-        String libName = lib.getPath().toString();
+        String libName = lib.toString();
         String loadExpression = String.format("load \"%s\"", libName);
         final Source source = Source.newBuilder(loadExpression).name("(load " + libName + ")").mimeType("application/x-native").build();
         try {

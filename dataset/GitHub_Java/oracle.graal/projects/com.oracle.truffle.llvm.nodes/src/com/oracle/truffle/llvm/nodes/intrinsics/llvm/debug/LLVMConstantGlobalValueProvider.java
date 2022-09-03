@@ -41,17 +41,14 @@ import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugTypeConstants;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 
 final class LLVMConstantGlobalValueProvider implements LLVMDebugValueProvider {
 
     private final LLVMGlobal global;
     private final LLVMContext context;
-    private final LLVMMemory memory;
     private final LLVMDebugValueProvider.Builder valueBuilder;
 
-    LLVMConstantGlobalValueProvider(LLVMMemory memory, LLVMGlobal global, LLVMContext context, Builder valueBuilder) {
-        this.memory = memory;
+    LLVMConstantGlobalValueProvider(LLVMGlobal global, LLVMContext context, Builder valueBuilder) {
         this.global = global;
         this.context = context;
         this.valueBuilder = valueBuilder;
@@ -166,7 +163,7 @@ final class LLVMConstantGlobalValueProvider implements LLVMDebugValueProvider {
 
     private LLVMDebugValueProvider getCurrentValue() {
         if (isInNative(context, global)) {
-            return new LLVMAllocationValueProvider(memory, getNativeLocation(memory, context, global));
+            return new LLVMAllocationValueProvider(getNativeLocation(context, global));
         } else {
             return valueBuilder.build(getManagedValue(context, global));
         }

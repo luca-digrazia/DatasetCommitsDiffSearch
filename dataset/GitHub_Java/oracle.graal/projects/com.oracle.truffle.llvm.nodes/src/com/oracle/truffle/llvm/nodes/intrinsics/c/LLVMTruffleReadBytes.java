@@ -46,25 +46,23 @@ public abstract class LLVMTruffleReadBytes extends LLVMIntrinsic {
 
     @Specialization
     protected Object doIntrinsic(VirtualFrame frame, LLVMGlobal value,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return doIntrinsic(globalAccess.executeWithTarget(frame, value), memory);
+                    @Cached("toNative()") LLVMToNativeNode globalAccess) {
+        return doIntrinsic(globalAccess.executeWithTarget(frame, value));
     }
 
     @Specialization
-    protected Object doIntrinsic(LLVMAddress value,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+    protected Object doIntrinsic(LLVMAddress value) {
         byte c;
         long ptr = value.getVal();
         int count = 0;
-        while ((c = memory.getI8(ptr)) != 0) {
+        while ((c = LLVMMemory.getI8(ptr)) != 0) {
             count++;
             ptr += Byte.BYTES;
         }
         byte[] bytes = new byte[count];
         count = 0;
         ptr = value.getVal();
-        while ((c = memory.getI8(ptr)) != 0) {
+        while ((c = LLVMMemory.getI8(ptr)) != 0) {
             bytes[count++] = c;
             ptr += Byte.BYTES;
         }
