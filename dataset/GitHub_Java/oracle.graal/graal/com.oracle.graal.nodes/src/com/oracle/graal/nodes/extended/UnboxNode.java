@@ -22,36 +22,38 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
+
 public final class UnboxNode extends FixedWithNextNode implements Node.IterableNodeType, Canonicalizable {
 
     @Input private ValueNode source;
-    private Kind destinationKind;
+    private CiKind destinationKind;
 
-    public UnboxNode(Kind kind, ValueNode source) {
+    public UnboxNode(CiKind kind, ValueNode source) {
         super(StampFactory.forKind(kind));
         this.source = source;
         this.destinationKind = kind;
-        assert kind != Kind.Object : "can only unbox to primitive";
-        assert source.kind() == Kind.Object : "can only unbox objects";
+        assert kind != CiKind.Object : "can only unbox to primitive";
+        assert source.kind() == CiKind.Object : "can only unbox objects";
     }
 
     public ValueNode source() {
         return source;
     }
 
-    public Kind destinationKind() {
+    public CiKind destinationKind() {
         return destinationKind;
     }
 
     public void expand(BoxingMethodPool pool) {
-        ResolvedJavaField field = pool.getBoxField(kind());
+        RiResolvedField field = pool.getBoxField(kind());
         LoadFieldNode loadField = graph().add(new LoadFieldNode(source, field, StructuredGraph.INVALID_GRAPH_ID));
         loadField.setProbability(probability());
         ((StructuredGraph) graph()).replaceFixedWithFixed(this, loadField);
@@ -60,7 +62,7 @@ public final class UnboxNode extends FixedWithNextNode implements Node.IterableN
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         if (source.isConstant()) {
-            Constant constant = source.asConstant();
+            CiConstant constant = source.asConstant();
             Object o = constant.asObject();
             if (o != null) {
                 switch (destinationKind) {
@@ -81,7 +83,7 @@ public final class UnboxNode extends FixedWithNextNode implements Node.IterableN
                     case Double:
                         return ConstantNode.forDouble((Long) o, graph());
                     default:
-                        ValueNodeUtil.shouldNotReachHere();
+                        ValueUtil.shouldNotReachHere();
                 }
             }
         }

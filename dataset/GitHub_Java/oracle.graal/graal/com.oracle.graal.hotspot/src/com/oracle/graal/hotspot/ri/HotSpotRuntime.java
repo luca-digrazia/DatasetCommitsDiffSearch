@@ -28,6 +28,8 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.phases.*;
+import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
@@ -35,6 +37,7 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.Compiler;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.target.amd64.*;
+import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -336,21 +339,21 @@ public class HotSpotRuntime implements GraalRuntime {
                 if (array.exactType() != null) {
                     RiResolvedType elementType = array.exactType().componentType();
                     if (elementType.superType() != null) {
+                        AnchorNode anchor = graph.add(new AnchorNode());
+                        graph.addBeforeFixed(storeIndexed, anchor);
                         ConstantNode type = ConstantNode.forCiConstant(elementType.getEncoding(Representation.ObjectHub), this, graph);
-                        CheckCastNode checkcast = graph.add(new CheckCastNode(type, elementType, value));
-                        graph.addBeforeFixed(storeIndexed, checkcast);
-                        value = checkcast;
+                        value = graph.unique(new CheckCastNode(anchor, type, elementType, value));
                     } else {
                         assert elementType.name().equals("Ljava/lang/Object;") : elementType.name();
                     }
                 } else {
+                    AnchorNode anchor = graph.add(new AnchorNode());
+                    graph.addBeforeFixed(storeIndexed, anchor);
                     GuardNode guard = (GuardNode) tool.createGuard(graph.unique(new NullCheckNode(array, false)), RiDeoptReason.NullCheckException, RiDeoptAction.InvalidateReprofile, StructuredGraph.INVALID_GRAPH_ID);
                     FloatingReadNode arrayClass = graph.unique(new FloatingReadNode(array, null, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Object, config.hubOffset, graph), StampFactory.objectNonNull()));
                     arrayClass.setGuard(guard);
                     FloatingReadNode arrayElementKlass = graph.unique(new FloatingReadNode(arrayClass, null, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Object, config.arrayClassElementOffset, graph), StampFactory.objectNonNull()));
-                    CheckCastNode checkcast = graph.add(new CheckCastNode(arrayElementKlass, null, value));
-                    graph.addBeforeFixed(storeIndexed, checkcast);
-                    value = checkcast;
+                    value = graph.unique(new CheckCastNode(anchor, arrayElementKlass, null, value));
                 }
             }
             WriteNode memoryWrite = graph.add(new WriteNode(array, value, arrayLocation));
@@ -475,25 +478,14 @@ public class HotSpotRuntime implements GraalRuntime {
         return (RiResolvedMethod) compiler.getCompilerToVM().getRiMethod(reflectionMethod);
     }
 
-    private HotSpotCodeInfo makeInfo(RiResolvedMethod method, CiTargetMethod code, RiCodeInfo[] info) {
-        HotSpotCodeInfo hsInfo = null;
-        if (info != null && info.length > 0) {
-            hsInfo = new HotSpotCodeInfo(compiler, code, (HotSpotMethodResolved) method);
-            info[0] = hsInfo;
-        }
-        return hsInfo;
+    @Override
+    public void installMethod(RiResolvedMethod method, CiTargetMethod code, RiCodeInfo info) {
+        compiler.getCompilerToVM().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), true, (HotSpotCodeInfo) info);
     }
 
     @Override
-    public void installMethod(RiResolvedMethod method, CiTargetMethod code, RiCodeInfo[] info) {
-        HotSpotCodeInfo hsInfo = makeInfo(method, code, info);
-        compiler.getCompilerToVM().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), true, hsInfo);
-    }
-
-    @Override
-    public RiCompiledMethod addMethod(RiResolvedMethod method, CiTargetMethod code, RiCodeInfo[] info) {
-        HotSpotCodeInfo hsInfo = makeInfo(method, code, info);
-        return compiler.getCompilerToVM().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), false, hsInfo);
+    public RiCompiledMethod addMethod(RiResolvedMethod method, CiTargetMethod code) {
+        return compiler.getCompilerToVM().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), false, null);
     }
 
     @Override
@@ -503,8 +495,10 @@ public class HotSpotRuntime implements GraalRuntime {
 
     @Override
     public CiTargetMethod compile(RiResolvedMethod method, StructuredGraph graph) {
-        OptimisticOptimizations optimisticOpts = OptimisticOptimizations.ALL;
-        return compiler.getCompiler().compileMethod(method, graph, -1, compiler.getCache(), compiler.getVMToCompiler().createPhasePlan(optimisticOpts), optimisticOpts);
+        final PhasePlan plan = new PhasePlan();
+        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(compiler.getRuntime(), GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
+        plan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
+        return compiler.getCompiler().compileMethod(method, graph, -1, compiler.getCache(), plan, OptimisticOptimizations.ALL);
     }
 
     @Override

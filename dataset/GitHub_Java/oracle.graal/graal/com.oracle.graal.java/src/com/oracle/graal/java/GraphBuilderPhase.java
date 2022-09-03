@@ -46,7 +46,6 @@ import com.oracle.graal.nodes.util.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.cri.ri.RiType.Representation;
-import com.oracle.max.cri.ri.RiTypeProfile.ProfiledType;
 import com.oracle.max.criutils.*;
 
 /**
@@ -592,7 +591,7 @@ public final class GraphBuilderPhase extends Phase {
     private static final RiResolvedType[] EMPTY_TYPE_ARRAY = new RiResolvedType[0];
 
     private RiResolvedType[] getTypeCheckHints(RiResolvedType type, int maxHints) {
-        if (!optimisticOpts.useTypeCheckHints() || Util.isFinalClass(type)) {
+        if (!optimisticOpts.useUseTypeCheckHints() || Util.isFinalClass(type)) {
             return new RiResolvedType[] {type};
         } else {
             RiResolvedType uniqueSubtype = type.uniqueConcreteSubtype();
@@ -602,14 +601,12 @@ public final class GraphBuilderPhase extends Phase {
                 RiTypeProfile typeProfile = profilingInfo.getTypeProfile(bci());
                 if (typeProfile != null) {
                     double notRecordedTypes = typeProfile.getNotRecordedProbability();
-                    ProfiledType[] ptypes = typeProfile.getTypes();
+                    RiResolvedType[] types = typeProfile.getTypes();
 
-                    if (notRecordedTypes == 0 && ptypes != null && ptypes.length > 0 && ptypes.length <= maxHints) {
-                    //if (notRecordedTypes < 0.1d && ptypes != null && ptypes.length > 0) {
-                        RiResolvedType[] hints = new RiResolvedType[ptypes.length];
+                    if (notRecordedTypes == 0 && types != null && types.length > 0 && types.length <= maxHints) {
+                        RiResolvedType[] hints = new RiResolvedType[types.length];
                         int hintCount = 0;
-                        for (ProfiledType ptype : ptypes) {
-                            RiResolvedType hint = ptype.type;
+                        for (RiResolvedType hint : types) {
                             if (hint.isSubtypeOf(type)) {
                                 hints[hintCount++] = hint;
                             }
@@ -632,7 +629,7 @@ public final class GraphBuilderPhase extends Phase {
             AnchorNode anchor = currentGraph.add(new AnchorNode());
             append(anchor);
             CheckCastNode checkCast;
-            RiResolvedType[] hints = getTypeCheckHints((RiResolvedType) type, GraalOptions.CheckcastMaxHints);
+            RiResolvedType[] hints = getTypeCheckHints((RiResolvedType) type, 2);
             checkCast = currentGraph.unique(new CheckCastNode(anchor, typeInstruction, (RiResolvedType) type, object, hints, Util.isFinalClass((RiResolvedType) type)));
             append(currentGraph.add(new ValueAnchorNode(checkCast)));
             frameState.apush(checkCast);
@@ -651,7 +648,7 @@ public final class GraphBuilderPhase extends Phase {
             RiResolvedType resolvedType = (RiResolvedType) type;
             ConstantNode hub = appendConstant(resolvedType.getEncoding(RiType.Representation.ObjectHub));
 
-            RiResolvedType[] hints = getTypeCheckHints(resolvedType, GraalOptions.InstanceOfMaxHints);
+            RiResolvedType[] hints = getTypeCheckHints(resolvedType, 1);
             InstanceOfNode instanceOfNode = new InstanceOfNode(hub, (RiResolvedType) type, object, hints, Util.isFinalClass(resolvedType), false);
             frameState.ipush(append(MaterializeNode.create(currentGraph.unique(instanceOfNode), currentGraph)));
         } else {
