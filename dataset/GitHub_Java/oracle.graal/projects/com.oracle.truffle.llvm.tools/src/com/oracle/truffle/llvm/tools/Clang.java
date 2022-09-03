@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.tools;
 
 import java.io.File;
-import java.io.IOException;
 
 import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.tools.LLVMToolPaths.LLVMTool;
@@ -77,13 +76,6 @@ public class Clang extends CompilerBase {
     }
 
     public static void compileToLLVMIR(File path, File destinationFile, ClangOptions options) {
-        File tool = getCompileToolFromExtension(path);
-        String[] command = new String[]{tool.getAbsolutePath(), "-I " + LLVMBaseOptionFacade.getProjectRoot() + "/../include", emitLLVMIRTo(destinationFile), optimizationLevel(options),
-                        path.getAbsolutePath()};
-        ProcessUtil.executeNativeCommandZeroReturn(command);
-    }
-
-    private static File getCompileToolFromExtension(File path) {
         String fileExtension = PathUtil.getExtension(path.getName());
         File tool;
         if (ProgrammingLanguage.C.isFile(path)) {
@@ -95,24 +87,8 @@ public class Clang extends CompilerBase {
         } else {
             throw new IllegalArgumentException(fileExtension);
         }
-        return tool;
-    }
-
-    public static File compileToExecutable(File path, ClangOptions options) {
-        try {
-            File outputFile = File.createTempFile(path.getName(), ".out");
-            outputFile.setExecutable(true);
-            compileToExecutable(path, outputFile, options);
-            return outputFile;
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    public static void compileToExecutable(File path, File destinationFile, ClangOptions options) {
-        File tool = getCompileToolFromExtension(path);
-        String[] command = new String[]{tool.getAbsolutePath(), "-I " + LLVMBaseOptionFacade.getProjectRoot() + "/../include", optimizationLevel(options), path.getAbsolutePath(),
-                        "-o " + destinationFile, "-lm"};
+        String[] command = new String[]{tool.getAbsolutePath(), "-I " + LLVMBaseOptionFacade.getProjectRoot() + "/../include", emitLLVMIRTo(destinationFile), optimizationLevel(options),
+                        path.getAbsolutePath()};
         ProcessUtil.executeNativeCommandZeroReturn(command);
     }
 
