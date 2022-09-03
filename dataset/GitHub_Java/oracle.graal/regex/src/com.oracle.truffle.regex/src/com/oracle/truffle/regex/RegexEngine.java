@@ -81,7 +81,7 @@ public class RegexEngine implements RegexLanguageObject {
         return RegexEngineMessageResolutionForeign.ACCESS;
     }
 
-    @MessageResolution(receiverType = RegexEngine.class)
+    @MessageResolution(receiverType = RegexCompiler.class)
     static class RegexEngineMessageResolution {
 
         @Resolve(message = "EXECUTE")

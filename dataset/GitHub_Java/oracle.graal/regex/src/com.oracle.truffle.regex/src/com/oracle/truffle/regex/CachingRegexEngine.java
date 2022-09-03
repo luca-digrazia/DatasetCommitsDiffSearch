@@ -36,14 +36,8 @@ public class CachingRegexEngine extends RegexEngine {
 
     private final Map<RegexSource, CompilationResult<RegexObject>> cache = Collections.synchronizedMap(new LRUCache<>(TRegexOptions.RegexMaxCacheSize));
 
-    public CachingRegexEngine(RegexCompiler compiler, RegexOptions options) {
-        super(compiler, options);
-    }
-
-    // Compatibility for Graal.js. To be dropped once Graal.js switches to the other constructor.
-    @Deprecated
     public CachingRegexEngine(RegexCompiler compiler, boolean eagerCompilation) {
-        this(compiler, new RegexOptions(false, eagerCompilation));
+        super(compiler, eagerCompilation);
     }
 
     @Override
