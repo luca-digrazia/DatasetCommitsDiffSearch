@@ -121,7 +121,7 @@ public class WordTypeRewriterPhase extends Phase {
                         assert arguments.size() == 2;
                         ValueNode left = arguments.get(0);
                         ValueNode right = operation.rightOperandIsInt() ? toUnsigned(graph, arguments.get(1), Kind.Int) : fromSigned(graph, arguments.get(1));
-                        replace(invoke, nodeClassOp(graph, operation.node(), left, right, invoke));
+                        replace(invoke, nodeClassOp(graph, operation.node(), left, right));
                         break;
 
                     case COMPARISON:
@@ -215,14 +215,10 @@ public class WordTypeRewriterPhase extends Phase {
         }
     }
 
-    private ValueNode nodeClassOp(StructuredGraph graph, Class<? extends ValueNode> nodeClass, ValueNode left, ValueNode right, Invoke invoke) {
+    private ValueNode nodeClassOp(StructuredGraph graph, Class<? extends ValueNode> nodeClass, ValueNode left, ValueNode right) {
         try {
             Constructor< ? extends ValueNode> constructor = nodeClass.getConstructor(Kind.class, ValueNode.class, ValueNode.class);
-            ValueNode result = graph.add(constructor.newInstance(wordKind, left, right));
-            if (result instanceof FixedWithNextNode) {
-                graph.addBeforeFixed(invoke.node(), (FixedWithNextNode) result);
-            }
-            return result;
+            return graph.add(constructor.newInstance(wordKind, left, right));
         } catch (Throwable ex) {
             throw new GraalInternalError(ex).addContext(nodeClass.getName());
         }
