@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -39,12 +40,10 @@ import java.util.function.Consumer;
 import com.oracle.shadowed.com.google.gson.Gson;
 import com.oracle.svm.hosted.server.SubstrateServerMessage.ServerCommand;
 
-import sun.misc.Signal;
-
 public class NativeImageBuildClient {
 
-    public static final String COMMAND_PREFIX = "-command=";
-    public static final int EXIT_FAIL = -1;
+    private static final String COMMAND_PREFIX = "-command=";
+    private static final int EXIT_FAIL = -1;
     public static final int EXIT_SUCCESS = 0;
 
     private static void usage(Consumer<String> out) {
@@ -53,8 +52,8 @@ public class NativeImageBuildClient {
                         PORT_PREFIX));
     }
 
-    public static int run(String[] argsArray, Consumer<String> out, Consumer<String> err) {
-        Consumer<String> outln = s -> out.accept(s + "\n");
+    public static int run(String[] argsArray, Consumer<byte[]> out, Consumer<byte[]> err) {
+        Consumer<String> outln = s -> out.accept((s + "\n").getBytes());
         final List<String> args = new ArrayList<>(Arrays.asList(argsArray));
         if (args.size() < 1) {
             usage(outln);
@@ -68,70 +67,60 @@ public class NativeImageBuildClient {
         final Optional<Integer> port = NativeImageBuildServer.extractPort(args);
 
         if (port.isPresent() && command.isPresent()) {
-            Signal.handle(new Signal("INT"), sig -> {
-                sendRequest("abort", "image building interrupted by user (Ctrl-C).", port.get(), out, err);
-            });
-            return sendRequest(command.get(), String.join(" ", args), port.get(), out, err);
+            ServerCommand serverCommand = ServerCommand.valueOf(command.get());
+            return sendRequest(serverCommand, String.join(" ", args).getBytes(), port.get(), out, err);
         } else {
             usage(outln);
             return EXIT_FAIL;
         }
     }
 
-    private static int sendRequest(String command, String payload, int port, Consumer<String> out, Consumer<String> err) {
-        Consumer<String> outln = s -> out.accept(s + "\n");
-        Consumer<String> errln = s -> out.accept(s + "\n");
+    public static int sendRequest(ServerCommand command, byte[] payload, int port, Consumer<byte[]> out, Consumer<byte[]> err) {
+        Consumer<String> outln = s -> out.accept((s + "\n").getBytes());
+        Consumer<String> errln = s -> err.accept((s + "\n").getBytes());
 
-        Socket svmClient;
-        OutputStreamWriter os;
-        BufferedReader is;
-        try {
-            svmClient = new Socket((String) null, port);
-            os = new OutputStreamWriter(svmClient.getOutputStream());
-            is = new BufferedReader(new InputStreamReader(svmClient.getInputStream()));
-        } catch (IOException e) {
-            if (!ServerCommand.version.toString().equals(command)) {
-                errln.accept("The image build server is not running on port " + port);
-                errln.accept("Underlying exception: " + e);
-            }
-            return EXIT_FAIL;
-        }
-
-        try {
+        try (
+                        Socket svmClient = new Socket((String) null, port);
+                        OutputStreamWriter os = new OutputStreamWriter(svmClient.getOutputStream());
+                        BufferedReader is = new BufferedReader(new InputStreamReader(svmClient.getInputStream()))) {
             SubstrateServerMessage.send(new SubstrateServerMessage(command, payload), os);
-            switch (command) {
-                case "version":
-                    SubstrateServerMessage response = new Gson().fromJson(is.readLine(), SubstrateServerMessage.class);
-                    outln.accept(response.payload);
-                    break;
-                default: {
-                    String line;
-                    while ((line = is.readLine()) != null) {
-                        SubstrateServerMessage serverCommand = new Gson().fromJson(line, SubstrateServerMessage.class);
-                        Consumer<String> selectedConsumer = null;
-                        switch (serverCommand.command) {
-                            case o:
-                                selectedConsumer = out;
-                                break;
-                            case e:
-                                selectedConsumer = err;
-                                break;
-                            case s:
-                                return Integer.valueOf(serverCommand.payload);
-                            default:
-                                throw new RuntimeException("Invalid command sent by the image build server: " + serverCommand.command);
-                        }
-                        if (selectedConsumer != null) {
-                            selectedConsumer.accept(serverCommand.payload);
-                        }
+            String line;
+            if (ServerCommand.GET_VERSION.equals(command)) {
+                line = is.readLine();
+                if (line != null) {
+                    SubstrateServerMessage response = new Gson().fromJson(line, SubstrateServerMessage.class);
+                    outln.accept(new String(response.payload));
+                }
+            } else {
+
+                while ((line = is.readLine()) != null) {
+                    SubstrateServerMessage serverCommand = new Gson().fromJson(line, SubstrateServerMessage.class);
+                    Consumer<byte[]> selectedConsumer;
+                    switch (serverCommand.command) {
+                        case WRITE_OUT:
+                            selectedConsumer = out;
+                            break;
+                        case WRITE_ERR:
+                            selectedConsumer = err;
+                            break;
+                        case SEND_STATUS:
+                            /* Exit with exit status sent by server */
+                            return ByteBuffer.wrap(serverCommand.payload).getInt();
+                        default:
+                            throw new RuntimeException("Invalid command sent by the image build server: " + serverCommand.command);
+                    }
+                    if (selectedConsumer != null) {
+                        selectedConsumer.accept(serverCommand.payload);
                     }
                 }
+                /* Report failure if communication does not end with ExitStatus */
+                return EXIT_FAIL;
             }
-            os.close();
-            is.close();
-            svmClient.close();
         } catch (IOException e) {
-            errln.accept("Could not stream data from the image build server. Underlying exception: " + e);
+            if (!ServerCommand.GET_VERSION.equals(command)) {
+                errln.accept("Could not connect to image build server running on port " + port);
+                errln.accept("Underlying exception: " + e);
+            }
             return EXIT_FAIL;
         }
         return EXIT_SUCCESS;

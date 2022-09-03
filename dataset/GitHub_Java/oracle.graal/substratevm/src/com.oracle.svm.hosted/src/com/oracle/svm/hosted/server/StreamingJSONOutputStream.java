@@ -24,8 +24,10 @@ package com.oracle.svm.hosted.server;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.channels.ClosedByInterruptException;
 
 import com.oracle.shadowed.com.google.gson.Gson;
+import com.oracle.svm.hosted.server.SubstrateServerMessage.ServerCommand;
 
 /**
  * Converts the data stream to streaming JSON packages containing the content as well as the command
@@ -36,28 +38,38 @@ import com.oracle.shadowed.com.google.gson.Gson;
  */
 public class StreamingJSONOutputStream extends OutputStream {
 
-    private final String command;
+    private final ServerCommand command;
     private OutputStream original;
     private final Gson gson = new Gson();
+    private volatile boolean interrupted;
+    private volatile boolean writing;
 
     public void setOriginal(OutputStream original) {
         this.original = original;
     }
 
-    StreamingJSONOutputStream(String command, OutputStream original) {
+    StreamingJSONOutputStream(ServerCommand command, OutputStream original) {
         this.command = command;
         this.original = original;
     }
 
     @Override
     public void write(int b) throws IOException {
-        String jsonString = gson.toJson(new SubstrateServerMessage(command, new String(new byte[]{(byte) b}, 0, 1)));
-        for (byte ch : jsonString.getBytes()) {
-            original.write(ch);
+        if (interrupted) {
+            throw new ClosedByInterruptException();
         }
+        writing = true;
+        try {
+            String jsonString = gson.toJson(new SubstrateServerMessage(command, new byte[]{(byte) b}));
+            for (byte ch : jsonString.getBytes()) {
+                original.write(ch);
+            }
 
-        for (byte ch : System.lineSeparator().getBytes()) {
-            original.write(ch);
+            for (byte ch : System.lineSeparator().getBytes()) {
+                original.write(ch);
+            }
+        } finally {
+            writing = false;
         }
     }
 
@@ -71,4 +83,11 @@ public class StreamingJSONOutputStream extends OutputStream {
         original.close();
     }
 
+    void writingInterrupted(boolean value) {
+        this.interrupted = value;
+    }
+
+    public boolean isWriting() {
+        return writing;
+    }
 }
