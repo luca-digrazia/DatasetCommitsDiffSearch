@@ -32,22 +32,20 @@ package com.oracle.truffle.llvm.nodes.impl.intrinsics.interop;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
-import com.oracle.truffle.llvm.types.LLVMTruffleAddress;
 
 public abstract class LLVMToNullNode extends Node {
-    public abstract Object executeConvert(Object value, LLVMRuntimeType type);
+    public abstract Object executeConvert(Object value);
 
     @Specialization
-    protected static Object fromAddress(LLVMAddress value, LLVMRuntimeType type) {
+    protected static Object fromAddress(LLVMAddress value) {
         if (LLVMAddress.NULL_POINTER.equals(value)) {
             return null;
         }
-        return new LLVMTruffleAddress(value, type);
+        return value;
     }
 
     @Specialization
-    protected static Object fromGeneric(Object value, @SuppressWarnings("unused") LLVMRuntimeType type) {
+    protected static Object fromGeneric(Object value) {
         return value;
     }
 }
