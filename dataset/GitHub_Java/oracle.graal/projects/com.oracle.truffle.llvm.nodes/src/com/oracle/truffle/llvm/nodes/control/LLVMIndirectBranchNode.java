@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,42 +29,103 @@
  */
 package com.oracle.truffle.llvm.nodes.control;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMTerminatorNode;
+import com.oracle.truffle.api.instrumentation.GenerateWrapper;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode;
+import com.oracle.truffle.api.instrumentation.ProbeNode;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-public class LLVMIndirectBranchNode extends LLVMTerminatorNode {
+@GenerateWrapper
+public abstract class LLVMIndirectBranchNode extends LLVMControlFlowNode implements InstrumentableNode {
 
-    @Child private LLVMAddressNode address;
+    public static LLVMIndirectBranchNode create(LLVMBranchAddressNode branchAddress, int[] indices, LLVMStatementNode[] phiWriteNodes, LLVMSourceLocation sourceSection) {
+        return new LLVMIndirectBranchNodeImpl(branchAddress, indices, phiWriteNodes, sourceSection);
+    }
 
-    @Children private final LLVMNode[] writeNodes;
+    public LLVMIndirectBranchNode(LLVMSourceLocation sourceSection) {
+        super(sourceSection);
+    }
 
-    public LLVMIndirectBranchNode(LLVMAddressNode address, int[] indices, LLVMNode[] writeNodes) {
-        super(indices);
-        this.address = address;
-        this.writeNodes = writeNodes;
+    protected LLVMIndirectBranchNode(LLVMIndirectBranchNode delegate) {
+        super(delegate.getSourceLocation());
     }
 
     @Override
-    public int executeGetSuccessorIndex(VirtualFrame frame) {
-        // TODO specialize
-        int val = (int) address.executePointee(frame).getVal();
-        for (int i = 0; i < nrSuccessors(); i++) {
-            if (val == getSuccessors()[i]) {
-                executePhiWrites(frame);
-                return i;
+    public WrapperNode createWrapper(ProbeNode probe) {
+        return new LLVMIndirectBranchNodeWrapper(this, this, probe);
+    }
+
+    @Override
+    public boolean isInstrumentable() {
+        return getSourceLocation() != null;
+    }
+
+    public abstract int executeCondition(VirtualFrame frame);
+
+    public abstract int[] getSuccessors();
+
+    private static final class LLVMIndirectBranchNodeImpl extends LLVMIndirectBranchNode {
+
+        @Child private LLVMBranchAddressNode branchAddress;
+        @Children private final LLVMStatementNode[] phiWriteNodes;
+        @CompilationFinal(dimensions = 1) private final int[] successors;
+
+        private LLVMIndirectBranchNodeImpl(LLVMBranchAddressNode branchAddress, int[] indices, LLVMStatementNode[] phiWriteNodes, LLVMSourceLocation sourceSection) {
+            super(sourceSection);
+            assert indices.length > 1;
+            this.successors = indices;
+            this.branchAddress = branchAddress;
+            this.phiWriteNodes = phiWriteNodes;
+        }
+
+        @Override
+        public int getSuccessorCount() {
+            return successors.length;
+        }
+
+        @Override
+        public LLVMStatementNode getPhiNode(int successorIndex) {
+            return phiWriteNodes[successorIndex];
+        }
+
+        @Override
+        public int executeCondition(VirtualFrame frame) {
+            return branchAddress.branchAddress(frame);
+        }
+
+        @Override
+        public int[] getSuccessors() {
+            return successors;
+        }
+    }
+
+    public abstract static class LLVMBranchAddressNode extends LLVMNode {
+        public abstract int branchAddress(VirtualFrame frame);
+    }
+
+    public static final class LLVMBasicBranchAddressNode extends LLVMBranchAddressNode {
+
+        @Child private LLVMExpressionNode address;
+
+        public LLVMBasicBranchAddressNode(LLVMExpressionNode address) {
+            this.address = address;
+        }
+
+        @Override
+        public int branchAddress(VirtualFrame frame) {
+            try {
+                return (int) address.executeLLVMNativePointer(frame).asNative();
+            } catch (UnexpectedResultException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException("should not reach here", e);
             }
         }
-        throw new AssertionError();
     }
-
-    @ExplodeLoop
-    private void executePhiWrites(VirtualFrame frame) {
-        for (int j = 0; j < writeNodes.length; j++) {
-            writeNodes[j].executeVoid(frame);
-        }
-    }
-
 }

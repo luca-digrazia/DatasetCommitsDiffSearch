@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -54,31 +54,31 @@ public abstract class LLVMAMD64WriteAddressRegisterNode extends LLVMStatementNod
 
     @Specialization
     protected void doI8(VirtualFrame frame, byte value) {
-        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Long);
+        getSlot().setKind(FrameSlotKind.Long);
         frame.setLong(getSlot(), value);
     }
 
     @Specialization
     protected void doI16(VirtualFrame frame, short value) {
-        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Long);
+        getSlot().setKind(FrameSlotKind.Long);
         frame.setLong(getSlot(), value);
     }
 
     @Specialization
     protected void doI32(VirtualFrame frame, int value) {
-        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Long);
+        getSlot().setKind(FrameSlotKind.Long);
         frame.setLong(getSlot(), value);
     }
 
     @Specialization
     protected void doI64(VirtualFrame frame, long value) {
-        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Long);
+        getSlot().setKind(FrameSlotKind.Long);
         frame.setLong(getSlot(), value);
     }
 
     @Specialization
     protected void doAddress(VirtualFrame frame, LLVMPointer value) {
-        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Object);
+        getSlot().setKind(FrameSlotKind.Object);
         frame.setObject(getSlot(), value);
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,63 +32,67 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
-import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 @NodeField(type = long.class, name = "structSize")
-public abstract class LLVMStructStoreNode extends LLVMStoreNode {
+public abstract class LLVMStructStoreNode extends LLVMStoreNodeCommon {
 
     public abstract long getStructSize();
 
     @Child private LLVMMemMoveNode memMove;
 
-    protected LLVMStructStoreNode(LLVMMemMoveNode memMove, Type type) {
-        super(type, 0);
+    protected LLVMStructStoreNode(LLVMMemMoveNode memMove) {
+        this(null, memMove);
+    }
+
+    protected LLVMStructStoreNode(LLVMSourceLocation sourceLocation, LLVMMemMoveNode memMove) {
+        super(sourceLocation);
         this.memMove = memMove;
-    }
-
-    @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMGlobalVariable address, LLVMGlobalVariable value,
-                    @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess1,
-                    @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess2) {
-        memMove.executeWithTarget(frame, globalAccess1.getNativeLocation(address), globalAccess2.getNativeLocation(value), getStructSize());
-        return null;
-    }
-
-    @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMAddress address, LLVMGlobalVariable value,
-                    @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        memMove.executeWithTarget(frame, address, globalAccess.getNativeLocation(value), getStructSize());
-        return null;
-    }
-
-    @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMGlobalVariable address, LLVMAddress value,
-                    @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        memMove.executeWithTarget(frame, globalAccess.getNativeLocation(address), value, getStructSize());
-        return null;
-    }
-
-    @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMAddress address, LLVMAddress value) {
-        memMove.executeWithTarget(frame, address, value, getStructSize());
-        return null;
     }
 
     @SuppressWarnings("unused")
     @Specialization(guards = "getStructSize() == 0")
-    protected Object noCopy(LLVMAddress address, Object value) {
-        return null;
+    protected void noCopy(Object address, Object value) {
+        // nothing to do
     }
 
-    @Specialization
-    protected Object doTruffleObject(VirtualFrame frame, LLVMTruffleObject address, LLVMTruffleObject value) {
-        memMove.executeWithTarget(frame, address, value, getStructSize());
-        return null;
+    @Specialization(guards = "getStructSize() > 0")
+    protected void doOp(LLVMGlobal address, LLVMGlobal value,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess1,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess2) {
+        memMove.executeWithTarget(globalAccess1.executeWithTarget(address), globalAccess2.executeWithTarget(value), getStructSize());
+    }
+
+    @Specialization(guards = "getStructSize() > 0")
+    protected void doOp(LLVMNativePointer addr, LLVMGlobal value,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+        memMove.executeWithTarget(addr, globalAccess.executeWithTarget(value), getStructSize());
+    }
+
+    @Specialization(guards = "getStructSize() > 0")
+    protected void doOp(LLVMGlobal address, LLVMPointer value,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+        memMove.executeWithTarget(globalAccess.executeWithTarget(address), value, getStructSize());
+    }
+
+    @Specialization(guards = {"getStructSize() > 0", "!isAutoDerefHandle(address)", "!isAutoDerefHandle(value)"})
+    protected void doOp(LLVMNativePointer address, LLVMNativePointer value) {
+        memMove.executeWithTarget(address, value, getStructSize());
+    }
+
+    @Specialization(guards = {"getStructSize() > 0", "isAutoDerefHandle(addr)", "isAutoDerefHandle(value)"})
+    protected void doOpDerefHandle(LLVMNativePointer addr, LLVMNativePointer value) {
+        doManaged(getDerefHandleGetReceiverNode().execute(addr), getDerefHandleGetReceiverNode().execute(value));
+    }
+
+    @Specialization(guards = "getStructSize() > 0")
+    protected void doManaged(LLVMManagedPointer address, LLVMManagedPointer value) {
+        memMove.executeWithTarget(address, value, getStructSize());
     }
 }

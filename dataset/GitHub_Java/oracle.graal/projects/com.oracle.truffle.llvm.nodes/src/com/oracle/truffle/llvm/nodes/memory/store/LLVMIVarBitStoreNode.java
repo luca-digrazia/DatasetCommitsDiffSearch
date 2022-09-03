@@ -29,10 +29,12 @@
  */
 package com.oracle.truffle.llvm.nodes.memory.store;
 
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
@@ -44,6 +46,12 @@ public abstract class LLVMIVarBitStoreNode extends LLVMStoreNodeCommon {
 
     public LLVMIVarBitStoreNode(LLVMSourceLocation sourceLocation) {
         super(sourceLocation);
+    }
+
+    @Specialization
+    protected void doOp(LLVMGlobal address, LLVMIVarBit value,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+        getLLVMMemoryCached().putIVarBit(globalAccess.executeWithTarget(address), value);
     }
 
     @Specialization(guards = "!isAutoDerefHandle(addr)")
@@ -61,8 +69,13 @@ public abstract class LLVMIVarBitStoreNode extends LLVMStoreNodeCommon {
         byte[] bytes = value.getBytes();
         LLVMManagedPointer currentPtr = address;
         for (int i = bytes.length - 1; i >= 0; i--) {
-            getForeignWriteNode(ForeignToLLVMType.I8).execute(currentPtr, bytes[i]);
+            getForeignWriteNode().execute(currentPtr, bytes[i]);
             currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
         }
+    }
+
+    @Override
+    protected LLVMForeignWriteNode createForeignWrite() {
+        return LLVMForeignWriteNodeGen.create();
     }
 }

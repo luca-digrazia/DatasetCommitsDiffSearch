@@ -29,43 +29,50 @@
  */
 package com.oracle.truffle.llvm.nodes.others;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.llvm.context.LLVMContext;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.types.memory.LLVMStack;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
 public class LLVMStaticInitsBlockNode extends RootNode {
 
-    @Children private final LLVMNode[] nodes;
-    private final FrameSlot stackSlot;
-    private final LLVMStack stack;
+    @Children private final LLVMStatementNode[] nodes;
 
-    public LLVMStaticInitsBlockNode(LLVMNode[] nodes, FrameDescriptor descriptor, LLVMContext llvmContext, FrameSlot stackSlot) {
-        super(LLVMLanguage.class, null, descriptor);
+    public LLVMStaticInitsBlockNode(LLVMLanguage language, LLVMStatementNode[] nodes, FrameDescriptor descriptor) {
+        super(language, descriptor);
+        assert nodes.length > 0;
         this.nodes = nodes;
-        this.stackSlot = stackSlot;
-        stack = llvmContext.getStack();
+    }
 
+    @CompilationFinal private FrameSlot stackPointerSlot;
+
+    private FrameSlot getStackPointerSlot() {
+        if (stackPointerSlot == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            stackPointerSlot = getRootNode().getFrameDescriptor().findFrameSlot(LLVMStack.FRAME_ID);
+            assert stackPointerSlot != null;
+        }
+        return stackPointerSlot;
     }
 
     @ExplodeLoop
     @Override
     public Object execute(VirtualFrame frame) {
-        frame.setObject(stackSlot, stack.getUpperBounds());
-        for (LLVMNode node : nodes) {
-            node.executeVoid(frame);
+        frame.setObject(getStackPointerSlot(), frame.getArguments()[0]);
+        for (LLVMStatementNode node : nodes) {
+            node.execute(frame);
         }
         return null;
     }
 
     @Override
     public String toString() {
-        return "static inits (" + nodes.length + ")";
+        return "staticInits[" + nodes.length + "]";
     }
-
 }

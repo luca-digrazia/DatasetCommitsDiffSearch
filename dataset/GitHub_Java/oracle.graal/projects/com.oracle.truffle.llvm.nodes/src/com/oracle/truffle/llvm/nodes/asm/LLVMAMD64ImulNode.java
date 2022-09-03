@@ -35,179 +35,185 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64UpdateFlagsNode;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteBooleanNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI16RegisterNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI32RegisterNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI64RegisterNode;
+import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteTupelNode;
+import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteValueNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.nodes.asm.support.LongMultiplication;
 
-public abstract class LLVMAMD64ImulNode extends LLVMExpressionNode {
-    @Child protected LLVMAMD64WriteBooleanNode cf;
-    @Child protected LLVMAMD64WriteBooleanNode pf;
-    @Child protected LLVMAMD64WriteBooleanNode af;
-    @Child protected LLVMAMD64WriteBooleanNode zf;
-    @Child protected LLVMAMD64WriteBooleanNode sf;
-    @Child protected LLVMAMD64WriteBooleanNode of;
+public abstract class LLVMAMD64ImulNode extends LLVMStatementNode {
+    @Child protected LLVMAMD64WriteBooleanNode writeCFNode;
+    @Child protected LLVMAMD64WriteBooleanNode writePFNode;
+    @Child protected LLVMAMD64WriteBooleanNode writeAFNode;
+    @Child protected LLVMAMD64WriteBooleanNode writeZFNode;
+    @Child protected LLVMAMD64WriteBooleanNode writeSFNode;
+    @Child protected LLVMAMD64WriteBooleanNode writeOFNode;
 
     protected void setFlags(VirtualFrame frame, byte value, boolean overflow, boolean sign) {
-        cf.execute(frame, overflow);
-        pf.execute(frame, LLVMAMD64UpdateFlagsNode.getParity(value));
-        af.execute(frame, false);
-        zf.execute(frame, false);
-        sf.execute(frame, sign);
-        of.execute(frame, overflow);
+        writeCFNode.execute(frame, overflow);
+        writePFNode.execute(frame, LLVMAMD64UpdateFlagsNode.getParity(value));
+        writeAFNode.execute(frame, false);
+        writeZFNode.execute(frame, false);
+        writeSFNode.execute(frame, sign);
+        writeOFNode.execute(frame, overflow);
     }
 
-    public LLVMAMD64ImulNode(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                    LLVMAMD64WriteBooleanNode of) {
-        this.cf = cf;
-        this.pf = pf;
-        this.af = af;
-        this.zf = zf;
-        this.sf = sf;
-        this.of = of;
+    public LLVMAMD64ImulNode(LLVMAMD64WriteBooleanNode writeCFNode, LLVMAMD64WriteBooleanNode writePFNode, LLVMAMD64WriteBooleanNode writeAFNode, LLVMAMD64WriteBooleanNode writeZFNode,
+                    LLVMAMD64WriteBooleanNode writeSFNode, LLVMAMD64WriteBooleanNode writeOFNode) {
+        this.writeCFNode = writeCFNode;
+        this.writePFNode = writePFNode;
+        this.writeAFNode = writeAFNode;
+        this.writeZFNode = writeZFNode;
+        this.writeSFNode = writeSFNode;
+        this.writeOFNode = writeOFNode;
     }
 
     @NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
     public abstract static class LLVMAMD64ImulbNode extends LLVMAMD64ImulNode {
-        public LLVMAMD64ImulbNode(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                        LLVMAMD64WriteBooleanNode of) {
-            super(cf, pf, af, zf, sf, of);
+        @Child private LLVMAMD64WriteValueNode out;
+
+        public LLVMAMD64ImulbNode(LLVMAMD64WriteBooleanNode writeCFNode, LLVMAMD64WriteBooleanNode writePFNode, LLVMAMD64WriteBooleanNode writeAFNode, LLVMAMD64WriteBooleanNode writeZFNode,
+                        LLVMAMD64WriteBooleanNode writeSFNode, LLVMAMD64WriteBooleanNode writeOFNode, LLVMAMD64WriteValueNode out) {
+            super(writeCFNode, writePFNode, writeAFNode, writeZFNode, writeSFNode, writeOFNode);
+            this.out = out;
         }
 
         @Specialization
-        protected short executeI8(VirtualFrame frame, byte left, byte right) {
+        protected void doOp(VirtualFrame frame, byte left, byte right) {
             short value = (short) (left * right);
             byte valueb = (byte) value;
             boolean overflow = valueb != value;
             boolean sign = valueb < 0;
             setFlags(frame, valueb, overflow, sign);
-            return value;
+            out.execute(frame, value);
         }
     }
 
     @NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
     public abstract static class LLVMAMD64ImulwNode extends LLVMAMD64ImulNode {
-        @Child private LLVMAMD64WriteI16RegisterNode high;
+        @Child private LLVMAMD64WriteTupelNode out;
 
-        public LLVMAMD64ImulwNode(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                        LLVMAMD64WriteBooleanNode of, LLVMAMD64WriteI16RegisterNode high) {
-            super(cf, pf, af, zf, sf, of);
-            this.high = high;
+        public LLVMAMD64ImulwNode(LLVMAMD64WriteBooleanNode writeCFNode, LLVMAMD64WriteBooleanNode writePFNode, LLVMAMD64WriteBooleanNode writeAFNode, LLVMAMD64WriteBooleanNode writeZFNode,
+                        LLVMAMD64WriteBooleanNode writeSFNode, LLVMAMD64WriteBooleanNode writeOFNode, LLVMAMD64WriteTupelNode out) {
+            super(writeCFNode, writePFNode, writeAFNode, writeZFNode, writeSFNode, writeOFNode);
+            this.out = out;
         }
 
         @Specialization
-        protected short executeI16(VirtualFrame frame, short left, short right) {
+        protected void doOp(VirtualFrame frame, short left, short right) {
             int value = left * right;
             short hi = (short) (value >> LLVMExpressionNode.I16_SIZE_IN_BITS);
             short valuew = (short) value;
             boolean overflow = valuew != value;
             boolean sign = valuew < 0;
             setFlags(frame, (byte) value, overflow, sign);
-            high.execute(frame, hi);
-            return valuew;
+            out.execute(frame, valuew, hi);
         }
     }
 
     @NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
     public abstract static class LLVMAMD64Imulw3Node extends LLVMAMD64ImulNode {
+        @Child private LLVMAMD64WriteValueNode out;
 
-        public LLVMAMD64Imulw3Node(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                        LLVMAMD64WriteBooleanNode of) {
-            super(cf, pf, af, zf, sf, of);
+        public LLVMAMD64Imulw3Node(LLVMAMD64WriteBooleanNode writeCFNode, LLVMAMD64WriteBooleanNode writePFNode, LLVMAMD64WriteBooleanNode writeAFNode, LLVMAMD64WriteBooleanNode writeZFNode,
+                        LLVMAMD64WriteBooleanNode writeSFNode, LLVMAMD64WriteBooleanNode writeOFNode, LLVMAMD64WriteValueNode out) {
+            super(writeCFNode, writePFNode, writeAFNode, writeZFNode, writeSFNode, writeOFNode);
+            this.out = out;
         }
 
         @Specialization
-        protected short executeI16(VirtualFrame frame, short left, short right) {
+        protected void doI16(VirtualFrame frame, short left, short right) {
             int value = left * right;
             short valuew = (short) value;
             boolean overflow = valuew != value;
             boolean sign = valuew < 0;
             setFlags(frame, (byte) value, overflow, sign);
-            return valuew;
+            out.execute(frame, value);
         }
     }
 
     @NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
     public abstract static class LLVMAMD64ImullNode extends LLVMAMD64ImulNode {
-        @Child private LLVMAMD64WriteI32RegisterNode high;
+        @Child private LLVMAMD64WriteTupelNode out;
 
-        public LLVMAMD64ImullNode(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                        LLVMAMD64WriteBooleanNode of, LLVMAMD64WriteI32RegisterNode high) {
-            super(cf, pf, af, zf, sf, of);
-            this.high = high;
+        public LLVMAMD64ImullNode(LLVMAMD64WriteBooleanNode writeCFNode, LLVMAMD64WriteBooleanNode writePFNode, LLVMAMD64WriteBooleanNode writeAFNode, LLVMAMD64WriteBooleanNode writeZFNode,
+                        LLVMAMD64WriteBooleanNode writeSFNode, LLVMAMD64WriteBooleanNode writeOFNode, LLVMAMD64WriteTupelNode out) {
+            super(writeCFNode, writePFNode, writeAFNode, writeZFNode, writeSFNode, writeOFNode);
+            this.out = out;
         }
 
         @Specialization
-        protected int executeI32(VirtualFrame frame, int left, int right) {
+        protected void doOp(VirtualFrame frame, int left, int right) {
             long value = (long) left * (long) right;
             int hi = (int) (value >> LLVMExpressionNode.I32_SIZE_IN_BITS);
             int valuel = (int) value;
             boolean overflow = valuel != value;
             boolean sign = valuel < 0;
             setFlags(frame, (byte) value, overflow, sign);
-            high.execute(frame, hi);
-            return valuel;
+            out.execute(frame, valuel, hi);
         }
     }
 
     @NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
     public abstract static class LLVMAMD64Imull3Node extends LLVMAMD64ImulNode {
+        @Child private LLVMAMD64WriteValueNode out;
 
-        public LLVMAMD64Imull3Node(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                        LLVMAMD64WriteBooleanNode of) {
-            super(cf, pf, af, zf, sf, of);
+        public LLVMAMD64Imull3Node(LLVMAMD64WriteBooleanNode writeCFNode, LLVMAMD64WriteBooleanNode writePFNode, LLVMAMD64WriteBooleanNode writeAFNode, LLVMAMD64WriteBooleanNode writeZFNode,
+                        LLVMAMD64WriteBooleanNode writeSFNode, LLVMAMD64WriteBooleanNode writeOFNode, LLVMAMD64WriteValueNode out) {
+            super(writeCFNode, writePFNode, writeAFNode, writeZFNode, writeSFNode, writeOFNode);
+            this.out = out;
         }
 
         @Specialization
-        protected int executeI32(VirtualFrame frame, int left, int right) {
+        protected void doI32(VirtualFrame frame, int left, int right) {
             long value = (long) left * (long) right;
             int valuel = (int) value;
             boolean overflow = valuel != value;
             boolean sign = valuel < 0;
             setFlags(frame, (byte) value, overflow, sign);
-            return valuel;
+            out.execute(frame, valuel);
         }
     }
 
     @NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
     public abstract static class LLVMAMD64ImulqNode extends LLVMAMD64ImulNode {
-        @Child private LLVMAMD64WriteI64RegisterNode high;
+        @Child private LLVMAMD64WriteTupelNode out;
 
-        public LLVMAMD64ImulqNode(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                        LLVMAMD64WriteBooleanNode of, LLVMAMD64WriteI64RegisterNode high) {
-            super(cf, pf, af, zf, sf, of);
-            this.high = high;
+        public LLVMAMD64ImulqNode(LLVMAMD64WriteBooleanNode writeCFNode, LLVMAMD64WriteBooleanNode writePFNode, LLVMAMD64WriteBooleanNode writeAFNode, LLVMAMD64WriteBooleanNode writeZFNode,
+                        LLVMAMD64WriteBooleanNode writeSFNode, LLVMAMD64WriteBooleanNode writeOFNode, LLVMAMD64WriteTupelNode out) {
+            super(writeCFNode, writePFNode, writeAFNode, writeZFNode, writeSFNode, writeOFNode);
+            this.out = out;
         }
 
         @Specialization
-        protected long executeI64(VirtualFrame frame, long left, long right) {
+        protected void doOp(VirtualFrame frame, long left, long right) {
             long value = left * right;
             long hi = LongMultiplication.multiplyHigh(left, right);
             boolean overflow = !(value < 0 && hi == -1) && !(value > 0 && hi == 0);
             boolean sign = value < 0;
             setFlags(frame, (byte) value, overflow, sign);
-            high.execute(frame, hi);
-            return value;
+            out.execute(frame, value, hi);
         }
     }
 
     @NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
     public abstract static class LLVMAMD64Imulq3Node extends LLVMAMD64ImulNode {
+        @Child private LLVMAMD64WriteValueNode out;
 
-        public LLVMAMD64Imulq3Node(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                        LLVMAMD64WriteBooleanNode of) {
-            super(cf, pf, af, zf, sf, of);
+        public LLVMAMD64Imulq3Node(LLVMAMD64WriteBooleanNode writeCFNode, LLVMAMD64WriteBooleanNode writePFNode, LLVMAMD64WriteBooleanNode writeAFNode, LLVMAMD64WriteBooleanNode writeZFNode,
+                        LLVMAMD64WriteBooleanNode writeSFNode, LLVMAMD64WriteBooleanNode writeOFNode, LLVMAMD64WriteValueNode out) {
+            super(writeCFNode, writePFNode, writeAFNode, writeZFNode, writeSFNode, writeOFNode);
+            this.out = out;
         }
 
         @Specialization
-        protected long executeI64(VirtualFrame frame, long left, long right) {
+        protected void doI64(VirtualFrame frame, long left, long right) {
             long value = left * right;
             long hi = LongMultiplication.multiplyHigh(left, right);
             boolean overflow = !(value < 0 && hi == -1) && !(value > 0 && hi == 0);
             boolean sign = value < 0;
             setFlags(frame, (byte) value, overflow, sign);
-            return value;
+            out.execute(frame, value);
         }
     }
 }

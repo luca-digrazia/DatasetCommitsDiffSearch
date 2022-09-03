@@ -35,23 +35,21 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64Flags;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteBooleanNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-public abstract class LLVMAMD64StoreFlags extends LLVMExpressionNode {
+public abstract class LLVMAMD64StoreFlags extends LLVMStatementNode {
     @Child protected LLVMAMD64WriteBooleanNode cf;
     @Child protected LLVMAMD64WriteBooleanNode pf;
     @Child protected LLVMAMD64WriteBooleanNode af;
     @Child protected LLVMAMD64WriteBooleanNode zf;
     @Child protected LLVMAMD64WriteBooleanNode sf;
-    @Child protected LLVMAMD64WriteBooleanNode of;
 
-    public LLVMAMD64StoreFlags(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                    LLVMAMD64WriteBooleanNode of) {
+    public LLVMAMD64StoreFlags(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf) {
         this.cf = cf;
         this.pf = pf;
         this.af = af;
         this.zf = zf;
         this.sf = sf;
-        this.of = of;
     }
 
     protected static boolean set(long value, long flag) {
@@ -60,38 +58,38 @@ public abstract class LLVMAMD64StoreFlags extends LLVMExpressionNode {
 
     @NodeChild(value = "flags", type = LLVMExpressionNode.class)
     public abstract static class LLVMAMD64SahfNode extends LLVMAMD64StoreFlags {
-        public LLVMAMD64SahfNode(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
-                        LLVMAMD64WriteBooleanNode of) {
-            super(cf, pf, af, zf, sf, of);
+        public LLVMAMD64SahfNode(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf) {
+            super(cf, pf, af, zf, sf);
         }
 
         @Specialization
-        protected Object executeObject(VirtualFrame frame, byte flags) {
+        protected void doObject(VirtualFrame frame, byte flags) {
             cf.execute(frame, set(flags, LLVMAMD64Flags.CF));
             pf.execute(frame, set(flags, LLVMAMD64Flags.PF));
             af.execute(frame, set(flags, LLVMAMD64Flags.AF));
             zf.execute(frame, set(flags, LLVMAMD64Flags.ZF));
             sf.execute(frame, set(flags, LLVMAMD64Flags.SF));
-            return null;
         }
     }
 
     @NodeChild(value = "flags", type = LLVMExpressionNode.class)
     public abstract static class LLVMAMD64WriteFlagswNode extends LLVMAMD64StoreFlags {
+        @Child protected LLVMAMD64WriteBooleanNode of;
+
         public LLVMAMD64WriteFlagswNode(LLVMAMD64WriteBooleanNode cf, LLVMAMD64WriteBooleanNode pf, LLVMAMD64WriteBooleanNode af, LLVMAMD64WriteBooleanNode zf, LLVMAMD64WriteBooleanNode sf,
                         LLVMAMD64WriteBooleanNode of) {
-            super(cf, pf, af, zf, sf, of);
+            super(cf, pf, af, zf, sf);
+            this.of = of;
         }
 
         @Specialization
-        protected Object executeObject(VirtualFrame frame, short flags) {
+        protected void doObject(VirtualFrame frame, short flags) {
             cf.execute(frame, set(flags, LLVMAMD64Flags.CF));
             pf.execute(frame, set(flags, LLVMAMD64Flags.PF));
             af.execute(frame, set(flags, LLVMAMD64Flags.AF));
             zf.execute(frame, set(flags, LLVMAMD64Flags.ZF));
             sf.execute(frame, set(flags, LLVMAMD64Flags.SF));
             of.execute(frame, set(flags, LLVMAMD64Flags.OF));
-            return null;
         }
     }
 }

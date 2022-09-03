@@ -35,7 +35,8 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalWriteNode.WriteI16Node;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -51,6 +52,12 @@ public abstract class LLVMI16StoreNode extends LLVMStoreNodeCommon {
     }
 
     @Specialization
+    protected void doOp(LLVMGlobal address, short value,
+                    @Cached("create()") WriteI16Node globalAccess) {
+        globalAccess.execute(address, value);
+    }
+
+    @Specialization
     protected void doOp(LLVMVirtualAllocationAddress address, short value,
                     @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
         address.writeI16(memory, value);
@@ -63,7 +70,7 @@ public abstract class LLVMI16StoreNode extends LLVMStoreNodeCommon {
 
     @Specialization
     protected void doOpManaged(LLVMManagedPointer address, short value) {
-        getForeignWriteNode(ForeignToLLVMType.I16).execute(address, value);
+        getForeignWriteNode().execute(address, value);
     }
 
     @Specialization(guards = "isAutoDerefHandle(addr)")

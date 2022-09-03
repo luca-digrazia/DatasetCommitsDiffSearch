@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,51 +29,105 @@
  */
 package com.oracle.truffle.llvm.nodes.control;
 
-import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMTerminatorNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
+import com.oracle.truffle.api.instrumentation.GenerateWrapper;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode;
+import com.oracle.truffle.api.instrumentation.ProbeNode;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-@NodeChild(type = LLVMI1Node.class)
-public abstract class LLVMConditionalBranchNode extends LLVMTerminatorNode {
+@GenerateWrapper
+public abstract class LLVMConditionalBranchNode extends LLVMControlFlowNode implements InstrumentableNode {
 
-    @Children final LLVMNode[] truePhiWriteNodes;
-    @Children final LLVMNode[] falsePhiWriteNodes;
+    public static LLVMConditionalBranchNode create(int trueSuccessor, int falseSuccessor, LLVMStatementNode truePhi, LLVMStatementNode falsePhi, LLVMExpressionNode condition,
+                    LLVMSourceLocation sourceSection) {
+        return new LLVMConditionalBranchNodeImpl(trueSuccessor, falseSuccessor, truePhi, falsePhi, condition, sourceSection);
+    }
 
     public static final int TRUE_SUCCESSOR = 0;
     public static final int FALSE_SUCCESSOR = 1;
 
-    public LLVMConditionalBranchNode(int trueSuccessor, int falseSuccessor, LLVMNode[] truePhiWriteNodes, LLVMNode[] falsePhiWriteNodes) {
-        super(trueSuccessor, falseSuccessor);
-        this.truePhiWriteNodes = truePhiWriteNodes;
-        this.falsePhiWriteNodes = falsePhiWriteNodes;
+    public LLVMConditionalBranchNode(LLVMSourceLocation sourceSection) {
+        super(sourceSection);
     }
 
-    // TODO find a better name
-    public abstract static class LLVMBrConditionalNode extends LLVMConditionalBranchNode {
+    protected LLVMConditionalBranchNode(LLVMConditionalBranchNode delegate) {
+        super(delegate.getSourceLocation());
+    }
 
-        public LLVMBrConditionalNode(int trueSuccessor, int falseSuccessor, LLVMNode[] truePhiWriteNodes, LLVMNode[] falsePhiWriteNodes) {
-            super(trueSuccessor, falseSuccessor, truePhiWriteNodes, falsePhiWriteNodes);
+    @Override
+    public WrapperNode createWrapper(ProbeNode probe) {
+        return new LLVMConditionalBranchNodeWrapper(this, this, probe);
+    }
+
+    @Override
+    public boolean isInstrumentable() {
+        return getSourceLocation() != null;
+    }
+
+    public abstract boolean executeCondition(VirtualFrame frame);
+
+    public abstract int getTrueSuccessor();
+
+    public abstract int getFalseSuccessor();
+
+    private static final class LLVMConditionalBranchNodeImpl extends LLVMConditionalBranchNode {
+
+        @Child private LLVMExpressionNode condition;
+        @Child private LLVMStatementNode truePhi;
+        @Child private LLVMStatementNode falsePhi;
+        private final int trueSuccessor;
+        private final int falseSuccessor;
+
+        private LLVMConditionalBranchNodeImpl(int trueSuccessor, int falseSuccessor, LLVMStatementNode truePhi, LLVMStatementNode falsePhi, LLVMExpressionNode condition,
+                        LLVMSourceLocation sourceSection) {
+            super(sourceSection);
+            this.trueSuccessor = trueSuccessor;
+            this.falseSuccessor = falseSuccessor;
+            this.truePhi = truePhi;
+            this.falsePhi = falsePhi;
+            this.condition = condition;
         }
 
-        @ExplodeLoop
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, boolean condition) {
-            if (condition) {
-                for (int i = 0; i < truePhiWriteNodes.length; i++) {
-                    truePhiWriteNodes[i].executeVoid(frame);
-                }
-                return TRUE_SUCCESSOR;
+        @Override
+        public int getSuccessorCount() {
+            return 2;
+        }
+
+        @Override
+        public LLVMStatementNode getPhiNode(int successorIndex) {
+            CompilerAsserts.partialEvaluationConstant(successorIndex);
+            if (successorIndex == TRUE_SUCCESSOR) {
+                return truePhi;
             } else {
-                for (int i = 0; i < falsePhiWriteNodes.length; i++) {
-                    falsePhiWriteNodes[i].executeVoid(frame);
-                }
-                return FALSE_SUCCESSOR;
+                assert successorIndex == FALSE_SUCCESSOR;
+                return falsePhi;
             }
         }
-    }
 
+        @Override
+        public boolean executeCondition(VirtualFrame frame) {
+            try {
+                return condition.executeI1(frame);
+            } catch (UnexpectedResultException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
+            }
+        }
+
+        @Override
+        public int getTrueSuccessor() {
+            return trueSuccessor;
+        }
+
+        @Override
+        public int getFalseSuccessor() {
+            return falseSuccessor;
+        }
+    }
 }

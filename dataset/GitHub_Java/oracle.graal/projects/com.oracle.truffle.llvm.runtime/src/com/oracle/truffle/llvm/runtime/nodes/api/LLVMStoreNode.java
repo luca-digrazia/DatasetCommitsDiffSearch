@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -27,37 +27,13 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.nodes.asm;
+package com.oracle.truffle.llvm.runtime.nodes.api;
 
-import com.oracle.truffle.api.debug.DebuggerTags;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.Tag;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
+import com.oracle.truffle.api.dsl.NodeChild;
 
-public class LLVMAMD64BreakpointNode extends LLVMStatementNode {
-    private final LLVMSourceLocation source;
+@NodeChild(value = "address", type = LLVMExpressionNode.class)
+@NodeChild(value = "value", type = LLVMExpressionNode.class)
+public abstract class LLVMStoreNode extends LLVMStatementNode {
 
-    public LLVMAMD64BreakpointNode(LLVMSourceLocation source) {
-        this.source = source;
-    }
-
-    @Override
-    public void execute(VirtualFrame frame) {
-        // nothing to do
-    }
-
-    @Override
-    public LLVMSourceLocation getSourceLocation() {
-        return source;
-    }
-
-    @Override
-    public boolean hasTag(Class<? extends Tag> tag) {
-        if (tag == DebuggerTags.AlwaysHalt.class) {
-            return true;
-        } else {
-            return super.hasTag(tag);
-        }
-    }
+    public abstract void executeWithTarget(Object address, Object value);
 }

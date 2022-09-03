@@ -35,7 +35,8 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalWriteNode.WriteI64Node;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
@@ -49,6 +50,12 @@ public abstract class LLVMI64StoreNode extends LLVMStoreNodeCommon {
 
     public LLVMI64StoreNode(LLVMSourceLocation sourceLocation) {
         super(sourceLocation);
+    }
+
+    @Specialization
+    protected void doOp(LLVMGlobal address, long value,
+                    @Cached("create()") WriteI64Node globalAccess) {
+        globalAccess.execute(address, value);
     }
 
     @Specialization(guards = "!isAutoDerefHandle(address)")
@@ -78,9 +85,13 @@ public abstract class LLVMI64StoreNode extends LLVMStoreNodeCommon {
         address.writeI64(memory, value);
     }
 
+    protected static LLVMI64StoreNode createRecursive() {
+        return LLVMI64StoreNodeGen.create(null, null);
+    }
+
     @Specialization
     protected void doOpManaged(LLVMManagedPointer address, Object value) {
-        getForeignWriteNode(ForeignToLLVMType.I64).execute(address, value);
+        getForeignWriteNode().execute(address, value);
     }
 
     @Specialization

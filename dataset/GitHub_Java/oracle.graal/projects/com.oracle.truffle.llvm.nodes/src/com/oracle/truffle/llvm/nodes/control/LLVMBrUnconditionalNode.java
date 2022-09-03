@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,31 +29,72 @@
  */
 package com.oracle.truffle.llvm.nodes.control;
 
-import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMBasicBlockNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMTerminatorNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
+import com.oracle.truffle.api.instrumentation.GenerateWrapper;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode;
+import com.oracle.truffle.api.instrumentation.ProbeNode;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-@NodeChild(type = LLVMI1Node.class)
-public class LLVMBrUnconditionalNode extends LLVMTerminatorNode {
+@GenerateWrapper
+public abstract class LLVMBrUnconditionalNode extends LLVMControlFlowNode implements InstrumentableNode {
 
-    @Children private final LLVMNode[] phiWrites;
-
-    public LLVMBrUnconditionalNode(int trueSuccessor, LLVMNode[] phiWrites) {
-        super(trueSuccessor);
-        this.phiWrites = phiWrites;
+    public static LLVMBrUnconditionalNode create(int successor, LLVMStatementNode phi, LLVMSourceLocation sourceSection) {
+        return new LLVMBrUnconditionalNodeImpl(successor, phi, sourceSection);
     }
 
-    @ExplodeLoop
+    protected LLVMBrUnconditionalNode(LLVMBrUnconditionalNode delegate) {
+        super(delegate.getSourceLocation());
+    }
+
+    public LLVMBrUnconditionalNode(LLVMSourceLocation source) {
+        super(source);
+    }
+
     @Override
-    public int executeGetSuccessorIndex(VirtualFrame frame) {
-        for (LLVMNode node : phiWrites) {
-            node.executeVoid(frame);
-        }
-        return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+    public WrapperNode createWrapper(ProbeNode probe) {
+        return new LLVMBrUnconditionalNodeWrapper(this, this, probe);
     }
 
+    @Override
+    public boolean isInstrumentable() {
+        return getSourceLocation() != null;
+    }
+
+    public abstract int getSuccessor();
+
+    // we need an execute method so the node can be properly instrumented
+    public abstract void execute(VirtualFrame frame);
+
+    private static final class LLVMBrUnconditionalNodeImpl extends LLVMBrUnconditionalNode {
+        @Child private LLVMStatementNode phi;
+        private final int successor;
+
+        private LLVMBrUnconditionalNodeImpl(int successor, LLVMStatementNode phi, LLVMSourceLocation sourceSection) {
+            super(sourceSection);
+            this.successor = successor;
+            this.phi = phi;
+        }
+
+        @Override
+        public int getSuccessorCount() {
+            return 1;
+        }
+
+        @Override
+        public LLVMStatementNode getPhiNode(int successorIndex) {
+            assert successorIndex == 0;
+            return phi;
+        }
+
+        @Override
+        public int getSuccessor() {
+            return successor;
+        }
+
+        @Override
+        public void execute(VirtualFrame frame) {
+        }
+    }
 }

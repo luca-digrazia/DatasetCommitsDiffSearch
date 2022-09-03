@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -116,7 +116,7 @@ public abstract class LLVMWriteNode extends LLVMStatementNode {
     public abstract static class LLVMWriteI64Node extends LLVMWriteNode {
         @Specialization
         protected void writeI64(VirtualFrame frame, long value) {
-            if (frame.getFrameDescriptor().getFrameSlotKind(getSlot()) == FrameSlotKind.Long) {
+            if (getSlot().getKind() == FrameSlotKind.Long) {
                 frame.setLong(getSlot(), value);
             } else {
                 frame.setObject(getSlot(), value);
@@ -125,9 +125,9 @@ public abstract class LLVMWriteNode extends LLVMStatementNode {
 
         @Specialization(replaces = "writeI64")
         protected void writePointer(VirtualFrame frame, Object value) {
-            if (frame.getFrameDescriptor().getFrameSlotKind(getSlot()) == FrameSlotKind.Long) {
+            if (getSlot().getKind() == FrameSlotKind.Long) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Object);
+                getSlot().setKind(FrameSlotKind.Object);
             }
             frame.setObject(getSlot(), value);
         }

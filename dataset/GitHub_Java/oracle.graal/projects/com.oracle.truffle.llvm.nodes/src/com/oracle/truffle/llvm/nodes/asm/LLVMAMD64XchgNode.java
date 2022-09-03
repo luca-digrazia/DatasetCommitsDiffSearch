@@ -33,67 +33,59 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI16RegisterNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI32RegisterNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI64RegisterNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteRegisterNode.LLVMAMD64WriteI8RegisterNode;
+import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteTupelNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-@NodeChildren({@NodeChild("left"), @NodeChild("right")})
-public abstract class LLVMAMD64XchgNode extends LLVMExpressionNode {
+@NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
+public abstract class LLVMAMD64XchgNode extends LLVMStatementNode {
+    @Child protected LLVMAMD64WriteTupelNode out;
+
+    public LLVMAMD64XchgNode(LLVMAMD64WriteTupelNode out) {
+        this.out = out;
+    }
+
     public abstract static class LLVMAMD64XchgbNode extends LLVMAMD64XchgNode {
-        @Child private LLVMAMD64WriteI8RegisterNode out2;
-
-        public LLVMAMD64XchgbNode(LLVMAMD64WriteI8RegisterNode out2) {
-            this.out2 = out2;
+        public LLVMAMD64XchgbNode(LLVMAMD64WriteTupelNode out) {
+            super(out);
         }
 
         @Specialization
-        protected byte executeI8(VirtualFrame frame, byte a, byte b) {
-            out2.execute(frame, a);
-            return b;
+        protected void doOp(VirtualFrame frame, byte a, byte b) {
+            out.execute(frame, b, a);
         }
     }
 
     public abstract static class LLVMAMD64XchgwNode extends LLVMAMD64XchgNode {
-        @Child private LLVMAMD64WriteI16RegisterNode out2;
-
-        public LLVMAMD64XchgwNode(LLVMAMD64WriteI16RegisterNode out2) {
-            this.out2 = out2;
+        public LLVMAMD64XchgwNode(LLVMAMD64WriteTupelNode out) {
+            super(out);
         }
 
         @Specialization
-        protected short executeI16(VirtualFrame frame, short a, short b) {
-            out2.execute(frame, a);
-            return b;
+        protected void doOp(VirtualFrame frame, short a, short b) {
+            out.execute(frame, b, a);
         }
     }
 
     public abstract static class LLVMAMD64XchglNode extends LLVMAMD64XchgNode {
-        @Child private LLVMAMD64WriteI32RegisterNode out2;
-
-        public LLVMAMD64XchglNode(LLVMAMD64WriteI32RegisterNode out2) {
-            this.out2 = out2;
+        public LLVMAMD64XchglNode(LLVMAMD64WriteTupelNode out) {
+            super(out);
         }
 
         @Specialization
-        protected int executeI32(VirtualFrame frame, int a, int b) {
-            out2.execute(frame, a);
-            return b;
+        protected void doOp(VirtualFrame frame, int a, int b) {
+            out.execute(frame, b, a);
         }
     }
 
     public abstract static class LLVMAMD64XchgqNode extends LLVMAMD64XchgNode {
-        @Child private LLVMAMD64WriteI64RegisterNode out2;
-
-        public LLVMAMD64XchgqNode(LLVMAMD64WriteI64RegisterNode out2) {
-            this.out2 = out2;
+        public LLVMAMD64XchgqNode(LLVMAMD64WriteTupelNode out) {
+            super(out);
         }
 
         @Specialization
-        protected long executeI64(VirtualFrame frame, long a, long b) {
-            out2.execute(frame, a);
-            return b;
+        protected void doOp(VirtualFrame frame, long a, long b) {
+            out.execute(frame, b, a);
         }
     }
 }
