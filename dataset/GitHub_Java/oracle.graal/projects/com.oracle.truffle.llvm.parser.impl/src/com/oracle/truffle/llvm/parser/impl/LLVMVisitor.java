@@ -263,7 +263,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         List<GlobalVariable> staticVars = new ArrayList<>();
         functionToLabelMapping = new HashMap<>();
         setTargetInfo(objects);
-        allocateGlobalsAndAliases(this, objects);
+        allocateGlobals(this, objects);
         this.nativeLookup = new NativeLookup(facade);
         for (EObject object : objects) {
             if (object instanceof FunctionDef) {
@@ -287,7 +287,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
             } else if (object instanceof TypeDef) {
                 // do nothing
             } else if (object instanceof Alias) {
-                // do nothing
+                // do nothing, visit later when alias is referenced
             } else if (object instanceof InlineAsm) {
                 LLVMLogger.info("ignoring module level inline assembler!");
             } else {
@@ -307,24 +307,10 @@ public class LLVMVisitor implements LLVMParserRuntime {
         }
     }
 
-    private void allocateGlobalsAndAliases(LLVMVisitor visitor, List<EObject> objects) {
+    private static void allocateGlobals(LLVMVisitor visitor, List<EObject> objects) {
         for (EObject object : objects) {
             if (object instanceof GlobalVariable) {
                 visitor.findOrAllocateGlobal((GlobalVariable) object);
-            }
-            if (object instanceof Alias) {
-                Alias alias = (Alias) object;
-                GlobalValueDef aliasee = alias.getAliasee().getRef();
-                Object globalVar;
-                if (aliasee instanceof GlobalVariable) {
-                    globalVar = globalVars.get(aliasee);
-                } else if (aliasee instanceof Alias) {
-                    globalVar = aliases.get(aliasee);
-                } else {
-                    continue;
-                }
-                LLVMParserAsserts.assertNotNull(globalVar);
-                aliases.put(alias, globalVar);
             }
         }
     }
@@ -416,7 +402,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private final Map<GlobalVariable, Object> globalVars = new HashMap<>();
-    private final Map<Alias, Object> aliases = new HashMap<>();
     private final List<LLVMNode> globalDeallocations = new ArrayList<>();
     private boolean isGlobalScope;
 
@@ -1021,15 +1006,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
         if (aliaseeRef instanceof FunctionHeader) {
             LLVMFunctionDescriptor function = createLLVMFunctionFromHeader((FunctionHeader) aliaseeRef);
             return factoryFacade.createLiteral(function, LLVMBaseType.FUNCTION_ADDRESS);
-        } else if (aliaseeRef instanceof GlobalVariable) {
-            GlobalVariable originalVar = (GlobalVariable) aliaseeRef;
-            Object globalVar = globalVars.get(originalVar);
-            LLVMParserAsserts.assertNotNull(globalVar);
-            return factoryFacade.createLiteral(globalVar, LLVMBaseType.ADDRESS);
-        } else if (aliaseeRef instanceof Alias) {
-            Object globalVar = aliases.get(ref);
-            LLVMParserAsserts.assertNotNull(globalVar);
-            return factoryFacade.createLiteral(globalVar, LLVMBaseType.ADDRESS);
         } else {
             throw new AssertionError(aliaseeRef);
         }
