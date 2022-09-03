@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +22,6 @@
  */
 package org.graalvm.compiler.lir;
 
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.COMPOSITE;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.CONST;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.HINT;
@@ -37,6 +34,7 @@ import static org.graalvm.compiler.lir.LIRInstruction.OperandMode.ALIVE;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandMode.DEF;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandMode.TEMP;
 import static org.graalvm.compiler.lir.LIRValueUtil.isVirtualStackSlot;
+import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -46,6 +44,8 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.EnumSet;
 
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.DebugCounter;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.lir.StandardOp.LoadConstantOp;
 import org.graalvm.compiler.lir.StandardOp.MoveOp;
@@ -204,10 +204,13 @@ public abstract class LIRInstruction {
      */
     private NodeSourcePosition position;
 
+    private static final DebugCounter LIR_NODE_COUNT = Debug.counter("LIRNodes");
+
     /**
      * Constructs a new LIR instruction.
      */
     public LIRInstruction(LIRInstructionClass<? extends LIRInstruction> c) {
+        LIR_NODE_COUNT.increment();
         instructionClass = c;
         assert c.getClazz() == this.getClass();
         id = -1;
@@ -457,9 +460,5 @@ public abstract class LIRInstruction {
     @Override
     public int hashCode() {
         return id;
-    }
-
-    public boolean needsClearUpperVectorRegisters() {
-        return false;
     }
 }

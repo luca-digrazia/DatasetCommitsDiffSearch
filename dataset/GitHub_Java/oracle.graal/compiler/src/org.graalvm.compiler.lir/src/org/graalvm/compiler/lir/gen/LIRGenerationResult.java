@@ -22,10 +22,9 @@
  */
 package org.graalvm.compiler.lir.gen;
 
-import jdk.vm.ci.code.RegisterConfig;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.CompilationIdentifier.Verbosity;
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.framemap.FrameMap;
@@ -66,8 +65,7 @@ public class LIRGenerationResult {
      * Adds a comment to a {@link LIRInstruction}. Existing comments are replaced.
      */
     public final void setComment(LIRInstruction op, String comment) {
-        DebugContext debug = lir.getDebug();
-        if (debug.isDumpEnabled(DebugContext.BASIC_LEVEL)) {
+        if (Debug.isDumpEnabled(Debug.BASIC_LEVEL)) {
             if (comments == null) {
                 comments = EconomicMap.create(Equivalence.IDENTITY);
             }
@@ -122,10 +120,6 @@ public class LIRGenerationResult {
     public FrameMap getFrameMap() {
         assert frameMap != null : "getFrameMap() can only be used after calling buildFrameMap()!";
         return frameMap;
-    }
-
-    public final RegisterConfig getRegisterConfig() {
-        return frameMapBuilder.getRegisterConfig();
     }
 
     public LIR getLIR() {
