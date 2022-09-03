@@ -511,8 +511,14 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         throw GraalError.unimplemented();
     }
 
+    /**
+     * @param zappedRegisters registers to be zapped
+     * @param zapValues values used for zapping
+     */
     @Override
-    public abstract SaveRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues);
+    public SaveRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues) {
+        return null;
+    }
 
     @Override
     public SaveRegistersOp createZapRegisters() {
