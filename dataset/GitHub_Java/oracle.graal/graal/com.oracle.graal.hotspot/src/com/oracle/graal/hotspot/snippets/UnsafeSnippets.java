@@ -28,356 +28,300 @@ import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.snippets.*;
-import com.oracle.graal.snippets.ClassSubstitution.*;
 
 /**
  * Snippets for {@link sun.misc.Unsafe} methods.
  */
 @ClassSubstitution(sun.misc.Unsafe.class)
 public class UnsafeSnippets implements SnippetsInterface {
-    @MethodSubstitution(isStatic = false)
-    public static boolean compareAndSwapObject(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, Object expected, Object x) {
+
+    public boolean compareAndSwapObject(Object o, long offset, Object expected, Object x) {
         return CompareAndSwapNode.compareAndSwap(o, 0, offset, expected, x);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static boolean compareAndSwapInt(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, int expected, int x) {
+    public boolean compareAndSwapInt(Object o, long offset, int expected, int x) {
         return CompareAndSwapNode.compareAndSwap(o, 0, offset, expected, x);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static boolean compareAndSwapLong(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, long expected, long x) {
+    public boolean compareAndSwapLong(Object o, long offset, long expected, long x) {
         return CompareAndSwapNode.compareAndSwap(o, 0, offset, expected, x);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static Object getObject(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public Object getObject(Object o, long offset) {
         return UnsafeLoadNode.load(o, 0, offset, Kind.Object);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static Object getObjectVolatile(final Object thisObj, Object o, long offset) {
+    public Object getObjectVolatile(Object o, long offset) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
-        Object result = getObject(thisObj, o, offset);
+        Object result = getObject(o, offset);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putObject(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, Object x) {
+    public void putObject(Object o, long offset, Object x) {
         UnsafeStoreNode.store(o, 0, offset, x, Kind.Object);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putObjectVolatile(final Object thisObj, Object o, long offset, Object x) {
+    public void putObjectVolatile(Object o, long offset, Object x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
-        putObject(thisObj, o, offset, x);
+        putObject(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putOrderedObject(final Object thisObj, Object o, long offset, Object x) {
+    public void putOrderedObject(Object o, long offset, Object x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
-        putObject(thisObj, o, offset, x);
+        putObject(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static int getInt(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public int getInt(Object o, long offset) {
         Integer value = UnsafeLoadNode.load(o, 0, offset, Kind.Int);
         return value;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static int getIntVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public int getIntVolatile(Object o, long offset) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         int result = getInt(o, offset);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putInt(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, int x) {
+    public void putInt(Object o, long offset, int x) {
         UnsafeStoreNode.store(o, 0, offset, x, Kind.Int);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putIntVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, int x) {
+    public void putIntVolatile(Object o, long offset, int x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putInt(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putOrderedInt(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, int x) {
+    public void putOrderedInt(Object o, long offset, int x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putInt(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static boolean getBoolean(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public boolean getBoolean(Object o, long offset) {
         @JavacBug(id = 6995200)
         Boolean result = UnsafeLoadNode.load(o, 0, offset, Kind.Boolean);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static boolean getBooleanVolatile(final Object thisObj, Object o, long offset) {
+    public boolean getBooleanVolatile(Object o, long offset) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
-        boolean result = getBoolean(thisObj, o, offset);
+        boolean result = getBoolean(o, offset);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putBoolean(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, boolean x) {
+    public void putBoolean(Object o, long offset, boolean x) {
         UnsafeStoreNode.store(o, 0, offset, x, Kind.Boolean);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putBooleanVolatile(final Object thisObj, Object o, long offset, boolean x) {
+    public void putBooleanVolatile(Object o, long offset, boolean x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
-        putBoolean(thisObj, o, offset, x);
+        putBoolean(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static byte getByte(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public byte getByte(Object o, long offset) {
         @JavacBug(id = 6995200)
         Byte result = UnsafeLoadNode.load(o, 0, offset, Kind.Byte);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static byte getByteVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public byte getByteVolatile(Object o, long offset) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         byte result = getByte(o, offset);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putByte(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, byte x) {
+    public void putByte(Object o, long offset, byte x) {
         UnsafeStoreNode.store(o, 0, offset, x, Kind.Byte);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putByteVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, byte x) {
+    public void putByteVolatile(Object o, long offset, byte x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putByte(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static short getShort(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public short getShort(Object o, long offset) {
         @JavacBug(id = 6995200)
         Short result = UnsafeLoadNode.load(o, 0, offset, Kind.Short);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static short getShortVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public short getShortVolatile(Object o, long offset) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         short result = getShort(o, offset);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putShort(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, short x) {
+    public void putShort(Object o, long offset, short x) {
         UnsafeStoreNode.store(o, 0, offset, x, Kind.Short);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putShortVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, short x) {
+    public void putShortVolatile(Object o, long offset, short x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putShort(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static char getChar(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public char getChar(Object o, long offset) {
         @JavacBug(id = 6995200)
         Character result = UnsafeLoadNode.load(o, 0, offset, Kind.Char);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static char getCharVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public char getCharVolatile(Object o, long offset) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         char result = getChar(o, offset);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putChar(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, char x) {
+    public void putChar(Object o, long offset, char x) {
         UnsafeStoreNode.store(o, 0, offset, x, Kind.Char);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putCharVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, char x) {
+    public void putCharVolatile(Object o, long offset, char x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putChar(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static long getLong(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public long getLong(Object o, long offset) {
         @JavacBug(id = 6995200)
         Long result = UnsafeLoadNode.load(o, 0, offset, Kind.Long);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static long getLongVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public long getLongVolatile(Object o, long offset) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         long result = getLong(o, offset);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putLong(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, long x) {
+    public void putLong(Object o, long offset, long x) {
         UnsafeStoreNode.store(o, 0, offset, x, Kind.Long);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putLongVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, long x) {
+    public void putLongVolatile(Object o, long offset, long x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putLong(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putOrderedLong(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, long x) {
+    public void putOrderedLong(Object o, long offset, long x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putLong(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static float getFloat(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public float getFloat(Object o, long offset) {
         @JavacBug(id = 6995200)
         Float result = UnsafeLoadNode.load(o, 0, offset, Kind.Float);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static float getFloatVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public float getFloatVolatile(Object o, long offset) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         float result = getFloat(o, offset);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putFloat(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, float x) {
+    public void putFloat(Object o, long offset, float x) {
         UnsafeStoreNode.store(o, 0, offset, x, Kind.Float);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putFloatVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, float x) {
+    public void putFloatVolatile(Object o, long offset, float x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putFloat(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static double getDouble(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public double getDouble(Object o, long offset) {
         @JavacBug(id = 6995200)
         Double result = UnsafeLoadNode.load(o, 0, offset, Kind.Double);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static double getDoubleVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset) {
+    public double getDoubleVolatile(Object o, long offset) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         double result = getDouble(o, offset);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putDouble(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, double x) {
+    public void putDouble(Object o, long offset, double x) {
         UnsafeStoreNode.store(o, 0, offset, x, Kind.Double);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putDoubleVolatile(@SuppressWarnings("unused") final Object thisObj, Object o, long offset, double x) {
+    public void putDoubleVolatile(Object o, long offset, double x) {
         MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putDouble(o, offset, x);
         MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putByte(@SuppressWarnings("unused") final Object thisObj, long address, byte value) {
+    public void putByte(long address, byte value) {
         DirectStoreNode.store(address, value);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putShort(@SuppressWarnings("unused") final Object thisObj, long address, short value) {
+    public void putShort(long address, short value) {
         DirectStoreNode.store(address, value);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putChar(@SuppressWarnings("unused") final Object thisObj, long address, char value) {
+    public void putChar(long address, char value) {
         DirectStoreNode.store(address, value);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putInt(@SuppressWarnings("unused") final Object thisObj, long address, int value) {
+    public void putInt(long address, int value) {
         DirectStoreNode.store(address, value);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putLong(@SuppressWarnings("unused") final Object thisObj, long address, long value) {
+    public void putLong(long address, long value) {
         DirectStoreNode.store(address, value);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putFloat(@SuppressWarnings("unused") final Object thisObj, long address, float value) {
+    public void putFloat(long address, float value) {
         DirectStoreNode.store(address, value);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static void putDouble(@SuppressWarnings("unused") final Object thisObj, long address, double value) {
+    public void putDouble(long address, double value) {
         DirectStoreNode.store(address, value);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static byte getByte(@SuppressWarnings("unused") final Object thisObj, long address) {
+    public byte getByte(long address) {
         return DirectReadNode.read(address, Kind.Byte);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static short getShort(@SuppressWarnings("unused") final Object thisObj, long address) {
+    public short getShort(long address) {
         return DirectReadNode.read(address, Kind.Short);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static char getChar(@SuppressWarnings("unused") final Object thisObj, long address) {
+    public char getChar(long address) {
         return DirectReadNode.read(address, Kind.Char);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static int getInt(@SuppressWarnings("unused") final Object thisObj, long address) {
+    public int getInt(long address) {
         return DirectReadNode.read(address, Kind.Int);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static long getLong(@SuppressWarnings("unused") final Object thisObj, long address) {
+    public long getLong(long address) {
         return DirectReadNode.read(address, Kind.Long);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static float getFloat(@SuppressWarnings("unused") final Object thisObj, long address) {
+    public float getFloat(long address) {
         return DirectReadNode.read(address, Kind.Float);
     }
 
-    @MethodSubstitution(isStatic = false)
-    public static double getDouble(@SuppressWarnings("unused") final Object thisObj, long address) {
+    public double getDouble(long address) {
         return DirectReadNode.read(address, Kind.Double);
     }
 }

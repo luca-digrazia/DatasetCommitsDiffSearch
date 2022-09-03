@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,31 @@
  */
 package com.oracle.graal.hotspot.snippets;
 
+import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
+
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.snippets.*;
 
-/**
- * Snippets for {@link java.lang.Thread} methods.
- */
+
 @ClassSubstitution(java.lang.Thread.class)
 public class ThreadSnippets implements SnippetsInterface {
-
     public static Thread currentThread() {
-        return CurrentThread.get();
+        return CurrentThread.get(threadObjectOffset());
+    }
+
+    @InstanceMethodSubstitution
+    @SuppressWarnings("unused")
+    private static boolean isInterrupted(final Thread thisObject, boolean clearInterrupted) {
+        Word rawThread = HotSpotCurrentRawThreadNode.get();
+        Thread thread = (Thread) loadObjectFromWord(rawThread, threadObjectOffset());
+        if (thisObject == thread) {
+            Word osThread = loadWordFromWord(rawThread, osThreadOffset());
+            boolean interrupted = loadIntFromWord(osThread, osThreadInterruptedOffset()) != 0;
+            if (!interrupted || !clearInterrupted) {
+                return interrupted;
+            }
+        }
+
+        return ThreadIsInterruptedStubCall.call(thisObject, clearInterrupted) != 0;
     }
 }
