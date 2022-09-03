@@ -23,13 +23,12 @@
 // Checkstyle: stop
 package com.oracle.graal.jtt.loop;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
 
 /*
  * Tests exiting 2 loops at the same time with escape-analysed values flowing out of loops
  */
-public class Loop16 extends JTTTest {
+public class Loop16 {
 
     public int a;
     public int b;
@@ -59,6 +58,6 @@ public class Loop16 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 40);
+        Assert.assertEquals(526, test(40));
     }
 }

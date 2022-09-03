@@ -22,10 +22,9 @@
  */
 package com.oracle.graal.jtt.loop;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
 
-public class LoopParseLong extends JTTTest {
+public class LoopParseLong {
 
     public static long test(String s, int radix) throws NumberFormatException {
         if (s == null) {
@@ -81,7 +80,7 @@ public class LoopParseLong extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", "7", 10);
-        runTest("test", "-100", 10);
+        Assert.assertEquals(Character.digit('7', 10), test("7", 10));
+        Assert.assertEquals(-100, test("-100", 10));
     }
 }
