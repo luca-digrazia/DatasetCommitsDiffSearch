@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,26 +50,17 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     private HashMap<Long, HotSpotResolvedJavaField> fieldCache;
     private HashMap<Long, HotSpotResolvedJavaMethod> methodCache;
     private HotSpotResolvedJavaField[] instanceFields;
-    private HotSpotResolvedObjectType[] interfaces;
+    private ResolvedJavaType[] interfaces;
     private ConstantPool constantPool;
-    private HotSpotResolvedObjectType arrayOfType;
-
-    /**
-     * Gets the Graal mirror for a {@link Class} object.
-     *
-     * @return the {@link HotSpotResolvedJavaType} corresponding to {@code javaClass}
-     */
-    public static HotSpotResolvedObjectType fromObjectClass(Class<?> javaClass) {
-        return (HotSpotResolvedObjectType) runtime().fromClass(javaClass);
-    }
+    private ResolvedJavaType arrayOfType;
 
     /**
      * Gets the Graal mirror from a HotSpot metaspace Klass native object.
      *
-     * @param metaspaceKlass a metaspace Klass object boxed in a {@link JavaConstant}
-     * @return the {@link HotSpotResolvedObjectType} corresponding to {@code klassConstant}
+     * @param metaspaceKlass a metaspace Klass object boxed in a {@link Constant}
+     * @return the {@link ResolvedJavaType} corresponding to {@code klassConstant}
      */
-    public static HotSpotResolvedObjectType fromMetaspaceKlass(JavaConstant metaspaceKlass) {
+    public static ResolvedJavaType fromMetaspaceKlass(Constant metaspaceKlass) {
         assert metaspaceKlass.getKind() == Kind.Long;
         return fromMetaspaceKlass(metaspaceKlass.asLong());
     }
@@ -80,11 +71,11 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
      * @param metaspaceKlass a metaspace Klass object
      * @return the {@link ResolvedJavaType} corresponding to {@code metaspaceKlass}
      */
-    public static HotSpotResolvedObjectType fromMetaspaceKlass(long metaspaceKlass) {
+    public static ResolvedJavaType fromMetaspaceKlass(long metaspaceKlass) {
         assert metaspaceKlass != 0;
         Class<?> javaClass = runtime().getCompilerToVM().getJavaMirror(metaspaceKlass);
         assert javaClass != null;
-        return fromObjectClass(javaClass);
+        return fromClass(javaClass);
     }
 
     /**
@@ -92,8 +83,8 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
      *
      * <p>
      * <b>NOTE</b>: Creating an instance of this class does not install the mirror for the
-     * {@link Class} type. Use {@link #fromObjectClass(Class)},
-     * {@link #fromMetaspaceKlass(JavaConstant)} or {@link #fromMetaspaceKlass(long)} instead.
+     * {@link Class} type. Use {@link #fromClass(Class)}, {@link #fromMetaspaceKlass(Constant)} or
+     * {@link #fromMetaspaceKlass(long)} instead.
      * </p>
      *
      * @param javaClass the Class to create the mirror for
@@ -134,7 +125,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     @Override
     public ResolvedJavaType getArrayClass() {
         if (arrayOfType == null) {
-            arrayOfType = fromObjectClass(Array.newInstance(mirror(), 0).getClass());
+            arrayOfType = fromClass(Array.newInstance(mirror(), 0).getClass());
         }
         return arrayOfType;
     }
@@ -151,10 +142,14 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         if (isArray()) {
             return getElementalType().isFinal() ? this : null;
         } else if (isInterface()) {
-            HotSpotResolvedObjectType type = getSingleImplementor();
-            if (type == null) {
+            final long implementorMetaspaceKlass = runtime().getCompilerToVM().getKlassImplementor(getMetaspaceKlass());
+
+            // No implementor.
+            if (implementorMetaspaceKlass == 0) {
                 return null;
             }
+
+            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) fromMetaspaceKlass(implementorMetaspaceKlass);
 
             /*
              * If the implementor field contains itself that indicates that the interface has more
@@ -172,7 +167,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
                 if (subklass == 0 || unsafeReadWord(subklass + config.nextSiblingOffset) != 0) {
                     return null;
                 }
-                type = fromMetaspaceKlass(subklass);
+                type = (HotSpotResolvedObjectType) fromMetaspaceKlass(subklass);
             }
             if (type.isAbstract() || type.isInterface() || !type.isLeafClass()) {
                 return null;
@@ -204,47 +199,32 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     @Override
     public HotSpotResolvedObjectType getSuperclass() {
         Class<?> javaSuperclass = mirror().getSuperclass();
-        return javaSuperclass == null ? null : (HotSpotResolvedObjectType) fromObjectClass(javaSuperclass);
+        return javaSuperclass == null ? null : (HotSpotResolvedObjectType) fromClass(javaSuperclass);
     }
 
     @Override
-    public HotSpotResolvedObjectType[] getInterfaces() {
+    public ResolvedJavaType[] getInterfaces() {
         if (interfaces == null) {
             Class<?>[] javaInterfaces = mirror().getInterfaces();
-            HotSpotResolvedObjectType[] result = new HotSpotResolvedObjectType[javaInterfaces.length];
+            ResolvedJavaType[] result = new ResolvedJavaType[javaInterfaces.length];
             for (int i = 0; i < javaInterfaces.length; i++) {
-                result[i] = fromObjectClass(javaInterfaces[i]);
+                result[i] = fromClass(javaInterfaces[i]);
             }
             interfaces = result;
         }
         return interfaces;
     }
 
-    @Override
-    public HotSpotResolvedObjectType getSingleImplementor() {
-        if (!isInterface()) {
-            throw new GraalInternalError("Cannot call getImplementor() on a non-interface type: " + this);
-        }
-        final long implementorMetaspaceKlass = runtime().getCompilerToVM().getKlassImplementor(getMetaspaceKlass());
-
-        // No implementor.
-        if (implementorMetaspaceKlass == 0) {
-            return null;
-        }
-
-        return fromMetaspaceKlass(implementorMetaspaceKlass);
-    }
-
     public HotSpotResolvedObjectType getSupertype() {
         if (isArray()) {
             ResolvedJavaType componentType = getComponentType();
             if (mirror() == Object[].class || componentType.isPrimitive()) {
-                return fromObjectClass(Object.class);
+                return (HotSpotResolvedObjectType) fromClass(Object.class);
             }
             return (HotSpotResolvedObjectType) ((HotSpotResolvedObjectType) componentType).getSupertype().getArrayClass();
         }
         if (isInterface()) {
-            return fromObjectClass(Object.class);
+            return (HotSpotResolvedObjectType) fromClass(Object.class);
         }
         return getSuperclass();
     }
@@ -278,7 +258,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     @Override
-    public JavaConstant getEncoding(Representation r) {
+    public Constant getEncoding(Representation r) {
         switch (r) {
             case JavaClass:
                 return HotSpotObjectConstant.forObject(mirror());
@@ -341,7 +321,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     @Override
-    public boolean isInstance(JavaConstant obj) {
+    public boolean isInstance(Constant obj) {
         if (obj.getKind() == Kind.Object && !obj.isNull()) {
             return mirror().isInstance(HotSpotObjectConstant.asObject(obj));
         }
@@ -379,19 +359,23 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     @Override
-    public ResolvedJavaMethod resolveConcreteMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
-        ResolvedJavaMethod resolvedMethod = resolveMethod(method, callerType, true);
+    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
+        ResolvedJavaMethod resolvedMethod = resolveMethodInternal(method, callerType);
         if (resolvedMethod == null || resolvedMethod.isAbstract()) {
             return null;
         }
         return resolvedMethod;
     }
 
-    @Override
-    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType, boolean includeAbstract) {
-        if (!includeAbstract) {
-            return resolveConcreteMethod(method, callerType);
-        }
+    /**
+     * Resolve the method against the current type and return the method found, including any
+     * abstract methods.
+     *
+     * @param method
+     * @param callerType
+     * @return the method found
+     */
+    private ResolvedJavaMethod resolveMethodInternal(ResolvedJavaMethod method, ResolvedJavaType callerType) {
         assert !callerType.isArray();
         if (!method.isAbstract() && method.getDeclaringClass().equals(this) && method.isPublic()) {
             return method;
@@ -399,13 +383,13 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         if (!method.getDeclaringClass().isAssignableFrom(this)) {
             return null;
         }
-        HotSpotResolvedJavaMethodImpl hotSpotMethod = (HotSpotResolvedJavaMethodImpl) method;
+        HotSpotResolvedJavaMethod hotSpotMethod = (HotSpotResolvedJavaMethod) method;
         HotSpotResolvedObjectType hotSpotCallerType = (HotSpotResolvedObjectType) callerType;
         final long resolvedMetaspaceMethod = runtime().getCompilerToVM().resolveMethod(getMetaspaceKlass(), hotSpotMethod.getMetaspaceMethod(), hotSpotCallerType.getMetaspaceKlass());
         if (resolvedMetaspaceMethod == 0) {
             return null;
         }
-        return HotSpotResolvedJavaMethodImpl.fromMetaspace(resolvedMetaspaceMethod);
+        return HotSpotResolvedJavaMethod.fromMetaspace(resolvedMetaspaceMethod);
     }
 
     public ConstantPool constantPool() {
@@ -446,7 +430,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
             method = methodCache.get(metaspaceMethod);
         }
         if (method == null) {
-            method = new HotSpotResolvedJavaMethodImpl(this, metaspaceMethod);
+            method = new HotSpotResolvedJavaMethod(this, metaspaceMethod);
             methodCache.put(metaspaceMethod, method);
         }
         return method;
@@ -518,7 +502,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
          * The holder may be a subtype of the decaredHolder so make sure to resolve the method to
          * the correct method for the subtype.
          */
-        HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) resolveMethod(hmethod, this, true);
+        HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) resolveMethodInternal(hmethod, this);
         if (resolvedMethod == null) {
             // The type isn't known to implement the method.
             return null;
@@ -614,7 +598,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         }
     }
 
-    private static class OffsetComparator implements java.util.Comparator<HotSpotResolvedJavaField> {
+    private static class OffsetComparator implements Comparator<HotSpotResolvedJavaField> {
         @Override
         public int compare(HotSpotResolvedJavaField o1, HotSpotResolvedJavaField o2) {
             return o1.offset() - o2.offset();
@@ -773,10 +757,10 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     /**
-     * Gets the metaspace Klass boxed in a {@link JavaConstant}.
+     * Gets the metaspace Klass boxed in a {@link Constant}.
      */
-    public JavaConstant klass() {
-        return HotSpotMetaspaceConstant.forMetaspaceObject(runtime().getTarget().wordKind, getMetaspaceKlass(), this, false);
+    public Constant klass() {
+        return HotSpotMetaspaceConstant.forMetaspaceObject(runtime().getTarget().wordKind, getMetaspaceKlass(), this);
     }
 
     public boolean isPrimaryType() {
@@ -825,9 +809,9 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     @Override
-    public HotSpotResolvedObjectType getEnclosingType() {
+    public ResolvedJavaType getEnclosingType() {
         final Class<?> encl = mirror().getEnclosingClass();
-        return encl == null ? null : fromObjectClass(encl);
+        return encl == null ? null : fromClass(encl);
     }
 
     @Override
@@ -861,7 +845,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     @Override
-    public JavaConstant newArray(int length) {
+    public Constant newArray(int length) {
         return HotSpotObjectConstant.forObject(Array.newInstance(mirror(), length));
     }
 
@@ -870,7 +854,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         return "HotSpotType<" + getName() + ", resolved>";
     }
 
-    private static final HotSpotResolvedObjectType trustedInterfaceType = fromObjectClass(TrustedInterface.class);
+    private static final ResolvedJavaType trustedInterfaceType = fromClass(TrustedInterface.class);
 
     @Override
     public boolean isTrustedInterfaceType() {

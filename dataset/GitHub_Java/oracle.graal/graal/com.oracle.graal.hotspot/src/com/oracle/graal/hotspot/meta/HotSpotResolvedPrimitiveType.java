@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,7 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     /**
      * Gets the Graal mirror for a {@link Kind}.
      *
-     * @return the {@link HotSpotResolvedObjectTypeImpl} corresponding to {@code kind}
+     * @return the {@link HotSpotResolvedObjectType} corresponding to {@code kind}
      */
     public static ResolvedJavaType fromKind(Kind kind) {
         Class<?> javaClass = kind.toJavaClass();
@@ -71,12 +71,12 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public HotSpotResolvedObjectTypeImpl getArrayClass() {
+    public ResolvedJavaType getArrayClass() {
         if (kind == Kind.Void) {
             return null;
         }
         Class<?> javaArrayMirror = Array.newInstance(mirror(), 0).getClass();
-        return HotSpotResolvedObjectTypeImpl.fromObjectClass(javaArrayMirror);
+        return HotSpotResolvedObjectType.fromClass(javaArrayMirror);
     }
 
     public ResolvedJavaType getElementalType() {
@@ -104,17 +104,12 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public ResolvedJavaType getSingleImplementor() {
-        throw new GraalInternalError("Cannot call getImplementor() on a non-interface type: " + this);
-    }
-
-    @Override
     public ResolvedJavaType findLeastCommonAncestor(ResolvedJavaType otherType) {
         return null;
     }
 
     @Override
-    public JavaConstant getEncoding(Representation r) {
+    public Constant getEncoding(Representation r) {
         throw GraalInternalError.unimplemented("HotSpotResolvedPrimitiveType.getEncoding");
     }
 
@@ -148,7 +143,7 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public boolean isInstance(JavaConstant obj) {
+    public boolean isInstance(Constant obj) {
         return false;
     }
 
@@ -179,12 +174,7 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public ResolvedJavaMethod resolveConcreteMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
-        return null;
-    }
-
-    @Override
-    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType, boolean includeAbstract) {
+    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
         return null;
     }
 
@@ -279,7 +269,7 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public JavaConstant newArray(int length) {
+    public Constant newArray(int length) {
         return HotSpotObjectConstant.forObject(Array.newInstance(mirror(), length));
     }
 

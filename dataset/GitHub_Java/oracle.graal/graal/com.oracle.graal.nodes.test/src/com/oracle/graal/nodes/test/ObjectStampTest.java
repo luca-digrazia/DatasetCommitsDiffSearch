@@ -22,28 +22,25 @@
  */
 package com.oracle.graal.nodes.test;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 
 public class ObjectStampTest extends AbstractObjectStampTest {
     @Test
     public void testInterfaceTrust0() {
-        Stamp notTrusted = StampFactory.object(TypeReference.createWithoutAssumptions(getMetaAccess().lookupJavaType(I.class)));
+        Stamp notTrusted = StampFactory.declared(getType(I.class));
         Assert.assertEquals(StampFactory.object(), notTrusted);
     }
 
-    private interface TrustedI {
+    private static interface TrustedI extends TrustedInterface {
 
     }
 
     @Test
     public void testInterfaceTrust1() {
-        Stamp trusted = StampFactory.object(getType(TrustedI.class));
+        Stamp trusted = StampFactory.declared(getType(TrustedI.class));
         Assert.assertNotEquals(StampFactory.object(), trusted);
         Assert.assertTrue("Should be an AbstractObjectStamp", trusted instanceof AbstractObjectStamp);
         AbstractObjectStamp trustedObjectStamp = (AbstractObjectStamp) trusted;

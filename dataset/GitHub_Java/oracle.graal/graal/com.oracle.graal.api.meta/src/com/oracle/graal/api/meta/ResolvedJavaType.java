@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +23,7 @@
 package com.oracle.graal.api.meta;
 
 import java.lang.annotation.*;
+import java.lang.reflect.*;
 import java.net.*;
 
 /**
@@ -33,15 +34,31 @@ import java.net.*;
 public interface ResolvedJavaType extends JavaType, ModifiersProvider {
 
     /**
-     * Gets the runtime representation of the Java class object of this type.
+     * Represents each of the several different parts of the runtime representation of a type which
+     * compiled code may need to reference individually. These may or may not be different objects
+     * or data structures, depending on the runtime system.
      */
-    JavaConstant getJavaClass();
+    public enum Representation {
+        /**
+         * The runtime representation of the Java class object of this type.
+         */
+        JavaClass,
+
+        /**
+         * The runtime representation of the "hub" of this type--that is, the closest part of the
+         * type representation which is typically stored in the object header.
+         */
+        ObjectHub
+    }
 
     /**
-     * Gets the runtime representation of the "hub" of this type--that is, the closest part of the
-     * type representation which is typically stored in the object header.
+     * Gets the encoding of (that is, a constant representing the value of) the specified part of
+     * this type.
+     *
+     * @param r the part of this type
+     * @return a constant representing a reference to the specified part of this type
      */
-    Constant getObjectHub();
+    Constant getEncoding(Representation r);
 
     /**
      * Checks whether this type has a finalizer method.
@@ -137,7 +154,7 @@ public interface ResolvedJavaType extends JavaType, ModifiersProvider {
      * @param obj the object to test
      * @return {@code true} if the object is an instance of this type
      */
-    boolean isInstance(JavaConstant obj);
+    boolean isInstance(Constant obj);
 
     /**
      * Returns this type if it is an exact type otherwise returns null. This type is exact if it is
@@ -160,19 +177,6 @@ public interface ResolvedJavaType extends JavaType, ModifiersProvider {
      * or extended by this type.
      */
     ResolvedJavaType[] getInterfaces();
-
-    /**
-     * Gets the single implementor of this type. Calling this method on a non-interface type causes
-     * an exception.
-     * <p>
-     * If the compiler uses the result of this method for its compilation, the usage must be guarded
-     * because the verifier can not guarantee that the assigned type really implements this
-     * interface. Additionally, class loading can invalidate the result of this method.
-     *
-     * @return {@code null} if there is no implementor, the implementor if there is only one, or
-     *         {@code this} if there are more than one.
-     */
-    ResolvedJavaType getSingleImplementor();
 
     /**
      * Walks the class hierarchy upwards and returns the least common class that is a superclass of
@@ -218,21 +222,6 @@ public interface ResolvedJavaType extends JavaType, ModifiersProvider {
 
     /**
      * Resolves the method implementation for virtual dispatches on objects of this dynamic type.
-     * This resolution process only searches "up" the class hierarchy of this type.
-     *
-     * @param method the method to select the implementation of
-     * @param callerType the caller or context type used to perform access checks
-     * @param includeAbstract whether abstract methods should be returned. If it is {@code false}
-     *            this method behaves like {@link #resolveConcreteMethod}. This is just a temporary
-     *            parameter to highlight the changed semantics of this method. TODO (je) remove this
-     *            flag.
-     * @return the link-time resolved method (might be abstract) or {@code null} if it can not be
-     *         linked
-     */
-    ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType, boolean includeAbstract);
-
-    /**
-     * Resolves the method implementation for virtual dispatches on objects of this dynamic type.
      * This resolution process only searches "up" the class hierarchy of this type. A broader search
      * that also walks "down" the hierarchy is implemented by
      * {@link #findUniqueConcreteMethod(ResolvedJavaMethod)}.
@@ -242,7 +231,7 @@ public interface ResolvedJavaType extends JavaType, ModifiersProvider {
      * @return the concrete method that would be selected at runtime, or {@code null} if there is no
      *         concrete implementation of {@code method} in this type or any of its superclasses
      */
-    ResolvedJavaMethod resolveConcreteMethod(ResolvedJavaMethod method, ResolvedJavaType callerType);
+    ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType);
 
     /**
      * Given a {@link ResolvedJavaMethod} A, returns a concrete {@link ResolvedJavaMethod} B that is
@@ -341,6 +330,12 @@ public interface ResolvedJavaType extends JavaType, ModifiersProvider {
      * Returns the {@code <clinit>} method for this class if there is one.
      */
     ResolvedJavaMethod getClassInitializer();
+
+    /**
+     * Creates a new array with this type as the component type and the specified length. This
+     * method is similar to {@link Array#newInstance(Class, int)}.
+     */
+    Constant newArray(int length);
 
     /**
      * Returns true if this type represents and interface and it should be trusted even in places

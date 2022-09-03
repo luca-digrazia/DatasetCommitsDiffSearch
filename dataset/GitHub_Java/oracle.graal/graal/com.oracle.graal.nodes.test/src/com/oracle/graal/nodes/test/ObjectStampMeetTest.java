@@ -104,7 +104,7 @@ public class ObjectStampMeetTest extends AbstractObjectStampTest {
     @Test
     public void testMeetInterface0() {
         Stamp a = StampFactory.declared(getType(A.class));
-        Stamp i = StampFactory.declaredTrusted(getType(I.class));
+        Stamp i = StampFactory.declared(getType(I.class), false, true);
         Assert.assertEquals(StampFactory.declared(getType(Object.class)), meet(a, i));
     }
 

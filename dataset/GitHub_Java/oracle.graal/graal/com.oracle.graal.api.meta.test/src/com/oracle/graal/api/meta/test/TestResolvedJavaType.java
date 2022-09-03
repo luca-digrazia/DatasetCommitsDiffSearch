@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,7 +35,6 @@ import org.junit.*;
 import sun.reflect.ConstantPool;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 
 /**
  * Tests for {@link ResolvedJavaType}.
@@ -122,9 +121,9 @@ public class TestResolvedJavaType extends TypeUniverse {
 
     @Test
     public void isInstanceTest() {
-        for (JavaConstant c : constants) {
+        for (Constant c : constants) {
             if (c.getKind() == Kind.Object && !c.isNull()) {
-                Object o = snippetReflection.asObject(Object.class, c);
+                Object o = snippetReflection.asObject(c);
                 Class<? extends Object> cls = o.getClass();
                 while (cls != null) {
                     ResolvedJavaType type = metaAccess.lookupJavaType(cls);
@@ -338,96 +337,6 @@ public class TestResolvedJavaType extends TypeUniverse {
         checkConcreteSubtype(inta, inta);
     }
 
-    interface NoImplementor {
-    }
-
-    interface SingleImplementorInterface {
-    }
-
-    static class SingleConcreteImplementor implements SingleImplementorInterface {
-    }
-
-    interface SingleAbstractImplementorInterface {
-    }
-
-    abstract static class SingleAbstractImplementor implements SingleAbstractImplementorInterface {
-    }
-
-    interface MultiImplementorInterface {
-    }
-
-    static class ConcreteImplementor1 implements MultiImplementorInterface {
-    }
-
-    static class ConcreteImplementor2 implements MultiImplementorInterface {
-    }
-
-    interface MultipleAbstractImplementorInterface {
-    }
-
-    abstract static class MultiAbstractImplementor1 implements MultipleAbstractImplementorInterface {
-    }
-
-    abstract static class MultiAbstractImplementor2 implements MultipleAbstractImplementorInterface {
-    }
-
-    interface SingleAbstractImplementorInterface2 {
-    }
-
-    interface ExtendedSingleImplementorInterface {
-    }
-
-    abstract static class SingleAbstractImplementor2 implements SingleAbstractImplementorInterface2 {
-    }
-
-    static class ConcreteTransitiveImplementor1 extends SingleAbstractImplementor2 implements ExtendedSingleImplementorInterface {
-    }
-
-    static class ConcreteTransitiveImplementor2 extends SingleAbstractImplementor2 implements ExtendedSingleImplementorInterface {
-    }
-
-    @Test
-    public void getSingleImplementorTest() {
-        ResolvedJavaType iNi = metaAccess.lookupJavaType(NoImplementor.class);
-        assertNull(iNi.getSingleImplementor());
-
-        ResolvedJavaType iSi = metaAccess.lookupJavaType(SingleImplementorInterface.class);
-        ResolvedJavaType cSi = metaAccess.lookupJavaType(SingleConcreteImplementor.class);
-        assertEquals(cSi, iSi.getSingleImplementor());
-
-        ResolvedJavaType iSai = metaAccess.lookupJavaType(SingleAbstractImplementorInterface.class);
-        ResolvedJavaType aSai = metaAccess.lookupJavaType(SingleAbstractImplementor.class);
-        assertEquals(aSai, iSai.getSingleImplementor());
-
-        ResolvedJavaType iMi = metaAccess.lookupJavaType(MultiImplementorInterface.class);
-        metaAccess.lookupJavaType(ConcreteImplementor1.class);
-        metaAccess.lookupJavaType(ConcreteImplementor2.class);
-        assertEquals(iMi, iMi.getSingleImplementor());
-
-        ResolvedJavaType iMai = metaAccess.lookupJavaType(MultipleAbstractImplementorInterface.class);
-        metaAccess.lookupJavaType(MultiAbstractImplementor1.class);
-        metaAccess.lookupJavaType(MultiAbstractImplementor2.class);
-        assertEquals(iMai, iMai.getSingleImplementor());
-
-        ResolvedJavaType iSai2 = metaAccess.lookupJavaType(SingleAbstractImplementorInterface2.class);
-        ResolvedJavaType aSai2 = metaAccess.lookupJavaType(SingleAbstractImplementor2.class);
-        metaAccess.lookupJavaType(ConcreteTransitiveImplementor1.class);
-        metaAccess.lookupJavaType(ConcreteTransitiveImplementor2.class);
-        assertEquals(aSai2, iSai2.getSingleImplementor());
-    }
-
-    @Test(expected = GraalInternalError.class)
-    public void getSingleImplementorTestClassReceiver() {
-        ResolvedJavaType base = metaAccess.lookupJavaType(Base.class);
-        base.getSingleImplementor();
-    }
-
-    @Test(expected = GraalInternalError.class)
-    public void getSingleImplementorTestPrimitiveReceiver() {
-        ResolvedJavaType primitive = metaAccess.lookupJavaType(int.class);
-        primitive.getSingleImplementor();
-    }
-
     @Test
     public void getComponentTypeTest() {
         for (Class<?> c : classes) {
@@ -539,7 +448,7 @@ public class TestResolvedJavaType extends TypeUniverse {
     }
 
     private static void checkResolveMethod(ResolvedJavaType type, ResolvedJavaType context, ResolvedJavaMethod decl, ResolvedJavaMethod expected) {
-        ResolvedJavaMethod impl = type.resolveConcreteMethod(decl, context);
+        ResolvedJavaMethod impl = type.resolveMethod(decl, context);
         assertEquals(expected, impl);
     }
 
@@ -552,40 +461,7 @@ public class TestResolvedJavaType extends TypeUniverse {
                 for (Method m : c.getDeclaredMethods()) {
                     if (JAVA_VERSION <= 1.7D || (!isStatic(m.getModifiers()) && !isPrivate(m.getModifiers()))) {
                         ResolvedJavaMethod resolved = metaAccess.lookupJavaMethod(m);
-                        ResolvedJavaMethod impl = type.resolveMethod(resolved, context, true);
-                        ResolvedJavaMethod expected = resolved.isDefault() || resolved.isAbstract() ? resolved : null;
-                        assertEquals(m.toString(), expected, impl);
-                    } else {
-                        // As of JDK 8, interfaces can have static and private methods
-                    }
-                }
-            } else {
-                ResolvedJavaType type = metaAccess.lookupJavaType(c);
-                VTable vtable = getVTable(c);
-                for (Method impl : vtable.methods.values()) {
-                    Set<Method> decls = findDeclarations(impl, c);
-                    for (Method decl : decls) {
-                        ResolvedJavaMethod m = metaAccess.lookupJavaMethod(decl);
-                        if (m.isPublic()) {
-                            ResolvedJavaMethod i = metaAccess.lookupJavaMethod(impl);
-                            checkResolveMethod(type, context, m, i);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @Test
-    public void resolveConcreteMethodTest() {
-        ResolvedJavaType context = metaAccess.lookupJavaType(TestResolvedJavaType.class);
-        for (Class<?> c : classes) {
-            if (c.isInterface() || c.isPrimitive()) {
-                ResolvedJavaType type = metaAccess.lookupJavaType(c);
-                for (Method m : c.getDeclaredMethods()) {
-                    if (JAVA_VERSION <= 1.7D || (!isStatic(m.getModifiers()) && !isPrivate(m.getModifiers()))) {
-                        ResolvedJavaMethod resolved = metaAccess.lookupJavaMethod(m);
-                        ResolvedJavaMethod impl = type.resolveConcreteMethod(resolved, context);
+                        ResolvedJavaMethod impl = type.resolveMethod(resolved, context);
                         ResolvedJavaMethod expected = resolved.isDefault() ? resolved : null;
                         assertEquals(m.toString(), expected, impl);
                     } else {
@@ -606,7 +482,7 @@ public class TestResolvedJavaType extends TypeUniverse {
                     }
                 }
                 for (Method m : c.getDeclaredMethods()) {
-                    ResolvedJavaMethod impl = type.resolveConcreteMethod(metaAccess.lookupJavaMethod(m), context);
+                    ResolvedJavaMethod impl = type.resolveMethod(metaAccess.lookupJavaMethod(m), context);
                     ResolvedJavaMethod expected = isAbstract(m.getModifiers()) ? null : impl;
                     assertEquals(type + " " + m.toString(), expected, impl);
                 }
@@ -837,8 +713,7 @@ public class TestResolvedJavaType extends TypeUniverse {
         "getDeclaredConstructors",
         "isInitialized",
         "isLinked",
-        "getJavaClass",
-        "getObjectHub",
+        "getEncoding",
         "hasFinalizableSubclass",
         "hasFinalizer",
         "getSourceFileName",

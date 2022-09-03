@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.nodes.test;
 
-import org.junit.Assert;
+import org.junit.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.test.*;
 
 public abstract class AbstractObjectStampTest extends GraalCompilerTest {
 
@@ -54,33 +54,6 @@ public abstract class AbstractObjectStampTest extends GraalCompilerTest {
 
     }
 
-    protected interface OtherI {
-
-    }
-
-    protected interface SubI1 extends I {
-
-    }
-
-    protected interface SubI2 extends I {
-
-    }
-
-    protected interface SubI3 extends I {
-
-    }
-
-    protected interface SubI4 extends SubI1, SubI3 {
-
-    }
-
-    protected interface SubI5 extends OtherI, SubI3 {
-
-    }
-
-    /**
-     * Joins the two stamps and also asserts that the meet operation is commutative.
-     */
     protected static Stamp join(Stamp a, Stamp b) {
         Stamp ab = a.join(b);
         Stamp ba = b.join(a);
@@ -88,9 +61,6 @@ public abstract class AbstractObjectStampTest extends GraalCompilerTest {
         return ab;
     }
 
-    /**
-     * Meets the two stamps and also asserts that the meet operation is commutative.
-     */
     protected static Stamp meet(Stamp a, Stamp b) {
         Stamp ab = a.meet(b);
         Stamp ba = b.meet(a);
@@ -98,7 +68,7 @@ public abstract class AbstractObjectStampTest extends GraalCompilerTest {
         return ab;
     }
 
-    protected TypeReference getType(Class<?> clazz) {
-        return TypeReference.createTrustedWithoutAssumptions(getMetaAccess().lookupJavaType(clazz));
+    protected ResolvedJavaType getType(Class<?> clazz) {
+        return getMetaAccess().lookupJavaType(clazz);
     }
 }
