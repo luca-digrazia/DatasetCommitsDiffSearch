@@ -68,17 +68,17 @@ public class BitSpecTest {
         assertFalse(d4lo.valueFits(0x10));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test(expected = InternalError.class)
     public void testContinousSignExtendSetFail1() {
         d4hi.setBits(0, 0xf);
     }
 
-    @Test(expected = AssertionError.class)
+    @Test(expected = InternalError.class)
     public void testContinousSignExtendSetFail2() {
         d4hi.setBits(0, 0xFFFFFFF0);
     }
 
-    @Test(expected = AssertionError.class)
+    @Test(expected = InternalError.class)
     public void testContinousZeroExtendSetFail1() {
         d4lo.setBits(0, 0x10);
     }
@@ -90,12 +90,12 @@ public class BitSpecTest {
         testSetGet(d8, 0x007000c0, 0x7c);
     }
 
-    @Test(expected = AssertionError.class)
+    @Test(expected = InternalError.class)
     public void testCompositeSignExtendedFail1() {
         d8.setBits(0, 0x00000080);
     }
 
-    @Test(expected = AssertionError.class)
+    @Test(expected = InternalError.class)
     public void testCompositeSignExtendedFail2() {
         d8.setBits(0, 0xEFFFFF80);
     }
