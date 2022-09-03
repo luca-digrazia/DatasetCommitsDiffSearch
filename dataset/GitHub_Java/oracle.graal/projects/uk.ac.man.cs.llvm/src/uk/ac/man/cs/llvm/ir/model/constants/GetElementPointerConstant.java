@@ -27,36 +27,17 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.ir.model.constants;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import uk.ac.man.cs.llvm.ir.model.Symbol;
+import uk.ac.man.cs.llvm.ir.model.Symbols;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
-public class GetElementPointerConstant extends AbstractConstant {
+public final class GetElementPointerConstant extends AbstractConstant {
 
     private final boolean isInbounds;
 
@@ -64,13 +45,9 @@ public class GetElementPointerConstant extends AbstractConstant {
 
     private final List<Symbol> indices = new ArrayList<>();
 
-    public GetElementPointerConstant(Type type, boolean isInbounds) {
+    private GetElementPointerConstant(Type type, boolean isInbounds) {
         super(type);
         this.isInbounds = isInbounds;
-    }
-
-    public void addIndex(Symbol index) {
-        indices.add(index);
     }
 
     public Symbol getBasePointer() {
@@ -83,6 +60,10 @@ public class GetElementPointerConstant extends AbstractConstant {
 
     public int getIndexCount() {
         return indices.size();
+    }
+
+    public List<Symbol> getIndices() {
+        return Collections.unmodifiableList(indices);
     }
 
     public boolean isInbounds() {
@@ -101,7 +82,13 @@ public class GetElementPointerConstant extends AbstractConstant {
         }
     }
 
-    public void setBasePointer(Symbol base) {
-        this.base = base;
+    public static GetElementPointerConstant fromSymbols(Symbols symbols, Type type, int pointer, int[] indices, boolean isInbounds) {
+        final GetElementPointerConstant constant = new GetElementPointerConstant(type, isInbounds);
+
+        constant.base = symbols.getSymbol(pointer, constant);
+        for (int index : indices) {
+            constant.indices.add(symbols.getSymbol(index, constant));
+        }
+        return constant;
     }
 }

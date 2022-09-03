@@ -633,25 +633,22 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
 
     @Override
     public void visit(VoidCallInstruction call) {
-        final Symbol target = call.getCallTarget();
-        final int argumentCount = call.getArgumentCount();
-        final LLVMExpressionNode[] args = new LLVMExpressionNode[argumentCount + 1];
+        Symbol target = call.getCallTarget();
 
-        int argIndex = 0;
-        args[argIndex++] = LLVMFrameReadWriteFactory.createFrameRead(LLVMBaseType.ADDRESS, method.getStackSlot());
+        int argumentCount = call.getArgumentCount();
+
+        LLVMExpressionNode[] args = new LLVMExpressionNode[argumentCount + 1];
+
+        args[0] = LLVMFrameReadWriteFactory.createFrameRead(LLVMBaseType.ADDRESS, method.getStackSlot());
+
         for (int i = 0; i < argumentCount; i++) {
-            args[argIndex++] = symbols.resolve(call.getArgument(i));
+            args[i + 1] = symbols.resolve(call.getArgument(i));
         }
 
-        final LLVMNode node;
+        LLVMNode node;
+
         if (target instanceof FunctionDeclaration && (((ValueSymbol) target).getName()).startsWith("@llvm.")) {
             node = LLVMIntrinsicFactory.create(((ValueSymbol) target).getName(), args, call.getCallType().getArgumentTypes().length, method.getStackSlot(), method.getOptimizationConfiguration());
-
-        } else if (target instanceof FunctionDeclaration && (((ValueSymbol) target).getName()).startsWith("@truffle_")) {
-            node = LLVMTruffleIntrinsicFactory.create(((ValueSymbol) target).getName(), args);
-            if (node == null) {
-                throw new UnsupportedOperationException("Unknown Truffle Intrinsic: " + ((ValueSymbol) target).getName());
-            }
         } else {
             LLVMFunctionNode function = (LLVMFunctionNode) symbols.resolve(target);
             node = LLVMFunctionFactory.createFunctionCall(function, args, typeHelper.getLLVMBaseType(call.getType()));
