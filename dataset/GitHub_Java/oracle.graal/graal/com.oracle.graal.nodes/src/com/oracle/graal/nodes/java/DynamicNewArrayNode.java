@@ -23,20 +23,13 @@
 //JaCoCo Exclude
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ValueNode;
+import jdk.internal.jvmci.meta.*;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * The {@code DynamicNewArrayNode} is used for allocation of arrays when the type is not a
@@ -49,48 +42,50 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode implements Canonic
     @Input ValueNode elementType;
 
     /**
-     * Class pointer to void.class needs to be exposed earlier than this node is lowered so that it
-     * can be replaced by the AOT machinery. If it's not needed for lowering this input can be
-     * ignored.
-     */
-    @OptionalInput ValueNode voidClass;
-
-    /**
      * A non-null value indicating the worst case element type. Mainly useful for distinguishing
      * Object arrays from primitive arrays.
      */
-    protected final JavaKind knownElementKind;
+    protected final Kind knownElementKind;
 
     public DynamicNewArrayNode(ValueNode elementType, ValueNode length, boolean fillContents) {
         this(TYPE, elementType, length, fillContents, null, null, null);
     }
 
-    public DynamicNewArrayNode(@InjectedNodeParameter MetaAccessProvider metaAccess, ValueNode elementType, ValueNode length, boolean fillContents, JavaKind knownElementKind) {
+    public DynamicNewArrayNode(@InjectedNodeParameter MetaAccessProvider metaAccess, ValueNode elementType, ValueNode length, boolean fillContents, Kind knownElementKind) {
         this(TYPE, elementType, length, fillContents, knownElementKind, null, metaAccess);
     }
 
-    private static Stamp computeStamp(JavaKind knownElementKind, MetaAccessProvider metaAccess) {
+    private static Stamp computeStamp(Kind knownElementKind, MetaAccessProvider metaAccess) {
         if (knownElementKind != null && metaAccess != null) {
-            ResolvedJavaType arrayType = metaAccess.lookupJavaType(knownElementKind == JavaKind.Object ? Object.class : knownElementKind.toJavaClass()).getArrayClass();
-            return StampFactory.objectNonNull(TypeReference.createWithoutAssumptions(arrayType));
+            ResolvedJavaType arrayType = metaAccess.lookupJavaType(knownElementKind == Kind.Object ? Object.class : knownElementKind.toJavaClass()).getArrayClass();
+            return StampFactory.declaredNonNull(arrayType);
         }
         return StampFactory.objectNonNull();
     }
 
-    protected DynamicNewArrayNode(NodeClass<? extends DynamicNewArrayNode> c, ValueNode elementType, ValueNode length, boolean fillContents, JavaKind knownElementKind, FrameState stateBefore,
+    protected DynamicNewArrayNode(NodeClass<? extends DynamicNewArrayNode> c, ValueNode elementType, ValueNode length, boolean fillContents, Kind knownElementKind, FrameState stateBefore,
                     MetaAccessProvider metaAccess) {
         super(c, computeStamp(knownElementKind, metaAccess), length, fillContents, stateBefore);
         this.elementType = elementType;
         this.knownElementKind = knownElementKind;
-        assert knownElementKind != JavaKind.Void && knownElementKind != JavaKind.Illegal;
+        assert knownElementKind != Kind.Void && knownElementKind != Kind.Illegal;
     }
 
     public ValueNode getElementType() {
         return elementType;
     }
 
-    public JavaKind getKnownElementKind() {
+    public Kind getKnownElementKind() {
         return knownElementKind;
+    }
+
+    @Override
+    public void simplify(SimplifierTool tool) {
+        /*
+         * Do not call the super implementation: we must not eliminate unused allocations because
+         * throwing a NullPointerException or IllegalArgumentException is a possible side effect of
+         * an unused allocation.
+         */
     }
 
     @Override
@@ -109,31 +104,23 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode implements Canonic
         return new NewArrayNode(type, length(), fillContents(), stateBefore());
     }
 
-    public static boolean throwsIllegalArgumentException(Class<?> elementType, Class<?> voidClass) {
-        return elementType == voidClass;
+    public static boolean throwsIllegalArgumentException(Class<?> elementType) {
+        return elementType == void.class;
     }
 
     public static boolean throwsIllegalArgumentException(ResolvedJavaType elementType) {
-        return elementType.getJavaKind() == JavaKind.Void;
+        return elementType.getKind() == Kind.Void;
     }
 
     @NodeIntrinsic
-    private static native Object newArray(Class<?> componentType, int length, @ConstantNodeParameter boolean fillContents, @ConstantNodeParameter JavaKind knownElementKind);
+    private static native Object newArray(Class<?> componentType, int length, @ConstantNodeParameter boolean fillContents, @ConstantNodeParameter Kind knownElementKind);
 
-    public static Object newArray(Class<?> componentType, int length, JavaKind knownElementKind) {
+    public static Object newArray(Class<?> componentType, int length, Kind knownElementKind) {
         return newArray(componentType, length, true, knownElementKind);
     }
 
-    public static Object newUninitializedArray(Class<?> componentType, int length, JavaKind knownElementKind) {
+    public static Object newUninitializedArray(Class<?> componentType, int length, Kind knownElementKind) {
         return newArray(componentType, length, false, knownElementKind);
     }
 
-    public ValueNode getVoidClass() {
-        return voidClass;
-    }
-
-    public void setVoidClass(ValueNode newVoidClass) {
-        updateUsages(voidClass, newVoidClass);
-        voidClass = newVoidClass;
-    }
 }
