@@ -22,49 +22,35 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-@NodeInfo(cycles = CYCLES_100, size = SIZE_50)
+@NodeInfo
 public final class UnboxNode extends FixedWithNextNode implements Virtualizable, Lowerable, Canonicalizable.Unary<ValueNode> {
 
     public static final NodeClass<UnboxNode> TYPE = NodeClass.create(UnboxNode.class);
     @Input protected ValueNode value;
-    protected final JavaKind boxingKind;
+    protected final Kind boxingKind;
 
-    @Override
     public ValueNode getValue() {
         return value;
     }
 
-    public UnboxNode(ValueNode value, JavaKind boxingKind) {
+    public UnboxNode(ValueNode value, Kind boxingKind) {
         super(TYPE, StampFactory.forKind(boxingKind.getStackKind()));
         this.value = value;
         this.boxingKind = boxingKind;
     }
 
-    public static ValueNode create(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode value, JavaKind boxingKind) {
+    public static ValueNode create(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode value, Kind boxingKind) {
         ValueNode synonym = findSynonym(metaAccess, constantReflection, value, boxingKind);
         if (synonym != null) {
             return synonym;
@@ -72,7 +58,7 @@ public final class UnboxNode extends FixedWithNextNode implements Virtualizable,
         return new UnboxNode(value, boxingKind);
     }
 
-    public JavaKind getBoxingKind() {
+    public Kind getBoxingKind() {
         return boxingKind;
     }
 
@@ -106,11 +92,11 @@ public final class UnboxNode extends FixedWithNextNode implements Virtualizable,
         return this;
     }
 
-    private static ValueNode findSynonym(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode forValue, JavaKind boxingKind) {
+    private static ValueNode findSynonym(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode forValue, Kind boxingKind) {
         if (forValue.isConstant()) {
             JavaConstant constant = forValue.asJavaConstant();
             JavaConstant unboxed = constantReflection.unboxPrimitive(constant);
-            if (unboxed != null && unboxed.getJavaKind() == boxingKind) {
+            if (unboxed != null && unboxed.getKind() == boxingKind) {
                 return ConstantNode.forConstant(unboxed, metaAccess);
             }
         } else if (forValue instanceof BoxNode) {
