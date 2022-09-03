@@ -29,12 +29,11 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.Map.Entry;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.meta.*;
 
 abstract class LIRIntrospection<T> extends FieldIntrospection<T> {
 
@@ -244,7 +243,7 @@ abstract class LIRIntrospection<T> extends FieldIntrospection<T> {
                 Value value = values.getValue(inst, i);
                 if (value instanceof CompositeValue) {
                     CompositeValue composite = (CompositeValue) value;
-                    composite.visitEachComponent(inst, mode, proc);
+                    composite.forEachComponent(inst, mode, proc);
                 } else {
                     proc.visitValue(inst, value, mode, values.getFlags(i));
                 }
@@ -254,7 +253,7 @@ abstract class LIRIntrospection<T> extends FieldIntrospection<T> {
                     Value value = valueArray[j];
                     if (value instanceof CompositeValue) {
                         CompositeValue composite = (CompositeValue) value;
-                        composite.visitEachComponent(inst, mode, proc);
+                        composite.forEachComponent(inst, mode, proc);
                     } else {
                         proc.visitValue(inst, value, mode, values.getFlags(i));
                     }
