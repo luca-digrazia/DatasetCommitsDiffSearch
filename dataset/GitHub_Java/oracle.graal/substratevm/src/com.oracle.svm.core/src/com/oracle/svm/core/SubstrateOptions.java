@@ -25,6 +25,7 @@
 package com.oracle.svm.core;
 
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -39,7 +40,6 @@ import org.graalvm.nativeimage.Platforms;
 import com.oracle.svm.core.jdk.JavaNetSubstitutions;
 import com.oracle.svm.core.option.APIOption;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.RuntimeOptionKey;
 
 public class SubstrateOptions {
@@ -74,11 +74,11 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> IncludeNodeSourcePositions = new HostedOptionKey<>(false);
 
     @Option(help = "Search path for C libraries passed to the linker (list of comma-separated directories)")//
-    public static final HostedOptionKey<String[]> CLibraryPath = new HostedOptionKey<>(new String[]{
-                    Paths.get("clibraries/" + OS.getCurrent().asPackageName() + "-" + SubstrateUtil.getArchitectureName()).toAbsolutePath().toString()});
+    public static final HostedOptionKey<String> CLibraryPath = new HostedOptionKey<>(
+                    Paths.get("clibraries/" + OS.getCurrent().asPackageName() + "-" + SubstrateUtil.getArchitectureName()).toAbsolutePath().toString());
 
     @Option(help = "Path passed to the linker as the -rpath (list of comma-separated directories)")//
-    public static final HostedOptionKey<String[]> LinkerRPath = new HostedOptionKey<>(null);
+    public static final HostedOptionKey<String> LinkerRPath = new HostedOptionKey<>("");
 
     @APIOption(name = "-ea", customHelp = "enable assertions in the generated image")//
     @APIOption(name = "-da", kind = APIOption.APIOptionKind.Negated, customHelp = "disable assertions in the generated image")//
@@ -130,10 +130,11 @@ public class SubstrateOptions {
     @APIOption(name = "enable-https", fixedValue = "https", customHelp = "enable https support in the generated image")//
     @APIOption(name = "enable-url-protocols")//
     @Option(help = "List of comma separated URL protocols to enable.")//
-    public static final HostedOptionKey<String[]> EnableURLProtocols = new HostedOptionKey<String[]>(null) {
+    public static final HostedOptionKey<String> EnableURLProtocols = new HostedOptionKey<String>("") {
         @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String[] oldValue, String[] newValue) {
-            for (String protocol : OptionUtils.flatten(",", newValue)) {
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
+            String[] protocols = newValue.split(",");
+            for (String protocol : protocols) {
                 if (protocol.equals(JavaNetSubstitutions.HTTPS_PROTOCOL)) {
                     EnableAllSecurityServices.update(values, true);
                 }
@@ -161,10 +162,10 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> JNI = new HostedOptionKey<>(true);
 
     @Option(help = "Files describing program elements to be made accessible via JNI (for syntax, see ReflectionConfigurationFiles)", type = OptionType.User)//
-    public static final HostedOptionKey<String[]> JNIConfigurationFiles = new HostedOptionKey<>(null);
+    public static final HostedOptionKey<String> JNIConfigurationFiles = new HostedOptionKey<>("");
 
     @Option(help = "Resources describing program elements to be made accessible via JNI (see JNIConfigurationFiles).", type = OptionType.User)//
-    public static final HostedOptionKey<String[]> JNIConfigurationResources = new HostedOptionKey<>(null);
+    public static final HostedOptionKey<String> JNIConfigurationResources = new HostedOptionKey<>("");
 
     /*
      * Object and array allocation options.
@@ -219,7 +220,7 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> ParseRuntimeOptions = new HostedOptionKey<>(true);
 
     @Option(help = "Only use Java assert statements for classes that are matching the comma-separated list of package prefixes.")//
-    public static final HostedOptionKey<String[]> RuntimeAssertionsFilter = new HostedOptionKey<>(null);
+    public static final HostedOptionKey<String> RuntimeAssertionsFilter = new HostedOptionKey<>(null);
 
     @Option(help = "Perform method inlining in the AOT compiled native image")//
     public static final HostedOptionKey<Boolean> AOTInline = new HostedOptionKey<>(true);
@@ -236,17 +237,22 @@ public class SubstrateOptions {
     @Option(help = "Maximum number of nodes in a method so that it is considered trivial, if it does not have any invokes.")//
     public static final HostedOptionKey<Integer> MaxNodesInTrivialLeafMethod = new HostedOptionKey<>(40);
 
-    public static FoldedPredicate makeFilter(String[] definedFilters) {
-        if (definedFilters != null) {
-            List<String> wildCardList = OptionUtils.flatten(",", definedFilters);
-            return new FoldedPredicate((String javaName) -> {
-                for (String wildCard : wildCardList) {
-                    if (javaName.startsWith(wildCard)) {
-                        return true;
+    @Option(help = "Saves stack base pointer on the stack on method entry.")//
+    public static final HostedOptionKey<Boolean> UseStackBasePointer = new HostedOptionKey<>(false);
+
+    public static FoldedPredicate makeFilter(String definedFilter) {
+        if (definedFilter != null) {
+            List<String> wildCardList = Arrays.asList(definedFilter.split(","));
+            if (!wildCardList.contains("")) {
+                return new FoldedPredicate((String javaName) -> {
+                    for (String wildCard : wildCardList) {
+                        if (javaName.startsWith(wildCard)) {
+                            return true;
+                        }
                     }
-                }
-                return false;
-            });
+                    return false;
+                });
+            }
         }
         return new FoldedPredicate((String javaName) -> true);
     }

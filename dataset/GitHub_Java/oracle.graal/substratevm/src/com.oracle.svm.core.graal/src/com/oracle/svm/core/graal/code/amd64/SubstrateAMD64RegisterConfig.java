@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.core.graal.code.amd64;
 
+import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
+import static com.oracle.svm.core.util.VMError.unimplemented;
 import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rbx;
 import static jdk.vm.ci.amd64.AMD64.rcx;
@@ -55,7 +57,6 @@ import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.graal.code.SubstrateCallingConvention;
 import com.oracle.svm.core.graal.meta.SubstrateRegisterConfig;
-import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.CallingConvention;
@@ -150,7 +151,7 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
                 break;
 
             default:
-                throw VMError.shouldNotReachHere();
+                throw shouldNotReachHere();
 
         }
         attributesMap = RegisterAttributes.createMap(this, AMD64.allRegisters);
@@ -173,7 +174,7 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
             case Void:
                 return null;
             default:
-                throw VMError.shouldNotReachHere();
+                throw shouldNotReachHere();
         }
     }
 
@@ -219,21 +220,8 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
 
     @Override
     public RegisterArray getCallingConventionRegisters(Type type, JavaKind kind) {
-        switch (kind) {
-            case Boolean:
-            case Byte:
-            case Short:
-            case Char:
-            case Int:
-            case Long:
-            case Object:
-                return generalParameterRegs;
-            case Float:
-            case Double:
-                return xmmParameterRegs;
-            default:
-                throw VMError.shouldNotReachHere();
-        }
+        throw unimplemented();
+        // return null;
     }
 
     public boolean shouldUseBasePointer() {
@@ -282,7 +270,7 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
                     }
                     break;
                 default:
-                    throw VMError.shouldNotReachHere();
+                    throw shouldNotReachHere();
             }
 
             if (locations[i] == null) {
