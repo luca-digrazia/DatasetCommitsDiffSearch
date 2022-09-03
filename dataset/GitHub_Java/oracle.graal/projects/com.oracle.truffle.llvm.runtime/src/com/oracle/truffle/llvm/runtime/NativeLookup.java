@@ -58,7 +58,7 @@ public final class NativeLookup {
 
     NativeLookup(Env env) {
         this.env = env;
-        this.libraryHandles = loadLibraries(env);
+        this.libraryHandles = loadLibraries(env, LLVMOptions.ENGINE.dynamicNativeLibraryPath());
         this.defaultLibrary = loadDefaultLibrary(env);
     }
 
@@ -66,10 +66,9 @@ public final class NativeLookup {
      * PRIVATE
      */
 
-    private static List<TruffleObject> loadLibraries(TruffleLanguage.Env env) {
+    private static List<TruffleObject> loadLibraries(TruffleLanguage.Env env, String[] dynamicLibraryPaths) {
         CompilerAsserts.neverPartOfCompilation();
         List<TruffleObject> handles = new ArrayList<>();
-        String[] dynamicLibraryPaths = LLVMOptions.getNativeLibraries();
         for (String library : dynamicLibraryPaths) {
             try {
                 TruffleObject lib = loadLibrary(env, library);
@@ -117,10 +116,10 @@ public final class NativeLookup {
 
     private static String getNativeType(Type type) {
         if (type instanceof FunctionType) {
-            return prepareSignature((FunctionType) type, 0);
+            return prepareSignature((FunctionType) type);
         } else if (type instanceof PointerType && ((PointerType) type).getPointeeType() instanceof FunctionType) {
             FunctionType functionType = (FunctionType) ((PointerType) type).getPointeeType();
-            return prepareSignature(functionType, 0);
+            return prepareSignature(functionType);
         } else if (type instanceof PointerType) {
             return "POINTER";
         } else if (type instanceof PrimitiveType) {
@@ -245,11 +244,11 @@ public final class NativeLookup {
         }
     }
 
-    static String prepareSignature(FunctionType type, int skipArguments) {
+    static String prepareSignature(FunctionType type) {
         // TODO varargs
         CompilerAsserts.neverPartOfCompilation();
         String nativeRet = getNativeType(type.getReturnType());
-        String[] argTypes = getNativeTypes(type.getArgumentTypes(), skipArguments);
+        String[] argTypes = getNativeTypes(type.getArgumentTypes(), 0);
         StringBuilder sb = new StringBuilder();
         sb.append("(");
         for (String a : argTypes) {
