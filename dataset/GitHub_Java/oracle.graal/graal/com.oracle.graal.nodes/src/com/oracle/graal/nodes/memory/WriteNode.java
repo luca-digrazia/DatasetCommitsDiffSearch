@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
@@ -33,12 +30,14 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.memory.address.AddressNode.Address;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
  */
 @NodeInfo(nameTemplate = "Write#{p#location/s}")
-public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
+public final class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
 
     public static final NodeClass<WriteNode> TYPE = NodeClass.create(WriteNode.class);
 
@@ -55,11 +54,7 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simpli
     }
 
     public WriteNode(AddressNode address, LocationIdentity location, ValueNode value, BarrierType barrierType, GuardingNode guard, boolean initialization) {
-        this(TYPE, address, location, value, barrierType, guard, initialization);
-    }
-
-    protected WriteNode(NodeClass<? extends WriteNode> c, AddressNode address, LocationIdentity location, ValueNode value, BarrierType barrierType, GuardingNode guard, boolean initialization) {
-        super(c, address, location, value, barrierType, guard, initialization);
+        super(TYPE, address, location, value, barrierType, guard, initialization);
     }
 
     @Override

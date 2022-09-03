@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -34,6 +31,8 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Reads an {@linkplain FixedAccessNode accessed} value.
@@ -133,13 +132,6 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
                     return length;
                 }
             }
-            if (locationIdentity instanceof CanonicalizableLocation) {
-                CanonicalizableLocation canonicalize = (CanonicalizableLocation) locationIdentity;
-                ValueNode result = canonicalize.canonicalizeRead(read, address, object, tool);
-                assert result != null && result.stamp().isCompatible(read.stamp());
-                return result;
-            }
-
         }
         return read;
     }
