@@ -60,10 +60,7 @@ public final class GraphOrder {
                         if (input instanceof FrameState && node instanceof StateSplit && input == ((StateSplit) node).stateAfter()) {
                             // nothing to do - after frame states are known, allowed cycles
                         } else {
-                            // TODO assertion does not hold for Substrate VM (in general for all
-// notDataflow inputs)
-                            // assert false : "unexpected cycle detected at input " + node + " -> "
-// + input;
+                            assert false : "unexpected cycle detected at input " + node + " -> " + input;
                         }
                     }
                 }
@@ -88,7 +85,7 @@ public final class GraphOrder {
 
     private static void visitForward(ArrayList<Node> nodes, NodeBitMap visited, Node node, boolean floatingOnly) {
         try {
-            assert node == null || node.isAlive() : node + " not alive";
+            assert node.isAlive() : node + " not alive";
             if (node != null && !visited.isMarked(node)) {
                 if (floatingOnly && node instanceof FixedNode) {
                     throw new GraalInternalError("unexpected reference to fixed node: %s (this indicates an unexpected cycle)", node);
