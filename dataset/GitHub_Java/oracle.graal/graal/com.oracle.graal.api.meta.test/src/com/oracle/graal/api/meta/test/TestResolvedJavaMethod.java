@@ -313,8 +313,7 @@ public class TestResolvedJavaMethod extends MethodUniverse {
         "getLocalVariableTable",
         "isInVirtualMethodTable",
         "toParameterTypes",
-        "getParameterAnnotation",
-        "$jacocoInit"
+        "getParameterAnnotation"
     };
     // @formatter:on
 
