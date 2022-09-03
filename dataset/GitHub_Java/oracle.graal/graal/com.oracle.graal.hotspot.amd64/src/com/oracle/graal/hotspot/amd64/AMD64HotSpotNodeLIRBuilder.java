@@ -27,7 +27,6 @@ import static jdk.internal.jvmci.amd64.AMD64.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import com.oracle.graal.compiler.amd64.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -40,9 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 
 import jdk.internal.jvmci.amd64.*;
 import jdk.internal.jvmci.code.*;
-
 import com.oracle.graal.debug.*;
-
 import jdk.internal.jvmci.hotspot.*;
 import jdk.internal.jvmci.meta.*;
 
