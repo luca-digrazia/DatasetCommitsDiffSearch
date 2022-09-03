@@ -29,11 +29,10 @@ import com.sun.cri.ci.*;
 /**
  * The {@code StateSplit} class is the abstract base class of all instructions
  * that store an immutable copy of the frame state.
+ *
+ * @author Ben L. Titzer
  */
 public abstract class StateSplit extends Instruction {
-
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Sentinel denoting an explicitly cleared state.
@@ -50,7 +49,7 @@ public abstract class StateSplit extends Instruction {
      * @param graph
      */
     public StateSplit(CiKind kind, FrameState stateBefore, int inputCount, int successorCount, Graph graph) {
-        super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
+        super(kind, inputCount, successorCount, graph);
         this.stateBefore = stateBefore;
     }
 
