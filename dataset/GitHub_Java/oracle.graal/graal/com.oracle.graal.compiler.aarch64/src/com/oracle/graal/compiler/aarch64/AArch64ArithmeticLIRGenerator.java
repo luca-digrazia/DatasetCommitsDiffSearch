@@ -39,7 +39,6 @@ import com.oracle.graal.lir.aarch64.AArch64AddressValue;
 import com.oracle.graal.lir.aarch64.AArch64ArithmeticLIRGeneratorTool;
 import com.oracle.graal.lir.aarch64.AArch64ArithmeticOp;
 import com.oracle.graal.lir.aarch64.AArch64BitManipulationOp;
-import com.oracle.graal.lir.aarch64.AArch64BitManipulationOp.BitManipulationOpCode;
 import com.oracle.graal.lir.aarch64.AArch64Move.LoadOp;
 import com.oracle.graal.lir.aarch64.AArch64Move.StoreConstantOp;
 import com.oracle.graal.lir.aarch64.AArch64Move.StoreOp;
@@ -364,15 +363,7 @@ public class AArch64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implem
     public Value emitBitScanReverse(Value inputVal) {
         // TODO (das) old implementation said to use emitCountLeadingZeros instead - need extra node
         // for that though
-        return emitBitManipulation(BitManipulationOpCode.BSR, inputVal);
-    }
-
-    public Value emitCountLeadingZeros(Value value) {
-        return emitBitManipulation(BitManipulationOpCode.CLZ, value);
-    }
-
-    public Value emitCountTrailingZeros(Value value) {
-        throw JVMCIError.unimplemented();
+        return emitBitManipulation(AArch64BitManipulationOp.BitManipulationOpCode.BSR, inputVal);
     }
 
     private Variable emitBitManipulation(AArch64BitManipulationOp.BitManipulationOpCode op, Value inputVal) {
@@ -447,6 +438,14 @@ public class AArch64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implem
     }
 
     public Value emitMathTan(Value input) {
+        throw JVMCIError.unimplemented();
+    }
+
+    public Value emitCountLeadingZeros(Value value) {
+        throw JVMCIError.unimplemented();
+    }
+
+    public Value emitCountTrailingZeros(Value value) {
         throw JVMCIError.unimplemented();
     }
 
