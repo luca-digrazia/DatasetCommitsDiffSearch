@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
@@ -38,17 +38,17 @@ import com.oracle.graal.lir.sparc.*;
 final class SPARCHotSpotDeoptimizeCallerOp extends SPARCHotSpotEpilogueOp {
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        leaveFrame(crb);
+    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        leaveFrame(tasm);
 
         // SPARCHotSpotBackend backend = (SPARCHotSpotBackend)
         // HotSpotGraalRuntime.runtime().getBackend();
         // final boolean isStub = true;
         // HotSpotFrameContext frameContext = backend.new HotSpotFrameContext(isStub);
-        // frameContext.enter(crb);
+        // frameContext.enter(tasm);
         Register scratch = g3;
-        SPARCCall.indirectJmp(crb, masm, scratch, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP_HANDLER));
+        SPARCCall.indirectJmp(tasm, masm, scratch, tasm.foreignCalls.lookupForeignCall(UNCOMMON_TRAP));
 
-        // frameContext.leave(crb);
+        // frameContext.leave(tasm);
     }
 }

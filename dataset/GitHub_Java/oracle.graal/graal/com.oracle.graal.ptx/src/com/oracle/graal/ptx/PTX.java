@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -197,13 +197,13 @@ public class PTX extends Architecture {
     }
 
     @Override
-    public boolean canStoreValue(RegisterCategory category, PlatformKind lirKind) {
-        if (!(lirKind instanceof Kind)) {
+    public boolean canStoreValue(RegisterCategory category, PlatformKind platformKind) {
+        if (!(platformKind instanceof Kind)) {
             return false;
         }
 
-        Kind kind = (Kind) lirKind;
-        if (category.equals(REG)) {
+        Kind kind = (Kind) platformKind;
+        if (category == REG) {
             switch (kind) {
                 case Boolean:
                 case Byte:
@@ -223,7 +223,7 @@ public class PTX extends Architecture {
 
     @Override
     public PlatformKind getLargestStorableKind(RegisterCategory category) {
-        if (category.equals(REG)) {
+        if (category == REG) {
             return Kind.Double;
         } else {
             return Kind.Illegal;

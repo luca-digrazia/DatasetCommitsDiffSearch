@@ -34,11 +34,7 @@ import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.calc.*;
 
 public enum PTXCompare {
-    ICMP,
-    LCMP,
-    ACMP,
-    FCMP,
-    DCMP;
+    ICMP, LCMP, ACMP, FCMP, DCMP;
 
     public static class CompareOp extends PTXLIRInstruction {
 
@@ -58,7 +54,7 @@ public enum PTXCompare {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
             emit(masm, opcode, condition, x, y, predRegNum);
         }
 

@@ -265,6 +265,6 @@ public class HSAILControlFlow {
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        masm.emitConditionalMove(result, trueValue, falseValue, width);
+        masm.cmovCommon(result, trueValue, falseValue, width);
     }
 }
