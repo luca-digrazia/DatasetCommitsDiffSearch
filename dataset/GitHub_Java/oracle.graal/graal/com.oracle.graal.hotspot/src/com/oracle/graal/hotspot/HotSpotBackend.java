@@ -27,13 +27,13 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.HotSpotReplacementsImpl.GraphProducer;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
-import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
+import com.oracle.graal.lir.LIRInstruction.*;
+import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.tiers.*;
@@ -95,6 +95,14 @@ public abstract class HotSpotBackend extends Backend {
     }
 
     /**
+     * Gets the graph producer provided by this backend (if any). A primary use case for this is a
+     * GPU backend that may want to offload certain methods to the GPU.
+     */
+    public GraphProducer getGraphProducer() {
+        return null;
+    }
+
+    /**
      * Finds all the registers that are defined by some given LIR.
      * 
      * @param lir the LIR to examine
@@ -113,7 +121,7 @@ public abstract class HotSpotBackend extends Backend {
                 return value;
             }
         };
-        for (Block block : lir.codeEmittingOrder()) {
+        for (AbstractBlock<?> block : lir.codeEmittingOrder()) {
             for (LIRInstruction op : lir.lir(block)) {
                 if (op instanceof LabelOp) {
                     // Don't consider this as a definition

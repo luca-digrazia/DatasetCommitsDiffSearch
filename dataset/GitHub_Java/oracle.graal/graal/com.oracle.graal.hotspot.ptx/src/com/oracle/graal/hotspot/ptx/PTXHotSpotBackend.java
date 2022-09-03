@@ -184,7 +184,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
 
             private boolean canOffloadToGPU(ResolvedJavaMethod method) {
                 HotSpotVMConfig config = getRuntime().getConfig();
-                return config.gpuOffload && method.getName().contains("lambda$") && method.isSynthetic();
+                return config.gpuOffload && method.getName().contains("lambda$") & method.isSynthetic();
             }
         };
     }
@@ -423,7 +423,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
 
         RegisterAnalysis registerAnalysis = new RegisterAnalysis();
 
-        for (Block b : lir.codeEmittingOrder()) {
+        for (AbstractBlock<?> b : lir.codeEmittingOrder()) {
             for (LIRInstruction op : lir.lir(b)) {
                 if (op instanceof LabelOp) {
                     // Don't consider this as a definition
