@@ -102,7 +102,12 @@ final class JavaClassDesc {
                         collectPublicMethods(type, methodMap, staticMethodMap);
                         break;
                     }
-                    putMethod(m, methodMap, staticMethodMap);
+                    SingleMethodDesc method = SingleMethodDesc.unreflect(m);
+
+                    methodMap.merge(m.getName(), method, MERGE);
+                    if (Modifier.isStatic(m.getModifiers())) {
+                        staticMethodMap.merge(m.getName(), method, MERGE);
+                    }
                 }
 
                 boolean inheritedPublicInstanceFields = false;
@@ -180,7 +185,12 @@ final class JavaClassDesc {
                     }
 
                     if (visited.add(methodInfo(m))) {
-                        putMethod(m, methodMap, staticMethodMap);
+                        SingleMethodDesc method = SingleMethodDesc.unreflect(m);
+
+                        methodMap.merge(m.getName(), method, MERGE);
+                        if (Modifier.isStatic(m.getModifiers())) {
+                            staticMethodMap.merge(m.getName(), method, MERGE);
+                        }
                     }
                 }
             }
@@ -216,16 +226,6 @@ final class JavaClassDesc {
                 }
             }
             return new MethodInfo();
-        }
-
-        private static SingleMethodDesc putMethod(Method m, Map<String, JavaMethodDesc> methodMap, Map<String, JavaMethodDesc> staticMethodMap) {
-            SingleMethodDesc method = SingleMethodDesc.unreflect(m);
-            if (Modifier.isStatic(m.getModifiers())) {
-                staticMethodMap.merge(m.getName(), method, MERGE);
-            } else {
-                methodMap.merge(m.getName(), method, MERGE);
-            }
-            return method;
         }
 
         static JavaMethodDesc merge(JavaMethodDesc existing, JavaMethodDesc other) {
@@ -271,7 +271,7 @@ final class JavaClassDesc {
     }
 
     /**
-     * Looks up a public non-static method in this class.
+     * Looks up a public method in this class.
      *
      * @param name method name
      * @return method descriptor or {@code null} if there is no such method
@@ -300,7 +300,7 @@ final class JavaClassDesc {
     }
 
     /**
-     * Looks up a public non-static field in this class.
+     * Looks up a public field in this class.
      *
      * @param name field name
      * @return field or {@code null} if there is no such field
