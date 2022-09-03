@@ -495,9 +495,6 @@ public abstract class Node implements NodeInterface, Cloneable {
         return null;
     }
 
-    /**
-     * TODO: Javadoc.
-     */
     protected void reportPolymorphicSpecialize() {
         CompilerAsserts.neverPartOfCompilation();
         Node.ACCESSOR.nodes().reportPolymorphicSpecialize(this);
