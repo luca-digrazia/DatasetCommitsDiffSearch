@@ -182,6 +182,11 @@ class HostLanguage extends TruffleLanguage<HostContext> {
     }
 
     @Override
+    protected void initializeContext(HostContext context) throws Exception {
+        context.lookupInternalContext();
+    }
+
+    @Override
     protected Iterable<Scope> findTopScopes(HostContext context) {
         Iterable<Scope> topScopes = context.topScopes;
         if (topScopes == null) {
