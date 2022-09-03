@@ -30,6 +30,8 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
@@ -38,6 +40,22 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 
 final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory {
+    private static final Class<?> JFO_CLASS;
+    private static final Class<?> JO_CLASS;
+    static {
+        try {
+            ClassLoader l = EngineTruffleObject.class.getClassLoader();
+            if (!TruffleOptions.AOT) {
+                JFO_CLASS = Class.forName("com.oracle.truffle.api.interop.java.JavaFunctionObject", false, l);
+            } else {
+                JFO_CLASS = null;
+            }
+            JO_CLASS = Class.forName("com.oracle.truffle.api.interop.java.JavaObject", false, l);
+        } catch (ClassNotFoundException ex) {
+            throw new ExceptionInInitializerError(ex);
+        }
+    }
+
     private final PolyglotEngine engine;
     private final TruffleObject delegate;
 
@@ -49,6 +67,12 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
     static Object wrap(PolyglotEngine engine, Object value) {
         Object obj = ConvertedObject.value(value);
         if (obj instanceof TruffleObject) {
+            if (obj.getClass() == JO_CLASS) {
+                return obj;
+            }
+            if (obj.getClass() == JFO_CLASS) {
+                return obj;
+            }
             return new EngineTruffleObject(engine, (TruffleObject) obj);
         } else {
             return obj;
@@ -124,7 +148,7 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
         @Child private DirectCallNode messageCallNode;
 
         WrappingRoot(PolyglotEngine engine, Message foreignMessage) {
-            super(null);
+            super(TruffleLanguage.class, null, null);
             this.engine = engine;
             this.messageCallNode = DirectCallNode.create(PolyglotRootNode.createSend(engine, foreignMessage));
         }
