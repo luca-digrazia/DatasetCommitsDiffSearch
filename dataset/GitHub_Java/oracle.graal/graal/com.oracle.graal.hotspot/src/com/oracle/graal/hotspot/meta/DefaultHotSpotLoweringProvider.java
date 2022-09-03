@@ -26,6 +26,13 @@ import static com.oracle.graal.compiler.common.GraalOptions.AlwaysInlineVTableSt
 import static com.oracle.graal.compiler.common.GraalOptions.InlineVTableStubs;
 import static com.oracle.graal.compiler.common.GraalOptions.OmitHotExceptionStacktrace;
 import static com.oracle.graal.compiler.common.LocationIdentity.any;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_COS;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_EXP;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG10;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_POW;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_SIN;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_TAN;
 import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.OSR_MIGRATION_END;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.CLASS_KLASS_LOCATION;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.CLASS_MIRROR_LOCATION;
@@ -76,7 +83,7 @@ import com.oracle.graal.hotspot.replacements.KlassLayoutHelperNode;
 import com.oracle.graal.hotspot.replacements.LoadExceptionObjectSnippets;
 import com.oracle.graal.hotspot.replacements.MonitorSnippets;
 import com.oracle.graal.hotspot.replacements.NewObjectSnippets;
-import com.oracle.graal.hotspot.replacements.StringToBytesSnippets;
+import com.oracle.graal.hotspot.replacements.RuntimeStringSnippets;
 import com.oracle.graal.hotspot.replacements.UnsafeLoadSnippets;
 import com.oracle.graal.hotspot.replacements.WriteBarrierSnippets;
 import com.oracle.graal.hotspot.replacements.arraycopy.ArrayCopyNode;
@@ -104,12 +111,11 @@ import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.calc.IntegerDivRemNode;
 import com.oracle.graal.nodes.calc.IsNullNode;
 import com.oracle.graal.nodes.calc.RemNode;
-import com.oracle.graal.nodes.debug.StringToBytesNode;
+import com.oracle.graal.nodes.debug.RuntimeStringNode;
 import com.oracle.graal.nodes.debug.VerifyHeapNode;
 import com.oracle.graal.nodes.extended.BytecodeExceptionNode;
 import com.oracle.graal.nodes.extended.ForeignCallNode;
 import com.oracle.graal.nodes.extended.GetClassNode;
-import com.oracle.graal.nodes.extended.GuardedUnsafeLoadNode;
 import com.oracle.graal.nodes.extended.GuardingNode;
 import com.oracle.graal.nodes.extended.LoadHubNode;
 import com.oracle.graal.nodes.extended.LoadMethodNode;
@@ -139,7 +145,12 @@ import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.replacements.DefaultJavaLoweringProvider;
+import com.oracle.graal.replacements.Snippet;
 import com.oracle.graal.replacements.nodes.AssertionNode;
+import com.oracle.graal.replacements.nodes.BinaryMathIntrinsicNode;
+import com.oracle.graal.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation;
+import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode;
+import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
 
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
@@ -151,6 +162,7 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
@@ -159,6 +171,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider implements HotSpotLoweringProvider {
 
     protected final HotSpotGraalRuntimeProvider runtime;
+    protected final ForeignCallsProvider foreignCalls;
     protected final HotSpotRegistersProvider registers;
     protected final HotSpotConstantReflectionProvider constantReflection;
 
@@ -170,12 +183,13 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     protected UnsafeLoadSnippets.Templates unsafeLoadSnippets;
     protected AssertionSnippets.Templates assertionSnippets;
     protected ArrayCopySnippets.Templates arraycopySnippets;
-    protected StringToBytesSnippets.Templates stringToBytesSnippets;
+    protected RuntimeStringSnippets.Templates runtimeStringSnippets;
 
     public DefaultHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
-        super(metaAccess, foreignCalls, target);
+        super(metaAccess, target);
         this.runtime = runtime;
+        this.foreignCalls = foreignCalls;
         this.registers = registers;
         this.constantReflection = constantReflection;
     }
@@ -193,7 +207,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(providers, target);
         assertionSnippets = new AssertionSnippets.Templates(providers, target);
         arraycopySnippets = new ArrayCopySnippets.Templates(providers, target);
-        stringToBytesSnippets = new StringToBytesSnippets.Templates(providers, target);
+        runtimeStringSnippets = new RuntimeStringSnippets.Templates(providers, target);
         providers.getReplacements().registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(providers, target));
     }
 
@@ -303,10 +317,8 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             exceptionObjectSnippets.lower((LoadExceptionObjectNode) n, registers, tool);
         } else if (n instanceof AssertionNode) {
             assertionSnippets.lower((AssertionNode) n, tool);
-        } else if (n instanceof StringToBytesNode) {
-            if (graph.getGuardsStage().areDeoptsFixed()) {
-                stringToBytesSnippets.lower((StringToBytesNode) n, tool);
-            }
+        } else if (n instanceof RuntimeStringNode) {
+            runtimeStringSnippets.lower((RuntimeStringNode) n, tool);
         } else if (n instanceof IntegerDivRemNode) {
             // Nothing to do for division nodes. The HotSpot signal handler catches divisions by
             // zero and the MIN_VALUE / -1 cases.
@@ -322,8 +334,100 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 lowerComputeObjectAddressNode((ComputeObjectAddressNode) n);
             }
+        } else if (n instanceof UnaryMathIntrinsicNode) {
+            lowerUnaryMath((UnaryMathIntrinsicNode) n, tool);
+        } else if (n instanceof BinaryMathIntrinsicNode) {
+            lowerBinaryMath((BinaryMathIntrinsicNode) n, tool);
         } else {
             super.lower(n, tool);
+        }
+    }
+
+    private void lowerBinaryMath(BinaryMathIntrinsicNode math, LoweringTool tool) {
+        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
+            return;
+        }
+        ResolvedJavaMethod method = math.graph().method();
+        if (method != null) {
+            if (method.getAnnotation(Snippet.class) != null) {
+                /*
+                 * In the context of the snippet use the LIR lowering instead of the Node lowering.
+                 */
+                return;
+            }
+            if (method.getName().equalsIgnoreCase(math.getOperation().name()) && tool.getMetaAccess().lookupJavaType(Math.class).equals(method.getDeclaringClass())) {
+                /*
+                 * A root compilation of the intrinsic method should emit the full assembly
+                 * implementation.
+                 */
+                return;
+            }
+
+        }
+        ForeignCallDescriptor foreignCall = foreignCallForBinaryOperation(math.getOperation());
+        if (foreignCall != null) {
+            StructuredGraph graph = math.graph();
+            ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, foreignCall, math.getX(), math.getY()));
+            graph.addAfterFixed(tool.lastFixedNode(), call);
+            math.replaceAtUsages(call);
+        }
+    }
+
+    private void lowerUnaryMath(UnaryMathIntrinsicNode math, LoweringTool tool) {
+        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
+            return;
+        }
+        ResolvedJavaMethod method = math.graph().method();
+        if (method != null) {
+            if (method.getAnnotation(Snippet.class) != null) {
+                /*
+                 * In the context of the snippet use the LIR lowering instead of the Node lowering.
+                 */
+                return;
+            }
+            if (method.getName().equalsIgnoreCase(math.getOperation().name()) && tool.getMetaAccess().lookupJavaType(Math.class).equals(method.getDeclaringClass())) {
+                /*
+                 * A root compilation of the intrinsic method should emit the full assembly
+                 * implementation.
+                 */
+                return;
+            }
+
+        }
+        ForeignCallDescriptor foreignCall = foreignCallForUnaryOperation(math.getOperation());
+        if (foreignCall != null) {
+            StructuredGraph graph = math.graph();
+            ForeignCallNode call = math.graph().add(new ForeignCallNode(foreignCalls, foreignCall, math.getValue()));
+            graph.addAfterFixed(tool.lastFixedNode(), call);
+            math.replaceAtUsages(call);
+        }
+    }
+
+    protected ForeignCallDescriptor foreignCallForUnaryOperation(UnaryOperation operation) {
+        switch (operation) {
+            case LOG:
+                return ARITHMETIC_LOG;
+            case LOG10:
+                return ARITHMETIC_LOG10;
+            case EXP:
+                return ARITHMETIC_EXP;
+            case SIN:
+                return ARITHMETIC_SIN;
+            case COS:
+                return ARITHMETIC_COS;
+            case TAN:
+                return ARITHMETIC_TAN;
+            default:
+                throw GraalError.shouldNotReachHere();
+        }
+    }
+
+    protected ForeignCallDescriptor foreignCallForBinaryOperation(BinaryOperation operation) {
+        switch (operation) {
+            case POW:
+                return ARITHMETIC_POW;
+            default:
+                throw GraalError.shouldNotReachHere();
         }
     }
 
@@ -472,7 +576,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     @Override
     protected void lowerUnsafeLoadNode(UnsafeLoadNode load, LoweringTool tool) {
         StructuredGraph graph = load.graph();
-        if (!(load instanceof GuardedUnsafeLoadNode) && !graph.getGuardsStage().allowsFloatingGuards() && addReadBarrier(load)) {
+        if (load.getGuardingCondition() == null && !graph.getGuardsStage().allowsFloatingGuards() && addReadBarrier(load)) {
             unsafeLoadSnippets.lower(load, tool);
         } else {
             super.lowerUnsafeLoadNode(load, tool);

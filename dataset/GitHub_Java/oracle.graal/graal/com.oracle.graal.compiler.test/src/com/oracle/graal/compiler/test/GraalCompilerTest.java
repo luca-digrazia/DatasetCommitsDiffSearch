@@ -102,6 +102,7 @@ import com.oracle.graal.test.GraalTest;
 
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.CompiledCode;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
@@ -842,8 +843,9 @@ public abstract class GraalCompilerTest extends GraalTest {
         return null;
     }
 
-    protected InstalledCode addMethod(final ResolvedJavaMethod method, final CompilationResult compilationResult) {
-        return backend.addInstalledCode(method, compilationResult);
+    protected InstalledCode addMethod(final ResolvedJavaMethod method, final CompilationResult compResult) {
+        CompiledCode compiledCode = backend.createCompiledCode(method, compResult);
+        return getCodeCache().addCode(method, compiledCode, null, null);
     }
 
     private final Map<ResolvedJavaMethod, Method> methodMap = new HashMap<>();

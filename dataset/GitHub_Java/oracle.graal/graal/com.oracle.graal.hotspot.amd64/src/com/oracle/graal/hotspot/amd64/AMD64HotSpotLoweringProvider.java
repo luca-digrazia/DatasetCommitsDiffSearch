@@ -74,7 +74,7 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
     }
 
     @Override
-    protected ForeignCallDescriptor toForeignCall(UnaryOperation operation) {
+    protected ForeignCallDescriptor foreignCallForUnaryOperation(UnaryOperation operation) {
         if (GraalArithmeticStubs.getValue()) {
             switch (operation) {
                 case LOG:
@@ -90,22 +90,18 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
                 case EXP:
                     return ARITHMETIC_EXP_STUB;
             }
-        } else if (operation == UnaryOperation.EXP) {
-            return operation.foreignCallDescriptor;
         }
         // Lower only using LIRGenerator
         return null;
     }
 
     @Override
-    protected ForeignCallDescriptor toForeignCall(BinaryOperation operation) {
+    protected ForeignCallDescriptor foreignCallForBinaryOperation(BinaryOperation operation) {
         if (GraalArithmeticStubs.getValue()) {
             switch (operation) {
                 case POW:
                     return ARITHMETIC_POW_STUB;
             }
-        } else if (operation == BinaryOperation.POW) {
-            return operation.foreignCallDescriptor;
         }
         // Lower only using LIRGenerator
         return null;
