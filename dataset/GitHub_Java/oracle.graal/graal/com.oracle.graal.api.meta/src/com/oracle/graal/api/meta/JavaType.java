@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,76 +22,132 @@
  */
 package com.oracle.graal.api.meta;
 
+import static com.oracle.graal.api.meta.MetaUtil.*;
+
 /**
- * Represents a resolved or unresolved type in the compiler-runtime interface. Types include primitives, objects, {@code void},
- * and arrays thereof.
+ * Represents a resolved or unresolved type. Types include primitives, objects, {@code void}, and
+ * arrays thereof.
  */
-public interface JavaType {
+public interface JavaType extends TrustedInterface {
 
     /**
-     * Represents each of the several different parts of the runtime representation of
-     * a type which compiled code may need to reference individually. These may or may not be
-     * different objects or data structures, depending on the runtime system.
-     */
-    public enum Representation {
-        /**
-         * The runtime representation of the data structure containing the static fields of this type.
-         */
-        StaticFields,
-
-        /**
-         * The runtime representation of the Java class object of this type.
-         */
-        JavaClass,
-
-        /**
-         * The runtime representation of the "hub" of this type--that is, the closest part of the type
-         * representation which is typically stored in the object header.
-         */
-        ObjectHub
-    }
-
-    /**
-     * Gets the name of this type in internal form. The following are examples of strings returned by this method:
+     * Returns the name of this type in internal form. The following are examples of strings
+     * returned by this method:
+     *
      * <pre>
      *     "Ljava/lang/Object;"
      *     "I"
      *     "[[B"
      * </pre>
+     */
+    String getName();
+
+    /**
+     * Returns an unqualified name of this type.
      *
-     * @return the name of this type in internal form
+     * <pre>
+     *     "Object"
+     *     "Integer"
+     * </pre>
      */
-    String name();
+    default String getUnqualifiedName() {
+        String name = getName();
+        if (name.indexOf('/') != -1) {
+            name = name.substring(name.lastIndexOf('/') + 1);
+        }
+        if (name.endsWith(";")) {
+            name = name.substring(0, name.length() - 1);
+        }
+        return name;
+    }
 
     /**
-     * For array types, gets the type of the components.
-     * @return the component type of this array type
+     * For array types, gets the type of the components, or {@code null} if this is not an array
+     * type. This method is analogous to {@link Class#getComponentType()}.
      */
-    JavaType componentType();
+    JavaType getComponentType();
 
     /**
-     * Gets the type representing an array with elements of this type.
-     * @return a new compiler interface type representing an array of this type
+     * Gets the elemental type for this given type. The elemental type is the corresponding zero
+     * dimensional type of an array type. For example, the elemental type of {@code int[][][]} is
+     * {@code int}. A non-array type is its own elemental type.
      */
-    JavaType arrayOf();
+    default JavaType getElementalType() {
+        JavaType t = this;
+        while (t.getComponentType() != null) {
+            t = t.getComponentType();
+        }
+        return t;
+    }
 
     /**
-     * Gets the kind of this compiler interface type.
-     * @return the kind
+     * Gets the array class type representing an array with elements of this type.
      */
-    Kind kind();
+    JavaType getArrayClass();
 
     /**
-     * Gets the kind used to represent the specified part of this type.
-     * @param r the part of the this type
-     * @return the kind of constants for the specified part of the type
+     * Gets the kind of this type.
      */
-    Kind getRepresentationKind(Representation r);
+    Kind getKind();
 
     /**
-     * Resolved this Java type and returns the result.
-     * @param accessingClass the class that requests resolving this type
+     * Resolves this type to a {@link ResolvedJavaType}.
+     *
+     * @param accessingClass the context of resolution (must not be null)
      * @return the resolved Java type
+     * @throws LinkageError if the resolution failed
+     * @throws NullPointerException if {@code accessingClass} is {@code null}
      */
     ResolvedJavaType resolve(ResolvedJavaType accessingClass);
+
+    /**
+     * Gets the Java programming language name for this type. The following are examples of strings
+     * returned by this method:
+     *
+     * <pre>
+     *      java.lang.Object
+     *      int
+     *      boolean[][]
+     * </pre>
+     *
+     * @return the Java name corresponding to this type
+     */
+    default String toJavaName() {
+        return internalNameToJava(getName(), true, false);
+    }
+
+    /**
+     * Gets the Java programming language name for this type. The following are examples of strings
+     * returned by this method:
+     *
+     * <pre>
+     *     qualified == true:
+     *         java.lang.Object
+     *         int
+     *         boolean[][]
+     *     qualified == false:
+     *         Object
+     *         int
+     *         boolean[][]
+     * </pre>
+     *
+     * @param qualified specifies if the package prefix of this type should be included in the
+     *            returned name
+     * @return the Java name corresponding to this type
+     */
+    default String toJavaName(boolean qualified) {
+        Kind kind = getKind();
+        if (kind == Kind.Object) {
+            return internalNameToJava(getName(), qualified, false);
+        }
+        return getKind().getJavaName();
+    }
+
+    /**
+     * Returns this type's name in the same format as {@link Class#getName()}.
+     */
+    default String toClassName() {
+        return internalNameToJava(getName(), true, true);
+    }
+
 }

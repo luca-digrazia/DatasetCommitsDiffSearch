@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,20 @@
  */
 package com.oracle.graal.phases.verify;
 
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.ObjectEqualsNode;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.phases.VerifyPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
-
-import jdk.vm.ci.meta.JavaField;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaMethod;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * For certain types, object identity should not be used for object equality check. This phase
  * checks the correct usage of the given type. Equality checks with == or != (except null checks)
  * results in an {@link AssertionError}.
+ *
+ * Note that only {@link TrustedInterface}s can be verified.
  */
 public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
 
@@ -54,18 +46,7 @@ public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
 
     public VerifyUsageWithEquals(Class<?> restrictedClass) {
         this.restrictedClass = restrictedClass;
-        assert !restrictedClass.isInterface() || isTrustedInterface(restrictedClass);
-    }
-
-    private static final Class<?>[] trustedInterfaceTypes = {JavaType.class, JavaField.class, JavaMethod.class};
-
-    private static boolean isTrustedInterface(Class<?> cls) {
-        for (Class<?> trusted : trustedInterfaceTypes) {
-            if (trusted.isAssignableFrom(cls)) {
-                return true;
-            }
-        }
-        return false;
+        assert !restrictedClass.isInterface() || TrustedInterface.class.isAssignableFrom(restrictedClass);
     }
 
     /**
@@ -90,7 +71,7 @@ public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
     private static boolean isEqualsMethod(ResolvedJavaMethod method) {
         if (method.getName().equals("equals")) {
             Signature sig = method.getSignature();
-            if (sig.getReturnKind() == JavaKind.Boolean) {
+            if (sig.getReturnKind() == Kind.Boolean) {
                 if (sig.getParameterCount(false) == 1) {
                     ResolvedJavaType ptype = (ResolvedJavaType) sig.getParameterType(0, method.getDeclaringClass());
                     if (ptype.isJavaLangObject()) {
@@ -126,11 +107,7 @@ public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
         for (ObjectEqualsNode cn : graph.getNodes().filter(ObjectEqualsNode.class)) {
             // bail out if we compare an object of type klass with == or != (except null checks)
             ResolvedJavaMethod method = graph.method();
-            ResolvedJavaType restrictedType = context.getMetaAccess().lookupJavaType(restrictedClass);
-
-            if (method.getDeclaringClass().equals(restrictedType)) {
-                // Allow violation in methods of the restricted type itself.
-            } else if (isIllegalUsage(method, cn.getX(), cn.getY(), context.getMetaAccess()) || isIllegalUsage(method, cn.getY(), cn.getX(), context.getMetaAccess())) {
+            if (isIllegalUsage(method, cn.getX(), cn.getY(), context.getMetaAccess()) || isIllegalUsage(method, cn.getY(), cn.getX(), context.getMetaAccess())) {
                 throw new VerificationError("Verification of " + restrictedClass.getName() + " usage failed: Comparing " + cn.getX() + " and " + cn.getY() + " in " + method +
                                 " must use .equals() for object equality, not '==' or '!='");
             }
