@@ -2193,11 +2193,10 @@ public class AMD64Assembler extends AMD64BaseAssembler {
     }
 
     public final void movswl(Register dst, AMD64Address src) {
-        AMD64RMOp.MOVSX.emit(this, DWORD, dst, src);
-    }
-
-    public final void movswq(Register dst, AMD64Address src) {
-        AMD64RMOp.MOVSX.emit(this, QWORD, dst, src);
+        prefix(src, dst);
+        emitByte(0x0F);
+        emitByte(0xBF);
+        emitOperandHelper(dst, src, 0);
     }
 
     public final void movw(AMD64Address dst, int imm16) {
@@ -2230,16 +2229,11 @@ public class AMD64Assembler extends AMD64BaseAssembler {
         AMD64RMOp.MOVZXB.emit(this, QWORD, dst, src);
     }
 
-    public final void movzbq(Register dst, AMD64Address src) {
-        AMD64RMOp.MOVZXB.emit(this, QWORD, dst, src);
-    }
-
     public final void movzwl(Register dst, AMD64Address src) {
-        AMD64RMOp.MOVZX.emit(this, DWORD, dst, src);
-    }
-
-    public final void movzwq(Register dst, AMD64Address src) {
-        AMD64RMOp.MOVZX.emit(this, QWORD, dst, src);
+        prefix(src, dst);
+        emitByte(0x0F);
+        emitByte(0xB7);
+        emitOperandHelper(dst, src, 0);
     }
 
     public final void negl(Register dst) {
@@ -2521,14 +2515,6 @@ public class AMD64Assembler extends AMD64BaseAssembler {
         emitModRM(dst, src);
     }
 
-    public final void pcmpeqd(Register dst, Register src) {
-        assert supports(CPUFeature.SSE2);
-        assert dst.getRegisterCategory().equals(XMM) && src.getRegisterCategory().equals(XMM);
-        simdPrefix(dst, dst, src, PD, P_0F, false);
-        emitByte(0x76);
-        emitModRM(dst, src);
-    }
-
     public final void pcmpestri(Register dst, AMD64Address src, int imm8) {
         assert supports(CPUFeature.SSE4_2);
         assert inRC(XMM, dst);
@@ -2555,61 +2541,14 @@ public class AMD64Assembler extends AMD64BaseAssembler {
         emitModRM(dst, src);
     }
 
-    private void pmovSZx(Register dst, AMD64Address src, int op) {
+    // Insn: VPMOVZXBW xmm1, xmm2/m64
+
+    public final void pmovzxbw(Register dst, AMD64Address src) {
         assert supports(CPUFeature.SSE4_1);
         assert inRC(XMM, dst);
         simdPrefix(dst, Register.None, src, PD, P_0F38, false);
-        emitByte(op);
+        emitByte(0x30);
         emitOperandHelper(dst, src, 0);
-    }
-
-    public final void pmovsxbw(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x20);
-    }
-
-    public final void pmovsxbd(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x21);
-    }
-
-    public final void pmovsxbq(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x22);
-    }
-
-    public final void pmovsxwd(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x23);
-    }
-
-    public final void pmovsxwq(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x24);
-    }
-
-    public final void pmovsxdq(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x25);
-    }
-
-    // Insn: VPMOVZXBW xmm1, xmm2/m64
-    public final void pmovzxbw(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x30);
-    }
-
-    public final void pmovzxbd(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x31);
-    }
-
-    public final void pmovzxbq(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x32);
-    }
-
-    public final void pmovzxwd(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x33);
-    }
-
-    public final void pmovzxwq(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x34);
-    }
-
-    public final void pmovzxdq(Register dst, AMD64Address src) {
-        pmovSZx(dst, src, 0x35);
     }
 
     public final void pmovzxbw(Register dst, Register src) {
@@ -2780,14 +2719,6 @@ public class AMD64Assembler extends AMD64BaseAssembler {
         emitModRM(dst, src);
     }
 
-    public final void punpcklbw(Register dst, Register src) {
-        assert supports(CPUFeature.SSE2);
-        assert inRC(XMM, dst) && inRC(XMM, src);
-        simdPrefix(dst, dst, src, PD, P_0F, false);
-        emitByte(0x60);
-        emitModRM(dst, src);
-    }
-
     public final void rcpps(Register dst, Register src) {
         assert inRC(XMM, dst) && inRC(XMM, src);
         simdPrefix(dst, Register.None, src, PS, P_0F, false);
@@ -2924,10 +2855,6 @@ public class AMD64Assembler extends AMD64BaseAssembler {
 
     public final void xorl(Register dst, Register src) {
         XOR.rmOp.emit(this, DWORD, dst, src);
-    }
-
-    public final void xorq(Register dst, Register src) {
-        XOR.rmOp.emit(this, QWORD, dst, src);
     }
 
     public final void xorpd(Register dst, Register src) {
