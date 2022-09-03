@@ -45,8 +45,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.asm.amd64.Parser;
-import com.oracle.truffle.llvm.context.LLVMContext;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
@@ -59,7 +57,9 @@ import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMIntNuller;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMLongNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMBasicBlockNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMTerminatorNode;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
@@ -92,8 +92,11 @@ import com.oracle.truffle.llvm.parser.LLVMType;
 import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
 import com.oracle.truffle.llvm.parser.base.model.enums.CompareOperator;
 import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.types.*;
+import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.base.model.types.ArrayType;
+import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
+import com.oracle.truffle.llvm.parser.base.model.types.Type;
+import com.oracle.truffle.llvm.parser.base.model.types.VectorType;
 import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
@@ -102,13 +105,13 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunction;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
-import com.oracle.truffle.llvm.types.NativeResolver;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor.NativeResolver;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 
 public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
@@ -449,10 +452,17 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public Object allocateGlobalVariable(GlobalValueSymbol globalVariable) {
+    public LLVMGlobalVariableDescriptor allocateGlobalVariable(GlobalVariable globalVariable) {
         String name = globalVariable.getName();
 
-        NativeResolver nativeResolver = () -> LLVMAddress.fromLong(runtime.getNativeHandle(name));
+        NativeResolver nativeResolver = new NativeResolver() {
+
+            @Override
+            public LLVMAddress resolve() {
+                return LLVMAddress.fromLong(runtime.getNativeHandle(name));
+            }
+
+        };
 
         LLVMGlobalVariableDescriptor descriptor;
 
@@ -463,13 +473,14 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
             descriptor = context.getGlobalVariableRegistry().lookupOrAdd(name, nativeResolver);
         }
 
-        if ((globalVariable.getInitialiser() > 0 || !globalVariable.isExtern()) && !descriptor.isDeclared()) {
-            Type resolvedType = ((PointerType) globalVariable.getType()).getPointeeType();
+        if (!globalVariable.isExtern() && !descriptor.isDeclared()) {
+            Type resolvedType = globalVariable.getType();
             int byteSize = runtime.getByteSize(resolvedType);
             LLVMAddress nativeStorage = LLVMHeap.allocateMemory(byteSize);
             LLVMAddressNode addressLiteralNode = (LLVMAddressNode) createLiteral(nativeStorage, LLVMBaseType.ADDRESS);
             runtime.addDestructor(LLVMFreeFactory.create(addressLiteralNode));
             descriptor.declare(nativeStorage);
+            return descriptor;
         }
 
         return descriptor;
@@ -511,7 +522,7 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
                  */
                 return new LLVMAddressNuller(slot);
             case Illegal:
-                if (LLVMOptions.DEBUG.debug()) {
+                if (LLVMBaseOptionFacade.debugEnabled()) {
                     LLVMLogger.info("illegal frame slot at stack nuller: " + identifier);
                 }
                 return new LLVMAddressNuller(slot);

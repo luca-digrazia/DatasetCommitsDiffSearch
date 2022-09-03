@@ -33,6 +33,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.LLVMType;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
+import com.oracle.truffle.llvm.parser.base.model.enums.CompareOperator;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
+import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -45,14 +53,6 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
-import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.LLVMType;
-import com.oracle.truffle.llvm.parser.base.model.enums.CompareOperator;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
-import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
@@ -99,18 +99,17 @@ public interface NodeFactoryFacade {
     LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMExpressionNode target, LLVMBaseType type);
 
     /**
-     * This method allows to substitute calls to functions with nodes. The implementer is either
-     * expected to return <code>null</code> when not intrinsifying this method, or the node with
-     * which the function call should be substituted with.
+     * Creates an intrinsic for a <code>@llvm.*</code> function.
      *
-     * This method is also called for <code>@llvm.*</code> and <code>@truffle_*</code> intrinsics.
-     *
-     * @param declaration the function declaration of the function that could be intrinsified
-     * @param argNodes the arguments to the function
-     * @param numberOfExplicitArguments number of explicit arguments passed to function
+     * @param declaration the function declaration of the function from which the intrinsic is
+     *            called
+     * @param argNodes the arguments to the intrinsic function
+     * @param numberOfExplicitArguments number of explicite arguments passed to function
      * @return the created intrinsic
      */
-    LLVMNode tryCreateFunctionSubstitution(FunctionType declaration, LLVMExpressionNode[] argNodes, int numberOfExplicitArguments);
+    LLVMNode createLLVMIntrinsic(FunctionType declaration, Object[] argNodes, int numberOfExplicitArguments);
+
+    LLVMNode createTruffleIntrinsic(String functionName, LLVMExpressionNode[] argNodes);
 
     LLVMNode createRetVoid();
 
@@ -317,7 +316,7 @@ public interface NodeFactoryFacade {
      */
     RootNode createFunctionSubstitutionRootNode(LLVMNode intrinsicNode);
 
-    Object allocateGlobalVariable(GlobalValueSymbol globalVariable);
+    Object allocateGlobalVariable(GlobalVariable globalVariable);
 
     RootNode createStaticInitsRootNode(LLVMNode[] staticInits);
 
