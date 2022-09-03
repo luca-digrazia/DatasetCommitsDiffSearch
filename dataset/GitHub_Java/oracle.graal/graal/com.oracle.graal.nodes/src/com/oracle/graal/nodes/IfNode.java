@@ -47,8 +47,7 @@ import com.oracle.graal.nodes.util.*;
  * of a comparison.
  */
 @NodeInfo
-public final class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerable {
-    public static final NodeClass TYPE = NodeClass.get(IfNode.class);
+public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerable {
 
     private static final DebugMetric CORRECTED_PROBABILITIES = Debug.metric("CorrectedProbabilities");
 
@@ -71,7 +70,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     public IfNode(LogicNode condition, AbstractBeginNode trueSuccessor, AbstractBeginNode falseSuccessor, double trueSuccessorProbability) {
-        super(TYPE, StampFactory.forVoid());
+        super(StampFactory.forVoid());
         this.condition = condition;
         this.falseSuccessor = falseSuccessor;
         this.trueSuccessor = trueSuccessor;
