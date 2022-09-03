@@ -41,11 +41,13 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
         }
     }
 
+
     static final class Unresolved extends MethodRefConstant.Unresolved implements InterfaceMethodRefConstant {
 
         public Unresolved(TypeDescriptor declaringClass, String name, SignatureDescriptor signature) {
             super(declaringClass, name, signature);
         }
+
 
         private MethodInfo lookupMethod(Klass declaringInterface, String name, SignatureDescriptor signature) {
             MethodInfo m = declaringInterface.findMethod(name, signature);

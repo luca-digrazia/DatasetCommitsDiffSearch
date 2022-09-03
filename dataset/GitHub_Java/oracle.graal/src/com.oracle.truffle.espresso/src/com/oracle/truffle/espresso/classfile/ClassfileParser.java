@@ -352,8 +352,9 @@ public class ClassfileParser {
         final int descriptorIndex = stream.readU2();
         String name = pool.utf8At(nameIndex).getValue();
         TypeDescriptor type = context.getTypeDescriptors().make(pool.utf8At(descriptorIndex).getValue());
-        parseAttributes();
+        AttributeInfo[] attributes = parseAttributes();
         return new FieldInfo.Builder().setName(name).setType(type).setModifiers(flags);
+        // .setAttributes(attributes);
     }
 
     private FieldInfo.Builder[] parseFields() {

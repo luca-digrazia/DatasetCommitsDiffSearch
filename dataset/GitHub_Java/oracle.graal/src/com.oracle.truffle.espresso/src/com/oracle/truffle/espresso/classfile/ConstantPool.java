@@ -38,7 +38,6 @@ import java.util.Arrays;
 import java.util.Formatter;
 import java.util.List;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
@@ -270,7 +269,6 @@ public final class ConstantPool {
      * Updates the constant entry at a given index.
      */
     PoolConstant updateAt(int index, PoolConstant constant) {
-        CompilerAsserts.neverPartOfCompilation();
         assert constant.tag() == constants[index].tag() : "cannot replace a " + constants[index].tag() + " with a " + constant.tag();
         constants[index] = constant;
         return constant;
