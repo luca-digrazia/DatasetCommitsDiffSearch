@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -33,7 +33,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.nodes.func.LLVMCallNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMGetElementPtrNode.LLVMIncrementPointerNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
@@ -41,9 +40,11 @@ import com.oracle.truffle.llvm.nodes.memory.store.LLVM80BitFloatStoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI32StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI64StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMPointerStoreNodeGen;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMVarArgCompoundValue;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.memory.VarargsAreaStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -158,6 +159,10 @@ public abstract class LLVMX86_64VAStart extends LLVMExpressionNode {
             return VarArgArea.OVERFLOW_AREA;
         } else if (LLVMPointer.isInstance(arg)) {
             return VarArgArea.GP_AREA;
+        } else if (arg instanceof LLVMFunctionDescriptor) {
+            return VarArgArea.GP_AREA;
+        } else if (arg instanceof LLVMGlobal) {
+            return VarArgArea.GP_AREA;
         } else if (arg instanceof LLVM80BitFloat) {
             return VarArgArea.OVERFLOW_AREA;
         } else if (arg instanceof LLVMFloatVector && ((LLVMFloatVector) arg).getLength() <= 2) {
@@ -204,7 +209,6 @@ public abstract class LLVMX86_64VAStart extends LLVMExpressionNode {
 
     }
 
-    @ExplodeLoop
     private int calculateUsedFpArea(Object[] realArguments) {
         assert numberOfExplicitArguments <= realArguments.length;
 
@@ -218,7 +222,6 @@ public abstract class LLVMX86_64VAStart extends LLVMExpressionNode {
         return usedFpArea;
     }
 
-    @ExplodeLoop
     private int calculateUsedGpArea(Object[] realArguments) {
         assert numberOfExplicitArguments <= realArguments.length;
 
@@ -285,7 +288,7 @@ public abstract class LLVMX86_64VAStart extends LLVMExpressionNode {
             Object currentPtr = pointerArithmetic.executeWithTarget(ptr, offset);
             memmove.executeWithTarget(currentPtr, obj.getAddr(), obj.getSize());
             return obj.getSize();
-        } else if (LLVMPointer.isInstance(object)) {
+        } else if (LLVMPointer.isInstance(object) || object instanceof LLVMFunctionDescriptor || object instanceof LLVMGlobal) {
             Object currentPtr = pointerArithmetic.executeWithTarget(ptr, offset);
             storePointerNode.executeWithTarget(currentPtr, object);
             return X86_64BitVarArgs.STACK_STEP;
