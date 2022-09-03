@@ -173,8 +173,7 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget, ModifiersP
     Type[] getGenericParameterTypes();
 
     /**
-     * Returns {@code true} if this method is not excluded from inlining and has associated Java
-     * bytecodes (@see {@link ResolvedJavaMethod#hasBytecodes()}).
+     * Returns {@code true} if this method can be inlined.
      */
     boolean canBeInlined();
 
@@ -245,7 +244,7 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget, ModifiersP
     }
 
     default JavaType[] toParameterTypes() {
-        JavaType receiver = isStatic() || isConstructor() ? null : getDeclaringClass();
+        JavaType receiver = isStatic() ? null : getDeclaringClass();
         return getSignature().toParameterTypes(receiver);
     }
 
@@ -270,22 +269,4 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget, ModifiersP
         return result;
     }
 
-    /**
-     * Checks whether the method has bytecodes associated with it. Methods without bytecodes are
-     * either abstract or native methods.
-     *
-     * @return whether the definition of this method is Java bytecodes
-     */
-    default boolean hasBytecodes() {
-        return isConcrete() && !isNative();
-    }
-
-    /**
-     * Checks whether the method has a receiver parameter - i.e., whether it is not static.
-     * 
-     * @return whether the method has a receiver parameter
-     */
-    default boolean hasReceiver() {
-        return !isStatic();
-    }
 }
