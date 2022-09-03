@@ -94,7 +94,7 @@ public class PartialEvaluator {
             throw Debug.handle(e);
         }
 
-        if (TraceTruffleCompilationHistogram.getValue()) {
+        if (TraceTruffleCompilationDetails.getValue()) {
             constantReceivers = new HashSet<>();
         }
 
@@ -130,7 +130,7 @@ public class PartialEvaluator {
 
             new VerifyFrameDoesNotEscapePhase().apply(graph, false);
 
-            if (TraceTruffleCompilationHistogram.getValue() && constantReceivers != null) {
+            if (TraceTruffleCompilationDetails.getValue() && constantReceivers != null) {
                 DebugHistogram histogram = Debug.createHistogram("Expanded Truffle Nodes");
                 for (Constant c : constantReceivers) {
                     histogram.add(c.asObject().getClass().getSimpleName());
@@ -184,7 +184,7 @@ public class PartialEvaluator {
             for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.class)) {
                 InvokeKind kind = methodCallTargetNode.invokeKind();
                 if (kind == InvokeKind.Static || (kind == InvokeKind.Special && (methodCallTargetNode.receiver().isConstant() || methodCallTargetNode.receiver() instanceof NewFrameNode))) {
-                    if (TraceTruffleCompilationHistogram.getValue() && kind == InvokeKind.Special) {
+                    if (TraceTruffleCompilationDetails.getValue() && kind == InvokeKind.Special) {
                         ConstantNode constantNode = (ConstantNode) methodCallTargetNode.arguments().first();
                         constantReceivers.add(constantNode.asConstant());
                     }
@@ -208,7 +208,6 @@ public class PartialEvaluator {
                         if (TraceTruffleExpansion.getValue()) {
                             expansionLogger.preExpand(methodCallTargetNode, inlineGraph);
                         }
-                        List<Node> invokeUsages = methodCallTargetNode.invoke().asNode().usages().snapshot();
                         Map<Node, Node> inlined = InliningUtil.inline(methodCallTargetNode.invoke(), inlineGraph, false);
                         if (TraceTruffleExpansion.getValue()) {
                             expansionLogger.postExpand(inlined);
@@ -217,7 +216,7 @@ public class PartialEvaluator {
                             int nodeCountAfter = graph.getNodeCount();
                             Debug.dump(graph, "After inlining %s %+d (%d)", methodCallTargetNode.targetMethod().toString(), nodeCountAfter - nodeCountBefore, nodeCountAfter);
                         }
-                        canonicalizer.applyIncremental(graph, phaseContext, invokeUsages, mark);
+                        canonicalizer.applyIncremental(graph, phaseContext, mark);
                         changed = true;
                     }
                 }

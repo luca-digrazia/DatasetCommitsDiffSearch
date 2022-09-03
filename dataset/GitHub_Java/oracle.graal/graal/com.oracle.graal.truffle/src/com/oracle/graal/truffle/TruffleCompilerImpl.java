@@ -69,11 +69,10 @@ public class TruffleCompilerImpl implements TruffleCompiler {
     private final TruffleCache truffleCache;
     private final ThreadPoolExecutor compileQueue;
 
-    private static final Class[] SKIPPED_EXCEPTION_CLASSES = new Class[]{UnexpectedResultException.class, SlowPathException.class, ArithmeticException.class};
+    private static final Class[] SKIPPED_EXCEPTION_CLASSES = new Class[]{SlowPathException.class, UnexpectedResultException.class, ArithmeticException.class};
 
     public static final OptimisticOptimizations Optimizations = OptimisticOptimizations.ALL.remove(OptimisticOptimizations.Optimization.UseExceptionProbability,
                     OptimisticOptimizations.Optimization.RemoveNeverExecutedCode, OptimisticOptimizations.Optimization.UseTypeCheckedInlining, OptimisticOptimizations.Optimization.UseTypeCheckHints);
-    private static final OptimisticOptimizations OptimizationsGraal = OptimisticOptimizations.ALL.remove(OptimisticOptimizations.Optimization.UseExceptionProbability);
 
     public TruffleCompilerImpl() {
         this.runtime = Graal.getRequiredCapability(RuntimeProvider.class);
@@ -220,8 +219,8 @@ public class TruffleCompilerImpl implements TruffleCompiler {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(name);
-            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, createGraphBuilderSuite(), OptimizationsGraal, getProfilingInfo(graph), speculationLog,
-                            suites, false, compilationResult, CompilationResultBuilderFactory.Default);
+            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, createGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph),
+                            speculationLog, suites, false, compilationResult, CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
