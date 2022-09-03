@@ -144,8 +144,9 @@ public interface ResolvedJavaType extends JavaType, ModifiersProvider {
      * Returns true if this type is exactly the type {@link java.lang.Object}.
      */
     default boolean isJavaLangObject() {
-        // Removed assertion due to https://bugs.eclipse.org/bugs/show_bug.cgi?id=434442
-        return getSuperclass() == null && !isInterface() && getKind() == Kind.Object;
+        boolean result = getSuperclass() == null && !isInterface() && getKind() == Kind.Object;
+        assert result == getName().equals("Ljava/lang/Object;") : getName();
+        return result;
     }
 
     /**
@@ -212,7 +213,7 @@ public interface ResolvedJavaType extends JavaType, ModifiersProvider {
 
     default ResolvedJavaType getElementalType() {
         ResolvedJavaType t = this;
-        while (t.isArray()) {
+        while (t.getComponentType() != null) {
             t = t.getComponentType();
         }
         return t;
