@@ -29,16 +29,18 @@ import java.lang.reflect.Method;
 
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.java.ToJavaNode.TruffleHandler;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Proxy;
 
 /**
  * Helper methods to simplify access to objects of {@link TruffleLanguage Truffle languages} from
@@ -204,10 +206,13 @@ public final class JavaInterop {
         if (obj == null) {
             return JavaObject.NULL;
         }
-        if (TruffleOptions.AOT) {
-            throw new IllegalArgumentException();
+        if (Proxy.isProxyClass(obj.getClass())) {
+            InvocationHandler h = Proxy.getInvocationHandler(obj);
+            if (h instanceof TruffleHandler) {
+                return ((TruffleHandler) h).obj;
+            }
         }
-        return JavaInteropReflect.asTruffleViaReflection(obj);
+        return new JavaObject(obj, obj.getClass());
     }
 
     /**
@@ -422,7 +427,7 @@ public final class JavaInterop {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            return node.execute(frame, value, new TypeAndClass<>(null, type));
+            return node.execute(frame, value, new TypeAndClass<>(type, type));
         }
     }
 
