@@ -35,7 +35,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiFunction;
 
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
@@ -45,8 +44,8 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.KeyInfo;
@@ -64,7 +63,6 @@ final class PolyglotLanguageContext implements VMObject {
     final PolyglotLanguage language;
     final Map<Object, CallTarget> sourceCache = new ConcurrentHashMap<>();
     final Map<String, Object> config;
-    final boolean eventsEnabled;
     volatile Map<Class<?>, PolyglotValue> valueCache;
     volatile PolyglotValue defaultValueCache;
     volatile OptionValuesImpl optionValues;
@@ -74,16 +72,15 @@ final class PolyglotLanguageContext implements VMObject {
     volatile boolean creating; // true when context is currently being created.
     volatile boolean initialized;
     volatile boolean finalized;
-    @CompilationFinal volatile Env env;
+    volatile Env env;
     private final Node keyInfoNode = Message.KEY_INFO.createNode();
     private final Node readNode = Message.READ.createNode();
     final Thread.UncaughtExceptionHandler uncaughtExceptionHandler = new PolyglotUncaughtExceptionHandler();
 
-    PolyglotLanguageContext(PolyglotContextImpl context, PolyglotLanguage language, OptionValuesImpl optionValues, String[] applicationArguments, Map<String, Object> config, boolean eventsEnabled) {
+    PolyglotLanguageContext(PolyglotContextImpl context, PolyglotLanguage language, OptionValuesImpl optionValues, String[] applicationArguments, Map<String, Object> config) {
         this.context = context;
         this.language = language;
         this.config = config;
-        this.eventsEnabled = eventsEnabled;
         this.optionValues = optionValues;
         setApplicationArguments(applicationArguments);
     }
@@ -139,9 +136,7 @@ final class PolyglotLanguageContext implements VMObject {
         if (localEnv != null && !finalized) {
             finalized = true;
             LANGUAGE.finalizeContext(localEnv);
-            if (eventsEnabled) {
-                VMAccessor.INSTRUMENT.notifyLanguageContextFinalized(context.engine, context.truffleContext, language.info);
-            }
+            VMAccessor.INSTRUMENT.notifyLanguageContextFinalized(context.engine, context.truffleContext, language.info);
             return true;
         }
         return false;
@@ -167,9 +162,7 @@ final class PolyglotLanguageContext implements VMObject {
     }
 
     void notifyDisposed() {
-        if (eventsEnabled) {
-            VMAccessor.INSTRUMENT.notifyLanguageContextDisposed(context.engine, context.truffleContext, language.info);
-        }
+        VMAccessor.INSTRUMENT.notifyLanguageContextDisposed(context.engine, context.truffleContext, language.info);
     }
 
     Object enterThread(PolyglotThread thread) {
@@ -230,12 +223,11 @@ final class PolyglotLanguageContext implements VMObject {
                     try {
                         initializeCaches();
                         try {
-                            Env createdEnv = env = LANGUAGE.createEnv(this, language.info,
+                            env = LANGUAGE.createEnv(this, language.info,
                                             context.out,
                                             context.err,
                                             context.in, config, getOptionValues(), applicationArguments);
-                            LANGUAGE.createEnvContext(createdEnv);
-                            language.requireProfile().notifyContextCreate(createdEnv);
+                            LANGUAGE.createEnvContext(env);
                         } finally {
                             creating = false;
                         }
@@ -249,7 +241,7 @@ final class PolyglotLanguageContext implements VMObject {
                 }
             }
         }
-        if (created && eventsEnabled) {
+        if (created) {
             VMAccessor.INSTRUMENT.notifyLanguageContextCreated(context.engine, context.truffleContext, language.info);
         }
     }
@@ -288,7 +280,7 @@ final class PolyglotLanguageContext implements VMObject {
                 }
             }
         }
-        if (wasInitialized && eventsEnabled) {
+        if (wasInitialized) {
             VMAccessor.INSTRUMENT.notifyLanguageContextInitialized(context.engine, context.truffleContext, language.info);
         }
         return wasInitialized;
@@ -325,11 +317,11 @@ final class PolyglotLanguageContext implements VMObject {
     }
 
     @TruffleBoundary
-    static Object[] toGuestValues(Object languageContext, Object[] args) {
+    Object[] toGuestValues(Object[] args) {
         Object[] newArgs = args;
         for (int i = 0; i < args.length; i++) {
             Object arg = args[i];
-            Object newArg = toGuestValue(languageContext, arg);
+            Object newArg = toGuestValue(arg);
             if (newArg != arg) {
                 if (newArgs == args) {
                     newArgs = Arrays.copyOf(args, args.length);
@@ -338,6 +330,10 @@ final class PolyglotLanguageContext implements VMObject {
             }
         }
         return newArgs;
+    }
+
+    ToGuestValuesNode createToGuestValues() {
+        return new ToGuestValuesNode();
     }
 
     void preInitialize() {
@@ -377,7 +373,7 @@ final class PolyglotLanguageContext implements VMObject {
         this.applicationArguments = newApplicationArguments == null ? EMPTY_STRING_ARRAY : newApplicationArguments;
     }
 
-    static final class ToGuestValuesNode implements BiFunction<Object, Object[], Object[]> {
+    final class ToGuestValuesNode {
 
         @CompilationFinal private int cachedLength = -1;
         @CompilationFinal(dimensions = 1) private ToGuestValueNode[] toGuestValue;
@@ -386,8 +382,7 @@ final class PolyglotLanguageContext implements VMObject {
         private ToGuestValuesNode() {
         }
 
-        @Override
-        public Object[] apply(Object languageContext, Object[] args) {
+        Object[] execute(Object[] args) {
             if (cachedLength == -1) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 cachedLength = args.length;
@@ -400,7 +395,7 @@ final class PolyglotLanguageContext implements VMObject {
                 return args;
             } else if (cachedLength == args.length) {
                 // fast path
-                Object[] newArgs = fastToGuestValuesUnroll(languageContext, args);
+                Object[] newArgs = fastToGuestValuesUnroll(args);
                 return newArgs;
             } else {
                 if (cachedLength != -2) {
@@ -411,7 +406,7 @@ final class PolyglotLanguageContext implements VMObject {
                         toGuestValue[0] = createToGuestValue();
                     }
                 }
-                return fastToGuestValues(languageContext, args);
+                return fastToGuestValues(args);
             }
         }
 
@@ -419,11 +414,11 @@ final class PolyglotLanguageContext implements VMObject {
          * Specialization for constant number of arguments. Uses a profile for each argument.
          */
         @ExplodeLoop
-        private Object[] fastToGuestValuesUnroll(Object languageContext, Object[] args) {
+        private Object[] fastToGuestValuesUnroll(Object[] args) {
             Object[] newArgs = needsCopy ? new Object[toGuestValue.length] : args;
             for (int i = 0; i < toGuestValue.length; i++) {
                 Object arg = args[i];
-                Object newArg = toGuestValue[i].apply(languageContext, arg);
+                Object newArg = toGuestValue[i].execute(arg);
                 if (needsCopy) {
                     newArgs[i] = newArg;
                 } else if (arg != newArg) {
@@ -440,12 +435,12 @@ final class PolyglotLanguageContext implements VMObject {
          * Specialization that supports multiple argument lengths but uses a single profile for all
          * arguments.
          */
-        private Object[] fastToGuestValues(Object languageContext, Object[] args) {
+        private Object[] fastToGuestValues(Object[] args) {
             assert toGuestValue[0] != null;
             Object[] newArgs = needsCopy ? new Object[args.length] : args;
             for (int i = 0; i < args.length; i++) {
                 Object arg = args[i];
-                Object newArg = toGuestValue[0].apply(languageContext, arg);
+                Object newArg = toGuestValue[0].execute(arg);
                 if (needsCopy) {
                     newArgs[i] = newArg;
                 } else if (arg != newArg) {
@@ -458,10 +453,6 @@ final class PolyglotLanguageContext implements VMObject {
             return newArgs;
         }
 
-        static ToGuestValuesNode create() {
-            return new ToGuestValuesNode();
-        }
-
     }
 
     static final class Generic {
@@ -470,7 +461,7 @@ final class PolyglotLanguageContext implements VMObject {
         }
     }
 
-    static final class ToGuestValueNode implements BiFunction<Object, Object, Object> {
+    final class ToGuestValueNode {
 
         @CompilationFinal private Class<?> cachedClass;
 
@@ -478,8 +469,7 @@ final class PolyglotLanguageContext implements VMObject {
 
         }
 
-        @Override
-        public Object apply(Object languageContext, Object receiver) {
+        Object execute(Object receiver) {
             if (cachedClass == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 if (receiver == null) {
@@ -491,48 +481,43 @@ final class PolyglotLanguageContext implements VMObject {
             }
             if (cachedClass != Generic.class) {
                 if (cachedClass.isInstance(receiver)) {
-                    return toGuestValue(languageContext, cachedClass.cast(receiver));
+                    return toGuestValue(cachedClass.cast(receiver));
                 } else {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     cachedClass = Generic.class; // switch to generic
                 }
             }
-            return slowPath(languageContext, receiver);
+            return slowPath(receiver);
         }
 
         @TruffleBoundary
-        private static Object slowPath(Object languageContext, Object receiver) {
-            return toGuestValue(languageContext, receiver);
-        }
-
-        static ToGuestValueNode create() {
-            return new ToGuestValueNode();
+        private Object slowPath(Object receiver) {
+            return toGuestValue(receiver);
         }
 
     }
 
-    static Object toGuestValue(Object originalLanguageContext, Object receiver) {
-        PolyglotLanguageContext languageContext = ((PolyglotLanguageContext) originalLanguageContext);
+    Object toGuestValue(Object receiver) {
         if (receiver instanceof Value) {
             Value receiverValue = (Value) receiver;
-            PolyglotValue valueImpl = (PolyglotValue) languageContext.getAPIAccess().getImpl(receiverValue);
-            if (valueImpl.languageContext.context != languageContext.context) {
+            PolyglotValue valueImpl = (PolyglotValue) getAPIAccess().getImpl(receiverValue);
+            if (valueImpl.languageContext.context != context) {
                 CompilerDirectives.transferToInterpreter();
                 throw engineError(new IllegalArgumentException(String.format("Values cannot be passed from one context to another. " +
                                 "The current value originates from context 0x%s and the argument originates from context 0x%s.",
-                                Integer.toHexString(languageContext.context.api.hashCode()), Integer.toHexString(valueImpl.languageContext.context.api.hashCode()))));
+                                Integer.toHexString(context.api.hashCode()), Integer.toHexString(valueImpl.languageContext.context.api.hashCode()))));
             }
-            return languageContext.getAPIAccess().getReceiver(receiverValue);
+            return getAPIAccess().getReceiver(receiverValue);
         } else if (PolyglotImpl.isGuestPrimitive(receiver)) {
             return receiver;
         } else if (receiver instanceof Proxy) {
-            return PolyglotProxy.toProxyGuestObject(languageContext, (Proxy) receiver);
+            return PolyglotProxy.toProxyGuestObject(this, (Proxy) receiver);
         } else {
-            return JAVAINTEROP.toJavaGuestObject(receiver, languageContext);
+            return JAVAINTEROP.toJavaGuestObject(receiver, this);
         }
     }
 
-    static ToGuestValueNode createToGuestValue() {
+    ToGuestValueNode createToGuestValue() {
         return new ToGuestValueNode();
     }
 
@@ -622,10 +607,6 @@ final class PolyglotLanguageContext implements VMObject {
 
     ToHostValueNode createToHostValue() {
         return new ToHostValueNode();
-    }
-
-    Object toGuestValue(Object receiver) {
-        return toGuestValue(this, receiver);
     }
 
     @TruffleBoundary
