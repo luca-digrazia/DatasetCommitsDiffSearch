@@ -23,9 +23,7 @@
 package com.oracle.graal.compiler;
 
 import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
-import com.oracle.graal.debug.DebugConfig;
-import com.oracle.graal.debug.DebugDumpHandler;
-import com.oracle.graal.debug.GraalDebugConfig;
+import com.oracle.graal.debug.*;
 
 /**
  * A compiler thread is a daemon thread that runs at {@link Thread#MAX_PRIORITY} and executes in the
@@ -45,7 +43,7 @@ public class CompilerThread extends Thread {
 
     @Override
     public void run() {
-        DebugConfig debugConfig = debugConfigAccess.getDebugConfig();
+        GraalDebugConfig debugConfig = debugConfigAccess.getDebugConfig();
         setContextClassLoader(getClass().getClassLoader());
         try {
             super.run();

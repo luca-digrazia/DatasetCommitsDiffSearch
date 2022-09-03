@@ -165,26 +165,18 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
     public static Path getRootViaResourceURL(final Class<?> c, String[] paths) {
         URL url = c.getResource(c.getSimpleName() + ".class");
         if (url != null) {
-            char sep = File.separatorChar;
             String externalForm = url.toExternalForm();
-            String classPart = sep + c.getName().replace('.', sep) + ".class";
-            String suffix = null;
-            String prefix = null;
-            if (externalForm.startsWith("jar:file:")) {
-                prefix = "jar:file:";
-                suffix = sep + "build/truffle-sl.jar!" + classPart;
-            } else if (externalForm.startsWith("file:")) {
-                prefix = "file:";
-                suffix = sep + "bin" + classPart;
-            } else {
-                return null;
-            }
-            if (externalForm.endsWith(suffix)) {
-                String base = externalForm.substring(prefix.length(), externalForm.length() - suffix.length());
-                for (String path : paths) {
-                    String candidate = base + sep + path;
-                    if (new File(candidate).exists()) {
-                        return FileSystems.getDefault().getPath(candidate);
+            System.out.println("externalForm: " + externalForm);
+            if (externalForm.startsWith("file:")) {
+                char sep = File.separatorChar;
+                String suffix = sep + "bin" + sep + c.getName().replace('.', sep) + ".class";
+                if (externalForm.endsWith(suffix)) {
+                    String base = externalForm.substring("file:".length(), externalForm.length() - suffix.length());
+                    for (String path : paths) {
+                        String candidate = base + sep + path;
+                        if (new File(candidate).exists()) {
+                            return FileSystems.getDefault().getPath(candidate);
+                        }
                     }
                 }
             }
@@ -218,10 +210,10 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         PrintWriter printer = new PrintWriter(out);
         try {
-            Portaal vm = Portaal.createNew().stdIn(new BufferedReader(new StringReader(repeat(testCase.testInput, repeats)))).stdOut(printer).build();
+            TruffleVM vm = TruffleVM.newVM().stdIn(new BufferedReader(new StringReader(repeat(testCase.testInput, repeats)))).stdOut(printer).build();
 
             String script = readAllLines(testCase.path);
-            SLLanguage.run(vm, testCase.path, null, printer, repeats, builtins);
+            SLLanguage.run(vm, testCase.path.toUri(), null, printer, repeats, builtins);
 
             printer.flush();
             String actualOutput = new String(out.toByteArray());

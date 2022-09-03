@@ -33,6 +33,7 @@ import java.util.Map.Entry;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.*;
@@ -203,17 +204,14 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         ArrayList<LIRKind> values = new ArrayList<>(phi.valueCount());
         for (int i = 0; i < phi.valueCount(); i++) {
             ValueNode node = phi.valueAt(i);
-            if (node instanceof ConstantNode) {
-                values.add(gen.getLIRKind(node.stamp()));
+            Value value = node instanceof ConstantNode ? ((ConstantNode) node).asJavaConstant() : getOperand(node);
+            if (value != null) {
+                values.add(value.getLIRKind());
             } else {
-                Value value = getOperand(node);
-                if (value != null) {
-                    values.add(value.getLIRKind());
-                } else {
-                    assert isPhiInputFromBackedge(phi, i) : String.format("Input %s to phi node %s is not yet available although it is not coming from a loop back edge", node, phi);
-                    // non-java constant -> get Kind from stamp.
-                    values.add(getLIRGeneratorTool().getLIRKind(node.stamp()));
-                }
+                assert node instanceof ConstantNode || isPhiInputFromBackedge(phi, i) : String.format("Input %s to phi node %s is not yet available although it is not coming from a loop back edge",
+                                node, phi);
+                // non-java constant -> get Kind from stamp.
+                values.add(getLIRGeneratorTool().getLIRKind(node.stamp()));
             }
         }
         LIRKind derivedKind = LIRKind.merge(values);
@@ -262,7 +260,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         return values.toArray(new Value[values.size()]);
     }
 
-    @SuppressWarnings("try")
     public void doBlock(Block block, StructuredGraph graph, BlockMap<List<Node>> blockMap) {
         try (BlockScope blockScope = gen.getBlockScope(block)) {
 
@@ -344,7 +341,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         }
     }
 
-    @SuppressWarnings("try")
     protected void matchComplexExpressions(List<Node> nodes) {
         if (matchRules != null) {
             try (Scope s = Debug.scope("MatchComplexExpressions")) {
@@ -502,9 +498,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     private void emitNullCheckBranch(IsNullNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, double trueSuccessorProbability) {
-        LIRKind kind = gen.getLIRKind(node.getValue().stamp());
-        Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
-        gen.emitCompareBranch(kind.getPlatformKind(), operand(node.getValue()), nullValue, Condition.EQ, false, trueSuccessor, falseSuccessor, trueSuccessorProbability);
+        PlatformKind kind = gen.getLIRKind(node.getValue().stamp()).getPlatformKind();
+        gen.emitCompareBranch(kind, operand(node.getValue()), kind.getDefaultValue(), Condition.EQ, false, trueSuccessor, falseSuccessor, trueSuccessorProbability);
     }
 
     public void emitCompareBranch(CompareNode compare, LabelRef trueSuccessor, LabelRef falseSuccessor, double trueSuccessorProbability) {
@@ -531,9 +526,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     public Variable emitConditional(LogicNode node, Value trueValue, Value falseValue) {
         if (node instanceof IsNullNode) {
             IsNullNode isNullNode = (IsNullNode) node;
-            LIRKind kind = gen.getLIRKind(isNullNode.getValue().stamp());
-            Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
-            return gen.emitConditionalMove(kind.getPlatformKind(), operand(isNullNode.getValue()), nullValue, Condition.EQ, false, trueValue, falseValue);
+            PlatformKind kind = gen.getLIRKind(isNullNode.getValue().stamp()).getPlatformKind();
+            return gen.emitConditionalMove(kind, operand(isNullNode.getValue()), kind.getDefaultValue(), Condition.EQ, false, trueValue, falseValue);
         } else if (node instanceof CompareNode) {
             CompareNode compare = (CompareNode) node;
             PlatformKind kind = gen.getLIRKind(compare.getX().stamp()).getPlatformKind();
@@ -623,9 +617,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             if (keyCount == 1) {
                 assert defaultTarget != null;
                 double probability = x.probability(x.keySuccessor(0));
-                LIRKind kind = gen.getLIRKind(x.value().stamp());
-                Value key = gen.emitConstant(kind, x.keyAt(0));
-                gen.emitCompareBranch(kind.getPlatformKind(), gen.load(operand(x.value())), key, Condition.EQ, false, getLIRBlock(x.keySuccessor(0)), defaultTarget, probability);
+                PlatformKind kind = gen.getLIRKind(x.value().stamp()).getPlatformKind();
+                gen.emitCompareBranch(kind, gen.load(operand(x.value())), x.keyAt(0), Condition.EQ, false, getLIRBlock(x.keySuccessor(0)), defaultTarget, probability);
             } else {
                 LabelRef[] keyTargets = new LabelRef[keyCount];
                 JavaConstant[] keyConstants = new JavaConstant[keyCount];

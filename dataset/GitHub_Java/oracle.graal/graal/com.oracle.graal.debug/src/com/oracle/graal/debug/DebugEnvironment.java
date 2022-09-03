@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,17 @@
  */
 package com.oracle.graal.debug;
 
-import static com.oracle.graal.debug.GraalDebugConfig.Options.Dump;
-import static com.oracle.graal.debug.GraalDebugConfig.Options.Log;
-import static com.oracle.graal.debug.GraalDebugConfig.Options.Meter;
-import static com.oracle.graal.debug.GraalDebugConfig.Options.MethodFilter;
-import static com.oracle.graal.debug.GraalDebugConfig.Options.Time;
-import static com.oracle.graal.debug.GraalDebugConfig.Options.TrackMemUse;
-import static com.oracle.graal.debug.GraalDebugConfig.Options.Verify;
+import static com.oracle.graal.debug.GraalDebugConfig.*;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
+import java.io.*;
+import java.util.*;
 
-import jdk.internal.jvmci.runtime.JVMCI;
-import jdk.internal.jvmci.service.Services;
+import jdk.internal.jvmci.service.*;
 
 public class DebugEnvironment {
 
     public static GraalDebugConfig initialize(PrintStream log) {
-        // Initialize JVMCI before loading class Debug to make sure, properties are loaded
-        // (especially Debug=...)
-        JVMCI.initialize();
+
         if (!Debug.isEnabled()) {
             log.println("WARNING: Scope debugging needs to be enabled with -esa or -D" + Debug.Initialization.INITIALIZER_PROPERTY_NAME + "=true");
             return null;

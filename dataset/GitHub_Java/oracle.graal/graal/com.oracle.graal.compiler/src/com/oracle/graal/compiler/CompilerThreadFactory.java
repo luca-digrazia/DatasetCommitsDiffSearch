@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.compiler;
 
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.*;
 
-import com.oracle.graal.debug.DebugConfig;
+import com.oracle.graal.debug.*;
 
 /**
  * Facility for creating {@linkplain CompilerThread compiler threads}.
@@ -39,7 +39,7 @@ public class CompilerThreadFactory implements ThreadFactory {
          * Get a thread-local debug configuration for the current thread. This will be null if
          * debugging is disabled.
          */
-        DebugConfig getDebugConfig();
+        GraalDebugConfig getDebugConfig();
     }
 
     protected final String threadNamePrefix;

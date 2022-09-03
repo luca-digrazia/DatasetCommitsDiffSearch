@@ -225,7 +225,6 @@ public class CheckGraalInvariants extends GraalTest {
             new VerifyUsageWithEquals(ArithmeticOpTable.Op.class).apply(graph, context);
         }
         new VerifyDebugUsage().apply(graph, context);
-        new VerifyCallerSensitiveMethods().apply(graph, context);
     }
 
     private static boolean matches(String[] filters, String s) {
