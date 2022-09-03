@@ -200,12 +200,11 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements VMObject {
         Object get() {
             if (singleContext.isValid()) {
                 Object cachedSingle = cachedSingleContext;
-                if (cachedSingle != UNSET_CONTEXT) {
-                    assert cachedSingle == lookupLanguageContext(PolyglotContextImpl.requireContext());
-                    return cachedSingle;
-                }
+                assert cachedSingle == lookupLanguageContext(PolyglotContextImpl.requireContext());
+                return cachedSingle;
+            } else {
+                return lookupLanguageContext(PolyglotContextImpl.requireContext());
             }
-            return lookupLanguageContext(PolyglotContextImpl.requireContext());
         }
 
         private Object lookupLanguageContext(PolyglotContextImpl context) {

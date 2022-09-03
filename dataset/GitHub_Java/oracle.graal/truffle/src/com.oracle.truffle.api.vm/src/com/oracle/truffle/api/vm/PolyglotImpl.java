@@ -807,7 +807,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         @Override
         public <T> T getOrCreateRuntimeData(Object sourceVM, Supplier<T> constructor) {
             if (!(sourceVM instanceof VMObject)) {
-                return null;
+                throw new IllegalArgumentException();
             }
             final PolyglotEngineImpl engine = getEngine(sourceVM);
             if (engine.runtimeData == null) {

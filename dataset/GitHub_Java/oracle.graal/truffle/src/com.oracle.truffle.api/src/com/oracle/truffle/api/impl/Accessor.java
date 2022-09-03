@@ -78,8 +78,6 @@ public abstract class Accessor {
 
         public abstract RootNode cloneUninitialized(RootNode rootNode);
 
-        public abstract int adoptChildrenAndCount(RootNode rootNode);
-
         public abstract Object getEngineObject(LanguageInfo languageInfo);
 
         public abstract TruffleLanguage<?> getLanguageSpi(LanguageInfo languageInfo);
