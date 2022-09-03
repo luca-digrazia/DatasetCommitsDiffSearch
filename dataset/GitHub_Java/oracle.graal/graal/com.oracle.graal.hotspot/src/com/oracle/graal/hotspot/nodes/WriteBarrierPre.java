@@ -23,14 +23,12 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 public final class WriteBarrierPre extends WriteBarrier implements Lowerable {
 
     @Input private ValueNode object;
     @Input private ValueNode previousValue;
-    @Input private LocationNode location;
     private boolean doLoad;
 
     public ValueNode object() {
@@ -45,15 +43,10 @@ public final class WriteBarrierPre extends WriteBarrier implements Lowerable {
         return doLoad;
     }
 
-    public LocationNode location() {
-        return location;
-    }
-
-    public WriteBarrierPre(ValueNode object, ValueNode previousValue, LocationNode location, boolean doLoad) {
+    public WriteBarrierPre(ValueNode object, ValueNode previousValue, boolean doLoad) {
         this.object = object;
         this.previousValue = previousValue;
         this.doLoad = doLoad;
-        this.location = location;
     }
 
     public void lower(LoweringTool generator) {
