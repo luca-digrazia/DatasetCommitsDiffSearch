@@ -105,6 +105,7 @@ public class InliningData {
         }
         MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
+        final OptimisticOptimizations optimisticOpts = context.getOptimisticOptimizations();
 
         if (callTarget.invokeKind() == MethodCallTargetNode.InvokeKind.Special || targetMethod.canBeStaticallyBound()) {
             return getExactInlineInfo(invoke, targetMethod);
@@ -162,10 +163,10 @@ public class InliningData {
         }
 
         // type check based inlining
-        return getTypeCheckedInlineInfo(invoke, targetMethod);
+        return getTypeCheckedInlineInfo(invoke, targetMethod, optimisticOpts);
     }
 
-    public InlineInfo getTypeCheckedInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod) {
+    public InlineInfo getTypeCheckedInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod, OptimisticOptimizations optimisticOpts) {
         JavaTypeProfile typeProfile;
         ValueNode receiver = invoke.callTarget().arguments().get(0);
         if (receiver instanceof TypeProfileProxyNode) {
@@ -183,7 +184,6 @@ public class InliningData {
         }
         ResolvedJavaType contextType = invoke.getContextType();
         double notRecordedTypeProbability = typeProfile.getNotRecordedProbability();
-        final OptimisticOptimizations optimisticOpts = context.getOptimisticOptimizations();
         if (ptypes.length == 1 && notRecordedTypeProbability == 0) {
             if (!optimisticOpts.inlineMonomorphicCalls()) {
                 InliningUtil.logNotInlined(invoke, inliningDepth(), targetMethod, "inlining monomorphic calls is disabled");
