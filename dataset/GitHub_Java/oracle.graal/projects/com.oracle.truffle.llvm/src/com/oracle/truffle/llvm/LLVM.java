@@ -241,13 +241,17 @@ public class LLVM {
 
             @Override
             public void disposeContext(LLVMContext context) {
-                for (RootCallTarget destructorFunction : context.getDestructorFunctions()) {
-                    destructorFunction.call(destructorFunction);
+                // the PolyglotEngine calls this method for every mime type supported by the
+                // language
+                if (!context.getStack().isFreed()) {
+                    for (RootCallTarget destructorFunction : context.getDestructorFunctions()) {
+                        destructorFunction.call(destructorFunction);
+                    }
+                    for (RootCallTarget destructor : context.getGlobalVarDeallocs()) {
+                        destructor.call();
+                    }
+                    context.getStack().free();
                 }
-                for (RootCallTarget destructor : context.getGlobalVarDeallocs()) {
-                    destructor.call();
-                }
-                context.getStack().free();
             }
         };
     }
@@ -352,6 +356,8 @@ public class LLVM {
         try {
             Integer result = vm.eval(fileSource).as(Integer.class);
             return result;
+        } catch (IOException e) {
+            throw new AssertionError(e);
         } finally {
             vm.dispose();
         }
