@@ -334,7 +334,7 @@ public final class REPLServer {
             }
         }
 
-        void eval(Source source, boolean stepInto) {
+        void eval(Source source, boolean stepInto) throws IOException {
             this.steppingInto = stepInto;
             try {
                 engine.eval(source);
@@ -364,7 +364,7 @@ public final class REPLServer {
                 this.steppingInto = stepInto;
                 final String mimeType = defaultMIME(currentLanguage);
                 try {
-                    return engine.eval(Source.newBuilder(code).name("eval(\"" + code + "\")").mimeType(mimeType).build()).get();
+                    return engine.eval(Source.fromText(code, "eval(\"" + code + "\")").withMimeType(mimeType)).get();
                 } finally {
                     this.steppingInto = false;
                 }
@@ -376,23 +376,13 @@ public final class REPLServer {
                     event.prepareStepInto(1);
                 }
                 try {
-                    FrameInstance frameInstance = frameNumber == 0 ? null : event.getStack().get(frameNumber);
-                    final Object result = event.eval(code, frameInstance);
+                    FrameInstance frame = frameNumber == 0 ? null : event.getStack().get(frameNumber);
+                    final Object result = event.eval(code, frame);
                     return (result instanceof Value) ? ((Value) result).get() : result;
                 } finally {
                     event.prepareContinue();
                 }
             }
-        }
-
-        public String displayValue(Integer frameNumber, Object value, int trim) {
-            if (frameNumber == null) {
-                throw new IllegalStateException("displayValue in halted context requires a frame number");
-            }
-            if (value == null) {
-                return "<empty>";
-            }
-            return trim(event.toString(value, event.getStack().get(frameNumber)), trim);
         }
 
         /**
@@ -675,7 +665,7 @@ public final class REPLServer {
 
         void setCondition(String expr) throws IOException {
             if (breakpoint == null) {
-                conditionSource = expr == null ? null : Source.newBuilder(expr).name("breakpoint condition from text: " + expr).mimeType("content/unknown").build();
+                conditionSource = expr == null ? null : Source.fromText(expr, "breakpoint condition from text: " + expr);
             } else {
                 breakpoint.setCondition(expr);
             }
@@ -778,6 +768,29 @@ public final class REPLServer {
         String displayIdentifier(FrameSlot slot) {
             return slot.getIdentifier().toString();
         }
+
+        /**
+         * Trims text if {@code trim > 0} to the shorter of {@code trim} or the length of the first
+         * line of test. Identity if {@code trim <= 0}.
+         */
+        protected String trim(String text, int trim) {
+            if (trim == 0) {
+                return text;
+            }
+            final String[] lines = text.split("\n");
+            String result = lines[0];
+            if (lines.length == 1) {
+                if (result.length() <= trim) {
+                    return result;
+                }
+                if (trim <= 3) {
+                    return result.substring(0, Math.min(result.length() - 1, trim - 1));
+                } else {
+                    return result.substring(0, trim - 4) + "...";
+                }
+            }
+            return (result.length() < trim - 3 ? result : result.substring(0, trim - 4)) + "...";
+        }
     }
 
     private static class REPLASTPrinter extends InstrumentationUtils.ASTPrinter {
@@ -806,28 +819,5 @@ public final class REPLServer {
             }
             return "";
         }
-    }
-
-    /**
-     * Trims text if {@code trim > 0} to the shorter of {@code trim} or the length of the first line
-     * of test. Identity if {@code trim <= 0}.
-     */
-    protected static String trim(String text, int trim) {
-        if (trim == 0) {
-            return text;
-        }
-        final String[] lines = text.split("\n");
-        String result = lines[0];
-        if (lines.length == 1) {
-            if (result.length() <= trim) {
-                return result;
-            }
-            if (trim <= 3) {
-                return result.substring(0, Math.min(result.length() - 1, trim - 1));
-            } else {
-                return result.substring(0, trim - 4) + "...";
-            }
-        }
-        return (result.length() < trim - 3 ? result : result.substring(0, trim - 4)) + "...";
     }
 }

@@ -40,277 +40,544 @@
  */
 package com.oracle.truffle.sl.test;
 
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Truffle;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.LinkedList;
 
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.api.debug.Breakpoint;
-import com.oracle.truffle.api.debug.DebugStackFrame;
-import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.Debugger;
-import com.oracle.truffle.api.debug.DebuggerSession;
-import com.oracle.truffle.api.debug.SuspendedCallback;
+import com.oracle.truffle.api.debug.ExecutionEvent;
 import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.ForeignAccess.Factory;
+import com.oracle.truffle.api.interop.ForeignAccess.Factory10;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.LineLocation;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.EventConsumer;
 import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.PolyglotEngine.Value;
 import com.oracle.truffle.sl.SLLanguage;
-import com.oracle.truffle.tck.DebuggerTester;
 
 public class SLDebugTest {
-
-    private DebuggerTester tester;
+    private Debugger debugger;
+    private final LinkedList<Runnable> run = new LinkedList<>();
+    private SuspendedEvent suspendedEvent;
+    private Throwable ex;
+    private ExecutionEvent executionEvent;
+    protected PolyglotEngine engine;
+    protected final ByteArrayOutputStream out = new ByteArrayOutputStream();
+    protected final ByteArrayOutputStream err = new ByteArrayOutputStream();
 
     @Before
     public void before() {
-        tester = new DebuggerTester();
+        suspendedEvent = null;
+        executionEvent = null;
+        engine = PolyglotEngine.newBuilder().setOut(out).setErr(err).onEvent(new EventConsumer<ExecutionEvent>(ExecutionEvent.class) {
+            @Override
+            protected void on(ExecutionEvent event) {
+                executionEvent = event;
+                debugger = executionEvent.getDebugger();
+                performWork();
+                executionEvent = null;
+            }
+        }).onEvent(new EventConsumer<SuspendedEvent>(SuspendedEvent.class) {
+            @Override
+            protected void on(SuspendedEvent event) {
+                suspendedEvent = event;
+                performWork();
+                suspendedEvent = null;
+            }
+        }).build();
+        run.clear();
     }
 
     @After
     public void dispose() {
-        tester.close();
-    }
-
-    private void startEval(Source code) {
-        tester.startEval(code);
-    }
-
-    private static Source slCode(String code) {
-        return Source.newBuilder(code).name("testing").mimeType(SLLanguage.MIME_TYPE).build();
-    }
-
-    private DebuggerSession startSession() {
-        return tester.startSession();
-    }
-
-    private String expectDone() {
-        return tester.expectDone();
-    }
-
-    private void expectSuspended(SuspendedCallback callback) {
-        tester.expectSuspended(callback);
-    }
-
-    protected SuspendedEvent checkState(SuspendedEvent suspendedEvent, String name, final int expectedLineNumber, final boolean expectedIsBefore, final String expectedCode,
-                    final String... expectedFrame) {
-        final int actualLineNumber = suspendedEvent.getSourceSection().getStartLine();
-        Assert.assertEquals(expectedLineNumber, actualLineNumber);
-        final String actualCode = suspendedEvent.getSourceSection().getCode();
-        Assert.assertEquals(expectedCode, actualCode);
-        final boolean actualIsBefore = suspendedEvent.isHaltedBefore();
-        Assert.assertEquals(expectedIsBefore, actualIsBefore);
-
-        checkStack(suspendedEvent.getTopStackFrame(), name, expectedFrame);
-        return suspendedEvent;
-    }
-
-    protected void checkStack(DebugStackFrame frame, String name, String... expectedFrame) {
-        Map<String, DebugValue> values = new HashMap<>();
-        for (DebugValue value : frame) {
-            values.put(value.getName(), value);
+        if (engine != null) {
+            engine.dispose();
         }
-        assertEquals(name, frame.getName());
-        String message = String.format("Frame expected %s got %s", Arrays.toString(expectedFrame), values.toString());
-        Assert.assertEquals(message, expectedFrame.length / 2, values.size());
-        for (int i = 0; i < expectedFrame.length; i = i + 2) {
-            String expectedIdentifier = expectedFrame[i];
-            String expectedValue = expectedFrame[i + 1];
-            DebugValue value = values.get(expectedIdentifier);
-            Assert.assertNotNull(value);
-            Assert.assertEquals(expectedValue, value.as(String.class));
+    }
+
+    private static Source createFactorial() {
+        return Source.fromText("function test() {\n" +
+                        "  res = fac(2);\n" + "  println(res);\n" +
+                        "  return res;\n" +
+                        "}\n" +
+                        "function fac(n) {\n" +
+                        "  if (n <= 1) {\n" +
+                        "    return 1;\n" + "  }\n" +
+                        "  nMinusOne = n - 1;\n" +
+                        "  nMOFact = fac(nMinusOne);\n" +
+                        "  res = n * nMOFact;\n" +
+                        "  return res;\n" + "}\n",
+                        "factorial.sl").withMimeType(SLLanguage.MIME_TYPE);
+    }
+
+    private static Source createFactorialWithDebugger() {
+        return Source.fromText("function test() {\n" +
+                        "  res = fac(2);\n" + "  println(res);\n" +
+                        "  return res;\n" +
+                        "}\n" +
+                        "function fac(n) {\n" +
+                        "  if (n <= 1) {\n" +
+                        "    return 1;\n" + "  }\n" +
+                        "  nMinusOne = n - 1;\n" +
+                        "  nMOFact = fac(nMinusOne);\n" +
+                        "  debugger;\n" +
+                        "  res = n * nMOFact;\n" +
+                        "  return res;\n" + "}\n",
+                        "factorial.sl").withMimeType(SLLanguage.MIME_TYPE);
+    }
+
+    private static Source createInteropComputation() {
+        return Source.fromText("function test() {\n" +
+                        "}\n" +
+                        "function interopFunction(notifyHandler) {\n" +
+                        "  executing = true;\n" +
+                        "  while (executing == true || executing) {\n" +
+                        "    executing = notifyHandler.isExecuting;\n" +
+                        "  }\n" +
+                        "  return executing;\n" +
+                        "}\n",
+                        "interopComputation.sl").withMimeType(SLLanguage.MIME_TYPE);
+    }
+
+    protected final String getOut() {
+        return new String(out.toByteArray());
+    }
+
+    protected final String getErr() {
+        try {
+            err.flush();
+        } catch (IOException e) {
         }
+        return new String(err.toByteArray());
     }
 
     @Test
     public void testBreakpoint() throws Throwable {
-        /*
-         * Wrappers need to remain inserted for recursive functions to work for debugging. Like in
-         * this test case when the breakpoint is in the exit condition and we want to step out.
-         */
-        final Source factorial = slCode("function main() {\n" +
-                        "  return fac(5);\n" +
-                        "}\n" +
-                        "function fac(n) {\n" +
-                        "  if (n <= 1) {\n" +
-                        "    return 1;\n" + // break
-                        "  }\n" +
-                        "  return n * fac(n - 1);\n" +
-                        "}\n");
+        final Source factorial = createFactorial();
 
-        try (DebuggerSession session = startSession()) {
-
-            startEval(factorial);
-            Breakpoint breakpoint = session.install(Breakpoint.newBuilder(factorial).lineIs(6).build());
-
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "fac", 6, true, "return 1", "n", "1");
-                assertSame(breakpoint, event.getBreakpoints().iterator().next());
-                event.prepareStepOver(1);
-            });
-
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "fac", 8, false, "fac(n - 1)", "n", "2");
-                assertEquals("1", event.getReturnValue().as(String.class));
-                assertTrue(event.getBreakpoints().isEmpty());
-                event.prepareStepOut();
-            });
-
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "fac", 8, false, "fac(n - 1)", "n", "3");
-                assertEquals("2", event.getReturnValue().as(String.class));
-                assertTrue(event.getBreakpoints().isEmpty());
-                event.prepareStepOut();
-            });
-
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "fac", 8, false, "fac(n - 1)", "n", "4");
-                assertEquals("6", event.getReturnValue().as(String.class));
-                assertTrue(event.getBreakpoints().isEmpty());
-                event.prepareStepOut();
-            });
-
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "fac", 8, false, "fac(n - 1)", "n", "5");
-                assertEquals("24", event.getReturnValue().as(String.class));
-                assertTrue(event.getBreakpoints().isEmpty());
-                event.prepareStepOut();
-            });
-
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "main", 2, false, "fac(5)");
-                assertEquals("120", event.getReturnValue().as(String.class));
-                assertTrue(event.getBreakpoints().isEmpty());
-                event.prepareStepOut();
-            });
-
-            assertEquals("120", expectDone());
-        }
-    }
-
-    @Test
-    public void testStepInOver() throws Throwable {
-        /*
-         * For recursive function we want to ensure that we don't step when we step over a function.
-         */
-        final Source factorial = slCode("function main() {\n" +
-                        "  return fac(5);\n" +
-                        "}\n" +
-                        "function fac(n) {\n" +
-                        "  if (n <= 1) {\n" +
-                        "    return 1;\n" + // break
-                        "  }\n" +
-                        "  return n * fac(n - 1);\n" +
-                        "}\n");
-
-        try (DebuggerSession session = startSession()) {
-            session.suspendNextExecution();
-            startEval(factorial);
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "main", 2, true, "return fac(5)").prepareStepInto(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "fac", 5, true, "n <= 1", "n", "5").prepareStepOver(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "fac", 8, true, "return n * fac(n - 1)", "n", "5").prepareStepOver(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "main", 2, false, "fac(5)").prepareStepInto(1);
-                assertEquals("120", event.getReturnValue().as(String.class));
-            });
-
-            expectDone();
-        }
-    }
-
-    @Test
-    public void testDebugger() throws Throwable {
-        /*
-         * Test AlwaysHalt is working.
-         */
-        final Source factorial = slCode("function main() {\n" +
-                        "  return fac(5);\n" +
-                        "}\n" +
-                        "function fac(n) {\n" +
-                        "  if (n <= 1) {\n" +
-                        "    debugger; return 1;\n" + // // break
-                        "  }\n" +
-                        "  return n * fac(n - 1);\n" +
-                        "}\n");
-
-        try (DebuggerSession session = startSession()) {
-            startEval(factorial);
-
-            // make javac happy and use the session
-            session.getBreakpoints();
-
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "fac", 6, true, "debugger", "n", "1").prepareContinue();
-            });
-
-            expectDone();
-        }
-    }
-
-    @Test(expected = ThreadDeath.class)
-    public void testTimeboxing() throws Throwable {
-        final Source endlessLoop = slCode("function main() {\n" +
-                        "  i = 1; \n" +
-                        "  while(i > 0) {\n" +
-                        "    i = i + 1;\n" +
-                        "  }\n" +
-                        "  return i; \n" +
-                        "}\n");
-
-        final PolyglotEngine engine = PolyglotEngine.newBuilder().build();
-
-        Timer timer = new Timer();
-        timer.schedule(new TimerTask() {
+        run.addLast(new Runnable() {
             @Override
             public void run() {
-                Debugger.find(engine).startSession(new SuspendedCallback() {
-                    public void onSuspend(SuspendedEvent event) {
-                        event.prepareKill();
-                    }
-                }).suspendNextExecution();
+                try {
+                    assertNull(suspendedEvent);
+                    assertNotNull(executionEvent);
+                    LineLocation nMinusOne = factorial.createLineLocation(8);
+                    debugger.setLineBreakpoint(0, nMinusOne, false);
+                    executionEvent.prepareContinue();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
-        }, 1000);
+        });
+        engine.eval(factorial);
+        assertExecutedOK();
 
-        engine.eval(endlessLoop);
+        run.addLast(new Runnable() {
+            @Override
+            public void run() {
+                // the breakpoint should hit instead
+            }
+        });
+        assertLocation("fac", 8, true,
+                        "return 1", "n",
+                        1L, "nMinusOne",
+                        null, "nMOFact",
+                        null, "res", null);
+        continueExecution();
+
+        Value value = engine.findGlobalSymbol("test").execute();
+        assertExecutedOK();
+        Assert.assertEquals("2\n", getOut());
+        Number n = value.as(Number.class);
+        assertNotNull(n);
+        assertEquals("Factorial computed OK", 2, n.intValue());
     }
 
     @Test
-    public void testNull() throws Throwable {
-        final Source factorial = slCode("function main() {\n" +
-                        "  res = doNull();\n" +
-                        "  return res;\n" +
-                        "}\n" +
-                        "function doNull() {}\n");
+    public void testDebuggerBreakpoint() throws Throwable {
+        final Source factorial = createFactorialWithDebugger();
 
-        try (DebuggerSession session = startSession()) {
-            session.suspendNextExecution();
-            startEval(factorial);
+        run.addLast(new Runnable() {
+            @Override
+            public void run() {
+                assertNull(suspendedEvent);
+                assertNotNull(executionEvent);
+            }
+        });
+        engine.eval(factorial);
+        assertExecutedOK();
 
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "main", 2, true, "res = doNull()").prepareStepInto(1);
-            });
+        run.addLast(new Runnable() {
+            @Override
+            public void run() {
+                // the breakpoint should hit instead
+            }
+        });
+        assertLocation("fac", 12, true,
+                        "debugger", "n",
+                        2L, "nMinusOne",
+                        1L, "nMOFact",
+                        1L, "res", null);
+        continueExecution();
 
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, "main", 3, true, "return res", "res", "NULL").prepareContinue();
-            });
+        Value value = engine.findGlobalSymbol("test").execute();
+        assertExecutedOK();
+        Assert.assertEquals("2\n", getOut());
+        Number n = value.as(Number.class);
+        assertNotNull(n);
+        assertEquals("Factorial computed OK", 2, n.intValue());
+    }
 
-            assertEquals("NULL", expectDone());
+    @Test
+    public void stepInStepOver() throws Throwable {
+        final Source factorial = createFactorial();
+        engine.eval(factorial);
+
+        // @formatter:on
+        run.addLast(new Runnable() {
+            @Override
+            public void run() {
+                assertNull(suspendedEvent);
+                assertNotNull(executionEvent);
+                executionEvent.prepareStepInto();
+            }
+        });
+
+        assertLocation("test", 2, true, "res = fac(2)", "res", null);
+        stepInto(1);
+        assertLocation("fac", 7, true,
+                        "n <= 1", "n",
+                        2L, "nMinusOne",
+                        null, "nMOFact",
+                        null, "res", null);
+        stepOver(1);
+        assertLocation("fac", 10, true,
+                        "nMinusOne = n - 1", "n",
+                        2L, "nMinusOne",
+                        null, "nMOFact",
+                        null, "res", null);
+        stepOver(1);
+        assertLocation("fac", 11, true,
+                        "nMOFact = fac(nMinusOne)", "n",
+                        2L, "nMinusOne",
+                        1L, "nMOFact",
+                        null, "res", null);
+        stepOver(1);
+        assertLocation("fac", 12, true,
+                        "res = n * nMOFact", "n", 2L, "nMinusOne",
+                        1L, "nMOFact",
+                        1L, "res", null);
+        stepOver(1);
+        assertLocation("fac", 13, true,
+                        "return res", "n",
+                        2L, "nMinusOne",
+                        1L, "nMOFact",
+                        1L, "res", 2L);
+        stepOver(1);
+        assertLocation("test", 2, false, "fac(2)", "res", null);
+        stepOver(1);
+        assertLocation("test", 3, true, "println(res)", "res", 2L);
+        stepOut();
+
+        Value value = engine.findGlobalSymbol("test").execute();
+        assertExecutedOK();
+
+        Number n = value.as(Number.class);
+        assertNotNull(n);
+        assertEquals("Factorial computed OK", 2, n.intValue());
+    }
+
+    @Test
+    public void testPause() throws Throwable {
+        final Source interopComp = createInteropComputation();
+
+        run.addLast(new Runnable() {
+            @Override
+            public void run() {
+                assertNull(suspendedEvent);
+                assertNotNull(executionEvent);
+            }
+        });
+        engine.eval(interopComp);
+        assertExecutedOK();
+
+        final ExecNotifyHandler nh = new ExecNotifyHandler();
+
+        run.addLast(new Runnable() {
+            @Override
+            public void run() {
+                assertNull(suspendedEvent);
+                assertNotNull(executionEvent);
+                // Do pause after execution has really started
+                new Thread() {
+                    @Override
+                    public void run() {
+                        nh.waitTillCanPause();
+                        boolean paused = debugger.pause();
+                        Assert.assertTrue(paused);
+                    }
+                }.start();
+            }
+        });
+
+        run.addLast(new Runnable() {
+            @Override
+            public void run() {
+                // paused
+                assertNotNull(suspendedEvent);
+                int line = suspendedEvent.getNode().getSourceSection().getLineLocation().getLineNumber();
+                Assert.assertTrue("Unexpected line: " + line, 5 <= line && line <= 6);
+                final MaterializedFrame frame = suspendedEvent.getFrame();
+                String[] expectedIdentifiers = new String[]{"executing"};
+                for (String expectedIdentifier : expectedIdentifiers) {
+                    FrameSlot slot = frame.getFrameDescriptor().findFrameSlot(expectedIdentifier);
+                    Assert.assertNotNull(expectedIdentifier, slot);
+                }
+                // Assert.assertTrue(debugger.isExecuting());
+                suspendedEvent.prepareContinue();
+                nh.pauseDone();
+            }
+        });
+
+        Value value = engine.findGlobalSymbol("interopFunction").execute(nh);
+
+        assertExecutedOK();
+        // Assert.assertFalse(debugger.isExecuting());
+        Boolean n = value.as(Boolean.class);
+        assertNotNull(n);
+        assertTrue("Interop computation OK", !n.booleanValue());
+    }
+
+    private void performWork() {
+        try {
+            if (ex == null && !run.isEmpty()) {
+                Runnable c = run.removeFirst();
+                c.run();
+            }
+        } catch (Throwable e) {
+            ex = e;
         }
     }
 
+    private void stepOver(final int size) {
+        run.addLast(new Runnable() {
+            public void run() {
+                suspendedEvent.prepareStepOver(size);
+            }
+        });
+    }
+
+    private void stepOut() {
+        run.addLast(new Runnable() {
+            public void run() {
+                suspendedEvent.prepareStepOut();
+            }
+        });
+    }
+
+    private void continueExecution() {
+        run.addLast(new Runnable() {
+            public void run() {
+                suspendedEvent.prepareContinue();
+            }
+        });
+    }
+
+    private void stepInto(final int size) {
+        run.addLast(new Runnable() {
+            public void run() {
+                suspendedEvent.prepareStepInto(size);
+            }
+        });
+    }
+
+    private void assertLocation(final String name, final int line, final boolean isBefore, final String code, final Object... expectedFrame) {
+        run.addLast(new Runnable() {
+            public void run() {
+                assertNotNull(suspendedEvent);
+                final String actualName = suspendedEvent.getNode().getRootNode().getName();
+                Assert.assertEquals(name, actualName);
+                Assert.assertEquals(line, suspendedEvent.getNode().getSourceSection().getLineLocation().getLineNumber());
+                Assert.assertEquals(code, suspendedEvent.getNode().getSourceSection().getCode());
+                Assert.assertEquals(isBefore, suspendedEvent.isHaltedBefore());
+                final MaterializedFrame frame = suspendedEvent.getFrame();
+
+                Assert.assertEquals(expectedFrame.length / 2, frame.getFrameDescriptor().getSize());
+
+                for (int i = 0; i < expectedFrame.length; i = i + 2) {
+                    String expectedIdentifier = (String) expectedFrame[i];
+                    Object expectedValue = expectedFrame[i + 1];
+                    FrameSlot slot = frame.getFrameDescriptor().findFrameSlot(expectedIdentifier);
+                    Assert.assertNotNull(slot);
+                    Assert.assertEquals(expectedValue, frame.getValue(slot));
+                }
+                run.removeFirst().run();
+            }
+        });
+    }
+
+    private void assertExecutedOK() throws Throwable {
+        Assert.assertTrue(getErr(), getErr().isEmpty());
+        if (ex != null) {
+            if (ex instanceof AssertionError) {
+                throw ex;
+            } else {
+                throw new AssertionError("Error during execution", ex);
+            }
+        }
+        assertTrue("Assuming all requests processed: " + run, run.isEmpty());
+    }
+
+    private static class ExecNotifyHandler implements TruffleObject {
+
+        private final ExecNotifyHandlerForeign nhf = new ExecNotifyHandlerForeign(this);
+        private final ForeignAccess access = ForeignAccess.create(null, nhf);
+        private final Object pauseLock = new Object();
+        private boolean canPause;
+        private volatile boolean pauseDone;
+
+        @Override
+        public ForeignAccess getForeignAccess() {
+            return access;
+        }
+
+        private void waitTillCanPause() {
+            synchronized (pauseLock) {
+                while (!canPause) {
+                    try {
+                        pauseLock.wait();
+                    } catch (InterruptedException iex) {
+                    }
+                }
+            }
+        }
+
+        void setCanPause() {
+            synchronized (pauseLock) {
+                canPause = true;
+                pauseLock.notifyAll();
+            }
+        }
+
+        private void pauseDone() {
+            pauseDone = true;
+        }
+
+        boolean isPauseDone() {
+            return pauseDone;
+        }
+
+    }
+
+    private static class ExecNotifyHandlerForeign implements Factory10, Factory {
+
+        private final ExecNotifyHandler nh;
+
+        ExecNotifyHandlerForeign(ExecNotifyHandler nh) {
+            this.nh = nh;
+        }
+
+        @Override
+        public CallTarget accessIsNull() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessIsExecutable() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessIsBoxed() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessHasSize() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessGetSize() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessUnbox() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessRead() {
+            return Truffle.getRuntime().createCallTarget(new ExecNotifyReadNode(nh));
+        }
+
+        @Override
+        public CallTarget accessWrite() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessExecute(int i) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessInvoke(int i) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessNew(int i) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallTarget accessMessage(Message msg) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public boolean canHandle(TruffleObject to) {
+            return (to instanceof ExecNotifyHandler);
+        }
+
+    }
+
+    private static class ExecNotifyReadNode extends RootNode {
+
+        private final ExecNotifyHandler nh;
+
+        ExecNotifyReadNode(ExecNotifyHandler nh) {
+            super(SLLanguage.class, null, null);
+            this.nh = nh;
+        }
+
+        @Override
+        public Object execute(VirtualFrame vf) {
+            nh.setCanPause();
+            return !nh.isPauseDone();
+        }
+
+    }
 }
