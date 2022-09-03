@@ -99,14 +99,13 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
 
     final OptionValuesImpl engineOptionValues;
     final OptionValuesImpl compilerOptionValues;
-    final ClassLoader contextClassLoader;
 
     volatile OptionDescriptors allOptions;
 
     volatile boolean closed;
 
     PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, Map<String, String> options, long timeout, TimeUnit timeoutUnit,
-                    boolean sandbox, boolean useSystemProperties, ClassLoader contextClassLoader) {
+                    boolean sandbox, boolean useSystemProperties) {
         super(impl);
         this.instrumentationHandler = INSTRUMENT.createInstrumentationHandler(this, out, err, in);
         this.impl = impl;
@@ -115,7 +114,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         this.in = in;
         this.timeout = timeout;
         this.timeoutUnit = timeoutUnit;
-        this.contextClassLoader = contextClassLoader;
         this.sandbox = sandbox;
         Map<String, LanguageInfo> languageInfos = new LinkedHashMap<>();
         this.idToLanguage = Collections.unmodifiableMap(initializeLanguages(languageInfos));
