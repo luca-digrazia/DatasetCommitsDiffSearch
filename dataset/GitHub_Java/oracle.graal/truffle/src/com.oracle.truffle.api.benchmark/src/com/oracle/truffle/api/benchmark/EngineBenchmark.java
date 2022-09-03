@@ -1,45 +1,31 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api.benchmark;
 
+import java.util.Collections;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.graalvm.polyglot.Context;
@@ -56,15 +42,22 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.KeyInfo;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
 @Warmup(iterations = 10)
@@ -273,11 +266,9 @@ public class EngineBenchmark extends TruffleBenchmark {
     public static class CallTargetCallState {
         final Source source = Source.create(TEST_LANGUAGE, "");
         final Context context = Context.create(TEST_LANGUAGE);
-        {
-            context.initialize(TEST_LANGUAGE);
-        }
-        final Value hostValue = context.getPolyglotBindings().getMember("context");
+        final Value hostValue = context.getBindings(TEST_LANGUAGE).getMember("context");
         final BenchmarkContext internalContext = hostValue.asHostObject();
+        final Node executeNode = Message.EXECUTE.createNode();
         final Integer intValue = 42;
         final CallTarget callTarget = Truffle.getRuntime().createCallTarget(new RootNode(null) {
 
@@ -369,12 +360,18 @@ public class EngineBenchmark extends TruffleBenchmark {
 
         @Override
         protected BenchmarkContext createContext(Env env) {
-            return new BenchmarkContext(env);
+            BenchmarkContext context = new BenchmarkContext(env, new Function<TruffleObject, Scope>() {
+                @Override
+                public Scope apply(TruffleObject obj) {
+                    return Scope.newBuilder("Benchmark top scope", obj).build();
+                }
+            });
+            return context;
         }
 
         @Override
         protected void initializeContext(BenchmarkContext context) throws Exception {
-            InteropLibrary.getFactory().getUncached().writeMember(context.env.getPolyglotBindings(), "context", context.env.asGuestValue(context));
+            ForeignAccess.sendWrite(Message.WRITE.createNode(), (TruffleObject) context.env.getPolyglotBindings(), "context", context.env.asGuestValue(context));
         }
 
         @Override
@@ -401,6 +398,20 @@ public class EngineBenchmark extends TruffleBenchmark {
         }
 
         @Override
+        protected Iterable<Scope> findLocalScopes(BenchmarkContext context, Node node, Frame frame) {
+            if (node != null) {
+                return super.findLocalScopes(context, node, frame);
+            } else {
+                return context.topScopes;
+            }
+        }
+
+        @Override
+        protected Iterable<Scope> findTopScopes(BenchmarkContext context) {
+            return context.topScopes;
+        }
+
+        @Override
         protected boolean isObjectOfLanguage(Object object) {
             return object instanceof BenchmarkObject;
         }
@@ -411,14 +422,14 @@ public class EngineBenchmark extends TruffleBenchmark {
 
         final Env env;
         final BenchmarkObject object = new BenchmarkObject();
+        final Iterable<Scope> topScopes;
 
-        BenchmarkContext(Env env) {
+        BenchmarkContext(Env env, Function<TruffleObject, Scope> scopeProvider) {
             this.env = env;
+            topScopes = Collections.singleton(scopeProvider.apply(new TopScopeObject(this)));
         }
     }
 
-    @ExportLibrary(InteropLibrary.class)
-    @SuppressWarnings({"static-method", "unused", "hiding"})
     public static class BenchmarkObject implements TruffleObject {
 
         private static final Integer constant = 42;
@@ -429,94 +440,146 @@ public class EngineBenchmark extends TruffleBenchmark {
             return constant;
         };
 
-        @ExportMessage
-        final boolean hasMembers() {
-            return true;
+        public ForeignAccess getForeignAccess() {
+            return BenchmarkObjectMRForeign.ACCESS;
         }
 
-        @ExportMessage
-        final boolean hasArrayElements() {
-            return true;
+        public static boolean isInstance(TruffleObject obj) {
+            return obj instanceof BenchmarkObject;
         }
 
-        @ExportMessage
-        final boolean isExecutable() {
-            return true;
+    }
+
+    static final class TopScopeObject implements TruffleObject {
+
+        private final BenchmarkContext context;
+
+        private TopScopeObject(BenchmarkContext context) {
+            this.context = context;
         }
 
-        @ExportMessage
-        final Object getMembers(boolean includeInternal) {
-            return null;
+        @Override
+        public ForeignAccess getForeignAccess() {
+            return TopScopeObjectMessageResolutionForeign.ACCESS;
         }
 
-        @ExportMessage
-        final Object readArrayElement(long index) {
-            return value;
+        public static boolean isInstance(TruffleObject obj) {
+            return obj instanceof TopScopeObject;
         }
 
-        @ExportMessage
-        final void writeArrayElement(long index, Object value) {
-            this.value = value;
+        @MessageResolution(receiverType = TopScopeObject.class)
+        static class TopScopeObjectMessageResolution {
+
+            @Resolve(message = "READ")
+            abstract static class VarsMapReadNode extends Node {
+
+                @TruffleBoundary
+                public Object access(TopScopeObject ts, String name) {
+                    if ("context".equals(name)) {
+                        return ts.context.env.asGuestValue(ts.context);
+                    } else {
+                        return ts.context.env.asGuestValue(ts.context.object);
+                    }
+                }
+            }
+
+            @Resolve(message = "KEY_INFO")
+            abstract static class VarsMapKeyInfoNode extends Node {
+
+                public int access(@SuppressWarnings("unused") TopScopeObject ts, String propertyName) {
+                    if ("context".equals(propertyName)) {
+                        return KeyInfo.READABLE;
+                    }
+                    return 0;
+                }
+            }
+
+            @Resolve(message = "KEYS")
+            abstract static class VarsMapKeysNode extends Node {
+
+                @TruffleBoundary
+                public Object access(TopScopeObject ts) {
+                    return ts.context.env.asGuestValue(new String[]{"context"});
+                }
+            }
+        }
+    }
+
+    @MessageResolution(receiverType = BenchmarkObject.class)
+    @SuppressWarnings("unused")
+    static class BenchmarkObjectMR {
+
+        @Resolve(message = "READ")
+        abstract static class ReadNode extends Node {
+
+            public Object access(BenchmarkObject obj, String name) {
+                return obj.value;
+            }
+
+            public Object access(BenchmarkObject obj, Number name) {
+                return obj.value;
+            }
         }
 
-        @ExportMessage
-        final boolean isArrayElementInsertable(long index) {
-            return true;
+        @Resolve(message = "EXECUTE")
+        abstract static class ExecuteNode extends Node {
+
+            @CompilationFinal private Supplier<Object> runOnExecute;
+
+            public Object access(Object obj, Object[] args) {
+                if (runOnExecute == null) {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    runOnExecute = ((BenchmarkObject) obj).runOnExecute;
+                }
+                return runOnExecute.get();
+            }
         }
 
-        @ExportMessage
-        final long getArraySize() {
-            return 0L;
+        @Resolve(message = "IS_EXECUTABLE")
+        abstract static class IsExecutableNode extends Node {
+
+            public boolean access(Object obj) {
+                return true;
+            }
         }
 
-        @ExportMessage
-        final boolean isArrayElementReadable(long index) {
-            return true;
+        @Resolve(message = "HAS_SIZE")
+        abstract static class HasSizeNode extends Node {
+
+            public boolean access(Object obj) {
+                return true;
+            }
         }
 
-        @ExportMessage
-        final boolean isArrayElementModifiable(long index) {
-            return true;
+        @Resolve(message = "IS_POINTER")
+        abstract static class IsNativeNode extends Node {
+
+            public boolean access(Object obj) {
+                return true;
+            }
         }
 
-        @ExportMessage
-        final Object execute(Object[] arguments, @Cached("this.runOnExecute") Supplier<Object> runOnExecute) {
-            return runOnExecute.get();
+        @Resolve(message = "AS_POINTER")
+        abstract static class AsPointerNode extends Node {
+
+            public long access(BenchmarkObject obj) {
+                return obj.longValue;
+            }
         }
 
-        @ExportMessage
-        final boolean isMemberReadable(String member) {
-            return true;
-        }
+        @Resolve(message = "WRITE")
+        abstract static class WriteNode extends Node {
 
-        @ExportMessage
-        final boolean isMemberModifiable(String member) {
-            return true;
-        }
+            public Object access(BenchmarkObject obj, String name, Object value) {
+                obj.value = value;
+                return value;
+            }
 
-        @ExportMessage
-        final boolean isMemberInsertable(String member) {
-            return true;
-        }
+            public Object access(BenchmarkObject obj, Number index, Object value) {
+                obj.value = value;
+                return value;
+            }
 
-        @ExportMessage
-        final void writeMember(String member, Object value) {
-            this.value = value;
-        }
-
-        @ExportMessage
-        final Object readMember(String member) {
-            return value;
-        }
-
-        @ExportMessage
-        final boolean isPointer() {
-            return true;
-        }
-
-        @ExportMessage
-        final long asPointer() {
-            return longValue;
         }
 
     }
