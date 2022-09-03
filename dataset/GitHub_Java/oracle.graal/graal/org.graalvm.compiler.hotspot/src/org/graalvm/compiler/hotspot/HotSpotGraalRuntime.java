@@ -22,14 +22,13 @@
  */
 package org.graalvm.compiler.hotspot;
 
-import static org.graalvm.compiler.core.common.GraalOptions.HotSpotPrintInlining;
+import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.debug.GraalDebugConfig.areScopedGlobalMetricsEnabled;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.DebugValueSummary;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Dump;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Log;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.MethodFilter;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Verify;
-import static org.graalvm.compiler.options.OptionValues.GLOBAL;
 import static jdk.vm.ci.common.InitTimer.timer;
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
@@ -48,7 +47,6 @@ import org.graalvm.compiler.hotspot.CompilerConfigurationFactory.BackendMap;
 import org.graalvm.compiler.hotspot.debug.BenchmarkCounters;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.nodes.spi.StampProvider;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.tiers.CompilerConfiguration;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.runtime.RuntimeProvider;
@@ -97,14 +95,12 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     HotSpotGraalRuntime(HotSpotJVMCIRuntime jvmciRuntime, CompilerConfigurationFactory compilerConfigurationFactory) {
 
         HotSpotVMConfigStore store = jvmciRuntime.getConfigStore();
-        config = new GraalHotSpotVMConfig(store);
+        config = GeneratePIC.getValue() ? new AOTGraalHotSpotVMConfig(store) : new GraalHotSpotVMConfig(store);
+        CompileTheWorldOptions.overrideWithNativeOptions(config);
 
-        OptionValues options;
         // Only set HotSpotPrintInlining if it still has its default value (false).
-        if (GraalOptions.HotSpotPrintInlining.getValue(GLOBAL) == false && config.printInlining) {
-            options = new OptionValues(GLOBAL, HotSpotPrintInlining, true);
-        } else {
-            options = GLOBAL;
+        if (GraalOptions.HotSpotPrintInlining.getValue() == false) {
+            GraalOptions.HotSpotPrintInlining.setValue(config.printInlining);
         }
 
         CompilerConfiguration compilerConfiguration = compilerConfigurationFactory.createCompilerConfiguration();
@@ -135,16 +131,16 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
             }
         }
 
-        if (Log.getValue(options) == null && !areScopedGlobalMetricsEnabled(options) && Dump.getValue(options) == null && Verify.getValue(options) == null) {
-            if (MethodFilter.getValue(options) != null && !Debug.isEnabled()) {
+        if (Log.getValue() == null && !areScopedGlobalMetricsEnabled() && Dump.getValue() == null && Verify.getValue() == null) {
+            if (MethodFilter.getValue() != null && !Debug.isEnabled()) {
                 TTY.println("WARNING: Ignoring MethodFilter option since Log, Meter, Time, TrackMemUse, Dump and Verify options are all null");
             }
         }
 
         if (Debug.isEnabled()) {
-            DebugEnvironment.ensureInitialized(OptionValues.GLOBAL, hostBackend.getProviders().getSnippetReflection());
+            DebugEnvironment.ensureInitialized(hostBackend.getProviders().getSnippetReflection());
 
-            String summary = DebugValueSummary.getValue(options);
+            String summary = DebugValueSummary.getValue();
             if (summary != null) {
                 switch (summary) {
                     case "Name":
@@ -159,12 +155,12 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         }
 
         if (Debug.areUnconditionalCountersEnabled() || Debug.areUnconditionalTimersEnabled() || Debug.areUnconditionalMethodMetricsEnabled() ||
-                        (Debug.isEnabled() && areScopedGlobalMetricsEnabled(options)) || (Debug.isEnabled() && Debug.isMethodFilteringEnabled())) {
+                        (Debug.isEnabled() && areScopedGlobalMetricsEnabled()) || (Debug.isEnabled() && Debug.isMethodFilteringEnabled())) {
             // This must be created here to avoid loading the DebugValuesPrinter class
             // during shutdown() which in turn can cause a deadlock
             int mmPrinterType = 0;
-            mmPrinterType |= MethodMetricsPrinter.Options.MethodMeterPrintAscii.getValue(options) ? 1 : 0;
-            mmPrinterType |= MethodMetricsPrinter.Options.MethodMeterFile.getValue(options) != null ? 2 : 0;
+            mmPrinterType |= MethodMetricsPrinter.Options.MethodMeterPrintAscii.getValue() ? 1 : 0;
+            mmPrinterType |= MethodMetricsPrinter.Options.MethodMeterFile.getValue() != null ? 2 : 0;
             switch (mmPrinterType) {
                 case 0:
                     debugValuesPrinter = new DebugValuesPrinter();
