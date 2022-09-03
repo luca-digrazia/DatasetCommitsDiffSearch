@@ -26,29 +26,47 @@ import static com.oracle.graal.ptx.PTX.*;
 
 import java.util.*;
 
+import com.oracle.graal.ptx.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.lir.Variable;
 import com.oracle.graal.graph.*;
 
 public class PTXHotSpotRegisterConfig implements RegisterConfig {
 
+    private final Architecture architecture;
+
     private final Register[] allocatable;
+
+    private final HashMap<PlatformKind, Register[]> categorized = new HashMap<>();
+
+    private final RegisterAttributes[] attributesMap;
 
     @Override
     public Register[] getAllocatableRegisters() {
         return allocatable.clone();
     }
 
-    @Override
     public Register[] getAllocatableRegisters(PlatformKind kind) {
-        throw GraalInternalError.unimplemented("PTXHotSpotRegisterConfig.getAllocatableRegisters()");
+        if (categorized.containsKey(kind)) {
+            return categorized.get(kind);
+        }
+
+        ArrayList<Register> list = new ArrayList<>();
+        for (Register reg : getAllocatableRegisters()) {
+            if (architecture.canStoreValue(reg.getRegisterCategory(), kind)) {
+                list.add(reg);
+            }
+        }
+
+        Register[] ret = list.toArray(new Register[0]);
+        categorized.put(kind, ret);
+        return ret;
     }
 
     @Override
     public RegisterAttributes[] getAttributesMap() {
-        throw GraalInternalError.unimplemented("PTXHotSpotRegisterConfig.getAttributesMap()");
+        return attributesMap.clone();
     }
 
     private final Register[] javaGeneralParameterRegisters;
@@ -63,11 +81,14 @@ public class PTXHotSpotRegisterConfig implements RegisterConfig {
         return registers;
     }
 
-    public PTXHotSpotRegisterConfig() {
+    public PTXHotSpotRegisterConfig(Architecture architecture) {
+        this.architecture = architecture;
+
         javaGeneralParameterRegisters = paramRegisters;
         nativeGeneralParameterRegisters = gprRegisters;
 
         allocatable = initAllocatable();
+        attributesMap = RegisterAttributes.createMap(this, PTX.allRegisters);
     }
 
     @Override
@@ -78,7 +99,7 @@ public class PTXHotSpotRegisterConfig implements RegisterConfig {
 
     @Override
     public Register getRegisterForRole(int index) {
-        throw GraalInternalError.unimplemented("PTXHotSpotRegisterConfig.getRegisterForRole()");
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -89,30 +110,16 @@ public class PTXHotSpotRegisterConfig implements RegisterConfig {
         return callingConvention(javaGeneralParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
     }
 
-    @Override
     public Register[] getCallingConventionRegisters(Type type, Kind kind) {
-        throw GraalInternalError.unimplemented("PTXHotSpotRegisterConfig.getRegisterForRole()");
+        assert architecture.canStoreValue(REG, kind);
+        return type == Type.NativeCall ? nativeGeneralParameterRegisters : javaGeneralParameterRegisters;
     }
 
-    private static CallingConvention callingConvention(@SuppressWarnings("unused") Register[] generalParameterRegisters,
-                                                JavaType returnType, JavaType[] parameterTypes,
-                                                Type type, TargetDescription target, boolean stackOnly) {
-
-        assert stackOnly == false;
+    private CallingConvention callingConvention(Register[] generalParameterRegisters, JavaType returnType, JavaType[] parameterTypes, Type type, TargetDescription target, boolean stackOnly) {
+        AllocatableValue[] locations = new AllocatableValue[parameterTypes.length];
 
         int currentGeneral = 0;
         int currentStackOffset = 0;
-
-        Kind returnKind = returnType == null ? Kind.Void : returnType.getKind();
-
-        AllocatableValue returnLocation;
-        if (returnKind == Kind.Void) {
-            returnLocation = Value.ILLEGAL;
-        } else {
-            returnLocation = new Variable(returnKind, currentGeneral++);
-        }
-
-        AllocatableValue[] locations = new AllocatableValue[parameterTypes.length];
 
         for (int i = 0; i < parameterTypes.length; i++) {
             final Kind kind = parameterTypes[i].getKind();
@@ -127,8 +134,9 @@ public class PTXHotSpotRegisterConfig implements RegisterConfig {
                 case Float:
                 case Double:
                 case Object:
-                    if (!stackOnly) {
-                        locations[i] = new Variable(kind, currentGeneral++);
+                    if (!stackOnly && currentGeneral < generalParameterRegisters.length) {
+                        Register register = generalParameterRegisters[currentGeneral++];
+                        locations[i] = register.asValue(kind);
                     }
                     break;
                 default:
@@ -141,12 +149,30 @@ public class PTXHotSpotRegisterConfig implements RegisterConfig {
             }
         }
 
+        Kind returnKind = returnType == null ? Kind.Void : returnType.getKind();
+        AllocatableValue returnLocation = returnKind == Kind.Void ? Value.ILLEGAL : getReturnRegister(returnKind).asValue(returnKind);
         return new CallingConvention(currentStackOffset, returnLocation, locations);
     }
 
     @Override
     public Register getReturnRegister(Kind kind) {
-        throw GraalInternalError.unimplemented("PTXHotSpotRegisterConfig.getRegisterForRole()");
+        switch (kind) {
+            case Boolean:
+            case Byte:
+            case Char:
+            case Short:
+            case Int:
+            case Long:
+            case Object:
+            case Float:
+            case Double:
+                return retReg;
+            case Void:
+            case Illegal:
+                return null;
+            default:
+                throw new UnsupportedOperationException("no return register for type " + kind);
+        }
     }
 
     @Override

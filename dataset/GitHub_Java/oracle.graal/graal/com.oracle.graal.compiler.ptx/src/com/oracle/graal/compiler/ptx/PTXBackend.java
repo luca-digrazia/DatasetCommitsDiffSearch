@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.compiler.ptx;
 
-import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
@@ -50,11 +50,6 @@ public class PTXBackend extends Backend {
 
     public PTXBackend(CodeCacheProvider runtime, TargetDescription target) {
         super(runtime, target);
-    }
-
-    @Override
-    public boolean shouldAllocateRegisters() {
-        return false;
     }
 
     @Override
@@ -109,8 +104,8 @@ public class PTXBackend extends Backend {
         Buffer codeBuffer = tasm.asm.codeBuffer;
 
         // Emit initial boiler-plate directives.
-        codeBuffer.emitString(".version 2.1");
-        codeBuffer.emitString(".target sm_20");
+        codeBuffer.emitString(".version 1.4");
+        codeBuffer.emitString(".target sm_10");
         codeBuffer.emitString0(".entry " + name + " (");
         codeBuffer.emitString("");
 
@@ -147,7 +142,6 @@ public class PTXBackend extends Backend {
 
         final SortedSet<Integer> signed32 = new TreeSet<>();
         final SortedSet<Integer> signed64 = new TreeSet<>();
-        final SortedSet<Integer> unsigned64 = new TreeSet<>();
         final SortedSet<Integer> float32 = new TreeSet<>();
         final SortedSet<Integer> float64 = new TreeSet<>();
 
@@ -155,42 +149,40 @@ public class PTXBackend extends Backend {
 
             @Override
             public Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
-                if (isVariable(value)) {
-                    Variable regVal = (Variable) value;
+                if (isRegister(value)) {
+                    RegisterValue regVal = (RegisterValue) value;
                     Kind regKind = regVal.getKind();
                     switch (regKind) {
                         case Int:
                             // If the register was used as a wider signed type
                             // do not add it here
-                            if (!signed64.contains(regVal.index)) {
-                                signed32.add(regVal.index);
+                            if (!signed64.contains(regVal.getRegister().encoding())) {
+                                signed32.add(regVal.getRegister().encoding());
                             }
                             break;
                         case Long:
+                        case Object:
                             // If the register was used as a narrower signed type
                             // remove it from there and add it to wider type.
-                            if (signed32.contains(regVal.index)) {
-                                signed32.remove(regVal.index);
+                            if (signed32.contains(regVal.getRegister().encoding())) {
+                                signed32.remove(regVal.getRegister().encoding());
                             }
-                            signed64.add(regVal.index);
+                            signed64.add(regVal.getRegister().encoding());
                             break;
                         case Float:
                             // If the register was used as a wider signed type
                             // do not add it here
-                            if (!float64.contains(regVal.index)) {
-                                float32.add(regVal.index);
+                            if (!float64.contains(regVal.getRegister().encoding())) {
+                                float32.add(regVal.getRegister().encoding());
                             }
                             break;
                         case Double:
                             // If the register was used as a narrower signed type
                             // remove it from there and add it to wider type.
-                            if (float32.contains(regVal.index)) {
-                                float32.remove(regVal.index);
+                            if (float32.contains(regVal.getRegister().encoding())) {
+                                float32.remove(regVal.getRegister().encoding());
                             }
-                            float64.add(regVal.index);
-                            break;
-                        case Object:
-                            unsigned64.add(regVal.index);
+                            float64.add(regVal.getRegister().encoding());
                             break;
                         default:
                             throw GraalInternalError.shouldNotReachHere("unhandled register type " + value.toString());
@@ -217,9 +209,6 @@ public class PTXBackend extends Backend {
         for (Integer i : signed64) {
             codeBuffer.emitString(".reg .s64 %r" + i.intValue() + ";");
         }
-        for (Integer i : unsigned64) {
-            codeBuffer.emitString(".reg .u64 %r" + i.intValue() + ";");
-        }
         for (Integer i : float32) {
             codeBuffer.emitString(".reg .f32 %r" + i.intValue() + ";");
         }
@@ -231,7 +220,6 @@ public class PTXBackend extends Backend {
         if (maxPredRegNum > 0) {
             codeBuffer.emitString(".reg .pred %p<" + maxPredRegNum + ">;");
         }
-        codeBuffer.emitString(".reg .pred %r;");  // used for setp bool
     }
 
     @Override
