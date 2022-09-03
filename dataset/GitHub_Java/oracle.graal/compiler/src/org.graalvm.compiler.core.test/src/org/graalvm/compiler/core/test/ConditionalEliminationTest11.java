@@ -27,9 +27,8 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 /**
- * Collection of tests for
- * {@link org.graalvm.compiler.phases.common.DominatorConditionalEliminationPhase} including those
- * that triggered bugs in this phase.
+ * Collection of tests for {@link org.graalvm.compiler.phases.common.ConditionalEliminationPhase}
+ * including those that triggered bugs in this phase.
  */
 public class ConditionalEliminationTest11 extends ConditionalEliminationTestBase {
     @SuppressWarnings("all")
@@ -124,19 +123,19 @@ public class ConditionalEliminationTest11 extends ConditionalEliminationTestBase
 
     public static int test6Snippet(int a) {
         if ((a & 8) != 0) {
-            GraalDirectives.deoptimizeAndInvalidate();
+            GraalDirectives.deoptimize();
         }
         if ((a & 15) != 15) {
-            GraalDirectives.deoptimizeAndInvalidate();
+            GraalDirectives.deoptimize();
         }
         return 0;
     }
 
     public static int reference6Snippet(int a) {
         if ((a & 8) != 0) {
-            GraalDirectives.deoptimizeAndInvalidate();
+            GraalDirectives.deoptimize();
         }
-        GraalDirectives.deoptimizeAndInvalidate();
+        GraalDirectives.deoptimize();
         return 0;
     }
 
