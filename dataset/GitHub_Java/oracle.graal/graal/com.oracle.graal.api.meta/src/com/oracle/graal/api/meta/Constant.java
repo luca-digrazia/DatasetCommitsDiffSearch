@@ -112,15 +112,11 @@ public final class Constant extends Value {
 
     @Override
     public String toString() {
-        if (getKind() == Kind.Illegal) {
-            return "illegal";
-        } else {
-            String annotationSuffix = "";
-            if (getKind() != Kind.Object && getPrimitiveAnnotation() != null) {
-                annotationSuffix = "{" + getPrimitiveAnnotation() + "}";
-            }
-            return getKind().getJavaName() + "[" + getKind().format(asBoxedValue()) + (getKind() != Kind.Object ? "|0x" + Long.toHexString(primitive) : "") + "]" + annotationSuffix;
+        String annotationSuffix = "";
+        if (getKind() != Kind.Object && getPrimitiveAnnotation() != null) {
+            annotationSuffix = "{" + getPrimitiveAnnotation() + "}";
         }
+        return getKind().getJavaName() + "[" + getKind().format(asBoxedValue()) + (getKind() != Kind.Object ? "|0x" + Long.toHexString(primitive) : "") + "]" + annotationSuffix;
     }
 
     /**
@@ -148,8 +144,6 @@ public final class Constant extends Value {
                 return asDouble();
             case Object:
                 return object;
-            case Illegal:
-                return this;
         }
         throw new IllegalArgumentException();
     }
@@ -194,7 +188,7 @@ public final class Constant extends Value {
      * @return the constant value
      */
     public long asLong() {
-        assert getKind().isNumericInteger();
+        assert getKind() == Kind.Long || getKind().getStackKind() == Kind.Int;
         return primitive;
     }
 
@@ -431,10 +425,6 @@ public final class Constant extends Value {
             default:
                 throw new RuntimeException("cannot create Constant for boxed " + kind + " value");
         }
-    }
-
-    public static Constant forIllegal() {
-        return new Constant(Kind.Illegal, null, 0);
     }
 
     /**
