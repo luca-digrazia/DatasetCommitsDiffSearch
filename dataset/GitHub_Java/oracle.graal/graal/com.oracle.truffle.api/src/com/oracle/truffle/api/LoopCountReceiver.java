@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,6 +24,10 @@
  */
 package com.oracle.truffle.api;
 
+/**
+ * Accepts the execution count of a loop that is a child of this node. The optimization heuristics
+ * can use the loop count to guide compilation and inlining.
+ */
 public interface LoopCountReceiver {
 
     void reportLoopCount(int count);
