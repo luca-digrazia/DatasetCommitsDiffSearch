@@ -187,7 +187,6 @@ public class ClassSearchTest {
         return list;
     }
 
-    @SafeVarargs
     private <T> List<T> list(T... entries) {
         List<T> list = new ArrayList<T>();
         for (T entry : entries) {
@@ -196,7 +195,6 @@ public class ClassSearchTest {
         return list;
     }
 
-    @SafeVarargs
     private <T> Set<T> hashset(T... entries) {
         Set<T> set = new HashSet<T>();
         for (T entry : entries) {

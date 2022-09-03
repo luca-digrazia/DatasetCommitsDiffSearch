@@ -29,7 +29,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class Utils {
-    @SafeVarargs
     public static <T> Set<T> set(T... entries) {
         Set<T> set = new HashSet<T>();
         for (T entry : entries) {
