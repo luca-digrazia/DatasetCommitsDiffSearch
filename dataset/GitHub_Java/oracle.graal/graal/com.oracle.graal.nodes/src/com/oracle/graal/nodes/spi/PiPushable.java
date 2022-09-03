@@ -29,10 +29,5 @@ import com.oracle.graal.nodes.*;
  */
 public interface PiPushable {
 
-    /**
-     * 
-     * @param parent PiNode
-     * @return true if node was moved
-     */
-    boolean push(PiNode parent);
+    void push(PiNode parent);
 }
