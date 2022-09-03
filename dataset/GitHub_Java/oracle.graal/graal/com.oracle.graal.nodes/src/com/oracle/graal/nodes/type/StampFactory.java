@@ -278,7 +278,13 @@ public class StampFactory {
         } else if (a == null || b == null) {
             return null;
         } else {
-            return a.leastCommonAncestor(b);
+            if (a.isSubtypeOf(b)) {
+                return b;
+            } else if (b.isSubtypeOf(a)) {
+                return a;
+            } else {
+                return null;
+            }
         }
     }
 }
