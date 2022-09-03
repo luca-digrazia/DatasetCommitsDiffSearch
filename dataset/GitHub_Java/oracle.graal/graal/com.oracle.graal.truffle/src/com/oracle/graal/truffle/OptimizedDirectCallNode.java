@@ -27,6 +27,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.NodeUtil.NodeCountFilter;
 
 /**
  * A call node with a constant {@link CallTarget} that can be optimized by Graal.
@@ -34,39 +35,23 @@ import com.oracle.truffle.api.nodes.*;
 public final class OptimizedDirectCallNode extends DirectCallNode implements MaterializedFrameNotify {
 
     private int callCount;
+    private boolean trySplit = true;
     private boolean inliningForced;
 
     @CompilationFinal private boolean inlined;
     @CompilationFinal private OptimizedCallTarget splitCallTarget;
     @CompilationFinal private FrameAccess outsideFrameAccess = FrameAccess.NONE;
 
-    private final TruffleSplittingStrategy splittingStrategy;
-
     private OptimizedDirectCallNode(OptimizedCallTarget target) {
         super(target);
-        if (TruffleCompilerOptions.TruffleSplittingNew.getValue()) {
-            this.splittingStrategy = new DefaultTruffleSplittingStrategyNew(this);
-        } else {
-            this.splittingStrategy = new DefaultTruffleSplittingStrategy(this);
-        }
     }
 
     @Override
     public Object call(VirtualFrame frame, Object[] arguments) {
         if (CompilerDirectives.inInterpreter()) {
-            onInterpreterCall(arguments);
+            onInterpreterCall();
         }
-        Object result = callProxy(this, getCurrentCallTarget(), frame, arguments, inlined, true);
-
-        if (CompilerDirectives.inInterpreter()) {
-            afterInterpreterCall(result);
-        }
-        return result;
-    }
-
-    private void afterInterpreterCall(Object result) {
-        splittingStrategy.afterCall(result);
-        // propagateInliningInvalidations();
+        return callProxy(this, getCurrentCallTarget(), frame, arguments, inlined, true);
     }
 
     public static Object callProxy(MaterializedFrameNotify notify, CallTarget callTarget, VirtualFrame frame, Object[] arguments, boolean inlined, boolean direct) {
@@ -89,8 +74,9 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
 
     public void resetInlining() {
         CompilerAsserts.neverPartOfCompilation();
-        if (inlined && !inliningForced) {
+        if (inlined) {
             inlined = false;
+            getCurrentCallTarget().invalidateInlining();
         }
     }
 
@@ -143,43 +129,19 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
         return splitCallTarget;
     }
 
-    private void onInterpreterCall(Object[] arguments) {
-        int calls = ++callCount;
-        if (calls == 1) {
-            getCurrentCallTarget().incrementKnownCallSites();
-        }
-        splittingStrategy.beforeCall(arguments);
-        // propagateInliningInvalidations();
-    }
-
-    /** Used by the splitting strategy to install new targets. */
-    public void installSplitCallTarget(OptimizedCallTarget newTarget) {
-        CompilerAsserts.neverPartOfCompilation();
-
-        OptimizedCallTarget currentTarget = getCurrentCallTarget();
-        if (currentTarget == newTarget) {
-            return;
-        }
-
-        if (callCount >= 1) {
-            currentTarget.decrementKnownCallSites();
-        }
-        newTarget.incrementKnownCallSites();
-
-        // dummy replace to report the split
-        replace(this, "Split call " + newTarget.toString());
-
-        if (newTarget.getSplitSource() == null) {
-            splitCallTarget = null;
-        } else {
-            splitCallTarget = newTarget;
-        }
-    }
-
-    @SuppressWarnings("unused")
-    private void propagateInliningInvalidations() {
-        if (isInlined() && !getCurrentCallTarget().inliningPerformed) {
-            replace(this, "Propagate invalid inlining from " + getCurrentCallTarget().toString());
+    private void onInterpreterCall() {
+        callCount++;
+        if (trySplit) {
+            if (callCount == 1) {
+                // on first call
+                getCurrentCallTarget().incrementKnownCallSites();
+            }
+            if (callCount > 1 && !inlined) {
+                trySplit = false;
+                if (shouldSplit()) {
+                    splitImpl(true);
+                }
+            }
         }
     }
 
@@ -195,11 +157,75 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
 
     @Override
     public boolean split() {
-        splittingStrategy.forceSplitting();
+        splitImpl(false);
         return true;
+    }
+
+    private void splitImpl(boolean heuristic) {
+        CompilerAsserts.neverPartOfCompilation();
+
+        OptimizedCallTarget splitTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(getCallTarget().getRootNode().split());
+        splitTarget.setSplitSource(getCallTarget());
+        if (heuristic) {
+            OptimizedCallTargetLog.logSplit(this, getCallTarget(), splitTarget);
+        }
+        if (callCount >= 1) {
+            getCallTarget().decrementKnownCallSites();
+            splitTarget.incrementKnownCallSites();
+        }
+        this.splitCallTarget = splitTarget;
+    }
+
+    private boolean shouldSplit() {
+        if (splitCallTarget != null) {
+            return false;
+        }
+        if (!TruffleCompilerOptions.TruffleSplittingEnabled.getValue()) {
+            return false;
+        }
+        if (!isSplittable()) {
+            return false;
+        }
+        OptimizedCallTarget splitTarget = getCallTarget();
+        int nodeCount = OptimizedCallUtils.countNonTrivialNodes(splitTarget, false);
+        if (nodeCount > TruffleCompilerOptions.TruffleSplittingMaxCalleeSize.getValue()) {
+            return false;
+        }
+
+        // disable recursive splitting for now
+        OptimizedCallTarget root = (OptimizedCallTarget) getRootNode().getCallTarget();
+        if (root == splitTarget || root.getSplitSource() == splitTarget) {
+            // recursive call found
+            return false;
+        }
+
+        // max one child call and callCount > 2 and kind of small number of nodes
+        if (isMaxSingleCall()) {
+            return true;
+        }
+        return countPolymorphic() >= 1;
+    }
+
+    private boolean isMaxSingleCall() {
+        return NodeUtil.countNodes(getCurrentCallTarget().getRootNode(), new NodeCountFilter() {
+            public boolean isCounted(Node node) {
+                return node instanceof DirectCallNode;
+            }
+        }) <= 1;
+    }
+
+    private int countPolymorphic() {
+        return NodeUtil.countNodes(getCurrentCallTarget().getRootNode(), new NodeCountFilter() {
+            public boolean isCounted(Node node) {
+                NodeCost cost = node.getCost();
+                boolean polymorphic = cost == NodeCost.POLYMORPHIC || cost == NodeCost.MEGAMORPHIC;
+                return polymorphic;
+            }
+        });
     }
 
     public static OptimizedDirectCallNode create(OptimizedCallTarget target) {
         return new OptimizedDirectCallNode(target);
     }
+
 }
