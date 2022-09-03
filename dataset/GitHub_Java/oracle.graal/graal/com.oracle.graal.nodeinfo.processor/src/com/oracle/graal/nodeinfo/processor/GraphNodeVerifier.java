@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodeinfo.processor;
 
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.*;
 import static javax.lang.model.element.Modifier.*;
 
 import java.util.*;
@@ -30,6 +31,10 @@ import javax.annotation.processing.*;
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 import javax.lang.model.util.*;
+
+import com.oracle.truffle.dsl.processor.java.*;
+import com.oracle.truffle.dsl.processor.java.compiler.*;
+import com.oracle.truffle.dsl.processor.java.compiler.Compiler;
 
 /**
  * Verifies static constraints on nodes.
@@ -49,8 +54,6 @@ public class GraphNodeVerifier {
     private final TypeElement NodeInputList;
     private final TypeElement NodeSuccessorList;
 
-    private final TypeElement object;
-
     // Checkstyle: resume
 
     public GraphNodeVerifier(GraphNodeProcessor processor) {
@@ -65,7 +68,6 @@ public class GraphNodeVerifier {
         this.Node = getTypeElement("com.oracle.graal.graph.Node");
         this.NodeInputList = getTypeElement("com.oracle.graal.graph.NodeInputList");
         this.NodeSuccessorList = getTypeElement("com.oracle.graal.graph.NodeSuccessorList");
-        this.object = getTypeElement("java.lang.Object");
     }
 
     /**
@@ -89,6 +91,10 @@ public class GraphNodeVerifier {
         return getTypeElement(name).asType();
     }
 
+    public TypeMirror getType(Class<?> cls) {
+        return ElementUtils.getType(getProcessingEnv(), cls);
+    }
+
     public ProcessingEnvironment getProcessingEnv() {
         return env.getProcessingEnv();
     }
@@ -100,9 +106,10 @@ public class GraphNodeVerifier {
     }
 
     private void scanFields(TypeElement node) {
+        Compiler compiler = CompilerFactory.getCompiler(node);
         TypeElement currentClazz = node;
         do {
-            for (VariableElement field : ElementFilter.fieldsIn(currentClazz.getEnclosedElements())) {
+            for (VariableElement field : ElementFilter.fieldsIn(compiler.getEnclosedElementsInDeclarationOrder(currentClazz))) {
                 Set<Modifier> modifiers = field.getModifiers();
                 if (modifiers.contains(STATIC) || modifiers.contains(TRANSIENT)) {
                     continue;
@@ -178,30 +185,6 @@ public class GraphNodeVerifier {
             }
             currentClazz = getSuperType(currentClazz);
         } while (!isObject(getSuperType(currentClazz).asType()));
-    }
-
-    private AnnotationMirror findAnnotationMirror(List<? extends AnnotationMirror> mirrors, TypeElement expectedAnnotationType) {
-        for (AnnotationMirror mirror : mirrors) {
-            if (sameType(mirror.getAnnotationType(), expectedAnnotationType.asType())) {
-                return mirror;
-            }
-        }
-        return null;
-    }
-
-    private boolean isObject(TypeMirror type) {
-        return sameType(object.asType(), type);
-    }
-
-    private boolean sameType(TypeMirror type1, TypeMirror type2) {
-        return env.getProcessingEnv().getTypeUtils().isSameType(type1, type2);
-    }
-
-    private TypeElement getSuperType(TypeElement element) {
-        if (element.getSuperclass() != null) {
-            return (TypeElement) env.getProcessingEnv().getTypeUtils().asElement(element.getSuperclass());
-        }
-        return null;
     }
 
     void verify(TypeElement node) {

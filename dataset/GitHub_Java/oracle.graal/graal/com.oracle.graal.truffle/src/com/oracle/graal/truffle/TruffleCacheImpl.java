@@ -68,8 +68,8 @@ public class TruffleCacheImpl implements TruffleCache {
     private final ResolvedJavaType errorClass;
     private final ResolvedJavaType controlFlowExceptionClass;
 
-    protected final ResolvedJavaMethod callRootMethod;
-    protected final ResolvedJavaMethod callInlinedMethod;
+    private final ResolvedJavaMethod callRootMethod;
+    private final ResolvedJavaMethod callInlinedMethod;
 
     private long counter;
 

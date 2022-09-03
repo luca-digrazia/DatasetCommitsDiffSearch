@@ -49,7 +49,7 @@ public class OnStackReplacementPhase extends Phase {
         Debug.dump(graph, "OnStackReplacement initial");
         EntryMarkerNode osr;
         do {
-            NodeIterable<EntryMarkerNode> osrNodes = graph.getNodes(EntryMarkerNode.TYPE);
+            NodeIterable<EntryMarkerNode> osrNodes = graph.getNodes(EntryMarkerNode.class);
             osr = osrNodes.first();
             if (osr == null) {
                 throw new BailoutException("No OnStackReplacementNode generated");
@@ -76,7 +76,6 @@ public class OnStackReplacementPhase extends Phase {
             }
 
             LoopTransformations.peel(osrLoop);
-            osr.replaceAtUsages(InputType.Guard, AbstractBeginNode.prevBegin((FixedNode) osr.predecessor()));
             for (Node usage : osr.usages().snapshot()) {
                 ProxyNode proxy = (ProxyNode) usage;
                 proxy.replaceAndDelete(proxy.value());
@@ -108,8 +107,6 @@ public class OnStackReplacementPhase extends Phase {
                 assert value == null || value instanceof OSRLocalNode;
             }
         }
-        osr.replaceAtUsages(InputType.Guard, osrStart);
-        assert osr.usages().isEmpty();
 
         GraphUtil.killCFG(start);
 

@@ -55,7 +55,7 @@ public class NormalizeCompareNode extends BinaryNode implements Lowerable {
         LogicNode equalComp;
         LogicNode lessComp;
         if (getX().stamp() instanceof FloatStamp) {
-            equalComp = graph().unique(FloatEqualsNode.create(getX(), getY(), tool.getConstantReflection()));
+            equalComp = graph().unique(new FloatEqualsNode(getX(), getY()));
             lessComp = graph().unique(new FloatLessThanNode(getX(), getY(), isUnorderedLess));
         } else {
             equalComp = graph().unique(new IntegerEqualsNode(getX(), getY()));

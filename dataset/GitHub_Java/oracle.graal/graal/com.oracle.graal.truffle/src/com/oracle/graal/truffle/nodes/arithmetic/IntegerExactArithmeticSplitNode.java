@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@ package com.oracle.graal.truffle.nodes.arithmetic;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -32,15 +31,14 @@ import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
 public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode implements LIRLowerable {
-    public static final NodeClass TYPE = NodeClass.get(IntegerExactArithmeticSplitNode.class);
 
-    @Successor AbstractBeginNode overflowSuccessor;
-    @Successor AbstractBeginNode next;
+    @Successor BeginNode overflowSuccessor;
+    @Successor BeginNode next;
     @Input ValueNode x;
     @Input ValueNode y;
 
-    protected IntegerExactArithmeticSplitNode(NodeClass c, Stamp stamp, ValueNode x, ValueNode y, AbstractBeginNode next, AbstractBeginNode overflowSuccessor) {
-        super(c, stamp);
+    public IntegerExactArithmeticSplitNode(Stamp stamp, ValueNode x, ValueNode y, BeginNode next, BeginNode overflowSuccessor) {
+        super(stamp);
         this.x = x;
         this.y = y;
         this.overflowSuccessor = overflowSuccessor;
@@ -48,15 +46,15 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
     }
 
     @Override
-    public double probability(AbstractBeginNode successor) {
+    public double probability(BeginNode successor) {
         return successor == next ? 1 : 0;
     }
 
-    public AbstractBeginNode getNext() {
+    public BeginNode getNext() {
         return next;
     }
 
-    public AbstractBeginNode getOverflowSuccessor() {
+    public BeginNode getOverflowSuccessor() {
         return overflowSuccessor;
     }
 
@@ -71,7 +69,7 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
     @Override
     public void generate(NodeLIRBuilderTool generator) {
         generator.setResult(this, generateArithmetic(generator));
-        generator.emitOverflowCheckBranch(getOverflowSuccessor(), getNext(), stamp, probability(getOverflowSuccessor()));
+        generator.emitOverflowCheckBranch(getOverflowSuccessor(), getNext(), probability(getOverflowSuccessor()));
     }
 
     protected abstract Value generateArithmetic(NodeLIRBuilderTool generator);
@@ -83,7 +81,7 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
             FixedNode next = previous.next();
             previous.setNext(null);
             DeoptimizeNode deopt = floatingNode.graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.ArithmeticException));
-            AbstractBeginNode normalBegin = floatingNode.graph().add(new BeginNode());
+            BeginNode normalBegin = floatingNode.graph().add(new BeginNode());
             normalBegin.setNext(next);
             IntegerExactArithmeticSplitNode split = node.createSplit(normalBegin, BeginNode.begin(deopt));
             previous.setNext(split);

@@ -406,7 +406,7 @@ public class NodeIntrinsificationPhase extends Phase {
             usage.replaceFirstInput(input, intrinsifiedNode);
             Debug.log("%s: Checkcast used in a return with forNodeIntrinsic stamp", Debug.contextSnapshot(JavaMethod.class));
         } else if (usage instanceof IsNullNode) {
-            if (!usage.hasNoUsages()) {
+            if (!usage.usages().isEmpty()) {
                 assert usage.usages().count() == 1 && usage.usages().first().predecessor() == input : usage + " " + input;
                 graph.replaceFloating((FloatingNode) usage, LogicConstantNode.contradiction(graph));
                 Debug.log("%s: Replaced IsNull with false", Debug.contextSnapshot(JavaMethod.class));

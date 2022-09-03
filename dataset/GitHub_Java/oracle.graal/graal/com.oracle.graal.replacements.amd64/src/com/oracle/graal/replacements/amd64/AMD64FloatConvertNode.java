@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.spi.*;
  * fixup code that handles the corner cases that differ between AMD64 and Java.
  */
 @NodeInfo
-public final class AMD64FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> implements ArithmeticLIRLowerable {
+public class AMD64FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> implements ArithmeticLIRLowerable {
 
     protected final FloatConvert op;
 

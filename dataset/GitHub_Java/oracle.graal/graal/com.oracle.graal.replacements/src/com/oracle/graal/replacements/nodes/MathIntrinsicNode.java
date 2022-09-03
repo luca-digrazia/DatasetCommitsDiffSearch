@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@ package com.oracle.graal.replacements.nodes;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -34,9 +33,8 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
-public final class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerable {
+public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(MathIntrinsicNode.class);
     protected final Operation operation;
 
     public enum Operation {
@@ -52,7 +50,7 @@ public final class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRL
     }
 
     public MathIntrinsicNode(ValueNode value, Operation op) {
-        super(TYPE, StampFactory.forKind(Kind.Double), value);
+        super(StampFactory.forKind(Kind.Double), value);
         assert value.stamp() instanceof FloatStamp && PrimitiveStamp.getBits(value.stamp()) == 64;
         this.operation = op;
     }

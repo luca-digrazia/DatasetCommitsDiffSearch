@@ -74,14 +74,30 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
     public static class Instance extends Phase {
 
+        private LineNumberTable lnt;
+        private int previousLineNumber;
+        private int currentLineNumber;
+
         protected StructuredGraph currentGraph;
 
         private final MetaAccessProvider metaAccess;
 
-        private ResolvedJavaMethod rootMethod;
+        private BytecodeParser parser;
+
+        private ValueNode methodSynchronizedObject;
+        private ExceptionDispatchBlock unwindBlock;
+
+        private FixedWithNextNode lastInstr;                 // the last instruction added
 
         private final GraphBuilderConfiguration graphBuilderConfig;
         private final OptimisticOptimizations optimisticOpts;
+
+        /**
+         * Gets the current frame state being processed by this builder.
+         */
+        protected HIRFrameStateBuilder getCurrentFrameState() {
+            return parser.getFrameState();
+        }
 
         /**
          * Gets the graph being processed by this builder.
@@ -100,36 +116,39 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
         @Override
         protected void run(StructuredGraph graph) {
             ResolvedJavaMethod method = graph.method();
-            this.rootMethod = method;
+            if (graphBuilderConfig.insertNonSafepointDebugInfo()) {
+                lnt = method.getLineNumberTable();
+                previousLineNumber = -1;
+            }
             int entryBCI = graph.getEntryBCI();
+            ProfilingInfo profilingInfo = method.getProfilingInfo();
             assert method.getCode() != null : "method must contain bytecodes: " + method;
+            unwindBlock = null;
+            methodSynchronizedObject = null;
             this.currentGraph = graph;
-            HIRFrameStateBuilder frameState = new HIRFrameStateBuilder(method, graph, null);
-            frameState.initializeForMethodStart(graphBuilderConfig.eagerResolving());
+            HIRFrameStateBuilder frameState = new HIRFrameStateBuilder(method, graph, graphBuilderConfig.eagerResolving());
+            this.parser = createBytecodeParser(metaAccess, method, graphBuilderConfig, optimisticOpts, frameState, new BytecodeStream(method.getCode()), profilingInfo, method.getConstantPool(),
+                            entryBCI);
             TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
             try {
-                BytecodeParser parser = new BytecodeParser(metaAccess, method, graphBuilderConfig, optimisticOpts, entryBCI);
-                parser.build(0, graph.start(), frameState);
-
-                parser.connectLoopEndToBegin();
-
-                // remove dead parameters
-                for (ParameterNode param : currentGraph.getNodes(ParameterNode.class)) {
-                    if (param.hasNoUsages()) {
-                        assert param.inputs().isEmpty();
-                        param.safeDelete();
-                    }
-                }
+                parser.build();
             } finally {
                 filter.remove();
             }
+            parser = null;
 
             ComputeLoopFrequenciesClosure.compute(graph);
         }
 
+        @SuppressWarnings("hiding")
+        protected BytecodeParser createBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
+                        HIRFrameStateBuilder frameState, BytecodeStream stream, ProfilingInfo profilingInfo, ConstantPool constantPool, int entryBCI) {
+            return new BytecodeParser(metaAccess, method, graphBuilderConfig, optimisticOpts, frameState, stream, profilingInfo, constantPool, entryBCI);
+        }
+
         @Override
         protected String getDetailedName() {
-            return getName() + " " + rootMethod.format("%H.%n(%p):%r");
+            return getName() + " " + parser.getMethod().format("%H.%n(%p):%r");
         }
 
         private static class Target {
@@ -147,52 +166,14 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             private BciBlock[] loopHeaders;
             private LocalLiveness liveness;
-            protected final int entryBCI;
-            private int currentDepth;
 
-            private LineNumberTable lnt;
-            private int previousLineNumber;
-            private int currentLineNumber;
-
-            private ValueNode methodSynchronizedObject;
-            private ExceptionDispatchBlock unwindBlock;
-            private BciBlock returnBlock;
-
-            private ValueNode returnValue;
-            private FixedWithNextNode beforeReturnNode;
-            private ValueNode unwindValue;
-            private FixedWithNextNode beforeUnwindNode;
-
-            private FixedWithNextNode lastInstr;                 // the last instruction added
-
-            public BytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, int entryBCI) {
-                super(metaAccess, method, graphBuilderConfig, optimisticOpts);
-                this.entryBCI = entryBCI;
-
-                if (graphBuilderConfig.insertNonSafepointDebugInfo()) {
-                    lnt = method.getLineNumberTable();
-                    previousLineNumber = -1;
-                }
+            public BytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
+                            HIRFrameStateBuilder frameState, BytecodeStream stream, ProfilingInfo profilingInfo, ConstantPool constantPool, int entryBCI) {
+                super(metaAccess, method, graphBuilderConfig, optimisticOpts, frameState, stream, profilingInfo, constantPool, entryBCI);
             }
 
-            public ValueNode getReturnValue() {
-                return returnValue;
-            }
-
-            public FixedWithNextNode getBeforeReturnNode() {
-                return this.beforeReturnNode;
-            }
-
-            public ValueNode getUnwindValue() {
-                return unwindValue;
-            }
-
-            public FixedWithNextNode getBeforeUnwindNode() {
-                return this.beforeUnwindNode;
-            }
-
-            protected void build(int depth, FixedWithNextNode startInstruction, HIRFrameStateBuilder startFrameState) {
-                this.currentDepth = depth;
+            @Override
+            protected void build() {
                 if (PrintProfilingInformation.getValue()) {
                     TTY.println("Profiling info for " + method.format("%H.%n(%p)"));
                     TTY.println(MetaUtil.indent(profilingInfo.toString(method, CodeUtil.NEW_LINE), "  "));
@@ -205,60 +186,64 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     loopHeaders = blockMap.getLoopHeaders();
                     liveness = blockMap.liveness;
 
-                    lastInstr = startInstruction;
-                    this.setCurrentFrameState(startFrameState);
-
-                    if (startInstruction == currentGraph.start()) {
-                        StartNode startNode = currentGraph.start();
-                        if (method.isSynchronized()) {
-                            startNode.setStateAfter(frameState.create(BytecodeFrame.BEFORE_BCI));
-                        } else {
-                            frameState.clearNonLiveLocals(blockMap.startBlock, liveness, true);
-                            assert bci() == 0;
-                            startNode.setStateAfter(frameState.create(bci()));
-                        }
-                    }
-
+                    lastInstr = currentGraph.start();
                     if (method.isSynchronized()) {
                         // add a monitor enter to the start block
+                        currentGraph.start().setStateAfter(frameState.create(BytecodeFrame.BEFORE_BCI));
                         methodSynchronizedObject = synchronizedObject(frameState, method);
-                        MonitorEnterNode monitorEnter = genMonitorEnter(methodSynchronizedObject);
-                        frameState.clearNonLiveLocals(blockMap.startBlock, liveness, true);
-                        assert bci() == 0;
-                        monitorEnter.setStateAfter(frameState.create(bci()));
+                        lastInstr = genMonitorEnter(methodSynchronizedObject);
                     }
+                    frameState.clearNonLiveLocals(blockMap.startBlock, liveness, true);
+                    assert bci() == 0;
+                    ((StateSplit) lastInstr).setStateAfter(frameState.create(bci()));
+                    finishPrepare(lastInstr);
 
                     if (graphBuilderConfig.insertNonSafepointDebugInfo()) {
-                        append(createInfoPointNode(InfopointReason.METHOD_START));
+                        InfopointNode ipn = currentGraph.add(createInfoPointNode(InfopointReason.METHOD_START));
+                        lastInstr.setNext(ipn);
+                        lastInstr = ipn;
                     }
 
                     currentBlock = blockMap.startBlock;
                     blockMap.startBlock.entryState = frameState;
                     if (blockMap.startBlock.isLoopHeader) {
+                        /*
+                         * TODO(lstadler,gduboscq) createTarget might not be safe at this position,
+                         * since it expects currentBlock, etc. to be set up correctly. A better
+                         * solution to this problem of start blocks that are loop headers would be
+                         * to create a dummy block in BciBlockMapping.
+                         */
                         appendGoto(createTarget(blockMap.startBlock, frameState));
                     } else {
                         blockMap.startBlock.firstInstruction = lastInstr;
                     }
 
                     for (BciBlock block : blockMap.getBlocks()) {
-                        processBlock(this, block);
+                        processBlock(block);
                     }
-                    processBlock(this, returnBlock);
-                    processBlock(this, unwindBlock);
+                    processBlock(unwindBlock);
 
                     Debug.dump(currentGraph, "After bytecode parsing");
 
+                    connectLoopEndToBegin();
+
+                    // remove dead parameters
+                    for (ParameterNode param : currentGraph.getNodes(ParameterNode.class)) {
+                        if (param.usages().isEmpty()) {
+                            assert param.inputs().isEmpty();
+                            param.safeDelete();
+                        }
+                    }
                 }
             }
 
-            private BciBlock returnBlock(int bci) {
-                if (returnBlock == null) {
-                    returnBlock = new BciBlock();
-                    returnBlock.startBci = bci;
-                    returnBlock.endBci = bci;
-                    returnBlock.setId(Integer.MAX_VALUE);
-                }
-                return returnBlock;
+            /**
+             * A hook for derived classes to modify the graph start instruction or append new
+             * instructions to it.
+             *
+             * @param startInstr The start instruction of the graph.
+             */
+            protected void finishPrepare(FixedWithNextNode startInstr) {
             }
 
             private BciBlock unwindBlock() {
@@ -405,8 +390,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     dispatchBegin.setStateAfter(dispatchState.create(bci));
                     dispatchState.setRethrowException(true);
                 }
-                FixedNode target = createTarget(dispatchBlock, dispatchState);
                 FixedWithNextNode finishedDispatch = finishInstruction(dispatchBegin, dispatchState);
+                FixedNode target = createTarget(dispatchBlock, dispatchState);
                 finishedDispatch.setNext(target);
                 return dispatchBegin;
             }
@@ -753,40 +738,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     }
                 }
 
-                if (GraalOptions.InlineDuringParsing.getValue() && invokeKind.isDirect() && targetMethod.canBeInlined() && targetMethod.hasBytecodes()) {
-                    if (targetMethod.getCode().length <= GraalOptions.TrivialInliningSize.getValue() && currentDepth < GraalOptions.InlineDuringParsingMaxDepth.getValue() &&
-                                    graphBuilderConfig.shouldInlineTrivial()) {
-                        BytecodeParser parser = new BytecodeParser(metaAccess, targetMethod, graphBuilderConfig, optimisticOpts, StructuredGraph.INVOCATION_ENTRY_BCI);
-                        final FrameState[] lazyFrameState = new FrameState[1];
-                        HIRFrameStateBuilder startFrameState = new HIRFrameStateBuilder(targetMethod, currentGraph, () -> {
-                            if (lazyFrameState[0] == null) {
-                                lazyFrameState[0] = frameState.create(bci());
-                            }
-                            return lazyFrameState[0];
-                        });
-                        startFrameState.initializeFromArgumentsArray(args);
-                        parser.build(currentDepth + 1, this.lastInstr, startFrameState);
-
-                        FixedWithNextNode calleeBeforeReturnNode = parser.getBeforeReturnNode();
-                        this.lastInstr = calleeBeforeReturnNode;
-                        if (calleeBeforeReturnNode != null) {
-                            ValueNode calleeReturnValue = parser.getReturnValue();
-                            if (calleeReturnValue != null) {
-                                frameState.push(calleeReturnValue.getKind().getStackKind(), calleeReturnValue);
-                            }
-                        }
-
-                        FixedWithNextNode calleeBeforeUnwindNode = parser.getBeforeUnwindNode();
-                        if (calleeBeforeUnwindNode != null) {
-                            ValueNode calleeUnwindValue = parser.getUnwindValue();
-                            assert calleeUnwindValue != null;
-                            calleeBeforeUnwindNode.setNext(handleException(calleeUnwindValue, bci()));
-                        }
-
-                        return;
-                    }
-                }
-
                 MethodCallTargetNode callTarget = currentGraph.add(createMethodCallTarget(invokeKind, targetMethod, args, returnType));
 
                 // be conservative if information was not recorded (could result in endless
@@ -823,19 +774,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             protected void genReturn(ValueNode x) {
                 frameState.setRethrowException(false);
                 frameState.clearStack();
-
-                if (this.currentDepth == 0) {
-                    beforeReturn(x);
-                    append(new ReturnNode(x));
-                } else {
-                    if (x != null) {
-                        frameState.push(x.getKind(), x);
-                    }
-                    appendGoto(createTarget(returnBlock(bci()), frameState));
-                }
-            }
-
-            private void beforeReturn(ValueNode x) {
                 if (graphBuilderConfig.insertNonSafepointDebugInfo()) {
                     append(createInfoPointNode(InfopointReason.METHOD_END));
                 }
@@ -844,6 +782,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 if (frameState.lockDepth() != 0) {
                     throw new BailoutException("unbalanced monitors");
                 }
+
+                append(new ReturnNode(x));
             }
 
             @Override
@@ -855,13 +795,13 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             @Override
-            protected MonitorExitNode genMonitorExit(ValueNode x, ValueNode escapedReturnValue) {
+            protected MonitorExitNode genMonitorExit(ValueNode x, ValueNode returnValue) {
                 MonitorIdNode monitorId = frameState.peekMonitorId();
                 ValueNode lockedObject = frameState.popLock();
                 if (GraphUtil.originalValue(lockedObject) != GraphUtil.originalValue(x)) {
                     throw new BailoutException("unbalanced monitors: mismatch at monitorexit, %s != %s", GraphUtil.originalValue(x), GraphUtil.originalValue(lockedObject));
                 }
-                MonitorExitNode monitorExit = append(new MonitorExitNode(x, monitorId, escapedReturnValue));
+                MonitorExitNode monitorExit = append(new MonitorExitNode(x, monitorId, returnValue));
                 return monitorExit;
             }
 
@@ -1138,7 +1078,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
             }
 
-            protected void processBlock(BytecodeParser parser, BciBlock block) {
+            @Override
+            protected void processBlock(BciBlock block) {
                 // Ignore blocks that have no predecessors by the time their bytecodes are parsed
                 if (block == null || block.firstInstruction == null) {
                     Debug.log("Ignoring block %s", block);
@@ -1151,6 +1092,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     parser.setCurrentFrameState(frameState);
                     currentBlock = block;
 
+                    frameState.cleanupDeletedPhis();
                     if (lastInstr instanceof MergeNode) {
                         int bci = block.startBci;
                         if (block instanceof ExceptionDispatchBlock) {
@@ -1159,22 +1101,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         ((MergeNode) lastInstr).setStateAfter(frameState.create(bci));
                     }
 
-                    if (block == returnBlock) {
-                        Kind returnKind = method.getSignature().getReturnKind().getStackKind();
-                        ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
-                        assert frameState.stackSize() == 0;
-                        beforeReturn(x);
-                        this.returnValue = x;
-                        this.beforeReturnNode = this.lastInstr;
-                    } else if (block == unwindBlock) {
-                        if (currentDepth == 0) {
-                            frameState.setRethrowException(false);
-                            createUnwind();
-                        } else {
-                            ValueNode exception = frameState.apop();
-                            this.unwindValue = exception;
-                            this.beforeUnwindNode = this.lastInstr;
-                        }
+                    if (block == unwindBlock) {
+                        frameState.setRethrowException(false);
+                        createUnwind();
                     } else if (block instanceof ExceptionDispatchBlock) {
                         createExceptionDispatch((ExceptionDispatchBlock) block);
                     } else {
@@ -1184,22 +1113,19 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
             }
 
-            /**
-             * Remove loop header without loop ends. This can happen with degenerated loops like
-             * this one:
-             *
-             * <pre>
-             * for (;;) {
-             *     try {
-             *         break;
-             *     } catch (UnresolvedException iioe) {
-             *     }
-             * }
-             * </pre>
-             */
             private void connectLoopEndToBegin() {
                 for (LoopBeginNode begin : currentGraph.getNodes(LoopBeginNode.class)) {
                     if (begin.loopEnds().isEmpty()) {
+                        // @formatter:off
+                // Remove loop header without loop ends.
+                // This can happen with degenerated loops like this one:
+                // for (;;) {
+                //     try {
+                //         break;
+                //     } catch (UnresolvedException iioe) {
+                //     }
+                // }
+                // @formatter:on
                         assert begin.forwardEndCount() == 1;
                         currentGraph.reduceDegenerateLoopBegin(begin);
                     } else {
@@ -1215,11 +1141,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 append(new UnwindNode(exception));
             }
 
-            private void synchronizedEpilogue(int bci, ValueNode currentReturnValue) {
+            private void synchronizedEpilogue(int bci, ValueNode returnValue) {
                 if (method.isSynchronized()) {
-                    MonitorExitNode monitorExit = genMonitorExit(methodSynchronizedObject, currentReturnValue);
-                    if (currentReturnValue != null) {
-                        frameState.push(currentReturnValue.getKind(), currentReturnValue);
+                    MonitorExitNode monitorExit = genMonitorExit(methodSynchronizedObject, returnValue);
+                    if (returnValue != null) {
+                        frameState.push(returnValue.getKind(), returnValue);
                     }
                     monitorExit.setStateAfter(frameState.create(bci));
                     assert !frameState.rethrowException();
@@ -1284,7 +1210,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             protected void iterateBytecodesForBlock(BciBlock block) {
                 if (block.isLoopHeader) {
                     // Create the loop header block, which later will merge the backward branches of
-                    // the loop.
+                    // the
+                    // loop.
                     AbstractEndNode preLoopEnd = currentGraph.add(new EndNode());
                     LoopBeginNode loopBegin = currentGraph.add(new LoopBeginNode());
                     lastInstr.setNext(preLoopEnd);
@@ -1334,7 +1261,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     int opcode = stream.currentBC();
                     traceState();
                     traceInstruction(bci, opcode, bci == block.startBci);
-                    if (currentDepth == 0 && bci == entryBCI) {
+                    if (bci == entryBCI) {
                         if (block.getJsrScope() != JsrScope.EMPTY_SCOPE) {
                             throw new BailoutException("OSR into a JSR scope is not supported");
                         }

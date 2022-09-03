@@ -31,18 +31,17 @@ import com.oracle.graal.nodes.extended.*;
  * Guard {@link PhiNode}s merge guard dependencies at control flow merges.
  */
 @NodeInfo(nameTemplate = "GuardPhi({i#values})", allowedUsageTypes = {InputType.Guard})
-public final class GuardPhiNode extends PhiNode implements GuardingNode {
+public class GuardPhiNode extends PhiNode implements GuardingNode {
 
-    public static final NodeClass TYPE = NodeClass.get(GuardPhiNode.class);
     @OptionalInput(InputType.Guard) NodeInputList<ValueNode> values;
 
-    public GuardPhiNode(AbstractMergeNode merge) {
-        super(TYPE, StampFactory.forVoid(), merge);
+    public GuardPhiNode(MergeNode merge) {
+        super(StampFactory.forVoid(), merge);
         this.values = new NodeInputList<>(this);
     }
 
-    public GuardPhiNode(AbstractMergeNode merge, ValueNode[] values) {
-        super(TYPE, StampFactory.forVoid(), merge);
+    public GuardPhiNode(MergeNode merge, ValueNode[] values) {
+        super(StampFactory.forVoid(), merge);
         this.values = new NodeInputList<>(this, values);
     }
 

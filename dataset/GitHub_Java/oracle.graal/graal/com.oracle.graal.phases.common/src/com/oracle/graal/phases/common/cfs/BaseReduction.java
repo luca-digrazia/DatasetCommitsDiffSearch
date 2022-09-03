@@ -22,18 +22,16 @@
  */
 package com.oracle.graal.phases.common.cfs;
 
-import com.oracle.graal.api.code.Assumptions;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.phases.graph.PostOrderNodeIterator;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import java.util.*;
 
-import java.util.ArrayList;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.graph.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * <p>
@@ -44,18 +42,24 @@ import java.util.ArrayList;
  * disadvantages.
  * </p>
  *
- *
  * <p>
  * This class makes available little more than a few fields and a few utility methods used
  * throughout the remaining components making up control-flow sensitive reductions.
  * </p>
- * */
-public abstract class BaseReduction extends PostOrderNodeIterator<State> {
+ *
+ * <p>
+ * The laundry-list of all flow-sensitive reductions is summarized in
+ * {@link com.oracle.graal.phases.common.cfs.FlowSensitiveReduction}
+ * </p>
+ *
+ */
+public abstract class BaseReduction extends SinglePassNodeIterator<State> {
 
-    protected static final DebugMetric metricCheckCastRemoved = Debug.metric("CheckCastRemoved");
-    protected static final DebugMetric metricGuardingPiNodeRemoved = Debug.metric("GuardingPiNodeRemoved");
-    protected static final DebugMetric metricFixedGuardNodeRemoved = Debug.metric("FixedGuardNodeRemoved");
-    protected static final DebugMetric metricMethodResolved = Debug.metric("MethodResolved");
+    protected static final DebugMetric metricCheckCastRemoved = Debug.metric("FSR-CheckCastRemoved");
+    protected static final DebugMetric metricGuardingPiNodeRemoved = Debug.metric("FSR-GuardingPiNodeRemoved");
+    protected static final DebugMetric metricFixedGuardNodeRemoved = Debug.metric("FSR-FixedGuardNodeRemoved");
+    protected static final DebugMetric metricMethodResolved = Debug.metric("FSR-MethodResolved");
+    protected static final DebugMetric metricUnconditionalDeoptInserted = Debug.metric("FSR-UnconditionalDeoptInserted");
 
     /**
      * <p>
@@ -70,7 +74,7 @@ public abstract class BaseReduction extends PostOrderNodeIterator<State> {
      *
      * @see State#impossiblePath()
      * @see com.oracle.graal.phases.common.cfs.FlowSensitiveReduction#finished()
-     * */
+     */
     public static class PostponedDeopt {
 
         private final boolean goesBeforeFixed;
@@ -83,7 +87,14 @@ public abstract class BaseReduction extends PostOrderNodeIterator<State> {
             this.deoptReason = deoptReason;
         }
 
+        /*
+         * TODO Actually, we want to emit instructions to signal "should-not-reach-here". An
+         * imperfect substitute (as done here) is emitting FixedGuard(false).
+         * "should-not-reach-here" would be better for the runtime error it raises, thus pointing to
+         * a bug in FlowSensitiveReduction (the code was reachable, after all).
+         */
         public void doRewrite(LogicNode falseConstant) {
+            metricUnconditionalDeoptInserted.increment();
             StructuredGraph graph = fixed.graph();
             // have to insert a FixedNode other than a ControlSinkNode
             FixedGuardNode buckStopsHere = graph.add(new FixedGuardNode(falseConstant, deoptReason, DeoptimizationAction.None));
@@ -105,7 +116,7 @@ public abstract class BaseReduction extends PostOrderNodeIterator<State> {
          * argument, will be done once we're done traversing the graph.
          *
          * @see #finished()
-         * */
+         */
         void addDeoptBefore(FixedWithNextNode fixed, DeoptimizationReason deoptReason) {
             add(new PostponedDeopt(true, fixed, deoptReason));
         }
@@ -115,7 +126,7 @@ public abstract class BaseReduction extends PostOrderNodeIterator<State> {
          * argument, will be done once we're done traversing the graph.
          *
          * @see #finished()
-         * */
+         */
         void addDeoptAfter(FixedWithNextNode fixed, DeoptimizationReason deoptReason) {
             add(new PostponedDeopt(false, fixed, deoptReason));
         }
@@ -127,11 +138,10 @@ public abstract class BaseReduction extends PostOrderNodeIterator<State> {
      * One of the promises of
      * {@link com.oracle.graal.phases.common.cfs.EquationalReasoner#deverbosify(com.oracle.graal.graph.Node)}
      * is that a "maximally reduced" node is returned. That is achieved in part by leveraging
-     * {@link com.oracle.graal.graph.Node#canonical(com.oracle.graal.graph.spi.CanonicalizerTool)}.
-     * Doing so, in turn, requires this subclass of
-     * {@link com.oracle.graal.graph.spi.CanonicalizerTool}.
+     * {@link Canonicalizable#canonical(com.oracle.graal.graph.spi.CanonicalizerTool)}. Doing so, in
+     * turn, requires this subclass of {@link com.oracle.graal.graph.spi.CanonicalizerTool}.
      * </p>
-     * */
+     */
     public final class Tool implements CanonicalizerTool {
 
         private final PhaseContext context;
@@ -155,16 +165,6 @@ public abstract class BaseReduction extends PostOrderNodeIterator<State> {
             return context.getConstantReflection();
         }
 
-        /**
-         * Postpone
-         * {@link com.oracle.graal.nodes.util.GraphUtil#tryKillUnused(com.oracle.graal.graph.Node)}
-         * until {@link FlowSensitiveReduction#finished()} for the reasons covered there.
-         * */
-        @Override
-        public void removeIfUnused(Node node) {
-            // GraphUtil.tryKillUnused(node);
-        }
-
         @Override
         public boolean canonicalizeReads() {
             return false;
@@ -182,7 +182,7 @@ public abstract class BaseReduction extends PostOrderNodeIterator<State> {
 
     protected final PostponedDeopts postponedDeopts = new PostponedDeopts();
 
-    protected BaseReduction(FixedNode start, State initialState, PhaseContext context) {
+    protected BaseReduction(StartNode start, State initialState, PhaseContext context) {
         super(start, initialState);
         graph = start.graph();
         trueConstant = LogicConstantNode.tautology(graph);
@@ -207,8 +207,8 @@ public abstract class BaseReduction extends PostOrderNodeIterator<State> {
      * reported as such.
      * </p>
      *
-     * */
-    protected static boolean precisionLoss(ValueNode input, ValueNode output) {
+     */
+    public static boolean precisionLoss(ValueNode input, ValueNode output) {
         ObjectStamp inputStamp = (ObjectStamp) input.stamp();
         ObjectStamp outputStamp = (ObjectStamp) output.stamp();
         if (FlowUtil.isMorePrecise(inputStamp.type(), outputStamp.type())) {

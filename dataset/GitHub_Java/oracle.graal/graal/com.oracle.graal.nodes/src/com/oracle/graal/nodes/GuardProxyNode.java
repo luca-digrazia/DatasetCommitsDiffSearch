@@ -29,13 +29,12 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Guard})
-public final class GuardProxyNode extends ProxyNode implements GuardingNode, Proxy, LIRLowerable {
+public class GuardProxyNode extends ProxyNode implements GuardingNode, Proxy, LIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(GuardProxyNode.class);
     @Input(InputType.Guard) GuardingNode value;
 
-    public GuardProxyNode(GuardingNode value, AbstractBeginNode proxyPoint) {
-        super(TYPE, StampFactory.forVoid(), proxyPoint);
+    public GuardProxyNode(GuardingNode value, BeginNode proxyPoint) {
+        super(StampFactory.forVoid(), proxyPoint);
         this.value = value;
     }
 

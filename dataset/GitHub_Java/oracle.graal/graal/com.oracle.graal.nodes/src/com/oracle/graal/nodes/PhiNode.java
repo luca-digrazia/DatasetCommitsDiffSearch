@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,30 +32,28 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 
 /**
- * {@code PhiNode}s represent the merging of edges at a control flow merges (
- * {@link AbstractMergeNode} or {@link LoopBeginNode}). For a {@link AbstractMergeNode}, the order
- * of the values corresponds to the order of the ends. For {@link LoopBeginNode}s, the first value
- * corresponds to the loop's predecessor, while the rest of the values correspond to the
- * {@link LoopEndNode}s.
+ * {@code PhiNode}s represent the merging of edges at a control flow merges ({@link MergeNode} or
+ * {@link LoopBeginNode}). For a {@link MergeNode}, the order of the values corresponds to the order
+ * of the ends. For {@link LoopBeginNode}s, the first value corresponds to the loop's predecessor,
+ * while the rest of the values correspond to the {@link LoopEndNode}s.
  */
 @NodeInfo
 public abstract class PhiNode extends FloatingNode implements Simplifiable {
 
-    public static final NodeClass TYPE = NodeClass.get(PhiNode.class);
-    @Input(InputType.Association) protected AbstractMergeNode merge;
+    @Input(InputType.Association) protected MergeNode merge;
 
-    protected PhiNode(NodeClass c, Stamp stamp, AbstractMergeNode merge) {
-        super(c, stamp);
+    protected PhiNode(Stamp stamp, MergeNode merge) {
+        super(stamp);
         this.merge = merge;
     }
 
     public abstract NodeInputList<ValueNode> values();
 
-    public AbstractMergeNode merge() {
+    public MergeNode merge() {
         return merge;
     }
 
-    public void setMerge(AbstractMergeNode x) {
+    public void setMerge(MergeNode x) {
         updateUsages(merge, x);
         merge = x;
     }
@@ -143,12 +141,10 @@ public abstract class PhiNode extends FloatingNode implements Simplifiable {
     }
 
     @NodeInfo
-    static final class MultipleValuesNode extends ValueNode {
-
-        public static final NodeClass TYPE = NodeClass.get(MultipleValuesNode.class);
+    static class MultipleValuesNode extends ValueNode {
 
         public MultipleValuesNode() {
-            super(TYPE, null);
+            super(null);
         }
 
     }
@@ -161,10 +157,10 @@ public abstract class PhiNode extends FloatingNode implements Simplifiable {
      * {@code null} inputs.
      */
     public ValueNode singleValue() {
-        ValueNode singleValue = valueAt(0);
-        int count = valueCount();
-        for (int i = 1; i < count; ++i) {
-            ValueNode value = valueAt(i);
+        Iterator<ValueNode> iterator = values().iterator();
+        ValueNode singleValue = iterator.next();
+        while (iterator.hasNext()) {
+            ValueNode value = iterator.next();
             if (value != this) {
                 if (value != singleValue) {
                     return MULTIPLE_VALUES;

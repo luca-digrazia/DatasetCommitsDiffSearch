@@ -38,7 +38,7 @@ import com.oracle.graal.word.*;
  * expected value or the compared against value instead of a boolean.
  */
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
+public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
 
     @Input ValueNode object;
     @Input ValueNode offset;

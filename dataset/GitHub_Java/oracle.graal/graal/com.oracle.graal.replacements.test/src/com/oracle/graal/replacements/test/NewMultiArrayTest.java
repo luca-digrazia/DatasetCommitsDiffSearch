@@ -25,11 +25,10 @@ package com.oracle.graal.replacements.test;
 import java.lang.reflect.*;
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
 import org.junit.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
@@ -91,7 +90,7 @@ public class NewMultiArrayTest extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        for (Class<?> clazz : new Class<?>[]{byte.class, char.class, short.class, int.class, float.class, long.class, double.class, String.class}) {
+        for (Class<?> clazz : new Class[]{byte.class, char.class, short.class, int.class, float.class, long.class, double.class, String.class}) {
             bottomClass = clazz;
             bottomType = getMetaAccess().lookupJavaType(clazz);
             arrayType = bottomType;

@@ -56,8 +56,6 @@ public class InferStamps {
         }
 
         boolean stampChanged;
-        // The algorithm is not guaranteed to reach a stable state.
-        int z = 0;
         do {
             stampChanged = false;
             /*
@@ -74,8 +72,7 @@ public class InferStamps {
                     }
                 }
             }
-            ++z;
-        } while (stampChanged && z < 10000);
+        } while (stampChanged);
 
         /*
          * Check that all the illegal stamps we introduced above are correctly replaced with real

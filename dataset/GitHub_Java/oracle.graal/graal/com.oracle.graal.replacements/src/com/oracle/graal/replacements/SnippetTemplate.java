@@ -123,7 +123,7 @@ public class SnippetTemplate {
                     names[i] = method.getLocalVariableTable().getLocal(slotIdx, 0).getName();
 
                     Kind kind = method.getSignature().getParameterKind(i);
-                    slotIdx += kind.getSlotCount();
+                    slotIdx += kind == Kind.Long || kind == Kind.Double ? 2 : 1;
                 }
                 return true;
             }
@@ -418,7 +418,7 @@ public class SnippetTemplate {
             this.guardsStage = guardsStage;
             this.loweringStage = loweringStage;
             this.values = new Object[info.getParameterCount()];
-            this.hash = info.method.hashCode() + 31 * guardsStage.ordinal();
+            this.hash = info.method.hashCode() + 31 * guardsStage.hashCode();
         }
 
         protected void setParam(int paramIdx, Object value) {
@@ -726,7 +726,7 @@ public class SnippetTemplate {
         Debug.dump(snippet, "SnippetTemplate after fixing memory anchoring");
 
         StartNode entryPointNode = snippet.start();
-        if (memoryAnchor.hasNoUsages()) {
+        if (memoryAnchor.usages().isEmpty()) {
             memoryAnchor.safeDelete();
         } else {
             snippetCopy.addAfterFixed(snippetCopy.start(), memoryAnchor);
@@ -746,7 +746,7 @@ public class SnippetTemplate {
             this.returnNode.setMemoryMap(memoryMap);
             for (MemoryMapNode mm : memMaps) {
                 if (mm != memoryMap && mm.isAlive()) {
-                    assert mm.hasNoUsages();
+                    assert mm.usages().isEmpty();
                     GraphUtil.killWithUnusedFloatingInputs(mm);
                 }
             }
@@ -986,7 +986,7 @@ public class SnippetTemplate {
                 }
             }
             if (newNode == null) {
-                assert oldNode.hasNoUsages();
+                assert oldNode.usages().isEmpty();
             } else {
                 oldNode.replaceAtUsages(newNode);
             }
@@ -1176,7 +1176,7 @@ public class SnippetTemplate {
                 if (returnValue == null && replacee.usages().isNotEmpty() && replacee instanceof MemoryCheckpoint) {
                     replacer.replace(replacee, null, mmap);
                 } else {
-                    assert returnValue != null || replacee.hasNoUsages();
+                    assert returnValue != null || replacee.usages().isEmpty();
                     replacer.replace(replacee, returnValue, mmap);
                 }
                 if (returnDuplicate.isAlive()) {
@@ -1273,7 +1273,7 @@ public class SnippetTemplate {
             // Replace all usages of the replacee with the value returned by the snippet
             ReturnNode returnDuplicate = (ReturnNode) duplicates.get(returnNode);
             ValueNode returnValue = returnDuplicate.result();
-            assert returnValue != null || replacee.hasNoUsages();
+            assert returnValue != null || replacee.usages().isEmpty();
             replacer.replace(replacee, returnValue, new DuplicateMapper(duplicates, replaceeGraph.start()));
 
             if (returnDuplicate.isAlive()) {

@@ -45,6 +45,7 @@ public class FloatingReadPhase extends Phase {
 
     private boolean createFloatingReads;
     private boolean createMemoryMapNodes;
+    private boolean updateExistingPhis;
 
     public static class MemoryMapImpl implements MemoryMap {
 
@@ -56,7 +57,7 @@ public class FloatingReadPhase extends Phase {
 
         public MemoryMapImpl(StartNode start) {
             lastMemorySnapshot = CollectionsFactory.newMap();
-            lastMemorySnapshot.put(any(), start);
+            lastMemorySnapshot.put(ANY_LOCATION, start);
         }
 
         public MemoryMapImpl() {
@@ -71,7 +72,7 @@ public class FloatingReadPhase extends Phase {
             } else {
                 lastLocationAccess = lastMemorySnapshot.get(locationIdentity);
                 if (lastLocationAccess == null) {
-                    lastLocationAccess = lastMemorySnapshot.get(any());
+                    lastLocationAccess = lastMemorySnapshot.get(ANY_LOCATION);
                     assert lastLocationAccess != null;
                 }
                 return lastLocationAccess;
@@ -89,7 +90,7 @@ public class FloatingReadPhase extends Phase {
     }
 
     public FloatingReadPhase() {
-        this(true, false);
+        this(true, false, false);
     }
 
     /**
@@ -98,10 +99,13 @@ public class FloatingReadPhase extends Phase {
      *            {@link FloatingReadNode}s) where possible
      * @param createMemoryMapNodes a {@link MemoryMapNode} will be created for each return if this
      *            is true
+     * @param updateExistingPhis if true, then existing {@link MemoryPhiNode}s in the graph will be
+     *            updated
      */
-    public FloatingReadPhase(boolean createFloatingReads, boolean createMemoryMapNodes) {
+    public FloatingReadPhase(boolean createFloatingReads, boolean createMemoryMapNodes, boolean updateExistingPhis) {
         this.createFloatingReads = createFloatingReads;
         this.createMemoryMapNodes = createMemoryMapNodes;
+        this.updateExistingPhis = updateExistingPhis;
     }
 
     /**
@@ -131,7 +135,7 @@ public class FloatingReadPhase extends Phase {
         ReentrantNodeIterator.apply(new CollectMemoryCheckpointsClosure(modifiedInLoops), graph.start(), CollectionsFactory.newSet());
         HashSetNodeEventListener listener = new HashSetNodeEventListener(EnumSet.of(NODE_ADDED, ZERO_USAGES));
         try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
-            ReentrantNodeIterator.apply(new FloatingReadClosure(modifiedInLoops, createFloatingReads, createMemoryMapNodes), graph.start(), new MemoryMapImpl(graph.start()));
+            ReentrantNodeIterator.apply(new FloatingReadClosure(modifiedInLoops, createFloatingReads, createMemoryMapNodes, updateExistingPhis), graph.start(), new MemoryMapImpl(graph.start()));
         }
 
         for (Node n : removeExternallyUsedNodes(listener.getNodes())) {
@@ -146,7 +150,7 @@ public class FloatingReadPhase extends Phase {
         }
     }
 
-    public static MemoryMapImpl mergeMemoryMaps(AbstractMergeNode merge, List<? extends MemoryMap> states) {
+    public static MemoryMapImpl mergeMemoryMaps(MergeNode merge, List<? extends MemoryMap> states, boolean updateExistingPhis) {
         MemoryMapImpl newState = new MemoryMapImpl();
 
         Set<LocationIdentity> keys = CollectionsFactory.newSet();
@@ -154,6 +158,17 @@ public class FloatingReadPhase extends Phase {
             keys.addAll(other.getLocations());
         }
         assert checkNoImmutableLocations(keys);
+
+        Map<LocationIdentity, MemoryPhiNode> existingPhis = null;
+        if (updateExistingPhis) {
+            for (MemoryPhiNode phi : merge.phis().filter(MemoryPhiNode.class)) {
+                if (existingPhis == null) {
+                    existingPhis = CollectionsFactory.newMap();
+                }
+                phi.values().clear();
+                existingPhis.put(phi.getLocationIdentity(), phi);
+            }
+        }
 
         for (LocationIdentity key : keys) {
             int mergedStatesCount = 0;
@@ -169,7 +184,10 @@ public class FloatingReadPhase extends Phase {
                     } else if (merged == null) {
                         merged = last;
                     } else {
-                        MemoryPhiNode phi = merge.graph().addWithoutUnique(new MemoryPhiNode(merge, key));
+                        MemoryPhiNode phi = null;
+                        if (existingPhis == null || (phi = existingPhis.remove(key)) == null) {
+                            phi = merge.graph().addWithoutUnique(new MemoryPhiNode(merge, key));
+                        }
                         for (int j = 0; j < mergedStatesCount; j++) {
                             phi.addInput(ValueNodeUtil.asNode(merged));
                         }
@@ -181,6 +199,11 @@ public class FloatingReadPhase extends Phase {
                 mergedStatesCount++;
             }
             newState.lastMemorySnapshot.put(key, merged);
+        }
+        if (existingPhis != null) {
+            for (Map.Entry<LocationIdentity, MemoryPhiNode> entry : existingPhis.entrySet()) {
+                entry.getValue().replaceAndDelete(newState.getLastLocationAccess(entry.getKey()).asNode());
+            }
         }
         return newState;
 
@@ -214,7 +237,7 @@ public class FloatingReadPhase extends Phase {
         }
 
         @Override
-        protected Set<LocationIdentity> merge(AbstractMergeNode merge, List<Set<LocationIdentity>> states) {
+        protected Set<LocationIdentity> merge(MergeNode merge, List<Set<LocationIdentity>> states) {
             Set<LocationIdentity> result = CollectionsFactory.newSet();
             for (Set<LocationIdentity> other : states) {
                 result.addAll(other);
@@ -223,7 +246,7 @@ public class FloatingReadPhase extends Phase {
         }
 
         @Override
-        protected Set<LocationIdentity> afterSplit(AbstractBeginNode node, Set<LocationIdentity> oldState) {
+        protected Set<LocationIdentity> afterSplit(BeginNode node, Set<LocationIdentity> oldState) {
             return CollectionsFactory.newSet(oldState);
         }
 
@@ -250,11 +273,13 @@ public class FloatingReadPhase extends Phase {
         private final Map<LoopBeginNode, Set<LocationIdentity>> modifiedInLoops;
         private boolean createFloatingReads;
         private boolean createMemoryMapNodes;
+        private boolean updateExistingPhis;
 
-        public FloatingReadClosure(Map<LoopBeginNode, Set<LocationIdentity>> modifiedInLoops, boolean createFloatingReads, boolean createMemoryMapNodes) {
+        public FloatingReadClosure(Map<LoopBeginNode, Set<LocationIdentity>> modifiedInLoops, boolean createFloatingReads, boolean createMemoryMapNodes, boolean updateExistingPhis) {
             this.modifiedInLoops = modifiedInLoops;
             this.createFloatingReads = createFloatingReads;
             this.createMemoryMapNodes = createMemoryMapNodes;
+            this.updateExistingPhis = updateExistingPhis;
         }
 
         @Override
@@ -280,7 +305,7 @@ public class FloatingReadPhase extends Phase {
 
         private static void processAccess(MemoryAccess access, MemoryMapImpl state) {
             LocationIdentity locationIdentity = access.getLocationIdentity();
-            if (!locationIdentity.equals(LocationIdentity.any())) {
+            if (!locationIdentity.equals(LocationIdentity.ANY_LOCATION)) {
                 MemoryNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
                 access.setLastLocationAccess(lastLocationAccess);
             }
@@ -297,7 +322,7 @@ public class FloatingReadPhase extends Phase {
         }
 
         private static void processIdentity(LocationIdentity identity, MemoryCheckpoint checkpoint, MemoryMapImpl state) {
-            if (identity.isAny()) {
+            if (identity.equals(ANY_LOCATION)) {
                 state.lastMemorySnapshot.clear();
             }
             state.lastMemorySnapshot.put(identity, checkpoint);
@@ -321,12 +346,12 @@ public class FloatingReadPhase extends Phase {
         }
 
         @Override
-        protected MemoryMapImpl merge(AbstractMergeNode merge, List<MemoryMapImpl> states) {
-            return mergeMemoryMaps(merge, states);
+        protected MemoryMapImpl merge(MergeNode merge, List<MemoryMapImpl> states) {
+            return mergeMemoryMaps(merge, states, updateExistingPhis);
         }
 
         @Override
-        protected MemoryMapImpl afterSplit(AbstractBeginNode node, MemoryMapImpl oldState) {
+        protected MemoryMapImpl afterSplit(BeginNode node, MemoryMapImpl oldState) {
             MemoryMapImpl result = new MemoryMapImpl(oldState);
             if (node.predecessor() instanceof InvokeWithExceptionNode) {
                 /*
@@ -345,7 +370,7 @@ public class FloatingReadPhase extends Phase {
         @Override
         protected Map<LoopExitNode, MemoryMapImpl> processLoop(LoopBeginNode loop, MemoryMapImpl initialState) {
             Set<LocationIdentity> modifiedLocations = modifiedInLoops.get(loop);
-            if (modifiedLocations.contains(any())) {
+            if (modifiedLocations.contains(ANY_LOCATION)) {
                 // create phis for all locations if ANY is modified in the loop
                 modifiedLocations = CollectionsFactory.newSet(modifiedLocations);
                 modifiedLocations.addAll(initialState.lastMemorySnapshot.keySet());
@@ -353,10 +378,24 @@ public class FloatingReadPhase extends Phase {
 
             Map<LocationIdentity, MemoryPhiNode> phis = CollectionsFactory.newMap();
 
+            if (updateExistingPhis) {
+                for (MemoryPhiNode phi : loop.phis().filter(MemoryPhiNode.class).snapshot()) {
+                    if (modifiedLocations.contains(phi.getLocationIdentity())) {
+                        phi.values().clear();
+                        phi.addInput(ValueNodeUtil.asNode(initialState.getLastLocationAccess(phi.getLocationIdentity())));
+                        phis.put(phi.getLocationIdentity(), phi);
+                    } else {
+                        phi.replaceAndDelete(initialState.getLastLocationAccess(phi.getLocationIdentity()).asNode());
+                    }
+                }
+            }
+
             for (LocationIdentity location : modifiedLocations) {
-                MemoryPhiNode phi = loop.graph().addWithoutUnique(new MemoryPhiNode(loop, location));
-                phi.addInput(ValueNodeUtil.asNode(initialState.getLastLocationAccess(location)));
-                phis.put(location, phi);
+                if (!updateExistingPhis || !phis.containsKey(location)) {
+                    MemoryPhiNode phi = loop.graph().addWithoutUnique(new MemoryPhiNode(loop, location));
+                    phi.addInput(ValueNodeUtil.asNode(initialState.getLastLocationAccess(location)));
+                    phis.put(location, phi);
+                }
             }
             for (Map.Entry<LocationIdentity, MemoryPhiNode> entry : phis.entrySet()) {
                 initialState.lastMemorySnapshot.put(entry.getKey(), entry.getValue());

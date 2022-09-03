@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,6 @@ import sun.misc.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -40,13 +39,12 @@ import com.oracle.graal.nodes.spi.*;
  * Creates a memory barrier.
  */
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class MembarNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
+public class MembarNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
 
-    public static final NodeClass TYPE = NodeClass.get(MembarNode.class);
     protected final int barriers;
 
     public MembarNode(int barriers) {
-        super(TYPE, StampFactory.forVoid());
+        super(StampFactory.forVoid());
         this.barriers = barriers;
     }
 

@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp.Not;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -35,12 +34,10 @@ import com.oracle.graal.nodes.spi.*;
  * Binary negation of long or integer values.
  */
 @NodeInfo
-public final class NotNode extends UnaryArithmeticNode<Not> implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
-
-    public static final NodeClass TYPE = NodeClass.get(NotNode.class);
+public class NotNode extends UnaryArithmeticNode<Not> implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
 
     public NotNode(ValueNode x) {
-        super(TYPE, ArithmeticOpTable::getNot, x);
+        super(ArithmeticOpTable::getNot, x);
     }
 
     @Override

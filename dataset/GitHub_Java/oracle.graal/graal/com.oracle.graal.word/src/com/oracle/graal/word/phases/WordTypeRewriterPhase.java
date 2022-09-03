@@ -113,8 +113,6 @@ public class WordTypeRewriterPhase extends Phase {
     protected void rewriteNode(StructuredGraph graph, Node node) {
         if (node instanceof CheckCastNode) {
             rewriteCheckCast(graph, (CheckCastNode) node);
-        } else if (node instanceof PiNode) {
-            rewritePi(graph, (PiNode) node);
         } else if (node instanceof LoadFieldNode) {
             rewriteLoadField(graph, (LoadFieldNode) node);
         } else if (node instanceof AccessIndexedNode) {
@@ -131,16 +129,6 @@ public class WordTypeRewriterPhase extends Phase {
         if (node.getKind() == wordKind) {
             node.replaceAtUsages(node.object());
             graph.removeFixed(node);
-        }
-    }
-
-    /**
-     * Remove casts between word types (which by now no longer have kind Object).
-     */
-    protected void rewritePi(StructuredGraph graph, PiNode node) {
-        if (node.getKind() == wordKind) {
-            node.replaceAtUsages(node.object());
-            graph.removeFloating(node);
         }
     }
 
@@ -417,7 +405,7 @@ public class WordTypeRewriterPhase extends Phase {
          * The read must not float outside its block otherwise it may float above an explicit zero
          * check on its base address.
          */
-        read.setGuard(AbstractBeginNode.prevBegin(invoke.asNode()));
+        read.setGuard(BeginNode.prevBegin(invoke.asNode()));
         return read;
     }
 

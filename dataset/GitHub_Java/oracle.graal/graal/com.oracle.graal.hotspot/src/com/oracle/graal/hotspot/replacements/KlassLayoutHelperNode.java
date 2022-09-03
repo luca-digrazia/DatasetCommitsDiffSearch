@@ -79,7 +79,7 @@ public class KlassLayoutHelperNode extends FloatingGuardedNode implements Canoni
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (hasNoUsages()) {
+        if (usages().isEmpty()) {
             return null;
         } else {
             if (klass.isConstant()) {

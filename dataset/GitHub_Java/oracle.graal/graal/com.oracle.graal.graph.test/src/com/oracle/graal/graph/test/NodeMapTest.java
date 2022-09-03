@@ -33,7 +33,7 @@ import com.oracle.graal.nodeinfo.*;
 public class NodeMapTest {
 
     @NodeInfo
-    static final class TestNode extends Node {
+    static class TestNode extends Node {
         protected TestNode() {
         }
     }

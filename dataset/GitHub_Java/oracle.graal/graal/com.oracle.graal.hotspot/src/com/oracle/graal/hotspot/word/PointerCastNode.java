@@ -24,7 +24,6 @@ package com.oracle.graal.hotspot.word;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -35,13 +34,12 @@ import com.oracle.graal.nodes.spi.*;
  * {@link HotSpotWordTypeRewriterPhase}.
  */
 @NodeInfo
-public final class PointerCastNode extends FloatingNode implements LIRLowerable {
+public class PointerCastNode extends FloatingNode implements LIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(PointerCastNode.class);
     @Input ValueNode input;
 
     public PointerCastNode(Stamp stamp, ValueNode input) {
-        super(TYPE, stamp);
+        super(stamp);
         this.input = input;
     }
 

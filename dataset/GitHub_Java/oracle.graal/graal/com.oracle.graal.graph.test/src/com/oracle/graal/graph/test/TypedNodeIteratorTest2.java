@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,11 +34,9 @@ public class TypedNodeIteratorTest2 {
     @NodeInfo
     static class NodeA extends Node implements TestNodeInterface {
 
-        public static final NodeClass TYPE = NodeClass.get(NodeA.class);
         protected final String name;
 
         public NodeA(String name) {
-            super(TYPE);
             this.name = name;
         }
 
@@ -49,7 +47,6 @@ public class TypedNodeIteratorTest2 {
 
     @NodeInfo
     static class NodeB extends NodeA implements IterableNodeType {
-        public static final NodeClass TYPE = NodeClass.get(NodeB.class);
 
         public NodeB(String name) {
             super(name);
@@ -59,8 +56,6 @@ public class TypedNodeIteratorTest2 {
 
     @NodeInfo
     static class NodeC extends NodeB {
-        public static final NodeClass TYPE = NodeClass.get(NodeC.class);
-
         public NodeC(String name) {
             super(name);
         }
@@ -68,9 +63,7 @@ public class TypedNodeIteratorTest2 {
     }
 
     @NodeInfo
-    static final class NodeD extends NodeC {
-        public static final NodeClass TYPE = NodeClass.get(NodeD.class);
-
+    static class NodeD extends NodeC {
         public NodeD(String name) {
             super(name);
         }

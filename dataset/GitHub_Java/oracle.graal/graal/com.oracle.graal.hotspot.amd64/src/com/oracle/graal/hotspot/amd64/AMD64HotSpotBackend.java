@@ -62,6 +62,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
+    public boolean shouldAllocateRegisters() {
+        return true;
+    }
+
+    @Override
     public FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
         return new AMD64FrameMapBuilder(newFrameMap(registerConfigNonNull), getCodeCache(), registerConfigNonNull);
@@ -333,7 +338,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
                 return new AMD64RawNativeCallNode(returnType, functionPointer, args);
             }
         };
-        Backend backend = HotSpotGraalRuntime.runtime().getHostBackend();
+        Backend backend = HotSpotGraalRuntime.runtime().getBackend(AMD64.class);
         return new HotSpotNativeFunctionInterface(HotSpotGraalRuntime.runtime().getHostProviders(), factory, backend, config.dllLoad, config.dllLookup, config.rtldDefault);
     }
 

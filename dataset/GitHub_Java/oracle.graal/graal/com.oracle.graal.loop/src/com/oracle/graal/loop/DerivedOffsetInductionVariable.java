@@ -40,14 +40,6 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
         this.value = value;
     }
 
-    public InductionVariable getBase() {
-        return base;
-    }
-
-    public ValueNode getOffset() {
-        return offset;
-    }
-
     @Override
     public StructuredGraph graph() {
         return base.graph();
@@ -151,10 +143,5 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
 
     @Override
     public void deleteUnusedNodes() {
-    }
-
-    @Override
-    public String toString() {
-        return String.format("DerivedOffsetInductionVariable base (%s) %s %s", base, value.getNodeClass().shortName(), offset);
     }
 }

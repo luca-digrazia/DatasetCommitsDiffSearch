@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -63,21 +63,15 @@ public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
     private ValueNode getClassConstantReplacement(StructuredGraph graph, PhaseContext context, JavaConstant constant) {
         if (constant instanceof HotSpotObjectConstant) {
             ConstantReflectionProvider constantReflection = context.getConstantReflection();
-            ResolvedJavaType type = constantReflection.asJavaType(constant);
-            if (type != null) {
+            ResolvedJavaType c = constantReflection.asJavaType(constant);
+            if (c != null) {
                 MetaAccessProvider metaAccess = context.getMetaAccess();
-                Stamp stamp = StampFactory.exactNonNull(metaAccess.lookupJavaType(Class.class));
-
+                ResolvedJavaType type = c;
+                Constant klass;
+                LocationNode location;
                 if (type instanceof HotSpotResolvedObjectType) {
-                    ConstantNode klass = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), ((HotSpotResolvedObjectType) type).klass(), metaAccess, graph);
-                    LocationNode location = graph.unique(new ConstantLocationNode(CLASS_MIRROR_LOCATION, classMirrorOffset));
-                    ValueNode read = graph.unique(new FloatingReadNode(klass, location, null, stamp));
-
-                    if (((HotSpotObjectConstant) constant).isCompressed()) {
-                        return CompressionNode.compress(read, oopEncoding);
-                    } else {
-                        return read;
-                    }
+                    location = graph.unique(new ConstantLocationNode(CLASS_MIRROR_LOCATION, classMirrorOffset));
+                    klass = ((HotSpotResolvedObjectType) type).klass();
                 } else {
                     /*
                      * Primitive classes are more difficult since they don't have a corresponding
@@ -85,7 +79,7 @@ public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
                      */
                     HotSpotResolvedPrimitiveType primitive = (HotSpotResolvedPrimitiveType) type;
                     ResolvedJavaType boxingClass = metaAccess.lookupJavaType(primitive.getKind().toBoxedJavaClass());
-                    ConstantNode clazz = ConstantNode.forConstant(boxingClass.getJavaClass(), metaAccess, graph);
+                    klass = ((HotSpotResolvedObjectType) boxingClass).klass();
                     HotSpotResolvedJavaField[] a = (HotSpotResolvedJavaField[]) boxingClass.getStaticFields();
                     HotSpotResolvedJavaField typeField = null;
                     for (HotSpotResolvedJavaField f : a) {
@@ -97,18 +91,17 @@ public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
                     if (typeField == null) {
                         throw new GraalInternalError("Can't find TYPE field in class");
                     }
+                    location = graph.unique(new ConstantLocationNode(FINAL_LOCATION, typeField.offset()));
+                }
+                ConstantNode klassNode = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), klass, metaAccess, graph);
 
-                    LocationNode location = graph.unique(new ConstantLocationNode(FINAL_LOCATION, typeField.offset()));
-                    if (oopEncoding != null) {
-                        stamp = NarrowOopStamp.compressed((AbstractObjectStamp) stamp, oopEncoding);
-                    }
-                    ValueNode read = graph.unique(new FloatingReadNode(clazz, location, null, stamp));
+                Stamp stamp = StampFactory.exactNonNull(metaAccess.lookupJavaType(Class.class));
+                FloatingReadNode freadNode = graph.unique(new FloatingReadNode(klassNode, location, null, stamp));
 
-                    if (oopEncoding == null || ((HotSpotObjectConstant) constant).isCompressed()) {
-                        return read;
-                    } else {
-                        return CompressionNode.uncompress(read, oopEncoding);
-                    }
+                if (((HotSpotObjectConstant) constant).isCompressed()) {
+                    return CompressionNode.compress(freadNode, oopEncoding);
+                } else {
+                    return freadNode;
                 }
             }
         }

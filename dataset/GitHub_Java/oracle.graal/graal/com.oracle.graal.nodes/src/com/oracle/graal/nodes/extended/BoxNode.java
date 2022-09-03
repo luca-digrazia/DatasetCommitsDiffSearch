@@ -40,7 +40,7 @@ import com.oracle.graal.nodes.virtual.*;
  * methods in Integer, Long, etc.
  */
 @NodeInfo
-public final class BoxNode extends UnaryNode implements VirtualizableAllocation, Lowerable {
+public class BoxNode extends UnaryNode implements VirtualizableAllocation, Lowerable {
 
     protected final Kind boxingKind;
 

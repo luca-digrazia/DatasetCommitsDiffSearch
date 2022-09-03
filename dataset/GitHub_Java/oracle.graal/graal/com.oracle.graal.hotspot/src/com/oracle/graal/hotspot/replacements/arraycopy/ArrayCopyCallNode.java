@@ -117,7 +117,7 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
 
     @Override
     public void lower(LoweringTool tool) {
-        if (graph().getGuardsStage().areFrameStatesAtDeopts()) {
+        if (graph().getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
             updateAlignedDisjoint();
             ForeignCallDescriptor desc = HotSpotHostForeignCallsProvider.lookupArraycopyDescriptor(elementKind, isAligned(), isDisjoint(), isUninitialized());
             StructuredGraph graph = graph();

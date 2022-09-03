@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -44,8 +44,7 @@ import com.oracle.graal.nodes.spi.*;
  * this node can be canonicalized to a {@link IndexedLocationNode} or {@link ConstantLocationNode}.
  */
 @NodeInfo
-public final class SnippetLocationNode extends LocationNode implements Canonicalizable {
-    public static final NodeClass TYPE = NodeClass.get(SnippetLocationNode.class);
+public class SnippetLocationNode extends LocationNode implements Canonicalizable {
 
     protected final SnippetReflectionProvider snippetReflection;
 
@@ -59,7 +58,7 @@ public final class SnippetLocationNode extends LocationNode implements Canonical
     }
 
     public SnippetLocationNode(@InjectedNodeParameter SnippetReflectionProvider snippetReflection, ValueNode locationIdentity, ValueNode displacement, ValueNode index, ValueNode indexScaling) {
-        super(TYPE, StampFactory.object());
+        super(StampFactory.object());
         this.snippetReflection = snippetReflection;
         this.locationIdentity = locationIdentity;
         this.displacement = displacement;

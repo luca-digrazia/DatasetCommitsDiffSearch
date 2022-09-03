@@ -24,7 +24,6 @@ package com.oracle.graal.lir.gen;
 
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.framemap.*;
-import com.oracle.graal.lir.stackslotalloc.*;
 
 public class LIRGenerationResultBase implements LIRGenerationResult {
     private final LIR lir;
@@ -34,15 +33,10 @@ public class LIRGenerationResultBase implements LIRGenerationResult {
      * Records whether the code being generated makes at least one foreign call.
      */
     private boolean hasForeignCall;
-    /**
-     * Human readable name of this compilation unit.
-     */
-    private final String compilationUnitName;
 
-    public LIRGenerationResultBase(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder) {
+    public LIRGenerationResultBase(LIR lir, FrameMapBuilder frameMapBuilder) {
         this.lir = lir;
         this.frameMapBuilder = frameMapBuilder;
-        this.compilationUnitName = compilationUnitName;
     }
 
     public LIR getLIR() {
@@ -65,17 +59,13 @@ public class LIRGenerationResultBase implements LIRGenerationResult {
         return frameMapBuilder;
     }
 
-    public void buildFrameMap(StackSlotAllocator allocator) {
+    public void buildFrameMap() {
         assert frameMap == null : "buildFrameMap() can only be called once!";
-        frameMap = frameMapBuilder.buildFrameMap(this, allocator);
+        frameMap = frameMapBuilder.buildFrameMap(this);
     }
 
     public FrameMap getFrameMap() {
         assert frameMap != null : "getFrameMap() can only be used after calling buildFrameMap()!";
         return frameMap;
-    }
-
-    public String getCompilationUnitName() {
-        return compilationUnitName;
     }
 }

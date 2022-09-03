@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,9 +31,8 @@ import com.oracle.graal.nodes.virtual.*;
  * This class encapsulated the materialized state of an escape analyzed object.
  */
 @NodeInfo
-public final class MaterializedObjectState extends EscapeObjectState implements Node.ValueNumberable {
+public class MaterializedObjectState extends EscapeObjectState implements Node.ValueNumberable {
 
-    public static final NodeClass TYPE = NodeClass.get(MaterializedObjectState.class);
     @Input ValueNode materializedValue;
 
     public ValueNode materializedValue() {
@@ -41,7 +40,7 @@ public final class MaterializedObjectState extends EscapeObjectState implements 
     }
 
     public MaterializedObjectState(VirtualObjectNode object, ValueNode materializedValue) {
-        super(TYPE, object);
+        super(object);
         this.materializedValue = materializedValue;
     }
 

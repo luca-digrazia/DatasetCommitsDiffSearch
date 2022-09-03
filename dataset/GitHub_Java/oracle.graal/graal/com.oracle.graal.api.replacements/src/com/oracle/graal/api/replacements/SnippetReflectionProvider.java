@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,10 @@
  */
 package com.oracle.graal.api.replacements;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.Objects;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaField;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.api.meta.*;
 
 /**
  * Reflection operations on values represented as {@linkplain JavaConstant constants} for the
@@ -46,7 +37,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public interface SnippetReflectionProvider {
 
     /**
-     * Creates a boxed {@link JavaKind#Object object} constant.
+     * Creates a boxed {@link Kind#Object object} constant.
      *
      * @param object the object value to box
      * @return a constant containing {@code object}
@@ -55,7 +46,7 @@ public interface SnippetReflectionProvider {
 
     /**
      * Gets the object reference a given constant represents if it is of a given type. The constant
-     * must have kind {@link JavaKind#Object}.
+     * must have kind {@link Kind#Object}.
      *
      * @param type the expected type of the object represented by {@code constant}. If the object is
      *            required to be of this type, then wrap the call to this method in
@@ -68,7 +59,7 @@ public interface SnippetReflectionProvider {
 
     /**
      * Gets the object reference a given constant represents if it is of a given type. The constant
-     * must have kind {@link JavaKind#Object}.
+     * must have kind {@link Kind#Object}.
      *
      * @param type the expected type of the object represented by {@code constant}. If the object is
      *            required to be of this type, then wrap the call to this method in
@@ -85,10 +76,10 @@ public interface SnippetReflectionProvider {
      * Java boxed type corresponding to the kind.
      *
      * @param kind the kind of the constant to create
-     * @param value the Java boxed value: a {@link Byte} instance for {@link JavaKind#Byte}, etc.
+     * @param value the Java boxed value: a {@link Byte} instance for {@link Kind#Byte}, etc.
      * @return the boxed copy of {@code value}
      */
-    JavaConstant forBoxed(JavaKind kind, Object value);
+    JavaConstant forBoxed(Kind kind, Object value);
 
     /**
      * Resolves a parameter or return type involved in snippet code to a {@link Class}.
@@ -97,7 +88,7 @@ public interface SnippetReflectionProvider {
         try {
             return Class.forName(type.toClassName());
         } catch (ClassNotFoundException e) {
-            // Support for -XX:-UseJVMCIClassLoader
+            // Support for -XX:-UseGraalClassLoader
             return Class.forName(type.toClassName(), false, ClassLoader.getSystemClassLoader());
         }
     }
@@ -111,8 +102,8 @@ public interface SnippetReflectionProvider {
             Class<?>[] parameterClasses = new Class<?>[parameterTypes.length];
             for (int i = 0; i < parameterClasses.length; ++i) {
                 JavaType type = parameterTypes[i];
-                if (type.getJavaKind() != JavaKind.Object) {
-                    parameterClasses[i] = type.getJavaKind().toJavaClass();
+                if (type.getKind() != Kind.Object) {
+                    parameterClasses[i] = type.getKind().toJavaClass();
                 } else {
                     parameterClasses[i] = resolveClassForSnippet(parameterTypes[i]);
                 }
@@ -167,11 +158,20 @@ public interface SnippetReflectionProvider {
     }
 
     /**
+     * Gets the value to bind to a parameter in a {@link SubstitutionGuard} constructor.
+     *
+     * @param type the type of a parameter in a {@link SubstitutionGuard} constructor
+     * @return the value that should be bound to the parameter when invoking the constructor or null
+     *         if this provider cannot provide a value of the requested type
+     */
+    Object getSubstitutionGuardParameter(Class<?> type);
+
+    /**
      * Gets the value to bind to an injected parameter in a node intrinsic.
      *
      * @param type the type of a parameter in a node intrinsic constructor
      * @return the value that should be bound to the parameter when invoking the constructor or null
      *         if this provider cannot provide a value of the requested type
      */
-    <T> T getInjectedNodeIntrinsicParameter(Class<T> type);
+    Object getInjectedNodeIntrinsicParameter(ResolvedJavaType type);
 }

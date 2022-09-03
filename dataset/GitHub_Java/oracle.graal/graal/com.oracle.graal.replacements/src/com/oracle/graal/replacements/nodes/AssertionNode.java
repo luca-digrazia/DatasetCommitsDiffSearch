@@ -36,7 +36,7 @@ import com.oracle.graal.nodes.spi.*;
  * may need to insert a check.
  */
 @NodeInfo
-public final class AssertionNode extends FixedWithNextNode implements Lowerable, Canonicalizable, LIRLowerable {
+public class AssertionNode extends FixedWithNextNode implements Lowerable, Canonicalizable, LIRLowerable {
 
     @Input ValueNode value;
 

@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
@@ -36,12 +35,10 @@ import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 
 @NodeInfo
-public abstract class BasicObjectCloneNode extends MacroStateSplitNode implements VirtualizableAllocation, ArrayLengthProvider {
+public class BasicObjectCloneNode extends MacroStateSplitNode implements VirtualizableAllocation, ArrayLengthProvider {
 
-    public static final NodeClass TYPE = NodeClass.get(BasicObjectCloneNode.class);
-
-    protected BasicObjectCloneNode(NodeClass c, Invoke invoke) {
-        super(c, invoke);
+    public BasicObjectCloneNode(Invoke invoke) {
+        super(invoke);
     }
 
     @Override
@@ -64,7 +61,7 @@ public abstract class BasicObjectCloneNode extends MacroStateSplitNode implement
     /*
      * Looks at the given stamp and determines if it is an exact type (or can be assumed to be an
      * exact type) and if it is a cloneable type.
-     *
+     * 
      * If yes, then the exact type is returned, otherwise it returns null.
      */
     protected static ResolvedJavaType getConcreteType(Stamp stamp, Assumptions assumptions, MetaAccessProvider metaAccess) {
@@ -108,7 +105,7 @@ public abstract class BasicObjectCloneNode extends MacroStateSplitNode implement
             } else {
                 obj = tool.getReplacedValue(getObject());
             }
-            ResolvedJavaType type = getConcreteType(obj.stamp(), graph().getAssumptions(), tool.getMetaAccessProvider());
+            ResolvedJavaType type = getConcreteType(obj.stamp(), tool.getAssumptions(), tool.getMetaAccessProvider());
             if (type != null && !type.isArray()) {
                 VirtualInstanceNode newVirtual = createVirtualInstanceNode(type, true);
                 ResolvedJavaField[] fields = newVirtual.getFields();

@@ -111,7 +111,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
                     fixedAccess.setNullCheck(true);
                     LogicNode condition = guard.condition();
                     guard.replaceAndDelete(fixedAccess);
-                    if (condition.hasNoUsages()) {
+                    if (condition.usages().isEmpty()) {
                         GraphUtil.killWithUnusedFloatingInputs(condition);
                     }
                     nullGuarded.remove(fixedAccess.object());

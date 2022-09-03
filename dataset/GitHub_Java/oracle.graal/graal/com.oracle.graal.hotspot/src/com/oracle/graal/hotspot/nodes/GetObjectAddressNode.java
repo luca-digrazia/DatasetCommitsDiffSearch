@@ -34,7 +34,7 @@ import com.oracle.graal.nodes.spi.*;
  * this is if the usage is not an attempt to dereference the value.
  */
 @NodeInfo
-public final class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
+public class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
 
     @Input ValueNode object;
 

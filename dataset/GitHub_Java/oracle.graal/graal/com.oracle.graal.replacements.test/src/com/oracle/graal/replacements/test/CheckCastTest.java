@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.replacements.test;
 
+import org.junit.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.test.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 
@@ -35,14 +35,14 @@ public class CheckCastTest extends TypeCheckTest {
 
     @Override
     protected void replaceProfile(StructuredGraph graph, JavaTypeProfile profile) {
-        CheckCastNode ccn = graph.getNodes(CheckCastNode.class).first();
+        CheckCastNode ccn = graph.getNodes().filter(CheckCastNode.class).first();
         if (ccn != null) {
-            CheckCastNode ccnNew = graph.add(new CheckCastNode(ccn.type(), ccn.object(), profile));
+            CheckCastNode ccnNew = graph.add(new CheckCastNode(ccn.type(), ccn.object(), profile, false));
             graph.replaceFixedWithFixed(ccn, ccnNew);
         }
     }
 
-    @LongTest
+    @Test
     public void test1() {
         test("asNumber", profile(), 111);
         test("asNumber", profile(Integer.class), 111);
@@ -52,7 +52,7 @@ public class CheckCastTest extends TypeCheckTest {
         test("asNumberExt", profile(Long.class, Short.class), 111);
     }
 
-    @LongTest
+    @Test
     public void test2() {
         test("asString", profile(), "111");
         test("asString", profile(String.class), "111");
@@ -68,27 +68,27 @@ public class CheckCastTest extends TypeCheckTest {
         test("asStringExt", profile(String.class), "111");
     }
 
-    @LongTest
+    @Test
     public void test3() {
         test("asNumber", profile(), "111");
     }
 
-    @LongTest
+    @Test
     public void test4() {
         test("asString", profile(String.class), 111);
     }
 
-    @LongTest
+    @Test
     public void test5() {
         test("asNumberExt", profile(), "111");
     }
 
-    @LongTest
+    @Test
     public void test6() {
         test("asStringExt", profile(String.class), 111);
     }
 
-    @LongTest
+    @Test
     public void test7() {
         Throwable throwable = new Exception();
         test("asThrowable", profile(), throwable);
@@ -96,13 +96,13 @@ public class CheckCastTest extends TypeCheckTest {
         test("asThrowable", profile(Exception.class, Error.class), throwable);
     }
 
-    @LongTest
+    @Test
     public void test8() {
         test("arrayStore", new Object[100], "111");
     }
 
-    @LongTest
-    public void test8_1() {
+    @Test
+    public void test801() {
         test("arrayFill", new Object[100], "111");
     }
 
@@ -198,7 +198,7 @@ public class CheckCastTest extends TypeCheckTest {
         return (Cloneable) o;
     }
 
-    @LongTest
+    @Test
     public void test9() {
         Object o = new Depth13();
         test("asDepth12", profile(), o);
@@ -206,7 +206,7 @@ public class CheckCastTest extends TypeCheckTest {
         test("asDepth12", profile(Depth13.class, Depth14.class), o);
     }
 
-    @LongTest
+    @Test
     public void test10() {
         Object o = new Depth13[3][];
         test("asDepth12Arr", o);

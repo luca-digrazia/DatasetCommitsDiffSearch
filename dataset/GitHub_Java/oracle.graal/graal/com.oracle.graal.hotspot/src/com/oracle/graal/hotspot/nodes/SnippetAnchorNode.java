@@ -40,7 +40,7 @@ public class SnippetAnchorNode extends FixedWithNextNode implements Simplifiable
         BeginNode prevBegin = BeginNode.prevBegin(this);
         replaceAtUsages(InputType.Anchor, prevBegin);
         replaceAtUsages(InputType.Guard, prevBegin);
-        if (hasNoUsages()) {
+        if (usages().isEmpty()) {
             graph().removeFixed(this);
         }
     }

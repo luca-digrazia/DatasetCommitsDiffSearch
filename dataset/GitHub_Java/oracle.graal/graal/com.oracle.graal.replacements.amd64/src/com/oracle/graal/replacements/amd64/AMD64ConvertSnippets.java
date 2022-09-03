@@ -22,23 +22,20 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
-import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
-import jdk.vm.ci.code.TargetDescription;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import static com.oracle.graal.replacements.SnippetTemplate.*;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.calc.FloatConvertNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.util.Providers;
-import com.oracle.graal.replacements.Snippet;
-import com.oracle.graal.replacements.SnippetTemplate;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.replacements.Snippets;
 
 /**
  * Snippets used for conversion operations on AMD64 where the AMD64 instruction used does not match
@@ -190,7 +187,7 @@ public class AMD64ConvertSnippets implements Snippets {
             SnippetTemplate template = template(args);
             Debug.log("Lowering %s in %s: node=%s, template=%s, arguments=%s", convert.getFloatConvert(), graph, convert, template, args);
             template.instantiate(providers.getMetaAccess(), convert, DEFAULT_REPLACER, tool, args);
-            convert.safeDelete();
+            graph.removeFloating(convert);
         }
     }
 }

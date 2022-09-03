@@ -22,30 +22,126 @@
  */
 package com.oracle.graal.hotspot.hsail;
 
+import java.util.*;
+
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.hsail.replacements.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 
-public class HSAILHotSpotLoweringProvider implements LoweringProvider {
+public class HSAILHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider {
 
-    private LoweringProvider hostLowerer;
+    private HSAILNewObjectSnippets.Templates hsailNewObjectSnippets;
 
-    public HSAILHotSpotLoweringProvider(LoweringProvider hostLowerer) {
-        this.hostLowerer = hostLowerer;
+    abstract class LoweringStrategy {
+        abstract void lower(Node n, LoweringTool tool);
     }
 
-    public void lower(Node n, LoweringTool tool) {
-        if (n instanceof ConvertNode) {
-            // TODO
+    final LoweringStrategy passThruStrategy = new LoweringStrategy() {
+        @Override
+        void lower(Node n, LoweringTool tool) {
             return;
+        }
+    };
+
+    final LoweringStrategy rejectStrategy = new LoweringStrategy() {
+        @Override
+        void lower(Node n, LoweringTool tool) {
+            throw new GraalInternalError("Node implementing Lowerable not handled in HSAIL Backend: " + n);
+        }
+    };
+
+    final LoweringStrategy newObjectStrategy = new LoweringStrategy() {
+        @Override
+        void lower(Node n, LoweringTool tool) {
+            StructuredGraph graph = (StructuredGraph) n.graph();
+            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
+                if (n instanceof NewInstanceNode) {
+                    hsailNewObjectSnippets.lower((NewInstanceNode) n, tool);
+                } else if (n instanceof NewArrayNode) {
+                    hsailNewObjectSnippets.lower((NewArrayNode) n, runtime, tool);
+                }
+            }
+        }
+    };
+
+    // strategy to replace an UnwindNode with a DeoptNode
+    final LoweringStrategy unwindNodeStrategy = new LoweringStrategy() {
+        @Override
+        void lower(Node n, LoweringTool tool) {
+            StructuredGraph graph = (StructuredGraph) n.graph();
+            UnwindNode unwind = (UnwindNode) n;
+            ValueNode exception = unwind.exception();
+            if (exception instanceof ForeignCallNode) {
+                // build up action and reason
+                String callName = ((ForeignCallNode) exception).getDescriptor().getName();
+                DeoptimizationReason reason;
+                switch (callName) {
+                    case "createOutOfBoundsException":
+                        reason = DeoptimizationReason.BoundsCheckException;
+                        break;
+                    case "createNullPointerException":
+                        reason = DeoptimizationReason.NullCheckException;
+                        break;
+                    default:
+                        reason = DeoptimizationReason.None;
+                }
+                unwind.replaceAtPredecessor(graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, reason)));
+                unwind.safeDelete();
+            } else {
+                // unwind whose exception is not an instance of ForeignCallNode
+                throw new GraalInternalError("UnwindNode seen without ForeignCallNode: " + exception);
+            }
+        }
+    };
+
+    private HashMap<NodeClass, LoweringStrategy> strategyMap = new HashMap<>();
+
+    void initStrategyMap() {
+        strategyMap.put(NodeClass.get(IntegerConvertNode.class), passThruStrategy);
+        strategyMap.put(NodeClass.get(FloatConvertNode.class), passThruStrategy);
+        strategyMap.put(NodeClass.get(NewInstanceNode.class), newObjectStrategy);
+        strategyMap.put(NodeClass.get(NewArrayNode.class), newObjectStrategy);
+        strategyMap.put(NodeClass.get(NewMultiArrayNode.class), rejectStrategy);
+        strategyMap.put(NodeClass.get(DynamicNewArrayNode.class), rejectStrategy);
+        strategyMap.put(NodeClass.get(MonitorEnterNode.class), rejectStrategy);
+        strategyMap.put(NodeClass.get(MonitorExitNode.class), rejectStrategy);
+        strategyMap.put(NodeClass.get(UnwindNode.class), unwindNodeStrategy);
+    }
+
+    private LoweringStrategy getStrategy(Node n) {
+        return strategyMap.get(n.getNodeClass());
+    }
+
+    public HSAILHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
+                    TargetDescription target) {
+        super(runtime, metaAccess, foreignCalls, registers, target);
+        initStrategyMap();
+    }
+
+    @Override
+    public void initialize(HotSpotProviders providers, HotSpotVMConfig config) {
+        super.initialize(providers, config);
+        hsailNewObjectSnippets = new HSAILNewObjectSnippets.Templates(providers, target);
+    }
+
+    @Override
+    public void lower(Node n, LoweringTool tool) {
+        LoweringStrategy strategy = getStrategy(n);
+        // if not in map, let superclass handle it
+        if (strategy == null) {
+            super.lower(n, tool);
         } else {
-            hostLowerer.lower(n, tool);
+            strategy.lower(n, tool);
         }
     }
 
-    public ValueNode reconstructArrayIndex(LocationNode location) {
-        return hostLowerer.reconstructArrayIndex(location);
-    }
 }

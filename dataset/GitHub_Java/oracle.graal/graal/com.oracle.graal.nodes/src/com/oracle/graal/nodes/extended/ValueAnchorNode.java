@@ -65,7 +65,7 @@ public class ValueAnchorNode extends FixedWithNextNode implements LIRLowerable, 
                 break;
             }
         }
-        if (hasNoUsages() && next() instanceof FixedAccessNode) {
+        if (usages().isEmpty() && next() instanceof FixedAccessNode) {
             FixedAccessNode currentNext = (FixedAccessNode) next();
             if (currentNext.getGuard() == anchored) {
                 GraphUtil.removeFixedWithUnusedInputs(this);
@@ -83,7 +83,7 @@ public class ValueAnchorNode extends FixedWithNextNode implements LIRLowerable, 
             removeAnchoredNode();
         }
 
-        if (anchored == null && hasNoUsages()) {
+        if (anchored == null && usages().isEmpty()) {
             // anchor is not necessary any more => remove.
             GraphUtil.removeFixedWithUnusedInputs(this);
         }

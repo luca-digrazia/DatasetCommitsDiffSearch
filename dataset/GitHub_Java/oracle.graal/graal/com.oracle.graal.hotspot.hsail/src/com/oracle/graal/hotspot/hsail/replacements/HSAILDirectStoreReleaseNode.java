@@ -23,12 +23,15 @@
 package com.oracle.graal.hotspot.hsail.replacements;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.hsail.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.nodes.*;
-import com.oracle.graal.hotspot.hsail.*;
 import com.oracle.graal.word.*;
 
+// JaCoCo Exclude
+@NodeInfo
 public class HSAILDirectStoreReleaseNode extends DirectStoreNode {
 
     public HSAILDirectStoreReleaseNode(ValueNode address, ValueNode value, Kind kind) {
@@ -39,8 +42,8 @@ public class HSAILDirectStoreReleaseNode extends DirectStoreNode {
     public void generate(NodeLIRBuilderTool gen) {
         HSAILHotSpotLIRGenerator hsailgen = (HSAILHotSpotLIRGenerator) (gen.getLIRGeneratorTool());
         Value v = gen.operand(getValue());
-        LIRKind kind = hsailgen.getLIRKind(getValue().stamp());
-        hsailgen.emitStoreRelease(kind, gen.operand(getAddress()), v, null);
+        LIRKind lirKind = hsailgen.getLIRKind(getValue().stamp());
+        hsailgen.emitStoreRelease(lirKind, gen.operand(getAddress()), v, null);
     }
 
     @NodeIntrinsic

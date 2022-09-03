@@ -36,18 +36,17 @@ import com.oracle.graal.nodes.extended.*;
 @NodeInfo
 public abstract class ProxyNode extends FloatingNode implements IterableNodeType, ValueNumberable {
 
-    public static final NodeClass TYPE = NodeClass.get(ProxyNode.class);
-    @Input(InputType.Association) AbstractBeginNode proxyPoint;
+    @Input(InputType.Association) BeginNode proxyPoint;
 
-    protected ProxyNode(NodeClass c, Stamp stamp, AbstractBeginNode proxyPoint) {
-        super(c, stamp);
+    public ProxyNode(Stamp stamp, BeginNode proxyPoint) {
+        super(stamp);
         assert proxyPoint != null;
         this.proxyPoint = proxyPoint;
     }
 
     public abstract ValueNode value();
 
-    public AbstractBeginNode proxyPoint() {
+    public BeginNode proxyPoint() {
         return proxyPoint;
     }
 
@@ -59,11 +58,11 @@ public abstract class ProxyNode extends FloatingNode implements IterableNodeType
         return super.verify();
     }
 
-    public static ValueProxyNode forValue(ValueNode value, AbstractBeginNode exit, StructuredGraph graph) {
+    public static ValueProxyNode forValue(ValueNode value, BeginNode exit, StructuredGraph graph) {
         return graph.unique(new ValueProxyNode(value, exit));
     }
 
-    public static GuardProxyNode forGuard(GuardingNode value, AbstractBeginNode exit, StructuredGraph graph) {
+    public static GuardProxyNode forGuard(GuardingNode value, BeginNode exit, StructuredGraph graph) {
         return graph.unique(new GuardProxyNode(value, exit));
     }
 }

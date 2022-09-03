@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@ package com.oracle.graal.truffle.nodes.arithmetic;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -37,11 +36,10 @@ import com.oracle.truffle.api.*;
  * case the addition would overflow the 32 bit range.
  */
 @NodeInfo
-public final class IntegerAddExactNode extends AddNode implements IntegerExactArithmeticNode {
-    public static final NodeClass TYPE = NodeClass.get(IntegerAddExactNode.class);
+public class IntegerAddExactNode extends AddNode implements IntegerExactArithmeticNode {
 
     public IntegerAddExactNode(ValueNode x, ValueNode y) {
-        super(TYPE, x, y);
+        super(x, y);
         assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
     }
 
@@ -85,7 +83,7 @@ public final class IntegerAddExactNode extends AddNode implements IntegerExactAr
     }
 
     @Override
-    public IntegerExactArithmeticSplitNode createSplit(AbstractBeginNode next, AbstractBeginNode deopt) {
+    public IntegerExactArithmeticSplitNode createSplit(BeginNode next, BeginNode deopt) {
         return graph().add(new IntegerAddExactSplitNode(stamp(), getX(), getY(), next, deopt));
     }
 

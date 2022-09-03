@@ -35,6 +35,7 @@ public class CompilationConstantNode extends NeverPartOfCompilationNode implemen
         assert arguments.size() == 1;
     }
 
+
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (arguments.get(0).isConstant()) {

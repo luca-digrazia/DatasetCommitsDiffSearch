@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.phases.common;
 
-import com.oracle.graal.graph.iterators.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.util.*;
 
 /**
  * Adds safepoints to loops.
@@ -34,22 +34,13 @@ public class LoopSafepointInsertionPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        nextLoop:
-        for (LoopEndNode loopEnd : graph.getNodes(LoopEndNode.class)) {
-            if (!loopEnd.canSafepoint()) {
-                continue;
-            }
-            if (GraalOptions.OptSafepointElimination) {
-                // We 'eliminate' safepoints by simply never placing them into loops that have at least one call
-                NodeIterable<FixedNode> it = NodeIterators.dominators(loopEnd).until(loopEnd.loopBegin());
-                for (FixedNode n : it) {
-                    if (n instanceof Invoke) {
-                        continue nextLoop;
-                    }
+        if (GenLoopSafepoints.getValue()) {
+            for (LoopEndNode loopEndNode : graph.getNodes(LoopEndNode.class)) {
+                if (loopEndNode.canSafepoint()) {
+                    SafepointNode safepointNode = graph.add(new SafepointNode());
+                    graph.addBeforeFixed(loopEndNode, safepointNode);
                 }
             }
-            SafepointNode safepoint = graph.add(new SafepointNode());
-            graph.addBeforeFixed(loopEnd, safepoint);
         }
     }
 }

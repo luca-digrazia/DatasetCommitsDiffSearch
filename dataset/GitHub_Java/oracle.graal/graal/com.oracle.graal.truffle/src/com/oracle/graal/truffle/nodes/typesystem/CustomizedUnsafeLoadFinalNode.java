@@ -33,11 +33,12 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.truffle.nodes.*;
+import com.oracle.truffle.api.*;
 
 /**
  * Load of a final value from a location specified as an offset relative to an object.
  *
- * Substitution for method CompilerDirectives#unsafeGet*.
+ * Substitution for method {@link CompilerDirectives#unsafeGetFinalObject} and friends.
  */
 @NodeInfo
 public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements Canonicalizable, Virtualizable, Lowerable {
@@ -75,7 +76,7 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
             ValueNode offsetValue = tool.getReplacedValue(offset);
             if (offsetValue.isConstant()) {
                 long constantOffset = offsetValue.asJavaConstant().asLong();
-                int entryIndex = state.getVirtualObject().entryIndexForOffset(constantOffset, accessKind);
+                int entryIndex = state.getVirtualObject().entryIndexForOffset(constantOffset);
                 if (entryIndex != -1) {
                     ValueNode entry = state.getEntry(entryIndex);
                     if (entry.getKind() == getKind() || state.getVirtualObject().entryKind(entryIndex) == accessKind) {

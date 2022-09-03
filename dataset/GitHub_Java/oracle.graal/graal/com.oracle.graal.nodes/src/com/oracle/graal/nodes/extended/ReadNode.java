@@ -69,7 +69,7 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (hasNoUsages()) {
+        if (usages().isEmpty()) {
             if (getGuard() != null && !(getGuard() instanceof FixedNode)) {
                 // The guard is necessary even if the read goes away.
                 return new ValueAnchorNode((ValueNode) getGuard());

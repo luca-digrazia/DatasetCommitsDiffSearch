@@ -31,9 +31,10 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.truffle.nodes.asserts.*;
+import com.oracle.truffle.api.*;
 
 /**
- * Macro node for method CompilerDirectives#unsafeCast.
+ * Macro node for method {@link CompilerDirectives#unsafeCast(Object, Class, boolean, boolean)}.
  */
 @NodeInfo
 public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implements Simplifiable {
@@ -64,7 +65,7 @@ public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implemen
             } else {
                 Stamp piStamp = StampFactory.declaredTrusted(lookupJavaType, nonNullArgument.asJavaConstant().asInt() != 0);
                 ConditionAnchorNode valueAnchorNode = graph().add(
-                                new ConditionAnchorNode(CompareNode.createCompareNode(graph(), Condition.EQ, conditionArgument, ConstantNode.forBoolean(true, graph()), tool.getConstantReflection())));
+                                new ConditionAnchorNode(CompareNode.createCompareNode(graph(), Condition.EQ, conditionArgument, ConstantNode.forBoolean(true, graph()))));
                 PiNode piCast = graph().unique(new PiNode(objectArgument, piStamp, valueAnchorNode));
                 replaceAtUsages(piCast);
                 graph().replaceFixedWithFixed(this, valueAnchorNode);

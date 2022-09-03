@@ -36,10 +36,15 @@ public class FloatLessThanNode extends CompareNode {
     protected final boolean unorderedIsTrue;
 
     public FloatLessThanNode(ValueNode x, ValueNode y, boolean unorderedIsTrue) {
-        super(Condition.LT, x, y);
+        super(x, y);
         assert x.stamp() instanceof FloatStamp && y.stamp() instanceof FloatStamp;
         assert x.stamp().isCompatible(y.stamp());
         this.unorderedIsTrue = unorderedIsTrue;
+    }
+
+    @Override
+    public Condition condition() {
+        return Condition.LT;
     }
 
     @Override

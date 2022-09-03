@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,13 +30,12 @@ import com.oracle.graal.nodes.spi.*;
  * The {@code LogicConstantNode} represents a boolean constant.
  */
 @NodeInfo(nameTemplate = "{p#value}")
-public final class LogicConstantNode extends LogicNode implements LIRLowerable {
+public class LogicConstantNode extends LogicNode implements LIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(LogicConstantNode.class);
     protected final boolean value;
 
     public LogicConstantNode(boolean value) {
-        super(TYPE);
+        super();
         this.value = value;
     }
 

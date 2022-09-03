@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,18 +38,17 @@ import com.oracle.graal.nodes.type.*;
  * than the type this nodes casts to.
  */
 @NodeInfo
-public final class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, GuardingNode, IterableNodeType, Canonicalizable, ValueProxy {
+public class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, GuardingNode, IterableNodeType, Canonicalizable, ValueProxy {
 
-    public static final NodeClass TYPE = NodeClass.get(UnsafeCastNode.class);
     @Input ValueNode object;
 
     public UnsafeCastNode(ValueNode object, Stamp stamp) {
-        super(TYPE, stamp);
+        super(stamp);
         this.object = object;
     }
 
     public UnsafeCastNode(ValueNode object, Stamp stamp, ValueNode anchor) {
-        super(TYPE, stamp, (GuardingNode) anchor);
+        super(stamp, (GuardingNode) anchor);
         this.object = object;
     }
 

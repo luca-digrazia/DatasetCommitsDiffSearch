@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,11 +38,16 @@ import com.oracle.graal.phases.tiers.PhaseContext;
  * {@link com.oracle.graal.nodes.GuardingPiNode}.
  * </p>
  * 
+ * <p>
+ * The laundry-list of all flow-sensitive reductions is summarized in
+ * {@link com.oracle.graal.phases.common.cfs.FlowSensitiveReduction}
+ * </p>
+ * 
  * @see #visitGuardingPiNode(com.oracle.graal.nodes.GuardingPiNode)
- * */
+ */
 public abstract class GuardingPiReduction extends BaseReduction {
 
-    public GuardingPiReduction(FixedNode start, State initialState, PhaseContext context) {
+    public GuardingPiReduction(StartNode start, State initialState, PhaseContext context) {
         super(start, initialState, context);
     }
 
@@ -75,7 +80,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
      * Precondition: the condition hasn't been deverbosified yet.
      * </p>
      * 
-     * */
+     */
     protected final void visitGuardingPiNode(GuardingPiNode envelope) {
 
         if (!FlowUtil.hasLegalObjectStamp(envelope)) {
@@ -139,6 +144,12 @@ public abstract class GuardingPiReduction extends BaseReduction {
         FixedGuardNode fixedGuard = graph.add(new FixedGuardNode(envelope.condition(), envelope.getReason(), envelope.getAction(), envelope.isNegated()));
         graph.addBeforeFixed(envelope, fixedGuard);
 
+        /*
+         * 
+         * TODO This lowering is currently performed unconditionally: it might occur no
+         * flow-sensitive reduction is enabled down the road
+         */
+
         if (!FlowUtil.lacksUsages(envelope)) {
             // not calling wrapInPiNode() because we don't want to rememberSubstitution()
             PiNode replacement = graph.unique(new PiNode(envelope.object(), envelope.stamp(), fixedGuard));
@@ -171,8 +182,8 @@ public abstract class GuardingPiReduction extends BaseReduction {
      * Provided a condition as above can be reduced to a constant (and an anchor obtained in the
      * process), this method replaces all usages of the
      * {@link com.oracle.graal.nodes.GuardingPiNode} (necessarily of
-     * {@link com.oracle.graal.graph.InputType#Value}) with a {@link com.oracle.graal.nodes.PiNode}
-     * that wraps the payload and the anchor in question.
+     * {@link com.oracle.graal.nodeinfo.InputType#Value}) with a
+     * {@link com.oracle.graal.nodes.PiNode} that wraps the payload and the anchor in question.
      * </p>
      * 
      * <p>
@@ -181,7 +192,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
      * 
      * @see #visitGuardingPiNode(com.oracle.graal.nodes.GuardingPiNode)
      * 
-     * */
+     */
     private boolean tryRemoveGuardingPiNode(GuardingPiNode envelope) {
 
         LogicNode cond = envelope.condition();
@@ -203,7 +214,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
                 /*
                  * GuardingPiNode succeeds if payload null
                  */
-                ValueNode replacement = StampTool.isObjectAlwaysNull(payload) ? payload : reasoner.untrivialNull(payload);
+                ValueNode replacement = StampTool.isPointerAlwaysNull(payload) ? payload : reasoner.nonTrivialNull(payload);
                 if (replacement != null) {
                     // replacement == null means !isKnownNull(payload)
                     removeGuardingPiNode(envelope, replacement);
@@ -222,7 +233,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
             assert io.type() != null;
             Witness w = state.typeInfo(payload);
             if (w != null && w.isNonNull() && isEqualOrMorePrecise(w.type(), io.type())) {
-                ValueNode d = reasoner.downcasted(payload);
+                ValueNode d = reasoner.downcast(payload);
                 removeGuardingPiNode(envelope, d);
                 return true;
             }
@@ -251,7 +262,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
      * non-null.
      * 
      * @see #tryRemoveGuardingPiNode(com.oracle.graal.nodes.GuardingPiNode)
-     * */
+     */
     private boolean tryRemoveGuardingPiNodeNonNullCond(GuardingPiNode envelope) {
 
         ValueNode payload = envelope.object();
@@ -263,7 +274,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
             return true;
         }
 
-        if (StampTool.isObjectNonNull(payload)) {
+        if (StampTool.isPointerNonNull(payload)) {
             // payload needs no downcasting, it satisfies as-is the GuardingPiNode's condition.
             if (precisionLoss(envelope, payload)) {
                 /*
@@ -306,7 +317,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
      * 
      * @see #tryRemoveGuardingPiNode(com.oracle.graal.nodes.GuardingPiNode)
      * 
-     * */
+     */
     private boolean tryRemoveGuardingPiNodeCheckCastCond(GuardingPiNode envelope, ResolvedJavaType toType) {
         assert toType != null;
         ValueNode payload = envelope.object();
@@ -318,12 +329,12 @@ public abstract class GuardingPiReduction extends BaseReduction {
             warnAboutOutOfTheBlueGuardingPiNode(envelope);
         }
 
-        ValueNode d = reasoner.downcasted(payload);
+        ValueNode d = reasoner.downcast(payload);
         if (d == null) {
             return false;
         }
 
-        if (StampTool.isObjectAlwaysNull(d)) {
+        if (StampTool.isPointerAlwaysNull(d)) {
             removeGuardingPiNode(envelope, d);
             return true;
         }
@@ -348,12 +359,12 @@ public abstract class GuardingPiReduction extends BaseReduction {
             return false;
         }
         IsNullNode isNull = (IsNullNode) cond;
-        return isNull.object() == subject;
+        return isNull.getValue() == subject;
     }
 
     /**
      * Porcelain method.
-     * */
+     */
     private void removeGuardingPiNode(GuardingPiNode envelope, ValueNode replacement) {
         assert !precisionLoss(envelope, replacement);
         metricGuardingPiNodeRemoved.increment();

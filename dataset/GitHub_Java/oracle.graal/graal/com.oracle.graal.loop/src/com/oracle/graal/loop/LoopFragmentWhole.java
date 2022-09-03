@@ -22,19 +22,11 @@
  */
 package com.oracle.graal.loop;
 
-import java.util.Collections;
-
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.graph.Graph;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
 
 public class LoopFragmentWhole extends LoopFragment {
 
@@ -65,11 +57,7 @@ public class LoopFragmentWhole extends LoopFragment {
     public NodeBitMap nodes() {
         if (nodes == null) {
             Loop<Block> loop = loop().loop();
-            if (loop.getHeader().getBeginNode().graph().getGuardsStage() == GuardsStage.AFTER_FSA) {
-                nodes = LoopFragment.computeNodes(graph(), LoopFragment.toHirBlocks(loop.getBlocks()), Collections.emptyList());
-            } else {
-                nodes = LoopFragment.computeNodes(graph(), LoopFragment.toHirBlocks(loop.getBlocks()), LoopFragment.toHirExits(loop.getExits()));
-            }
+            nodes = LoopFragment.computeNodes(graph(), LoopFragment.toHirBlocks(loop.getBlocks()), LoopFragment.toHirExits(loop.getExits()));
         }
         return nodes;
     }

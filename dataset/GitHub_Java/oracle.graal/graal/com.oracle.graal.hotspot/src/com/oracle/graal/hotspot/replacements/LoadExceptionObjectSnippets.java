@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,25 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.LOAD_AND_CLEAR_EXCEPTION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.EXCEPTION_OOP_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.EXCEPTION_PC_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.readExceptionOop;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writeExceptionOop;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writeExceptionPc;
-import static com.oracle.graal.nodes.PiNode.piCast;
-import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
+import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.PiNode.*;
+import static com.oracle.graal.replacements.SnippetTemplate.*;
 
-import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.extended.ForeignCallNode;
-import com.oracle.graal.nodes.java.LoadExceptionObjectNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.replacements.Snippets;
-import com.oracle.graal.replacements.nodes.ReadRegisterNode;
-import com.oracle.graal.word.Word;
-
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.TargetDescription;
+import com.oracle.graal.replacements.nodes.*;
+import com.oracle.graal.word.*;
 
 /**
  * Snippet for loading the exception object at the start of an exception dispatcher.
@@ -66,10 +56,10 @@ public class LoadExceptionObjectSnippets implements Snippets {
     /**
      * Alternative way to implement exception object loading.
      */
-    private static final boolean USE_C_RUNTIME = HotspotSnippetsOptions.LoadExceptionObjectInVM.getValue();
+    private static final boolean USE_C_RUNTIME = Boolean.getBoolean("graal.loadExceptionObject.useCRuntime");
 
     @Snippet
-    public static Object loadException(@ConstantParameter Register threadRegister) {
+    public static Throwable loadException(@ConstantParameter Register threadRegister) {
         Word thread = registerAsWord(threadRegister);
         Object exception = readExceptionOop(thread);
         writeExceptionOop(thread, null);
@@ -79,7 +69,7 @@ public class LoadExceptionObjectSnippets implements Snippets {
 
     public static class Templates extends AbstractTemplates {
 
-        private final SnippetInfo loadException = snippet(LoadExceptionObjectSnippets.class, "loadException", EXCEPTION_OOP_LOCATION, EXCEPTION_PC_LOCATION);
+        private final SnippetInfo loadException = snippet(LoadExceptionObjectSnippets.class, "loadException");
 
         public Templates(HotSpotProviders providers, TargetDescription target) {
             super(providers, providers.getSnippetReflection(), target);

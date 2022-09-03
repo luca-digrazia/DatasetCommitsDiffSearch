@@ -56,7 +56,7 @@ public class ClassGetHubNode extends FloatingGuardedNode implements Lowerable, C
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (hasNoUsages()) {
+        if (usages().isEmpty()) {
             return null;
         } else {
             if (clazz.isConstant()) {

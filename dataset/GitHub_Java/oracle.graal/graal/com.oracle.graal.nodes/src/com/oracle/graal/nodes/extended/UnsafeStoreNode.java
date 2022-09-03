@@ -24,8 +24,6 @@ package com.oracle.graal.nodes.extended;
 
 import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
-import java.nio.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodeinfo.*;
@@ -43,19 +41,11 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    public static UnsafeStoreNode create(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
-        return new UnsafeStoreNode(object, offset, value, accessKind, locationIdentity);
-    }
-
-    protected UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
+    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
         this(object, offset, value, accessKind, locationIdentity, null);
     }
 
-    public static UnsafeStoreNode create(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
-        return new UnsafeStoreNode(object, offset, value, accessKind, locationIdentity, stateAfter);
-    }
-
-    protected UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
+    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
         super(StampFactory.forVoid(), object, offset, accessKind, locationIdentity);
         this.value = value;
         this.stateAfter = stateAfter;
@@ -96,21 +86,18 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
                 if (entryIndex != -1) {
                     Kind entryKind = state.getVirtualObject().entryKind(entryIndex);
                     ValueNode entry = state.getEntry(entryIndex);
-                    boolean isLoadSafe = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN || accessKind() == entry.getKind();
-                    if (isLoadSafe) {
-                        if (entry.getKind() == value.getKind() || entryKind == accessKind()) {
-                            tool.setVirtualEntry(state, entryIndex, value(), true);
-                            tool.delete();
-                        } else {
-                            if ((accessKind() == Kind.Long || accessKind() == Kind.Double) && entryKind == Kind.Int) {
-                                int nextIndex = state.getVirtualObject().entryIndexForOffset(off + 4);
-                                if (nextIndex != -1) {
-                                    Kind nextKind = state.getVirtualObject().entryKind(nextIndex);
-                                    if (nextKind == Kind.Int) {
-                                        tool.setVirtualEntry(state, entryIndex, value(), true);
-                                        tool.setVirtualEntry(state, nextIndex, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), graph()), true);
-                                        tool.delete();
-                                    }
+                    if (entry.getKind() == value.getKind() || entryKind == accessKind()) {
+                        tool.setVirtualEntry(state, entryIndex, value(), true);
+                        tool.delete();
+                    } else {
+                        if ((accessKind() == Kind.Long || accessKind() == Kind.Double) && entryKind == Kind.Int) {
+                            int nextIndex = state.getVirtualObject().entryIndexForOffset(off + 4);
+                            if (nextIndex != -1) {
+                                Kind nextKind = state.getVirtualObject().entryKind(nextIndex);
+                                if (nextKind == Kind.Int) {
+                                    tool.setVirtualEntry(state, entryIndex, value(), true);
+                                    tool.setVirtualEntry(state, nextIndex, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), graph()), true);
+                                    tool.delete();
                                 }
                             }
                         }
@@ -122,12 +109,12 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
 
     @Override
     protected ValueNode cloneAsFieldAccess(ResolvedJavaField field) {
-        return StoreFieldNode.create(object(), field, value(), stateAfter());
+        return new StoreFieldNode(object(), field, value(), stateAfter());
     }
 
     @Override
     protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
-        return UnsafeStoreNode.create(object(), location, value, accessKind(), identity, stateAfter());
+        return new UnsafeStoreNode(object(), location, value, accessKind(), identity, stateAfter());
     }
 
     public FrameState getState() {

@@ -99,7 +99,7 @@ public class CheckcastArrayCopyCallNode extends AbstractMemoryCheckpoint impleme
 
     @Override
     public void lower(LoweringTool tool) {
-        if (graph().getGuardsStage().areFrameStatesAtDeopts()) {
+        if (graph().getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
             ForeignCallDescriptor desc = HotSpotHostForeignCallsProvider.lookupCheckcastArraycopyDescriptor(isUninit());
             StructuredGraph graph = graph();
             ValueNode srcAddr = computeBase(getSource(), getSourcePosition());

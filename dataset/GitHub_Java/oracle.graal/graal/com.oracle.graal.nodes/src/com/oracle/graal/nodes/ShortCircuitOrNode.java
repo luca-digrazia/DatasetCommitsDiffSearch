@@ -27,9 +27,8 @@ import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 
 @NodeInfo
-public final class ShortCircuitOrNode extends LogicNode implements IterableNodeType, Canonicalizable.Binary<LogicNode> {
+public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, Canonicalizable.Binary<LogicNode> {
 
-    public static final NodeClass TYPE = NodeClass.get(ShortCircuitOrNode.class);
     @Input(InputType.Condition) LogicNode x;
     @Input(InputType.Condition) LogicNode y;
     protected boolean xNegated;
@@ -37,7 +36,6 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
     protected double shortCircuitProbability;
 
     public ShortCircuitOrNode(LogicNode x, boolean xNegated, LogicNode y, boolean yNegated, double shortCircuitProbability) {
-        super(TYPE);
         this.x = x;
         this.xNegated = xNegated;
         this.y = y;
@@ -107,7 +105,7 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
             if (isXNegated()) {
                 if (isYNegated()) {
                     // !a || !a = !a
-                    return LogicNegationNode.create(forX);
+                    return new LogicNegationNode(forX);
                 } else {
                     // !a || a = true
                     return LogicConstantNode.tautology();

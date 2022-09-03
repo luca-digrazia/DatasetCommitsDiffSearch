@@ -63,7 +63,7 @@ public class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, 
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (hasNoUsages()) {
+        if (usages().isEmpty()) {
             return null;
         }
         if (GraphUtil.unproxify(array1) == GraphUtil.unproxify(array2)) {

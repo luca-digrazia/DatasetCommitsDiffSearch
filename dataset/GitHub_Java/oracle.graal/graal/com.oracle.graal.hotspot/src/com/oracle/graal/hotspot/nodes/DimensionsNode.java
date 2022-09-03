@@ -39,7 +39,7 @@ import com.oracle.graal.word.*;
  * instruction.
  */
 @NodeInfo
-public final class DimensionsNode extends FixedWithNextNode implements LIRLowerable {
+public class DimensionsNode extends FixedWithNextNode implements LIRLowerable {
 
     protected final int rank;
 

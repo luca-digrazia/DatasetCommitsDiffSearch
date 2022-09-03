@@ -41,6 +41,7 @@ import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.hotspot.replacements.arraycopy.*;
+import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.calc.*;
@@ -120,31 +121,31 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
                 instanceofSnippets.lower((InstanceOfDynamicNode) n, tool);
             }
         } else if (n instanceof NewInstanceNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
                 newObjectSnippets.lower((NewInstanceNode) n, registers, tool);
             }
         } else if (n instanceof DynamicNewInstanceNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
                 newObjectSnippets.lower((DynamicNewInstanceNode) n, registers, tool);
             }
         } else if (n instanceof NewArrayNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
                 newObjectSnippets.lower((NewArrayNode) n, registers, runtime, tool);
             }
         } else if (n instanceof DynamicNewArrayNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
                 newObjectSnippets.lower((DynamicNewArrayNode) n, registers, tool);
             }
         } else if (n instanceof VerifyHeapNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
                 newObjectSnippets.lower((VerifyHeapNode) n, registers, runtime, tool);
             }
         } else if (n instanceof MonitorEnterNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
                 monitorSnippets.lower((MonitorEnterNode) n, registers, tool);
             }
         } else if (n instanceof MonitorExitNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
                 monitorSnippets.lower((MonitorExitNode) n, tool);
             }
         } else if (n instanceof G1PreWriteBarrier) {
@@ -162,7 +163,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         } else if (n instanceof G1ArrayRangePostWriteBarrier) {
             writeBarrierSnippets.lower((G1ArrayRangePostWriteBarrier) n, registers, tool);
         } else if (n instanceof NewMultiArrayNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
                 newObjectSnippets.lower((NewMultiArrayNode) n, tool);
             }
         } else if (n instanceof LoadExceptionObjectNode) {
@@ -307,7 +308,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     @Override
     protected void lowerUnsafeLoadNode(UnsafeLoadNode load, LoweringTool tool) {
         StructuredGraph graph = load.graph();
-        if (load.getGuardingCondition() == null && !graph.getGuardsStage().allowsFloatingGuards() && addReadBarrier(load)) {
+        if (load.getGuardingCondition() == null && graph.getGuardsStage().ordinal() > StructuredGraph.GuardsStage.FLOATING_GUARDS.ordinal() && addReadBarrier(load)) {
             unsafeLoadSnippets.lower(load, tool);
         } else {
             super.lowerUnsafeLoadNode(load, tool);
@@ -353,7 +354,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             // mirroring the calculations in c1_GraphBuilder.cpp (setup_osr_entry_block)
             int localsOffset = (graph.method().getMaxLocals() - 1) * 8;
             for (OSRLocalNode osrLocal : graph.getNodes(OSRLocalNode.class)) {
-                int size = osrLocal.getKind().getSlotCount();
+                int size = HIRFrameStateBuilder.stackSlots(osrLocal.getKind());
                 int offset = localsOffset - (osrLocal.index() + size - 1) * 8;
                 IndexedLocationNode location = graph.unique(new IndexedLocationNode(ANY_LOCATION, offset, ConstantNode.forLong(0, graph), 1));
                 ReadNode load = graph.add(new ReadNode(buffer, location, osrLocal.stamp(), BarrierType.NONE));
@@ -367,7 +368,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
     private void lowerDynamicCounterNode(DynamicCounterNode n) {
         StructuredGraph graph = n.graph();
-        if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+        if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
             BenchmarkCounters.lower(n, registers, runtime.getConfig(), runtime.getTarget().wordKind);
         }
     }
@@ -391,7 +392,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
     private void lowerBytecodeExceptionNode(BytecodeExceptionNode node) {
         StructuredGraph graph = node.graph();
-        if (graph.getGuardsStage().allowsFloatingGuards()) {
+        if (graph.getGuardsStage() == StructuredGraph.GuardsStage.FLOATING_GUARDS) {
             if (OmitHotExceptionStacktrace.getValue()) {
                 Throwable exception;
                 if (node.getExceptionClass() == NullPointerException.class) {

@@ -47,10 +47,6 @@ public class BasicInductionVariable extends InductionVariable {
         return phi.graph();
     }
 
-    public BinaryArithmeticNode<?> getOp() {
-        return op;
-    }
-
     @Override
     public Direction direction() {
         Stamp stamp = rawStride.stamp();
@@ -160,10 +156,5 @@ public class BasicInductionVariable extends InductionVariable {
 
     @Override
     public void deleteUnusedNodes() {
-    }
-
-    @Override
-    public String toString() {
-        return String.format("BasicInductionVariable %s %s %s %s", initNode(), phi, op.getNodeClass().shortName(), strideNode());
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -31,13 +30,11 @@ import com.oracle.graal.nodes.*;
  * Start node for a {@link Stub}'s graph.
  */
 @NodeInfo
-public final class StubStartNode extends StartNode {
+public class StubStartNode extends StartNode {
 
-    public static final NodeClass TYPE = NodeClass.get(StubStartNode.class);
     protected final Stub stub;
 
     public StubStartNode(Stub stub) {
-        super(TYPE);
         this.stub = stub;
     }
 

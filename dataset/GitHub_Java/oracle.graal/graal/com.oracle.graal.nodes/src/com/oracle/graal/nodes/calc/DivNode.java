@@ -33,7 +33,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "/")
-public final class DivNode extends BinaryArithmeticNode<Div> {
+public class DivNode extends BinaryArithmeticNode<Div> {
 
     public DivNode(ValueNode x, ValueNode y) {
         super(ArithmeticOpTable::getDiv, x, y);

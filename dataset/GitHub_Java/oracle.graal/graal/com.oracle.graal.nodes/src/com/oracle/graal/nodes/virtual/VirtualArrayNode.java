@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import java.nio.*;
-
 import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
@@ -77,7 +75,7 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
     }
 
     @Override
-    public int entryIndexForOffset(long constantOffset, Kind expectedEntryKind) {
+    public int entryIndexForOffset(long constantOffset) {
         int baseOffset;
         int indexScale;
         switch (componentType.getKind()) {
@@ -120,14 +118,7 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
             default:
                 return -1;
         }
-        long offset;
-        if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN && componentType.isPrimitive()) {
-            // On big endian, we do just get expect the type be right aligned in this memory slot
-            offset = constantOffset - (componentType.getKind().getByteCount() - Math.min(componentType.getKind().getByteCount(), 4 + expectedEntryKind.getByteCount()));
-        } else {
-            offset = constantOffset;
-        }
-        long index = offset - baseOffset;
+        long index = constantOffset - baseOffset;
         if (index % indexScale != 0) {
             return -1;
         }

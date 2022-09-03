@@ -38,7 +38,7 @@ import com.oracle.graal.nodes.spi.*;
  * A call to the {@link NewArrayStub}.
  */
 @NodeInfo
-public final class NewArrayStubCall extends DeoptimizingStubCall implements LIRLowerable {
+public class NewArrayStubCall extends DeoptimizingStubCall implements LIRLowerable {
 
     private static final Stamp defaultStamp = StampFactory.objectNonNull();
 

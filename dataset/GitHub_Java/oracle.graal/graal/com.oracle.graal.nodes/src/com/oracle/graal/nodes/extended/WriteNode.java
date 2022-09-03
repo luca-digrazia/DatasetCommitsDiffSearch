@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -35,20 +34,18 @@ import com.oracle.graal.nodes.spi.*;
  * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
  */
 @NodeInfo
-public final class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
-
-    public static final NodeClass TYPE = NodeClass.get(WriteNode.class);
+public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
 
     public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
-        super(TYPE, object, value, location, barrierType);
+        super(object, value, location, barrierType);
     }
 
     public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
-        super(TYPE, object, value, location, barrierType, initialization);
+        super(object, value, location, barrierType, initialization);
     }
 
     public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
-        super(TYPE, object, value, location, barrierType, guard, initialization);
+        super(object, value, location, barrierType, guard, initialization);
     }
 
     @Override

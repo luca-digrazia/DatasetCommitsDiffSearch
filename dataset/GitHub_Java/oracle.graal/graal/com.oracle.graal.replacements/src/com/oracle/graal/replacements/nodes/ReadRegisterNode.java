@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@ package com.oracle.graal.replacements.nodes;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -34,9 +33,8 @@ import com.oracle.graal.nodes.spi.*;
  * Access the value of a specific register.
  */
 @NodeInfo(nameTemplate = "ReadRegister %{p#register}")
-public final class ReadRegisterNode extends FixedWithNextNode implements LIRLowerable {
+public class ReadRegisterNode extends FixedWithNextNode implements LIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(ReadRegisterNode.class);
     /**
      * The fixed register to access.
      */
@@ -56,7 +54,7 @@ public final class ReadRegisterNode extends FixedWithNextNode implements LIRLowe
     protected final boolean incoming;
 
     public ReadRegisterNode(Register register, Kind kind, boolean directUse, boolean incoming) {
-        super(TYPE, StampFactory.forKind(kind));
+        super(StampFactory.forKind(kind));
         assert register != null;
         this.register = register;
         this.directUse = directUse;
@@ -64,7 +62,7 @@ public final class ReadRegisterNode extends FixedWithNextNode implements LIRLowe
     }
 
     public ReadRegisterNode(Register register, boolean directUse, boolean incoming) {
-        super(TYPE, StampFactory.forNodeIntrinsic());
+        super(StampFactory.forNodeIntrinsic());
         assert register != null;
         this.register = register;
         this.directUse = directUse;

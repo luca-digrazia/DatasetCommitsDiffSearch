@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,9 +28,8 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
-public final class ReturnNode extends ControlSinkNode implements LIRLowerable, IterableNodeType {
+public class ReturnNode extends ControlSinkNode implements LIRLowerable, IterableNodeType {
 
-    public static final NodeClass TYPE = NodeClass.get(ReturnNode.class);
     @OptionalInput ValueNode result;
     @OptionalInput(InputType.Extension) MemoryMapNode memoryMap;
 
@@ -43,7 +42,7 @@ public final class ReturnNode extends ControlSinkNode implements LIRLowerable, I
     }
 
     public ReturnNode(ValueNode result, MemoryMapNode memoryMap) {
-        super(TYPE, StampFactory.forVoid());
+        super(StampFactory.forVoid());
         this.result = result;
         this.memoryMap = memoryMap;
     }

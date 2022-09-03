@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,8 +26,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Mul;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -37,25 +36,8 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "*")
 public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArithmeticNode {
 
-    public static final NodeClass TYPE = NodeClass.get(MulNode.class);
-
     public MulNode(ValueNode x, ValueNode y) {
-        this(TYPE, x, y);
-    }
-
-    protected MulNode(NodeClass c, ValueNode x, ValueNode y) {
-        super(c, ArithmeticOpTable::getMul, x, y);
-    }
-
-    public static ValueNode create(ValueNode x, ValueNode y) {
-        BinaryOp<Mul> op = ArithmeticOpTable.forStamp(x.stamp()).getMul();
-        Stamp stamp = op.foldStamp(x.stamp(), y.stamp());
-        ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
-        if (tryConstantFold != null) {
-            return tryConstantFold;
-        } else {
-            return new MulNode(x, y);
-        }
+        super(ArithmeticOpTable::getMul, x, y);
     }
 
     @Override
@@ -124,6 +106,6 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
             op1 = op2;
             op2 = tmp;
         }
-        builder.setResult(this, gen.emitMul(op1, op2, false));
+        builder.setResult(this, gen.emitMul(op1, op2));
     }
 }

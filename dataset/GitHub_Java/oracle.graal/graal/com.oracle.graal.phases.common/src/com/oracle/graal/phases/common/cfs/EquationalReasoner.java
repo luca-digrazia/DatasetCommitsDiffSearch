@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,38 +22,29 @@
  */
 package com.oracle.graal.phases.common.cfs;
 
-import com.oracle.graal.api.meta.ResolvedJavaType;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.calc.ObjectEqualsNode;
-import com.oracle.graal.nodes.extended.GuardedNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.java.CheckCastNode;
-import com.oracle.graal.nodes.java.InstanceOfNode;
-import com.oracle.graal.nodes.spi.ValueProxy;
-import com.oracle.graal.compiler.common.type.IllegalStamp;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.util.GraphUtil;
+import java.util.*;
 
-import java.util.IdentityHashMap;
-import java.util.Set;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * <p>
  * This class implements a simple partial evaluator that recursively reduces a given
  * {@link com.oracle.graal.nodes.calc.FloatingNode} into a simpler one based on the current state.
  * Such evaluator comes handy when visiting a {@link com.oracle.graal.nodes.FixedNode} N, just
- * before updating the state for N. At the pre-state, an {@link EquationalReasoner
- * EquationalReasoner} can be used to reduce N's inputs (actually only those inputs of Value and
- * Condition {@link com.oracle.graal.graph.InputType InputType}). For an explanation of where it's
+ * before updating the state for N. At the pre-state, an {@link EquationalReasoner} can be used to
+ * reduce N's inputs (actually only those inputs of Value and Condition
+ * {@link com.oracle.graal.nodeinfo.InputType InputType}). For an explanation of where it's
  * warranted to replace "old input" with "reduced input", see the inline comments in method
  * {@link EquationalReasoner#deverbosify(com.oracle.graal.graph.Node n) deverbosify(Node n)}
  * </p>
@@ -65,11 +56,12 @@ import java.util.Set;
  */
 public final class EquationalReasoner {
 
-    private static final DebugMetric metricInstanceOfRemoved = Debug.metric("InstanceOfRemoved");
-    private static final DebugMetric metricNullCheckRemoved = Debug.metric("NullCheckRemoved");
-    private static final DebugMetric metricObjectEqualsRemoved = Debug.metric("ObjectEqualsRemoved");
-    private static final DebugMetric metricEquationalReasoning = Debug.metric("EquationalReasoning");
-    private static final DebugMetric metricDowncasting = Debug.metric("Downcasting");
+    private static final DebugMetric metricInstanceOfRemoved = Debug.metric("FSR-InstanceOfRemoved");
+    private static final DebugMetric metricNullCheckRemoved = Debug.metric("FSR-NullCheckRemoved");
+    private static final DebugMetric metricObjectEqualsRemoved = Debug.metric("FSR-ObjectEqualsRemoved");
+    private static final DebugMetric metricEquationalReasoning = Debug.metric("FSR-EquationalReasoning");
+    private static final DebugMetric metricDowncasting = Debug.metric("FSR-Downcasting");
+    private static final DebugMetric metricNullInserted = Debug.metric("FSR-NullInserted");
 
     private final StructuredGraph graph;
     private final CanonicalizerTool tool;
@@ -87,7 +79,7 @@ public final class EquationalReasoner {
      * {@link com.oracle.graal.graph.NodeBitMap NodeBitMap} but in this set instead (those nodes are
      * added after the {@link com.oracle.graal.graph.NodeBitMap} was obtained).
      */
-    final Set<ValueNode> added = java.util.Collections.newSetFromMap(new IdentityHashMap<ValueNode, Boolean>());
+    final Set<ValueNode> added = Node.newSet();
 
     /**
      * The reduction of a FloatingNode performed by {@link EquationalReasoner EquationalReasoner}
@@ -97,7 +89,7 @@ public final class EquationalReasoner {
      * The substitutions tracked in this field become invalid as described in
      * {@link #updateState(com.oracle.graal.phases.common.cfs.State) updateState(State)}
      */
-    private final IdentityHashMap<ValueNode, ValueNode> substs = new IdentityHashMap<>();
+    private final Map<ValueNode, ValueNode> substs = Node.newIdentityMap();
 
     public EquationalReasoner(StructuredGraph graph, CanonicalizerTool tool, LogicConstantNode trueConstant, LogicConstantNode falseConstant, ConstantNode nullConstant) {
         this.graph = graph;
@@ -111,9 +103,10 @@ public final class EquationalReasoner {
      * {@link #added} grows during a run of
      * {@link com.oracle.graal.phases.common.cfs.FlowSensitiveReductionPhase
      * FlowSensitiveReductionPhase}, and doesn't survive across runs.
-     * */
+     */
     public void forceState(State s) {
         state = s;
+        assert state.repOK();
         substs.clear();
         added.clear();
         visited = null;
@@ -219,7 +212,7 @@ public final class EquationalReasoner {
         if (n == null) {
             return null;
         }
-        assert !(n instanceof GuardNode) : "This phase not yet ready to run during MidTier";
+        assert !(n instanceof GuardNode) : "This phase not intended to run during MidTier";
         if (!(n instanceof ValueNode)) {
             return n;
         }
@@ -234,6 +227,17 @@ public final class EquationalReasoner {
         if (result != null) {
             // picked cached substitution
             return result;
+        }
+        if (FlowUtil.hasLegalObjectStamp(v) && state.isNull(v)) {
+            // it's ok to return nullConstant in deverbosify unlike in downcast
+            metricNullInserted.increment();
+            return nullConstant;
+        }
+        if (v instanceof ValueProxy) {
+            return v;
+        }
+        if (!(n instanceof FloatingNode)) {
+            return n;
         }
         if ((visited != null && visited.contains(n)) || added.contains(v)) {
             return v;
@@ -252,25 +256,13 @@ public final class EquationalReasoner {
          * Past this point, if we ever want `n` to be deverbosified, it must be looked-up by one of
          * the cases above. One sure way to achieve that is with `rememberSubstitution(old, new)`
          */
-        if (v instanceof ValueProxy) {
-            return downcasted(v);
-        }
 
-        if (n instanceof FloatingNode) {
-            /*
-             * `deverbosifyFloatingNode()` will drill down over floating inputs, when that not
-             * possible anymore it resorts to calling `downcasted()`. Thus it's ok to take the
-             * `deverbosifyFloatingNode()` route first, as no downcasting opportunity will be
-             * missed.
-             */
-            return deverbosifyFloatingNode((FloatingNode) n);
-        }
-
-        if (FlowUtil.hasLegalObjectStamp(v)) {
-            return downcasted(v);
-        }
-
-        return n;
+        /*
+         * `deverbosifyFloatingNode()` will drill down over floating inputs, when that not possible
+         * anymore it resorts to calling `downcast()`. Thus it's ok to take the
+         * `deverbosifyFloatingNode()` route first, as no downcasting opportunity will be missed.
+         */
+        return deverbosifyFloatingNode((FloatingNode) n);
     }
 
     /**
@@ -285,7 +277,7 @@ public final class EquationalReasoner {
      * Usage: must be called only from {@link #deverbosify(com.oracle.graal.graph.Node)
      * deverbosify(Node)}.</li>
      * </ul>
-     * */
+     */
     public Node deverbosifyFloatingNode(final FloatingNode n) {
 
         assert n != null : "Should have been caught in deverbosify()";
@@ -334,33 +326,33 @@ public final class EquationalReasoner {
         }
         if (changed == null) {
             assert visited.contains(f) || added.contains(f);
-            if (FlowUtil.hasLegalObjectStamp(f)) {
-                /*
-                 * No input has changed doesn't imply there's no witness to refine the
-                 * floating-object value.
-                 */
-                ValueNode d = downcasted(f);
-                return d;
-            } else {
-                return f;
-            }
+            return f;
         }
         FlowUtil.inferStampAndCheck(changed);
         added.add(changed);
-        ValueNode canon = (ValueNode) changed.canonical(tool);
-        // might be already in `added`, no problem adding it again.
-        added.add(canon);
-        rememberSubstitution(f, canon);
-        return canon;
+
+        if (changed instanceof Canonicalizable) {
+            ValueNode canon = (ValueNode) ((Canonicalizable) changed).canonical(tool);
+            if (canon != null && !canon.isAlive()) {
+                assert !canon.isDeleted();
+                canon = graph.addOrUniqueWithInputs(canon);
+            }
+            // might be already in `added`, no problem adding it again.
+            added.add(canon);
+            rememberSubstitution(f, canon);
+            return canon;
+        } else {
+            return changed;
+        }
     }
 
     /**
      * In case of doubt (on whether a reduction actually triggered) it's always ok to invoke "
-     * <code>rememberSubstitution(f, downcasted(f))</code>": this method records a map entry only if
+     * <code>rememberSubstitution(f, downcast(f))</code>": this method records a map entry only if
      * pre-image and image differ.
      *
      * @return the image of the substitution (ie, the second argument) unmodified.
-     * */
+     */
     private <M extends ValueNode> M rememberSubstitution(ValueNode from, M to) {
         assert from != null && to != null;
         if (from == to) {
@@ -387,7 +379,7 @@ public final class EquationalReasoner {
     /**
      * The contract for this baseCase-style method is covered in
      * {@link EquationalReasoner#deverbosify(com.oracle.graal.graph.Node)
-     * EquationalReasoner#deverbosify()}
+     * EquationalReasoner#deverbosify()}.
      *
      * @return a {@link com.oracle.graal.nodes.calc.FloatingNode} different from the argument, in
      *         case a reduction was made. The node being returned might be already in the graph. In
@@ -441,6 +433,8 @@ public final class EquationalReasoner {
                 return baseCaseIsNullNode((IsNullNode) condition);
             } else if (condition instanceof ObjectEqualsNode) {
                 return baseCaseObjectEqualsNode((ObjectEqualsNode) condition);
+            } else if (condition instanceof ShortCircuitOrNode) {
+                return baseCaseShortCircuitOrNode((ShortCircuitOrNode) condition);
             }
         }
         return condition;
@@ -458,11 +452,16 @@ public final class EquationalReasoner {
      *
      */
     private LogicNode baseCaseInstanceOfNode(InstanceOfNode instanceOf) {
-        ValueNode scrutinee = GraphUtil.unproxify(instanceOf.object());
+        ValueNode scrutinee = GraphUtil.unproxify(instanceOf.getValue());
         if (!FlowUtil.hasLegalObjectStamp(scrutinee)) {
             return instanceOf;
         }
         if (state.isNull(scrutinee)) {
+            metricInstanceOfRemoved.increment();
+            return falseConstant;
+        } else if (state.knownNotToPassInstanceOf(scrutinee, instanceOf.type())) {
+            // scrutinee turns out to be null -> falseConstant right answer
+            // scrutinee not null, but known-not-to-conform -> falseConstant
             metricInstanceOfRemoved.increment();
             return falseConstant;
         } else if (state.isNonNull(scrutinee) && state.knownToConform(scrutinee, instanceOf.type())) {
@@ -477,21 +476,19 @@ public final class EquationalReasoner {
      *         performed; otherwise the unmodified argument.
      *
      */
-    private FloatingNode baseCaseIsNullNode(IsNullNode isNull) {
-        ValueNode object = isNull.object();
+    private FloatingNode baseCaseIsNullNode(IsNullNode isNu) {
+        ValueNode object = isNu.getValue();
         if (!FlowUtil.hasLegalObjectStamp(object)) {
-            return isNull;
+            return isNu;
         }
-        ValueNode scrutinee = GraphUtil.unproxify(isNull.object());
-        GuardingNode evidence = untrivialNullAnchor(scrutinee);
-        if (evidence != null) {
+        if (state.isNull(object)) {
             metricNullCheckRemoved.increment();
             return trueConstant;
-        } else if (state.isNonNull(scrutinee)) {
+        } else if (state.isNonNull(object)) {
             metricNullCheckRemoved.increment();
             return falseConstant;
         }
-        return isNull;
+        return isNu;
     }
 
     /**
@@ -499,11 +496,11 @@ public final class EquationalReasoner {
      *         otherwise the unmodified argument.
      */
     private LogicNode baseCaseObjectEqualsNode(ObjectEqualsNode equals) {
-        if (!FlowUtil.hasLegalObjectStamp(equals.x()) || !FlowUtil.hasLegalObjectStamp(equals.y())) {
+        if (!FlowUtil.hasLegalObjectStamp(equals.getX()) || !FlowUtil.hasLegalObjectStamp(equals.getY())) {
             return equals;
         }
-        ValueNode x = GraphUtil.unproxify(equals.x());
-        ValueNode y = GraphUtil.unproxify(equals.y());
+        ValueNode x = GraphUtil.unproxify(equals.getX());
+        ValueNode y = GraphUtil.unproxify(equals.getY());
         if (state.isNull(x) && state.isNonNull(y) || state.isNonNull(x) && state.isNull(y)) {
             metricObjectEqualsRemoved.increment();
             return falseConstant;
@@ -515,7 +512,39 @@ public final class EquationalReasoner {
     }
 
     /**
-     * It's always ok to use "<code>downcasted(object)</code>" instead of " <code>object</code>"
+     * The following is tried:
+     *
+     * <ol>
+     * <li>
+     * A {@link com.oracle.graal.phases.common.cfs.Witness} that is at check-cast level level
+     * doesn't entail {@link com.oracle.graal.nodes.calc.IsNullNode} (on its own) nor
+     * {@link com.oracle.graal.nodes.java.InstanceOfNode} (also on its own) but of course it entails
+     * <code>(IsNull || IsInstanceOf)</code>. Good thing
+     * {@link com.oracle.graal.phases.common.cfs.CastCheckExtractor} detects that very pattern.</li>
+     * <li>
+     * Otherwise return the unmodified argument (later on,
+     * {@link #deverbosifyFloatingNode(com.oracle.graal.nodes.calc.FloatingNode)} will attempt to
+     * simplify the {@link com.oracle.graal.nodes.ShortCircuitOrNode}).</li>
+     * </ol>
+     *
+     * @return a {@link com.oracle.graal.nodes.LogicConstantNode}, in case a reduction was made;
+     *         otherwise the unmodified argument.
+     */
+    private LogicNode baseCaseShortCircuitOrNode(ShortCircuitOrNode orNode) {
+        CastCheckExtractor cast = CastCheckExtractor.extract(orNode);
+        if (cast != null) {
+            if (state.knownToConform(cast.subject, cast.type)) {
+                return trueConstant;
+            } else if (state.knownNotToPassCheckCast(cast.subject, cast.type)) {
+                return falseConstant;
+            }
+            return orNode;
+        }
+        return orNode;
+    }
+
+    /**
+     * It's always ok to use "<code>downcast(object)</code>" instead of " <code>object</code>"
      * because this method re-wraps the argument in a {@link com.oracle.graal.nodes.PiNode} only if
      * the new stamp is strictly more refined than the original.
      *
@@ -534,7 +563,7 @@ public final class EquationalReasoner {
      *         <li>the unmodified argument otherwise.</li>
      *         </ul>
      */
-    ValueNode downcasted(final ValueNode object) {
+    ValueNode downcast(final ValueNode object) {
 
         // -------------------------------------------------
         // actions based only on the stamp of the input node
@@ -546,8 +575,8 @@ public final class EquationalReasoner {
         if (FlowUtil.isLiteralNode(object)) {
             return object;
         }
-        if (StampTool.isObjectAlwaysNull(object.stamp())) {
-            return untrivialNull(object);
+        if (StampTool.isPointerAlwaysNull(object.stamp())) {
+            return object;
         }
 
         // ------------------------------------------
@@ -556,8 +585,9 @@ public final class EquationalReasoner {
 
         ValueNode scrutinee = GraphUtil.unproxify(object);
 
-        PiNode untrivialNull = untrivialNull(scrutinee);
+        PiNode untrivialNull = nonTrivialNull(scrutinee);
         if (untrivialNull != null) {
+            metricNullInserted.increment();
             return untrivialNull;
         }
 
@@ -581,10 +611,12 @@ public final class EquationalReasoner {
 
         ValueNode result;
         if (object instanceof ValueProxy) {
-            result = downcastedValueProxy((ValueProxy) object, w);
+            result = downcastValueProxy((ValueProxy) object, w);
         } else {
             result = downcastedUtil(object, w);
         }
+
+        assert !BaseReduction.precisionLoss(object, result);
 
         return result;
     }
@@ -597,14 +629,14 @@ public final class EquationalReasoner {
      * {@link com.oracle.graal.phases.common.cfs.FlowSensitiveReductionPhase} that assert no
      * type-precision gets lost. Thus the need to fix-up on our own, as done here.
      * </p>
-     * */
+     */
     private static void fixupTypeProfileStamp(ValueNode object) {
         if (!(object instanceof TypeProfileProxyNode)) {
             return;
         }
         TypeProfileProxyNode profile = (TypeProfileProxyNode) object;
         ObjectStamp outgoinStamp = (ObjectStamp) profile.stamp();
-        ObjectStamp payloadStamp = (ObjectStamp) profile.getObject().stamp();
+        ObjectStamp payloadStamp = (ObjectStamp) profile.getValue().stamp();
         if (payloadStamp.nonNull() && !outgoinStamp.nonNull()) {
             profile.setStamp(FlowUtil.asNonNullStamp(outgoinStamp));
         }
@@ -625,7 +657,7 @@ public final class EquationalReasoner {
      * <p>
      * The resulting node might not have been in the graph already.
      * </p>
-     * */
+     */
     private PiNode wrapInPiNode(ValueNode payload, GuardingNode anchor, ObjectStamp newStamp, boolean remember) {
         try (Debug.Scope s = Debug.scope("Downcast", payload)) {
             assert payload != anchor : payload.graph().toString();
@@ -644,24 +676,6 @@ public final class EquationalReasoner {
     }
 
     /**
-     * <p>
-     * If the argument is known null due to its stamp, there's no need to have an anchor for that
-     * fact and this method returns null.
-     * </p>
-     *
-     * <p>
-     * Otherwise, if an anchor is found it is returned, null otherwise.
-     * </p>
-     */
-    public GuardingNode untrivialNullAnchor(ValueNode object) {
-        assert FlowUtil.hasLegalObjectStamp(object);
-        if (StampTool.isObjectAlwaysNull(object)) {
-            return null;
-        }
-        return state.knownNull.get(GraphUtil.unproxify(object));
-    }
-
-    /**
      *
      * This method returns:
      * <ul>
@@ -676,13 +690,13 @@ public final class EquationalReasoner {
      * .
      * </p>
      */
-    public PiNode untrivialNull(ValueNode object) {
+    public PiNode nonTrivialNull(ValueNode object) {
         assert FlowUtil.hasLegalObjectStamp(object);
-        GuardingNode anchor = untrivialNullAnchor(object);
+        GuardingNode anchor = state.nonTrivialNullAnchor(object);
         if (anchor == null) {
             return null;
         }
-        if (object instanceof GuardedNode && StampTool.isObjectAlwaysNull(object.stamp())) {
+        if (object instanceof GuardedNode && StampTool.isPointerAlwaysNull(object.stamp())) {
             return (PiNode) object;
         }
         // notice nullConstant is wrapped, not object
@@ -711,7 +725,7 @@ public final class EquationalReasoner {
      *     the reason being that the state abstraction can be updated only at fixed nodes).
      *     As a result, the witness for a (PiNode, PiArrayNode, UnsafeCastNode, or GuardedValueNode)
      *     may be less precise than the proxy's stamp. We don't want to lose such precision,
-     *     thus <code>downcasted(proxy) == proxy</code> in such cases.
+     *     thus <code>downcast(proxy) == proxy</code> in such cases.
      * </p>
      *
      * <p>
@@ -733,7 +747,7 @@ public final class EquationalReasoner {
      *</p>
      */
     // @formatter:on
-    private ValueNode downcastedValueProxy(ValueProxy proxy, Witness w) {
+    private ValueNode downcastValueProxy(ValueProxy proxy, Witness w) {
         assert FlowUtil.hasLegalObjectStamp((ValueNode) proxy);
         assert FlowUtil.hasLegalObjectStamp((proxy).getOriginalNode());
         assert GraphUtil.unproxify((ValueNode) proxy) == GraphUtil.unproxify(proxy.getOriginalNode());
@@ -741,13 +755,13 @@ public final class EquationalReasoner {
         assert GraphUtil.unproxify((ValueNode) proxy) == GraphUtil.unproxify((proxy).getOriginalNode());
 
         if (proxy instanceof PiNode) {
-            return downcastedPiNodeOrPiArrayNode((PiNode) proxy, w);
+            return downcastPiNodeOrPiArrayNode((PiNode) proxy, w);
         } else if (proxy instanceof GuardingPiNode) {
-            return downcastedGuardingPiNode((GuardingPiNode) proxy, w);
+            return downcastGuardingPiNode((GuardingPiNode) proxy, w);
         } else if (proxy instanceof TypeProfileProxyNode) {
-            return downcastedTypeProfileProxyNode((TypeProfileProxyNode) proxy);
+            return downcastTypeProfileProxyNode((TypeProfileProxyNode) proxy);
         } else if (proxy instanceof CheckCastNode) {
-            return downcastedCheckCastNode((CheckCastNode) proxy, w);
+            return downcastCheckCastNode((CheckCastNode) proxy, w);
         } else if (proxy instanceof ProxyNode || proxy instanceof GuardedValueNode) {
             // TODO scaladacapo return downcastedUtil((ValueNode) proxy, w);
             return (ValueNode) proxy;
@@ -781,9 +795,9 @@ public final class EquationalReasoner {
      * GuardingPiNode is clear: devirtualizing the `intValue()` callsite.
      * </p>
      *
-     * @see #downcastedValueProxy
-     * */
-    public ValueNode downcastedGuardingPiNode(GuardingPiNode envelope, Witness w) {
+     * @see #downcastValueProxy
+     */
+    public ValueNode downcastGuardingPiNode(GuardingPiNode envelope, Witness w) {
         assert envelope != w.guard().asNode() : "The stamp of " + envelope + " would lead to downcasting with that very same GuardingPiNode as guard.";
         return downcastedUtil(envelope, w);
     }
@@ -813,9 +827,9 @@ public final class EquationalReasoner {
      * PiNode.canonical()} does). Not clear the benefits of duplicating that logic here.
      * </p>
      *
-     * @see #downcastedValueProxy
-     * */
-    private ValueNode downcastedPiNodeOrPiArrayNode(PiNode envelope, Witness w) {
+     * @see #downcastValueProxy
+     */
+    private ValueNode downcastPiNodeOrPiArrayNode(PiNode envelope, Witness w) {
         return downcastedUtil(envelope, w);
     }
 
@@ -829,11 +843,11 @@ public final class EquationalReasoner {
      * Otherwise returns the unmodified argument.
      * </p>
      *
-     * @see #downcastedValueProxy
-     * */
-    private ValueNode downcastedTypeProfileProxyNode(TypeProfileProxyNode envelope) {
+     * @see #downcastValueProxy
+     */
+    private ValueNode downcastTypeProfileProxyNode(TypeProfileProxyNode envelope) {
         ValueNode payload = envelope.getOriginalNode();
-        ValueNode d = downcasted(payload);
+        ValueNode d = downcast(payload);
         if (payload != d) {
             TypeProfileProxyNode changed = (TypeProfileProxyNode) envelope.copyWithInputs();
             added.add(changed);
@@ -859,8 +873,8 @@ public final class EquationalReasoner {
      * Re-wrap the checkCast in a type-refining {@link com.oracle.graal.nodes.PiNode PiNode} only if
      * the downcasted scrutinee does not conform to the checkCast's target-type.
      * </p>
-     * */
-    private ValueNode downcastedCheckCastNode(CheckCastNode checkCast, Witness w) {
+     */
+    private ValueNode downcastCheckCastNode(CheckCastNode checkCast, Witness w) {
 
         final ResolvedJavaType toType = checkCast.type();
 
@@ -869,7 +883,7 @@ public final class EquationalReasoner {
             while (innerMost instanceof CheckCastNode) {
                 innerMost = ((CheckCastNode) innerMost).object();
             }
-            ValueNode deepest = downcasted(innerMost);
+            ValueNode deepest = downcast(innerMost);
             ResolvedJavaType deepestType = ((ObjectStamp) deepest.stamp()).type();
             if ((deepestType != null && deepestType.equals(toType)) || FlowUtil.isMorePrecise(deepestType, toType)) {
                 assert !w.knowsBetterThan(deepest);
@@ -877,7 +891,7 @@ public final class EquationalReasoner {
             }
         }
 
-        ValueNode subject = downcasted(checkCast.object());
+        ValueNode subject = downcast(checkCast.object());
         ObjectStamp subjectStamp = (ObjectStamp) subject.stamp();
         ResolvedJavaType subjectType = subjectStamp.type();
 
@@ -899,7 +913,7 @@ public final class EquationalReasoner {
      * to hold an updated stamp) provided the argument's stamp can be strictly refined, and returns
      * it.
      * </p>
-     * */
+     */
     private ValueNode downcastedUtil(ValueNode subject, Witness w) {
 
         ObjectStamp originalStamp = (ObjectStamp) subject.stamp();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.nodeinfo.*;
@@ -35,13 +34,12 @@ import com.oracle.graal.nodes.spi.*;
  * return address if its location is on the stack.
  */
 @NodeInfo
-public final class LeaveCurrentStackFrameNode extends FixedWithNextNode implements LIRLowerable {
+public class LeaveCurrentStackFrameNode extends FixedWithNextNode implements LIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(LeaveCurrentStackFrameNode.class);
     @Input SaveAllRegistersNode registerSaver;
 
     public LeaveCurrentStackFrameNode(ValueNode registerSaver) {
-        super(TYPE, StampFactory.forVoid());
+        super(StampFactory.forVoid());
         this.registerSaver = (SaveAllRegistersNode) registerSaver;
     }
 

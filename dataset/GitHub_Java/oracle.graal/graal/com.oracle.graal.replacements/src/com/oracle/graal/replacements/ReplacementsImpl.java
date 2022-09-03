@@ -196,9 +196,7 @@ public class ReplacementsImpl implements Replacements {
     private final Map<String, AtomicReference<ClassReplacements>> classReplacements;
     private final Map<String, Class<?>[]> internalNameToSubstitutionClasses;
 
-    // This map is key'ed by a class name instead of a Class object so that
-    // it is stable across VM executions (in support of replay compilation).
-    private final Map<String, SnippetTemplateCache> snippetTemplateCache;
+    private final Map<Class<? extends SnippetTemplateCache>, SnippetTemplateCache> snippetTemplateCache;
 
     public ReplacementsImpl(Providers providers, SnippetReflectionProvider snippetReflection, Assumptions assumptions, TargetDescription target) {
         this.providers = providers.copyWith(this);
@@ -799,13 +797,13 @@ public class ReplacementsImpl implements Replacements {
 
     @Override
     public void registerSnippetTemplateCache(SnippetTemplateCache templates) {
-        assert snippetTemplateCache.get(templates.getClass().getName()) == null;
-        snippetTemplateCache.put(templates.getClass().getName(), templates);
+        assert snippetTemplateCache.get(templates.getClass()) == null;
+        snippetTemplateCache.put(templates.getClass(), templates);
     }
 
     @Override
     public <T extends SnippetTemplateCache> T getSnippetTemplateCache(Class<T> templatesClass) {
-        SnippetTemplateCache ret = snippetTemplateCache.get(templatesClass.getName());
+        SnippetTemplateCache ret = snippetTemplateCache.get(templatesClass);
         return templatesClass.cast(ret);
     }
 }

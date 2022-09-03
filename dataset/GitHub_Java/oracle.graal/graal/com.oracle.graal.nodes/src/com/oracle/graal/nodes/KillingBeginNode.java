@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,18 +23,15 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class KillingBeginNode extends AbstractBeginNode implements MemoryCheckpoint.Single {
+public class KillingBeginNode extends BeginNode implements MemoryCheckpoint.Single {
 
-    public static final NodeClass TYPE = NodeClass.get(KillingBeginNode.class);
     protected LocationIdentity locationIdentity;
 
     public KillingBeginNode(LocationIdentity locationIdentity) {
-        super(TYPE);
         this.locationIdentity = locationIdentity;
     }
 
