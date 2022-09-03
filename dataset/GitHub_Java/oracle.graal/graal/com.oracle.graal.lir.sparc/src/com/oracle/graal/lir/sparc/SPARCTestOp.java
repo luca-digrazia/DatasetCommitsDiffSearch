@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,64 +22,63 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
 public class SPARCTestOp extends SPARCLIRInstruction {
+    public static final LIRInstructionClass<SPARCTestOp> TYPE = LIRInstructionClass.create(SPARCTestOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(1);
 
     @Use({REG}) protected Value x;
-    @Use({REG, STACK, CONST}) protected Value y;
+    @Use({REG, CONST}) protected Value y;
 
     public SPARCTestOp(Value x, Value y) {
+        super(TYPE, SIZE);
         this.x = x;
         this.y = y;
     }
 
     @Override
-    @SuppressWarnings("unused")
-    public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
+    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         if (isRegister(y)) {
             switch (x.getKind()) {
+                case Short:
+                case Byte:
+                case Char:
+                case Boolean:
                 case Int:
-                    new Cmp(asIntReg(x), asIntReg(y)).emit(masm);
+                    masm.andcc(asIntReg(x), asIntReg(y), g0);
                     break;
                 case Long:
-                    new Cmp(asLongReg(x), asLongReg(y)).emit(masm);
+                    masm.andcc(asLongReg(x), asLongReg(y), g0);
                     break;
                 default:
-                    throw GraalInternalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
             }
         } else if (isConstant(y)) {
             switch (x.getKind()) {
+                case Short:
+                case Byte:
+                case Char:
+                case Boolean:
                 case Int:
-                    new Cmp(asIntReg(x), tasm.asIntConst(y)).emit(masm);
+                    masm.andcc(asIntReg(x), crb.asIntConst(y), g0);
                     break;
                 case Long:
-                    new Cmp(asLongReg(x), tasm.asIntConst(y)).emit(masm);
+                    masm.andcc(asLongReg(x), crb.asIntConst(y), g0);
                     break;
                 default:
-                    throw GraalInternalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
             }
         } else {
-            switch (x.getKind()) {
-                case Int:
-                    new Ldsw((SPARCAddress) tasm.asIntAddr(y), asIntReg(y)).emit(masm);
-                    new Cmp(asIntReg(x), asIntReg(y)).emit(masm);
-                    break;
-                case Long:
-                    new Ldx((SPARCAddress) tasm.asLongAddr(y), asLongReg(y)).emit(masm);
-                    new Cmp(asLongReg(x), asLongReg(y)).emit(masm);
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
+            throw JVMCIError.shouldNotReachHere();
         }
     }
 

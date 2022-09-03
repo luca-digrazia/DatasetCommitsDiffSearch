@@ -22,17 +22,15 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static jdk.vm.ci.sparc.SPARC.g5;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
 
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.SPARCCall.DirectCallOp;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 
@@ -61,6 +59,6 @@ final class SPARCHotspotDirectVirtualCallOp extends DirectCallOp {
         // instruction that loads the Klass from the inline cache.
         crb.recordMark(invokeKind == InvokeKind.Virtual ? config.MARKID_INVOKEVIRTUAL : config.MARKID_INVOKEINTERFACE);
         Register scratchRegister = g5;
-        masm.setx(config.nonOopBits, scratchRegister, true);
+        new Setx(config.nonOopBits, scratchRegister, true).emit(masm);
     }
 }

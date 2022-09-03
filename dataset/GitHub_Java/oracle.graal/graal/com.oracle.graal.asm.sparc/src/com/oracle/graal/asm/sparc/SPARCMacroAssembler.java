@@ -39,7 +39,7 @@ public class SPARCMacroAssembler extends SPARCAssembler {
      * patched.
      */
     private static final SPARCAddress Placeholder = new SPARCAddress(g0, 0);
-    private final ScratchRegister[] scratchRegister = new ScratchRegister[]{new ScratchRegister(g3), new ScratchRegister(o7)};
+    private final ScratchRegister[] scratchRegister = new ScratchRegister[]{new ScratchRegister(g1), new ScratchRegister(g3)};
     // Points to the next free scratch register
     private int nextFreeScratchRegister = 0;
     /**
@@ -97,7 +97,8 @@ public class SPARCMacroAssembler extends SPARCAssembler {
                 maskBits = DISP19_MASK;
                 break;
             case Bpr:
-                if (isCBCond(inst)) {
+                boolean isCBcond = (inst & CBCOND_MASK) != 0;
+                if (isCBcond) {
                     assert isSimm10(disp) : String.format("%d: instruction: 0x%x", disp, inst);
                     int d10Split = 0;
                     d10Split |= (disp & 0b11_0000_0000) << D10HI_SHIFT - 8;

@@ -22,16 +22,15 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
 import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
 
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Sethix;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -82,7 +81,7 @@ public class SPARCCall {
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             if (!emitted) {
                 emitCallPrefixCode(crb, masm);
-                directCall(crb, masm, callTarget, null, state);
+                directCall(crb, masm, callTarget, null, true, state);
             } else {
                 int after = masm.position();
                 if (after - before == 4) {
@@ -107,7 +106,8 @@ public class SPARCCall {
         public void emitControlTransfer(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             assert !emitted;
             emitCallPrefixCode(crb, masm);
-            before = masm.call(0);
+            before = masm.position();
+            masm.call(0);
             emitted = true;
         }
 
@@ -166,7 +166,7 @@ public class SPARCCall {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            directCall(crb, masm, callTarget, null, state);
+            directCall(crb, masm, callTarget, null, false, state);
         }
     }
 
@@ -181,22 +181,22 @@ public class SPARCCall {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            try (ScratchRegister scratch = masm.getScratchRegister()) {
-                directCall(crb, masm, callTarget, scratch.getRegister(), state);
-            }
+            directCall(crb, masm, callTarget, o7, false, state);
         }
     }
 
-    public static void directCall(CompilationResultBuilder crb, SPARCMacroAssembler masm, InvokeTarget callTarget, Register scratch, LIRFrameState info) {
-        int before;
+    public static void directCall(CompilationResultBuilder crb, SPARCMacroAssembler masm, InvokeTarget callTarget, Register scratch, boolean align, LIRFrameState info) {
+        if (align) {
+            // We don't need alignment on SPARC.
+        }
+        int before = masm.position();
         if (scratch != null) {
             // offset might not fit a 30-bit displacement, generate an
             // indirect call with a 64-bit immediate
-            before = masm.position();
             new Sethix(0L, scratch, true).emit(masm);
             masm.jmpl(scratch, 0, o7);
         } else {
-            before = masm.call(0);
+            masm.call(0);
         }
         masm.nop();  // delay slot
         int after = masm.position();
@@ -216,7 +216,8 @@ public class SPARCCall {
     }
 
     public static void indirectCall(CompilationResultBuilder crb, SPARCMacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
-        int before = masm.jmpl(dst, 0, o7);
+        int before = masm.position();
+        masm.jmpl(dst, 0, o7);
         masm.nop();  // delay slot
         int after = masm.position();
         crb.recordIndirectCall(before, after, callTarget, info);

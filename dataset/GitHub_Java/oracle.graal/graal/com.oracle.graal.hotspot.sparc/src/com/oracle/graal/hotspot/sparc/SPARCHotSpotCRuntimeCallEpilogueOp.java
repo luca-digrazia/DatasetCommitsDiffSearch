@@ -22,22 +22,15 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
-import static jdk.internal.jvmci.sparc.SPARC.g0;
-import static jdk.internal.jvmci.sparc.SPARCKind.DWORD;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
 
-import com.oracle.graal.asm.sparc.SPARCAddress;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.sparc.SPARCDelayedControlTransfer;
-import com.oracle.graal.lir.sparc.SPARCLIRInstruction;
-import com.oracle.graal.lir.sparc.SPARCMove;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.sparc.*;
 
 @Opcode("CRUNTIME_CALL_EPILOGUE")
 final class SPARCHotSpotCRuntimeCallEpilogueOp extends SPARCLIRInstruction {
@@ -63,7 +56,7 @@ final class SPARCHotSpotCRuntimeCallEpilogueOp extends SPARCLIRInstruction {
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
 
         // Restore the thread register when coming back from the runtime.
-        SPARCMove.move(crb, masm, thread.asValue(LIRKind.value(DWORD)), threadTemp, SPARCDelayedControlTransfer.DUMMY);
+        SPARCMove.move(crb, masm, thread.asValue(LIRKind.value(Kind.Long)), threadTemp, SPARCDelayedControlTransfer.DUMMY);
 
         // Reset last Java frame, last Java PC and flags.
         masm.stx(g0, new SPARCAddress(thread, threadLastJavaSpOffset));

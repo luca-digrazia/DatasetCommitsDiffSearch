@@ -23,25 +23,23 @@
 package com.oracle.graal.hotspot.sparc;
 
 import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.sparc.*;
 
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
 
 @Opcode("DEOPT")
-final class SPARCDeoptimizeOp extends SPARCBlockEndOp {
+final class SPARCDeoptimizeOp extends SPARCLIRInstruction implements BlockEndOp {
     public static final LIRInstructionClass<SPARCDeoptimizeOp> TYPE = LIRInstructionClass.create(SPARCDeoptimizeOp.class);
     public static final SizeEstimate SIZE = SizeEstimate.create(1);
-    @Temp AllocatableValue pcRegister;
+
     @State private LIRFrameState info;
 
-    SPARCDeoptimizeOp(LIRFrameState info, PlatformKind wordKind) {
+    SPARCDeoptimizeOp(LIRFrameState info) {
         super(TYPE, SIZE);
         this.info = info;
-        pcRegister = SPARC.o7.asValue(LIRKind.value(wordKind));
     }
 
     @Override
@@ -54,6 +52,6 @@ final class SPARCDeoptimizeOp extends SPARCBlockEndOp {
         // [Deopt Handler Code]
         // 0xffffffff749bb60c: call 0xffffffff748da540 ; {runtime_call}
         // 0xffffffff749bb610: nop
-        SPARCCall.directCall(crb, masm, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP_HANDLER), null, info);
+        SPARCCall.directCall(crb, masm, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP_HANDLER), null, false, info);
     }
 }

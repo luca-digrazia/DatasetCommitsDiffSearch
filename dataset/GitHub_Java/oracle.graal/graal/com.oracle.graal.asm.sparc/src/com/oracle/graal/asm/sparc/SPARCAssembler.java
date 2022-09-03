@@ -55,9 +55,20 @@ public abstract class SPARCAssembler extends Assembler {
 
     public static final int CCR_ICC_SHIFT = 0;
     public static final int CCR_XCC_SHIFT = 4;
+    public static final int CCR_C_SHIFT = 0;
     public static final int CCR_V_SHIFT = 1;
+    public static final int CCR_Z_SHIFT = 2;
+    public static final int CCR_N_SHIFT = 3;
 
+    protected static final int OP_SHIFT = 30;
+    protected static final int CBCOND_SHIFT = 28;
     protected static final int OP2_SHIFT = 22;
+    protected static final int A_SHIFT = 29;
+
+    protected static final int A_MASK = 0b0010_0000_0000_0000_0000_0000_0000_0000;
+    protected static final int OP_MASK = 0b1100_0000_0000_0000_0000_0000_0000_0000;
+    protected static final int CBCOND_MASK = 0b0001_0000_0000_0000_0000_0000_0000_0000; // Used for
+    // distinguish CBcond and BPr instructions
     protected static final int OP2_MASK = 0b0000_0001_1100_0000_0000_0000_0000_0000;
 
     protected static final int DISP22_SHIFT = 0;
@@ -75,21 +86,6 @@ public abstract class SPARCAssembler extends Assembler {
     protected static final int D10HI_MASK = 0b0000_0000_0001_1000_0000_0000_0000_0000;
     protected static final int D10LO_SHIFT = 5;
     protected static final int D10HI_SHIFT = 19;
-
-    private static final Ops[] OPS;
-    private static final Op2s[] OP2S;
-    static {
-        Ops[] ops = Ops.values();
-        OPS = new Ops[ops.length];
-        for (Ops op : ops) {
-            OPS[op.value] = op;
-        }
-        Op2s[] op2s = Op2s.values();
-        OP2S = new Op2s[op2s.length];
-        for (Op2s op2 : op2s) {
-            OP2S[op2.value] = op2;
-        }
-    }
 
     public enum Ops {
         // @formatter:off
@@ -155,7 +151,12 @@ public abstract class SPARCAssembler extends Assembler {
         }
 
         public static Op2s byValue(int value) {
-            return OP2S[value];
+            for (Op2s op : values()) {
+                if (op.getValue() == value) {
+                    return op;
+                }
+            }
+            return null;
         }
     }
 
@@ -966,40 +967,12 @@ public abstract class SPARCAssembler extends Assembler {
      */
     // @formatter:on
     private void bcc(Op2s op2, ConditionFlag cond, Annul annul, Label l) {
-        insertNopAfterCBCond();
         int pos = !l.isBound() ? patchUnbound(l) : (l.position() - position()) / 4;
         final int disp = 22;
         assert isSimm(pos, disp);
         pos &= (1 << disp) - 1;
         int a = (annul.flag << 4) | cond.getValue();
         fmt00(a, op2.getValue(), pos);
-    }
-
-    public void insertNopAfterCBCond() {
-        int pos = position() - INSTRUCTION_SIZE;
-        if (pos == 0) {
-            return;
-        }
-        int inst = getInt(pos);
-        if (isCBCond(inst)) {
-            nop();
-        }
-    }
-
-    protected static boolean isCBCond(int inst) {
-        return getOp(inst).equals(Ops.BranchOp) && getOp2(inst).equals(Op2s.Bpr) && getBits(inst, 28, 28) == 1;
-    }
-
-    private static Ops getOp(int inst) {
-        return OPS[getBits(inst, 31, 30)];
-    }
-
-    private static Op2s getOp2(int inst) {
-        return OP2S[getBits(inst, 24, 22)];
-    }
-
-    private static int getBits(int inst, int hiBit, int lowBit) {
-        return (inst >> lowBit) & ((1 << (hiBit - lowBit + 1)) - 1);
     }
 
     // @formatter:off
@@ -1038,7 +1011,6 @@ public abstract class SPARCAssembler extends Assembler {
      */
     // @formatter:on
     private void bpcc(Op2s op2, ConditionFlag cond, Annul annul, Label l, CC cc, BranchPredict predictTaken) {
-        insertNopAfterCBCond();
         int pos = !l.isBound() ? patchUnbound(l) : (l.position() - position()) / 4;
         final int disp = 19;
         assert isSimm(pos, disp);
@@ -1058,7 +1030,6 @@ public abstract class SPARCAssembler extends Assembler {
      */
     // @formatter:on
     public void bpr(RCondition cond, Annul annul, Label l, BranchPredict predictTaken, Register rs1) {
-        insertNopAfterCBCond();
         int pos = !l.isBound() ? patchUnbound(l) : (l.position() - position()) / 4;
         final int disp = 16;
         assert isSimm(pos, disp);
@@ -1094,7 +1065,6 @@ public abstract class SPARCAssembler extends Assembler {
     }
 
     private void cbcond(int cc2, int i, ConditionFlag cf, Register rs1, int rs2, Label l) {
-        insertNopAfterCBCond();
         int disp10 = !l.isBound() ? patchUnbound(l) : (l.position() - position()) / 4;
         assert isSimm(disp10, 10) && isImm(rs2, 5);
         disp10 &= (1 << 10) - 1;
@@ -1131,18 +1101,13 @@ public abstract class SPARCAssembler extends Assembler {
      * | 01  |                      disp30                             |
      * |31 30|29                                                      0|
      * </pre>
-     *
-     * @return Position of the call instruction
      */
     // @formatter:on
-    public int call(int disp30) {
+    public void call(int disp30) {
         assert isImm(disp30, 30);
-        insertNopAfterCBCond();
-        int before = position();
         int instr = 1 << 30;
         instr |= disp30;
         emitInt(instr);
-        return before;
     }
 
     public void add(Register rs1, Register rs2, Register rd) {
@@ -1261,14 +1226,6 @@ public abstract class SPARCAssembler extends Assembler {
 
     public void fmovd(Register rs2, Register rd) {
         op3(Fpop1, Fmovd, null, rs2, rd);
-    }
-
-    public void fsrc2s(Register rs2, Register rd) {
-        op3(Impdep1, Fsrc2s, null, rs2, rd);
-    }
-
-    public void fsrc2d(Register rs2, Register rd) {
-        op3(Impdep1, Fsrc2d, null, rs2, rd);
     }
 
     public void fmuls(Register rs1, Register rs2, Register rd) {
@@ -1425,18 +1382,11 @@ public abstract class SPARCAssembler extends Assembler {
     }
 
     public void jmpl(Register rs1, Register rs2, Register rd) {
-        insertNopAfterCBCond();
         op3(Jmpl, rs1, rs2, rd);
     }
 
-    /**
-     * @return Position of the jmpl instruction
-     */
-    public int jmpl(Register rs1, int simm13, Register rd) {
-        insertNopAfterCBCond();
-        int before = position();
+    public void jmpl(Register rs1, int simm13, Register rd) {
         op3(Jmpl, rs1, simm13, rd);
-        return before;
     }
 
     public void fmovdcc(ConditionFlag cond, CC cc, Register rs2, Register rd) {
@@ -1841,5 +1791,9 @@ public abstract class SPARCAssembler extends Assembler {
 
     public void fpadd32(Register rs1, Register rs2, Register rd) {
         op3(Impdep1, Fpadd32, rs1, rs2, rd);
+    }
+
+    public boolean isCbcond(int i) {
+        return (i & 0xC1C00000) == 0xC00000;
     }
 }

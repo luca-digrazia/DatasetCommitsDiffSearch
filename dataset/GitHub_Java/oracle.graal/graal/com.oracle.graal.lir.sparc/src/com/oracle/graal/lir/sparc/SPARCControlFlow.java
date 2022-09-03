@@ -31,7 +31,6 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.lir.sparc.SPARCMove.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 import static jdk.internal.jvmci.sparc.SPARC.*;
-import static jdk.internal.jvmci.sparc.SPARC.CPUFeature.*;
 
 import java.util.*;
 
@@ -50,15 +49,13 @@ import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
 import com.oracle.graal.lir.asm.*;
 
 public class SPARCControlFlow {
-    // This describes the maximum offset between the first emitted (load constant in to scratch,
-    // if does not fit into simm5 of cbcond) instruction and the final branch instruction
-    private static final int maximumSelfOffsetInstructions = 2;
 
-    public static final class ReturnOp extends SPARCBlockEndOp {
+    public static final class ReturnOp extends SPARCLIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<ReturnOp> TYPE = LIRInstructionClass.create(ReturnOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
@@ -81,7 +78,7 @@ public class SPARCControlFlow {
         }
     }
 
-    public static final class CompareBranchOp extends SPARCBlockEndOp implements SPARCDelayedControlTransfer {
+    public static final class CompareBranchOp extends SPARCLIRInstruction implements BlockEndOp, SPARCDelayedControlTransfer {
         public static final LIRInstructionClass<CompareBranchOp> TYPE = LIRInstructionClass.create(CompareBranchOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(3);
         static final EnumSet<Kind> SUPPORTED_KINDS = EnumSet.of(Kind.Long, Kind.Int, Kind.Object, Kind.Float, Kind.Double);
@@ -99,6 +96,9 @@ public class SPARCControlFlow {
         private boolean emitted = false;
         private int delaySlotPosition = -1;
         private double trueDestinationProbability;
+        // This describes the maximum offset between the first emitted (load constant in to scratch,
+        // if does not fit into simm5 of cbcond) instruction and the final branch instruction
+        private static int maximumSelfOffsetInstructions = 2;
 
         public CompareBranchOp(SPARCCompare opcode, Value x, Value y, Condition condition, LabelRef trueDestination, LabelRef falseDestination, Kind kind, boolean unorderedIsTrue,
                         double trueDestinationProbability) {
@@ -227,6 +227,7 @@ public class SPARCControlFlow {
             }
             try (ScratchRegister scratch = masm.getScratchRegister()) {
                 emitCBCond(masm, actualX, actualY, actualTrueTarget, actualConditionFlag);
+                masm.nop();
             }
             if (needJump) {
                 masm.jmp(actualFalseTarget);
@@ -295,6 +296,26 @@ public class SPARCControlFlow {
             return hasShortJumpTarget;
         }
 
+        private static boolean isShortBranch(SPARCAssembler asm, int position, LabelHint hint, Label label) {
+            int disp = 0;
+            if (label.isBound()) {
+                disp = label.position() - position;
+            } else if (hint != null && hint.isValid()) {
+                disp = hint.getTarget() - hint.getPosition();
+            }
+            if (disp != 0) {
+                if (disp < 0) {
+                    disp -= maximumSelfOffsetInstructions * asm.target.wordSize;
+                } else {
+                    disp += maximumSelfOffsetInstructions * asm.target.wordSize;
+                }
+                return isSimm10(disp >> 2);
+            } else if (hint == null) {
+                asm.requestLabelHint(label);
+            }
+            return false;
+        }
+
         public void resetState() {
             emitted = false;
             delaySlotPosition = -1;
@@ -308,27 +329,7 @@ public class SPARCControlFlow {
         }
     }
 
-    private static boolean isShortBranch(SPARCAssembler asm, int position, LabelHint hint, Label label) {
-        int disp = 0;
-        if (label.isBound()) {
-            disp = label.position() - position;
-        } else if (hint != null && hint.isValid()) {
-            disp = hint.getTarget() - hint.getPosition();
-        }
-        if (disp != 0) {
-            if (disp < 0) {
-                disp -= maximumSelfOffsetInstructions * asm.target.wordSize;
-            } else {
-                disp += maximumSelfOffsetInstructions * asm.target.wordSize;
-            }
-            return isSimm10(disp >> 2);
-        } else if (hint == null) {
-            asm.requestLabelHint(label);
-        }
-        return false;
-    }
-
-    public static final class BranchOp extends SPARCBlockEndOp implements StandardOp.BranchOp {
+    public static final class BranchOp extends SPARCLIRInstruction implements StandardOp.BranchOp {
         public static final LIRInstructionClass<BranchOp> TYPE = LIRInstructionClass.create(BranchOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(2);
         protected final ConditionFlag conditionFlag;
@@ -393,7 +394,7 @@ public class SPARCControlFlow {
         return true;
     }
 
-    public static final class StrategySwitchOp extends SPARCBlockEndOp {
+    public static final class StrategySwitchOp extends SPARCLIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<StrategySwitchOp> TYPE = LIRInstructionClass.create(StrategySwitchOp.class);
         @Use({CONST}) protected JavaConstant[] keyConstants;
         private final LabelRef[] keyTargets;
@@ -402,7 +403,6 @@ public class SPARCControlFlow {
         @Alive({REG, ILLEGAL}) protected Value constantTableBase;
         @Temp({REG}) protected Value scratch;
         private final SwitchStrategy strategy;
-        private final LabelHint[] labelHints;
 
         public StrategySwitchOp(Value constantTableBase, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch) {
             super(TYPE);
@@ -413,7 +413,6 @@ public class SPARCControlFlow {
             this.constantTableBase = constantTableBase;
             this.key = key;
             this.scratch = scratch;
-            this.labelHints = new LabelHint[keyTargets.length];
             assert keyConstants.length == keyTargets.length;
             assert keyConstants.length == strategy.keyProbabilities.length;
         }
@@ -425,68 +424,37 @@ public class SPARCControlFlow {
             BaseSwitchClosure closure = new BaseSwitchClosure(crb, masm, keyTargets, defaultTarget) {
                 @Override
                 protected void conditionalJump(int index, Condition condition, Label target) {
-                    requestHint(masm, index);
-                    JavaConstant constant = keyConstants[index];
+                    const2reg(crb, masm, scratch, constantBaseRegister, keyConstants[index], SPARCDelayedControlTransfer.DUMMY);
                     CC conditionCode;
-                    Long bits;
+                    Register scratchRegister;
                     switch (key.getKind()) {
                         case Char:
                         case Byte:
                         case Short:
                         case Int:
                             conditionCode = CC.Icc;
-                            bits = constant.asLong();
+                            scratchRegister = asIntReg(scratch);
                             break;
                         case Long: {
                             conditionCode = CC.Xcc;
-                            bits = constant.asLong();
+                            scratchRegister = asLongReg(scratch);
                             break;
                         }
                         case Object: {
                             conditionCode = crb.codeCache.getTarget().wordKind == Kind.Long ? CC.Xcc : CC.Icc;
-                            bits = constant.isDefaultForKind() ? 0L : null;
+                            scratchRegister = asObjectReg(scratch);
                             break;
                         }
                         default:
                             throw new JVMCIError("switch only supported for int, long and object");
                     }
                     ConditionFlag conditionFlag = fromCondition(conditionCode, condition, false);
-                    LabelHint hint = labelHints[index];
-                    boolean canUseShortBranch = masm.hasFeature(CBCOND) && hint.isValid() && isShortBranch(masm, masm.position(), hint, target);
-                    if (bits != null && canUseShortBranch) {
-                        if (isSimm5(constant)) {
-                            if (conditionCode == Icc) {
-                                masm.cbcondw(conditionFlag, keyRegister, (int) (long) bits, target);
-                            } else {
-                                masm.cbcondx(conditionFlag, keyRegister, (int) (long) bits, target);
-                            }
-                        } else {
-                            Register scratchRegister = asRegister(scratch);
-                            const2reg(crb, masm, scratch, constantBaseRegister, keyConstants[index], SPARCDelayedControlTransfer.DUMMY);
-                            if (conditionCode == Icc) {
-                                masm.cbcondw(conditionFlag, keyRegister, scratchRegister, target);
-                            } else {
-                                masm.cbcondx(conditionFlag, keyRegister, scratchRegister, target);
-                            }
-                        }
-                    } else {
-                        if (bits != null && isSimm13(constant)) {
-                            masm.cmp(keyRegister, (int) (long) bits); // Cast is safe
-                        } else {
-                            Register scratchRegister = asRegister(scratch);
-                            const2reg(crb, masm, scratch, constantBaseRegister, keyConstants[index], SPARCDelayedControlTransfer.DUMMY);
-                            masm.cmp(keyRegister, scratchRegister);
-                        }
-                        masm.bpcc(conditionFlag, ANNUL, target, conditionCode, PREDICT_TAKEN);
-                        masm.nop();  // delay slot
-                    }
+                    masm.cmp(keyRegister, scratchRegister);
+                    masm.bpcc(conditionFlag, NOT_ANNUL, target, conditionCode, PREDICT_TAKEN);
+                    masm.nop();  // delay slot
                 }
             };
             strategy.run(closure);
-        }
-
-        private void requestHint(SPARCMacroAssembler masm, int index) {
-            labelHints[index] = masm.requestLabelHint(keyTargets[index].label());
         }
 
         @Override
@@ -501,7 +469,7 @@ public class SPARCControlFlow {
         }
     }
 
-    public static final class TableSwitchOp extends SPARCBlockEndOp {
+    public static final class TableSwitchOp extends SPARCLIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<TableSwitchOp> TYPE = LIRInstructionClass.create(TableSwitchOp.class);
 
         private final int lowKey;

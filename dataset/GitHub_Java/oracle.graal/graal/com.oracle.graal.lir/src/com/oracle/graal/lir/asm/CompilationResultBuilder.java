@@ -31,15 +31,12 @@ import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.code.CompilationResult.*;
 import jdk.internal.jvmci.code.DataSection.*;
 import jdk.internal.jvmci.common.*;
-
-import com.oracle.graal.debug.*;
-
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.options.*;
 
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.framemap.*;
 

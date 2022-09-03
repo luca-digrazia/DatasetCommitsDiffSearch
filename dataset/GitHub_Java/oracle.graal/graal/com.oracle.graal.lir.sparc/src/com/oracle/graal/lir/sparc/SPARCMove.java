@@ -135,7 +135,7 @@ public class SPARCMove {
         public static final LIRInstructionClass<Move> TYPE = LIRInstructionClass.create(Move.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(8);
 
-        @Def({REG, STACK, HINT}) protected AllocatableValue result;
+        @Def({REG, STACK}) protected AllocatableValue result;
         @Use({REG, STACK}) protected Value input;
 
         public Move(AllocatableValue result, Value input) {
@@ -635,10 +635,10 @@ public class SPARCMove {
                     JavaConstant constant) {
         if (constant.isDefaultForKind() || constant.isNull()) {
             SPARCAddress resultAddress = (SPARCAddress) crb.asAddress(result);
-            emitStore(g0.asValue(LIRKind.combine(input)), resultAddress, input.getPlatformKind(), delaySlotLir, null, crb, masm);
+            emitStore(g0.asValue(LIRKind.derive(input)), resultAddress, input.getPlatformKind(), delaySlotLir, null, crb, masm);
         } else {
             try (ScratchRegister sc = masm.getScratchRegister()) {
-                Value scratchRegisterValue = sc.getRegister().asValue(LIRKind.combine(constant));
+                Value scratchRegisterValue = sc.getRegister().asValue(LIRKind.derive(constant));
                 const2reg(crb, masm, scratchRegisterValue, constantTableBase, constant, SPARCDelayedControlTransfer.DUMMY);
                 SPARCAddress resultAddress = (SPARCAddress) crb.asAddress(result);
                 emitStore(scratchRegisterValue, resultAddress, input.getPlatformKind(), delaySlotLir, null, crb, masm);
@@ -649,7 +649,7 @@ public class SPARCMove {
     public static void stack2stack(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, SPARCDelayedControlTransfer delaySlotLir) {
         try (ScratchRegister sc = masm.getScratchRegister()) {
             SPARCAddress inputAddress = (SPARCAddress) crb.asAddress(input);
-            Value scratchRegisterValue = sc.getRegister().asValue(LIRKind.combine(input));
+            Value scratchRegisterValue = sc.getRegister().asValue(LIRKind.derive(input));
             emitLoad(crb, masm, inputAddress, scratchRegisterValue, false, input.getPlatformKind(), SPARCDelayedControlTransfer.DUMMY, null);
             SPARCAddress resultAddress = (SPARCAddress) crb.asAddress(result);
             emitStore(scratchRegisterValue, resultAddress, input.getPlatformKind(), delaySlotLir, null, crb, masm);
@@ -680,14 +680,14 @@ public class SPARCMove {
                 break;
             case Float:
                 if (result.getPlatformKind() == Kind.Float) {
-                    masm.fsrc2s(src, dst);
+                    masm.fmovs(src, dst);
                 } else {
                     throw JVMCIError.shouldNotReachHere();
                 }
                 break;
             case Double:
                 if (result.getPlatformKind() == Kind.Double) {
-                    masm.fsrc2d(src, dst);
+                    masm.fmovd(src, dst);
                 } else {
                     throw JVMCIError.shouldNotReachHere();
                 }

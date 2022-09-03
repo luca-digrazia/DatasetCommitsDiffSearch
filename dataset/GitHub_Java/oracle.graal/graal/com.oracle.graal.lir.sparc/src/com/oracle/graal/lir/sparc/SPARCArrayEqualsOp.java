@@ -83,8 +83,8 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         this.lengthValue = length;
 
         // Allocate some temporaries.
-        this.temp1 = tool.newVariable(LIRKind.unknownReference(tool.target().wordKind));
-        this.temp2 = tool.newVariable(LIRKind.unknownReference(tool.target().wordKind));
+        this.temp1 = tool.newVariable(LIRKind.derivedReference(tool.target().wordKind));
+        this.temp2 = tool.newVariable(LIRKind.derivedReference(tool.target().wordKind));
         this.temp3 = tool.newVariable(LIRKind.value(tool.target().wordKind));
         this.temp4 = tool.newVariable(LIRKind.value(tool.target().wordKind));
         this.temp5 = tool.newVariable(LIRKind.value(tool.target().wordKind));
@@ -160,7 +160,9 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         masm.ldx(new SPARCAddress(array2, 0), tempReg2);
         if (hasCBcond) {
             masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
+            masm.nop(); // for optimal performance (see manual)
             masm.cbcondx(Equal, length, 0, compareTailCorrectVectorEnd);
+            masm.nop(); // for optimal performance (see manual)
         } else {
             masm.cmp(tempReg1, tempReg2);
             masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);

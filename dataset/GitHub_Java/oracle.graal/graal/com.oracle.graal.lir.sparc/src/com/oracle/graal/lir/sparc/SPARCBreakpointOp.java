@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,20 @@
  */
 package com.oracle.graal.lir.sparc;
 
+import jdk.internal.jvmci.meta.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Trap;
-import com.oracle.graal.lir.LIRInstruction.*;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
 /**
  * Emits a breakpoint.
  */
 @Opcode("BREAKPOINT")
-public class SPARCBreakpointOp extends SPARCLIRInstruction {
+public final class SPARCBreakpointOp extends SPARCLIRInstruction {
+    public static final LIRInstructionClass<SPARCBreakpointOp> TYPE = LIRInstructionClass.create(SPARCBreakpointOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(1);
 
     // historical - from hotspot src/cpu/sparc/vm
     // <sys/trap.h> promises that the system will not use traps 16-31
@@ -47,12 +48,12 @@ public class SPARCBreakpointOp extends SPARCLIRInstruction {
     @Use({REG, STACK}) protected Value[] parameters;
 
     public SPARCBreakpointOp(Value[] parameters) {
+        super(TYPE, SIZE);
         this.parameters = parameters;
     }
 
     @Override
-    @SuppressWarnings("unused")
-    public void emitCode(TargetMethodAssembler tasm, SPARCAssembler asm) {
-        new Trap(asm, ST_RESERVED_FOR_USER_0);
+    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+        masm.ta(ST_RESERVED_FOR_USER_0);
     }
 }

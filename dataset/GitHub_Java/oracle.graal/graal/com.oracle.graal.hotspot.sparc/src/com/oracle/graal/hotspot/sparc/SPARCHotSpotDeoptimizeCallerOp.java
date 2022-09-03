@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.*;
-import static com.oracle.graal.sparc.SPARC.*;
+import jdk.internal.jvmci.code.*;
+import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
@@ -36,19 +36,28 @@ import com.oracle.graal.lir.sparc.*;
  */
 @Opcode("DEOPT_CALLER")
 final class SPARCHotSpotDeoptimizeCallerOp extends SPARCHotSpotEpilogueOp {
+    public static final LIRInstructionClass<SPARCHotSpotDeoptimizeCallerOp> TYPE = LIRInstructionClass.create(SPARCHotSpotDeoptimizeCallerOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(32);
+
+    protected SPARCHotSpotDeoptimizeCallerOp() {
+        super(TYPE, SIZE);
+    }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
-        leaveFrame(tasm);
+    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+        leaveFrame(crb);
 
-// SPARCHotSpotBackend backend = (SPARCHotSpotBackend)
-// HotSpotGraalRuntime.graalRuntime().getBackend();
-// final boolean isStub = true;
-// HotSpotFrameContext frameContext = backend.new HotSpotFrameContext(isStub);
-// frameContext.enter(tasm);
-        Register scratch = g3;
-        SPARCCall.indirectJmp(tasm, masm, scratch, tasm.codeCache.lookupForeignCall(UNCOMMON_TRAP));
+        // SPARCHotSpotBackend backend = (SPARCHotSpotBackend)
+        // HotSpotGraalRuntime.runtime().getBackend();
+        // final boolean isStub = true;
+        // HotSpotFrameContext frameContext = backend.new HotSpotFrameContext(isStub);
+        // frameContext.enter(crb);
 
-// frameContext.leave(tasm);
+        try (ScratchRegister sc = masm.getScratchRegister()) {
+            Register scratch = sc.getRegister();
+            SPARCCall.indirectJmp(crb, masm, scratch, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP_HANDLER));
+        }
+
+        // frameContext.leave(crb);
     }
 }
