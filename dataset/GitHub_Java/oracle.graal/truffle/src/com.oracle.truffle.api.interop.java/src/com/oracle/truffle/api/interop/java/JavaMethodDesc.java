@@ -32,8 +32,4 @@ interface JavaMethodDesc {
     default boolean isInternal() {
         return false;
     }
-
-    boolean isMethod();
-
-    boolean isConstructor();
 }
