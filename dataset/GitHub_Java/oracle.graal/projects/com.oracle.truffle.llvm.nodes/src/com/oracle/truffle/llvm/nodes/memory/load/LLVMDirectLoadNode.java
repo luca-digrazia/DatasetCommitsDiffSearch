@@ -63,19 +63,19 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        protected LLVMIVarBit doI64(LLVMGlobal addr,
+        protected LLVMIVarBit doI64(VirtualFrame frame, LLVMGlobal addr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
-            return memory.getIVarBit(globalAccess.executeWithTarget(addr), getBitWidth());
+            return memory.getIVarBit(globalAccess.executeWithTarget(frame, addr), getBitWidth());
         }
 
         @Specialization
-        protected Object doForeign(LLVMTruffleObject addr,
+        protected Object doForeign(VirtualFrame frame, LLVMTruffleObject addr,
                         @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
             byte[] result = new byte[getByteSize()];
             LLVMTruffleObject currentPtr = addr;
             for (int i = result.length - 1; i >= 0; i--) {
-                result[i] = (Byte) foreignRead.execute(currentPtr);
+                result[i] = (Byte) foreignRead.execute(frame, currentPtr);
                 currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
             }
             return LLVMIVarBit.create(getBitWidth(), result, getBitWidth(), false);
@@ -100,19 +100,19 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        protected LLVM80BitFloat doDouble(LLVMGlobal addr,
+        protected LLVM80BitFloat doDouble(VirtualFrame frame, LLVMGlobal addr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
-            return memory.get80BitFloat(globalAccess.executeWithTarget(addr));
+            return memory.get80BitFloat(globalAccess.executeWithTarget(frame, addr));
         }
 
         @Specialization
-        protected LLVM80BitFloat doForeign(LLVMTruffleObject addr,
+        protected LLVM80BitFloat doForeign(VirtualFrame frame, LLVMTruffleObject addr,
                         @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
             byte[] result = new byte[LLVM80BitFloat.BYTE_WIDTH];
             LLVMTruffleObject currentPtr = addr;
             for (int i = 0; i < result.length; i++) {
-                result[i] = (Byte) foreignRead.execute(currentPtr);
+                result[i] = (Byte) foreignRead.execute(frame, currentPtr);
                 currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
             }
             return LLVM80BitFloat.fromBytes(result);
@@ -132,10 +132,10 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        protected LLVMAddress doAddress(LLVMGlobal addr,
+        protected LLVMAddress doAddress(VirtualFrame frame, LLVMGlobal addr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
-            return LLVMAddress.fromLong(memory.getFunctionPointer(globalAccess.executeWithTarget(addr)));
+            return LLVMAddress.fromLong(memory.getFunctionPointer(globalAccess.executeWithTarget(frame, addr)));
         }
 
         static LLVMForeignReadNode createForeignRead() {
@@ -143,9 +143,9 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        protected Object doForeign(LLVMTruffleObject addr,
+        protected Object doForeign(VirtualFrame frame, LLVMTruffleObject addr,
                         @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
-            return foreignRead.execute(addr);
+            return foreignRead.execute(frame, addr);
         }
     }
 
@@ -183,9 +183,9 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        protected Object doIndirectedForeign(LLVMTruffleObject addr,
+        protected Object doIndirectedForeign(VirtualFrame frame, LLVMTruffleObject addr,
                         @Cached("createForeignReadNode()") LLVMForeignReadNode foreignRead) {
-            return foreignRead.execute(addr);
+            return foreignRead.execute(frame, addr);
         }
 
         protected LLVMForeignReadNode createForeignReadNode() {

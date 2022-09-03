@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -364,7 +364,6 @@ import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReaso
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMFrameValueAccess;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
@@ -1508,26 +1507,26 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public Object allocateGlobalVariable(LLVMParserRuntime runtime, GlobalVariable globalVariable, LLVMSourceSymbol sourceSymbol) {
-        return allocateGlobalIntern(runtime, globalVariable, sourceSymbol);
+    public Object allocateGlobalVariable(LLVMParserRuntime runtime, GlobalVariable globalVariable) {
+        return allocateGlobalIntern(runtime, globalVariable);
     }
 
-    private static Object allocateGlobalIntern(LLVMParserRuntime runtime, final GlobalValueSymbol global, LLVMSourceSymbol sourceSymbol) {
+    private static Object allocateGlobalIntern(LLVMParserRuntime runtime, final GlobalValueSymbol global) {
         final Type resolvedType = ((PointerType) global.getType()).getPointeeType();
         final String name = global.getName();
 
         LLVMContext context = runtime.getContext();
         if (global.isExternal()) {
             NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
-            return LLVMGlobal.external(context, global, name, resolvedType, LLVMAddress.fromLong(nfiContextExtension.getNativeHandle(context, name)), sourceSymbol);
+            return LLVMGlobal.external(context, global, name, resolvedType, LLVMAddress.fromLong(nfiContextExtension.getNativeHandle(context, name)));
         } else {
-            return LLVMGlobal.internal(context, global, name, resolvedType, sourceSymbol);
+            return LLVMGlobal.internal(context, global, name, resolvedType);
         }
     }
 
     @Override
-    public Object allocateGlobalConstant(LLVMParserRuntime runtime, GlobalConstant globalConstant, LLVMSourceSymbol sourceSymbol) {
-        return allocateGlobalIntern(runtime, globalConstant, sourceSymbol);
+    public Object allocateGlobalConstant(LLVMParserRuntime runtime, GlobalConstant globalConstant) {
+        return allocateGlobalIntern(runtime, globalConstant);
     }
 
     @Override
@@ -1545,7 +1544,7 @@ public class BasicNodeFactory implements NodeFactory {
 
     @Override
     public LLVMExpressionNode createLandingPad(LLVMParserRuntime runtime, LLVMExpressionNode allocateLandingPadValue, FrameSlot exceptionValueSlot, boolean cleanup, long[] clauseKinds,
-                    LLVMExpressionNode[] entries, LLVMExpressionNode getStack) {
+                    LLVMExpressionNode[] entries) {
 
         LLVMLandingpadNode.LandingpadEntryNode[] landingpadEntries = new LLVMLandingpadNode.LandingpadEntryNode[entries.length];
         for (int i = 0; i < entries.length; i++) {
@@ -1559,7 +1558,7 @@ public class BasicNodeFactory implements NodeFactory {
                 throw new IllegalStateException();
             }
         }
-        return new LLVMLandingpadNode(getStack, allocateLandingPadValue, exceptionValueSlot, cleanup, landingpadEntries);
+        return new LLVMLandingpadNode(allocateLandingPadValue, exceptionValueSlot, cleanup, landingpadEntries);
     }
 
     private static LLVMLandingpadNode.LandingpadEntryNode getLandingpadCatchEntry(LLVMExpressionNode exp) {

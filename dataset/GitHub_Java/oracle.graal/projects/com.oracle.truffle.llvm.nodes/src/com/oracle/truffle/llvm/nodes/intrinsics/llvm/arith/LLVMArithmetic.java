@@ -33,6 +33,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMBuiltin;
 import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNode.LLVMIncrementPointerNode;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMStoreNode;
@@ -41,66 +42,66 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 public abstract class LLVMArithmetic extends LLVMBuiltin {
 
     public interface Arithmetic {
-        boolean evalI8(byte left, byte right, Object addr, LLVMStoreNode store);
+        boolean evalI8(VirtualFrame frame, byte left, byte right, Object addr, LLVMStoreNode store);
 
-        boolean evalI16(short left, short right, Object addr, LLVMStoreNode store);
+        boolean evalI16(VirtualFrame frame, short left, short right, Object addr, LLVMStoreNode store);
 
-        boolean evalI32(int left, int right, Object addr, LLVMStoreNode store);
+        boolean evalI32(VirtualFrame frame, int left, int right, Object addr, LLVMStoreNode store);
 
-        boolean evalI64(long left, long right, Object addr, LLVMStoreNode store);
+        boolean evalI64(VirtualFrame frame, long left, long right, Object addr, LLVMStoreNode store);
     }
 
     public interface CarryArithmetic {
-        byte evalI8(byte left, byte right, byte cin, Object addr, LLVMStoreNode store);
+        byte evalI8(VirtualFrame frame, byte left, byte right, byte cin, Object addr, LLVMStoreNode store);
 
-        short evalI16(short left, short right, short cin, Object addr, LLVMStoreNode store);
+        short evalI16(VirtualFrame frame, short left, short right, short cin, Object addr, LLVMStoreNode store);
 
-        int evalI32(int left, int right, int cin, Object addr, LLVMStoreNode store);
+        int evalI32(VirtualFrame frame, int left, int right, int cin, Object addr, LLVMStoreNode store);
 
-        long evalI64(long left, long right, long cin, Object addr, LLVMStoreNode store);
+        long evalI64(VirtualFrame frame, long left, long right, long cin, Object addr, LLVMStoreNode store);
     }
 
     public static final CarryArithmetic CARRY_ADD = new CarryArithmetic() {
 
         @Override
-        public byte evalI8(byte left, byte right, byte cin, Object addr, LLVMStoreNode store) {
+        public byte evalI8(VirtualFrame frame, byte left, byte right, byte cin, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I8_MASK) + (right & LLVMExpressionNode.I8_MASK) + (cin & LLVMExpressionNode.I8_MASK);
             final boolean overflow = (res & (0xF << Byte.SIZE)) != 0;
 
-            store.executeWithTarget(addr, (byte) (overflow ? 1 : 0));
+            store.executeWithTarget(frame, addr, (byte) (overflow ? 1 : 0));
             return (byte) res;
         }
 
         @Override
-        public short evalI16(short left, short right, short cin, Object addr, LLVMStoreNode store) {
+        public short evalI16(VirtualFrame frame, short left, short right, short cin, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I16_MASK) + (right & LLVMExpressionNode.I16_MASK) + (cin & LLVMExpressionNode.I16_MASK);
             final boolean overflow = (res & (0xF << Short.SIZE)) != 0;
 
-            store.executeWithTarget(addr, (short) (overflow ? 1 : 0));
+            store.executeWithTarget(frame, addr, (short) (overflow ? 1 : 0));
             return (short) res;
         }
 
         @Override
-        public int evalI32(int left, int right, int cin, Object addr, LLVMStoreNode store) {
+        public int evalI32(VirtualFrame frame, int left, int right, int cin, Object addr, LLVMStoreNode store) {
             final int res1 = left + right;
             final boolean overflow1 = ((~res1 & left) | (~res1 & right) | (left & right)) < 0;
 
             final int res2 = res1 + cin;
             final boolean overflow2 = ((~res2 & res1) | (~res2 & cin) | (res1 & cin)) < 0;
 
-            store.executeWithTarget(addr, (overflow1 | overflow2) ? 1 : 0);
+            store.executeWithTarget(frame, addr, (overflow1 | overflow2) ? 1 : 0);
             return res2;
         }
 
         @Override
-        public long evalI64(long left, long right, long cin, Object addr, LLVMStoreNode store) {
+        public long evalI64(VirtualFrame frame, long left, long right, long cin, Object addr, LLVMStoreNode store) {
             final long res1 = left + right;
             final boolean overflow1 = ((~res1 & left) | (~res1 & right) | (left & right)) < 0;
 
             final long res2 = res1 + cin;
             final boolean overflow2 = ((~res2 & res1) | (~res2 & cin) | (res1 & cin)) < 0;
 
-            store.executeWithTarget(addr, (overflow1 | overflow2) ? 1 : 0);
+            store.executeWithTarget(frame, addr, (overflow1 | overflow2) ? 1 : 0);
             return res2;
         }
     };
@@ -108,44 +109,44 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
     public static final CarryArithmetic CARRY_SUB = new CarryArithmetic() {
 
         @Override
-        public byte evalI8(byte left, byte right, byte cin, Object addr, LLVMStoreNode store) {
+        public byte evalI8(VirtualFrame frame, byte left, byte right, byte cin, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I8_MASK) - (right & LLVMExpressionNode.I8_MASK) - (cin & LLVMExpressionNode.I8_MASK);
             final boolean overflow = res < 0;
 
-            store.executeWithTarget(addr, (byte) (overflow ? 1 : 0));
+            store.executeWithTarget(frame, addr, (byte) (overflow ? 1 : 0));
             return (byte) res;
         }
 
         @Override
-        public short evalI16(short left, short right, short cin, Object addr, LLVMStoreNode store) {
+        public short evalI16(VirtualFrame frame, short left, short right, short cin, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I16_MASK) - (right & LLVMExpressionNode.I16_MASK) - (cin & LLVMExpressionNode.I16_MASK);
             final boolean overflow = res < 0;
 
-            store.executeWithTarget(addr, (short) (overflow ? 1 : 0));
+            store.executeWithTarget(frame, addr, (short) (overflow ? 1 : 0));
             return (short) res;
         }
 
         @Override
-        public int evalI32(int left, int right, int cin, Object addr, LLVMStoreNode store) {
+        public int evalI32(VirtualFrame frame, int left, int right, int cin, Object addr, LLVMStoreNode store) {
             final int res1 = left - right;
             final boolean overflow1 = Integer.compareUnsigned(left, right) < 0;
 
             final int res2 = res1 - cin;
             final boolean overflow2 = Integer.compareUnsigned(res1, cin) < 0;
 
-            store.executeWithTarget(addr, (overflow1 | overflow2) ? 1 : 0);
+            store.executeWithTarget(frame, addr, (overflow1 | overflow2) ? 1 : 0);
             return res2;
         }
 
         @Override
-        public long evalI64(long left, long right, long cin, Object addr, LLVMStoreNode store) {
+        public long evalI64(VirtualFrame frame, long left, long right, long cin, Object addr, LLVMStoreNode store) {
             final long res1 = left - right;
             final boolean overflow1 = Long.compareUnsigned(left, right) < 0;
 
             final long res2 = res1 - cin;
             final boolean overflow2 = Long.compareUnsigned(res1, cin) < 0;
 
-            store.executeWithTarget(addr, (overflow1 | overflow2) ? 1 : 0);
+            store.executeWithTarget(frame, addr, (overflow1 | overflow2) ? 1 : 0);
             return res2;
         }
     };
@@ -153,24 +154,24 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
     public static final Arithmetic SIGNED_ADD = new Arithmetic() {
 
         @Override
-        public boolean evalI8(byte left, byte right, Object addr, LLVMStoreNode store) {
+        public boolean evalI8(VirtualFrame frame, byte left, byte right, Object addr, LLVMStoreNode store) {
             final int res = left + right;
             final boolean overflow = (((res ^ left) & (res ^ right)) & (1 << (Byte.SIZE - 1))) != 0;
-            store.executeWithTarget(addr, (byte) res);
+            store.executeWithTarget(frame, addr, (byte) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI16(short left, short right, Object addr, LLVMStoreNode store) {
+        public boolean evalI16(VirtualFrame frame, short left, short right, Object addr, LLVMStoreNode store) {
             final int res = left + right;
             final boolean overflow = (((res ^ left) & (res ^ right)) & (1 << (Short.SIZE - 1))) != 0;
 
-            store.executeWithTarget(addr, (short) res);
+            store.executeWithTarget(frame, addr, (short) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI32(int left, int right, Object addr, LLVMStoreNode store) {
+        public boolean evalI32(VirtualFrame frame, int left, int right, Object addr, LLVMStoreNode store) {
             int res;
             boolean overflow = false;
             try {
@@ -180,12 +181,12 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                 res = left + right;
                 overflow = true;
             }
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
 
         @Override
-        public boolean evalI64(long left, long right, Object addr, LLVMStoreNode store) {
+        public boolean evalI64(VirtualFrame frame, long left, long right, Object addr, LLVMStoreNode store) {
             long res;
             boolean overflow = false;
             try {
@@ -195,7 +196,7 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                 res = left + right;
                 overflow = true;
             }
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
     };
@@ -203,35 +204,35 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
     public static final Arithmetic UNSIGNED_ADD = new Arithmetic() {
 
         @Override
-        public boolean evalI8(byte left, byte right, Object addr, LLVMStoreNode store) {
+        public boolean evalI8(VirtualFrame frame, byte left, byte right, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I8_MASK) + (right & LLVMExpressionNode.I8_MASK);
             final boolean overflow = (res & (1 << Byte.SIZE)) != 0;
-            store.executeWithTarget(addr, (byte) res);
+            store.executeWithTarget(frame, addr, (byte) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI16(short left, short right, Object addr, LLVMStoreNode store) {
+        public boolean evalI16(VirtualFrame frame, short left, short right, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I16_MASK) + (right & LLVMExpressionNode.I16_MASK);
             final boolean overflow = (res & (1 << Short.SIZE)) != 0;
 
-            store.executeWithTarget(addr, (short) res);
+            store.executeWithTarget(frame, addr, (short) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI32(int left, int right, Object addr, LLVMStoreNode store) {
+        public boolean evalI32(VirtualFrame frame, int left, int right, Object addr, LLVMStoreNode store) {
             final int res = left + right;
             final boolean overflow = ((~res & left) | (~res & right) | (left & right)) < 0;
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
 
         @Override
-        public boolean evalI64(long left, long right, Object addr, LLVMStoreNode store) {
+        public boolean evalI64(VirtualFrame frame, long left, long right, Object addr, LLVMStoreNode store) {
             final long res = left + right;
             final boolean overflow = ((~res & left) | (~res & right) | (left & right)) < 0;
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
     };
@@ -239,24 +240,24 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
     public static final Arithmetic SIGNED_SUB = new Arithmetic() {
 
         @Override
-        public boolean evalI8(byte left, byte right, Object addr, LLVMStoreNode store) {
+        public boolean evalI8(VirtualFrame frame, byte left, byte right, Object addr, LLVMStoreNode store) {
             final int res = left - right;
             final boolean overflow = (((left ^ right) & (left ^ res)) & (1 << (Byte.SIZE - 1))) != 0;
-            store.executeWithTarget(addr, (byte) res);
+            store.executeWithTarget(frame, addr, (byte) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI16(short left, short right, Object addr, LLVMStoreNode store) {
+        public boolean evalI16(VirtualFrame frame, short left, short right, Object addr, LLVMStoreNode store) {
             final int res = left - right;
             final boolean overflow = (((left ^ right) & (left ^ res)) & (1 << (Short.SIZE - 1))) != 0;
 
-            store.executeWithTarget(addr, (short) res);
+            store.executeWithTarget(frame, addr, (short) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI32(int left, int right, Object addr, LLVMStoreNode store) {
+        public boolean evalI32(VirtualFrame frame, int left, int right, Object addr, LLVMStoreNode store) {
             int res;
             boolean overflow = false;
             try {
@@ -266,12 +267,12 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                 res = left - right;
                 overflow = true;
             }
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
 
         @Override
-        public boolean evalI64(long left, long right, Object addr, LLVMStoreNode store) {
+        public boolean evalI64(VirtualFrame frame, long left, long right, Object addr, LLVMStoreNode store) {
             long res;
             boolean overflow = false;
             try {
@@ -281,7 +282,7 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                 res = left - right;
                 overflow = true;
             }
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
     };
@@ -289,35 +290,35 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
     public static final Arithmetic UNSIGNED_SUB = new Arithmetic() {
 
         @Override
-        public boolean evalI8(byte left, byte right, Object addr, LLVMStoreNode store) {
+        public boolean evalI8(VirtualFrame frame, byte left, byte right, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I8_MASK) - (right & LLVMExpressionNode.I8_MASK);
             boolean overflow = res < 0;
-            store.executeWithTarget(addr, (byte) res);
+            store.executeWithTarget(frame, addr, (byte) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI16(short left, short right, Object addr, LLVMStoreNode store) {
+        public boolean evalI16(VirtualFrame frame, short left, short right, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I16_MASK) - (right & LLVMExpressionNode.I16_MASK);
             final boolean overflow = res < 0;
 
-            store.executeWithTarget(addr, (short) res);
+            store.executeWithTarget(frame, addr, (short) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI32(int left, int right, Object addr, LLVMStoreNode store) {
+        public boolean evalI32(VirtualFrame frame, int left, int right, Object addr, LLVMStoreNode store) {
             final int res = left - right;
             final boolean overflow = Integer.compareUnsigned(left, right) < 0;
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
 
         @Override
-        public boolean evalI64(long left, long right, Object addr, LLVMStoreNode store) {
+        public boolean evalI64(VirtualFrame frame, long left, long right, Object addr, LLVMStoreNode store) {
             final long res = left - right;
             final boolean overflow = Long.compareUnsigned(left, right) < 0;
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
     };
@@ -325,24 +326,24 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
     public static final Arithmetic SIGNED_MUL = new Arithmetic() {
 
         @Override
-        public boolean evalI8(byte left, byte right, Object addr, LLVMStoreNode store) {
+        public boolean evalI8(VirtualFrame frame, byte left, byte right, Object addr, LLVMStoreNode store) {
             final int res = left * right;
             final boolean overflow = (byte) res != res;
-            store.executeWithTarget(addr, (byte) res);
+            store.executeWithTarget(frame, addr, (byte) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI16(short left, short right, Object addr, LLVMStoreNode store) {
+        public boolean evalI16(VirtualFrame frame, short left, short right, Object addr, LLVMStoreNode store) {
             final int res = left * right;
             final boolean overflow = (short) res != res;
 
-            store.executeWithTarget(addr, (short) res);
+            store.executeWithTarget(frame, addr, (short) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI32(int left, int right, Object addr, LLVMStoreNode store) {
+        public boolean evalI32(VirtualFrame frame, int left, int right, Object addr, LLVMStoreNode store) {
             int res;
             boolean overflow = false;
             try {
@@ -352,12 +353,12 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                 res = left * right;
                 overflow = true;
             }
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
 
         @Override
-        public boolean evalI64(long left, long right, Object addr, LLVMStoreNode store) {
+        public boolean evalI64(VirtualFrame frame, long left, long right, Object addr, LLVMStoreNode store) {
             long res;
             boolean overflow = false;
             try {
@@ -367,7 +368,7 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                 res = left * right;
                 overflow = true;
             }
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
     };
@@ -375,33 +376,33 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
     public static final Arithmetic UNSIGNED_MUL = new Arithmetic() {
 
         @Override
-        public boolean evalI8(byte left, byte right, Object addr, LLVMStoreNode store) {
+        public boolean evalI8(VirtualFrame frame, byte left, byte right, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I8_MASK) * (right & LLVMExpressionNode.I8_MASK);
             final boolean overflow = (res & LLVMExpressionNode.I8_MASK) != res;
-            store.executeWithTarget(addr, (byte) res);
+            store.executeWithTarget(frame, addr, (byte) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI16(short left, short right, Object addr, LLVMStoreNode store) {
+        public boolean evalI16(VirtualFrame frame, short left, short right, Object addr, LLVMStoreNode store) {
             final int res = (left & LLVMExpressionNode.I16_MASK) * (right & LLVMExpressionNode.I16_MASK);
             final boolean overflow = (res & LLVMExpressionNode.I16_MASK) != res;
 
-            store.executeWithTarget(addr, (short) res);
+            store.executeWithTarget(frame, addr, (short) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI32(int left, int right, Object addr, LLVMStoreNode store) {
+        public boolean evalI32(VirtualFrame frame, int left, int right, Object addr, LLVMStoreNode store) {
             final long res = (left & LLVMExpressionNode.I32_MASK) * (right & LLVMExpressionNode.I32_MASK);
             final boolean overflow = (res & LLVMExpressionNode.I32_MASK) != res;
 
-            store.executeWithTarget(addr, (int) res);
+            store.executeWithTarget(frame, addr, (int) res);
             return overflow;
         }
 
         @Override
-        public boolean evalI64(long left, long right, Object addr, LLVMStoreNode store) {
+        public boolean evalI64(VirtualFrame frame, long left, long right, Object addr, LLVMStoreNode store) {
             final long res = left * right;
             boolean overflow = false;
             if ((left | right) >>> 31 != 0) {
@@ -410,7 +411,7 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                 }
             }
 
-            store.executeWithTarget(addr, res);
+            store.executeWithTarget(frame, addr, res);
             return overflow;
         }
     };
@@ -426,27 +427,27 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
         }
 
         @Specialization
-        protected byte doIntrinsic(byte left, byte right, Object addr,
+        protected byte doIntrinsic(VirtualFrame frame, byte left, byte right, Object addr,
                         @Cached("createStoreI8()") LLVMStoreNode store) {
-            return (byte) (arithmetic.evalI8(left, right, addr, store) ? 1 : 0);
+            return (byte) (arithmetic.evalI8(frame, left, right, addr, store) ? 1 : 0);
         }
 
         @Specialization
-        protected short doIntrinsic(short left, short right, Object addr,
+        protected short doIntrinsic(VirtualFrame frame, short left, short right, Object addr,
                         @Cached("createStoreI16()") LLVMStoreNode store) {
-            return (short) (arithmetic.evalI16(left, right, addr, store) ? 1 : 0);
+            return (short) (arithmetic.evalI16(frame, left, right, addr, store) ? 1 : 0);
         }
 
         @Specialization
-        protected int doIntrinsic(int left, int right, Object addr,
+        protected int doIntrinsic(VirtualFrame frame, int left, int right, Object addr,
                         @Cached("createStoreI32()") LLVMStoreNode store) {
-            return arithmetic.evalI32(left, right, addr, store) ? 1 : 0;
+            return arithmetic.evalI32(frame, left, right, addr, store) ? 1 : 0;
         }
 
         @Specialization
-        protected long doIntrinsic(long left, long right, Object addr,
+        protected long doIntrinsic(VirtualFrame frame, long left, long right, Object addr,
                         @Cached("createStoreI64()") LLVMStoreNode store) {
-            return arithmetic.evalI64(left, right, addr, store) ? 1 : 0;
+            return arithmetic.evalI64(frame, left, right, addr, store) ? 1 : 0;
         }
     }
 
@@ -464,38 +465,38 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
         }
 
         @Specialization
-        protected Object doIntrinsic(byte left, byte right, Object addr,
+        protected Object doIntrinsic(VirtualFrame frame, byte left, byte right, Object addr,
                         @Cached("createStoreI8()") LLVMStoreNode store,
                         @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
-            final boolean overflow = arithmetic.evalI8(left, right, addr, store);
-            storeI8.executeWithTarget(incrementPointer.executeWithTarget(addr, secondValueOffset), overflow);
+            final boolean overflow = arithmetic.evalI8(frame, left, right, addr, store);
+            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset), overflow);
             return addr;
         }
 
         @Specialization
-        protected Object doIntrinsic(short left, short right, Object addr,
+        protected Object doIntrinsic(VirtualFrame frame, short left, short right, Object addr,
                         @Cached("createStoreI16()") LLVMStoreNode store,
                         @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
-            final boolean overflow = arithmetic.evalI16(left, right, addr, store);
-            storeI8.executeWithTarget(incrementPointer.executeWithTarget(addr, secondValueOffset), overflow);
+            final boolean overflow = arithmetic.evalI16(frame, left, right, addr, store);
+            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset), overflow);
             return addr;
         }
 
         @Specialization
-        protected Object doIntrinsic(int left, int right, Object addr,
+        protected Object doIntrinsic(VirtualFrame frame, int left, int right, Object addr,
                         @Cached("createStoreI32()") LLVMStoreNode store,
                         @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
-            final boolean overflow = arithmetic.evalI32(left, right, addr, store);
-            storeI8.executeWithTarget(incrementPointer.executeWithTarget(addr, secondValueOffset), overflow);
+            final boolean overflow = arithmetic.evalI32(frame, left, right, addr, store);
+            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset), overflow);
             return addr;
         }
 
         @Specialization
-        protected Object doIntrinsic(long left, long right, Object addr,
+        protected Object doIntrinsic(VirtualFrame frame, long left, long right, Object addr,
                         @Cached("createStoreI64()") LLVMStoreNode store,
                         @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
-            final boolean overflow = arithmetic.evalI64(left, right, addr, store);
-            storeI8.executeWithTarget(incrementPointer.executeWithTarget(addr, secondValueOffset), overflow);
+            final boolean overflow = arithmetic.evalI64(frame, left, right, addr, store);
+            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset), overflow);
             return addr;
         }
     }
@@ -511,27 +512,27 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
         }
 
         @Specialization
-        protected byte doIntrinsic(byte left, byte right, byte cin, Object addr,
+        protected byte doIntrinsic(VirtualFrame frame, byte left, byte right, byte cin, Object addr,
                         @Cached("createStoreI8()") LLVMStoreNode store) {
-            return arithmetic.evalI8(left, right, cin, addr, store);
+            return arithmetic.evalI8(frame, left, right, cin, addr, store);
         }
 
         @Specialization
-        protected short doIntrinsic(short left, short right, short cin, Object addr,
+        protected short doIntrinsic(VirtualFrame frame, short left, short right, short cin, Object addr,
                         @Cached("createStoreI16()") LLVMStoreNode store) {
-            return arithmetic.evalI16(left, right, cin, addr, store);
+            return arithmetic.evalI16(frame, left, right, cin, addr, store);
         }
 
         @Specialization
-        protected int doIntrinsic(int left, int right, int cin, Object addr,
+        protected int doIntrinsic(VirtualFrame frame, int left, int right, int cin, Object addr,
                         @Cached("createStoreI32()") LLVMStoreNode store) {
-            return arithmetic.evalI32(left, right, cin, addr, store);
+            return arithmetic.evalI32(frame, left, right, cin, addr, store);
         }
 
         @Specialization
-        protected long doIntrinsic(long left, long right, long cin, Object addr,
+        protected long doIntrinsic(VirtualFrame frame, long left, long right, long cin, Object addr,
                         @Cached("createStoreI64()") LLVMStoreNode store) {
-            return arithmetic.evalI64(left, right, cin, addr, store);
+            return arithmetic.evalI64(frame, left, right, cin, addr, store);
         }
     }
 }

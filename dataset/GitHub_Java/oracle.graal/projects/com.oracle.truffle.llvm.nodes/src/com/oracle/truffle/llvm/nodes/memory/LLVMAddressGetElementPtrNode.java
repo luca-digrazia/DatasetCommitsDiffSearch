@@ -35,6 +35,7 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
@@ -58,21 +59,21 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    protected Object intIncrement(Object addr, int val,
+    protected Object intIncrement(VirtualFrame frame, Object addr, int val,
                     @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementNode) {
         long incr = getTypeWidth() * val;
-        return incrementNode.executeWithTarget(addr, incr);
+        return incrementNode.executeWithTarget(frame, addr, incr);
     }
 
     @Specialization
-    protected Object longIncrement(Object addr, long val,
+    protected Object longIncrement(VirtualFrame frame, Object addr, long val,
                     @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementNode) {
         long incr = getTypeWidth() * val;
-        return incrementNode.executeWithTarget(addr, incr);
+        return incrementNode.executeWithTarget(frame, addr, incr);
     }
 
     public abstract static class LLVMIncrementPointerNode extends LLVMNode {
-        public abstract Object executeWithTarget(Object addr, Object val);
+        public abstract Object executeWithTarget(VirtualFrame frame, Object addr, Object val);
 
         @Specialization
         protected LLVMAddress doPointee(LLVMAddress addr, int incr) {
@@ -90,7 +91,7 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected Object executePointee(LLVMGlobal addr, int incr,
+        protected Object executePointee(VirtualFrame frame, LLVMGlobal addr, int incr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                         @Cached("create()") LLVMGlobalReadNode.ReadObjectNode readObject,
                         @Cached("create()") BranchProfile notNativeBranch) {
@@ -99,7 +100,7 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
                 notNativeBranch.enter();
                 return ((LLVMTruffleObject) globalObject).increment(incr);
             } else {
-                return globalAccess.executeWithTarget(addr).increment(incr);
+                return globalAccess.executeWithTarget(frame, addr).increment(incr);
             }
         }
 
@@ -139,7 +140,7 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected Object executePointee(LLVMGlobal addr, long incr,
+        protected Object executePointee(VirtualFrame frame, LLVMGlobal addr, long incr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                         @Cached("create()") LLVMGlobalReadNode.ReadObjectNode readObject,
                         @Cached("create()") BranchProfile notNativeBranch) {
@@ -148,7 +149,7 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
                 notNativeBranch.enter();
                 return ((LLVMTruffleObject) globalObject).increment(incr);
             } else {
-                return globalAccess.executeWithTarget(addr).increment(incr);
+                return globalAccess.executeWithTarget(frame, addr).increment(incr);
             }
         }
     }
