@@ -59,7 +59,6 @@ public class GraphPrintVisitor implements Closeable {
 
     public static final String GraphVisualizerAddress = "127.0.0.1";
     public static final int GraphVisualizerPort = 4444;
-    private static final String DEFAULT_GRAPH_NAME = "truffle tree";
 
     private Map<Object, NodeElement> nodeMap;
     private List<EdgeElement> edgeList;
@@ -482,7 +481,7 @@ public class GraphPrintVisitor implements Closeable {
 
     public GraphPrintVisitor visit(Object node) {
         if (openGraphCount == 0) {
-            beginGraph(DEFAULT_GRAPH_NAME);
+            beginGraph("truffle tree");
         }
 
         // if node is visited once again, skip
@@ -503,10 +502,6 @@ public class GraphPrintVisitor implements Closeable {
     }
 
     public GraphPrintVisitor visit(Object node, GraphPrintHandler handler) {
-        if (openGraphCount == 0) {
-            beginGraph(DEFAULT_GRAPH_NAME);
-        }
-
         handler.visit(node, new GraphPrintAdapter());
 
         return this;
