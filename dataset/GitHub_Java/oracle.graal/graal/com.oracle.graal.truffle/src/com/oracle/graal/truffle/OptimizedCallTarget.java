@@ -96,10 +96,12 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
                             invokeCounter = 2;
                             loopAndInvokeCounter = inliningReprofileCount;
                             originalInvokeCounter = inliningReprofileCount;
-                            continue;
+                        } else {
+                            compile();
                         }
+                    } else {
+                        compile();
                     }
-                    compile();
                 }
             }
         }
@@ -123,10 +125,13 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
                 }
             }
         } catch (Throwable e) {
-            disableCompilation = true;
+            invokeCounter = Integer.MAX_VALUE;
+            loopAndInvokeCounter = Integer.MAX_VALUE;
             if (TraceTruffleCompilation.getValue()) {
                 if (e instanceof BailoutException) {
-                    OUT.printf("[truffle] opt bailout %-48s  %s\n", rootNode, e.getMessage());
+                    disableCompilation = true;
+                    BailoutException bailoutException = (BailoutException) e;
+                    OUT.printf("[truffle] opt bailout %-48s  %s\n", rootNode, bailoutException.getMessage());
                 } else {
                     OUT.printf("[truffle] opt failed %-49s  %s\n", rootNode, e.toString());
                     if (TraceTruffleCompilationExceptions.getValue()) {
