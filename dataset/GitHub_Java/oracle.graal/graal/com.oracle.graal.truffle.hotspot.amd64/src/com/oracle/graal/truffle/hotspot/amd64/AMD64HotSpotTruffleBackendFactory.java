@@ -23,22 +23,18 @@
 package com.oracle.graal.truffle.hotspot.amd64;
 
 import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.amd64.*;
-import com.oracle.graal.truffle.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
  * Factory to create a Truffle-specialized AMD64 HotSpot backend.
  */
-@ServiceProvider(TruffleBackendFactory.class)
-public class AMD64HotSpotTruffleBackendFactory implements TruffleBackendFactory {
+@ServiceProvider(HotSpotBackendFactory.class)
+public class AMD64HotSpotTruffleBackendFactory extends AMD64HotSpotBackendFactory {
 
     @Override
-    public Backend createBackend(Backend original) {
-        return new AMD64HotSpotTruffleBackend((AMD64HotSpotBackend) original);
-    }
-
-    public String getArchitecture() {
-        return "AMD64";
+    protected AMD64HotSpotBackend createBackend(HotSpotGraalRuntime runtime, HotSpotProviders providers) {
+        return new AMD64HotSpotTruffleBackend(runtime, providers);
     }
 }
