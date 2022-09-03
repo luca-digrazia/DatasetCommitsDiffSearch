@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,14 +40,12 @@ import org.graalvm.compiler.core.common.util.Util;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode;
-import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope;
 import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.test.nodes.AbstractTestNode;
 import org.graalvm.compiler.truffle.test.nodes.ConstantTestNode;
 import org.graalvm.compiler.truffle.test.nodes.RootTestNode;
-import org.graalvm.polyglot.Context;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -188,11 +186,12 @@ public class OptimizedCallTargetTest extends TestWithSynchronousCompiling {
     @Test
     public void testRewriteAssumption() {
         String testName = "testRewriteAssumption";
-        final int compilationThreshold = 20;
+        assertTrue("test only works with inlining enabled", TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleFunctionInlining));
 
-        Context context = Context.newBuilder().option("engine.Inlining", "true").option("engine.CompilationThreshold", String.valueOf(compilationThreshold)).build();
-        context.enter();
-        try {
+        try (TruffleRuntimeOptionsOverrideScope s = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleCompilationThreshold, 20)) {
+            final int compilationThreshold = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompilationThreshold);
+            assertTrue(compilationThreshold >= 2);
+
             OptimizedCallTarget innermostCallTarget = (OptimizedCallTarget) runtime.createCallTarget(new RootTestNode(new FrameDescriptor(), testName + 0, new AbstractTestNode() {
                 @Child private AbstractTestNode child = new ConstantTestNode(42);
                 @Child private AbstractTestNode dummy = new ConstantTestNode(17);
@@ -207,8 +206,6 @@ public class OptimizedCallTargetTest extends TestWithSynchronousCompiling {
                     return child.execute(frame);
                 }
             }));
-            assertEquals(compilationThreshold, (int) innermostCallTarget.getOptionValue(PolyglotCompilerOptions.CompilationThreshold));
-
             OptimizedCallTarget ct = innermostCallTarget;
             ct = (OptimizedCallTarget) runtime.createCallTarget(new RootTestNode(new FrameDescriptor(), testName + 1, new CallTestNode(ct)));
             ct = (OptimizedCallTarget) runtime.createCallTarget(new RootTestNode(new FrameDescriptor(), testName + 2, new CallTestNode(ct)));
@@ -244,9 +241,6 @@ public class OptimizedCallTargetTest extends TestWithSynchronousCompiling {
             assertTrue(finalRewriteAssumption.isValid());
 
             assertFalse(rewriteAssumptions.stream().filter(a -> a != finalRewriteAssumption).anyMatch(Assumption::isValid));
-        } finally {
-            context.leave();
-            context.close();
         }
     }
 
