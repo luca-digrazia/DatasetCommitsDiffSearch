@@ -44,7 +44,6 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-@SuppressWarnings("deprecation")
 @RunWith(SeparateClassloaderTestRunner.class)
 public class SourceTest {
     @Test
@@ -327,14 +326,14 @@ public class SourceTest {
     }
 
     @Test
-    public void normalSourceIsntInternal() {
+    public void normalSourceIsntInternal() throws IOException {
         Source source = Source.newFromText("anything").mimeType("text/plain").build();
 
         assertFalse("Not internal", source.isInternal());
     }
 
     @Test
-    public void markSourceAsInternal() {
+    public void markSourceAsInternal() throws IOException {
         Source source = Source.newFromText("anything internal").mimeType("text/plain").internal().build();
 
         assertTrue("This source is internal", source.isInternal());
