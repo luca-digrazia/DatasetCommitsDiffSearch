@@ -22,68 +22,47 @@
  */
 package org.graalvm.compiler.debug;
 
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Count;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Dump;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Log;
+import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Count;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.MethodFilter;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.MethodMeter;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Time;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.TrackMemUse;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Verify;
+import static org.graalvm.compiler.debug.GraalDebugConfig.Options.MethodMeter;
 
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.debug.internal.DebugScope;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 
 import jdk.vm.ci.runtime.JVMCI;
 
 public class DebugEnvironment {
+    public static GraalDebugConfig initialize(PrintStream log, Object... extraArgs) {
+        initializeScope(log, extraArgs);
+        return (GraalDebugConfig) DebugScope.getConfig();
+    }
 
-    /**
-     * Create a GraalDebugConfig if {@link Debug#isEnabled()} is true and one hasn't already been
-     * created. Additionally add {@code extraArgs} as capabilities to the {@link DebugDumpHandler}s
-     * associated with the current config. Capabilities can be added at any time.
-     *
-     * @return the current {@link GraalDebugConfig} or null if nothing was done
-     */
-    public static GraalDebugConfig ensureInitialized(OptionValues options, Object... capabilities) {
+    public static DebugConfigScope initializeScope(PrintStream log, Object... extraArgs) {
+        // Initialize JVMCI before loading class Debug
+        JVMCI.initialize();
         if (!Debug.isEnabled()) {
+            log.println("WARNING: Scope debugging needs to be enabled with -esa");
             return null;
         }
-        GraalDebugConfig debugConfig = (GraalDebugConfig) DebugScope.getConfig();
-        if (debugConfig == null) {
-            // Initialize JVMCI before loading class Debug
-            JVMCI.initialize();
-            List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
-            List<DebugVerifyHandler> verifyHandlers = new ArrayList<>();
-            debugConfig = new GraalDebugConfig(
-                            options,
-                            Log.getValue(options),
-                            Count.getValue(options),
-                            TrackMemUse.getValue(options),
-                            Time.getValue(options),
-                            Dump.getValue(options),
-                            Verify.getValue(options),
-                            MethodFilter.getValue(options),
-                            MethodMeter.getValue(options),
-                            TTY.out, dumpHandlers, verifyHandlers);
+        List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
+        List<DebugVerifyHandler> verifyHandlers = new ArrayList<>();
+        GraalDebugConfig debugConfig = new GraalDebugConfig(Log.getValue(), Count.getValue(), TrackMemUse.getValue(), Time.getValue(), Dump.getValue(), Verify.getValue(), MethodFilter.getValue(),
+                        MethodMeter.getValue(),
+                        log, dumpHandlers, verifyHandlers);
 
-            for (DebugConfigCustomizer customizer : GraalServices.load(DebugConfigCustomizer.class)) {
-                customizer.customize(debugConfig);
-            }
+        for (DebugConfigCustomizer customizer : GraalServices.load(DebugConfigCustomizer.class)) {
+            customizer.customize(debugConfig, extraArgs);
+        }
 
-            Debug.setConfig(debugConfig);
-        }
-        if (capabilities != null) {
-            for (Object o : capabilities) {
-                for (DebugDumpHandler handler : debugConfig.dumpHandlers()) {
-                    handler.addCapability(o);
-                }
-            }
-        }
-        return debugConfig;
+        return Debug.setConfig(debugConfig);
     }
 }

@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.DebugConfig;
@@ -45,8 +44,8 @@ import org.graalvm.compiler.debug.DebugDumpScope;
 import org.graalvm.compiler.debug.GraalDebugConfig;
 import org.graalvm.compiler.debug.GraalDebugConfig.Options;
 import org.graalvm.compiler.debug.GraalError;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.debug.internal.DebugScope;
+import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.nodes.StructuredGraph;
 
@@ -65,7 +64,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     private static final int FAILURE_LIMIT = 8;
     private final GraphPrinterSupplier printerSupplier;
     protected GraphPrinter printer;
-    private SnippetReflectionProvider snippetReflection;
     private List<String> previousInlineContext;
     private int[] dumpIds = {};
     private int failuresCount;
@@ -100,9 +98,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             inlineContextMap = new WeakHashMap<>();
             try {
                 printer = printerSupplier.get();
-                if (snippetReflection != null) {
-                    printer.setSnippetReflectionProvider(snippetReflection);
-                }
             } catch (IOException e) {
                 handleException(e);
             }
@@ -120,7 +115,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     @Override
     @SuppressWarnings("try")
     public void dump(Object object, final String message) {
-        if (object instanceof Graph && Options.PrintIdealGraph.getValue(DebugScope.getConfig().getOptions())) {
+        if (object instanceof Graph && Options.PrintIdealGraph.getValue()) {
             ensureInitialized();
             if (printer == null) {
                 return;
@@ -184,7 +179,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     }
 
     void handleException(IOException e) {
-        if (GraalDebugConfig.Options.DumpingErrorsAreFatal.getValue(DebugScope.getConfig().getOptions())) {
+        if (GraalDebugConfig.Options.DumpingErrorsAreFatal.getValue()) {
             throw new GraalError(e);
         }
         if (e instanceof ClosedByInterruptException) {
@@ -337,16 +332,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         if (printer != null) {
             printer.close();
             printer = null;
-        }
-    }
-
-    @Override
-    public void addCapability(Object capability) {
-        if (capability instanceof SnippetReflectionProvider) {
-            snippetReflection = (SnippetReflectionProvider) capability;
-            if (printer != null && printer.getSnippetReflectionProvider() == null) {
-                printer.setSnippetReflectionProvider(snippetReflection);
-            }
         }
     }
 }

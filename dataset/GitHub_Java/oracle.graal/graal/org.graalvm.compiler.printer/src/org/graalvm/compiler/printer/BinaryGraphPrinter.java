@@ -149,20 +149,16 @@ public class BinaryGraphPrinter implements GraphPrinter {
     private final ConstantPool constantPool;
     private final ByteBuffer buffer;
     private final WritableByteChannel channel;
-    private SnippetReflectionProvider snippetReflection;
+    private final SnippetReflectionProvider snippetReflection;
 
     private static final Charset utf8 = Charset.forName("UTF-8");
 
-    public BinaryGraphPrinter(WritableByteChannel channel) throws IOException {
+    public BinaryGraphPrinter(WritableByteChannel channel, SnippetReflectionProvider snippetReflection) throws IOException {
         constantPool = new ConstantPool();
         buffer = ByteBuffer.allocateDirect(256 * 1024);
+        this.snippetReflection = snippetReflection;
         this.channel = channel;
         writeVersion();
-    }
-
-    @Override
-    public void setSnippetReflectionProvider(SnippetReflectionProvider snippetReflection) {
-        this.snippetReflection = snippetReflection;
     }
 
     @Override
@@ -187,9 +183,9 @@ public class BinaryGraphPrinter implements GraphPrinter {
             if (scheduleResult == null) {
 
                 // Also provide a schedule when an error occurs
-                if (Options.PrintGraphWithSchedule.getValue(graph.getOptions()) || Debug.contextLookup(Throwable.class) != null) {
+                if (Options.PrintIdealGraphSchedule.getValue() || Debug.contextLookup(Throwable.class) != null) {
                     try {
-                        SchedulePhase schedule = new SchedulePhase(graph.getOptions());
+                        SchedulePhase schedule = new SchedulePhase();
                         schedule.apply(structuredGraph);
                         scheduleResult = structuredGraph.getLastSchedule();
                     } catch (Throwable t) {
@@ -502,7 +498,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
         for (Node node : graph.getNodes()) {
             NodeClass<?> nodeClass = node.getNodeClass();
             node.getDebugProperties(props);
-            if (cfg != null && Options.PrintGraphProbabilities.getValue(graph.getOptions()) && node instanceof FixedNode) {
+            if (cfg != null && Options.PrintGraphProbabilities.getValue() && node instanceof FixedNode) {
                 try {
                     props.put("probability", cfg.blockFor(node).probability());
                 } catch (Throwable t) {
