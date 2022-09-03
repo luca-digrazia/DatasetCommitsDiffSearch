@@ -26,7 +26,6 @@ package com.oracle.truffle.api.source;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.net.URI;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -34,7 +33,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 
-final class BytesSourceImpl extends Content implements Content.CreateURI {
+final class BytesSourceImpl extends Content {
 
     private final String name;
     private final byte[] bytes;
@@ -68,16 +67,6 @@ final class BytesSourceImpl extends Content implements Content.CreateURI {
     @Override
     public URL getURL() {
         return null;
-    }
-
-    @Override
-    URI getURI() {
-        return createURIOnce(this);
-    }
-
-    @Override
-    public URI createURI() {
-        return getNamedURI(name, bytes, byteIndex, length);
     }
 
     @Override
