@@ -45,11 +45,12 @@ public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext
 
     @Override
     protected void run(StructuredGraph graph, PhaseContext context) {
-        HashSetNodeEventListener listener = new HashSetNodeEventListener().exclude(NODE_ADDED).exclude(ZERO_USAGES);
+        ConditionalEliminationPhase eliminate = new ConditionalEliminationPhase(context.getMetaAccess());
+        HashSetNodeEventListener listener = new HashSetNodeEventListener().exclude(NODE_ADDED);
         int count = 0;
         while (true) {
             try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
-                new DominatorConditionalEliminationPhase().apply(graph);
+                eliminate.apply(graph);
             }
             if (listener.getNodes().isEmpty()) {
                 break;

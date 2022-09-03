@@ -37,6 +37,7 @@ import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
@@ -410,19 +411,16 @@ public class PartialEvaluator {
             assert graph.hasLoops() : graph + " does not contain a loop";
             final StructuredGraph graphCopy = graph.copy();
             final List<Node> modifiedNodes = new ArrayList<>();
-            for (ParameterNode param : graphCopy.getNodes(ParameterNode.class).snapshot()) {
+            for (ParameterNode param : graphCopy.getNodes(ParameterNode.class)) {
                 ValueNode arg = arguments.get(param.index());
                 if (arg.isConstant()) {
                     Constant constant = arg.asConstant();
-                    param.usages().snapshotTo(modifiedNodes);
-                    param.replaceAndDelete(ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy));
-                } else {
-                    ValueNode length = GraphUtil.arrayLength(arg);
-                    if (length != null && length.isConstant()) {
-                        param.usages().snapshotTo(modifiedNodes);
-                        ParameterNode newParam = graphCopy.addWithoutUnique(ParameterNode.create(param.index(), param.stamp()));
-                        param.replaceAndDelete(graphCopy.addWithoutUnique(PiArrayNode.create(newParam, ConstantNode.forInt(length.asConstant().asInt(), graphCopy), param.stamp())));
+                    for (Node usage : param.usages()) {
+                        if (usage instanceof Canonicalizable) {
+                            modifiedNodes.add(usage);
+                        }
                     }
+                    param.replaceAndDelete(ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy));
                 }
             }
             try (Scope s = Debug.scope("TruffleUnrollLoop", targetMethod)) {

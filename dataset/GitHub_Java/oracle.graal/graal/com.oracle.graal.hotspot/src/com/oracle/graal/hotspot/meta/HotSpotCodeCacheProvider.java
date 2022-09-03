@@ -206,11 +206,11 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
         return installedCode;
     }
 
-    public InstalledCode installMethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long ctask, boolean isDefault) {
+    public InstalledCode installMethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long ctask) {
         if (compResult.getId() == -1) {
             compResult.setId(method.allocateCompileId(compResult.getEntryBCI()));
         }
-        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, compResult.getName(), isDefault);
+        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, compResult.getName(), true);
         runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(target, method, compResult, ctask), installedCode, method.getSpeculationLog());
         return logOrDump(installedCode, compResult);
     }
@@ -236,7 +236,7 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
     @Override
     public InstalledCode setDefaultMethod(ResolvedJavaMethod method, CompilationResult compResult) {
         HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
-        return installMethod(hotspotMethod, compResult, 0L, true);
+        return installMethod(hotspotMethod, compResult, 0L);
     }
 
     public HotSpotNmethod addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult) {

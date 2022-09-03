@@ -40,8 +40,8 @@ import com.oracle.graal.asm.*;
  */
 public abstract class FrameMap {
 
-    private final TargetDescription target;
-    private final RegisterConfig registerConfig;
+    public final TargetDescription target;
+    public final RegisterConfig registerConfig;
 
     /**
      * The final frame size, not including the size of the
@@ -95,20 +95,12 @@ public abstract class FrameMap {
         this.objectStackSlots = new ArrayList<>();
     }
 
-    public RegisterConfig getRegisterConfig() {
-        return registerConfig;
-    }
-
-    public TargetDescription getTarget() {
-        return target;
-    }
-
     protected int returnAddressSize() {
-        return getTarget().arch.getReturnAddressSize();
+        return target.arch.getReturnAddressSize();
     }
 
     protected int calleeSaveAreaSize() {
-        CalleeSaveLayout csl = getRegisterConfig().getCalleeSaveLayout();
+        CalleeSaveLayout csl = registerConfig.getCalleeSaveLayout();
         return csl != null ? csl.size : 0;
     }
 
@@ -126,7 +118,7 @@ public abstract class FrameMap {
      * @return stack slot size
      */
     public int stackSlotSize() {
-        return getTarget().wordSize;
+        return target.wordSize;
     }
 
     /**
@@ -188,7 +180,7 @@ public abstract class FrameMap {
             // Without this, frameNeedsAllocating() would never return true.
             int total = 0;
             for (StackSlot s : freedSlots) {
-                total += getTarget().getSizeInBytes(s.getKind());
+                total += target.getSizeInBytes(s.getKind());
             }
             if (total == spillSize - initialSpillSize) {
                 // reset spill area size
@@ -197,8 +189,8 @@ public abstract class FrameMap {
             freedSlots = null;
         }
         frameSize = currentFrameSize();
-        if (frameSize > getRegisterConfig().getMaximumFrameSize()) {
-            throw new BailoutException("Frame size (%d) exceeded maximum allowed frame size (%d).", frameSize, getRegisterConfig().getMaximumFrameSize());
+        if (frameSize > registerConfig.getMaximumFrameSize()) {
+            throw new BailoutException("Frame size (%d) exceeded maximum allowed frame size (%d).", frameSize, registerConfig.getMaximumFrameSize());
         }
     }
 
@@ -281,7 +273,7 @@ public abstract class FrameMap {
      * @return the size in bytes
      */
     public int spillSlotSize(LIRKind kind) {
-        return getTarget().getSizeInBytes(kind.getPlatformKind());
+        return target.getSizeInBytes(kind.getPlatformKind());
     }
 
     /**
@@ -360,7 +352,7 @@ public abstract class FrameMap {
                     if (objectSlot != null) {
                         result = objectSlot;
                     } else {
-                        result = allocateNewSpillSlot(LIRKind.value(getTarget().wordKind), 0);
+                        result = allocateNewSpillSlot(LIRKind.value(target.wordKind), 0);
                     }
                 }
             }
@@ -368,12 +360,12 @@ public abstract class FrameMap {
             return result;
 
         } else {
-            return allocateNewSpillSlot(LIRKind.value(getTarget().wordKind), 0);
+            return allocateNewSpillSlot(LIRKind.value(target.wordKind), 0);
         }
     }
 
     public ReferenceMap initReferenceMap(boolean hasRegisters) {
-        ReferenceMap refMap = getTarget().createReferenceMap(hasRegisters, frameSize() / stackSlotSize());
+        ReferenceMap refMap = target.createReferenceMap(hasRegisters, frameSize() / stackSlotSize());
         for (StackSlot slot : objectStackSlots) {
             setReference(slot, refMap);
         }
