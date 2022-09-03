@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,18 +33,11 @@ import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64BinaryArithmeti
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64RMOp.MOVSX;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64RMOp.MOVSXB;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64RMOp.MOVSXD;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VADDSD;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VADDSS;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VMULSD;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VMULSS;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VSUBSD;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VSUBSS;
 import static org.graalvm.compiler.asm.amd64.AMD64BaseAssembler.OperandSize.DWORD;
 import static org.graalvm.compiler.asm.amd64.AMD64BaseAssembler.OperandSize.QWORD;
 import static org.graalvm.compiler.asm.amd64.AMD64BaseAssembler.OperandSize.SD;
 import static org.graalvm.compiler.asm.amd64.AMD64BaseAssembler.OperandSize.SS;
 
-import org.graalvm.compiler.asm.amd64.AMD64Assembler;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64MIOp;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64RMOp;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.SSEOp;
@@ -470,22 +463,12 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
                         getState(access));
     }
 
-    private ComplexMatchResult binaryRead(AMD64Assembler.VexRVMOp op, OperandSize size, ValueNode value, LIRLowerableAccess access) {
-        assert size == SS || size == SD;
-        return builder -> getArithmeticLIRGenerator().emitBinaryMemory(op, size, getLIRGeneratorTool().asAllocatable(operand(value)), (AMD64AddressValue) operand(access.getAddress()),
-                        getState(access));
-    }
-
     @MatchRule("(Add value Read=access)")
     @MatchRule("(Add value FloatingRead=access)")
     public ComplexMatchResult addMemory(ValueNode value, LIRLowerableAccess access) {
         OperandSize size = getMemorySize(access);
         if (size.isXmmType()) {
-            if (getArithmeticLIRGenerator().supportAVX()) {
-                return binaryRead(size == SS ? VADDSS : VADDSD, size, value, access);
-            } else {
-                return binaryRead(SSEOp.ADD, size, value, access);
-            }
+            return binaryRead(SSEOp.ADD, size, value, access);
         } else {
             return binaryRead(ADD.getRMOpcode(size), size, value, access);
         }
@@ -496,11 +479,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     public ComplexMatchResult subMemory(ValueNode value, LIRLowerableAccess access) {
         OperandSize size = getMemorySize(access);
         if (size.isXmmType()) {
-            if (getArithmeticLIRGenerator().supportAVX()) {
-                return binaryRead(size == SS ? VSUBSS : VSUBSD, size, value, access);
-            } else {
-                return binaryRead(SSEOp.SUB, size, value, access);
-            }
+            return binaryRead(SSEOp.SUB, size, value, access);
         } else {
             return binaryRead(SUB.getRMOpcode(size), size, value, access);
         }
@@ -511,11 +490,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     public ComplexMatchResult mulMemory(ValueNode value, LIRLowerableAccess access) {
         OperandSize size = getMemorySize(access);
         if (size.isXmmType()) {
-            if (getArithmeticLIRGenerator().supportAVX()) {
-                return binaryRead(size == SS ? VMULSS : VMULSD, size, value, access);
-            } else {
-                return binaryRead(SSEOp.MUL, size, value, access);
-            }
+            return binaryRead(SSEOp.MUL, size, value, access);
         } else {
             return binaryRead(AMD64RMOp.IMUL, size, value, access);
         }
