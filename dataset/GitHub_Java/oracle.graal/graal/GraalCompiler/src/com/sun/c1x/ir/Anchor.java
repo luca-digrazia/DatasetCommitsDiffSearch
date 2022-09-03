@@ -47,18 +47,11 @@ public final class Anchor extends BlockEnd {
 
     @Override
     public void accept(ValueVisitor v) {
-        v.visitGoto(this);
+        v.visitAnchor(this);
     }
 
     @Override
     public void print(LogStream out) {
-        out.print("goto ").print(defaultSuccessor());
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        Anchor x = new Anchor(null, into);
-        x.setNonNull(isNonNull());
-        return x;
+        out.print("anchor ").print(defaultSuccessor());
     }
 }

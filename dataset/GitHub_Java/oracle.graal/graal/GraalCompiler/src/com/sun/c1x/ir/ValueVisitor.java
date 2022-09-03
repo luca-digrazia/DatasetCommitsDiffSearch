@@ -40,7 +40,7 @@ public abstract class ValueVisitor {
     public abstract void visitConvert(Convert i);
     public abstract void visitExceptionObject(ExceptionObject i);
     public abstract void visitFrameState(FrameState i);
-    public abstract void visitGoto(Anchor i);
+    public abstract void visitAnchor(Anchor i);
     public abstract void visitIf(If i);
     public abstract void visitIfOp(IfOp i);
     public abstract void visitInstanceOf(InstanceOf i);
@@ -70,6 +70,4 @@ public abstract class ValueVisitor {
     public abstract void visitDeoptimize(Deoptimize deoptimize);
     public abstract void visitExceptionDispatch(ExceptionDispatch exceptionDispatch);
     public abstract void visitUnwind(Unwind unwind);
-    public abstract void visitLoopBegin(LoopBegin loopBegin);
-    public abstract void visitLoopEnd(LoopEnd loopEnd);
 }

@@ -34,7 +34,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.max.asm.*;
 import com.sun.c1x.*;
 import com.sun.c1x.alloc.*;
-import com.sun.c1x.alloc.OperandPool.*;
+import com.sun.c1x.alloc.OperandPool.VariableFlag;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.globalstub.*;
 import com.sun.c1x.graph.*;
@@ -43,10 +43,16 @@ import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.bytecode.*;
+import com.sun.cri.bytecode.Bytecodes.MemoryBarriers;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
+import com.sun.cri.xir.CiXirAssembler.XirConstant;
+import com.sun.cri.xir.CiXirAssembler.XirInstruction;
+import com.sun.cri.xir.CiXirAssembler.XirOperand;
+import com.sun.cri.xir.CiXirAssembler.XirParameter;
+import com.sun.cri.xir.CiXirAssembler.XirRegister;
+import com.sun.cri.xir.CiXirAssembler.XirTemp;
 import com.sun.cri.xir.*;
-import com.sun.cri.xir.CiXirAssembler.*;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
@@ -224,11 +230,8 @@ public abstract class LIRGenerator extends ValueVisitor {
             TTY.println("BEGIN Generating LIR for block B" + block.blockID());
         }
 
-        for (Node instr : block.getInstructions()) {
-            FrameState stateAfter = null;
-            if (instr instanceof Instruction) {
-                stateAfter = ((Instruction) instr).stateAfter();
-            }
+        for (Instruction instr : block.getInstructions()) {
+            FrameState stateAfter = instr.stateAfter();
             FrameState stateBefore = null;
             if (instr instanceof StateSplit && ((StateSplit) instr).stateBefore() != null) {
                 stateBefore = ((StateSplit) instr).stateBefore();
@@ -242,9 +245,9 @@ public abstract class LIRGenerator extends ValueVisitor {
                     }
                 }
             }
-            if (!(instr instanceof Merge) && instr != instr.graph().start()) {
+            if (!(instr instanceof Merge)) {
                 walkState(instr, stateAfter);
-                doRoot((Value) instr);
+                doRoot(instr);
             }
             if (stateAfter != null) {
                 lastState = stateAfter;
@@ -256,7 +259,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
             }
         }
-        if (block.blockSuccessors().size() == 1 && (block.getInstructions().size() == 0  || !(block.getInstructions().get(block.getInstructions().size() - 1) instanceof BlockEnd))) {
+        if (block.blockSuccessors().size() >= 1 && (block.getInstructions().size() == 0  || !jumpsToNextBlock(block.getInstructions().get(block.getInstructions().size() - 1)))) {
             moveToPhi();
             block.lir().jump(block.blockSuccessors().get(0));
         }
@@ -268,6 +271,10 @@ public abstract class LIRGenerator extends ValueVisitor {
         block.setLastState(lastState);
         this.currentBlock = null;
         blockDoEpilog();
+    }
+
+    private static boolean jumpsToNextBlock(Instruction instr) {
+        return instr instanceof BlockEnd;
     }
 
     @Override
@@ -403,7 +410,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
-    public void visitGoto(Anchor x) {
+    public void visitAnchor(Anchor x) {
         setNoResult(x);
 
         // emit phi-instruction moves after safepoint since this simplifies
@@ -1218,11 +1225,12 @@ public abstract class LIRGenerator extends ValueVisitor {
         return res.toArray(new SwitchRange[res.size()]);
     }
 
-    void doRoot(Value instr) {
+    void doRoot(Instruction instr) {
         if (C1XOptions.TraceLIRGeneratorLevel >= 2) {
-            TTY.println("Emitting LIR for instruction " + instr);
+            TTY.println("Emitting LIR for instruction " + instr.toString());
         }
         currentInstruction = instr;
+        assert !instr.hasSubst() : "shouldn't have missed substitution";
 
         if (C1XOptions.TraceLIRVisit) {
             TTY.println("Visiting    " + instr);
@@ -1291,7 +1299,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     private List<Phi> getPhis(LIRBlock block) {
         if (block.getInstructions().size() > 0) {
-            Node i = block.getInstructions().get(0);
+            Instruction i = block.getInstructions().get(0);
             if (i instanceof Merge) {
                 List<Phi> result = new ArrayList<Phi>();
                 for (Node n : i.usages()) {
@@ -1433,7 +1441,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected void walkState(Node x, FrameState state) {
+    protected void walkState(Instruction x, FrameState state) {
         if (state == null) {
             return;
         }
@@ -1455,6 +1463,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     private void walkStateValue(Value value) {
         if (value != null) {
+            assert !value.hasSubst() : "missed substitution on " + value.toString();
             if (value instanceof Phi && !value.isIllegal()) {
                 // phi's are special
                 operandForPhi((Phi) value);
@@ -1466,12 +1475,12 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected LIRDebugInfo stateFor(Value x) {
+    protected LIRDebugInfo stateFor(Instruction x) {
         assert lastState != null : "must have state before instruction for " + x;
         return stateFor(x, lastState);
     }
 
-    protected LIRDebugInfo stateFor(Value x, FrameState state) {
+    protected LIRDebugInfo stateFor(Instruction x, FrameState state) {
         if (compilation.placeholderState != null) {
             state = compilation.placeholderState;
         }
@@ -1540,7 +1549,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
         }
         // the value must be a constant or have a valid operand
-        assert operand.isLegal() : "this root has not been visited yet; instruction=" + instruction;
+        assert operand.isLegal() : "this root has not been visited yet";
         return operand;
     }
 

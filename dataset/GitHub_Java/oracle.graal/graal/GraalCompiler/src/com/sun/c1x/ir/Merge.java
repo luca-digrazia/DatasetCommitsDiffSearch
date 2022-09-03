@@ -33,7 +33,7 @@ import com.sun.cri.ci.*;
  * about the basic block, including the successor and
  * predecessor blocks, exception handlers, liveness information, etc.
  */
-public class Merge extends StateSplit {
+public final class Merge extends StateSplit {
 
     private static final int INPUT_COUNT = 0;
 
@@ -54,18 +54,32 @@ public class Merge extends StateSplit {
         return false;
     }
 
+    public final boolean isLoopHeader;
+
+    /**
+     * Index of bytecode that generated this node when appended in a basic block.
+     * Negative values indicate special cases.
+     */
+    private int bci;
+
     /**
      * Constructs a new Merge at the specified bytecode index.
      * @param bci the bytecode index of the start
      * @param blockID the ID of the block
      * @param graph
      */
-    public Merge(Graph graph) {
+    public Merge(int bci, boolean isLoopHeader, Graph graph) {
         super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        this.bci = bci;
+        this.isLoopHeader = isLoopHeader;
     }
 
-    protected Merge(int inputCount, int successorCount, Graph graph) {
-        super(CiKind.Illegal, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
+    /**
+     * Gets the bytecode index of this instruction.
+     * @return the bytecode index of this instruction
+     */
+    public int bci() {
+        return bci;
     }
 
     @Override
@@ -85,14 +99,15 @@ public class Merge extends StateSplit {
             builder.append(" -> ");
             boolean hasSucc = false;
             for (Node s : this.successors()) {
-                if (s != null) {
-                    if (hasSucc) {
-                        builder.append(", ");
-                    }
-                    builder.append("#");
-                    builder.append(s.id());
-                    hasSucc = true;
+                if (s == null) {
+                    continue;
                 }
+                if (hasSucc) {
+                    builder.append(", ");
+                }
+                builder.append("#");
+                builder.append(s.id());
+                hasSucc = true;
             }
         //}
         return builder.toString();
@@ -252,4 +267,8 @@ public class Merge extends StateSplit {
         return sb.toString();
     }
 
+    @Override
+    public String shortName() {
+        return "Merge #" + id();
+    }
 }
