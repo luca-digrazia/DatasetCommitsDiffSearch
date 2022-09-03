@@ -74,8 +74,11 @@ public class LLVMTypedForeignObjectMessageResolution {
         protected Object access(LLVMTypedForeignObject receiver) {
             try {
                 Object nativized = ForeignAccess.sendToNative(toNative, receiver.getForeign());
-                if (nativized != receiver.getForeign()) {
+                if (nativized != receiver.getForeign() && nativized instanceof TruffleObject) {
                     return LLVMTypedForeignObject.create((TruffleObject) nativized, receiver.getType());
+                } else if (!(nativized instanceof TruffleObject)) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalArgumentException();
                 }
                 return receiver;
             } catch (UnsupportedMessageException ex) {
