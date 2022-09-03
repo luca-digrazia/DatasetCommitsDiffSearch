@@ -22,9 +22,7 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
+import java.util.*;
 
 class TypedGraphNodeIterator<T extends IterableNodeType> implements Iterator<T> {
 
@@ -35,7 +33,7 @@ class TypedGraphNodeIterator<T extends IterableNodeType> implements Iterator<T> 
     private int currentIdIndex;
     private boolean needsForward;
 
-    TypedGraphNodeIterator(NodeClass<?> clazz, Graph graph) {
+    public TypedGraphNodeIterator(NodeClass<?> clazz, Graph graph) {
         this.graph = graph;
         ids = clazz.iterableIds();
         currentIdIndex = 0;
