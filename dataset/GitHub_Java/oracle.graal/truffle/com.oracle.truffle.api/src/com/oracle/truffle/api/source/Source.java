@@ -1226,6 +1226,7 @@ class SourceSnippets {
 
         Source source = Source.newFromFile(file).build();
 
+        assert file.getName().equals(source.getShortName());
         assert file.getName().equals(source.getName());
         assert file.getPath().equals(source.getPath());
         assert file.toURI().equals(source.getURI());
