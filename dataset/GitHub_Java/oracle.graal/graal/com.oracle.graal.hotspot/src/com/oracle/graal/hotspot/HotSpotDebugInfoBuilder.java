@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.hotspot;
 
-import static jdk.internal.jvmci.code.BytecodeFrame.*;
+import static com.oracle.graal.api.code.BytecodeFrame.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
 
 /**
  * Extends {@link DebugInfoBuilder} to allocate the extra debug information required for locks.
@@ -39,8 +38,8 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
 
     private final HotSpotLockStack lockStack;
 
-    public HotSpotDebugInfoBuilder(NodeValueMap nodeValueMap, HotSpotLockStack lockStack) {
-        super(nodeValueMap);
+    public HotSpotDebugInfoBuilder(NodeMap<Value> nodeOperands, HotSpotLockStack lockStack) {
+        super(nodeOperands);
         this.lockStack = lockStack;
     }
 
@@ -66,7 +65,9 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
     protected BytecodeFrame computeFrameForState(FrameState state) {
         if (isPlaceholderBci(state.bci) && state.bci != BytecodeFrame.BEFORE_BCI) {
             // This is really a hard error since an incorrect state could crash hotspot
-            throw JVMCIError.shouldNotReachHere("Invalid state " + BytecodeFrame.getPlaceholderBciName(state.bci) + " " + state);
+            throw new BailoutException(true, "Invalid state " + BytecodeFrame.getPlaceholderBciName(state.bci) + " " + state);
+// throw GraalInternalError.shouldNotReachHere("Invalid state " +
+// BytecodeFrame.getPlaceholderBciName(state.bci) + " " + state);
         }
         return super.computeFrameForState(state);
     }
