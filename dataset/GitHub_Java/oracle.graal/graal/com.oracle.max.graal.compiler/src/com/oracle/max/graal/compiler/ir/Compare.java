@@ -39,7 +39,7 @@ import com.sun.cri.ci.*;
  * into variants that do not materialize the value (CompareIf, CompareGuard...)
  *
  */
-public final class Compare extends BooleanNode {
+public final class Compare extends BooleanNode implements Node.GlobalValueNumberable {
     @Input private Value x;
     @Input private Value y;
 
@@ -149,6 +149,13 @@ public final class Compare extends BooleanNode {
         Map<Object, Object> properties = super.getDebugProperties();
         properties.put("unorderedIsTrue", unorderedIsTrue());
         return properties;
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        Compare x = new Compare(null, condition, null, into);
+        x.unorderedIsTrue = unorderedIsTrue;
+        return x;
     }
 
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {

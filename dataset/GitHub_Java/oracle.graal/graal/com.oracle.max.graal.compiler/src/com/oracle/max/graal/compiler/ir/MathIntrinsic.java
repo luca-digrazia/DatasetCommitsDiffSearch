@@ -23,8 +23,9 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.graph.Node.*;
 
-public class MathIntrinsic extends FloatingNode {
+public class MathIntrinsic extends FloatingNode implements GlobalValueNumberable {
 
     @Input private Value x;
     @Data private final Operation operation;

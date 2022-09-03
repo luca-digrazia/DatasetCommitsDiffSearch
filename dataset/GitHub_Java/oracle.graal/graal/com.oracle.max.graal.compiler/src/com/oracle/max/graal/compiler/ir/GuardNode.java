@@ -70,6 +70,11 @@ public final class GuardNode extends FloatingNode implements Node.GlobalValueNum
         out.print("guard node ").print(node());
     }
 
+    @Override
+    public Node copy(Graph into) {
+        return new GuardNode(null, into);
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

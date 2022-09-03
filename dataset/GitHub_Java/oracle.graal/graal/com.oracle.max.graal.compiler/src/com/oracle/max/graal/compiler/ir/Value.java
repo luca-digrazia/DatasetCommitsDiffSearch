@@ -25,6 +25,7 @@ package com.oracle.max.graal.compiler.ir;
 import java.util.*;
 
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -39,7 +40,7 @@ public abstract class Value extends Node {
      * The kind of this value. This is {@link CiKind#Void} for instructions that produce no value.
      * This kind is guaranteed to be a {@linkplain CiKind#stackKind() stack kind}.
      */
-    public final CiKind kind;
+    @Data public final CiKind kind;
 
     protected CiValue operand = CiValue.IllegalValue;
 
@@ -50,18 +51,10 @@ public abstract class Value extends Node {
      * @param successorCount
      * @param graph
      */
-    public Value(CiKind kind, int inputCount, int successorCount, Graph graph) {
-        super(inputCount, successorCount, graph);
-        assert kind == kind.stackKind() : kind + " != " + kind.stackKind();
+    public Value(CiKind kind, Graph graph) {
+        super(graph);
+        assert kind != null && kind == kind.stackKind() : kind + " != " + kind.stackKind();
         this.kind = kind;
-    }
-
-    ///////////////
-    // TODO: remove when Value class changes are completed
-
-    @Override
-    protected Object clone() throws CloneNotSupportedException {
-        throw new CloneNotSupportedException();
     }
 
     /**
@@ -108,6 +101,7 @@ public abstract class Value extends Node {
         assert this.operand.isIllegal() : "operand cannot be set twice";
         assert operand != null && operand.isLegal() : "operand must be legal";
         assert operand.kind.stackKind() == this.kind;
+        assert !(this instanceof VirtualObject);
         this.operand = operand;
     }
 
@@ -134,19 +128,6 @@ public abstract class Value extends Node {
         return null; // default: unknown declared type
     }
 
-    /**
-     * Apply the specified closure to all the input values of this instruction.
-     * @param closure the closure to apply
-     */
-    public void inputValuesDo(ValueClosure closure) {
-        for (int i = 0; i < inputs().size(); i++) {
-            inputs().set(i, closure.apply((Value) inputs().get(i)));
-        }
-        for (int i = 0; i < successors().size(); i++) {
-            successors().set(i, closure.apply((Value) successors().get(i)));
-        }
-    }
-
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
@@ -167,36 +148,28 @@ public abstract class Value extends Node {
     }
 
     /**
-     * Compute the value number of this Instruction. Local and global value numbering
-     * optimizations use a hash map, and the value number provides a hash code.
-     * If the instruction cannot be value numbered, then this method should return
-     * {@code 0}.
-     * @return the hashcode of this instruction
-     */
-    public int valueNumber() {
-        return 0;
-    }
-
-    /**
-     * Checks that this instruction is equal to another instruction for the purposes
-     * of value numbering.
-     * @param i the other instruction
-     * @return {@code true} if this instruction is equivalent to the specified
-     * instruction w.r.t. value numbering
-     */
-    public boolean valueEqual(Node i) {
-        return false;
-    }
-
-    /**
      * This method supports the visitor pattern by accepting a visitor and calling the
      * appropriate {@code visit()} method.
      *
      * @param v the visitor to accept
      */
-    public abstract void accept(ValueVisitor v);
+    public void accept(ValueVisitor v) {
+        throw new IllegalStateException("No visit method for this node (" + this.getClass().getSimpleName() + ")");
+    }
 
-    public abstract void print(LogStream out);
+    public void print(LogStream out) {
+        out.print(this.getClass().toString());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == LIRGenerator.LIRGeneratorOp.class) {
+            return (T) LIRGenerator.DELEGATE_TO_VALUE_VISITOR;
+        }
+        return super.lookup(clazz);
+    }
+
 
     @Override
     public Map<Object, Object> getDebugProperties() {
@@ -206,5 +179,14 @@ public abstract class Value extends Node {
         return properties;
     }
 
-
+    /*@Override
+    public Iterable<? extends Node> dataUsages() {
+        final Iterator<? extends Node> dataUsages = super.dataUsages().iterator();
+        return new Iterable<Node>() {
+            @Override
+            public Iterator<Node> iterator() {
+                return new StateSplit.FilteringIterator(dataUsages, FrameState.class);
+            }
+        };
+    }*/
 }

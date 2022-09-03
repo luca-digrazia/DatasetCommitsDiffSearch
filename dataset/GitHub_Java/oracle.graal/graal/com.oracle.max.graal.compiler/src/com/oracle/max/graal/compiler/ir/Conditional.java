@@ -99,6 +99,12 @@ public class Conditional extends Binary {
         print(falseValue());
     }
 
+    @Override
+    public Node copy(Graph into) {
+        Conditional x = new Conditional(kind, into);
+        return x;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

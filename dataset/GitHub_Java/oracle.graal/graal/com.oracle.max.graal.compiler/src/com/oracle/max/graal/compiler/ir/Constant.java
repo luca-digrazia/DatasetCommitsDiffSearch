@@ -182,4 +182,9 @@ public final class Constant extends BooleanNode {
     public String shortName() {
         return value.name();
     }
+
+    @Override
+    public Node copy(Graph into) {
+        return new Constant(value, into);
+    }
 }

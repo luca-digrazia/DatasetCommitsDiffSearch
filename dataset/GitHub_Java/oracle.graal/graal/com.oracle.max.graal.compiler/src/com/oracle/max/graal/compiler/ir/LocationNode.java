@@ -100,6 +100,11 @@ public final class LocationNode extends FloatingNode {
         return valueKind;
     }
 
+    @Override
+    public Node copy(Graph into) {
+        return new LocationNode(locationIdentity, valueKind, displacement, into);
+    }
+
     public CiValue createAddress(LIRGenerator lirGenerator, Value object) {
         CiValue indexValue = CiValue.IllegalValue;
         Scale indexScale = Scale.Times1;

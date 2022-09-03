@@ -78,6 +78,11 @@ public final class CheckCast extends TypeCheck {
         print(CiUtil.toJavaName(targetClass()));
     }
 
+    @Override
+    public Node copy(Graph into) {
+        return new CheckCast(null, null, into);
+    }
+
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
         public Node canonical(Node node, NotifyReProcess reProcess) {

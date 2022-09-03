@@ -59,4 +59,9 @@ public final class CurrentThread extends FloatingNode implements Node.GlobalValu
     public void print(LogStream out) {
         out.print("currentThread");
     }
+
+    @Override
+    public Node copy(Graph into) {
+        return new CurrentThread(threadObjectOffset, into);
+    }
 }
