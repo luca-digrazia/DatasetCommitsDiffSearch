@@ -24,8 +24,6 @@ package com.oracle.graal.loop;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
@@ -73,53 +71,30 @@ public abstract class LoopTransformations {
         }
     }
 
-    public static void unswitch(LoopEx loop, List<ControlSplitNode> controlSplitNodeSet) {
-        ControlSplitNode firstNode = controlSplitNodeSet.iterator().next();
+    public static void unswitch(LoopEx loop, ControlSplitNode controlSplitNode) {
         LoopFragmentWhole originalLoop = loop.whole();
-        StructuredGraph graph = firstNode.graph();
-
         // create new control split out of loop
-        ControlSplitNode newControlSplit = (ControlSplitNode) firstNode.copyWithInputs();
+        ControlSplitNode newControlSplit = (ControlSplitNode) controlSplitNode.copyWithInputs();
         originalLoop.entryPoint().replaceAtPredecessor(newControlSplit);
 
-        /*
-         * The code below assumes that all of the control split nodes have the same successor
-         * structure, which should have been enforced by findUnswitchable.
-         */
-        NodeClassIterator successors = firstNode.successors().iterator();
+        NodeClassIterator successors = controlSplitNode.successors().iterator();
         assert successors.hasNext();
         // original loop is used as first successor
         Position firstPosition = successors.nextPosition();
-        NodeClass controlSplitClass = firstNode.getNodeClass();
-        BeginNode originalLoopBegin = BeginNode.begin(originalLoop.entryPoint());
-        controlSplitClass.set(newControlSplit, firstPosition, originalLoopBegin);
+        NodeClass controlSplitClass = controlSplitNode.getNodeClass();
+        controlSplitClass.set(newControlSplit, firstPosition, BeginNode.begin(originalLoop.entryPoint()));
 
+        StructuredGraph graph = controlSplitNode.graph();
         while (successors.hasNext()) {
             Position position = successors.nextPosition();
-            // create a new loop duplicate and connect it.
+            // create a new loop duplicate, connect it and simplify it
             LoopFragmentWhole duplicateLoop = originalLoop.duplicate();
-            BeginNode newBegin = BeginNode.begin(duplicateLoop.entryPoint());
-            controlSplitClass.set(newControlSplit, position, newBegin);
-
-            // For each cloned ControlSplitNode, simplify the proper path
-            for (ControlSplitNode controlSplitNode : controlSplitNodeSet) {
-                ControlSplitNode duplicatedControlSplit = duplicateLoop.getDuplicatedNode(controlSplitNode);
-                if (duplicatedControlSplit.isAlive()) {
-                    BeginNode survivingSuccessor = (BeginNode) controlSplitClass.get(duplicatedControlSplit, position);
-                    survivingSuccessor.replaceAtUsages(InputType.Guard, newBegin);
-                    graph.removeSplitPropagate(duplicatedControlSplit, survivingSuccessor);
-                }
-            }
+            controlSplitClass.set(newControlSplit, position, BeginNode.begin(duplicateLoop.entryPoint()));
+            ControlSplitNode duplicatedControlSplit = duplicateLoop.getDuplicatedNode(controlSplitNode);
+            graph.removeSplitPropagate(duplicatedControlSplit, (BeginNode) controlSplitClass.get(duplicatedControlSplit, position));
         }
         // original loop is simplified last to avoid deleting controlSplitNode too early
-        for (ControlSplitNode controlSplitNode : controlSplitNodeSet) {
-            if (controlSplitNode.isAlive()) {
-                BeginNode survivingSuccessor = (BeginNode) controlSplitClass.get(controlSplitNode, firstPosition);
-                survivingSuccessor.replaceAtUsages(InputType.Guard, originalLoopBegin);
-                graph.removeSplitPropagate(controlSplitNode, survivingSuccessor);
-            }
-        }
-
+        graph.removeSplitPropagate(controlSplitNode, (BeginNode) controlSplitClass.get(controlSplitNode, firstPosition));
         // TODO (gd) probabilities need some amount of fixup.. (probably also in other transforms)
     }
 
@@ -144,36 +119,17 @@ public abstract class LoopTransformations {
         }
     }
 
-    public static List<ControlSplitNode> findUnswitchable(LoopEx loop) {
-        List<ControlSplitNode> controls = null;
-        ValueNode invariantValue = null;
+    public static ControlSplitNode findUnswitchable(LoopEx loop) {
         for (IfNode ifNode : loop.whole().nodes().filter(IfNode.class)) {
             if (loop.isOutsideLoop(ifNode.condition())) {
-                if (controls == null) {
-                    invariantValue = ifNode.condition();
-                    controls = new ArrayList<>();
-                    controls.add(ifNode);
-                } else if (ifNode.condition() == invariantValue) {
-                    controls.add(ifNode);
-                }
+                return ifNode;
             }
         }
-        if (controls == null) {
-            SwitchNode firstSwitch = null;
-            for (SwitchNode switchNode : loop.whole().nodes().filter(SwitchNode.class)) {
-                if (switchNode.successors().count() > 1 && loop.isOutsideLoop(switchNode.value())) {
-                    if (controls == null) {
-                        firstSwitch = switchNode;
-                        invariantValue = switchNode.value();
-                        controls = new ArrayList<>();
-                        controls.add(switchNode);
-                    } else if (switchNode.value() == invariantValue && firstSwitch.equalKeys(switchNode)) {
-                        // Only collect switches which test the same values in the same order
-                        controls.add(switchNode);
-                    }
-                }
+        for (SwitchNode switchNode : loop.whole().nodes().filter(SwitchNode.class)) {
+            if (switchNode.successors().count() > 1 && loop.isOutsideLoop(switchNode.value())) {
+                return switchNode;
             }
         }
-        return controls;
+        return null;
     }
 }

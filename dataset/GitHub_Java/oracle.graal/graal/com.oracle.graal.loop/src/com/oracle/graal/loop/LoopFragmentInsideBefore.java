@@ -23,11 +23,10 @@
 package com.oracle.graal.loop;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 
-
 public class LoopFragmentInsideBefore extends LoopFragmentInside {
+
     private final FixedNode point;
 
     public LoopFragmentInsideBefore(LoopEx loop, FixedNode point) {
@@ -51,8 +50,7 @@ public class LoopFragmentInsideBefore extends LoopFragmentInside {
     }
 
     @Override
-    public NodeIterable<Node> nodes() {
-        // TODO Auto-generated method stub
+    public NodeBitMap nodes() {
         return null;
     }
 }
