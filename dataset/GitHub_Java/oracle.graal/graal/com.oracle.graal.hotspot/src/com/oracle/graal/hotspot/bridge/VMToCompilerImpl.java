@@ -35,6 +35,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
@@ -44,7 +45,6 @@ import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.debug.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.printer.*;
@@ -156,6 +156,13 @@ public class VMToCompilerImpl implements VMToCompiler {
                         provider.registerReplacements(replacements);
                     }
                     runtime.registerReplacements(replacements);
+                    if (GraalOptions.BootstrapReplacements) {
+                        for (ResolvedJavaMethod method : replacements.getAllReplacements()) {
+                            replacements.getMacroSubstitution(method);
+                            replacements.getMethodSubstitution(method);
+                            replacements.getSnippet(method);
+                        }
+                    }
                 }
             });
 
@@ -713,7 +720,6 @@ public class VMToCompilerImpl implements VMToCompiler {
         if (onStackReplacement) {
             phasePlan.addPhase(PhasePosition.AFTER_PARSING, new OnStackReplacementPhase());
         }
-        phasePlan.addPhase(PhasePosition.LOW_LEVEL, new WriteBarrierAdditionPhase());
         return phasePlan;
     }
 

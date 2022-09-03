@@ -77,9 +77,4 @@ public interface Replacements {
      * snippet.
      */
     Collection<ResolvedJavaMethod> getAllReplacements();
-
-    /**
-     * Determines whether the replacement of this method is flagged as being inlined always.
-     */
-    boolean isForcedSubstitution(ResolvedJavaMethod methodAt);
 }

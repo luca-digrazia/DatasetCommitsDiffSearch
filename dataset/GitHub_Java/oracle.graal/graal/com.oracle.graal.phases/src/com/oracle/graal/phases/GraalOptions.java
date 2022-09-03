@@ -204,8 +204,6 @@ public final class GraalOptions {
     public static boolean OptEliminatePartiallyRedundantGuards = true;
     public static boolean OptFilterProfiledTypes             = true;
     public static boolean OptDevirtualizeInvokesOptimistically = true;
-    public static boolean OptPushThroughPi                   = true;
-
 
     // Intrinsification settings
     public static boolean IntrinsifyObjectClone              = ____;
@@ -218,7 +216,6 @@ public final class GraalOptions {
     public static boolean IntrinsifyMathMethods              = true;
     public static boolean IntrinsifyAESMethods               = true;
     public static boolean IntrinsifyInstalledCodeMethods     = true;
-    public static boolean IntrinsifyCallSiteTarget           = true;
     /**
      * Counts the various paths taken through snippets.
      */
