@@ -201,7 +201,7 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(op2 | encode(dst) << 3 | encode(src));
     }
 
-    protected void emitOperandHelper(Register reg, Address addr) {
+    private void emitOperandHelper(Register reg, Address addr) {
         Register base = isLegal(addr.getBase()) ? asRegister(addr.getBase()) : Register.None;
         Register index = isLegal(addr.getIndex()) ? asRegister(addr.getIndex()) : Register.None;
 
@@ -3070,5 +3070,10 @@ public class AMD64Assembler extends AbstractAssembler {
 
     public void fstp(int i) {
         emitx87(0xDD, 0xD8, i);
+    }
+
+    @Override
+    public void bangStack(int disp) {
+        movq(new Address(target.wordKind, AMD64.RSP, -disp), AMD64.rax);
     }
 }
