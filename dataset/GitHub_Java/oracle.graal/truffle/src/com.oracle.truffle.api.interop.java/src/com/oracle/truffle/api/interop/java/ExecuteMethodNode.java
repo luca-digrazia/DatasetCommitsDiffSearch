@@ -41,7 +41,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
@@ -58,20 +57,7 @@ abstract class ExecuteMethodNode extends Node {
         return ExecuteMethodNodeGen.create();
     }
 
-    public final Object execute(JavaMethodDesc method, Object obj, Object[] args, Object languageContext) {
-        try {
-            return executeImpl(method, obj, args, languageContext);
-        } catch (ClassCastException | NullPointerException e) {
-            // conversion failed by ToJavaNode
-            throw UnsupportedTypeException.raise(e, args);
-        } catch (InteropException e) {
-            throw e.raise();
-        } catch (Throwable e) {
-            throw JavaInteropReflect.rethrow(JavaInterop.wrapHostException(e));
-        }
-    }
-
-    protected abstract Object executeImpl(JavaMethodDesc method, Object obj, Object[] args, Object languageContext) throws InteropException;
+    public abstract Object execute(JavaMethodDesc method, Object obj, Object[] args, Object languageContext);
 
     static ToJavaNode[] createToJava(int argsLength) {
         ToJavaNode[] toJava = new ToJavaNode[argsLength];
@@ -97,7 +83,6 @@ abstract class ExecuteMethodNode extends Node {
         for (int i = 0; i < toJavaNodes.length; i++) {
             convertedArguments[i] = toJavaNodes[i].execute(args[i], types[i], genericTypes[i], languageContext);
         }
-
         return doInvoke(cachedMethod, obj, convertedArguments, languageContext);
     }
 
@@ -228,15 +213,12 @@ abstract class ExecuteMethodNode extends Node {
                         continue;
                     }
                     Class<?> paramType = getParameterType(other.getParameterTypes(), i, varArgs);
-                    if (paramType == targetType) {
-                        continue;
-                    }
-                    if ((ToJavaNode.isAssignableFromTrufflePrimitiveType(paramType) || ToJavaNode.isAssignableFromTrufflePrimitiveType(targetType)) && isAssignableFrom(targetType, paramType)) {
+                    if (ToJavaNode.isAssignableFromTrufflePrimitiveType(paramType) && isAssignableFrom(targetType, paramType)) {
                         otherPossibleTypes.add(paramType);
                     }
                 }
 
-                argType = new PrimitiveType(currentTargetType, otherPossibleTypes.toArray(EMPTY_CLASS_ARRAY));
+                argType = new PrimitiveCoercibleType(currentTargetType, otherPossibleTypes.toArray(EMPTY_CLASS_ARRAY));
             } else if (arg instanceof JavaObject) {
                 argType = new JavaObjectType(((JavaObject) arg).clazz);
             } else {
@@ -273,8 +255,8 @@ abstract class ExecuteMethodNode extends Node {
                     if (!(arg instanceof JavaObject && ((JavaObject) arg).clazz == ((JavaObjectType) argType).clazz)) {
                         return false;
                     }
-                } else if (argType instanceof PrimitiveType) {
-                    if (!((PrimitiveType) argType).test(arg, toJavaNode)) {
+                } else if (argType instanceof PrimitiveCoercibleType) {
+                    if (!((PrimitiveCoercibleType) argType).test(arg, toJavaNode)) {
                         return false;
                     }
                 } else {
@@ -414,10 +396,12 @@ abstract class ExecuteMethodNode extends Node {
                 if (!candidate.isVarArgs() || paramCount == args.length) {
                     assert paramCount == args.length;
                     Class<?>[] parameterTypes = candidate.getParameterTypes();
-                    Type[] genericParameterTypes = candidate.getGenericParameterTypes();
                     boolean applicable = true;
                     for (int i = 0; i < paramCount; i++) {
-                        if (!isSubtypeOf(args[i], parameterTypes[i]) && !toJavaNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], languageContext, strict)) {
+                        Class<?> parameterType = parameterTypes[i];
+                        Type[] genericParameterTypes = candidate.getGenericParameterTypes();
+                        Object argument = args[i];
+                        if (!isSubtypeOf(argument, parameterType) && !toJavaNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], languageContext, strict)) {
                             applicable = false;
                             break;
                         }
@@ -571,24 +555,24 @@ abstract class ExecuteMethodNode extends Node {
         if (toType.isAssignableFrom(fromType)) {
             return true;
         }
-        boolean fromIsPrimitive = fromType.isPrimitive();
-        boolean toIsPrimitive = toType.isPrimitive();
-        Class<?> fromAsPrimitive = fromIsPrimitive ? fromType : boxedTypeToPrimitiveType(fromType);
-        Class<?> toAsPrimitive = toIsPrimitive ? toType : boxedTypeToPrimitiveType(toType);
-        if (toAsPrimitive != null && fromAsPrimitive != null) {
-            if (toAsPrimitive == fromAsPrimitive) {
-                assert fromIsPrimitive != toIsPrimitive;
+        if (fromType.isPrimitive()) {
+            if (toType.isPrimitive()) {
+                if (isWideningPrimitiveConversion(toType, fromType)) {
+                    return true;
+                }
+            } else if (toType.isAssignableFrom(primitiveTypeToBoxedType(fromType))) {
                 // primitive <: boxed
-                return fromIsPrimitive;
-            } else if (isWideningPrimitiveConversion(toAsPrimitive, fromAsPrimitive)) {
-                // primitive|boxed <: wider primitive|boxed
                 return true;
             }
-        } else if (fromAsPrimitive == char.class && (toType == String.class || toType == CharSequence.class)) {
+        } else if (toType.isPrimitive()) {
+            Class<?> boxedToPrimitive = boxedTypeToPrimitiveType(fromType);
+            if (boxedToPrimitive != null && isWideningPrimitiveConversion(toType, boxedToPrimitive)) {
+                // boxed <: wider primitive
+                return true;
+            }
+        }
+        if ((fromType == char.class || fromType == Character.class) && (toType == String.class || toType == CharSequence.class)) {
             // char|Character <: String|CharSequence
-            return true;
-        } else if (toAsPrimitive == null && fromAsPrimitive != null && toType.isAssignableFrom(primitiveTypeToBoxedType(fromAsPrimitive))) {
-            // primitive|boxed <: Number et al
             return true;
         }
         return false;
@@ -711,11 +695,11 @@ abstract class ExecuteMethodNode extends Node {
         }
     }
 
-    static class PrimitiveType implements Type {
+    static class PrimitiveCoercibleType implements Type {
         final Class<?> targetType;
         @CompilationFinal(dimensions = 1) final Class<?>[] otherTypes;
 
-        PrimitiveType(Class<?> targetType, Class<?>[] otherTypes) {
+        PrimitiveCoercibleType(Class<?> targetType, Class<?>[] otherTypes) {
             this.targetType = targetType;
             this.otherTypes = otherTypes;
         }
@@ -730,17 +714,17 @@ abstract class ExecuteMethodNode extends Node {
             if (this == obj) {
                 return true;
             }
-            if (!(obj instanceof PrimitiveType)) {
+            if (!(obj instanceof PrimitiveCoercibleType)) {
                 return false;
             }
-            PrimitiveType other = (PrimitiveType) obj;
+            PrimitiveCoercibleType other = (PrimitiveCoercibleType) obj;
             return Objects.equals(this.targetType, other.targetType) && Arrays.equals(this.otherTypes, other.otherTypes);
         }
 
         @Override
         public String toString() {
             StringBuilder sb = new StringBuilder();
-            sb.append("Primitive[");
+            sb.append("PrimitiveCoercible[");
             sb.append(targetType.getTypeName());
             if (otherTypes.length > 0) {
                 for (Class<?> otherType : otherTypes) {
@@ -755,11 +739,11 @@ abstract class ExecuteMethodNode extends Node {
         @ExplodeLoop
         public boolean test(Object value, ToJavaNode toJavaNode) {
             for (Class<?> otherType : otherTypes) {
-                if (toJavaNode.canConvertStrict(value, otherType)) {
+                if (toJavaNode.toPrimitive(value, otherType) != null) {
                     return false;
                 }
             }
-            return toJavaNode.canConvertStrict(value, targetType);
+            return toJavaNode.toPrimitive(value, targetType) != null;
         }
     }
 }

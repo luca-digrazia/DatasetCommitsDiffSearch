@@ -115,22 +115,16 @@ abstract class ToJavaNode extends Node {
         return convertedValue;
     }
 
-    boolean canConvertStrict(Object value, Class<?> targetType) {
+    @SuppressWarnings("unused")
+    boolean canConvert(Object value, Class<?> targetType, Type genericType, Object languageContext, boolean strict) {
+        Object convertedValue;
         if (isAssignableFromTrufflePrimitiveType(targetType)) {
-            Object convertedValue = primitive.toPrimitive(value, targetType);
+            convertedValue = toPrimitive(value, targetType);
             if (convertedValue != null) {
                 return true;
             }
         }
         if (JavaObject.isJavaInstance(targetType, value)) {
-            return true;
-        }
-        return false;
-    }
-
-    @SuppressWarnings("unused")
-    boolean canConvert(Object value, Class<?> targetType, Type genericType, Object languageContext, boolean strict) {
-        if (canConvertStrict(value, targetType)) {
             return true;
         }
         if (strict) {
@@ -168,6 +162,10 @@ abstract class ToJavaNode extends Node {
         }
     }
 
+    Object toPrimitive(Object value, Class<?> targetType) {
+        return primitive.toPrimitive(value, targetType);
+    }
+
     static boolean isAssignableFromTrufflePrimitiveType(Class<?> clazz) {
         return clazz == int.class || clazz == Integer.class ||
                         clazz == boolean.class || clazz == Boolean.class ||
@@ -198,9 +196,7 @@ abstract class ToJavaNode extends Node {
         } else if (primitive.hasSize(truffleObject)) {
             return asJavaObject(truffleObject, List.class, null, languageContext);
         } else if (isExecutable(truffleObject)) {
-            return TruffleFunction.create(truffleObject, languageContext, false);
-        } else if (isInstantiable(truffleObject)) {
-            return TruffleFunction.create(truffleObject, languageContext, true);
+            return JavaInteropReflect.asDefaultJavaFunction(truffleObject, languageContext);
         } else if (languageContext != null) {
             return JavaInterop.toHostValue(truffleObject, languageContext);
         } else {
