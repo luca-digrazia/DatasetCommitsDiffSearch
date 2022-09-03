@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,10 +35,9 @@ import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.*;
-import com.oracle.graal.nodes.memory.HeapAccess.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.word.*;
 
@@ -80,9 +79,9 @@ class HotSpotWordOperationPlugin extends WordOperationPlugin {
                 assert right.stamp() instanceof MetaspacePointerStamp : right + " " + right.stamp();
                 assert opcode == POINTER_EQ || opcode == POINTER_NE;
 
-                PointerEqualsNode comparison = b.add(new PointerEqualsNode(left, right));
-                ValueNode eqValue = b.add(forBoolean(opcode == POINTER_EQ));
-                ValueNode neValue = b.add(forBoolean(opcode == POINTER_NE));
+                PointerEqualsNode comparison = b.append(new PointerEqualsNode(left, right));
+                ValueNode eqValue = b.append(forBoolean(opcode == POINTER_EQ));
+                ValueNode neValue = b.append(forBoolean(opcode == POINTER_NE));
                 b.addPush(returnStackKind, new ConditionalNode(comparison, eqValue, neValue));
                 break;
 
@@ -91,8 +90,8 @@ class HotSpotWordOperationPlugin extends WordOperationPlugin {
                 ValueNode pointer = args[0];
                 assert pointer.stamp() instanceof MetaspacePointerStamp;
 
-                IsNullNode isNull = b.add(new IsNullNode(pointer));
-                b.addPush(returnStackKind, new ConditionalNode(isNull, b.add(forBoolean(true)), b.add(forBoolean(false))));
+                IsNullNode isNull = b.append(new IsNullNode(pointer));
+                b.addPush(returnStackKind, new ConditionalNode(isNull, b.append(forBoolean(true)), b.append(forBoolean(false))));
                 break;
 
             case FROM_POINTER:
@@ -119,7 +118,7 @@ class HotSpotWordOperationPlugin extends WordOperationPlugin {
                 } else {
                     location = makeLocation(b, args[1], args[2]);
                 }
-                ReadNode read = b.add(new ReadNode(args[0], location, readStamp, BarrierType.NONE));
+                ReadNode read = b.append(new ReadNode(args[0], location, readStamp, BarrierType.NONE));
                 /*
                  * The read must not float outside its block otherwise it may float above an
                  * explicit zero check on its base address.

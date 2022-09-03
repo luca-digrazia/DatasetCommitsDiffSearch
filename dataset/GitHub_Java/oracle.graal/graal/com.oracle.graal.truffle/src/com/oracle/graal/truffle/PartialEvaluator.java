@@ -268,9 +268,6 @@ public class PartialEvaluator {
             if (targetMethod != null) {
                 // TODO maybe cast arguments
 
-                if (!targetMethod.canBeInlined()) {
-                    return null;
-                }
                 if (targetMethod.canBeStaticallyBound()) {
                     return new InlineInfo(targetMethod, false, false);
                 }

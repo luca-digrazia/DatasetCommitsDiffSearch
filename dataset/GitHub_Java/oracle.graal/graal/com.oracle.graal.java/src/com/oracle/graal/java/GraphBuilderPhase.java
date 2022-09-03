@@ -2413,7 +2413,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             public void push(Kind kind, ValueNode value) {
-                assert value.isAlive();
                 assert kind == kind.getStackKind();
                 frameState.push(kind, value);
             }
