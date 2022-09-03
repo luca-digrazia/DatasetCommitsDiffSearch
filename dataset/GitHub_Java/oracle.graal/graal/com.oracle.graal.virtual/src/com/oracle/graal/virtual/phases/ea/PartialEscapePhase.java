@@ -26,16 +26,19 @@ import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.virtual.phases.ea.PartialEscapePhase.Options.*;
 
 import java.util.*;
+import java.util.function.*;
 
-import jdk.internal.jvmci.options.*;
-
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -84,14 +87,51 @@ public class PartialEscapePhase extends EffectsPhase<PhaseContext> {
 
     @Override
     protected Closure<?> createEffectsClosure(PhaseContext context, SchedulePhase schedule, ControlFlowGraph cfg) {
-        for (VirtualObjectNode virtual : cfg.graph.getNodes(VirtualObjectNode.TYPE)) {
-            virtual.resetObjectId();
-        }
         assert schedule != null;
         if (readElimination) {
-            return new PEReadEliminationClosure(schedule, context.getMetaAccess(), context.getConstantReflection());
+            return new PEReadEliminationClosure(schedule, context.getMetaAccess(), context.getConstantReflection(), context.getAssumptions());
         } else {
-            return new PartialEscapeClosure.Final(schedule, context.getMetaAccess(), context.getConstantReflection());
+            return new PartialEscapeClosure.Final(schedule, context.getMetaAccess(), context.getConstantReflection(), context.getAssumptions());
         }
+    }
+
+    public static Map<Invoke, Double> getHints(StructuredGraph graph) {
+        ToDoubleFunction<FixedNode> probabilities = new FixedNodeProbabilityCache();
+        Map<Invoke, Double> hints = null;
+        for (CommitAllocationNode commit : graph.getNodes().filter(CommitAllocationNode.class)) {
+            double sum = 0;
+            double invokeSum = 0;
+            for (Node commitUsage : commit.usages()) {
+                for (Node usage : commitUsage.usages()) {
+                    if (usage instanceof FixedNode) {
+                        sum += probabilities.applyAsDouble((FixedNode) usage);
+                    } else {
+                        if (usage instanceof MethodCallTargetNode) {
+                            invokeSum += probabilities.applyAsDouble(((MethodCallTargetNode) usage).invoke().asNode());
+                        }
+                        for (Node secondLevelUage : usage.usages()) {
+                            if (secondLevelUage instanceof FixedNode) {
+                                sum += probabilities.applyAsDouble(((FixedNode) secondLevelUage));
+                            }
+                        }
+                    }
+                }
+            }
+            // TODO(lstadler) get rid of this magic number
+            if (sum > 100 && invokeSum > 0) {
+                for (Node commitUsage : commit.usages()) {
+                    for (Node usage : commitUsage.usages()) {
+                        if (usage instanceof MethodCallTargetNode) {
+                            if (hints == null) {
+                                hints = CollectionsFactory.newMap();
+                            }
+                            Invoke invoke = ((MethodCallTargetNode) usage).invoke();
+                            hints.put(invoke, sum / invokeSum);
+                        }
+                    }
+                }
+            }
+        }
+        return hints;
     }
 }

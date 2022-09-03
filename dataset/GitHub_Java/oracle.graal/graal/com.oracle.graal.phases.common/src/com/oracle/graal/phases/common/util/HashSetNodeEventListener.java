@@ -22,14 +22,10 @@
  */
 package com.oracle.graal.phases.common.util;
 
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
-import com.oracle.graal.graph.Graph.NodeEvent;
-import com.oracle.graal.graph.Graph.NodeEventListener;
-import com.oracle.graal.graph.Node.IndirectCanonicalization;
-import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.Graph.*;
+import com.oracle.graal.graph.*;
 
 /**
  * A simple {@link NodeEventListener} implementation that accumulates event nodes in a
@@ -68,11 +64,6 @@ public class HashSetNodeEventListener implements NodeEventListener {
     public void event(NodeEvent e, Node node) {
         if (filter.contains(e)) {
             nodes.add(node);
-            if (node instanceof IndirectCanonicalization) {
-                for (Node usage : node.usages()) {
-                    nodes.add(usage);
-                }
-            }
         }
     }
 

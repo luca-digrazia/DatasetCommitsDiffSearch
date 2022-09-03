@@ -47,6 +47,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.GraphBuilderPhase.Instance;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
@@ -680,7 +681,8 @@ public class ReplacementsImpl implements Replacements {
                             InliningUtil.inlineMacroNode(callTarget.invoke(), callee, macroNodeClass);
                         } else {
                             StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(replacements, callee);
-                            if (callTarget.invokeKind().isDirect() && (policy.shouldInline(callee, methodToParse) || (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)))) {
+                            if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) &&
+                                            (policy.shouldInline(callee, methodToParse) || (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)))) {
                                 StructuredGraph targetGraph;
                                 if (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)) {
                                     targetGraph = intrinsicGraph;
