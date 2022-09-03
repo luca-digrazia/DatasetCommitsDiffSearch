@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
+import static com.oracle.graal.api.code.DeoptimizationAction.*;
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
@@ -33,18 +35,33 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.SnippetTemplate.Arguments;
+import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.word.*;
 
-public class NewMultiArrayStub extends CRuntimeStub {
+public class NewMultiArrayStub extends Stub {
 
     public NewMultiArrayStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
-        super(runtime, replacements, target, linkage);
+        super(runtime, replacements, target, linkage, "newMultiArray");
+    }
+
+    @Override
+    protected Arguments makeArguments(SnippetInfo stub) {
+        Arguments args = new Arguments(stub);
+        args.add("hub", null);
+        args.add("rank", null);
+        args.add("dims", null);
+        return args;
     }
 
     @Snippet
     private static Object newMultiArray(Word hub, int rank, Word dims) {
         newMultiArrayC(NEW_MULTI_ARRAY_C, thread(), hub, rank, dims);
-        handlePendingException(true);
+
+        if (clearPendingException(thread())) {
+            getAndClearObjectResult(thread());
+            DeoptimizeCallerNode.deopt(InvalidateReprofile, RuntimeConstraint);
+        }
         return verifyOop(getAndClearObjectResult(thread()));
     }
 
