@@ -80,20 +80,19 @@ abstract class ToJavaNode extends Node {
     private Object convertImpl(Object value, Class<?> targetType, Type genericType, Object languageContext) {
         Object convertedValue;
         if (isAssignableFromTrufflePrimitiveType(targetType)) {
-            Object unboxed = primitive.unbox(value);
-            convertedValue = primitive.toPrimitive(unboxed, targetType);
+            convertedValue = primitive.toPrimitive(value, targetType);
             if (convertedValue != null) {
                 return convertedValue;
             } else if (targetType == char.class || targetType == Character.class) {
-                Integer safeChar = primitive.toInteger(unboxed);
+                Integer safeChar = primitive.toInteger(value);
                 if (safeChar != null) {
                     int v = safeChar;
                     if (v >= 0 && v < 65536) {
                         return (char) v;
                     }
                 }
-            } else if (targetType == String.class && JavaInterop.isPrimitive(unboxed)) {
-                return convertToString(unboxed);
+            } else if (targetType == String.class && JavaInterop.isPrimitive(value)) {
+                return convertToString(value);
             }
         }
         if (targetType == Value.class && languageContext != null) {
@@ -116,31 +115,27 @@ abstract class ToJavaNode extends Node {
     }
 
     boolean canConvertToPrimitive(Object value, Class<?> targetType, boolean strict) {
-        if (JavaObject.isJavaInstance(targetType, value)) {
-            return true;
-        }
-        Object unboxed;
         if (isAssignableFromTrufflePrimitiveType(targetType)) {
-            unboxed = primitive.unbox(value);
-            Object convertedValue = primitive.toPrimitive(unboxed, targetType);
+            Object convertedValue = primitive.toPrimitive(value, targetType);
             if (convertedValue != null) {
                 return true;
             }
-        } else {
-            return false;
+        }
+        if (JavaObject.isJavaInstance(targetType, value)) {
+            return true;
         }
         if (strict) {
             return false;
         }
         if (targetType == char.class || targetType == Character.class) {
-            Integer safeChar = primitive.toInteger(unboxed);
+            Integer safeChar = primitive.toInteger(value);
             if (safeChar != null) {
                 int v = safeChar;
                 if (v >= 0 && v < 65536) {
                     return true;
                 }
             }
-        } else if (targetType == String.class && JavaInterop.isPrimitive(unboxed)) {
+        } else if (targetType == String.class && JavaInterop.isPrimitive(value)) {
             return true;
         }
         return false;
