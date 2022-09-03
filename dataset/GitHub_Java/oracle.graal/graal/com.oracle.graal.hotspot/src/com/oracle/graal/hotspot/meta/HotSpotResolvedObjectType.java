@@ -293,12 +293,14 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     @Override
     public boolean isInitialized() {
-        return isArray() ? true : getInitState() == runtime().getConfig().instanceKlassStateFullyInitialized;
+        final int state = getState();
+        return state == runtime().getConfig().klassStateFullyInitialized;
     }
 
     @Override
     public boolean isLinked() {
-        return isArray() ? true : getInitState() >= runtime().getConfig().instanceKlassStateLinked;
+        final int state = getState();
+        return state >= runtime().getConfig().klassStateLinked;
     }
 
     /**
@@ -307,9 +309,8 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
      *
      * @return state field value of this type
      */
-    private int getInitState() {
-        assert !isArray() : "_init_state only exists in InstanceKlass";
-        return unsafe.getByte(getMetaspaceKlass() + runtime().getConfig().instanceKlassInitStateOffset) & 0xFF;
+    private int getState() {
+        return unsafe.getByte(getMetaspaceKlass() + runtime().getConfig().klassStateOffset) & 0xFF;
     }
 
     @Override
@@ -694,7 +695,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     @Override
     public String getSourceFileName() {
         HotSpotVMConfig config = runtime().getConfig();
-        final int sourceFileNameIndex = unsafe.getChar(getMetaspaceKlass() + config.instanceKlassSourceFileNameIndexOffset);
+        final int sourceFileNameIndex = unsafe.getChar(getMetaspaceKlass() + config.klassSourceFileNameIndexOffset);
         if (sourceFileNameIndex == 0) {
             return null;
         }
