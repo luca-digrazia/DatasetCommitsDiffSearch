@@ -23,6 +23,7 @@
 package com.oracle.graal.graph;
 
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
+import com.oracle.graal.graph.NodeClass.Position;
 import com.oracle.graal.graph.iterators.*;
 
 /**
