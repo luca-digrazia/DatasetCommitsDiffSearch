@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,21 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import jdk.vm.ci.meta.JavaKind;
+import static com.oracle.graal.api.meta.LocationIdentity.*;
 
-import static com.oracle.graal.compiler.common.LocationIdentity.any;
-
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.replacements.nodes.BasicArrayCopyNode;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.nodes.*;
 
 @NodeInfo
 public final class ArrayCopyNode extends BasicArrayCopyNode implements Virtualizable, Lowerable {
 
     public static final NodeClass<ArrayCopyNode> TYPE = NodeClass.create(ArrayCopyNode.class);
 
-    private JavaKind elementKind;
+    private Kind elementKind;
 
     public ArrayCopyNode(int bci, ValueNode src, ValueNode srcPos, ValueNode dst, ValueNode dstPos, ValueNode length) {
         super(TYPE, src, srcPos, dst, dstPos, length, null, bci);

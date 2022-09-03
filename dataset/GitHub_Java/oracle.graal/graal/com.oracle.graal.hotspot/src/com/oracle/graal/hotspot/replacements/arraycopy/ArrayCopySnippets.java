@@ -22,24 +22,20 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import com.oracle.jvmci.code.TargetDescription;
-import com.oracle.jvmci.meta.NamedLocationIdentity;
-import com.oracle.jvmci.meta.DeoptimizationReason;
-import com.oracle.jvmci.meta.ResolvedJavaType;
-import com.oracle.jvmci.meta.LocationIdentity;
-import com.oracle.jvmci.meta.ResolvedJavaMethod;
-import com.oracle.jvmci.meta.DeoptimizationAction;
-import com.oracle.jvmci.meta.Kind;
-
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.GuardingPiNode.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.api.directives.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.type.*;
@@ -58,10 +54,6 @@ import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
-import com.oracle.jvmci.hotspot.*;
 
 public class ArrayCopySnippets implements Snippets {
 
@@ -99,8 +91,8 @@ public class ArrayCopySnippets implements Snippets {
 
     @Snippet
     public static void arraycopyZeroLengthIntrinsic(Object src, int srcPos, Object dest, int destPos, int length) {
-        Object nonNullSrc = GraalDirectives.guardingNonNull(src);
-        Object nonNullDest = GraalDirectives.guardingNonNull(dest);
+        Object nonNullSrc = guardingNonNull(src);
+        Object nonNullDest = guardingNonNull(dest);
         KlassPointer srcHub = loadHub(nonNullSrc);
         KlassPointer destHub = loadHub(nonNullDest);
         checkArrayType(srcHub);
@@ -111,8 +103,8 @@ public class ArrayCopySnippets implements Snippets {
 
     @Snippet
     public static void arraycopyExactIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter Kind elementKind, @ConstantParameter SnippetCounter counter) {
-        Object nonNullSrc = GraalDirectives.guardingNonNull(src);
-        Object nonNullDest = GraalDirectives.guardingNonNull(dest);
+        Object nonNullSrc = guardingNonNull(src);
+        Object nonNullDest = guardingNonNull(dest);
         checkLimits(nonNullSrc, srcPos, nonNullDest, destPos, length);
         counter.inc();
         ArrayCopyCallNode.arraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, elementKind);
@@ -129,8 +121,8 @@ public class ArrayCopySnippets implements Snippets {
      */
     @Snippet
     public static void arraycopyPredictedExactIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter Kind elementKind, @ConstantParameter SnippetCounter counter) {
-        Object nonNullSrc = GraalDirectives.guardingNonNull(src);
-        Object nonNullDest = GraalDirectives.guardingNonNull(dest);
+        Object nonNullSrc = guardingNonNull(src);
+        Object nonNullDest = guardingNonNull(dest);
         KlassPointer srcHub = loadHub(nonNullSrc);
         KlassPointer destHub = loadHub(nonNullDest);
         if (probability(SLOW_PATH_PROBABILITY, srcHub != destHub)) {
@@ -168,8 +160,8 @@ public class ArrayCopySnippets implements Snippets {
      */
     @Snippet
     public static void arraycopySlowPathIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter Kind elementKind, @ConstantParameter SnippetInfo slowPath) {
-        Object nonNullSrc = GraalDirectives.guardingNonNull(src);
-        Object nonNullDest = GraalDirectives.guardingNonNull(dest);
+        Object nonNullSrc = guardingNonNull(src);
+        Object nonNullDest = guardingNonNull(dest);
         KlassPointer srcHub = loadHub(nonNullSrc);
         KlassPointer destHub = loadHub(nonNullDest);
         checkArrayType(srcHub);
@@ -211,8 +203,8 @@ public class ArrayCopySnippets implements Snippets {
 
     @Snippet
     public static void arraycopyGeneric(Object src, int srcPos, Object dest, int destPos, int length) {
-        Object nonNullSrc = GraalDirectives.guardingNonNull(src);
-        Object nonNullDest = GraalDirectives.guardingNonNull(dest);
+        Object nonNullSrc = guardingNonNull(src);
+        Object nonNullDest = guardingNonNull(dest);
         KlassPointer srcHub = loadHub(nonNullSrc);
         KlassPointer destHub = loadHub(nonNullDest);
         if (probability(FAST_PATH_PROBABILITY, srcHub.equal(destHub)) && probability(FAST_PATH_PROBABILITY, nonNullSrc != nonNullDest)) {
@@ -314,13 +306,13 @@ public class ArrayCopySnippets implements Snippets {
             super(providers, providers.getSnippetReflection(), target);
         }
 
-        private ResolvedJavaMethod originalArraycopy() throws JVMCIError {
+        private ResolvedJavaMethod originalArraycopy() throws GraalInternalError {
             if (originalArraycopy == null) {
                 Method method;
                 try {
                     method = System.class.getDeclaredMethod("arraycopy", Object.class, int.class, Object.class, int.class, int.class);
                 } catch (NoSuchMethodException | SecurityException e) {
-                    throw new JVMCIError(e);
+                    throw new GraalInternalError(e);
                 }
                 originalArraycopy = providers.getMetaAccess().lookupJavaMethod(method);
             }
@@ -523,7 +515,7 @@ public class ArrayCopySnippets implements Snippets {
                     CallTargetNode call = invoke.callTarget();
 
                     if (!call.targetMethod().equals(originalArraycopy)) {
-                        throw new JVMCIError("unexpected invoke %s in snippet", call.targetMethod());
+                        throw new GraalInternalError("unexpected invoke %s in snippet", call.targetMethod());
                     }
                     // Here we need to fix the bci of the invoke
                     InvokeNode newInvoke = graph.add(new InvokeNode(invoke.callTarget(), arraycopy.getBci()));

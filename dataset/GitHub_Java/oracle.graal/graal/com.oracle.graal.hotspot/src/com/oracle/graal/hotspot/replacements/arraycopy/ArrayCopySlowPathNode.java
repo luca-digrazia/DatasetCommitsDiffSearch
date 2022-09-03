@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-import static jdk.internal.jvmci.meta.LocationIdentity.*;
+import static com.oracle.graal.api.meta.LocationIdentity.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -40,28 +40,18 @@ public final class ArrayCopySlowPathNode extends BasicArrayCopyNode {
 
     private final SnippetTemplate.SnippetInfo snippet;
 
-    /**
-     * Extra context for the slow path snippet.
-     */
-    private final Object argument;
-
-    public ArrayCopySlowPathNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, SnippetTemplate.SnippetInfo snippet, Object argument) {
+    public ArrayCopySlowPathNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, SnippetTemplate.SnippetInfo snippet) {
         super(TYPE, src, srcPos, dest, destPos, length, elementKind, BytecodeFrame.INVALID_FRAMESTATE_BCI);
         assert StampTool.isPointerNonNull(src) && StampTool.isPointerNonNull(dest) : "must have been null checked";
         this.snippet = snippet;
-        this.argument = argument;
     }
 
     @NodeIntrinsic
     public static native void arraycopy(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, @ConstantNodeParameter Kind elementKind,
-                    @ConstantNodeParameter SnippetTemplate.SnippetInfo snippet, @ConstantNodeParameter Object argument);
+                    @ConstantNodeParameter SnippetTemplate.SnippetInfo snippet);
 
     public SnippetTemplate.SnippetInfo getSnippet() {
         return snippet;
-    }
-
-    public Object getArgument() {
-        return argument;
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static org.junit.Assert.*;
-
 import java.lang.reflect.*;
 import java.util.*;
 
@@ -33,6 +31,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.replacements.arraycopy.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -41,7 +40,8 @@ import com.oracle.graal.nodes.*;
 public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
 
     @Override
-    protected InstalledCode getCode(ResolvedJavaMethod method, StructuredGraph graph) {
+    protected InstalledCode getCode(ResolvedJavaMethod method, StructuredGraph g) {
+        StructuredGraph graph = g == null ? parseForCompile(method) : g;
         int nodeCount = graph.getNodeCount();
         InstalledCode result = super.getCode(method, graph);
         boolean graphWasProcessed = nodeCount != graph.getNodeCount();
@@ -51,11 +51,16 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
                     if (node instanceof Invoke) {
                         Invoke invoke = (Invoke) node;
                         Assert.assertTrue(invoke.callTarget() instanceof DirectCallTargetNode);
-                        AbstractCallTargetNode directCall = (AbstractCallTargetNode) invoke.callTarget();
-                        JavaMethod callee = directCall.target();
-                        Assert.assertTrue(callee.getName().equals("<init>"));
-                        Assert.assertTrue(runtime.lookupJavaType(ArrayIndexOutOfBoundsException.class).equals(callee.getDeclaringClass()) ||
-                                        runtime.lookupJavaType(NullPointerException.class).equals(callee.getDeclaringClass()));
+                        LoweredCallTargetNode directCall = (LoweredCallTargetNode) invoke.callTarget();
+                        JavaMethod callee = directCall.targetMethod();
+                        if (callee.getDeclaringClass().equals(getMetaAccess().lookupJavaType(System.class)) && callee.getName().equals("arraycopy")) {
+                            // A partial snippet (e.g., ArrayCopySnippets.checkcastArraycopy) may
+                            // call the original arraycopy method
+                        } else {
+                            Assert.assertTrue(callee.toString(), callee.getName().equals("<init>"));
+                            Assert.assertTrue(getMetaAccess().lookupJavaType(ArrayIndexOutOfBoundsException.class).equals(callee.getDeclaringClass()) ||
+                                            getMetaAccess().lookupJavaType(NullPointerException.class).equals(callee.getDeclaringClass()));
+                        }
                     }
                 }
             } else {
@@ -63,9 +68,9 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
                 for (Node node : graph.getNodes()) {
                     if (node instanceof Invoke) {
                         Invoke invoke = (Invoke) node;
-                        AbstractCallTargetNode directCall = (AbstractCallTargetNode) invoke.callTarget();
-                        JavaMethod callee = directCall.target();
-                        if (callee.getDeclaringClass().equals(runtime.lookupJavaType(System.class)) && callee.getName().equals("arraycopy")) {
+                        LoweredCallTargetNode directCall = (LoweredCallTargetNode) invoke.callTarget();
+                        JavaMethod callee = directCall.targetMethod();
+                        if (callee.getDeclaringClass().equals(getMetaAccess().lookupJavaType(System.class)) && callee.getName().equals("arraycopy")) {
                             found = true;
                         } else {
                             fail("found invoke to some method other than arraycopy: " + callee);
@@ -82,12 +87,9 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
 
     @Test
     public void test0() {
-        mustIntrinsify = false; // a generic call to arraycopy will not be intrinsified
         // Array store checks
         test("genericArraycopy", new Object(), 0, new Object[0], 0, 0);
         test("genericArraycopy", new Object[0], 0, new Object(), 0, 0);
-
-        mustIntrinsify = true;
     }
 
     @Test
@@ -146,12 +148,28 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
 
     @Test
     public void testObject() {
-        mustIntrinsify = false; // a generic call to arraycopy will not be intrinsified
-
         Object[] src = {"one", "two", "three", new ArrayList<>(), new HashMap<>()};
         testHelper("objectArraycopy", src);
+    }
 
-        mustIntrinsify = true;
+    /**
+     * Tests {@link ArrayCopySnippets#checkcastArraycopyWork(Object, int, Object, int, int)}.
+     */
+    @Test
+    public void testArrayStoreException() {
+        Object[] src = {"one", "two", "three", new ArrayList<>(), new HashMap<>()};
+        Object[] dst = new CharSequence[src.length];
+        // Will throw ArrayStoreException for 4th element
+        test("objectArraycopy", src, 0, dst, 0, src.length);
+    }
+
+    @Test
+    public void testDisjointObject() {
+        Integer[] src1 = {1, 2, 3, 4};
+        test("objectArraycopy", src1, 0, src1, 1, src1.length - 1);
+
+        Integer[] src2 = {1, 2, 3, 4};
+        test("objectArraycopy", src2, 1, src2, 0, src2.length - 1);
     }
 
     @Test
@@ -177,6 +195,10 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
             test(name, src, 0, newArray(src, length), 0, length);
             test(name, src, srcLength - length, newArray(src, length), 0, length);
             test(name, src, 0, newArray(src, srcLength), 0, length);
+        }
+
+        if (srcLength > 1) {
+            test(name, src, 0, src, 1, srcLength - 1);
         }
     }
 
@@ -235,4 +257,22 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
         return dst;
     }
 
+    /**
+     * Test case derived from assertion while compiling <a href=
+     * "https://code.google.com/r/baggiogamp-guava/source/browse/guava/src/com/google/common/collect/ArrayTable.java?r=d2e06112416223cb5437d43c12a989c0adc7345b#181"
+     * > com.google.common.collect.ArrayTable(ArrayTable other)</a>.
+     */
+    @Test
+    public void testCopyRows() {
+        Object[][] rows = {{"a1", "a2", "a3", "a4"}, {"b1", "b2", "b3", "b4"}, {"c1", "c2", "c3", "c4"}};
+        test("copyRows", rows, 4, new Integer(rows.length));
+    }
+
+    public static Object[][] copyRows(Object[][] rows, int rowSize, Integer rowCount) {
+        Object[][] copy = new Object[rows.length][rowSize];
+        for (int i = 0; i < rowCount.intValue(); i++) {
+            System.arraycopy(rows[i], 0, copy[i], 0, rows[i].length);
+        }
+        return copy;
+    }
 }
