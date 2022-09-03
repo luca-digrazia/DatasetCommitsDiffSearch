@@ -22,19 +22,13 @@
  */
 package com.oracle.graal.java;
 
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import static com.oracle.graal.nodes.cfg.ControlFlowGraph.*;
 
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ControlSplitNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.phases.graph.ReentrantNodeIterator;
+import java.util.*;
+import java.util.stream.*;
+
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.graph.*;
 
 public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIteratorClosure<Double> {
 
@@ -69,8 +63,8 @@ public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.N
 
         double exitProbability = exitStates.values().stream().mapToDouble(d -> d).sum();
         exitProbability = Math.min(1D, exitProbability);
-        if (exitProbability < ControlFlowGraph.MIN_PROBABILITY) {
-            exitProbability = ControlFlowGraph.MIN_PROBABILITY;
+        if (exitProbability < MIN_PROBABILITY) {
+            exitProbability = MIN_PROBABILITY;
         }
         assert exitProbability <= 1D && exitProbability >= 0D;
         double loopFrequency = 1D / exitProbability;
@@ -83,12 +77,14 @@ public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.N
     }
 
     /**
-     * Multiplies a and b and saturates the result to {@link ControlFlowGraph#MAX_PROBABILITY}.
+     * Multiplies a and b and saturates the result to 1/{@link #MIN_PROBABILITY}.
+     *
+     * @return a times b saturated to 1/{@link #MIN_PROBABILITY}
      */
     public static double multiplySaturate(double a, double b) {
         double r = a * b;
-        if (r > ControlFlowGraph.MAX_PROBABILITY) {
-            return ControlFlowGraph.MAX_PROBABILITY;
+        if (r > 1 / MIN_PROBABILITY) {
+            return 1 / MIN_PROBABILITY;
         }
         return r;
     }
