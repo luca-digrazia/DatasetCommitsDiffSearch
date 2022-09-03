@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -261,36 +261,16 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
         throw GraalError.unimplemented("String.compareTo substitution is not implemented on this architecture");
     }
 
-    Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length, int constantLength, boolean directPointers);
+    Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length);
 
     @SuppressWarnings("unused")
-    default Variable emitArrayEquals(JavaKind kind1, JavaKind kind2, Value array1, Value array2, Value length, int constantLength, boolean directPointers) {
-        throw GraalError.unimplemented("Array.equals with different types substitution is not implemented on this architecture");
-    }
-
-    @SuppressWarnings("unused")
-    default Variable emitArrayIndexOf(JavaKind kind, boolean findTwoConsecutive, Value sourcePointer, Value sourceCount, Value... searchValues) {
+    default Variable emitStringIndexOf(Value sourcePointer, Value sourceCount, Value targetPointer, Value targetCount, int constantTargetCount) {
         throw GraalError.unimplemented("String.indexOf substitution is not implemented on this architecture");
     }
 
-    /*
-     * The routines emitStringLatin1Inflate/3 and emitStringUTF16Compress/3 models a simplified
-     * version of
-     *
-     * emitStringLatin1Inflate(Value src, Value src_ndx, Value dst, Value dst_ndx, Value len) and
-     * emitStringUTF16Compress(Value src, Value src_ndx, Value dst, Value dst_ndx, Value len)
-     *
-     * respectively, where we have hoisted the offset address computations in a method replacement
-     * snippet.
-     */
     @SuppressWarnings("unused")
-    default void emitStringLatin1Inflate(Value src, Value dst, Value len) {
-        throw GraalError.unimplemented("StringLatin1.inflate substitution is not implemented on this architecture");
-    }
-
-    @SuppressWarnings("unused")
-    default Variable emitStringUTF16Compress(Value src, Value dst, Value len) {
-        throw GraalError.unimplemented("StringUTF16.compress substitution is not implemented on this architecture");
+    default Variable emitArrayIndexOf(JavaKind kind, Value sourcePointer, Value sourceCount, Value charValue) {
+        throw GraalError.unimplemented("String.indexOf substitution is not implemented on this architecture");
     }
 
     void emitBlackhole(Value operand);
