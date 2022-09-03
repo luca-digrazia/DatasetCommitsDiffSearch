@@ -250,11 +250,7 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
     @Override
     public ResolvedJavaField[] declaredFields() {
         if (fields == null) {
-            if (isArrayClass) {
-                fields = new ResolvedJavaField[0];
-            } else {
-                fields = HotSpotGraalRuntime.getInstance().getCompilerToVM().JavaType_fields(this);
-            }
+            fields = HotSpotGraalRuntime.getInstance().getCompilerToVM().JavaType_fields(this);
         }
         return fields;
     }
