@@ -35,7 +35,6 @@ import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.CompilerThreadFactory.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
@@ -82,12 +81,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         this.skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
 
         // Create compilation queue.
-        CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread", new DebugConfigAccess() {
-            public GraalDebugConfig getDebugConfig() {
-                return Debug.isEnabled() ? DebugEnvironment.initialize(TTY.out().out()) : null;
-            }
-        });
-        compileQueue = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), factory);
+        compileQueue = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>());
 
         final GraphBuilderConfiguration config = GraphBuilderConfiguration.getEagerDefault();
         config.setSkippedExceptionTypes(skippedExceptionTypes);
@@ -113,7 +107,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
             @Override
             public InstalledCode call() throws Exception {
-                Object[] debug = new Object[]{new TruffleDebugJavaMethod(compilable)};
+                Object[] debug = new Object[]{new DebugDumpScope("Truffle: " + compilable)};
                 return Debug.scope("Truffle", debug, new Callable<InstalledCode>() {
 
                     @Override
@@ -160,16 +154,12 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         if (compiledMethod == null) {
             throw new BailoutException("Could not install method, code cache is full!");
         }
-        if (!compiledMethod.isValid()) {
-            return null;
-        }
 
         if (TraceTruffleCompilation.getValue()) {
             int nodeCountTruffle = NodeUtil.countNodes(compilable.getRootNode());
-            byte[] code = compiledMethod.getCode();
-            OUT.printf("[truffle] optimized %-50s %x |Nodes %7d |Time %5.0f(%4.0f+%-4.0f)ms |Nodes %5d/%5d |CodeSize %d\n", compilable.getRootNode(), compilable.hashCode(), nodeCountTruffle,
+            OUT.printf("[truffle] optimized %-50s %d |Nodes %7d |Time %5.0f(%4.0f+%-4.0f)ms |Nodes %5d/%5d |CodeSize %d\n", compilable.getRootNode(), compilable.hashCode(), nodeCountTruffle,
                             (timeCompilationFinished - timeCompilationStarted) / 1e6, (timePartialEvaluationFinished - timeCompilationStarted) / 1e6,
-                            (timeCompilationFinished - timePartialEvaluationFinished) / 1e6, nodeCountPartialEval, nodeCountLowered, code != null ? code.length : 0);
+                            (timeCompilationFinished - timePartialEvaluationFinished) / 1e6, nodeCountPartialEval, nodeCountLowered, compiledMethod.getCode().length);
         }
         return compiledMethod;
     }
@@ -221,7 +211,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
             @Override
             public CompilationResult call() {
                 try (TimerCloseable a = CompilationTime.start()) {
-                    return Debug.scope("GraalCompiler", new Object[]{graph, providers.getCodeCache()}, new Callable<CompilationResult>() {
+                    return Debug.scope("GraalCompiler", new Object[]{providers.getCodeCache()}, new Callable<CompilationResult>() {
                         public CompilationResult call() {
                             CodeCacheProvider codeCache = providers.getCodeCache();
                             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
