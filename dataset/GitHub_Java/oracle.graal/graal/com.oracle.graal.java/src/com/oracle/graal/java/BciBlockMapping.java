@@ -22,18 +22,16 @@
  */
 package com.oracle.graal.java;
 
-import com.oracle.jvmci.code.BailoutException;
-import com.oracle.jvmci.code.BytecodeFrame;
-import com.oracle.jvmci.meta.ResolvedJavaMethod;
-import com.oracle.jvmci.meta.ExceptionHandler;
 import static com.oracle.graal.bytecode.Bytecodes.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.jvmci.debug.*;
+import com.oracle.graal.debug.*;
 
 /**
  * Builds a mapping between bytecodes and basic blocks and builds a conservative control flow graph
@@ -369,7 +367,6 @@ public final class BciBlockMapping {
 
     private int blocksNotYetAssignedId;
     public int returnCount;
-    private int returnBci;
 
     /**
      * Creates a new BlockMap instance from bytecode of the given method .
@@ -468,7 +465,6 @@ public final class BciBlockMapping {
                 case RETURN: {
                     returnCount++;
                     current = null;
-                    returnBci = bci;
                     break;
                 }
                 case ATHROW: {
@@ -540,10 +536,10 @@ public final class BciBlockMapping {
                 case INVOKESTATIC:
                 case INVOKEVIRTUAL:
                 case INVOKEDYNAMIC: {
-                    current = null;
-                    addSuccessor(blockMap, bci, makeBlock(blockMap, stream.nextBCI()));
                     ExceptionDispatchBlock handler = handleExceptions(blockMap, bci);
                     if (handler != null) {
+                        current = null;
+                        addSuccessor(blockMap, bci, makeBlock(blockMap, stream.nextBCI()));
                         addSuccessor(blockMap, bci, handler);
                     }
                     break;
@@ -773,15 +769,11 @@ public final class BciBlockMapping {
 
         // Add return block.
         BciBlock returnBlock = new BciBlock();
-        returnBlock.startBci = returnBci;
-        returnBlock.endBci = returnBci;
         returnBlock.setId(newBlocks.length - 2);
         newBlocks[newBlocks.length - 2] = returnBlock;
 
         // Add unwind block.
         ExceptionDispatchBlock unwindBlock = new ExceptionDispatchBlock();
-        unwindBlock.startBci = -1;
-        unwindBlock.endBci = -1;
         unwindBlock.deoptBci = method.isSynchronized() ? BytecodeFrame.UNWIND_BCI : BytecodeFrame.AFTER_EXCEPTION_BCI;
         unwindBlock.setId(newBlocks.length - 1);
         newBlocks[newBlocks.length - 1] = unwindBlock;

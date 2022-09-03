@@ -73,7 +73,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
 
         try (InitTimer st = timer("graphBuilderPlugins.initialize")) {
             GraphBuilderPhase phase = (GraphBuilderPhase) providers.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
-            InvocationPlugins plugins = phase.getGraphBuilderConfig().getPlugins().getInvocationPlugins();
+            InvocationPlugins plugins = phase.getGraphBuilderConfig().getInvocationPlugins();
             registerInvocationPlugins(providers, plugins);
         }
 
