@@ -134,11 +134,6 @@ public class AArch64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implem
         return emitBinary(LIRKind.combine(a, b), AArch64ArithmeticOp.UMULH, true, a, b);
     }
 
-    public Value emitMNeg(Value a, Value b) {
-        assert isNumericInteger(a.getPlatformKind()) && isNumericInteger(b.getPlatformKind());
-        return emitBinary(LIRKind.combine(a, b), AArch64ArithmeticOp.MNEG, true, a, b);
-    }
-
     @Override
     public Value emitDiv(Value a, Value b, LIRFrameState state) {
         return emitBinary(LIRKind.combine(a, b), getOpCode(a, AArch64ArithmeticOp.DIV, AArch64ArithmeticOp.FDIV), false, asAllocatable(a), asAllocatable(b));
@@ -203,16 +198,6 @@ public class AArch64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implem
         LIRKind resultLirKind = LIRKind.combine(inputVal).changeType(resultPlatformKind);
         Variable result = getLIRGen().newVariable(resultLirKind);
         getLIRGen().append(new AArch64FloatConvertOp(op, result, asAllocatable(inputVal)));
-        return result;
-    }
-
-    public Value emitAddSubShift(AArch64ArithmeticOp op, Value a, Value b, AArch64MacroAssembler.ShiftType shiftType, int shiftAmount) {
-        assert isNumericInteger(a.getPlatformKind());
-        assert isNumericInteger(b.getPlatformKind());
-        Variable result = getLIRGen().newVariable(LIRKind.combine(a, b));
-        AllocatableValue x = moveSp(asAllocatable(a));
-        AllocatableValue y = moveSp(asAllocatable(b));
-        getLIRGen().append(new AArch64ArithmeticOp.AddSubShiftOp(op, result, x, y, shiftType, shiftAmount));
         return result;
     }
 

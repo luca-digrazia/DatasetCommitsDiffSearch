@@ -102,7 +102,6 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.PrimitiveConstant;
-import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.meta.Value;
 
 /**
@@ -268,7 +267,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
             pollOnReturnScratchRegister = findPollOnReturnScratchRegister();
         }
         Register thread = getProviders().getRegisters().getThreadRegister();
-        append(new AMD64HotSpotReturnOp(operand, getStub() != null, thread, pollOnReturnScratchRegister, config, getResult().requiresReservedStackAccessCheck()));
+        append(new AMD64HotSpotReturnOp(operand, getStub() != null, thread, pollOnReturnScratchRegister, config));
     }
 
     @Override
@@ -537,8 +536,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     public void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason) {
         Value actionAndReason = emitJavaConstant(getMetaAccess().encodeDeoptActionAndReason(action, reason, 0));
-        Value speculation = emitJavaConstant(getMetaAccess().encodeSpeculation(SpeculationLog.NO_SPECULATION));
-        moveDeoptValuesToThread(actionAndReason, speculation);
+        Value nullValue = emitConstant(LIRKind.reference(AMD64Kind.QWORD), JavaConstant.NULL_POINTER);
+        moveDeoptValuesToThread(actionAndReason, nullValue);
         append(new AMD64HotSpotDeoptimizeCallerOp());
     }
 

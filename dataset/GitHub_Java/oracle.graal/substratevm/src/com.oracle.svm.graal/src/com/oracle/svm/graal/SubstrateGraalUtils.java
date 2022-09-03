@@ -26,7 +26,6 @@ package com.oracle.svm.graal;
 
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
-import java.io.PrintStream;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
@@ -158,8 +157,8 @@ public class SubstrateGraalUtils {
             }
 
             @Override
-            protected DebugContext createRetryDebugContext(OptionValues options, PrintStream logStream) {
-                return GraalSupport.get().openDebugContext(options, compilationId, method, logStream);
+            protected DebugContext createRetryDebugContext(OptionValues options) {
+                return GraalSupport.get().openDebugContext(options, compilationId, method);
             }
         }.run(initialDebug);
     }

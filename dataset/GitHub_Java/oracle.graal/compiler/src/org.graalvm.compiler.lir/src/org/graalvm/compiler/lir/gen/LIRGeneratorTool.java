@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.lir.gen;
 
+import jdk.vm.ci.code.RegisterConfig;
 import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.calc.Condition;
@@ -43,7 +44,6 @@ import org.graalvm.compiler.lir.Variable;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterAttributes;
-import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.code.ValueKindFactory;
 import jdk.vm.ci.meta.AllocatableValue;
@@ -60,7 +60,7 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
     /**
      * Factory for creating moves.
      */
-    interface MoveFactory {
+    public interface MoveFactory {
 
         /**
          * Checks whether the supplied constant can be used without loading it into a register for
@@ -268,11 +268,6 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
         throw GraalError.unimplemented("String.indexOf substitution is not implemented on this architecture");
     }
 
-    @SuppressWarnings("unused")
-    default Variable emitArrayIndexOf(JavaKind kind, Value sourcePointer, Value sourceCount, Value charValue) {
-        throw GraalError.unimplemented("String.indexOf substitution is not implemented on this architecture");
-    }
-
     void emitBlackhole(Value operand);
 
     LIRKind getLIRKind(Stamp stamp);
@@ -292,10 +287,4 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
     default void emitConvertZeroToNull(AllocatableValue result, Value input) {
         emitMove(result, input);
     }
-
-    /**
-     * Emits an instruction that prevents speculative execution from proceeding: no instruction
-     * after this fence will execute until all previous instructions have retired.
-     */
-    void emitSpeculationFence();
 }

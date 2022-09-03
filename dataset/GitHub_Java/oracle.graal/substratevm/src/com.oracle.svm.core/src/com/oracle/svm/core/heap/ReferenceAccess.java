@@ -90,6 +90,7 @@ final class ReferenceAccessImpl implements ReferenceAccess {
     @AlwaysInline("Performance")
     @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
     public Word readObjectAsUntrackedPointer(Pointer p, boolean compressed) {
+        assert !compressed || haveCompressedReferences();
         Object obj = readObjectAt(p, compressed);
         return Word.objectToUntrackedPointer(obj);
     }
@@ -98,6 +99,7 @@ final class ReferenceAccessImpl implements ReferenceAccess {
     @AlwaysInline("Performance")
     @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
     public Object readObjectAt(Pointer p, boolean compressed) {
+        assert !compressed || haveCompressedReferences();
         Word w = (Word) p;
         if (compressed) {
             return ObjectAccess.readObject(WordFactory.nullPointer(), p);
@@ -110,6 +112,7 @@ final class ReferenceAccessImpl implements ReferenceAccess {
     @AlwaysInline("Performance")
     @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
     public void writeObjectAt(Pointer p, Object value, boolean compressed) {
+        assert !compressed || haveCompressedReferences();
         Word w = (Word) p;
         if (compressed) {
             ObjectAccess.writeObject(WordFactory.nullPointer(), p, value);
@@ -123,6 +126,7 @@ final class ReferenceAccessImpl implements ReferenceAccess {
     @AlwaysInline("Performance")
     @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
     public void writeObjectBarrieredAt(Object object, UnsignedWord offsetInObject, Object value, boolean compressed) {
+        assert compressed || !haveCompressedReferences() : "Heap object must contain only compressed references";
         BarrieredAccess.writeObject(object, offsetInObject, value);
     }
 
