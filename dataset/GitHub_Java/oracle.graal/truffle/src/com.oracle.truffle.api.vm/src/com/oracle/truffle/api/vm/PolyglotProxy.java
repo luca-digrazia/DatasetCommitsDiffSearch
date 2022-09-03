@@ -38,14 +38,15 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.ForeignAccess.Factory26;
-import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
@@ -216,7 +217,7 @@ final class PolyglotProxy {
         private static final ProxyArray EMPTY = new ProxyArray() {
 
             public void set(long index, Value value) {
-                throw new ArrayIndexOutOfBoundsException();
+                throw new UnsupportedOperationException();
             }
 
             public long getSize() {
@@ -224,24 +225,19 @@ final class PolyglotProxy {
             }
 
             public Object get(long index) {
-                throw new ArrayIndexOutOfBoundsException();
+                throw new UnsupportedOperationException();
             }
         };
 
         @Override
         @TruffleBoundary
         Object executeProxy(PolyglotLanguageContext context, Proxy proxy, Object[] arguments) {
-            Object result;
             if (proxy instanceof ProxyObject) {
                 final ProxyObject object = (ProxyObject) proxy;
-                result = object.getMemberKeys();
-                if (result == null) {
-                    result = EMPTY;
-                }
+                return context.toGuestValue(object.getMemberKeys());
             } else {
-                result = EMPTY;
+                return context.toGuestValue(EMPTY);
             }
-            return context.toGuestValue(result);
         }
     }
 
@@ -252,23 +248,9 @@ final class PolyglotProxy {
 
         @Override
         Object executeProxy(PolyglotLanguageContext context, Proxy proxy, Object[] arguments) {
-            if (arguments.length >= 2) {
-                Object key = arguments[1];
-                if (proxy instanceof ProxyObject && key instanceof String) {
-                    return keyInfo((ProxyObject) proxy, (String) key);
-                } else if (proxy instanceof ProxyArray && key instanceof Number) {
-                    return keyInfo((ProxyArray) proxy, (Number) key);
-                }
-            }
-            return NO_KEY;
-        }
-
-        @TruffleBoundary
-        private static Integer keyInfo(ProxyArray proxy, Number key) {
-            long size = proxy.getSize();
-            long index = key.longValue();
-            if (index >= 0 && index < size) {
-                return KEY;
+            Object key = arguments[1];
+            if (proxy instanceof ProxyObject && key instanceof String) {
+                return keyInfo((ProxyObject) proxy, (String) key);
             } else {
                 return NO_KEY;
             }
@@ -288,14 +270,13 @@ final class PolyglotProxy {
 
         @Override
         Object executeProxy(PolyglotLanguageContext context, Proxy proxy, Object[] arguments) {
-            if (arguments.length >= 2) {
-                Object key = arguments[1];
-                if (proxy instanceof ProxyObject && key instanceof String) {
-                    return invoke(context, (ProxyObject) proxy, (String) key, arguments);
-                }
+            Object key = arguments[1];
+            if (proxy instanceof ProxyObject && key instanceof String) {
+                return invoke(context, (ProxyObject) proxy, (String) key, arguments);
+            } else {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.raise(Message.createInvoke(0));
             }
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.raise(Message.createInvoke(0));
         }
 
         @Child private Node isExecutable = Message.IS_EXECUTABLE.createNode();
@@ -308,8 +289,12 @@ final class PolyglotProxy {
                 if (member instanceof TruffleObject && ForeignAccess.sendIsExecutable(isExecutable, (TruffleObject) member)) {
                     try {
                         return ForeignAccess.sendExecute(executeNode, ((TruffleObject) member), copyFromStart(arguments, 2));
-                    } catch (InteropException e) {
-                        throw e.raise();
+                    } catch (UnsupportedTypeException e) {
+                        throw UnsupportedTypeException.raise(e.getSuppliedValues());
+                    } catch (ArityException e) {
+                        throw ArityException.raise(e.getExpectedArity(), e.getActualArity());
+                    } catch (UnsupportedMessageException e) {
+                        throw UnsupportedMessageException.raise(Message.createInvoke(0));
                     }
                 } else {
                     throw UnknownIdentifierException.raise(key);
@@ -332,40 +317,27 @@ final class PolyglotProxy {
 
         @Override
         Object executeProxy(PolyglotLanguageContext context, Proxy proxy, Object[] arguments) {
-            if (arguments.length >= 3) {
-                Object key = arguments[1];
-                Object value = arguments[2];
-                if (proxy instanceof ProxyArray && key instanceof Number) {
-                    setArray(context, (ProxyArray) proxy, (Number) key, value);
-                    return value;
-                } else if (proxy instanceof ProxyObject && key instanceof String) {
-                    putMember(context, (ProxyObject) proxy, (String) key, value);
-                    return value;
-                }
+            Object key = arguments[1];
+            Object value = arguments[2];
+            if (proxy instanceof ProxyArray && key instanceof Number) {
+                setArray(context, (ProxyArray) proxy, (Number) key, value);
+            } else if (proxy instanceof ProxyObject && key instanceof String) {
+                putMember(context, (ProxyObject) proxy, (String) key, value);
+            } else {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.raise(Message.WRITE);
             }
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.raise(Message.WRITE);
+            return value;
         }
 
         @TruffleBoundary
         static void putMember(PolyglotLanguageContext context, ProxyObject object, String key, Object value) {
-            try {
-                object.putMember(key, context.toHostValue(value));
-            } catch (UnsupportedOperationException e) {
-                throw UnsupportedMessageException.raise(Message.WRITE);
-            }
+            object.putMember(key, context.toHostValue(value));
         }
 
         @TruffleBoundary
         static void setArray(PolyglotLanguageContext context, ProxyArray object, Number index, Object value) {
-            Value castValue = context.toHostValue(value);
-            try {
-                object.set(index.longValue(), castValue);
-            } catch (ArrayIndexOutOfBoundsException e) {
-                throw UnknownIdentifierException.raise(e.getMessage());
-            } catch (UnsupportedOperationException e) {
-                throw UnsupportedMessageException.raise(Message.READ);
-            }
+            object.set(index.longValue(), context.toHostValue(value));
         }
 
     }
@@ -374,26 +346,21 @@ final class PolyglotProxy {
 
         @Override
         Object executeProxy(PolyglotLanguageContext context, Proxy proxy, Object[] arguments) {
-            if (arguments.length >= 2) {
-                Object key = arguments[1];
-                if (proxy instanceof ProxyArray && key instanceof Number) {
-                    return getArray(context, (ProxyArray) proxy, (Number) key);
-                } else if (proxy instanceof ProxyObject && key instanceof String) {
-                    return getMember(context, (ProxyObject) proxy, (String) key);
-                }
+            Object key = arguments[1];
+            if (proxy instanceof ProxyArray && key instanceof Number) {
+                return getArray(context, (ProxyArray) proxy, (Number) key);
+            } else if (proxy instanceof ProxyObject && key instanceof String) {
+                return getMember(context, (ProxyObject) proxy, (String) key);
+            } else {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.raise(Message.READ);
             }
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.raise(Message.READ);
         }
 
         @TruffleBoundary
         static Object getMember(PolyglotLanguageContext context, ProxyObject object, String key) {
             if (object.hasMember(key)) {
-                try {
-                    return context.toGuestValue(object.getMember(key));
-                } catch (UnsupportedOperationException e) {
-                    throw UnsupportedMessageException.raise(Message.READ);
-                }
+                return context.toGuestValue(object.getMember(key));
             } else {
                 throw UnknownIdentifierException.raise(key);
             }
@@ -401,15 +368,7 @@ final class PolyglotProxy {
 
         @TruffleBoundary
         static Object getArray(PolyglotLanguageContext context, ProxyArray object, Number index) {
-            Object result;
-            try {
-                result = object.get(index.longValue());
-            } catch (ArrayIndexOutOfBoundsException e) {
-                throw UnknownIdentifierException.raise(e.getMessage());
-            } catch (UnsupportedOperationException e) {
-                throw UnsupportedMessageException.raise(Message.READ);
-            }
-            return context.toGuestValue(result);
+            return context.toGuestValue(object.get(index.longValue()));
         }
 
     }
