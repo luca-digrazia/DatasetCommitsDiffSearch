@@ -205,8 +205,13 @@ public class EngineAPITest {
     public void testEngineContextInitialize1() {
         Engine engine = Engine.create();
         Context context = engine.createContext();
-        Assert.assertTrue(context.initialize(EngineAPITestLanguage.ID));
-        Assert.assertTrue(context.initialize(LanguageSPITestLanguage.ID));
+        Assert.assertFalse(context.initialize(EngineAPITestLanguage.ID));
+        try {
+            // not allowed to access
+            Assert.assertTrue(context.initialize(LanguageSPITestLanguage.ID));
+            fail();
+        } catch (IllegalStateException e) {
+        }
         engine.close();
     }
 
