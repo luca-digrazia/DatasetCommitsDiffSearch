@@ -25,12 +25,18 @@
 package com.oracle.svm.core.jdk;
 
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 
 import org.graalvm.compiler.serviceprovider.GraalServices;
 
-public class JDK11OrLater implements BooleanSupplier {
+public class JDK11OrLater implements BooleanSupplier, Predicate<Class<?>> {
     @Override
     public boolean getAsBoolean() {
-        return GraalServices.JAVA_SPECIFICATION_VERSION >= 11;
+        return GraalServices.Java11OrLater;
+    }
+
+    @Override
+    public boolean test(Class<?> originalClass) {
+        return getAsBoolean();
     }
 }
