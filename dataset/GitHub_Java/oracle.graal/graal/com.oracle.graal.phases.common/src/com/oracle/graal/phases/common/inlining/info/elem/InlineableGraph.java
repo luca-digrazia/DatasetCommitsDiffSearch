@@ -59,7 +59,7 @@ public class InlineableGraph implements Inlineable {
     private FixedNodeProbabilityCache probabilites = new FixedNodeProbabilityCache();
 
     public InlineableGraph(final ResolvedJavaMethod method, final Invoke invoke, final HighTierContext context, CanonicalizerPhase canonicalizer) {
-        StructuredGraph original = getOriginalGraph(method, context, canonicalizer, invoke.asNode().graph(), invoke.bci());
+        StructuredGraph original = getOriginalGraph(method, context, canonicalizer, invoke.asNode().graph());
         // TODO copying the graph is only necessary if it is modified or if it contains any invokes
         this.graph = original.copy();
         specializeGraphToArguments(invoke, context, canonicalizer);
@@ -70,8 +70,12 @@ public class InlineableGraph implements Inlineable {
      * The graph thus obtained is returned, ie the caller is responsible for cloning before
      * modification.
      */
-    private static StructuredGraph getOriginalGraph(final ResolvedJavaMethod method, final HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller, int callerBci) {
-        StructuredGraph result = InliningUtil.getIntrinsicGraph(context.getReplacements(), method, callerBci);
+    private static StructuredGraph getOriginalGraph(final ResolvedJavaMethod method, final HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller) {
+        StructuredGraph result = InliningUtil.getIntrinsicGraph(context.getReplacements(), method);
+        if (result != null) {
+            return result;
+        }
+        result = getCachedGraph(method, context);
         if (result != null) {
             return result;
         }
@@ -177,6 +181,18 @@ public class InlineableGraph implements Inlineable {
         return result;
     }
 
+    private static StructuredGraph getCachedGraph(ResolvedJavaMethod method, HighTierContext context) {
+        if (context.getGraphCache() != null) {
+            StructuredGraph cachedGraph = context.getGraphCache().get(method);
+            if (cachedGraph != null) {
+                // TODO: check that cachedGraph.getAssumptions() are still valid
+                // instead of waiting for code installation to do it.
+                return cachedGraph;
+            }
+        }
+        return null;
+    }
+
     /**
      * This method builds the IR nodes for the given <code>method</code> and canonicalizes them.
      * Provided profiling info is mature, the resulting graph is cached. The caller is responsible
@@ -203,6 +219,9 @@ public class InlineableGraph implements Inlineable {
                 canonicalizer.apply(newGraph, context);
             }
 
+            if (context.getGraphCache() != null) {
+                context.getGraphCache().put(newGraph.method(), newGraph);
+            }
             return newGraph;
         } catch (Throwable e) {
             throw Debug.handle(e);

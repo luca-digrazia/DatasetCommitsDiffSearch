@@ -203,7 +203,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             private FixedWithNextNode lastInstr;                 // the last instruction added
             private final boolean explodeLoops;
-            private final boolean mergeExplosions;
             private Stack<ExplodedLoopContext> explodeLoopsContext;
             private int nextPeelIteration = 1;
             private boolean controlFlowSplit;
@@ -231,14 +230,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 LoopExplosionPlugin loopExplosionPlugin = graphBuilderConfig.getLoopExplosionPlugin();
                 if (loopExplosionPlugin != null) {
                     explodeLoops = loopExplosionPlugin.shouldExplodeLoops(method);
-                    if (explodeLoops) {
-                        mergeExplosions = loopExplosionPlugin.shouldMergeExplosions(method);
-                    } else {
-                        mergeExplosions = false;
-                    }
                 } else {
                     explodeLoops = false;
-                    mergeExplosions = false;
                 }
             }
 
