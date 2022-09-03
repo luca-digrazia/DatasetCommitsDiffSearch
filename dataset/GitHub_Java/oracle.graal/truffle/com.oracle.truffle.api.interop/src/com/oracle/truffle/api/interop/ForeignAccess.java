@@ -46,6 +46,7 @@ import com.oracle.truffle.api.nodes.RootNode;
  */
 public final class ForeignAccess {
     private final Factory factory;
+    private final Thread initThread;
     private final RootNode languageCheck;
 
     private ForeignAccess(Factory faf) {
@@ -54,6 +55,7 @@ public final class ForeignAccess {
 
     private ForeignAccess(RootNode languageCheck, Factory faf) {
         this.factory = faf;
+        this.initThread = Thread.currentThread();
         this.languageCheck = languageCheck;
         CompilerAsserts.neverPartOfCompilation("do not create a ForeignAccess object from compiled code");
     }
@@ -685,7 +687,12 @@ public final class ForeignAccess {
         return "ForeignAccess[" + f.getClass().getName() + "]";
     }
 
+    private void checkThread() {
+        assert initThread == Thread.currentThread();
+    }
+
     CallTarget access(Message message) {
+        checkThread();
         return factory.accessMessage(message);
     }
 
@@ -698,6 +705,7 @@ public final class ForeignAccess {
     }
 
     boolean canHandle(TruffleObject receiver) {
+        checkThread();
         return factory.canHandle(receiver);
     }
 
