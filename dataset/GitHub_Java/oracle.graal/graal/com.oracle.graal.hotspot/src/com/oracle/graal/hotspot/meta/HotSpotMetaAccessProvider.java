@@ -79,6 +79,20 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
         return runtime.getCompilerToVM().getJavaField(reflectionField);
     }
 
+    // These are synchronized with values in deoptimization.hpp:105
+    private static final int ACTION_BITS = 3;
+    private static final int REASON_BITS = 5;
+    private static final int SPECULATION_BITS = 23;
+
+    private static final int ACTION_SHIFT = 0;
+    private static final int ACTION_MASK = intMaskRight(ACTION_BITS);
+
+    private static final int REASON_SHIFT = ACTION_SHIFT + ACTION_BITS;
+    private static final int REASON_MASK = intMaskRight(REASON_BITS);
+
+    private static final int SPECULATION_SHIFT = REASON_SHIFT + REASON_BITS;
+    private static final int SPECULATION_MASK = intMaskRight(SPECULATION_BITS);
+
     private static int intMaskRight(int n) {
         assert n <= 32;
         return n == 32 ? -1 : (1 << n) - 1;
@@ -86,157 +100,133 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
 
     @Override
     public Constant encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason, int speculationId) {
-        HotSpotVMConfig config = runtime.getConfig();
         int actionValue = convertDeoptAction(action);
         int reasonValue = convertDeoptReason(reason);
-        int speculationValue = speculationId & intMaskRight(config.deoptimizationSpeculationIdBits);
-        Constant c = Constant.forInt(~((speculationValue << config.deoptimizationSpeculationIdShift) | (reasonValue << config.deoptimizationReasonShift) | (actionValue << config.deoptimizationActionShift)));
+        int speculationValue = speculationId & SPECULATION_MASK;
+        Constant c = Constant.forInt(~((speculationValue << SPECULATION_SHIFT) | (reasonValue << REASON_SHIFT) | (actionValue << ACTION_SHIFT)));
         assert c.asInt() < 0;
         return c;
     }
 
     public DeoptimizationReason decodeDeoptReason(Constant constant) {
-        HotSpotVMConfig config = runtime.getConfig();
-        int reasonValue = ((~constant.asInt()) >> config.deoptimizationReasonShift) & intMaskRight(config.deoptimizationReasonBits);
+        int reasonValue = ((~constant.asInt()) >> REASON_SHIFT) & REASON_MASK;
         DeoptimizationReason reason = convertDeoptReason(reasonValue);
         return reason;
     }
 
     public DeoptimizationAction decodeDeoptAction(Constant constant) {
-        HotSpotVMConfig config = runtime.getConfig();
-        int actionValue = ((~constant.asInt()) >> config.deoptimizationActionShift) & intMaskRight(config.deoptimizationActionBits);
+        int actionValue = ((~constant.asInt()) >> ACTION_SHIFT) & ACTION_MASK;
         DeoptimizationAction action = convertDeoptAction(actionValue);
         return action;
     }
 
     public short decodeSpeculationId(Constant constant) {
-        HotSpotVMConfig config = runtime.getConfig();
-        return (short) (((~constant.asInt()) >> config.deoptimizationSpeculationIdShift) & intMaskRight(config.deoptimizationSpeculationIdBits));
+        return (short) (((~constant.asInt()) >> SPECULATION_SHIFT) & SPECULATION_MASK);
     }
 
     public int convertDeoptAction(DeoptimizationAction action) {
-        HotSpotVMConfig config = runtime.getConfig();
         switch (action) {
             case None:
-                return config.deoptActionNone;
+                return runtime.getConfig().deoptActionNone;
             case RecompileIfTooManyDeopts:
-                return config.deoptActionMaybeRecompile;
+                return runtime.getConfig().deoptActionMaybeRecompile;
             case InvalidateReprofile:
-                return config.deoptActionReinterpret;
+                return runtime.getConfig().deoptActionReinterpret;
             case InvalidateRecompile:
-                return config.deoptActionMakeNotEntrant;
+                return runtime.getConfig().deoptActionMakeNotEntrant;
             case InvalidateStopCompiling:
-                return config.deoptActionMakeNotCompilable;
+                return runtime.getConfig().deoptActionMakeNotCompilable;
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
     }
 
     public DeoptimizationAction convertDeoptAction(int action) {
-        HotSpotVMConfig config = runtime.getConfig();
-        if (action == config.deoptActionNone) {
+        if (action == runtime.getConfig().deoptActionNone) {
             return DeoptimizationAction.None;
-        }
-        if (action == config.deoptActionMaybeRecompile) {
+        } else if (action == runtime.getConfig().deoptActionMaybeRecompile) {
             return DeoptimizationAction.RecompileIfTooManyDeopts;
-        }
-        if (action == config.deoptActionReinterpret) {
+        } else if (action == runtime.getConfig().deoptActionReinterpret) {
             return DeoptimizationAction.InvalidateReprofile;
-        }
-        if (action == config.deoptActionMakeNotEntrant) {
+        } else if (action == runtime.getConfig().deoptActionMakeNotEntrant) {
             return DeoptimizationAction.InvalidateRecompile;
-        }
-        if (action == config.deoptActionMakeNotCompilable) {
+        } else if (action == runtime.getConfig().deoptActionMakeNotCompilable) {
             return DeoptimizationAction.InvalidateStopCompiling;
+        } else {
+            throw GraalInternalError.shouldNotReachHere();
         }
-        throw GraalInternalError.shouldNotReachHere();
     }
 
     public int convertDeoptReason(DeoptimizationReason reason) {
-        HotSpotVMConfig config = runtime.getConfig();
         switch (reason) {
             case None:
-                return config.deoptReasonNone;
+                return runtime.getConfig().deoptReasonNone;
             case NullCheckException:
-                return config.deoptReasonNullCheck;
+                return runtime.getConfig().deoptReasonNullCheck;
             case BoundsCheckException:
-                return config.deoptReasonRangeCheck;
+                return runtime.getConfig().deoptReasonRangeCheck;
             case ClassCastException:
-                return config.deoptReasonClassCheck;
+                return runtime.getConfig().deoptReasonClassCheck;
             case ArrayStoreException:
-                return config.deoptReasonArrayCheck;
+                return runtime.getConfig().deoptReasonArrayCheck;
             case UnreachedCode:
-                return config.deoptReasonUnreached0;
+                return runtime.getConfig().deoptReasonUnreached0;
             case TypeCheckedInliningViolated:
-                return config.deoptReasonTypeCheckInlining;
+                return runtime.getConfig().deoptReasonTypeCheckInlining;
             case OptimizedTypeCheckViolated:
-                return config.deoptReasonOptimizedTypeCheck;
+                return runtime.getConfig().deoptReasonOptimizedTypeCheck;
             case NotCompiledExceptionHandler:
-                return config.deoptReasonNotCompiledExceptionHandler;
+                return runtime.getConfig().deoptReasonNotCompiledExceptionHandler;
             case Unresolved:
-                return config.deoptReasonUnresolved;
+                return runtime.getConfig().deoptReasonUnresolved;
             case JavaSubroutineMismatch:
-                return config.deoptReasonJsrMismatch;
+                return runtime.getConfig().deoptReasonJsrMismatch;
             case ArithmeticException:
-                return config.deoptReasonDiv0Check;
+                return runtime.getConfig().deoptReasonDiv0Check;
             case RuntimeConstraint:
-                return config.deoptReasonConstraint;
+                return runtime.getConfig().deoptReasonConstraint;
             case LoopLimitCheck:
-                return config.deoptReasonLoopLimitCheck;
+                return runtime.getConfig().deoptReasonLoopLimitCheck;
             case Aliasing:
-                return config.deoptReasonAliasing;
+                return runtime.getConfig().deoptReasonAliasing;
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
     }
 
     public DeoptimizationReason convertDeoptReason(int reason) {
-        HotSpotVMConfig config = runtime.getConfig();
-        if (reason == config.deoptReasonNone) {
+        if (reason == runtime.getConfig().deoptReasonNone) {
             return DeoptimizationReason.None;
-        }
-        if (reason == config.deoptReasonNullCheck) {
+        } else if (reason == runtime.getConfig().deoptReasonNullCheck) {
             return DeoptimizationReason.NullCheckException;
-        }
-        if (reason == config.deoptReasonRangeCheck) {
+        } else if (reason == runtime.getConfig().deoptReasonRangeCheck) {
             return DeoptimizationReason.BoundsCheckException;
-        }
-        if (reason == config.deoptReasonClassCheck) {
+        } else if (reason == runtime.getConfig().deoptReasonClassCheck) {
             return DeoptimizationReason.ClassCastException;
-        }
-        if (reason == config.deoptReasonArrayCheck) {
+        } else if (reason == runtime.getConfig().deoptReasonArrayCheck) {
             return DeoptimizationReason.ArrayStoreException;
-        }
-        if (reason == config.deoptReasonUnreached0) {
+        } else if (reason == runtime.getConfig().deoptReasonUnreached0) {
             return DeoptimizationReason.UnreachedCode;
-        }
-        if (reason == config.deoptReasonTypeCheckInlining) {
+        } else if (reason == runtime.getConfig().deoptReasonTypeCheckInlining) {
             return DeoptimizationReason.TypeCheckedInliningViolated;
-        }
-        if (reason == config.deoptReasonOptimizedTypeCheck) {
+        } else if (reason == runtime.getConfig().deoptReasonOptimizedTypeCheck) {
             return DeoptimizationReason.OptimizedTypeCheckViolated;
-        }
-        if (reason == config.deoptReasonNotCompiledExceptionHandler) {
+        } else if (reason == runtime.getConfig().deoptReasonNotCompiledExceptionHandler) {
             return DeoptimizationReason.NotCompiledExceptionHandler;
-        }
-        if (reason == config.deoptReasonUnresolved) {
+        } else if (reason == runtime.getConfig().deoptReasonUnresolved) {
             return DeoptimizationReason.Unresolved;
-        }
-        if (reason == config.deoptReasonJsrMismatch) {
+        } else if (reason == runtime.getConfig().deoptReasonJsrMismatch) {
             return DeoptimizationReason.JavaSubroutineMismatch;
-        }
-        if (reason == config.deoptReasonDiv0Check) {
+        } else if (reason == runtime.getConfig().deoptReasonDiv0Check) {
             return DeoptimizationReason.ArithmeticException;
-        }
-        if (reason == config.deoptReasonConstraint) {
+        } else if (reason == runtime.getConfig().deoptReasonConstraint) {
             return DeoptimizationReason.RuntimeConstraint;
-        }
-        if (reason == config.deoptReasonLoopLimitCheck) {
+        } else if (reason == runtime.getConfig().deoptReasonLoopLimitCheck) {
             return DeoptimizationReason.LoopLimitCheck;
-        }
-        if (reason == config.deoptReasonAliasing) {
+        } else if (reason == runtime.getConfig().deoptReasonAliasing) {
             return DeoptimizationReason.Aliasing;
+        } else {
+            throw GraalInternalError.shouldNotReachHere(Integer.toHexString(reason));
         }
-        throw GraalInternalError.shouldNotReachHere(Integer.toHexString(reason));
     }
 }
