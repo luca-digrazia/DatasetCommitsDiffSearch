@@ -35,8 +35,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ValueInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.VoidInstruction;
 import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
 import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
 import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
@@ -56,6 +54,7 @@ import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMFreeFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
 import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMAddressLiteralNode;
@@ -82,9 +81,7 @@ import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
 import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
 import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.base.model.target.TargetDataLayout;
-import com.oracle.truffle.llvm.parser.base.model.visitors.InstructionVisitor;
 import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.parser.base.model.visitors.ReducedInstructionVisitor;
 import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.parser.base.util.LLVMParserAsserts;
 import com.oracle.truffle.llvm.parser.base.util.LLVMParserResultImpl;
@@ -239,12 +236,13 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
                         phis.getPhiMap(functionName),
                         factoryFacade,
                         method.getParameters().size(),
-                        symbolResolver,
-                        method);
+                        symbolResolver);
 
-        parserRuntime.initFunction(visitor);
+        parserRuntime.setFunctionVisitor(visitor);
 
         method.accept(visitor);
+
+        parserRuntime.setFunctionVisitor(null);
 
         final int[] basicBlockIndices = new int[method.getBlockCount()];
         for (int i = 0; i < method.getBlockCount(); i++) {
@@ -503,7 +501,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         LLVMNode[] afterFunction = new LLVMNode[0];
 
         final SourceSection sourceSection = source.createSection(1);
-        RootNode rootNode = parserRuntime.getNodeFactoryFacade().createFunctionStartNode(body, beforeFunction, afterFunction, sourceSection, frame, method);
+        LLVMFunctionStartNode rootNode = new LLVMFunctionStartNode(body, beforeFunction, afterFunction, sourceSection, frame, method.getName(), getInitNullers(frame, method));
         if (LLVMOptions.DEBUG.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
             System.out.flush();
@@ -514,7 +512,17 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         LLVMFunction function = context.getFunctionRegistry().createFunctionDescriptor(method.getName(), llvmReturnType, llvmParamTypes, method.isVarArg());
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         functions.put(function, callTarget);
-        parserRuntime.exitFunction();
+    }
+
+    /**
+     * Initializes the tags of the frame.
+     */
+    private LLVMStackFrameNuller[] getInitNullers(FrameDescriptor frameDescriptor, FunctionDefinition method) throws AssertionError {
+        final List<LLVMStackFrameNuller> initNullers = new ArrayList<>();
+        for (FrameSlot slot : frameDescriptor.getSlots()) {
+            initNullers.add(getNullerNode(slot, method));
+        }
+        return initNullers.toArray(new LLVMStackFrameNuller[initNullers.size()]);
     }
 
     private static LLVMType findType(FunctionDefinition method, String identifier) {
@@ -548,34 +556,8 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         private LLVMBitcodeFunctionVisitor functionVisitor = null;
 
-        private final Map<String, Type> nameToTypeMapping = new HashMap<>();
-
-        final InstructionVisitor nameToTypeMappingVisitor = new ReducedInstructionVisitor() {
-            @Override
-            public void visitValueInstruction(ValueInstruction valueInstruction) {
-                nameToTypeMapping.put(valueInstruction.getName(), valueInstruction.getType());
-            }
-
-            @Override
-            public void visitVoidInstruction(VoidInstruction voidInstruction) {
-
-            }
-        };
-
-        void initFunction(LLVMBitcodeFunctionVisitor visitor) {
-            this.functionVisitor = visitor;
-            nameToTypeMapping.clear();
-            if (visitor != null) {
-                for (int i = 0; i < visitor.getFunction().getBlockCount(); i++) {
-                    visitor.getFunction().getBlock(i).accept(nameToTypeMappingVisitor);
-                }
-                visitor.getFunction().getParameters().forEach(p -> nameToTypeMapping.put(p.getName(), p.getType()));
-            }
-        }
-
-        void exitFunction() {
-            this.functionVisitor = null;
-            nameToTypeMapping.clear();
+        void setFunctionVisitor(LLVMBitcodeFunctionVisitor functionVisitor) {
+            this.functionVisitor = functionVisitor;
         }
 
         @Override
@@ -656,7 +638,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         @Override
         public Map<String, Type> getVariableNameTypesMapping() {
-            return Collections.unmodifiableMap(nameToTypeMapping);
+            throw new UnsupportedOperationException("Not implemented!");
         }
 
         @Override
