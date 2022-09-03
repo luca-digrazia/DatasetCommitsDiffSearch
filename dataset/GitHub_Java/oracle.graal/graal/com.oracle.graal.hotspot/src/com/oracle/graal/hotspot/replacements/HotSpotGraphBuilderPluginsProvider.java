@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.java.GraphBuilderContext.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -49,8 +47,9 @@ public class HotSpotGraphBuilderPluginsProvider implements GraphBuilderPluginsPr
                 if (objectStamp.isExactType() && objectStamp.nonNull()) {
                     mirror = builder.append(ConstantNode.forConstant(objectStamp.type().getJavaClass(), metaAccess));
                 } else {
+                    GuardingPiNode pi = builder.append(new GuardingPiNode(rcvr));
                     StampProvider stampProvider = builder.getStampProvider();
-                    LoadHubNode hub = builder.append(new LoadHubNode(stampProvider, makeNonNull(builder, rcvr)));
+                    LoadHubNode hub = builder.append(new LoadHubNode(stampProvider, pi));
                     mirror = builder.append(new HubGetClassNode(builder.getMetaAccess(), hub));
                 }
                 builder.push(Kind.Object, mirror);
