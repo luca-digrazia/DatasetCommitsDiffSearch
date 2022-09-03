@@ -1121,7 +1121,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected ValueNode genFloatRem(ValueNode x, ValueNode y) {
-        return RemNode.create(x, y, NodeView.DEFAULT);
+        return new RemNode(x, y);
     }
 
     protected ValueNode genIntegerDiv(ValueNode x, ValueNode y) {
