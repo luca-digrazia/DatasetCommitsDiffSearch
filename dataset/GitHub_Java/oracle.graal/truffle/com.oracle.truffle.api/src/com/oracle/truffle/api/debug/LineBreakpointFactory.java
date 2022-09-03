@@ -44,14 +44,13 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.Debugger.BreakpointCallback;
 import com.oracle.truffle.api.debug.Debugger.WarningLog;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.EvalInstrumentListener;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
+import com.oracle.truffle.api.instrument.ProbeInstrument;
 import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.ProbeInstrument;
 import com.oracle.truffle.api.instrument.StandardSyntaxTag;
 import com.oracle.truffle.api.instrument.SyntaxTag;
 import com.oracle.truffle.api.instrument.impl.DefaultProbeListener;
@@ -59,7 +58,6 @@ import com.oracle.truffle.api.instrument.impl.DefaultStandardInstrumentListener;
 import com.oracle.truffle.api.nodes.InvalidAssumptionException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.LineLocation;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
 
@@ -140,8 +138,7 @@ final class LineBreakpointFactory {
         this.warningLog = warningLog;
 
         final Instrumenter instrumenter = debugger.getInstrumenter();
-        this.lineToProbesMap = new LineToProbesMap();
-        instrumenter.install(lineToProbesMap);
+        lineToProbesMap = instrumenter.install(new LineToProbesMap());
 
         instrumenter.addProbeListener(new DefaultProbeListener() {
 
@@ -155,7 +152,14 @@ final class LineBreakpointFactory {
                             // A Probe with line location tagged STATEMENT we haven't seen before.
                             final LineBreakpointImpl breakpoint = lineToBreakpoint.get(lineLocation);
                             if (breakpoint != null) {
-                                breakpoint.attach(probe);
+                                try {
+                                    breakpoint.attach(probe);
+                                } catch (IOException e) {
+                                    warningLog.addWarning(BREAKPOINT_NAME + " failure attaching to newly tagged Probe: " + e.getMessage());
+                                    if (TRACE) {
+                                        OUT.println(BREAKPOINT_NAME + " failure: " + e.getMessage());
+                                    }
+                                }
                             }
                         }
                     }
@@ -268,9 +272,11 @@ final class LineBreakpointFactory {
      * Concrete representation of a line breakpoint, implemented by attaching an instrument to a
      * probe at the designated source location.
      */
-    private final class LineBreakpointImpl extends LineBreakpoint implements EvalInstrumentListener {
+    private final class LineBreakpointImpl extends LineBreakpoint implements AdvancedInstrumentResultListener {
 
         private static final String SHOULD_NOT_HAPPEN = "LineBreakpointImpl:  should not happen";
+
+        private final LineLocation lineLocation;
 
         // Cached assumption that the global status of line breakpoint activity has not changed.
         private Assumption breakpointsActiveAssumption;
@@ -279,7 +285,7 @@ final class LineBreakpointFactory {
         @CompilationFinal private boolean isEnabled;
         private Assumption enabledUnchangedAssumption;
 
-        private Source conditionSource;
+        private String conditionExpr;
 
         /**
          * The instrument(s) that this breakpoint currently has attached to a {@link Probe}:
@@ -288,7 +294,9 @@ final class LineBreakpointFactory {
         private List<ProbeInstrument> instruments = new ArrayList<>();
 
         public LineBreakpointImpl(int ignoreCount, LineLocation lineLocation, boolean oneShot) {
-            super(ENABLED_UNRESOLVED, lineLocation, ignoreCount, oneShot);
+            super(ENABLED_UNRESOLVED, ignoreCount, oneShot);
+            this.lineLocation = lineLocation;
+
             this.breakpointsActiveAssumption = LineBreakpointFactory.this.breakpointsActiveUnchanged.getAssumption();
             this.isEnabled = true;
             this.enabledUnchangedAssumption = Truffle.getRuntime().createAssumption(BREAKPOINT_NAME + " enabled state unchanged");
@@ -335,7 +343,7 @@ final class LineBreakpointFactory {
 
         @Override
         public void setCondition(String expr) throws IOException {
-            if (this.conditionSource != null || expr != null) {
+            if (this.conditionExpr != null || expr != null) {
                 // De-instrument the Probes instrumented by this breakpoint
                 final ArrayList<Probe> probes = new ArrayList<>();
                 for (ProbeInstrument instrument : instruments) {
@@ -343,7 +351,7 @@ final class LineBreakpointFactory {
                     instrument.dispose();
                 }
                 instruments.clear();
-                this.conditionSource = Source.fromText(expr, "breakpoint condition from text: " + expr);
+                this.conditionExpr = expr;
                 // Re-instrument the probes previously instrumented
                 for (Probe probe : probes) {
                     attach(probe);
@@ -352,8 +360,8 @@ final class LineBreakpointFactory {
         }
 
         @Override
-        public Source getCondition() {
-            return conditionSource;
+        public String getCondition() {
+            return conditionExpr;
         }
 
         @TruffleBoundary
@@ -368,18 +376,16 @@ final class LineBreakpointFactory {
             }
         }
 
-        @SuppressWarnings("rawtypes")
-        private void attach(Probe newProbe) {
+        private void attach(Probe newProbe) throws IOException {
             if (getState() == DISPOSED) {
                 throw new IllegalStateException("Attempt to attach a disposed " + BREAKPOINT_NAME);
             }
             ProbeInstrument newInstrument = null;
             final Instrumenter instrumenter = debugger.getInstrumenter();
-            if (conditionSource == null) {
+            if (conditionExpr == null) {
                 newInstrument = instrumenter.attach(newProbe, new UnconditionalLineBreakInstrumentListener(), BREAKPOINT_NAME);
             } else {
-                final Class<? extends TruffleLanguage> languageClass = Debugger.ACCESSOR.findLanguage(newProbe);
-                newInstrument = instrumenter.attach(newProbe, languageClass, conditionSource, this, BREAKPOINT_NAME);
+                newInstrument = instrumenter.attach(newProbe, this, debugger.createAdvancedInstrumentRootFactory(newProbe, conditionExpr, this), Boolean.class, BREAKPOINT_NAME);
             }
             instruments.add(newInstrument);
             changeState(isEnabled ? ENABLED : DISABLED);
@@ -440,20 +446,16 @@ final class LineBreakpointFactory {
         }
 
         public void onExecution(Node node, VirtualFrame vFrame, Object result) {
-            if (result instanceof Boolean) {
-                final boolean condition = (Boolean) result;
-                if (TRACE) {
-                    trace("breakpoint condition = %b  %s", condition, getShortDescription());
-                }
-                if (condition) {
-                    nodeEnter(node, vFrame);
-                }
-            } else {
-                onFailure(node, vFrame, new RuntimeException("breakpint failure = non-boolean condition " + result.toString()));
+            final boolean condition = (Boolean) result;
+            if (TRACE) {
+                trace("breakpoint condition = %b  %s", condition, getShortDescription());
+            }
+            if (condition) {
+                nodeEnter(node, vFrame);
             }
         }
 
-        public void onFailure(Node node, VirtualFrame vFrame, Exception ex) {
+        public void onFailure(Node node, VirtualFrame vFrame, RuntimeException ex) {
             addExceptionWarning(ex);
             if (TRACE) {
                 trace("breakpoint failure = %s  %s", ex, getShortDescription());
@@ -463,8 +465,18 @@ final class LineBreakpointFactory {
         }
 
         @TruffleBoundary
-        private void addExceptionWarning(Exception ex) {
+        private void addExceptionWarning(RuntimeException ex) {
             warningLog.addWarning(String.format("Exception in %s:  %s", getShortDescription(), ex.getMessage()));
+        }
+
+        @Override
+        public String getLocationDescription() {
+            return "Line: " + lineLocation.getShortDescription();
+        }
+
+        @Override
+        public LineLocation getLineLocation() {
+            return lineLocation;
         }
 
         private final class UnconditionalLineBreakInstrumentListener extends DefaultStandardInstrumentListener {
