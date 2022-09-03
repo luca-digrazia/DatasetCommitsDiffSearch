@@ -32,7 +32,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -60,7 +59,7 @@ public class ErrorTypeTest {
     public static Collection<? extends TestRun> createErrorTypeTests() {
         context = new TestContext();
         final Set<? extends String> requiredLanguages = TestUtil.getRequiredLanguages(context);
-        final Collection<TestRun> testRuns = new LinkedHashSet<>();
+        final List<TestRun> testRuns = new ArrayList<>();
         for (String snippetLanguage : requiredLanguages) {
             Collection<? extends Snippet> snippets = context.getExpressions(null, null, snippetLanguage);
             Map<String, Collection<? extends Snippet>> overloads = computeOverloads(snippets);
