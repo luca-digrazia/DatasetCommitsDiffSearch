@@ -39,7 +39,7 @@ import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.ValueNumberable;
+import com.oracle.graal.graph.Node.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
 import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
@@ -51,6 +51,7 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -59,11 +60,30 @@ import com.oracle.graal.phases.tiers.*;
  */
 public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
+    static class Options {
+        // @formatter:off
+        @Option(help = "The trace level for the bytecode parser used when building a graph from bytecode")
+        public static final OptionValue<Integer> TraceBytecodeParserLevel = new OptionValue<>(0);
+        // @formatter:on
+    }
+
     public static final class RuntimeCalls {
 
         public static final ForeignCallDescriptor CREATE_NULL_POINTER_EXCEPTION = new ForeignCallDescriptor("createNullPointerException", NullPointerException.class);
         public static final ForeignCallDescriptor CREATE_OUT_OF_BOUNDS_EXCEPTION = new ForeignCallDescriptor("createOutOfBoundsException", ArrayIndexOutOfBoundsException.class, int.class);
     }
+
+    /**
+     * The minimum value to which {@link Options#TraceBytecodeParserLevel} must be set to trace the
+     * bytecode instructions as they are parsed.
+     */
+    public static final int TRACELEVEL_INSTRUCTIONS = 1;
+
+    /**
+     * The minimum value to which {@link Options#TraceBytecodeParserLevel} must be set to trace the
+     * frame state before each bytecode instruction as it is parsed.
+     */
+    public static final int TRACELEVEL_STATE = 2;
 
     private final GraphBuilderConfiguration graphBuilderConfig;
 
@@ -95,6 +115,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
         private final GraphBuilderConfiguration graphBuilderConfig;
         private final OptimisticOptimizations optimisticOpts;
+
+        /**
+         * Meters the number of actual bytecodes parsed.
+         */
+        public static final DebugMetric BytecodesParsed = Debug.metric("BytecodesParsed");
 
         /**
          * Node that marks the begin of block during bytecode parsing. When a block is identified
@@ -588,6 +613,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return (ValueNode) currentGraph.unique((Node & ValueNumberable) x);
             }
 
+            @Override
             protected ValueNode genIf(ValueNode condition, ValueNode falseSuccessor, ValueNode trueSuccessor, double d) {
                 return new IfNode((LogicNode) condition, (FixedNode) falseSuccessor, (FixedNode) trueSuccessor, d);
             }
@@ -1357,6 +1383,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return instr;
             }
 
+            private final int traceLevel = Options.TraceBytecodeParserLevel.getValue();
+
             private void traceState() {
                 if (traceLevel >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
                     Debug.log(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
@@ -1371,59 +1399,24 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
             }
 
-            @Override
-            protected void ifNode(ValueNode x, Condition cond, ValueNode y) {
-                // assert !x.isDeleted() && !y.isDeleted();
-                // assert currentBlock.numNormalSuccessors() == 2;
-                assert currentBlock.getSuccessors().size() == 2;
-                BciBlock trueBlock = currentBlock.getSuccessors().get(0);
-                BciBlock falseBlock = currentBlock.getSuccessors().get(1);
-                if (trueBlock == falseBlock) {
-                    appendGoto(createTarget(trueBlock, frameState));
-                    return;
-                }
-
-                double probability = profilingInfo.getBranchTakenProbability(bci());
-                if (probability < 0) {
-                    assert probability == -1 : "invalid probability";
-                    Debug.log("missing probability in %s at bci %d", method, bci());
-                    probability = 0.5;
-                }
-
-                if (!optimisticOpts.removeNeverExecutedCode()) {
-                    if (probability == 0) {
-                        probability = 0.0000001;
-                    } else if (probability == 1) {
-                        probability = 0.999999;
+            private void traceInstruction(int bci, int opcode, boolean blockStart) {
+                if (traceLevel >= TRACELEVEL_INSTRUCTIONS && Debug.isLogEnabled()) {
+                    StringBuilder sb = new StringBuilder(40);
+                    sb.append(blockStart ? '+' : '|');
+                    if (bci < 10) {
+                        sb.append("  ");
+                    } else if (bci < 100) {
+                        sb.append(' ');
                     }
-                }
-
-                // the mirroring and negation operations get the condition into canonical form
-                boolean mirror = cond.canonicalMirror();
-                boolean negate = cond.canonicalNegate();
-
-                ValueNode a = mirror ? y : x;
-                ValueNode b = mirror ? x : y;
-
-                ValueNode condition;
-                assert !a.getKind().isNumericFloat();
-                if (cond == Condition.EQ || cond == Condition.NE) {
-                    if (a.getKind() == Kind.Object) {
-                        condition = genObjectEquals(a, b);
-                    } else {
-                        condition = genIntegerEquals(a, b);
+                    sb.append(bci).append(": ").append(Bytecodes.nameOf(opcode));
+                    for (int i = bci + 1; i < stream.nextBCI(); ++i) {
+                        sb.append(' ').append(stream.readUByte(i));
                     }
-                } else {
-                    assert a.getKind() != Kind.Object && !cond.isUnsigned();
-                    condition = genIntegerLessThan(a, b);
+                    if (!currentBlock.jsrScope.isEmpty()) {
+                        sb.append(' ').append(currentBlock.jsrScope);
+                    }
+                    Debug.log("%s", sb);
                 }
-                condition = genUnique(condition);
-
-                ValueNode trueSuccessor = createBlockTarget(probability, trueBlock, frameState);
-                ValueNode falseSuccessor = createBlockTarget(1 - probability, falseBlock, frameState);
-
-                ValueNode ifNode = negate ? genIf(condition, falseSuccessor, trueSuccessor, 1 - probability) : genIf(condition, trueSuccessor, falseSuccessor, probability);
-                append(ifNode);
             }
 
         }

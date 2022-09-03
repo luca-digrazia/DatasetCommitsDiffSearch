@@ -83,7 +83,11 @@ public final class BciBlockMapping {
         public int loopId;
 
         public FixedWithNextNode firstInstruction;
-        public AbstractFrameStateBuilder<?, ?> entryState;
+        public HIRFrameStateBuilder entryState;
+
+        // public ArrayList<BciBlock> successors = new ArrayList<>(2);
+        // public ArrayList<BciBlock> predecessors = new ArrayList<>(2); // only used in the
+        // baseline
 
         public long exits;
 

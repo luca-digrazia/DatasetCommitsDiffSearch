@@ -23,7 +23,6 @@
 package com.oracle.graal.debug;
 
 import static com.oracle.graal.debug.Debug.Initialization.*;
-import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.*;
 import static java.util.FormattableFlags.*;
 
 import java.io.*;
@@ -260,7 +259,17 @@ public class Debug {
     }
 
     public static Scope forceLog() {
-        return Debug.sandbox("forceLog", new DelegatingDebugConfig().enable(LOG).enable(LOG_METHOD));
+        return Debug.sandbox("forceLog", new DelegatingDebugConfig(DebugScope.getConfig()) {
+            @Override
+            public boolean isLogEnabled() {
+                return true;
+            }
+
+            @Override
+            public boolean isLogEnabledForMethod() {
+                return true;
+            }
+        });
     }
 
     /**
@@ -844,7 +853,7 @@ public class Debug {
 
     public static Object convertFormatArg(Object arg) {
         if (arg instanceof Class) {
-            return ((Class<?>) arg).getSimpleName();
+            return ((Class) arg).getSimpleName();
         }
         return arg;
     }

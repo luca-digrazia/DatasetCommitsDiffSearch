@@ -84,7 +84,7 @@ public abstract class AbstractJavaProfile<T extends AbstractProfiledItem<U>, U> 
     public T findEntry(ResolvedJavaType type) {
         if (pitems != null) {
             for (T pt : pitems) {
-                if (pt.getItem().equals(type)) {
+                if (pt.getItem() == type) {
                     return pt;
                 }
             }
@@ -131,7 +131,7 @@ public abstract class AbstractJavaProfile<T extends AbstractProfiledItem<U>, U> 
         if (!(obj instanceof AbstractJavaProfile)) {
             return false;
         }
-        AbstractJavaProfile<?, ?> that = (AbstractJavaProfile<?, ?>) obj;
+        AbstractJavaProfile that = (AbstractJavaProfile) obj;
         if (that.notRecordedProbability != notRecordedProbability) {
             return false;
         }

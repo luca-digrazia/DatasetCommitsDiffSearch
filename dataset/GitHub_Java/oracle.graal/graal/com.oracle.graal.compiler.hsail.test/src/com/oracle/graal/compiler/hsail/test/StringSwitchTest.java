@@ -25,8 +25,7 @@ package com.oracle.graal.compiler.hsail.test;
 
 import static org.junit.Assume.*;
 
-import org.junit.*;
-
+import org.junit.Test;
 import com.oracle.graal.compiler.hsail.test.infra.*;
 
 /**

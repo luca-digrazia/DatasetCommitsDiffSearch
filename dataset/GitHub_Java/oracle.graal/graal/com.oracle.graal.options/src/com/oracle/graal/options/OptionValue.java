@@ -128,7 +128,7 @@ public class OptionValue<T> {
         return new MultipleOverridesScope(current, map);
     }
 
-    static final ThreadLocal<OverrideScope> overrideScopes = new ThreadLocal<>();
+    private static final ThreadLocal<OverrideScope> overrideScopes = new ThreadLocal<>();
 
     /**
      * The raw option value.
@@ -139,7 +139,7 @@ public class OptionValue<T> {
 
     private long reads;
     private OptionValue<?> next;
-    private static OptionValue<?> head;
+    private static OptionValue head;
 
     private static final boolean ShowReadsHistogram = Boolean.getBoolean("graal.showOptionValueReadsHistogram");
 
@@ -252,23 +252,7 @@ public class OptionValue<T> {
      * {@link OptionValue#override(OptionValue, Object)} or {@link OptionValue#override(Map)}.
      */
     public abstract static class OverrideScope implements AutoCloseable {
-
-        private Map<DerivedOptionValue<?>, Object> derivedCache = null;
-
-        public <T> T getDerived(DerivedOptionValue<T> key) {
-            if (derivedCache == null) {
-                derivedCache = new HashMap<>();
-            }
-            @SuppressWarnings("unchecked")
-            T ret = (T) derivedCache.get(key);
-            if (ret == null) {
-                ret = key.createValue();
-                derivedCache.put(key, ret);
-            }
-            return ret;
-        }
-
-        abstract void addToInherited(Map<OptionValue<?>, Object> inherited);
+        abstract void addToInherited(Map<OptionValue, Object> inherited);
 
         abstract <T> T getOverride(OptionValue<T> option);
 
@@ -292,7 +276,7 @@ public class OptionValue<T> {
         }
 
         @Override
-        void addToInherited(Map<OptionValue<?>, Object> inherited) {
+        void addToInherited(Map<OptionValue, Object> inherited) {
             inherited.put(option, value);
         }
 
@@ -320,7 +304,7 @@ public class OptionValue<T> {
 
     static class MultipleOverridesScope extends OverrideScope {
         final OverrideScope parent;
-        final Map<OptionValue<?>, Object> overrides;
+        final Map<OptionValue, Object> overrides;
 
         public MultipleOverridesScope(OverrideScope parent, OptionValue<?> option, Object value) {
             this.parent = parent;
@@ -364,7 +348,7 @@ public class OptionValue<T> {
         }
 
         @Override
-        void addToInherited(Map<OptionValue<?>, Object> inherited) {
+        void addToInherited(Map<OptionValue, Object> inherited) {
             if (parent != null) {
                 parent.addToInherited(inherited);
             }

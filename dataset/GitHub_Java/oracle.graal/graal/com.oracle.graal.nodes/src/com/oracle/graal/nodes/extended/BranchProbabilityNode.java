@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -34,7 +33,7 @@ import com.oracle.graal.nodes.spi.*;
  * the if node's taken probability. Then the branch probability node will be removed. This node is
  * intended primarily for snippets, so that they can define their fast and slow paths.
  */
-public class BranchProbabilityNode extends FloatingNode implements Simplifiable, Lowerable {
+public class BranchProbabilityNode extends FloatingNode implements Canonicalizable, Lowerable {
 
     public static final double LIKELY_PROBABILITY = 0.6;
     public static final double NOT_LIKELY_PROBABILITY = 1 - LIKELY_PROBABILITY;
@@ -66,7 +65,7 @@ public class BranchProbabilityNode extends FloatingNode implements Simplifiable,
     }
 
     @Override
-    public void simplify(SimplifierTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         if (probability.isConstant()) {
             double probabilityValue = probability.asConstant().asDouble();
             if (probabilityValue < 0.0) {
@@ -77,9 +76,9 @@ public class BranchProbabilityNode extends FloatingNode implements Simplifiable,
             boolean couldSet = false;
             for (IntegerEqualsNode node : this.usages().filter(IntegerEqualsNode.class)) {
                 if (node.condition() == Condition.EQ) {
-                    ValueNode other = node.getX();
-                    if (node.getX() == this) {
-                        other = node.getY();
+                    ValueNode other = node.x();
+                    if (node.x() == this) {
+                        other = node.y();
                     }
                     if (other.isConstant()) {
                         double probabilityToSet = probabilityValue;
@@ -93,15 +92,15 @@ public class BranchProbabilityNode extends FloatingNode implements Simplifiable,
                     }
                 }
             }
-            if (couldSet) {
-                replaceAndDelete(condition);
-                tool.addToWorkList(condition.usages());
-            } else {
-                if (!isSubstitutionGraph()) {
-                    throw new GraalInternalError("Wrong usage of branch probability injection!");
+            if (!couldSet) {
+                if (isSubstitutionGraph()) {
+                    return this;
                 }
+                throw new GraalInternalError("Wrong usage of branch probability injection!");
             }
+            return condition;
         }
+        return this;
     }
 
     private boolean isSubstitutionGraph() {

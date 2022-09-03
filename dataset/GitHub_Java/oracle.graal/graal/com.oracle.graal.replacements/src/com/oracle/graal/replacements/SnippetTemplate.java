@@ -1110,7 +1110,7 @@ public class SnippetTemplate {
     private void propagateStamp(Node node) {
         if (node instanceof PhiNode) {
             PhiNode phi = (PhiNode) node;
-            if (phi.inferStamp()) {
+            if (phi.inferPhiStamp()) {
                 for (Node usage : node.usages()) {
                     propagateStamp(usage);
                 }

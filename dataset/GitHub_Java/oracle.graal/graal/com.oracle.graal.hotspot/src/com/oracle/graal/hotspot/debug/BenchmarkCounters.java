@@ -30,8 +30,7 @@ import java.util.concurrent.atomic.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -41,6 +40,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.debug.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.replacements.nodes.*;
 
@@ -108,22 +108,14 @@ public class BenchmarkCounters {
     public static final ArrayList<AtomicLong> staticCounters = new ArrayList<>();
 
     @SuppressFBWarnings(value = "AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION", justification = "concurrent abstraction calls are in synchronized block")
-    private static int getIndex(DynamicCounterNode counter) {
+    public static int getIndex(DynamicCounterNode counter) {
         if (!enabled) {
             throw new GraalInternalError("counter nodes shouldn't exist when counters are not enabled: " + counter.getGroup() + ", " + counter.getName());
         }
-        String name;
+        String name = counter.getName();
         String group = counter.getGroup();
-        if (counter.isWithContext()) {
-            name = counter.getName() + " @ " + counter.graph().graphId() + ":" + MetaUtil.format("%h.%n", counter.graph().method());
-            if (counter.graph().name != null) {
-                name += " (" + counter.graph().name + ")";
-            }
-            name += "#" + group;
-
-        } else {
-            name = counter.getName() + "#" + group;
-        }
+        name = counter.isWithContext() && counter.graph().method() != null ? name + " @ " + counter.graph().graphId() + ":" + MetaUtil.format("%h.%n", counter.graph().method()) + "#" + group : name +
+                        "#" + group;
         Integer index = indexes.get(name);
         if (index == null) {
             synchronized (BenchmarkCounters.class) {
@@ -143,7 +135,7 @@ public class BenchmarkCounters {
         return index;
     }
 
-    private static synchronized void dump(PrintStream out, double seconds, long[] counters, int maxRows) {
+    public static synchronized void dump(PrintStream out, double seconds, long[] counters, int maxRows) {
         if (!groups.isEmpty()) {
             out.println("====== dynamic counters (" + staticCounters.size() + " in total) ======");
             for (String group : new TreeSet<>(groups)) {
@@ -160,7 +152,7 @@ public class BenchmarkCounters {
         }
     }
 
-    private static synchronized void clear(long[] counters) {
+    public static synchronized void clear(long[] counters) {
         delta = counters;
     }
 
@@ -236,7 +228,7 @@ public class BenchmarkCounters {
         return (counter * 200 + 1) / sum / 2;
     }
 
-    private abstract static class CallbackOutputStream extends OutputStream {
+    public abstract static class CallbackOutputStream extends OutputStream {
 
         protected final PrintStream delegate;
         private final byte[][] patterns;
@@ -379,7 +371,7 @@ public class BenchmarkCounters {
             if (index >= config.graalCountersSize) {
                 throw new GraalInternalError("too many counters, reduce number of counters or increase -XX:GraalCounterSize=... (current value: " + config.graalCountersSize + ")");
             }
-            ConstantLocationNode arrayLocation = ConstantLocationNode.create(LocationIdentity.ANY_LOCATION, wordKind, config.graalCountersThreadOffset, graph);
+            ConstantLocationNode arrayLocation = ConstantLocationNode.create(LocationIdentity.ANY_LOCATION, Kind.Long, config.graalCountersThreadOffset, graph);
             ReadNode readArray = graph.add(new ReadNode(thread, arrayLocation, StampFactory.forKind(wordKind), BarrierType.NONE, false));
             ConstantLocationNode location = ConstantLocationNode.create(LocationIdentity.ANY_LOCATION, Kind.Long, Unsafe.ARRAY_LONG_INDEX_SCALE * index, graph);
             ReadNode read = graph.add(new ReadNode(readArray, location, StampFactory.forKind(Kind.Long), BarrierType.NONE, false));

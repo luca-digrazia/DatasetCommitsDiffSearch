@@ -23,7 +23,6 @@
 package com.oracle.graal.api.meta.jdk8.test;
 
 import static org.junit.Assert.*;
-import static org.junit.Assume.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -34,7 +33,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.test.*;
 
 /**
- * Tests for {@link ResolvedJavaMethod} that require JDK >= 8.
+ * Tests for {@link ResolvedJavaMethod} that require JDK &ge; 8.
  */
 public class TestResolvedJavaMethodJDK8 extends MethodUniverse {
 
@@ -43,12 +42,11 @@ public class TestResolvedJavaMethodJDK8 extends MethodUniverse {
 
     @Test
     public void isDefaultTest() {
-        assumeTrue(JAVA_VERSION >= 1.8D);
         for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
             ResolvedJavaMethod m = e.getValue();
             assertEquals(e.getKey().isDefault(), m.isDefault());
         }
-        for (Map.Entry<Constructor, ResolvedJavaMethod> e : constructors.entrySet()) {
+        for (Map.Entry<Constructor<?>, ResolvedJavaMethod> e : constructors.entrySet()) {
             ResolvedJavaMethod m = e.getValue();
             assertFalse(m.isDefault());
         }

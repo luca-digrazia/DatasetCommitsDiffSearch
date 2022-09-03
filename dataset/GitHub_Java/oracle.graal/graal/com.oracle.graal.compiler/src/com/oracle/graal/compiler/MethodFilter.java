@@ -121,18 +121,6 @@ public class MethodFilter {
         return false;
     }
 
-    /**
-     * Determines if a given class name is matched by a given array of filters.
-     */
-    public static boolean matchesClassName(MethodFilter[] filters, String className) {
-        for (MethodFilter filter : filters) {
-            if (filter.matchesClassName(className)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public MethodFilter(String sourcePattern) {
         String pattern = sourcePattern.trim();
 
@@ -178,19 +166,12 @@ public class MethodFilter {
         }
     }
 
-    /**
-     * Determines if the class part of this filter matches a given class name.
-     */
-    public boolean matchesClassName(String className) {
-        return clazz == null || clazz.matcher(className).matches();
-    }
-
     public boolean matches(JavaMethod o) {
         // check method name first, since MetaUtil.toJavaName is expensive
         if (methodName != null && !methodName.matcher(o.getName()).matches()) {
             return false;
         }
-        if (clazz != null && !clazz.matcher(o.getDeclaringClass().toJavaName()).matches()) {
+        if (clazz != null && !clazz.matcher(MetaUtil.toJavaName(o.getDeclaringClass())).matches()) {
             return false;
         }
         if (signature != null) {
@@ -200,7 +181,7 @@ public class MethodFilter {
             }
             for (int i = 0; i < signature.length; i++) {
                 JavaType type = sig.getParameterType(i, null);
-                String javaName = type.toJavaName();
+                String javaName = MetaUtil.toJavaName(type);
                 if (signature[i] != null && !signature[i].matcher(javaName).matches()) {
                     return false;
                 }
