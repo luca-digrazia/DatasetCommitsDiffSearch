@@ -32,7 +32,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.regex.CompiledRegex;
 import com.oracle.truffle.regex.RegexExecRootNode;
-import com.oracle.truffle.regex.RegexFlags;
 import com.oracle.truffle.regex.RegexLanguage;
 import com.oracle.truffle.regex.RegexObject;
 import com.oracle.truffle.regex.RegexProfile;
@@ -69,14 +68,13 @@ public class TRegexExecRootNode extends RegexExecRootNode implements CompiledReg
     public TRegexExecRootNode(RegexLanguage language,
                     TRegexCompiler tRegexCompiler,
                     RegexSource source,
-                    RegexFlags flags,
                     boolean eagerCompilation,
                     PreCalculatedResultFactory[] preCalculatedResults,
                     TRegexDFAExecutorNode forwardExecutor,
                     TRegexDFAExecutorNode backwardExecutor,
                     TRegexDFAExecutorNode captureGroupExecutor) {
         super(language, source);
-        lazySearchNode = new LazyCaptureGroupRegexSearchNode(language, source, flags, preCalculatedResults, forwardExecutor, backwardExecutor, captureGroupExecutor, this);
+        lazySearchNode = new LazyCaptureGroupRegexSearchNode(language, source, preCalculatedResults, forwardExecutor, backwardExecutor, captureGroupExecutor, this);
         runRegexSearchNode = insert(lazySearchNode);
         regexCallTarget = Truffle.getRuntime().createCallTarget(new RegexRootNode(language, forwardExecutor.getProperties().getFrameDescriptor(), this));
         this.tRegexCompiler = tRegexCompiler;
@@ -192,7 +190,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements CompiledReg
 
     static final class LazyCaptureGroupRegexSearchNode extends RunRegexSearchNode {
 
-        private final RegexFlags flags;
+        private final RegexSource source;
         @CompilationFinal(dimensions = 1) private final PreCalculatedResultFactory[] preCalculatedResults;
 
         @Child private TRegexDFAExecutorEntryNode forwardEntryNode;
@@ -204,14 +202,13 @@ public class TRegexExecRootNode extends RegexExecRootNode implements CompiledReg
 
         LazyCaptureGroupRegexSearchNode(RegexLanguage language,
                         RegexSource source,
-                        RegexFlags flags,
                         PreCalculatedResultFactory[] preCalculatedResults,
                         TRegexDFAExecutorNode forwardNode,
                         TRegexDFAExecutorNode backwardNode,
                         TRegexDFAExecutorNode captureGroupExecutor,
                         RegexProfile.TracksRegexProfile profiler) {
             this.forwardEntryNode = TRegexDFAExecutorEntryNode.create(forwardNode);
-            this.flags = flags;
+            this.source = source;
             this.preCalculatedResults = preCalculatedResults;
             this.backwardEntryNode = TRegexDFAExecutorEntryNode.create(backwardNode);
             if (backwardNode == null) {
@@ -252,7 +249,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements CompiledReg
                 if (end == fromIndexArg) { // zero-length match
                     return new SingleResult(regex, input, end, end);
                 }
-                if (forwardEntryNode.getExecutor().isAnchored() || flags.isSticky()) {
+                if (forwardEntryNode.getExecutor().isAnchored() || source.getFlags().isSticky()) {
                     return new SingleResult(regex, input, fromIndexArg, end);
                 }
                 return new SingleResultLazyStart(regex, input, fromIndexArg, end, backwardCallTarget);
@@ -261,7 +258,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements CompiledReg
                     return new TraceFinderResult(regex, input, fromIndexArg, end, backwardCallTarget, preCalculatedResults);
                 } else {
                     if (forwardEntryNode.getExecutor().isAnchored() ||
-                                    (flags.isSticky() && forwardEntryNode.getExecutor().getPrefixLength() == 0)) {
+                                    (source.getFlags().isSticky() && forwardEntryNode.getExecutor().getPrefixLength() == 0)) {
                         return new LazyCaptureGroupsResult(regex, input, fromIndexArg, end,
                                         captureGroupEntryNode.getExecutor().getNumberOfCaptureGroups(), null, captureGroupCallTarget);
                     }

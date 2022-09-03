@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.regex.tregex.nodes;
 
-import java.lang.reflect.Field;
-
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -33,6 +31,8 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ValueProfile;
 import sun.misc.Unsafe;
+
+import java.lang.reflect.Field;
 
 /**
  * This class wraps {@link TRegexDFAExecutorNode} and specializes on the type of the input strings
@@ -103,33 +103,36 @@ public abstract class TRegexDFAExecutorEntryNode extends Node {
 
     @Specialization(guards = "isCompactString(input)")
     void doStringCompact(VirtualFrame frame, String input, int fromIndex, int index, int maxIndex) {
+        executor.setInputIsCompactString(frame, true);
         executor.setInput(frame, input);
         executor.setFromIndex(frame, fromIndex);
         executor.setIndex(frame, index);
         executor.setMaxIndex(frame, maxIndex);
-        executor.execute(frame, true);
+        executor.execute(frame);
     }
 
     @Specialization(guards = "!isCompactString(input)")
     void doStringNonCompact(VirtualFrame frame, String input, int fromIndex, int index, int maxIndex) {
+        executor.setInputIsCompactString(frame, false);
         executor.setInput(frame, input);
         executor.setFromIndex(frame, fromIndex);
         executor.setIndex(frame, index);
         executor.setMaxIndex(frame, maxIndex);
-        executor.execute(frame, false);
+        executor.execute(frame);
     }
 
     @Specialization
     void doTruffleObject(VirtualFrame frame, TruffleObject input, int fromIndex, int index, int maxIndex,
                     @Cached("createClassProfile()") ValueProfile inputClassProfile) {
+        // conservatively disable compact string optimizations.
+        // TODO: maybe add an interface for TruffleObjects to announce if they are compact / ascii
+        // strings?
+        executor.setInputIsCompactString(frame, false);
         executor.setInput(frame, inputClassProfile.profile(input));
         executor.setFromIndex(frame, fromIndex);
         executor.setIndex(frame, index);
         executor.setMaxIndex(frame, maxIndex);
-        // conservatively disable compact string optimizations.
-        // TODO: maybe add an interface for TruffleObjects to announce if they are compact / ascii
-        // strings?
-        executor.execute(frame, false);
+        executor.execute(frame);
     }
 
     static boolean isCompactString(String str) {

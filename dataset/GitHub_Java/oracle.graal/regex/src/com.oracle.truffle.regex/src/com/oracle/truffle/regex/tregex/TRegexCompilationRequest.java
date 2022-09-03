@@ -250,8 +250,7 @@ final class TRegexCompilationRequest {
                         searching,
                         trackCaptureGroups,
                         tRegexCompiler.getOptions().isRegressionTestMode(),
-                        nfaArg.getAst().getNumberOfCaptureGroups(),
-                        nfaArg.getAst().getRoot().getMinPath());
+                        nfaArg.getAst().getNumberOfCaptureGroups());
     }
 
     private void logPhase(String msg) {
