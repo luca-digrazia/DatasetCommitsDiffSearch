@@ -36,7 +36,6 @@ import org.graalvm.compiler.truffle.OptimizedDirectCallNode;
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.TruffleInlining;
 import org.graalvm.compiler.truffle.TruffleInliningDecision;
-import org.graalvm.compiler.truffle.TruffleInliningPolicy;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -163,7 +162,7 @@ public class TruffleInliningTest {
                 if (andExecute) {
                     targets.get(lastAddedTargetName).call(0);
                 }
-                return new TruffleInlining(targets.get(lastAddedTargetName), policy);
+                return new TruffleInlining(targets.get(lastAddedTargetName), new DefaultInliningPolicy());
             } finally {
                 cleanup();
             }
@@ -214,7 +213,6 @@ public class TruffleInliningTest {
     }
 
     protected TruffleInliningTestScenarioBuilder builder = new TruffleInliningTestScenarioBuilder();
-    protected TruffleInliningPolicy policy = new DefaultInliningPolicy();
 
     void assertInlined(TruffleInlining decisions, String name) {
         Assert.assertTrue(name + " was not inlined!", countInlines(decisions, name) > 0);
