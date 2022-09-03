@@ -70,26 +70,6 @@ public final class ObjectEqualsNode extends CompareNode implements Virtualizable
         return super.canonical(tool);
     }
 
-    private void virtualizeNonVirtualComparison(State state, ValueNode other, VirtualizerTool tool) {
-        if (!state.getVirtualObject().hasIdentity() && state.getVirtualObject().entryKind(0) == Kind.Boolean) {
-            if (other.isConstant()) {
-                int expectedValue = ((Boolean) other.asConstant().asObject()) ? 1 : 0;
-                final IntegerEqualsNode equals = new IntegerEqualsNode(state.getEntry(0), ConstantNode.forInt(expectedValue, graph()));
-                tool.customAction(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        graph().add(equals);
-                    }
-                });
-                tool.replaceWithValue(equals);
-            }
-        } else {
-            // one of them is virtual: they can never be the same objects
-            tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
-        }
-    }
-
     @Override
     public void virtualize(VirtualizerTool tool) {
         State stateX = tool.getObjectState(x());
@@ -98,9 +78,15 @@ public final class ObjectEqualsNode extends CompareNode implements Virtualizable
         boolean yVirtual = stateY != null && stateY.getState() == EscapeState.Virtual;
 
         if (xVirtual && !yVirtual) {
-            virtualizeNonVirtualComparison(stateX, stateY != null ? stateY.getMaterializedValue() : y(), tool);
+            if (stateX.getVirtualObject().hasIdentity()) {
+                // one of them is virtual: they can never be the same objects
+                tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
+            }
         } else if (!xVirtual && yVirtual) {
-            virtualizeNonVirtualComparison(stateY, stateX != null ? stateX.getMaterializedValue() : x(), tool);
+            if (stateY.getVirtualObject().hasIdentity()) {
+                // one of them is virtual: they can never be the same objects
+                tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
+            }
         } else if (xVirtual && yVirtual) {
             boolean xIdentity = stateX.getVirtualObject().hasIdentity();
             boolean yIdentity = stateY.getVirtualObject().hasIdentity();
