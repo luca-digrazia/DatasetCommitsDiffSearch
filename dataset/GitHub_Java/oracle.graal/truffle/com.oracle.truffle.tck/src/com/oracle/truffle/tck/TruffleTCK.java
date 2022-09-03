@@ -28,6 +28,7 @@ import com.oracle.truffle.tck.impl.LongBinaryOperation;
 import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
@@ -343,7 +344,7 @@ public abstract class TruffleTCK {
     }
 
     /**
-     * Code snippet to multiply two variables. The test uses the snippet as a parameter to
+     * Code snippet to multiplyCode two two variables. The test uses the snippet as a parameter to
      * your language' s
      * {@link TruffleLanguage#parse(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, java.lang.String...)}
      * method.
@@ -1472,7 +1473,19 @@ public abstract class TruffleTCK {
     }
 
     private static Object unwrapTruffleObject(Object obj) {
-        return obj;
+        try {
+            if (obj instanceof TruffleObject) {
+                Class<?> eto = Class.forName("com.oracle.truffle.api.vm.EngineTruffleObject");
+                if (eto.isInstance(obj)) {
+                    final Field field = eto.getDeclaredField("delegate");
+                    field.setAccessible(true);
+                    return field.get(obj);
+                }
+            }
+            return obj;
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     interface CompoundObject {

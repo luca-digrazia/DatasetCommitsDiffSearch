@@ -21,7 +21,8 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
- */package com.oracle.truffle.api.instrument;
+ */
+package com.oracle.truffle.api.instrument;
 
 /**
  * A <em>binding</em> between:
@@ -31,62 +32,55 @@
  * <li>A <em>listener</em>: a consumer of execution events on behalf of an external client.
  * </ol>
  * <p>
- * Client-oriented documentation for the use of Instruments is available online at <a
- * HREF="https://wiki.openjdk.java.net/display/Graal/Listening+for+Execution+Events" >https://
+ * Client-oriented documentation for the use of Instruments is available online at
+ * <a HREF="https://wiki.openjdk.java.net/display/Graal/Listening+for+Execution+Events" >https://
  * wiki.openjdk.java.net/display/Graal/Listening+for+Execution+Events</a>
  *
  * @see SyntaxTag
  * @see Instrumenter
+ * @since 0.8 or earlier
  */
+@SuppressWarnings("deprecation")
+@Deprecated
 public abstract class TagInstrument extends Instrument {
 
-    /**
-     * Optional documentation, mainly for debugging.
-     */
-    @SuppressWarnings("unused") private final String instrumentInfo;
-
-    /**
-     * Has this instrument been disposed? stays true once set.
-     */
-    private boolean isDisposed = false;
+    private Instrumenter instrumenter;
 
     private SyntaxTag tag = null;
 
-    protected TagInstrument(SyntaxTag tag, String instrumentInfo) {
+    /** @since 0.8 or earlier */
+    protected TagInstrument(Instrumenter instrumenter, SyntaxTag tag, String instrumentInfo) {
+        super(instrumentInfo);
+        this.instrumenter = instrumenter;
         this.tag = tag;
-        this.instrumentInfo = instrumentInfo;
     }
 
-    @Override
-    public void dispose() throws IllegalStateException {
-        if (isDisposed) {
-            throw new IllegalStateException("Attempt to dispose an already disposed Instrumennt");
-        }
-
-        // TODO (mlvdv)
-        this.isDisposed = true;
-    }
-
-    @Override
-    public boolean isDisposed() {
-        return isDisposed;
-    }
-
-    public SyntaxTag getTag() {
+    /** @since 0.8 or earlier */
+    public final SyntaxTag getTag() {
         return tag;
+    }
+
+    /** @since 0.8 or earlier */
+    protected final Instrumenter getInstrumenter() {
+        return instrumenter;
     }
 
     static final class BeforeTagInstrument extends TagInstrument {
 
         private final StandardBeforeInstrumentListener listener;
 
-        BeforeTagInstrument(SyntaxTag tag, StandardBeforeInstrumentListener listener, String instrumentInfo) {
-            super(tag, instrumentInfo);
+        BeforeTagInstrument(Instrumenter instrumenter, SyntaxTag tag, StandardBeforeInstrumentListener listener, String instrumentInfo) {
+            super(instrumenter, tag, instrumentInfo);
             this.listener = listener;
         }
 
         StandardBeforeInstrumentListener getListener() {
             return listener;
+        }
+
+        @Override
+        protected void innerDispose() {
+            getInstrumenter().disposeBeforeTagInstrument();
         }
     }
 
@@ -94,13 +88,18 @@ public abstract class TagInstrument extends Instrument {
 
         private final StandardAfterInstrumentListener listener;
 
-        AfterTagInstrument(SyntaxTag tag, StandardAfterInstrumentListener listener, String instrumentInfo) {
-            super(tag, instrumentInfo);
+        AfterTagInstrument(Instrumenter instrumenter, SyntaxTag tag, StandardAfterInstrumentListener listener, String instrumentInfo) {
+            super(instrumenter, tag, instrumentInfo);
             this.listener = listener;
         }
 
         StandardAfterInstrumentListener getListener() {
             return listener;
+        }
+
+        @Override
+        protected void innerDispose() {
+            getInstrumenter().disposeAfterTagInstrument();
         }
     }
 }

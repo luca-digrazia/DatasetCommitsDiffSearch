@@ -24,7 +24,8 @@
  */
 package com.oracle.truffle.api.dsl.internal;
 
-import java.lang.annotation.*;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 /**
  * Used to suppress <a href="http://findbugs.sourceforge.net">FindBugs</a> warnings.
@@ -32,8 +33,8 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.CLASS)
 public @interface SuppressFBWarnings {
     /**
-     * The set of FindBugs <a
-     * href="http://findbugs.sourceforge.net/bugDescriptions.html">warnings</a> that are to be
+     * The set of FindBugs
+     * <a href="http://findbugs.sourceforge.net/bugDescriptions.html">warnings</a> that are to be
      * suppressed in annotated element. The value can be a bug category, kind or pattern.
      */
     java.lang.String[] value();

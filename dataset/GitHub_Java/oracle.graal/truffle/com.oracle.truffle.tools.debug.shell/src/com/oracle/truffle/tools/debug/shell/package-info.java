@@ -46,6 +46,10 @@
  * <p>
  * <h4>Goals for building <strong>REPL*</strong></h4>
  * <ol>
+ * <li>Exercise and test <em>in action</em> the built-in
+ * {@linkplain com.oracle.truffle.api.debug.Debugger} debugging support services provided as part of
+ * the Truffle API, which in turn relies on Truffle
+ * {@linkplain com.oracle.truffle.api.instrument.Instrumenter Instrumentation}.</li>
  * <li>Emulates a client/server architecture to demonstrate that language-agnostic debugging can be
  * implemented over wire protocols. Wire protocol communication between client and server is
  * <em>partially</em> emulated by passing messages expressed as textual key-value pairs. The
@@ -104,7 +108,5 @@
  * <li>Set/display options</li>
  * <li>Display Truffle AST structure</li>
  * </ul>
- *
- * @since 0.8 or earlier
  */
 package com.oracle.truffle.tools.debug.shell;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,21 +24,30 @@
  */
 package com.oracle.truffle.tools.debug.shell.client;
 
-import java.io.*;
-import java.util.*;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
 
-import jline.console.*;
+import jline.console.ConsoleReader;
 
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.tools.debug.shell.*;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.tools.debug.shell.server.REPLServer;
 
 /**
  * A very simple line-oriented, language-agnostic debugging client shell: the first step toward a
  * general, extensible debugging framework designed to be adapted for remote debugging.
  * <p>
- * The architecture of this debugging framework is modeled loosely on <a
- * href="https://github.com/clojure/tools.nrepl">nREPL</a>, a network REPL developed by the Clojure
- * community with a focus on generality:
+ * The architecture of this debugging framework is modeled loosely on
+ * <a href="https://github.com/clojure/tools.nrepl">nREPL</a>, a network REPL developed by the
+ * Clojure community with a focus on generality:
  * <ul>
  * <li>Client and (possibly remote) server communicate via <em>messages</em> carried over some
  * <em>transport</em>;</li>
@@ -54,9 +63,6 @@ import com.oracle.truffle.tools.debug.shell.*;
  * <p>
  * In order to get
  * <ol>
- * <li>A debugging session should start from this shell, but there is no machinery in place for
- * doing that; instead, an entry into the language implementation creates both the server and this
- * shell;</li>
  * <li>The current startup sequence is based on method calls, not messages;</li>
  * <li>Only a very few request types and keys are implemented, omitting for example request and
  * session ids;</li>
@@ -66,9 +72,10 @@ import com.oracle.truffle.tools.debug.shell.*;
  * </ol>
  *
  * @see REPLServer
- * @see REPLMessage
+ * @see com.oracle.truffle.tools.debug.shell.com.oracle.truffle.tools.debug.shell.REPLMessage
  */
-public class SimpleREPLClient implements REPLClient {
+@SuppressWarnings("deprecation")
+public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.REPLClient {
 
     private static final String REPLY_PREFIX = "==> ";
     private static final String FAIL_PREFIX = "**> ";
@@ -80,10 +87,15 @@ public class SimpleREPLClient implements REPLClient {
     static final String CODE_LINE_FORMAT = "    %3d  %s\n";
     static final String CODE_LINE_BREAK_FORMAT = "--> %3d  %s\n";
 
-    private static final String STACK_FRAME_FORMAT = "    %3d: at %s in %s    line =\"%s\"\n";
-    private static final String STACK_FRAME_SELECTED_FORMAT = "==> %3d: at %s in %s    line =\"%s\"\n";
+    private static final String STACK_FRAME_FORMAT = "    %3d: at %s in %s    %s\n";
+    private static final String STACK_FRAME_SELECTED_FORMAT = "==> %3d: at %s in %s    %s\n";
 
-    private final String languageName;
+    public static void main(String[] args) {
+        final SimpleREPLClient client = new SimpleREPLClient();
+        final REPLServer replServer = new REPLServer(client);
+        replServer.start();
+        client.start(replServer);
+    }
 
     // Top level commands
     private final Map<String, REPLCommand> commandMap = new HashMap<>();
@@ -96,18 +108,11 @@ public class SimpleREPLClient implements REPLClient {
     // Current local context
     ClientContextImpl clientContext;
 
-    // Cheating for the prototype; prototype startup now happens from the language server.
-    // So this isn't used.
-    public static void main(String[] args) {
-        final SimpleREPLClient repl = new SimpleREPLClient(null, null);
-        repl.start();
-    }
-
     private final ConsoleReader reader;
 
     private final PrintStream writer;
 
-    private final REPLServer replServer;
+    private REPLServer replServer;
 
     private final LocalOption astDepthOption = new IntegerOption(9, "astdepth", "default depth for AST display");
 
@@ -138,9 +143,9 @@ public class SimpleREPLClient implements REPLClient {
      */
     private Source selectedSource = null;
 
-    public SimpleREPLClient(String languageName, REPLServer replServer) {
-        this.languageName = languageName;
-        this.replServer = replServer;
+    private boolean quitting; // User has requested to "Quit"
+
+    public SimpleREPLClient() {
         this.writer = System.out;
         try {
             this.reader = new ConsoleReader();
@@ -151,8 +156,8 @@ public class SimpleREPLClient implements REPLClient {
         addCommand(backtraceCommand);
         addCommand(REPLRemoteCommand.BREAK_AT_LINE_CMD);
         addCommand(REPLRemoteCommand.BREAK_AT_LINE_ONCE_CMD);
-        addCommand(REPLRemoteCommand.BREAK_AT_THROW_CMD);
-        addCommand(REPLRemoteCommand.BREAK_AT_THROW_ONCE_CMD);
+        addCommand(REPLRemoteCommand.CALL_CMD);
+        addCommand(REPLRemoteCommand.CALL_STEP_INTO_CMD);
         addCommand(REPLRemoteCommand.CLEAR_BREAK_CMD);
         addCommand(REPLRemoteCommand.CONDITION_BREAK_CMD);
         addCommand(REPLRemoteCommand.CONTINUE_CMD);
@@ -160,17 +165,19 @@ public class SimpleREPLClient implements REPLClient {
         addCommand(REPLRemoteCommand.DISABLE_CMD);
         addCommand(REPLRemoteCommand.DOWN_CMD);
         addCommand(REPLRemoteCommand.ENABLE_CMD);
-        addCommand(evalCommand);
+        addCommand(REPLRemoteCommand.EVAL_CMD);
+        addCommand(REPLRemoteCommand.EVAL_STEP_INTO_CMD);
         addCommand(fileCommand);
         addCommand(REPLRemoteCommand.FRAME_CMD);
         addCommand(helpCommand);
         addCommand(infoCommand);
         addCommand(REPLRemoteCommand.KILL_CMD);
         addCommand(listCommand);
-        addCommand(REPLRemoteCommand.LOAD_RUN_CMD);
-        addCommand(REPLRemoteCommand.LOAD_STEP_CMD);
+        addCommand(REPLRemoteCommand.LOAD_CMD);
+        addCommand(REPLRemoteCommand.LOAD_STEP_INTO_CMD);
         addCommand(quitCommand);
         addCommand(setCommand);
+        addCommand(REPLRemoteCommand.SET_LANG_CMD);
         addCommand(REPLRemoteCommand.STEP_INTO_CMD);
         addCommand(REPLRemoteCommand.STEP_OUT_CMD);
         addCommand(REPLRemoteCommand.STEP_OVER_CMD);
@@ -196,23 +203,46 @@ public class SimpleREPLClient implements REPLClient {
         addOption(verboseBreakpointInfoOption);
     }
 
-    public void start() {
+    public void start(REPLServer server) {
 
-        REPLMessage startReply = replServer.start();
-
-        if (startReply.get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
-            clientContext.displayFailReply(startReply.get(REPLMessage.DISPLAY_MSG));
-            throw new RuntimeException("Can't start REPL server");
-        }
-
-        this.clientContext = new ClientContextImpl(null, null);
-
+        this.replServer = server;
+        clientContext = new ClientContextImpl(null, null);
+        showWelcome();
         try {
-            clientContext.startSession();
+            final com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = replServer.receive(infoLanguageCommand.createRequest(clientContext, NULL_ARGS));
+            if (replies.length == 0) {
+                clientContext.displayFailReply("No languages could be loaded");
+            } else if (replies.length == 1) {
+                final String[] args = new String[]{"", replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME)};
+                final com.oracle.truffle.tools.debug.shell.REPLMessage[] results = replServer.receive(REPLRemoteCommand.SET_LANG_CMD.createRequest(clientContext, args));
+                if (results[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
+                    final String message = results[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG);
+                    clientContext.displayFailReply(message != null ? message : results[0].toString());
+                } else {
+                    clientContext.updatePrompt();
+                    clientContext.startContextSession();
+                }
+            } else {
+                clientContext.displayInfo("Languages supported (type \"lang <name>\" to set default)");
+                displayLanguages(replies);
+                clientContext.updatePrompt();
+                clientContext.startContextSession();
+            }
         } finally {
-            clientContext.displayReply("Goodbye from " + languageName + "/REPL");
+            clientContext.displayReply("Goodbye");
         }
+    }
 
+    private void showWelcome() {
+        final com.oracle.truffle.tools.debug.shell.REPLMessage request = new com.oracle.truffle.tools.debug.shell.REPLMessage(
+                        com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.INFO);
+        request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, com.oracle.truffle.tools.debug.shell.REPLMessage.WELCOME_MESSAGE);
+        final com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = clientContext.sendToServer(request);
+        if (replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
+            clientContext.displayReply("Welcome");
+        } else {
+            clientContext.displayReply(replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_VALUE));
+        }
     }
 
     public void addCommand(REPLCommand replCommand) {
@@ -233,9 +263,11 @@ public class SimpleREPLClient implements REPLClient {
 
         // Information about where the execution is halted
         /** The source where execution, if any, is halted; null if none. */
-        private Source haltedSource = null;
+        private Source haltedSource;
         /** The line number where execution, if any, is halted; 0 if none. */
         private int haltedLineNumber = 0;
+        /** The name of a source that we can't locate. */
+        private String unknownSourceName = "<unavailable>";
         /** The stack where execution, if any, is halted; null if none. Evaluated lazily. */
         private List<REPLFrame> frames = null;
 
@@ -244,25 +276,38 @@ public class SimpleREPLClient implements REPLClient {
 
         private String currentPrompt;
 
+        // A execution context stacked on top of this one was explicitly
+        // killed, and this context will receive the resulting exception.
+        private boolean killPending;
+
         /**
          * Create a new context on the occasion of an execution halting.
          */
-        public ClientContextImpl(ClientContextImpl predecessor, REPLMessage message) {
+        ClientContextImpl(ClientContextImpl predecessor, com.oracle.truffle.tools.debug.shell.REPLMessage message) {
             this.predecessor = predecessor;
             this.level = predecessor == null ? 0 : predecessor.level + 1;
 
             if (message != null) {
+                final String sourceName = message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME);
                 try {
-                    this.haltedSource = Source.fromFileName(message.get(REPLMessage.SOURCE_NAME));
-                    selectedSource = this.haltedSource;
+                    this.haltedSource = Source.fromFileName(sourceName);
+                } catch (IOException ex) {
+                    final String code = message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_TEXT);
+                    if (code != null) {
+                        this.haltedSource = Source.fromText(code, sourceName);
+                    }
+                }
+                if (this.haltedSource != null) {
+                    selectedSource = haltedSource;
                     try {
-                        haltedLineNumber = Integer.parseInt(message.get(REPLMessage.LINE_NUMBER));
+                        haltedLineNumber = Integer.parseInt(message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER));
                     } catch (NumberFormatException e) {
                         haltedLineNumber = 0;
                     }
-                } catch (IOException e1) {
+                } else {
                     this.haltedSource = null;
                     this.haltedLineNumber = 0;
+                    this.unknownSourceName = sourceName;
                 }
             }
             updatePrompt();
@@ -277,20 +322,33 @@ public class SimpleREPLClient implements REPLClient {
             updatePrompt();
         }
 
-        private void updatePrompt() {
+        @Override
+        public void updatePrompt() {
+
+            String languageName = "???";
+            final com.oracle.truffle.tools.debug.shell.REPLMessage request = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.INFO);
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_CURRENT_LANGUAGE);
+            final com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = replServer.receive(request);
+            if (replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED)) {
+                languageName = replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME);
+            }
+            final String showLang = languageName == null ? "() " : "( " + languageName + " )";
             if (level == 0) {
                 // 0-level context; no executions halted.
                 if (selectedSource == null) {
-                    currentPrompt = languageName == null ? "() " : "( " + languageName + " ) ";
+                    currentPrompt = showLang + " ";
                 } else {
-                    currentPrompt = "(" + selectedSource.getShortName() + ") ";
+                    currentPrompt = "(" + selectedSource.getShortName() + ") " + showLang + " ";
                 }
             } else if (selectedSource != null && selectedSource != haltedSource) {
                 // User is focusing somewhere else than the current locn; show no line number.
                 final StringBuilder sb = new StringBuilder();
                 sb.append("(<" + Integer.toString(level) + "> ");
                 sb.append(selectedSource.getShortName());
-                sb.append(") ");
+                sb.append(")");
+                sb.append(showLang);
+                sb.append(" ");
                 currentPrompt = sb.toString();
             } else {
                 // Prompt reveals where currently halted.
@@ -300,7 +358,9 @@ public class SimpleREPLClient implements REPLClient {
                 if (haltedLineNumber > 0) {
                     sb.append(":" + Integer.toString(haltedLineNumber));
                 }
-                sb.append(") ");
+                sb.append(")");
+                sb.append(showLang);
+                sb.append(" ");
                 currentPrompt = sb.toString();
             }
 
@@ -316,19 +376,20 @@ public class SimpleREPLClient implements REPLClient {
 
         public List<REPLFrame> frames() {
             if (frames == null) {
-                final REPLMessage request = new REPLMessage(REPLMessage.OP, REPLMessage.BACKTRACE);
-                final REPLMessage[] replies = sendToServer(request);
-                if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
+                final com.oracle.truffle.tools.debug.shell.REPLMessage request = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
+                                com.oracle.truffle.tools.debug.shell.REPLMessage.BACKTRACE);
+                final com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = sendToServer(request);
+                if (replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
                     return null;
                 }
                 frames = new ArrayList<>();
-                for (REPLMessage reply : replies) {
-                    final int index = reply.getIntValue(REPLMessage.FRAME_NUMBER);
-                    final String locationFilePath = reply.get(REPLMessage.FILE_PATH);
-                    final Integer locationLineNumber = reply.getIntValue(REPLMessage.LINE_NUMBER);
-                    final String locationDescription = reply.get(REPLMessage.SOURCE_LOCATION);
-                    final String name = reply.get(REPLMessage.METHOD_NAME);
-                    final String sourceLineText = reply.get(REPLMessage.SOURCE_LINE_TEXT);
+                for (com.oracle.truffle.tools.debug.shell.REPLMessage reply : replies) {
+                    final int index = reply.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.FRAME_NUMBER);
+                    final String locationFilePath = reply.get(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH);
+                    final Integer locationLineNumber = reply.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER);
+                    final String locationDescription = reply.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_LOCATION);
+                    final String name = reply.get(com.oracle.truffle.tools.debug.shell.REPLMessage.METHOD_NAME);
+                    final String sourceLineText = reply.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_LINE_TEXT);
                     frames.add(new REPLFrameImpl(index, locationFilePath, locationLineNumber, locationDescription, name, sourceLineText));
                 }
                 frames = Collections.unmodifiableList(frames);
@@ -350,26 +411,26 @@ public class SimpleREPLClient implements REPLClient {
 
         public String stringQuery(String op) {
             assert op != null;
-            REPLMessage request = null;
+            com.oracle.truffle.tools.debug.shell.REPLMessage request = null;
             switch (op) {
-                case REPLMessage.TRUFFLE_AST:
+                case com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE_AST:
                     request = truffleASTCommand.createRequest(clientContext, NULL_ARGS);
                     break;
-                case REPLMessage.TRUFFLE_SUBTREE:
+                case com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE_SUBTREE:
                     request = truffleSubtreeCommand.createRequest(clientContext, NULL_ARGS);
                     break;
                 default:
-                    request = new REPLMessage();
-                    request.put(REPLMessage.OP, op);
+                    request = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+                    request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, op);
             }
             if (request == null) {
                 return null;
             }
-            final REPLMessage[] replies = sendToServer(request);
-            if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
+            final com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = sendToServer(request);
+            if (replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
                 return null;
             }
-            return replies[0].get(REPLMessage.DISPLAY_MSG);
+            return replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG);
         }
 
         public void selectFrameNumber(int frameNumber) {
@@ -400,7 +461,7 @@ public class SimpleREPLClient implements REPLClient {
                 whereLineNumber = frame.locationLineNumber();
             }
             if (whereSource == null) {
-                displayFailReply("Frame " + selectedFrameNumber + ": source unavailable");
+                displayFailReply("Unavalable source=\"" + this.unknownSourceName + "\"");
                 return;
             }
             final int listSize = listSizeOption.getInt();
@@ -408,7 +469,7 @@ public class SimpleREPLClient implements REPLClient {
             final int fileLineCount = whereSource.getLineCount();
             final String code = whereSource.getCode();
 
-            writer.println("Frame " + selectedFrameNumber + ": " + whereSource.getShortName() + "\n");
+            writer.println("Frame " + selectedFrameNumber + " in " + whereSource.getShortName());
             final int halfListSize = listSize / 2;
             final int startLineNumber = Math.max(1, whereLineNumber - halfListSize);
             final int lastLineNumber = Math.min(startLineNumber + listSize - 1, fileLineCount);
@@ -431,7 +492,9 @@ public class SimpleREPLClient implements REPLClient {
                 for (REPLFrame frame : frameList) {
                     String sourceLineText = frame.sourceLineText();
                     if (sourceLineText == null) {
-                        sourceLineText = "<??>";
+                        sourceLineText = "";
+                    } else {
+                        sourceLineText = "line=\"" + sourceLineText + "\"";
                     }
                     if (frame.index() == selectedFrameNumber) {
                         writer.format(STACK_FRAME_SELECTED_FORMAT, frame.index(), frame.locationDescription(), frame.name(), sourceLineText);
@@ -451,7 +514,19 @@ public class SimpleREPLClient implements REPLClient {
         }
 
         public void displayFailReply(String message) {
-            writer.println(FAIL_PREFIX + message);
+            // Suppress kill-induced failure, since kill is announced
+            if (!message.equals("KillException")) {
+                writer.println(FAIL_PREFIX + message);
+            }
+        }
+
+        public void notifyKilled() {
+            // A kill will not be received until after
+            // This context is released, so the exception
+            // must be handles specially by the
+            // context that will catch it.
+            predecessor.killPending = true;
+            writer.println(clientContext.currentPrompt + " killed");
         }
 
         public void displayWarnings(String warnings) {
@@ -464,37 +539,56 @@ public class SimpleREPLClient implements REPLClient {
             writer.println(TRACE_PREFIX + message);
         }
 
-        public void startSession() {
+        private void startContextSession() {
 
             while (true) {
                 try {
-                    String[] args;
-                    String line = reader.readLine(currentPrompt).trim();
-                    if (line.startsWith("eval ")) {
-                        args = new String[]{"eval", line.substring(5)};
-                    } else {
-                        args = line.split("[ \t]+");
-                    }
-                    if (args.length == 0) {
-                        break;
-                    }
-                    final String cmd = args[0];
+                    REPLCommand command = null;
+                    String[] args = NULL_ARGS;
 
-                    if (cmd.isEmpty()) {
-                        continue;
-                    }
-
-                    REPLCommand command = commandMap.get(cmd);
-                    while (command instanceof REPLIndirectCommand) {
-                        if (traceMessagesOption.getBool()) {
-                            traceMessage("Executing indirect: " + command.getCommand());
+                    if (quitting) {
+                        if (level == 0) {
+                            return;
                         }
-                        command = ((REPLIndirectCommand) command).getCommand(args);
+                        command = REPLRemoteCommand.KILL_CMD;
+                    } else {
+                        String line = reader.readLine(currentPrompt).trim();
+                        if (line.startsWith("eval ")) {
+                            args = new String[]{"eval", line.substring(5)};
+                        } else {
+                            args = line.split("[ \t]+");
+                        }
+                        if (args.length == 0) {
+                            break;
+                        }
+                        final String cmd = args[0];
+
+                        if (cmd.isEmpty()) {
+                            continue;
+                        }
+                        command = commandMap.get(cmd);
+
+                        while (command instanceof REPLIndirectCommand) {
+                            if (traceMessagesOption.getBool()) {
+                                traceMessage("Executing indirect: " + command.getCommand());
+                            }
+                            command = ((REPLIndirectCommand) command).getCommand(args);
+                        }
+
+                        if (command == quitCommand) {
+                            if (level == 0) {
+                                return;
+                            }
+                            quitting = true;
+                            command = REPLRemoteCommand.KILL_CMD;
+                        }
+
+                        if (command == null) {
+                            clientContext.displayFailReply("Unrecognized command \"" + cmd + "\"");
+                            continue;
+                        }
                     }
-                    if (command == null) {
-                        clientContext.displayFailReply("Unrecognized command \"" + cmd + "\"");
-                        continue;
-                    }
+
                     if (command instanceof REPLLocalCommand) {
                         if (traceMessagesOption.getBool()) {
                             traceMessage("Executing local: " + command.getCommand());
@@ -503,19 +597,31 @@ public class SimpleREPLClient implements REPLClient {
 
                     } else if (command instanceof REPLRemoteCommand) {
                         final REPLRemoteCommand remoteCommand = (REPLRemoteCommand) command;
-
-                        final REPLMessage request = remoteCommand.createRequest(clientContext, args);
+                        final com.oracle.truffle.tools.debug.shell.REPLMessage request = remoteCommand.createRequest(clientContext, args);
                         if (request == null) {
                             continue;
                         }
 
-                        REPLMessage[] replies = sendToServer(request);
-
+                        com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = sendToServer(request);
                         remoteCommand.processReply(clientContext, replies);
+
+                        final String path = replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH);
+                        if (path != null && !path.isEmpty()) {
+                            selectSource(path);
+                        }
                     } else {
                         assert false; // Should not happen.
                     }
-
+                } catch (ThreadDeath ex) {
+                    if (ex.getClass() != ThreadDeath.class && killPending) {
+                        // If the previous context was killed by REPL command, then
+                        // assume this exception is the result and the REPL should
+                        // continue debugging in this context.
+                        killPending = false;
+                    } else {
+                        // A legitimate use of the exception
+                        throw ex;
+                    }
                 } catch (REPLContinueException ex) {
                     break;
                 } catch (IOException e) {
@@ -525,20 +631,20 @@ public class SimpleREPLClient implements REPLClient {
 
         }
 
-        private REPLMessage[] sendToServer(REPLMessage request) {
+        private com.oracle.truffle.tools.debug.shell.REPLMessage[] sendToServer(com.oracle.truffle.tools.debug.shell.REPLMessage request) {
             if (traceMessagesOption.getBool()) {
                 clientContext.traceMessage("Sever request:");
                 request.print(writer, "  ");
             }
 
-            REPLMessage[] replies = replServer.receive(request);
+            com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = replServer.receive(request);
 
             assert replies != null && replies.length > 0;
             if (traceMessagesOption.getBool()) {
                 if (replies.length > 1) {
                     clientContext.traceMessage("Received " + replies.length + " server replies");
                     int replyCount = 0;
-                    for (REPLMessage reply : replies) {
+                    for (com.oracle.truffle.tools.debug.shell.REPLMessage reply : replies) {
                         clientContext.traceMessage("Server Reply " + replyCount++ + ":");
                         reply.print(writer, "  ");
                     }
@@ -598,7 +704,7 @@ public class SimpleREPLClient implements REPLClient {
 
     // Cheating with synchrony: asynchronous replies should arrive here, but don't.
     @Override
-    public REPLMessage receive(REPLMessage request) {
+    public com.oracle.truffle.tools.debug.shell.REPLMessage receive(com.oracle.truffle.tools.debug.shell.REPLMessage request) {
         final String result = request.get("result");
         clientContext.displayReply(result != null ? result : request.toString());
         return null;
@@ -608,11 +714,11 @@ public class SimpleREPLClient implements REPLClient {
      * Cheating with synchrony: take a direct call from the server that execution has halted and
      * we've entered a nested debugging context.
      */
-    public void halted(REPLMessage message) {
+    public void halted(com.oracle.truffle.tools.debug.shell.REPLMessage message) {
 
         // Push a new context for where we've stopped.
         clientContext = new ClientContextImpl(clientContext, message);
-        final String warnings = message.get(REPLMessage.WARNINGS);
+        final String warnings = message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.WARNINGS);
         if (warnings != null) {
             clientContext.displayWarnings(warnings);
         }
@@ -620,26 +726,26 @@ public class SimpleREPLClient implements REPLClient {
             clientContext.displayWhere();
         }
         if (autoNodeOption.getBool()) {
-            final String result = clientContext.stringQuery(REPLMessage.TRUFFLE_NODE);
+            final String result = clientContext.stringQuery(com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE_NODE);
             if (result != null) {
                 displayTruffleNode(result);
             }
         }
         if (autoASTOption.getBool()) {
-            final String result = clientContext.stringQuery(REPLMessage.TRUFFLE_AST);
+            final String result = clientContext.stringQuery(com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE_AST);
             if (result != null) {
                 displayTruffleAST(result);
             }
         }
         if (autoSubtreeOption.getBool()) {
-            final String result = clientContext.stringQuery(REPLMessage.TRUFFLE_SUBTREE);
+            final String result = clientContext.stringQuery(com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE_SUBTREE);
             if (result != null) {
                 displayTruffleSubtree(result);
             }
         }
 
         try {
-            clientContext.startSession();
+            clientContext.startContextSession();
         } finally {
 
             // To continue execution, pop the context and return
@@ -653,7 +759,7 @@ public class SimpleREPLClient implements REPLClient {
      */
     private abstract class REPLLocalCommand extends REPLCommand {
 
-        public REPLLocalCommand(String command, String abbreviation, String description) {
+        REPLLocalCommand(String command, String abbreviation, String description) {
             super(command, abbreviation, description);
         }
 
@@ -665,7 +771,7 @@ public class SimpleREPLClient implements REPLClient {
      */
     private abstract class REPLIndirectCommand extends REPLCommand {
 
-        public REPLIndirectCommand(String command, String abbreviation, String description) {
+        REPLIndirectCommand(String command, String abbreviation, String description) {
             super(command, abbreviation, description);
         }
 
@@ -686,33 +792,6 @@ public class SimpleREPLClient implements REPLClient {
         }
     };
 
-    private final REPLCommand evalCommand = new REPLRemoteCommand("eval", null, "Evaluate a string, in context of the current frame if any") {
-
-        private int evalCounter = 0;
-
-        @Override
-        public REPLMessage createRequest(REPLClientContext context, String[] args) {
-            if (args.length > 1) {
-                final String code = args[1];
-                if (!code.isEmpty()) {
-                    // Create a fake entry in the file maps and cache, based on this unique name
-                    final String fakeFileName = "<eval" + ++evalCounter + ">";
-                    Source.fromNamedText(fakeFileName, code);
-                    final REPLMessage request = new REPLMessage();
-                    request.put(REPLMessage.OP, REPLMessage.EVAL);
-                    request.put(REPLMessage.CODE, code);
-                    request.put(REPLMessage.SOURCE_NAME, fakeFileName);
-                    if (clientContext.level > 0) {
-                        // Specify a requested execution context, if one exists; otherwise top level
-                        request.put(REPLMessage.FRAME_NUMBER, Integer.toString(context.getSelectedFrameNumber()));
-                    }
-                    return request;
-                }
-            }
-            return null;
-        }
-    };
-
     private final REPLCommand fileCommand = new REPLRemoteCommand("file", null, "Set/display current file for viewing") {
 
         final String[] help = {"file:  display current file path", "file <filename>: Set file to be current file for viewing"};
@@ -723,7 +802,7 @@ public class SimpleREPLClient implements REPLClient {
         }
 
         @Override
-        public REPLMessage createRequest(REPLClientContext context, String[] args) {
+        public com.oracle.truffle.tools.debug.shell.REPLMessage createRequest(REPLClientContext context, String[] args) {
             if (args.length == 1) {
                 final Source source = clientContext.getSelectedSource();
                 if (source == null) {
@@ -733,29 +812,29 @@ public class SimpleREPLClient implements REPLClient {
                 }
                 return null;
             }
-            final REPLMessage request = new REPLMessage();
-            request.put(REPLMessage.OP, REPLMessage.FILE);
-            request.put(REPLMessage.SOURCE_NAME, args[1]);
+            final com.oracle.truffle.tools.debug.shell.REPLMessage request = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.FILE);
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, args[1]);
             return request;
         }
 
         @Override
-        void processReply(REPLClientContext context, REPLMessage[] replies) {
-            REPLMessage firstReply = replies[0];
+        void processReply(REPLClientContext context, com.oracle.truffle.tools.debug.shell.REPLMessage[] replies) {
+            com.oracle.truffle.tools.debug.shell.REPLMessage firstReply = replies[0];
 
-            if (firstReply.get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
-                final String result = firstReply.get(REPLMessage.DISPLAY_MSG);
+            if (firstReply.get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
+                final String result = firstReply.get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG);
                 clientContext.displayFailReply(result != null ? result : firstReply.toString());
                 return;
             }
-            final String fileName = firstReply.get(REPLMessage.SOURCE_NAME);
-            final String path = firstReply.get(REPLMessage.FILE_PATH);
+            final String fileName = firstReply.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME);
+            final String path = firstReply.get(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH);
             clientContext.selectSource(path == null ? fileName : path);
             clientContext.displayReply(clientContext.getSelectedSource().getPath());
 
             for (int i = 1; i < replies.length; i++) {
-                REPLMessage reply = replies[i];
-                final String result = reply.get(REPLMessage.DISPLAY_MSG);
+                com.oracle.truffle.tools.debug.shell.REPLMessage reply = replies[i];
+                final String result = reply.get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG);
                 clientContext.displayInfo(result != null ? result : reply.toString());
             }
         }
@@ -811,7 +890,7 @@ public class SimpleREPLClient implements REPLClient {
         }
     };
 
-    private final REPLIndirectCommand infoCommand = new REPLIndirectCommand(REPLMessage.INFO, null, "Additional information on topics") {
+    private final REPLIndirectCommand infoCommand = new REPLIndirectCommand(com.oracle.truffle.tools.debug.shell.REPLMessage.INFO, null, "Additional information on topics") {
 
         // "Info" commands
         private final Map<String, REPLCommand> infoCommandMap = new HashMap<>();
@@ -823,9 +902,9 @@ public class SimpleREPLClient implements REPLClient {
             for (String infoCommandName : infoCommandNames) {
                 final REPLCommand cmd = infoCommandMap.get(infoCommandName);
                 if (cmd == null) {
-                    lines.add("\"" + REPLMessage.INFO + " " + infoCommandName + "\" not implemented");
+                    lines.add("\"" + com.oracle.truffle.tools.debug.shell.REPLMessage.INFO + " " + infoCommandName + "\" not implemented");
                 } else {
-                    lines.add("\"" + REPLMessage.INFO + " " + infoCommandName + "\": " + cmd.getDescription());
+                    lines.add("\"" + com.oracle.truffle.tools.debug.shell.REPLMessage.INFO + " " + infoCommandName + "\": " + cmd.getDescription());
                 }
             }
             return lines.toArray(new String[0]);
@@ -864,23 +943,23 @@ public class SimpleREPLClient implements REPLClient {
     private final REPLCommand infoBreakCommand = new REPLRemoteCommand("breakpoint", "break", "info about breakpoints") {
 
         @Override
-        public REPLMessage createRequest(REPLClientContext context, String[] args) {
-            final REPLMessage request = new REPLMessage();
-            request.put(REPLMessage.OP, REPLMessage.BREAKPOINT_INFO);
+        public com.oracle.truffle.tools.debug.shell.REPLMessage createRequest(REPLClientContext context, String[] args) {
+            final com.oracle.truffle.tools.debug.shell.REPLMessage request = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_INFO);
             return request;
         }
 
         @Override
-        void processReply(REPLClientContext context, REPLMessage[] replies) {
-            if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
-                clientContext.displayFailReply(replies[0].get(REPLMessage.DISPLAY_MSG));
+        void processReply(REPLClientContext context, com.oracle.truffle.tools.debug.shell.REPLMessage[] replies) {
+            if (replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
+                clientContext.displayFailReply(replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG));
             } else {
-                Arrays.sort(replies, new Comparator<REPLMessage>() {
+                Arrays.sort(replies, new Comparator<com.oracle.truffle.tools.debug.shell.REPLMessage>() {
 
-                    public int compare(REPLMessage o1, REPLMessage o2) {
+                    public int compare(com.oracle.truffle.tools.debug.shell.REPLMessage o1, com.oracle.truffle.tools.debug.shell.REPLMessage o2) {
                         try {
-                            final int n1 = Integer.parseInt(o1.get(REPLMessage.BREAKPOINT_ID));
-                            final int n2 = Integer.parseInt(o2.get(REPLMessage.BREAKPOINT_ID));
+                            final int n1 = Integer.parseInt(o1.get(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID));
+                            final int n2 = Integer.parseInt(o2.get(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID));
                             return Integer.compare(n1, n2);
                         } catch (Exception ex) {
                         }
@@ -889,17 +968,17 @@ public class SimpleREPLClient implements REPLClient {
 
                 });
                 clientContext.displayReply("Breakpoints set:");
-                for (REPLMessage message : replies) {
+                for (com.oracle.truffle.tools.debug.shell.REPLMessage message : replies) {
                     final StringBuilder sb = new StringBuilder();
 
-                    sb.append(Integer.parseInt(message.get(REPLMessage.BREAKPOINT_ID)) + ": ");
-                    sb.append("@" + message.get(REPLMessage.INFO_VALUE));
-                    sb.append(" (state=" + message.get(REPLMessage.BREAKPOINT_STATE));
+                    sb.append(Integer.parseInt(message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID)) + ": ");
+                    sb.append("@" + message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_VALUE));
+                    sb.append(" (state=" + message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_STATE));
                     if (verboseBreakpointInfoOption.getBool()) {
-                        sb.append(", hits=" + Integer.parseInt(message.get(REPLMessage.BREAKPOINT_HIT_COUNT)));
-                        sb.append(", ignore=" + Integer.parseInt(message.get(REPLMessage.BREAKPOINT_IGNORE_COUNT)));
+                        sb.append(", hits=" + Integer.parseInt(message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_HIT_COUNT)));
+                        sb.append(", ignore=" + Integer.parseInt(message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_IGNORE_COUNT)));
                     }
-                    final String condition = message.get(REPLMessage.BREAKPOINT_CONDITION);
+                    final String condition = message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_CONDITION);
                     if (condition != null) {
                         sb.append(", condition=\"" + condition + "\"");
                     }
@@ -910,9 +989,9 @@ public class SimpleREPLClient implements REPLClient {
         }
     };
 
-    private final REPLCommand infoLanguageCommand = new REPLRemoteCommand("language", "lang", "language and implementation details") {
+    private final REPLRemoteCommand infoLanguageCommand = new REPLRemoteCommand("languages", "lang", "languages supported") {
 
-        final String[] help = {"info language:  list details about the language implementation"};
+        final String[] help = {"info language:  list details about supported languages"};
 
         @Override
         public String[] getHelp() {
@@ -920,29 +999,36 @@ public class SimpleREPLClient implements REPLClient {
         }
 
         @Override
-        public REPLMessage createRequest(REPLClientContext context, String[] args) {
-            final REPLMessage request = new REPLMessage();
-            request.put(REPLMessage.OP, REPLMessage.INFO);
-            request.put(REPLMessage.TOPIC, REPLMessage.LANGUAGE);
+        public com.oracle.truffle.tools.debug.shell.REPLMessage createRequest(REPLClientContext context, String[] args) {
+            final com.oracle.truffle.tools.debug.shell.REPLMessage request = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.INFO);
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_SUPPORTED_LANGUAGES);
             return request;
         }
 
         @Override
-        void processReply(REPLClientContext context, REPLMessage[] replies) {
-            if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
-                clientContext.displayFailReply(replies[0].get(REPLMessage.DISPLAY_MSG));
+        void processReply(REPLClientContext context, com.oracle.truffle.tools.debug.shell.REPLMessage[] replies) {
+            if (replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
+                clientContext.displayFailReply(replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG));
             } else {
-                clientContext.displayReply("Language info:");
-                for (REPLMessage message : replies) {
-                    final StringBuilder sb = new StringBuilder();
-                    sb.append(message.get(REPLMessage.INFO_KEY));
-                    sb.append(": ");
-                    sb.append(message.get(REPLMessage.INFO_VALUE));
-                    clientContext.displayInfo(sb.toString());
-                }
+                clientContext.displayReply("Languages supported:");
+                displayLanguages(replies);
             }
         }
     };
+
+    private void displayLanguages(com.oracle.truffle.tools.debug.shell.REPLMessage[] replies) {
+        for (com.oracle.truffle.tools.debug.shell.REPLMessage message : replies) {
+            final StringBuilder sb = new StringBuilder();
+            final String name = message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME);
+            if (!name.equals("")) {
+                sb.append(name);
+                sb.append(" ver. ");
+                sb.append(message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_VER));
+                clientContext.displayInfo(sb.toString());
+            }
+        }
+    }
 
     private final REPLCommand infoSetCommand = new REPLLocalCommand("set", null, "info about settings") {
 
@@ -1042,10 +1128,8 @@ public class SimpleREPLClient implements REPLClient {
     private final REPLCommand quitCommand = new REPLRemoteCommand("quit", "q", "Quit execution and REPL") {
 
         @Override
-        public REPLMessage createRequest(REPLClientContext context, String[] args) {
-            final REPLMessage request = new REPLMessage();
-            request.put(REPLMessage.OP, REPLMessage.QUIT);
-            return request;
+        protected com.oracle.truffle.tools.debug.shell.REPLMessage createRequest(REPLClientContext context, String[] args) {
+            return null;
         }
 
     };
@@ -1059,7 +1143,7 @@ public class SimpleREPLClient implements REPLClient {
 
         @Override
         public void execute(String[] args) {
-            REPLMessage request = null;
+            com.oracle.truffle.tools.debug.shell.REPLMessage request = null;
             if (args.length == 1) {
                 clientContext.displayFailReply("No option specified, try \"help set\"");
             } else if (args.length == 2) {
@@ -1084,10 +1168,10 @@ public class SimpleREPLClient implements REPLClient {
                         }
                         clientContext.displayInfo(localOption.name + " = " + localOption.getValue());
                     } else {
-                        request = new REPLMessage();
-                        request.put(REPLMessage.OP, REPLMessage.SET);
-                        request.put(REPLMessage.OPTION, optionName);
-                        request.put(REPLMessage.VALUE, newValue);
+                        request = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+                        request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.SET);
+                        request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OPTION, optionName);
+                        request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.VALUE, newValue);
                     }
                 }
             } else {
@@ -1096,7 +1180,7 @@ public class SimpleREPLClient implements REPLClient {
         }
     };
 
-    private final REPLIndirectCommand truffleCommand = new REPLIndirectCommand(REPLMessage.TRUFFLE, "t", "Access to Truffle internals") {
+    private final REPLIndirectCommand truffleCommand = new REPLIndirectCommand(com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE, "t", "Access to Truffle internals") {
 
         // "Truffle" commands
         private final Map<String, REPLCommand> truffleCommandMap = new HashMap<>();
@@ -1108,7 +1192,7 @@ public class SimpleREPLClient implements REPLClient {
             for (String truffleCommandName : truffleCommandNames) {
                 final REPLCommand cmd = truffleCommandMap.get(truffleCommandName);
                 if (cmd == null) {
-                    lines.add("\"" + REPLMessage.TRUFFLE + " " + truffleCommandName + "\" not implemented");
+                    lines.add("\"" + com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE + " " + truffleCommandName + "\" not implemented");
                 } else {
                     for (String line : cmd.getHelp()) {
                         lines.add(line);
@@ -1157,15 +1241,15 @@ public class SimpleREPLClient implements REPLClient {
         }
 
         @Override
-        public REPLMessage createRequest(REPLClientContext context, String[] args) {
+        public com.oracle.truffle.tools.debug.shell.REPLMessage createRequest(REPLClientContext context, String[] args) {
             if (clientContext.level() == 0) {
                 context.displayFailReply("no active execution");
                 return null;
             }
 
-            final REPLMessage request = new REPLMessage();
-            request.put(REPLMessage.OP, REPLMessage.TRUFFLE);
-            request.put(REPLMessage.TOPIC, REPLMessage.AST);
+            final com.oracle.truffle.tools.debug.shell.REPLMessage request = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE);
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, com.oracle.truffle.tools.debug.shell.REPLMessage.AST);
 
             int astDepth = astDepthOption.getInt();
             if (args.length > 2) {
@@ -1175,18 +1259,18 @@ public class SimpleREPLClient implements REPLClient {
                 } catch (NumberFormatException e) {
                 }
             }
-            request.put(REPLMessage.AST_DEPTH, Integer.toString(astDepth));
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.AST_DEPTH, Integer.toString(astDepth));
             return request;
         }
 
         @Override
-        void processReply(REPLClientContext context, REPLMessage[] replies) {
-            if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
-                clientContext.displayFailReply(replies[0].get(REPLMessage.DISPLAY_MSG));
+        void processReply(REPLClientContext context, com.oracle.truffle.tools.debug.shell.REPLMessage[] replies) {
+            if (replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
+                clientContext.displayFailReply(replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG));
             } else {
                 clientContext.displayReply("AST containing the Current Node:");
-                for (REPLMessage message : replies) {
-                    for (String line : message.get(REPLMessage.DISPLAY_MSG).split("\n")) {
+                for (com.oracle.truffle.tools.debug.shell.REPLMessage message : replies) {
+                    for (String line : message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG).split("\n")) {
                         clientContext.displayInfo(line);
                     }
                 }
@@ -1211,22 +1295,22 @@ public class SimpleREPLClient implements REPLClient {
         }
 
         @Override
-        public REPLMessage createRequest(REPLClientContext context, String[] args) {
+        public com.oracle.truffle.tools.debug.shell.REPLMessage createRequest(REPLClientContext context, String[] args) {
             if (clientContext.level() == 0) {
                 context.displayFailReply("no active execution");
                 return null;
             }
-            final REPLMessage request = new REPLMessage();
-            request.put(REPLMessage.OP, REPLMessage.TRUFFLE_NODE);
+            final com.oracle.truffle.tools.debug.shell.REPLMessage request = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE_NODE);
             return request;
         }
 
         @Override
-        void processReply(REPLClientContext context, REPLMessage[] replies) {
-            if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
-                clientContext.displayFailReply(replies[0].get(REPLMessage.DISPLAY_MSG));
+        void processReply(REPLClientContext context, com.oracle.truffle.tools.debug.shell.REPLMessage[] replies) {
+            if (replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
+                clientContext.displayFailReply(replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG));
             } else {
-                displayTruffleNode(replies[0].get(REPLMessage.DISPLAY_MSG));
+                displayTruffleNode(replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG));
             }
         }
     };
@@ -1246,15 +1330,15 @@ public class SimpleREPLClient implements REPLClient {
         }
 
         @Override
-        public REPLMessage createRequest(REPLClientContext context, String[] args) {
+        public com.oracle.truffle.tools.debug.shell.REPLMessage createRequest(REPLClientContext context, String[] args) {
             if (clientContext.level() == 0) {
                 context.displayFailReply("no active execution");
                 return null;
             }
 
-            final REPLMessage request = new REPLMessage();
-            request.put(REPLMessage.OP, REPLMessage.TRUFFLE);
-            request.put(REPLMessage.TOPIC, REPLMessage.SUBTREE);
+            final com.oracle.truffle.tools.debug.shell.REPLMessage request = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE);
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, com.oracle.truffle.tools.debug.shell.REPLMessage.SUBTREE);
 
             int astDepth = astDepthOption.getInt();
             if (args.length > 2) {
@@ -1264,18 +1348,18 @@ public class SimpleREPLClient implements REPLClient {
                 } catch (NumberFormatException e) {
                 }
             }
-            request.put(REPLMessage.AST_DEPTH, Integer.toString(astDepth));
+            request.put(com.oracle.truffle.tools.debug.shell.REPLMessage.AST_DEPTH, Integer.toString(astDepth));
             return request;
         }
 
         @Override
-        void processReply(REPLClientContext context, REPLMessage[] replies) {
-            if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
-                clientContext.displayFailReply(replies[0].get(REPLMessage.DISPLAY_MSG));
+        void processReply(REPLClientContext context, com.oracle.truffle.tools.debug.shell.REPLMessage[] replies) {
+            if (replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
+                clientContext.displayFailReply(replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG));
             } else {
                 clientContext.displayReply("AST subtree at Current Node:");
-                for (REPLMessage message : replies) {
-                    for (String line : message.get(REPLMessage.DISPLAY_MSG).split("\n")) {
+                for (com.oracle.truffle.tools.debug.shell.REPLMessage message : replies) {
+                    for (String line : message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG).split("\n")) {
                         clientContext.displayInfo(line);
                     }
                 }
@@ -1334,7 +1418,7 @@ public class SimpleREPLClient implements REPLClient {
 
         private Boolean value;
 
-        public BooleanOption(boolean value, String name, String description) {
+        BooleanOption(boolean value, String name, String description) {
             super(name, description);
             this.value = value;
         }
@@ -1364,7 +1448,7 @@ public class SimpleREPLClient implements REPLClient {
 
         private Integer value;
 
-        public IntegerOption(int value, String name, String description) {
+        IntegerOption(int value, String name, String description) {
             super(name, description);
             this.value = value;
         }

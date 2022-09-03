@@ -27,6 +27,7 @@ package com.oracle.truffle.api.profiles;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCloneable;
@@ -73,23 +74,35 @@ import com.oracle.truffle.api.nodes.RootNode;
  * <p>
  * Profile subclasses:
  * <ul>
- * <li> {@link BranchProfile} to profile on unlikely branches like errors.</li>
- * <li> {@link ConditionProfile} to profile on conditionals or boolean values.</li>
- * <li> {@link LoopConditionProfile} to profile on conditionals of loops with special support for
+ * <li>{@link BranchProfile} to profile on unlikely branches like errors.</li>
+ * <li>{@link ConditionProfile} to profile on conditionals or boolean values.</li>
+ * <li>{@link LoopConditionProfile} to profile on conditionals of loops with special support for
  * counted loops.</li>
- * <li> {@link ValueProfile} to profile on properties like type and identity of values.</li>
- * <li> {@link ByteValueProfile} to profile on <code>byte</code> values.</li>
- * <li> {@link IntValueProfile} to profile on <code>int</code> values.</li>
- * <li> {@link LongValueProfile} to profile on <code>long</code> values.</li>
- * <li> {@link FloatValueProfile} to profile on <code>float</code> values.</li>
- * <li> {@link DoubleValueProfile} to profile on <code>double</code> values.</li>
- * <li> {@link PrimitiveValueProfile} to profile on objects by identity and on primitives by value.</li>
+ * <li>{@link ValueProfile} to profile on properties like type and identity of values.</li>
+ * <li>{@link ByteValueProfile} to profile on <code>byte</code> values.</li>
+ * <li>{@link IntValueProfile} to profile on <code>int</code> values.</li>
+ * <li>{@link LongValueProfile} to profile on <code>long</code> values.</li>
+ * <li>{@link FloatValueProfile} to profile on <code>float</code> values.</li>
+ * <li>{@link DoubleValueProfile} to profile on <code>double</code> values.</li>
+ * <li>{@link PrimitiveValueProfile} to profile on objects by identity and on primitives by value.
+ * </li>
  * </ul>
  * </p>
  *
  * @see Assumption
+ * @since 0.10
  */
 public abstract class Profile extends NodeCloneable {
+    static boolean isProfilingEnabled() {
+        boolean enabled;
+        try {
+            enabled = Truffle.getRuntime().isProfilingEnabled();
+        } catch (LinkageError ex) {
+            // running on old version of Graal
+            enabled = true;
+        }
+        return enabled;
+    }
 
     Profile() {
         /* We don't to allow custom profiles. We want to evolve this API further first. Sorry. */

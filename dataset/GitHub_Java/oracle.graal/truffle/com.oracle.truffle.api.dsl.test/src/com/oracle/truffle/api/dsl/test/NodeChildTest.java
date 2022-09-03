@@ -22,12 +22,14 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.*;
-import static org.junit.Assert.*;
+import static com.oracle.truffle.api.dsl.test.TestHelper.createCallTarget;
+import static org.junit.Assert.assertEquals;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.test.NodeFieldTestFactory.IntFieldTestNodeFactory;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 
@@ -71,8 +73,8 @@ public class NodeChildTest {
 
     }
 
-    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. "
-                    + "The following execute methods do not provide all evaluated values for the expected signature size 3:%")
+    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. " +
+                    "The following execute methods do not provide all evaluated values for the expected signature size 3:%")
     @NodeChildren({@NodeChild(value = "child2", type = ValueNode.class)})
     abstract static class Child2Node extends Base1Node {
 

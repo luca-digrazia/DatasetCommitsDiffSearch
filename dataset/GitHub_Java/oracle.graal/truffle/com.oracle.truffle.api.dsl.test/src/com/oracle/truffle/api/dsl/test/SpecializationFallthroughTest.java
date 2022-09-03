@@ -22,11 +22,16 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.*;
+import static com.oracle.truffle.api.dsl.test.TestHelper.array;
+import static com.oracle.truffle.api.dsl.test.TestHelper.assertRuns;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.test.SpecializationFallthroughTestFactory.FallthroughTest0Factory;
 import com.oracle.truffle.api.dsl.test.SpecializationFallthroughTestFactory.FallthroughTest1Factory;
 import com.oracle.truffle.api.dsl.test.SpecializationFallthroughTestFactory.FallthroughTest2Factory;
@@ -61,7 +66,7 @@ public class SpecializationFallthroughTest {
 
         static int fallthroughCount = 0;
 
-        public FallthroughTest0() {
+        FallthroughTest0() {
             fallthroughCount = 0;
         }
 
@@ -106,7 +111,7 @@ public class SpecializationFallthroughTest {
 
         static int fallthroughCount;
 
-        public FallthroughTest1() {
+        FallthroughTest1() {
             fallthroughCount = 0;
         }
 
@@ -157,7 +162,7 @@ public class SpecializationFallthroughTest {
         static int fallthrough1;
         static int fallthrough2;
 
-        @Specialization(order = 1, rewriteOn = ArithmeticException.class)
+        @Specialization(rewriteOn = ArithmeticException.class)
         int do1(int a) throws ArithmeticException {
             if (a == 0) {
                 fallthrough1++;
@@ -166,7 +171,7 @@ public class SpecializationFallthroughTest {
             return a;
         }
 
-        @Specialization(order = 2, rewriteOn = ArithmeticException.class)
+        @Specialization(rewriteOn = ArithmeticException.class)
         int do2(int a) throws ArithmeticException {
             if (a == 1) {
                 fallthrough2++;
@@ -261,7 +266,7 @@ public class SpecializationFallthroughTest {
         static int fallthrough1;
         static int fallthrough2;
 
-        @Specialization(order = 1, rewriteOn = ArithmeticException.class)
+        @Specialization(rewriteOn = ArithmeticException.class)
         int do1(int a) throws ArithmeticException {
             if (a == 0) {
                 fallthrough1++;
@@ -270,7 +275,7 @@ public class SpecializationFallthroughTest {
             return a;
         }
 
-        @Specialization(order = 2, rewriteOn = ArithmeticException.class)
+        @Specialization(rewriteOn = ArithmeticException.class)
         int do2(int a) throws ArithmeticException {
             if (a == 1) {
                 fallthrough2++;
@@ -361,8 +366,8 @@ public class SpecializationFallthroughTest {
     @NodeChildren({@NodeChild("a")})
     static class FallthroughExceptionType2 extends ValueNode {
 
-        @ExpectError("A checked exception 'java.lang.Throwable' is thrown but is not specified using the rewriteOn property. "
-                        + "Checked exceptions that are not used for rewriting are not handled by the DSL. Use RuntimeExceptions for this purpose instead.")
+        @ExpectError("A checked exception 'java.lang.Throwable' is thrown but is not specified using the rewriteOn property. " +
+                        "Checked exceptions that are not used for rewriting are not handled by the DSL. Use RuntimeExceptions for this purpose instead.")
         @Specialization
         int do4(int a) throws Throwable {
             return a;

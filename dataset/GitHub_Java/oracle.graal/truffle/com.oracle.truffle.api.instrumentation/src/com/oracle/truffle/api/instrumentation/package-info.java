@@ -52,6 +52,5 @@
  *
  * @see com.oracle.truffle.api.instrumentation.TruffleInstrument
  * @see com.oracle.truffle.api.instrumentation.Instrumentable
- * @since 0.8 or older
  */
 package com.oracle.truffle.api.instrumentation;

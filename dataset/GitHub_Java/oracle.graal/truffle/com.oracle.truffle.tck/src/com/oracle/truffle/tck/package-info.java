@@ -32,7 +32,5 @@
 /**
  * Include implementation of {@link com.oracle.truffle.tck.TruffleTCK} in your test suite to verify
  * your {@link com.oracle.truffle.api.TruffleLanguage language} implementation is compliant.
- * 
- * @since 0.8 or older
  */
 package com.oracle.truffle.tck;

@@ -75,7 +75,6 @@ import com.oracle.truffle.dsl.processor.expression.DSLExpressionResolver;
 import com.oracle.truffle.dsl.processor.expression.InvalidExpressionException;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import com.oracle.truffle.dsl.processor.java.compiler.CompilerFactory;
-import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.ArrayCodeTypeMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeVariableElement;
 import com.oracle.truffle.dsl.processor.model.AssumptionExpression;
@@ -350,22 +349,14 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Element> importPublicStaticMembers(TypeElement importGuardClass, boolean includeConstructors) {
+    private List<? extends Element> importPublicStaticMembers(TypeElement importGuardClass, boolean includeConstructors) {
         // hack to reload type is necessary for incremental compiling in eclipse.
         // otherwise methods inside of import guard types are just not found.
         TypeElement typeElement = ElementUtils.fromTypeMirror(context.reloadType(importGuardClass.asType()));
 
         List<Element> members = new ArrayList<>();
-        List<Element> typeElementMembers = (List<Element>) processingEnv.getElementUtils().getAllMembers(typeElement);
 
-        // add default constructor
-        if (typeElement.getModifiers().contains(Modifier.PUBLIC) && ElementFilter.constructorsIn(typeElementMembers).isEmpty()) {
-            typeElementMembers = new ArrayList<>(typeElementMembers);
-            typeElementMembers.add(new CodeExecutableElement(ElementUtils.modifiers(Modifier.PUBLIC), typeElement.asType(), null));
-        }
-
-        for (Element importElement : typeElementMembers) {
+        for (Element importElement : processingEnv.getElementUtils().getAllMembers(typeElement)) {
             if (!importElement.getModifiers().contains(Modifier.PUBLIC)) {
                 continue;
             }
@@ -674,9 +665,7 @@ public class NodeParser extends AbstractParser<NodeData> {
                 child = children.get(childIndex);
                 shortCircuit = shortCircuits.contains(NodeExecutionData.createIndexedName(child, varArgsIndex));
             }
-            if (child != null) {
-                executions.add(new NodeExecutionData(child, i, varArgsIndex, shortCircuit));
-            }
+            executions.add(new NodeExecutionData(child, i, varArgsIndex, shortCircuit));
         }
         return executions;
     }
@@ -1181,7 +1170,6 @@ public class NodeParser extends AbstractParser<NodeData> {
             initializeLimit(specialization, resolver);
             initializeAssumptions(specialization, resolver);
         }
-
     }
 
     private void initializeAssumptions(SpecializationData specialization, DSLExpressionResolver resolver) {

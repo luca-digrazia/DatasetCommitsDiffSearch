@@ -35,7 +35,6 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.RootNode;
-import java.lang.reflect.Modifier;
 
 /**
  * Helper methods to simplify access to objects of {@link TruffleLanguage Truffle languages} from
@@ -226,32 +225,11 @@ public final class JavaInterop {
      * @since 0.9
      */
     public static <T> TruffleObject asTruffleFunction(Class<T> functionalType, T implementation) {
-        final Method method = functionalInterfaceMethod(functionalType);
-        if (method == null) {
+        final Method[] arr = functionalType.getDeclaredMethods();
+        if (!functionalType.isInterface() || arr.length != 1) {
             throw new IllegalArgumentException();
         }
-        return new JavaFunctionObject(method, implementation);
-    }
-
-    private static <T> Method functionalInterfaceMethod(Class<T> functionalType) {
-        if (!functionalType.isInterface()) {
-            return null;
-        }
-        final Method[] arr = functionalType.getMethods();
-        if (arr.length == 1) {
-            return arr[0];
-        }
-        Method found = null;
-        for (Method m : arr) {
-            if ((m.getModifiers() & Modifier.ABSTRACT) == 0) {
-                continue;
-            }
-            if (found != null) {
-                throw new IllegalArgumentException();
-            }
-            found = m;
-        }
-        return found;
+        return new JavaFunctionObject(arr[0], implementation);
     }
 
     private static class TemporaryConvertRoot extends RootNode {

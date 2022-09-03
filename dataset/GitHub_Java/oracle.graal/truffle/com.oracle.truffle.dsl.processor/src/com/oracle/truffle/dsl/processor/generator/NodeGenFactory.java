@@ -22,35 +22,98 @@
  */
 package com.oracle.truffle.dsl.processor.generator;
 
-import static com.oracle.truffle.dsl.processor.generator.GeneratorUtils.*;
-import static com.oracle.truffle.dsl.processor.java.ElementUtils.*;
-import static javax.lang.model.element.Modifier.*;
+import static com.oracle.truffle.dsl.processor.generator.GeneratorUtils.createClass;
+import static com.oracle.truffle.dsl.processor.generator.GeneratorUtils.createTransferToInterpreterAndInvalidate;
+import static com.oracle.truffle.dsl.processor.generator.GeneratorUtils.isTypeBoxingOptimized;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.compareType;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.fromTypeMirror;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.getTypeId;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.isObject;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.isSubtypeBoxed;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.isVoid;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.modifiers;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.needsCastTo;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.setVisibility;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.typeEquals;
+import static javax.lang.model.element.Modifier.ABSTRACT;
+import static javax.lang.model.element.Modifier.FINAL;
+import static javax.lang.model.element.Modifier.PRIVATE;
+import static javax.lang.model.element.Modifier.PROTECTED;
+import static javax.lang.model.element.Modifier.PUBLIC;
+import static javax.lang.model.element.Modifier.STATIC;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-import javax.lang.model.util.*;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.ArrayType;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
 
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
+import com.oracle.truffle.api.dsl.internal.DSLOptions;
 import com.oracle.truffle.api.dsl.internal.DSLOptions.ImplicitCastOptimization;
 import com.oracle.truffle.api.dsl.internal.DSLOptions.TypeBoxingOptimization;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.dsl.internal.SpecializationNode;
+import com.oracle.truffle.api.dsl.internal.SpecializedNode;
+import com.oracle.truffle.api.dsl.internal.SuppressFBWarnings;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.nodes.InvalidAssumptionException;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.Node.Children;
-import com.oracle.truffle.dsl.processor.*;
-import com.oracle.truffle.dsl.processor.expression.*;
+import com.oracle.truffle.api.nodes.NodeCost;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.dsl.processor.ProcessorContext;
+import com.oracle.truffle.dsl.processor.expression.DSLExpression;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.Variable;
-import com.oracle.truffle.dsl.processor.java.*;
-import com.oracle.truffle.dsl.processor.java.model.*;
+import com.oracle.truffle.dsl.processor.java.ElementUtils;
+import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationMirror;
+import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationValue;
+import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
+import com.oracle.truffle.dsl.processor.java.model.CodeNames;
+import com.oracle.truffle.dsl.processor.java.model.CodeTree;
+import com.oracle.truffle.dsl.processor.java.model.CodeTreeBuilder;
+import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.ArrayCodeTypeMirror;
-import com.oracle.truffle.dsl.processor.model.*;
-import com.oracle.truffle.dsl.processor.parser.*;
+import com.oracle.truffle.dsl.processor.java.model.CodeVariableElement;
+import com.oracle.truffle.dsl.processor.java.model.GeneratedTypeMirror;
+import com.oracle.truffle.dsl.processor.model.AssumptionExpression;
+import com.oracle.truffle.dsl.processor.model.CacheExpression;
+import com.oracle.truffle.dsl.processor.model.CreateCastData;
+import com.oracle.truffle.dsl.processor.model.ExecutableTypeData;
+import com.oracle.truffle.dsl.processor.model.GuardExpression;
+import com.oracle.truffle.dsl.processor.model.ImplicitCastData;
+import com.oracle.truffle.dsl.processor.model.NodeChildData;
+import com.oracle.truffle.dsl.processor.model.NodeData;
+import com.oracle.truffle.dsl.processor.model.NodeExecutionData;
+import com.oracle.truffle.dsl.processor.model.NodeFieldData;
+import com.oracle.truffle.dsl.processor.model.Parameter;
+import com.oracle.truffle.dsl.processor.model.ShortCircuitData;
+import com.oracle.truffle.dsl.processor.model.SpecializationData;
+import com.oracle.truffle.dsl.processor.model.TemplateMethod;
+import com.oracle.truffle.dsl.processor.model.TypeSystemData;
+import com.oracle.truffle.dsl.processor.parser.SpecializationGroup;
 import com.oracle.truffle.dsl.processor.parser.SpecializationGroup.TypeGuard;
 
 public class NodeGenFactory {
@@ -461,9 +524,12 @@ public class NodeGenFactory {
         CodeTypeElement clazz = createClass(node, null, modifiers(PRIVATE, ABSTRACT, STATIC), specializationTypeName(null), typeSystem.getContext().getType(SpecializationNode.class));
 
         clazz.addOptional(createSpecializationConstructor(clazz, null, null));
-        clazz.add(new CodeVariableElement(modifiers(PROTECTED, FINAL), nodeType(node), "root"));
+        CodeVariableElement rootField = new CodeVariableElement(modifiers(PROTECTED), nodeType(node), "root");
+        rootField.addAnnotationMirror(new CodeAnnotationMirror(context.getDeclaredType(CompilationFinal.class)));
+        clazz.add(rootField);
 
         clazz.addOptional(createUnsupported());
+        clazz.add(createSetRootMethod());
         clazz.add(createGetSuppliedChildrenMethod());
         clazz.add(createAcceptAndExecute());
 
@@ -472,6 +538,16 @@ public class NodeGenFactory {
         }
 
         return clazz;
+    }
+
+    private Element createSetRootMethod() {
+        CodeExecutableElement method = new CodeExecutableElement(modifiers(PROTECTED, FINAL), context.getType(void.class), "setRoot", new CodeVariableElement(getType(Node.class), "root"));
+        method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(Override.class)));
+
+        CodeTreeBuilder builder = method.createBuilder();
+        builder.startStatement().string("this.root = ").cast(ElementUtils.fillInGenericWildcards(nodeType(node))).string("root").end();
+
+        return method;
     }
 
     private Element createAcceptAndExecute() {
@@ -726,7 +802,7 @@ public class NodeGenFactory {
             }
         };
 
-        builder.tree(createGuardAndCast(group, genericType, currentLocals, executionFactory));
+        builder.tree(createGuardAndCast(builder, group, null, currentLocals, executionFactory));
         builder.returnFalse();
         return method;
     }
@@ -852,7 +928,7 @@ public class NodeGenFactory {
 
         CodeTreeBuilder builder = method.createBuilder();
         SpecializationGroup group = createSpecializationGroups();
-        CodeTree execution = createGuardAndCast(group, genericType, locals, new SpecializationBody(false, false) {
+        CodeTree execution = createGuardAndCast(builder, group, null, locals, new SpecializationBody(false, false) {
             @Override
             public CodeTree createBody(SpecializationData specialization, LocalContext values) {
                 CodeTypeElement generatedType = specializationClasses.get(specialization);
@@ -974,7 +1050,7 @@ public class NodeGenFactory {
         for (SpecializationData specialization : node.getSpecializations()) {
             if (specialization.isReachable() &&   //
                             (specialization.isSpecialized() //
-                            || (specialization.isFallback() && optimizeFallback(specialization)))) {
+                                            || (specialization.isFallback() && optimizeFallback(specialization)))) {
                 specializations.add(specialization);
             }
         }
@@ -1555,8 +1631,8 @@ public class NodeGenFactory {
         return builder.build();
     }
 
-    private CodeTree createCallDelegate(String methodName, String reason, ExecutableTypeData forType, LocalContext currentValues) {
-        CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
+    private CodeTree createCallDelegate(CodeTreeBuilder parent, String methodName, String reason, ExecutableTypeData forType, LocalContext currentValues) {
+        CodeTreeBuilder builder = parent.create();
         builder.startCall(methodName);
         if (reason != null) {
             builder.doubleQuote(reason);
@@ -1784,7 +1860,7 @@ public class NodeGenFactory {
         } else if (specialization.isPolymorphic()) {
             builder.tree(createCallNext(builder, executableType, node.getGenericExecutableType(executableType), currentLocals));
         } else if (specialization.isUninitialized()) {
-            builder.startReturn().tree(createCallDelegate("uninitialized", null, executableType, currentLocals)).end();
+            builder.startReturn().tree(createCallDelegate(builder, "uninitialized", null, executableType, currentLocals)).end();
         } else {
             SpecializationGroup group = SpecializationGroup.create(specialization);
             SpecializationBody executionFactory = new SpecializationBody(true, true) {
@@ -1793,7 +1869,7 @@ public class NodeGenFactory {
                     return createFastPathExecute(builder, executableType, s, values);
                 }
             };
-            builder.tree(createGuardAndCast(group, returnType, currentLocals, executionFactory));
+            builder.tree(createGuardAndCast(builder, group, executableType, currentLocals, executionFactory));
             if (hasFallthrough(group, returnType, originalValues, true, null) || group.getSpecialization().isFallback()) {
                 builder.tree(createCallNext(builder, executableType, node.getGenericExecutableType(executableType), originalValues));
             }
@@ -1929,26 +2005,6 @@ public class NodeGenFactory {
         }
         CodeTreeBuilder execute = builder.create();
 
-        if (!specialization.getAssumptionExpressions().isEmpty()) {
-            builder.startTryBlock();
-            for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                LocalVariable assumptionVar = currentValues.get(assumptionName(assumption));
-                if (assumptionVar == null) {
-                    throw new AssertionError("Could not resolve assumption var " + currentValues);
-                }
-                builder.startStatement().startCall("check").tree(assumptionVar.createReference()).end().end();
-            }
-            builder.end().startCatchBlock(getType(InvalidAssumptionException.class), "ae");
-            builder.startReturn();
-            List<String> assumptionIds = new ArrayList<>();
-            for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                assumptionIds.add(assumption.getId());
-            }
-            builder.tree(createCallDelegate("removeThis", String.format("Assumption %s invalidated", assumptionIds), forType, currentValues));
-            builder.end();
-            builder.end();
-        }
-
         if (specialization.getMethod() == null) {
             execute.startReturn();
             execute.startCall("unsupported");
@@ -1979,8 +2035,8 @@ public class NodeGenFactory {
         return builder.build();
     }
 
-    private CodeTree createGuardAndCast(SpecializationGroup group, TypeMirror forType, LocalContext currentValues, SpecializationBody execution) {
-        CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
+    private CodeTree createGuardAndCast(CodeTreeBuilder parent, SpecializationGroup group, ExecutableTypeData forType, LocalContext currentValues, SpecializationBody execution) {
+        CodeTreeBuilder builder = parent.create();
 
         Set<TypeGuard> castGuards;
         if (execution.needsCastedValues()) {
@@ -1995,6 +2051,14 @@ public class NodeGenFactory {
         }
 
         SpecializationData specialization = group.getSpecialization();
+
+        CodeTree assumptionChecks = null;
+        if (specialization != null && execution.isFastPath() && forType != null) {
+            if (!specialization.getAssumptionExpressions().isEmpty()) {
+                assumptionChecks = createFastPathAssumptionCheck(builder, specialization, forType, currentValues);
+            }
+        }
+
         CodeTree[] checkAndCast = createTypeCheckAndLocals(specialization, group.getTypeGuards(), castGuards, currentValues, execution);
 
         CodeTree check = checkAndCast[0];
@@ -2007,6 +2071,9 @@ public class NodeGenFactory {
         CodeTree methodGuards = methodGuardAndAssertions[0];
         CodeTree guardAssertions = methodGuardAndAssertions[1];
 
+        if (assumptionChecks != null) {
+            builder.tree(assumptionChecks);
+        }
         int ifCount = 0;
         if (!check.isEmpty()) {
             builder.startIf();
@@ -2034,7 +2101,7 @@ public class NodeGenFactory {
         boolean reachable = isReachableGroup(group, ifCount);
         if (reachable) {
             for (SpecializationGroup child : group.getChildren()) {
-                builder.tree(createGuardAndCast(child, forType, currentValues.copy(), execution));
+                builder.tree(createGuardAndCast(builder, child, forType, currentValues.copy(), execution));
             }
             if (specialization != null) {
                 builder.tree(execution.createBody(specialization, currentValues));
@@ -2042,6 +2109,28 @@ public class NodeGenFactory {
         }
         builder.end(ifCount);
 
+        return builder.build();
+    }
+
+    private CodeTree createFastPathAssumptionCheck(CodeTreeBuilder parent, SpecializationData specialization, ExecutableTypeData forType, LocalContext currentValues) throws AssertionError {
+        CodeTreeBuilder builder = parent.create();
+        builder.startTryBlock();
+        for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
+            LocalVariable assumptionVar = currentValues.get(assumptionName(assumption));
+            if (assumptionVar == null) {
+                throw new AssertionError("Could not resolve assumption var " + currentValues);
+            }
+            builder.startStatement().startCall("check").tree(assumptionVar.createReference()).end().end();
+        }
+        builder.end().startCatchBlock(getType(InvalidAssumptionException.class), "ae");
+        builder.startReturn();
+        List<String> assumptionIds = new ArrayList<>();
+        for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
+            assumptionIds.add(assumption.getId());
+        }
+        builder.tree(createCallDelegate(builder, "removeThis", String.format("Assumption %s invalidated", assumptionIds), forType, currentValues));
+        builder.end();
+        builder.end();
         return builder.build();
     }
 
@@ -3021,7 +3110,7 @@ public class NodeGenFactory {
         private final boolean fastPath;
         private final boolean needsCastedValues;
 
-        public SpecializationBody(boolean fastPath, boolean needsCastedValues) {
+        SpecializationBody(boolean fastPath, boolean needsCastedValues) {
             this.fastPath = fastPath;
             this.needsCastedValues = needsCastedValues;
         }

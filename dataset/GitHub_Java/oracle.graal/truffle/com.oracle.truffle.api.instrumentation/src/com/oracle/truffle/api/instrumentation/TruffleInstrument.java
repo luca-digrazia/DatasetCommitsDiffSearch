@@ -35,11 +35,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.instrumentation.InstrumentationHandler.AccessorInstrumentHandler;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 
 /**
@@ -76,21 +71,21 @@ import com.oracle.truffle.api.source.Source;
  * &#064;Registration(name = Coverage.NAME, version = Coverage.VERSION, instrumentType = Coverage.TYPE)
  * &#064;RequiredTags(&quot;EXPRESSION&quot;)
  * public final class Coverage extends TruffleInstrument {
- *
+ * 
  *     public static final String NAME = &quot;sample-coverage&quot;;
  *     public static final String TYPE = &quot;coverage&quot;;
  *     public static final String VERSION = &quot;coverage&quot;;
- *
+ * 
  *     private final Set&lt;SourceSection&gt; coverage = new HashSet&lt;&gt;();
- *
+ * 
  *     &#064;Override
  *     protected void onCreate(Env env, Instrumenter instrumenter) {
  *         instrumenter.attachFactory(SourceSectionFilter.newBuilder() //
- *                         .tagIs(&quot;EXPRESSION&quot;).build(), new ExecutionEventNodeFactory() {
- *                             public ExecutionEventNode create(final EventContext context) {
- *                                 return new ExecutionEventNode() {
+ *                         .tagIs(&quot;EXPRESSION&quot;).build(), new EventNodeFactory() {
+ *                             public EventNode create(final EventContext context) {
+ *                                 return new EventNode() {
  *                                     &#064;CompilationFinal private boolean visited;
- *
+ * 
  *                                     &#064;Override
  *                                     public void onReturnValue(VirtualFrame vFrame, Object result) {
  *                                         if (!visited) {
@@ -103,12 +98,12 @@ import com.oracle.truffle.api.source.Source;
  *                             }
  *                         });
  *     }
- *
+ * 
  *     &#064;Override
  *     protected void onDispose(Env env) {
  *         // print result
  *     }
- *
+ * 
  * }
  * </pre>
  *
@@ -169,15 +164,13 @@ public abstract class TruffleInstrument {
      */
     public static final class Env {
 
-        private final Object vm;
         private final Instrumenter instrumenter;
         private final InputStream in;
         private final OutputStream err;
         private final OutputStream out;
         private List<Object> services;
 
-        Env(Object vm, Instrumenter instrumenter, OutputStream out, OutputStream err, InputStream in) {
-            this.vm = vm;
+        Env(Instrumenter instrumenter, OutputStream out, OutputStream err, InputStream in) {
             this.instrumenter = instrumenter;
             this.in = in;
             this.err = err;
@@ -278,42 +271,6 @@ public abstract class TruffleInstrument {
         @SuppressWarnings("static-method")
         public CallTarget parse(Source source, String... argumentNames) throws IOException {
             return InstrumentationHandler.ACCESSOR.parse(null, source, null, argumentNames);
-        }
-
-        /**
-         * Returns <code>true</code> if the given root node is considered an engine evaluation root
-         * for the current execution context. Multiple such root nodes can appear on stack frames
-         * returned by
-         * {@link TruffleRuntime#iterateFrames(com.oracle.truffle.api.frame.FrameInstanceVisitor)}.
-         * A debugger implementation might use this information to hide stack frames of other
-         * engines.
-         *
-         * @param root the root node to check
-         * @return <code>true</code> if engine root else <code>false</code>
-         * @since 0.17
-         */
-        @SuppressWarnings("static-method")
-        public boolean isEngineRoot(RootNode root) {
-            return AccessorInstrumentHandler.engineAccess().isEvalRoot(root);
-        }
-
-        /**
-         * Uses the original language of the node to print a string representation of this value.
-         * The behavior of this method is undefined if a type unknown to the language is passed as
-         * value.
-         *
-         * @param node a node
-         * @param value a known value of that language
-         * @return a human readable string representation of the value.
-         * @since 0.17
-         */
-        @SuppressWarnings({"rawtypes"})
-        public String toString(Node node, Object value) {
-            RootNode rootNode = node.getRootNode();
-            final Class<? extends TruffleLanguage> languageClass = AccessorInstrumentHandler.nodesAccess().findLanguage(rootNode);
-            final TruffleLanguage.Env env = AccessorInstrumentHandler.engineAccess().findEnv(vm, languageClass);
-            final TruffleLanguage<?> language = AccessorInstrumentHandler.langAccess().findLanguage(env);
-            return AccessorInstrumentHandler.langAccess().toString(language, env, value);
         }
 
     }

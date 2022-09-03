@@ -22,9 +22,11 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.test.NoTypeSystemTestFactory.JustFrameTestNodeGen;
 import com.oracle.truffle.api.dsl.test.NoTypeSystemTestFactory.NoParameterTestNodeGen;
 import com.oracle.truffle.api.dsl.test.NoTypeSystemTestFactory.ObjectInterfaceNodeGen;
@@ -32,8 +34,9 @@ import com.oracle.truffle.api.dsl.test.NoTypeSystemTestFactory.ObjectPrimitiveTe
 import com.oracle.truffle.api.dsl.test.NoTypeSystemTestFactory.ObjectStringTestNodeGen;
 import com.oracle.truffle.api.dsl.test.NoTypeSystemTestFactory.PrimitiveTestNodeGen;
 import com.oracle.truffle.api.dsl.test.NoTypeSystemTestFactory.TypesNotInTypeSystemTestNodeGen;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 public class NoTypeSystemTest {
 
@@ -258,8 +261,8 @@ public class NoTypeSystemTest {
         }
     }
 
-    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. "
-                    + "The following execute methods do not provide all evaluated values for the expected signature size 1: [execute()].")
+    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. " +
+                    "The following execute methods do not provide all evaluated values for the expected signature size 1: [execute()].")
     abstract static class ErrorMissingNodeChild1 extends Node {
 
         abstract int execute();
@@ -270,8 +273,8 @@ public class NoTypeSystemTest {
         }
     }
 
-    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. "
-                    + "The following execute methods do not provide all evaluated values for the expected signature size 2: [execute(int)].")
+    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. " +
+                    "The following execute methods do not provide all evaluated values for the expected signature size 2: [execute(int)].")
     @NodeChild(type = DummyChild.class)
     abstract static class ErrorMissingNodeChild2 extends Node {
 
@@ -283,8 +286,8 @@ public class NoTypeSystemTest {
         }
     }
 
-    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. "
-                    + "The following execute methods do not provide all evaluated values for the expected signature size 1: [execute()].")
+    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. " +
+                    "The following execute methods do not provide all evaluated values for the expected signature size 1: [execute()].")
     abstract static class ErrorMissingNodeChild3 extends Node {
 
         abstract int execute();
@@ -311,8 +314,8 @@ public class NoTypeSystemTest {
     }
 
     @NodeChild(type = DummyChild.class)
-    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. "
-                    + "The following execute methods do not provide all evaluated values for the expected signature size 2: [execute(int)].")
+    @ExpectError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. " +
+                    "The following execute methods do not provide all evaluated values for the expected signature size 2: [execute(int)].")
     abstract static class ErrorAdditionalNodeChild2 extends Node {
 
         abstract int execute(int arg0);

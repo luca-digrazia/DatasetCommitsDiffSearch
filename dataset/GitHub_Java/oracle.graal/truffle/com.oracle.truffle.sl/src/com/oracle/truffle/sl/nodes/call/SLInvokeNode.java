@@ -41,7 +41,6 @@
 package com.oracle.truffle.sl.nodes.call;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -58,8 +57,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.sl.nodes.SLExpressionNode;
-import com.oracle.truffle.sl.nodes.interop.SLForeignToSLTypeNode;
-import com.oracle.truffle.sl.nodes.interop.SLForeignToSLTypeNodeGen;
+import com.oracle.truffle.sl.runtime.SLContext;
 import com.oracle.truffle.sl.runtime.SLFunction;
 import com.oracle.truffle.sl.runtime.SLNull;
 
@@ -100,20 +98,8 @@ public abstract class SLInvokeNode extends SLExpressionNode {
         return dispatchNode.executeDispatch(frame, function, argumentValues);
     }
 
-    /*
-     * The child node to call the foreign function.
-     */
     @Child private Node crossLanguageCall;
 
-    /*
-     * The child node to convert the result of the foreign function call to an SL value.
-     */
-    @Child private SLForeignToSLTypeNode toSLType;
-
-    /*
-     * If the receiver object (i.e., the function object) is a foreign value we use Truffle's
-     * interop API to execute the foreign function.
-     */
     @Specialization
     @ExplodeLoop
     protected Object executeGeneric(VirtualFrame frame, TruffleObject function) {
@@ -129,22 +115,13 @@ public abstract class SLInvokeNode extends SLExpressionNode {
         for (int i = 0; i < argumentNodes.length; i++) {
             argumentValues[i] = argumentNodes[i].executeGeneric(frame);
         }
-
-        // Lazily insert the foreign object access nodes upon the first execution.
         if (crossLanguageCall == null) {
-            // SL maps a function invocation to an EXECUTE message.
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             crossLanguageCall = insert(Message.createExecute(argumentValues.length).createNode());
-            toSLType = insert(SLForeignToSLTypeNodeGen.create(getSourceSection(), null));
         }
         try {
-            // Perform the foreign function call.
             Object res = ForeignAccess.sendExecute(crossLanguageCall, frame, function, argumentValues);
-            // Convert the result to an SL value.
-            Object slValue = toSLType.executeWithTarget(frame, res);
-            return slValue;
+            return SLContext.fromForeignValue(res);
         } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-            // In case the foreign function call is not successful, we return null.
             return SLNull.SINGLETON;
         }
     }

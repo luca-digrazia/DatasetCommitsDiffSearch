@@ -32,7 +32,5 @@
 /**
  * Central place to create and control {@link com.oracle.truffle.api.vm.PolyglotEngine polyglot
  * execution engine} and all languages hosted in it.
- * 
- * @since 0.8 or older
  */
 package com.oracle.truffle.api.vm;

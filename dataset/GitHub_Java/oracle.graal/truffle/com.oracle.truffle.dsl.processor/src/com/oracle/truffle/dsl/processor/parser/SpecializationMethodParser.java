@@ -26,7 +26,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.dsl.processor.ProcessorContext;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
-import com.oracle.truffle.dsl.processor.model.CachedParameterSpec;
+import com.oracle.truffle.dsl.processor.model.AnnotatedParameterSpec;
 import com.oracle.truffle.dsl.processor.model.MethodSpec;
 import com.oracle.truffle.dsl.processor.model.NodeData;
 import com.oracle.truffle.dsl.processor.model.SpecializationData;
@@ -53,7 +53,7 @@ public class SpecializationMethodParser extends NodeMethodParser<SpecializationD
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
         MethodSpec spec = createDefaultMethodSpec(method, mirror, true, null);
-        spec.getAnnotations().add(new CachedParameterSpec(getContext().getDeclaredType(Cached.class)));
+        spec.getAnnotations().add(new AnnotatedParameterSpec(getContext().getDeclaredType(Cached.class)));
         return spec;
     }
 
@@ -107,24 +107,16 @@ public class SpecializationMethodParser extends NodeMethodParser<SpecializationD
                 specialization.setInsertBeforeName(insertBeforeName);
             }
 
-            List<String> replacesDefs = new ArrayList<>();
-            replacesDefs.addAll(ElementUtils.getAnnotationValueList(String.class, specialization.getMarkerAnnotation(), "replaces"));
-
-            // TODO remove if deprecated contains api is removed.
-            replacesDefs.addAll(ElementUtils.getAnnotationValueList(String.class, specialization.getMarkerAnnotation(), "contains"));
-            Set<String> containsNames = specialization.getReplacesNames();
+            List<String> containsDefs = ElementUtils.getAnnotationValueList(String.class, specialization.getMarkerAnnotation(), "contains");
+            Set<String> containsNames = specialization.getContainsNames();
             containsNames.clear();
-            if (replacesDefs != null) {
-                for (String include : replacesDefs) {
+            if (containsDefs != null) {
+                for (String include : containsDefs) {
                     if (!containsNames.contains(include)) {
-                        specialization.getReplacesNames().add(include);
+                        specialization.getContainsNames().add(include);
                     } else {
-                        AnnotationValue value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "replaces");
-                        if (value == null) {
-                            // TODO remove if deprecated api was removed.
-                            value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "contains");
-                        }
-                        specialization.addError(value, "Duplicate replace declaration '%s'.", include);
+                        AnnotationValue value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "contains");
+                        specialization.addError(value, "Duplicate contains declaration '%s'.", include);
                     }
                 }
 
