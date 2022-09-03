@@ -303,11 +303,7 @@ public class HotSpotReplacementsUtil {
         return result;
     }
 
-    /*
-     * As far as Java code is concerned this can be considered immutable: it is set just after the
-     * JavaThread is created, before it is published. After that, it is never changed.
-     */
-    public static final LocationIdentity JAVA_THREAD_THREAD_OBJECT_LOCATION = NamedLocationIdentity.immutable("JavaThread::_threadObj");
+    public static final LocationIdentity JAVA_THREAD_THREAD_OBJECT_LOCATION = NamedLocationIdentity.mutable("JavaThread::_threadObj");
 
     @Fold
     public static int threadObjectOffset(@InjectedParameter GraalHotSpotVMConfig config) {
