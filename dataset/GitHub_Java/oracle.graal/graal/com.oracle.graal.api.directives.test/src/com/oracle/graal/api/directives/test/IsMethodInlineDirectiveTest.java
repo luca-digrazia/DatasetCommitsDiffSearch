@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.api.directives.test;
 
-import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.graal.api.directives.GraalDirectives;
@@ -49,6 +48,7 @@ public class IsMethodInlineDirectiveTest extends GraalCompilerTest {
         return GraalDirectives.isMethodInlined();
     }
 
+    @SuppressWarnings("try")
     @Test
     public void testRootMethod() {
         ResolvedJavaMethod method = getResolvedJavaMethod("rootMethodSnippet");
@@ -59,7 +59,7 @@ public class IsMethodInlineDirectiveTest extends GraalCompilerTest {
             Result result = new Result(code.executeVarargs(), null);
             assertEquals(new Result(false, null), result);
         } catch (Throwable e) {
-            Assert.fail("Unexpected exception: " + e);
+            throw new AssertionError(e);
         }
     }
 
@@ -81,45 +81,44 @@ public class IsMethodInlineDirectiveTest extends GraalCompilerTest {
             Result result = new Result(code.executeVarargs(), null);
             assertEquals(new Result(true, null), result);
         } catch (Throwable e) {
-            Assert.fail("Unexpected exception: " + e);
+            throw new AssertionError(e);
         }
     }
 
-    static boolean flag1;
-    static boolean flag2;
+    static boolean isCalleeInlined;
+    static boolean isCallerInlined;
 
     public static void calleeWithInstrumentationSnippet() {
-        GraalDirectives.instrumentationBegin(0);
-        flag1 = GraalDirectives.isMethodInlined();
+        GraalDirectives.instrumentationBegin();
+        isCalleeInlined = GraalDirectives.isMethodInlined();
         GraalDirectives.instrumentationEnd();
     }
 
     public static void callerSnippet1() {
         calleeWithInstrumentationSnippet();
 
-        GraalDirectives.instrumentationBegin(0);
-        flag2 = GraalDirectives.isMethodInlined();
+        GraalDirectives.instrumentationBegin();
+        isCallerInlined = GraalDirectives.isMethodInlined();
         GraalDirectives.instrumentationEnd();
     }
 
+    @SuppressWarnings("try")
     @Test
     public void testInlinedCalleeWithInstrumentation() {
         try (OverrideScope s = OptionValue.override(GraalOptions.UseGraalInstrumentation, true)) {
             ResolvedJavaMethod method = getResolvedJavaMethod("callerSnippet1");
             executeExpected(method, null); // ensure the method is fully resolved
-            flag1 = false;
-            flag2 = false;
+            isCalleeInlined = false;
+            isCallerInlined = false;
             // calleeWithInstrumentationSnippet will be inlined. We expect the flag1 set in
             // calleeWithInstrumentationSnippet to be true, and the flag2 set in callerSnippet1 to
             // be false.
             InstalledCode code = getCode(method);
-            try {
-                code.executeVarargs();
-                assertTrue("calleWithInstrumentationSnippet should be inlined", flag1);
-                assertFalse("callerSnippet1 should not be inlined", flag2);
-            } catch (Throwable e) {
-                Assert.fail("Unexpected exception: " + e);
-            }
+            code.executeVarargs();
+            assertTrue("calleWithInstrumentationSnippet should be inlined", isCalleeInlined);
+            assertFalse("callerSnippet1 should not be inlined", isCallerInlined);
+        } catch (Throwable e) {
+            throw new AssertionError(e);
         }
     }
 
