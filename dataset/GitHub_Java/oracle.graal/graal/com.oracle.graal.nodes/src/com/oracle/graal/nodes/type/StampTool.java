@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.type;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
@@ -33,8 +34,8 @@ import com.oracle.graal.nodes.*;
  */
 public class StampTool {
 
-    public static Stamp meet(Collection<? extends ValueNode> values) {
-        Iterator<? extends ValueNode> iterator = values.iterator();
+    public static Stamp meet(Collection<? extends StampProvider> values) {
+        Iterator<? extends StampProvider> iterator = values.iterator();
         if (iterator.hasNext()) {
             Stamp stamp = iterator.next().stamp();
             while (iterator.hasNext()) {
@@ -44,6 +45,95 @@ public class StampTool {
         } else {
             return StampFactory.forVoid();
         }
+    }
+
+    public static Stamp rightShift(Stamp value, Stamp shift) {
+        if (value instanceof IntegerStamp && shift instanceof IntegerStamp) {
+            return rightShift((IntegerStamp) value, (IntegerStamp) shift);
+        }
+        return value.illegal();
+    }
+
+    public static Stamp rightShift(IntegerStamp value, IntegerStamp shift) {
+        int bits = value.getBits();
+        if (shift.lowerBound() == shift.upperBound()) {
+            int extraBits = 64 - bits;
+            long shiftMask = bits > 32 ? 0x3FL : 0x1FL;
+            long shiftCount = shift.lowerBound() & shiftMask;
+            long defaultMask = CodeUtil.mask(bits);
+            // shifting back and forth performs sign extension
+            long downMask = (value.downMask() << extraBits) >> (shiftCount + extraBits) & defaultMask;
+            long upMask = (value.upMask() << extraBits) >> (shiftCount + extraBits) & defaultMask;
+            return new IntegerStamp(bits, value.lowerBound() >> shiftCount, value.upperBound() >> shiftCount, downMask, upMask);
+        }
+        long mask = IntegerStamp.upMaskFor(bits, value.lowerBound(), value.upperBound());
+        return IntegerStamp.stampForMask(bits, 0, mask);
+    }
+
+    public static Stamp unsignedRightShift(Stamp value, Stamp shift) {
+        if (value instanceof IntegerStamp && shift instanceof IntegerStamp) {
+            return unsignedRightShift((IntegerStamp) value, (IntegerStamp) shift);
+        }
+        return value.illegal();
+    }
+
+    public static Stamp unsignedRightShift(IntegerStamp value, IntegerStamp shift) {
+        int bits = value.getBits();
+        if (shift.lowerBound() == shift.upperBound()) {
+            long shiftMask = bits > 32 ? 0x3FL : 0x1FL;
+            long shiftCount = shift.lowerBound() & shiftMask;
+            long downMask = value.downMask() >>> shiftCount;
+            long upMask = value.upMask() >>> shiftCount;
+            if (value.lowerBound() < 0) {
+                return new IntegerStamp(bits, downMask, upMask, downMask, upMask);
+            } else {
+                return new IntegerStamp(bits, value.lowerBound() >>> shiftCount, value.upperBound() >>> shiftCount, downMask, upMask);
+            }
+        }
+        long mask = IntegerStamp.upMaskFor(bits, value.lowerBound(), value.upperBound());
+        return IntegerStamp.stampForMask(bits, 0, mask);
+    }
+
+    public static Stamp leftShift(Stamp value, Stamp shift) {
+        if (value instanceof IntegerStamp && shift instanceof IntegerStamp) {
+            return leftShift((IntegerStamp) value, (IntegerStamp) shift);
+        }
+        return value.illegal();
+    }
+
+    public static Stamp leftShift(IntegerStamp value, IntegerStamp shift) {
+        int bits = value.getBits();
+        long defaultMask = CodeUtil.mask(bits);
+        if (value.upMask() == 0) {
+            return value;
+        }
+        int shiftBits = bits > 32 ? 6 : 5;
+        long shiftMask = bits > 32 ? 0x3FL : 0x1FL;
+        if (shift.lowerBound() == shift.upperBound()) {
+            int shiftAmount = (int) (shift.lowerBound() & shiftMask);
+            if (shiftAmount == 0) {
+                return value;
+            }
+            // the mask of bits that will be lost or shifted into the sign bit
+            long removedBits = -1L << (bits - shiftAmount - 1);
+            if ((value.lowerBound() & removedBits) == 0 && (value.upperBound() & removedBits) == 0) {
+                // use a better stamp if neither lower nor upper bound can lose bits
+                return new IntegerStamp(bits, value.lowerBound() << shiftAmount, value.upperBound() << shiftAmount, value.downMask() << shiftAmount, value.upMask() << shiftAmount);
+            }
+        }
+        if ((shift.lowerBound() >>> shiftBits) == (shift.upperBound() >>> shiftBits)) {
+            long downMask = defaultMask;
+            long upMask = 0;
+            for (long i = shift.lowerBound(); i <= shift.upperBound(); i++) {
+                if (shift.contains(i)) {
+                    downMask &= value.downMask() << (i & shiftMask);
+                    upMask |= value.upMask() << (i & shiftMask);
+                }
+            }
+            Stamp result = IntegerStamp.stampForMask(bits, downMask, upMask & defaultMask);
+            return result;
+        }
+        return value.unrestricted();
     }
 
     /**
@@ -84,53 +174,53 @@ public class StampTool {
     }
 
     /**
-     * Checks whether this {@link ValueNode} represents a {@linkplain Stamp#isLegal() legal} pointer
+     * Checks whether this {@link ValueNode} represents a {@linkplain Stamp#isLegal() legal} Object
      * value which is known to be always null.
      *
      * @param node the node to check
      * @return true if this node represents a legal object value which is known to be always null
      */
-    public static boolean isPointerAlwaysNull(ValueNode node) {
-        return isPointerAlwaysNull(node.stamp());
+    public static boolean isObjectAlwaysNull(ValueNode node) {
+        return isObjectAlwaysNull(node.stamp());
     }
 
     /**
-     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#isLegal() legal} pointer
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#isLegal() legal} Object
      * stamp whose values are known to be always null.
      *
      * @param stamp the stamp to check
      * @return true if this stamp represents a legal object stamp whose values are known to be
      *         always null
      */
-    public static boolean isPointerAlwaysNull(Stamp stamp) {
-        if (stamp instanceof AbstractPointerStamp && stamp.isLegal()) {
-            return ((AbstractPointerStamp) stamp).alwaysNull();
+    public static boolean isObjectAlwaysNull(Stamp stamp) {
+        if (stamp instanceof AbstractObjectStamp && stamp.isLegal()) {
+            return ((AbstractObjectStamp) stamp).alwaysNull();
         }
         return false;
     }
 
     /**
-     * Checks whether this {@link ValueNode} represents a {@linkplain Stamp#isLegal() legal} pointer
+     * Checks whether this {@link ValueNode} represents a {@linkplain Stamp#isLegal() legal} Object
      * value which is known to never be null.
      *
      * @param node the node to check
      * @return true if this node represents a legal object value which is known to never be null
      */
-    public static boolean isPointerNonNull(ValueNode node) {
-        return isPointerNonNull(node.stamp());
+    public static boolean isObjectNonNull(ValueNode node) {
+        return isObjectNonNull(node.stamp());
     }
 
     /**
-     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#isLegal() legal} pointer
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#isLegal() legal} Object
      * stamp whose values known to be always null.
      *
      * @param stamp the stamp to check
      * @return true if this stamp represents a legal object stamp whose values are known to be
      *         always null
      */
-    public static boolean isPointerNonNull(Stamp stamp) {
-        if (stamp instanceof AbstractPointerStamp && stamp.isLegal()) {
-            return ((AbstractPointerStamp) stamp).nonNull();
+    public static boolean isObjectNonNull(Stamp stamp) {
+        if (stamp instanceof AbstractObjectStamp && stamp.isLegal()) {
+            return ((AbstractObjectStamp) stamp).nonNull();
         }
         return false;
     }

@@ -275,7 +275,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
 
     protected AMD64Arithmetic getOp(ValueNode operation, Access access) {
         Kind memoryKind = getMemoryKind(access);
-        if (operation.getClass() == AddNode.class) {
+        if (operation.getNodeClass().is(AddNode.class)) {
             switch (memoryKind) {
                 case Int:
                     return IADD;
@@ -286,28 +286,28 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
                 case Double:
                     return DADD;
             }
-        } else if (operation.getClass() == AndNode.class) {
+        } else if (operation.getNodeClass().is(AndNode.class)) {
             switch (memoryKind) {
                 case Int:
                     return IAND;
                 case Long:
                     return LAND;
             }
-        } else if (operation.getClass() == OrNode.class) {
+        } else if (operation.getNodeClass().is(OrNode.class)) {
             switch (memoryKind) {
                 case Int:
                     return IOR;
                 case Long:
                     return LOR;
             }
-        } else if (operation.getClass() == XorNode.class) {
+        } else if (operation.getNodeClass().is(XorNode.class)) {
             switch (memoryKind) {
                 case Int:
                     return IXOR;
                 case Long:
                     return LXOR;
             }
-        } else if (operation.getClass() == SubNode.class) {
+        } else if (operation.getNodeClass().is(SubNode.class)) {
             switch (memoryKind) {
                 case Int:
                     return ISUB;
@@ -318,7 +318,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
                 case Double:
                     return DSUB;
             }
-        } else if (operation.getClass() == MulNode.class) {
+        } else if (operation.getNodeClass().is(MulNode.class)) {
             switch (memoryKind) {
                 case Int:
                     return IMUL;
@@ -453,8 +453,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
             sig[i] = node.arguments().get(i).stamp().javaType(gen.getMetaAccess());
         }
 
-        Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMap().getRegisterConfig().getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false),
-                        node.arguments());
+        Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMap().registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false), node.arguments());
         append(new AMD64BreakpointOp(parameters));
     }
 

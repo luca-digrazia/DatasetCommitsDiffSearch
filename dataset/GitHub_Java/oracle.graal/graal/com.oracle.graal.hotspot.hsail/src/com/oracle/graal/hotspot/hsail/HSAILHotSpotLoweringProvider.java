@@ -45,21 +45,21 @@ public class HSAILHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
         abstract void lower(Node n, LoweringTool tool);
     }
 
-    final LoweringStrategy passThruStrategy = new LoweringStrategy() {
+    LoweringStrategy PassThruStrategy = new LoweringStrategy() {
         @Override
         void lower(Node n, LoweringTool tool) {
             return;
         }
     };
 
-    final LoweringStrategy rejectStrategy = new LoweringStrategy() {
+    LoweringStrategy RejectStrategy = new LoweringStrategy() {
         @Override
         void lower(Node n, LoweringTool tool) {
             throw new GraalInternalError("Node implementing Lowerable not handled in HSAIL Backend: " + n);
         }
     };
 
-    final LoweringStrategy newObjectStrategy = new LoweringStrategy() {
+    LoweringStrategy NewObjectStrategy = new LoweringStrategy() {
         @Override
         void lower(Node n, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) n.graph();
@@ -67,14 +67,14 @@ public class HSAILHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
                 if (n instanceof NewInstanceNode) {
                     hsailNewObjectSnippets.lower((NewInstanceNode) n, tool);
                 } else if (n instanceof NewArrayNode) {
-                    hsailNewObjectSnippets.lower((NewArrayNode) n, runtime, tool);
+                    hsailNewObjectSnippets.lower((NewArrayNode) n, tool);
                 }
             }
         }
     };
 
     // strategy to replace an UnwindNode with a DeoptNode
-    final LoweringStrategy unwindNodeStrategy = new LoweringStrategy() {
+    LoweringStrategy UnwindNodeStrategy = new LoweringStrategy() {
         @Override
         void lower(Node n, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) n.graph();
@@ -106,15 +106,15 @@ public class HSAILHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
     private HashMap<NodeClass, LoweringStrategy> strategyMap = new HashMap<>();
 
     void initStrategyMap() {
-        strategyMap.put(NodeClass.get(IntegerConvertNode.class), passThruStrategy);
-        strategyMap.put(NodeClass.get(FloatConvertNode.class), passThruStrategy);
-        strategyMap.put(NodeClass.get(NewInstanceNode.class), newObjectStrategy);
-        strategyMap.put(NodeClass.get(NewArrayNode.class), newObjectStrategy);
-        strategyMap.put(NodeClass.get(NewMultiArrayNode.class), rejectStrategy);
-        strategyMap.put(NodeClass.get(DynamicNewArrayNode.class), rejectStrategy);
-        strategyMap.put(NodeClass.get(MonitorEnterNode.class), rejectStrategy);
-        strategyMap.put(NodeClass.get(MonitorExitNode.class), rejectStrategy);
-        strategyMap.put(NodeClass.get(UnwindNode.class), unwindNodeStrategy);
+        strategyMap.put(NodeClass.get(IntegerConvertNode.class), PassThruStrategy);
+        strategyMap.put(NodeClass.get(FloatConvertNode.class), PassThruStrategy);
+        strategyMap.put(NodeClass.get(NewInstanceNode.class), NewObjectStrategy);
+        strategyMap.put(NodeClass.get(NewArrayNode.class), NewObjectStrategy);
+        strategyMap.put(NodeClass.get(NewMultiArrayNode.class), RejectStrategy);
+        strategyMap.put(NodeClass.get(DynamicNewArrayNode.class), RejectStrategy);
+        strategyMap.put(NodeClass.get(MonitorEnterNode.class), RejectStrategy);
+        strategyMap.put(NodeClass.get(MonitorExitNode.class), RejectStrategy);
+        strategyMap.put(NodeClass.get(UnwindNode.class), UnwindNodeStrategy);
     }
 
     private LoweringStrategy getStrategy(Node n) {

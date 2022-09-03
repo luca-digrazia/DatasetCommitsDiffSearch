@@ -24,7 +24,8 @@ package com.oracle.graal.replacements.amd64;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.FloatConvertOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -40,15 +41,12 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class AMD64FloatConvertNode extends UnaryArithmeticNode implements ArithmeticLIRLowerable {
 
-    protected final FloatConvert op;
-
-    public static AMD64FloatConvertNode create(FloatConvert op, ValueNode value) {
+    public static AMD64FloatConvertNode create(UnaryOp op, ValueNode value) {
         return USE_GENERATED_NODES ? new AMD64FloatConvertNodeGen(op, value) : new AMD64FloatConvertNode(op, value);
     }
 
-    protected AMD64FloatConvertNode(FloatConvert op, ValueNode value) {
-        super(table -> table.getFloatConvert(op), value);
-        this.op = op;
+    protected AMD64FloatConvertNode(UnaryOp op, ValueNode value) {
+        super(op, value);
     }
 
     @Override
@@ -64,6 +62,6 @@ public class AMD64FloatConvertNode extends UnaryArithmeticNode implements Arithm
     }
 
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitFloatConvert(op, builder.operand(getValue())));
+        builder.setResult(this, gen.emitFloatConvert(((FloatConvertOp) getOp()).getFloatConvert(), builder.operand(getValue())));
     }
 }

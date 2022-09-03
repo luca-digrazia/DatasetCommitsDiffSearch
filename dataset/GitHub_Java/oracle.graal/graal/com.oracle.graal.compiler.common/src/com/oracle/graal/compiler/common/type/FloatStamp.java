@@ -255,9 +255,9 @@ public class FloatStamp extends PrimitiveStamp {
         return null;
     }
 
-    private static final ArithmeticOpTable OPS = new ArithmeticOpTable(
+    private static final ArithmeticOpTable OPS = ArithmeticOpTable.create(
 
-    new UnaryOp.Neg() {
+    new UnaryOp('-') {
 
         @Override
         public Constant foldConstant(Constant value) {
@@ -278,7 +278,7 @@ public class FloatStamp extends PrimitiveStamp {
         }
     },
 
-    new BinaryOp.Add(false, true) {
+    new BinaryOp('+', false, true) {
 
         @Override
         public Constant foldConstant(Constant a, Constant b) {
@@ -312,7 +312,7 @@ public class FloatStamp extends PrimitiveStamp {
         }
     },
 
-    new BinaryOp.Sub(false, false) {
+    new BinaryOp('-', false, false) {
 
         @Override
         public Constant foldConstant(Constant a, Constant b) {
@@ -346,7 +346,7 @@ public class FloatStamp extends PrimitiveStamp {
         }
     },
 
-    new BinaryOp.Mul(false, true) {
+    new BinaryOp('*', false, true) {
 
         @Override
         public Constant foldConstant(Constant a, Constant b) {
@@ -380,7 +380,7 @@ public class FloatStamp extends PrimitiveStamp {
         }
     },
 
-    new BinaryOp.Div(false, false) {
+    new BinaryOp('/', false, false) {
 
         @Override
         public Constant foldConstant(Constant a, Constant b) {
@@ -414,7 +414,7 @@ public class FloatStamp extends PrimitiveStamp {
         }
     },
 
-    new BinaryOp.Rem(false, false) {
+    new BinaryOp('%', false, false) {
 
         @Override
         public Constant foldConstant(Constant a, Constant b) {
@@ -435,10 +435,6 @@ public class FloatStamp extends PrimitiveStamp {
             return stamp1.unrestricted();
         }
     },
-
-    null, null, null, null,
-
-    null, null, null,
 
     new FloatConvertOp(F2I) {
 

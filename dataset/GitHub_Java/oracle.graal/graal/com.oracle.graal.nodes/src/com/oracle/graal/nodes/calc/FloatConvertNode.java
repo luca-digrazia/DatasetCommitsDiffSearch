@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class FloatConvertNode extends UnaryArithmeticNode implements ConvertNode, Lowerable, ArithmeticLIRLowerable {
 
-    protected FloatConvertOp reverseOp;
+    protected final FloatConvertOp reverseOp;
 
     public static FloatConvertNode create(FloatConvert op, ValueNode input) {
         return USE_GENERATED_NODES ? new FloatConvertNodeGen(op, input) : new FloatConvertNode(op, input);
@@ -94,15 +94,6 @@ public class FloatConvertNode extends UnaryArithmeticNode implements ConvertNode
             }
         }
         return this;
-    }
-
-    @Override
-    public boolean inferStamp() {
-        boolean changed = super.inferStamp();
-        if (changed) {
-            reverseOp = ArithmeticOpTable.forStamp(stamp()).getFloatConvertOp(reverseOp);
-        }
-        return changed;
     }
 
     public void lower(LoweringTool tool) {

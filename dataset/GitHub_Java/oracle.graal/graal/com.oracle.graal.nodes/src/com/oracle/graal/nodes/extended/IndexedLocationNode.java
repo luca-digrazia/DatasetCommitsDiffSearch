@@ -70,7 +70,7 @@ public class IndexedLocationNode extends LocationNode implements Canonicalizable
     }
 
     public static IndexedLocationNode create(LocationIdentity identity, Kind kind, long displacement, ValueNode index, int indexScaling) {
-        return new IndexedLocationNode(identity, kind, displacement, index, indexScaling);
+        return USE_GENERATED_NODES ? new IndexedLocationNodeGen(identity, kind, displacement, index, indexScaling) : new IndexedLocationNode(identity, kind, displacement, index, indexScaling);
     }
 
     protected IndexedLocationNode(LocationIdentity identity, Kind kind, long displacement, ValueNode index, int indexScaling) {
@@ -108,7 +108,7 @@ public class IndexedLocationNode extends LocationNode implements Canonicalizable
         assert indexScaling > 0 && CodeUtil.isPowerOf2(indexScaling);
         int scale = CodeUtil.log2(indexScaling);
         return (IntegerStamp) IntegerStamp.OPS.getAdd().foldStamp(StampFactory.forInteger(64, displacement, displacement),
-                        IntegerStamp.OPS.getSignExtend().foldStamp(32, 64, StampTool.leftShift(index.stamp(), StampFactory.forInteger(64, scale, scale))));
+                        IntegerStamp.OPS.getSignExtend().foldStamp(64, StampTool.leftShift(index.stamp(), StampFactory.forInteger(64, scale, scale))));
     }
 
     @Override
