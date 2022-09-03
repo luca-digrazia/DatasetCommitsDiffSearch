@@ -226,7 +226,6 @@ import static com.oracle.graal.bytecode.Bytecodes.SWAP;
 import static com.oracle.graal.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.graal.bytecode.Bytecodes.nameOf;
 import static com.oracle.graal.compiler.common.GraalOptions.DeoptALot;
-import static com.oracle.graal.compiler.common.GraalOptions.NewInfopoints;
 import static com.oracle.graal.compiler.common.GraalOptions.PrintProfilingInformation;
 import static com.oracle.graal.compiler.common.GraalOptions.ResolveClassBeforeStaticInvoke;
 import static com.oracle.graal.compiler.common.GraalOptions.StressInvokeWithExceptionNode;
@@ -303,7 +302,6 @@ import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.debug.TTY;
@@ -741,7 +739,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
             finishPrepare(lastInstr);
 
-            if (GraalOptions.OldInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
+            if (graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
                 genInfoPointNode(InfopointReason.METHOD_START, null);
             }
 
@@ -1386,7 +1384,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected void genThrow() {
-        if (GraalOptions.OldInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
+        if (graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
             genInfoPointNode(InfopointReason.LINE_NUMBER, null);
         }
 
@@ -1978,7 +1976,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 append(new RegisterFinalizerNode(receiver));
             }
         }
-        if (GraalOptions.OldInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
+        if (graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
             genInfoPointNode(InfopointReason.METHOD_END, x);
         }
 
@@ -2584,7 +2582,6 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    @SuppressWarnings("try")
     protected void iterateBytecodesForBlock(BciBlock block) {
         if (block.isLoopHeader && !explodeLoops) {
             // Create the loop header block, which later will merge the backward branches of
@@ -2635,7 +2632,7 @@ public class BytecodeParser implements GraphBuilderContext {
         }
 
         while (bci < endBCI) {
-            if (GraalOptions.OldInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
+            if (graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
                 currentLineNumber = lnt != null ? lnt.getLineNumber(bci) : (graphBuilderConfig.insertFullDebugInfo() ? -1 : bci);
                 if (currentLineNumber != previousLineNumber) {
                     genInfoPointNode(InfopointReason.LINE_NUMBER, null);
@@ -2656,7 +2653,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 x.setStateAfter(createFrameState(bci, x));
             }
 
-            try (DebugCloseable context = openNodeContext()) {
+            try {
                 processBytecode(bci, opcode);
             } catch (BailoutException e) {
                 // Don't wrap bailouts as parser errors
@@ -2685,13 +2682,6 @@ public class BytecodeParser implements GraphBuilderContext {
                 }
             }
         }
-    }
-
-    private DebugCloseable openNodeContext() {
-        if (NewInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
-            return graph.withNodeContext(createBytecodePosition());
-        }
-        return null;
     }
 
     /* Also a hook for subclasses. */
@@ -2909,15 +2899,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (value) {
             nextBlock = trueBlock;
         }
-        int startBci = nextBlock.startBci;
-        int targetAtStart = stream.readUByte(startBci);
-        if (targetAtStart == Bytecodes.GOTO) {
-            // This is an empty block. Skip it.
-            appendGoto(nextBlock.successors.get(0));
-            assert nextBlock.numNormalSuccessors() == 1;
-        } else {
-            appendGoto(nextBlock);
-        }
+        appendGoto(nextBlock);
     }
 
     private int checkPositiveIntConstantPushed(BciBlock block) {
