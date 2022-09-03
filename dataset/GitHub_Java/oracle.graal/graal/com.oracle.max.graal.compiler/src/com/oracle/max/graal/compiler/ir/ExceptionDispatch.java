@@ -31,7 +31,7 @@ import com.sun.cri.ri.*;
  * This instruction takes an exception object and has two successors:
  * The catchSuccessor is called whenever the exception matches the given type, otherwise otherSuccessor is called.
  */
-public final class ExceptionDispatch extends ControlSplit {
+public final class ExceptionDispatch extends BlockEnd {
 
     private static final int INPUT_COUNT = 1;
     private static final int INPUT_EXCEPTION = 0;
@@ -115,9 +115,9 @@ public final class ExceptionDispatch extends ControlSplit {
         print(' ').
         print(catchType().name()).
         print(" then ").
-        print(catchSuccessor().toString()).
+        print(blockSuccessors().get(1).toString()).
         print(" else B").
-        print(otherSuccessor().toString());
+        print(blockSuccessors().get(0).toString());
     }
 
     @Override

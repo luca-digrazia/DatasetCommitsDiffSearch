@@ -193,7 +193,11 @@ public final class GraphBuilderPhase extends Phase {
         for (Node n : graph.getNodes()) {
             if (n instanceof Placeholder) {
                 Placeholder p = (Placeholder) n;
-                p.replace(p.next());
+                assert p.predecessors().size() == 1;
+                Node pred = p.predecessors().get(0);
+                int predIndex = p.predecessorsIndex().get(0);
+                pred.successors().setAndClear(predIndex, p, 0);
+                p.delete();
             }
         }
 
@@ -1209,8 +1213,7 @@ public final class GraphBuilderPhase extends Phase {
                 } else {
                     end.delete();
                     Merge merge = new Merge(graph);
-                    merge.setNext(begin.next());
-                    begin.setNext(null);
+                    merge.successors().setAndClear(merge.nextIndex(), begin, begin.nextIndex());
                     begin.replace(merge);
                 }
             }

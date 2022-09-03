@@ -162,7 +162,6 @@ public enum Condition {
      */
     public Boolean foldCondition(CiConstant lt, CiConstant rt, RiRuntime runtime) {
         switch (lt.kind) {
-            case Boolean:
             case Int: {
                 int x = lt.asInt();
                 int y = rt.asInt();

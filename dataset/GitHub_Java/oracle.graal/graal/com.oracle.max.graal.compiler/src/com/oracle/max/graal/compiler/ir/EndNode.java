@@ -36,7 +36,7 @@ public final class EndNode extends FixedNode {
 
     @Override
     public void accept(ValueVisitor v) {
-        v.visitEndNode(this);
+        // Do nothing. Maybe moveToPhi?
     }
 
     @Override

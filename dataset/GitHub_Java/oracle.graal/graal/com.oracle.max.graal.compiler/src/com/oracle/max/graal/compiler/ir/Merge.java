@@ -73,11 +73,6 @@ public class Merge extends StateSplit {
         v.visitMerge(this);
     }
 
-    public int endIndex(EndNode end) {
-        assert inputs().variablePart().contains(end);
-        return inputs().variablePart().indexOf(end);
-    }
-
     public void addEnd(EndNode end) {
         inputs().variablePart().add(end);
     }
