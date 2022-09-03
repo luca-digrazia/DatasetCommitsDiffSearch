@@ -55,7 +55,7 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstructio
 import com.oracle.truffle.llvm.parser.model.visitors.ValueInstructionVisitor;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObjectBuilder;
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMFrameValueAccess;
@@ -121,7 +121,7 @@ final class LLVMRuntimeDebugInformation {
         private void visitSimpleConstant(SymbolImpl constant) {
             final LLVMExpressionNode node = symbols.resolve(constant);
             assert node != null;
-            final LLVMDebugObjectBuilder value = factory.createDebugDynamicValue(node);
+            final LLVMDebugValue value = factory.createDebugStaticValue(node);
             context.getSourceContext().registerStatic(symbol, value);
             variable.addStaticValue();
         }
@@ -246,7 +246,7 @@ final class LLVMRuntimeDebugInformation {
             }
         }
 
-        return factory.createDebugValueInit(targetSlot, offsets, lengths);
+        return factory.createDebugInit(targetSlot, offsets, lengths);
     }
 
     private static final int[] CLEAR_NONE = new int[0];
@@ -321,7 +321,7 @@ final class LLVMRuntimeDebugInformation {
 
         final FrameSlot targetSlot = frame.findOrAddFrameSlot(variable.getSymbol(), MetaType.DEBUG, FrameSlotKind.Object);
         final LLVMExpressionNode containerRead = factory.createFrameRead(MetaType.DEBUG, targetSlot);
-        return factory.createDebugValueUpdate(mustDereference, valueRead, targetSlot, containerRead, partIndex, clearParts);
+        return factory.createDebugWrite(mustDereference, valueRead, targetSlot, containerRead, partIndex, clearParts);
     }
 
 }

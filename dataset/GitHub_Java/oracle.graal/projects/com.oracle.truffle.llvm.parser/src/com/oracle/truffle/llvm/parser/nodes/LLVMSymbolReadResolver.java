@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -35,6 +35,7 @@ import java.util.List;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.llvm.parser.LLVMParser;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.NodeFactory;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
@@ -69,7 +70,6 @@ import com.oracle.truffle.llvm.parser.model.visitors.ValueInstructionVisitor;
 import com.oracle.truffle.llvm.parser.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -390,16 +390,8 @@ public final class LLVMSymbolReadResolver {
 
         @Override
         public void visit(GlobalAlias alias) {
-            LLVMSymbol symbol = runtime.lookupSymbol(alias.getName(), alias.isExported());
-            if (symbol.isFunction()) {
-                LLVMFunctionDescriptor value = symbol.asFunction();
-                resolvedNode = nodeFactory.createLiteral(value, alias.getType());
-            } else if (symbol.isGlobalVariable()) {
-                LLVMGlobal value = symbol.asGlobalVariable();
-                resolvedNode = nodeFactory.createLiteral(value, alias.getType());
-            } else {
-                throw new IllegalStateException("Unexpected symbol: " + symbol.getClass());
-            }
+            SymbolImpl value = LLVMParser.getAliasValue(alias);
+            resolvedNode = resolve(value);
         }
 
         @Override

@@ -52,7 +52,6 @@ import com.oracle.truffle.llvm.parser.NodeFactory;
 import com.oracle.truffle.llvm.runtime.ContextExtension;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObject;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
@@ -119,25 +118,13 @@ public final class Sulong extends LLVMLanguage {
     @SuppressWarnings("deprecation") // for compatibility, will be removed in a future release
     protected Object findExportedSymbol(LLVMContext context, String globalName, boolean onlyExplicit) {
         String atname = globalName.startsWith("@") ? globalName : "@" + globalName; // for interop
-        LLVMSymbol result = null;
-        if (context.getGlobalScope().contains(atname)) {
-            result = context.getGlobalScope().get(atname);
-        } else if (context.getGlobalScope().contains(globalName)) {
-            result = context.getGlobalScope().get(globalName);
+        if (context.getGlobalScope().functions().contains(atname)) {
+            return context.getGlobalScope().functions().get(atname);
         }
-        return dealias(result);
-    }
-
-    private static Object dealias(LLVMSymbol symbol) {
-        if (symbol == null) {
-            return null;
-        } else if (symbol.isFunction()) {
-            return symbol.asFunction();
-        } else if (symbol.isGlobalVariable()) {
-            return symbol.asGlobalVariable();
-        } else {
-            throw new IllegalStateException("Unknown symbol: " + symbol.getClass());
+        if (context.getGlobalScope().globals().contains(globalName)) {
+            return context.getGlobalScope().globals().get(globalName);
         }
+        return null;
     }
 
     @Override
@@ -188,7 +175,10 @@ public final class Sulong extends LLVMLanguage {
     @Override
     protected Object findMetaObject(LLVMContext context, Object value) {
         if (value instanceof LLVMDebugObject) {
-            return ((LLVMDebugObject) value).getType();
+            final LLVMSourceType source = ((LLVMDebugObject) value).getType();
+            if (source != null) {
+                return source.getName();
+            }
         }
 
         return super.findMetaObject(context, value);

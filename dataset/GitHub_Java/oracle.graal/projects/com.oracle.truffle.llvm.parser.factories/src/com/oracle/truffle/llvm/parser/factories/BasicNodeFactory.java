@@ -118,7 +118,7 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.bit.CountTrailingZeroesNode
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.bit.CountTrailingZeroesNodeFactory.CountTrailingZeroesI8NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug.LLVMDebugBuilder;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug.LLVMDebugInitNodeFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug.LLVMDebugSimpleObjectBuilder;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug.LLVMDebugSimpleValue;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug.LLVMDebugWriteNodeFactory;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug.LLVMFrameValueAccessImpl;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug.LLVMToDebugValueNodeGen;
@@ -349,8 +349,8 @@ import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObjectBuilder;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourcePointerType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMFrameValueAccess;
@@ -1670,7 +1670,6 @@ public class BasicNodeFactory implements NodeFactory {
                 return LLVMI64ObjectSizeNodeGen.create(args[1], args[2], sourceSection);
             case "@llvm.copysign.f32":
             case "@llvm.copysign.f64":
-            case "@llvm.copysign.f80":
                 return LLVMCMathsIntrinsicsFactory.LLVMCopySignNodeGen.create(args[1], args[2], sourceSection);
 
             case "@llvm.uadd.with.overflow.i8":
@@ -1824,7 +1823,7 @@ public class BasicNodeFactory implements NodeFactory {
         return LLVMVarArgCompoundAddressNodeGen.create(parameterNode, length, alignment);
     }
 
-    private static LLVMDebugBuilder getDebugDynamicValueBuilder(boolean isDeclaration) {
+    private static LLVMDebugBuilder getDebugBuilder(boolean isDeclaration) {
         if (isDeclaration) {
             return LLVMDebugBuilder.NATIVE_DECLARATION;
         } else {
@@ -1833,8 +1832,8 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createDebugValueUpdate(boolean isDeclaration, LLVMExpressionNode valueRead, FrameSlot targetSlot, LLVMExpressionNode containerRead, int partIndex, int[] clearParts) {
-        final LLVMDebugBuilder builder = getDebugDynamicValueBuilder(isDeclaration);
+    public LLVMExpressionNode createDebugWrite(boolean isDeclaration, LLVMExpressionNode valueRead, FrameSlot targetSlot, LLVMExpressionNode containerRead, int partIndex, int[] clearParts) {
+        final LLVMDebugBuilder builder = getDebugBuilder(isDeclaration);
         if (partIndex < 0 || clearParts == null) {
             return LLVMDebugWriteNodeFactory.SimpleWriteNodeGen.create(builder, targetSlot, valueRead);
         } else {
@@ -1843,14 +1842,7 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public LLVMFrameValueAccess createDebugFrameValue(FrameSlot slot, boolean isDeclaration) {
-        final TruffleLanguage.ContextReference<LLVMContext> contextRef = LLVMLanguage.getLLVMContextReference();
-        final LLVMDebugValue.Builder builder = getDebugDynamicValueBuilder(isDeclaration).createBuilder(contextRef);
-        return new LLVMFrameValueAccessImpl(slot, builder);
-    }
-
-    @Override
-    public LLVMExpressionNode createDebugValueInit(FrameSlot targetSlot, int[] offsets, int[] lengths) {
+    public LLVMExpressionNode createDebugInit(FrameSlot targetSlot, int[] offsets, int[] lengths) {
         if (offsets == null || lengths == null) {
             return null;
         } else {
@@ -1859,24 +1851,12 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public LLVMDebugObjectBuilder createDebugStaticValue(LLVMExpressionNode valueNode) {
-        // TODO (jkreindl) this is correct, globals as containers
-        final LLVMDebugValue.Builder toDebugNode = LLVMToDebugValueNodeGen.LLVMToStaticDebugValueNodeGen.create(LLVMLanguage.getLLVMContextReference());
-        return createDebugValue(valueNode, toDebugNode);
-    }
-
-    @Override
-    public LLVMDebugObjectBuilder createDebugDynamicValue(LLVMExpressionNode valueNode) {
-        // TODO (jkreindl) always treat globals as pointer to memory
-        final LLVMDebugValue.Builder toDebugNode = LLVMToDebugValueNodeGen.LLVMToDynamicDebugValueNodeGen.create(LLVMLanguage.getLLVMContextReference());
-        return createDebugValue(valueNode, toDebugNode);
-    }
-
-    private static LLVMDebugObjectBuilder createDebugValue(LLVMExpressionNode valueNode, LLVMDebugValue.Builder toDebugNode) {
+    public LLVMDebugValue createDebugStaticValue(LLVMExpressionNode valueNode) {
         if (valueNode == null) {
-            return LLVMDebugObjectBuilder.UNAVAILABLE;
+            return LLVMDebugValue.UNAVAILABLE;
         }
 
+        final LLVMDebugValueProvider.Builder toDebugNode = LLVMToDebugValueNodeGen.create(LLVMLanguage.getLLVMContextReference());
         Object value;
         try {
             value = valueNode.executeGeneric(null);
@@ -1886,10 +1866,17 @@ public class BasicNodeFactory implements NodeFactory {
         }
 
         if (value != null) {
-            return LLVMDebugSimpleObjectBuilder.create(toDebugNode, value);
+            return LLVMDebugSimpleValue.create(toDebugNode, value);
         } else {
-            return LLVMDebugObjectBuilder.UNAVAILABLE;
+            return LLVMDebugValue.UNAVAILABLE;
         }
+    }
+
+    @Override
+    public LLVMFrameValueAccess createDebugFrameValue(FrameSlot slot, boolean isDeclaration) {
+        final TruffleLanguage.ContextReference<LLVMContext> contextRef = LLVMLanguage.getLLVMContextReference();
+        final LLVMDebugValueProvider.Builder builder = getDebugBuilder(isDeclaration).createBuilder(contextRef);
+        return new LLVMFrameValueAccessImpl(slot, builder);
     }
 
     @Override
