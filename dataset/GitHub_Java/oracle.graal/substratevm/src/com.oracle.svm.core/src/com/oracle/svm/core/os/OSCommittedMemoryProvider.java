@@ -55,6 +55,7 @@ class OSCommittedMemoryProviderFeature implements Feature {
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
         if (!ImageSingletons.contains(CommittedMemoryProvider.class)) {
+            ImageSingletons.add(ImageHeapProvider.class, new CopyingImageHeapProvider());
             ImageSingletons.add(CommittedMemoryProvider.class, new OSCommittedMemoryProvider());
         }
     }
