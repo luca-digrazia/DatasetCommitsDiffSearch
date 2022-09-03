@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,8 +39,6 @@ import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 
-@Deprecated
-@SuppressWarnings("deprecation")
 @TruffleLanguage.Registration(name = "instrumentationTestLanguage", version = "0", mimeType = "text/x-instTest")
 public final class InstrumentationTestingLanguage extends TruffleLanguage<Object> {
 
