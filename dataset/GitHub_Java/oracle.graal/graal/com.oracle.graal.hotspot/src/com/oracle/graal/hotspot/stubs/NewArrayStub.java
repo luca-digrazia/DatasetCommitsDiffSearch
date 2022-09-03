@@ -53,7 +53,7 @@ import com.oracle.graal.word.*;
 public class NewArrayStub extends SnippetStub {
 
     public NewArrayStub(HotSpotProviders providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
-        super("newArray", providers, target, linkage);
+        super(providers, target, linkage);
     }
 
     @Override
@@ -83,7 +83,7 @@ public class NewArrayStub extends SnippetStub {
      */
     @Snippet
     private static Object newArray(Word hub, int length, @ConstantParameter Word intArrayHub, @ConstantParameter Register threadRegister) {
-        int layoutHelper = hub.readInt(klassLayoutHelperOffset(), KLASS_LAYOUT_HELPER_LOCATION);
+        int layoutHelper = hub.readInt(klassLayoutHelperOffset(), LocationIdentity.FINAL_LOCATION);
         int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift()) & layoutHelperLog2ElementSizeMask();
         int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift()) & layoutHelperHeaderSizeMask();
         int elementKind = (layoutHelper >> layoutHelperElementTypeShift()) & layoutHelperElementTypeMask();
@@ -115,7 +115,7 @@ public class NewArrayStub extends SnippetStub {
         return verifyObject(getAndClearObjectResult(thread));
     }
 
-    public static final ForeignCallDescriptor NEW_ARRAY_C = newDescriptor(NewArrayStub.class, "newArrayC", void.class, Word.class, Word.class, int.class);
+    public static final ForeignCallDescriptor NEW_ARRAY_C = descriptorFor(NewArrayStub.class, "newArrayC");
 
     @NodeIntrinsic(StubForeignCallNode.class)
     public static native void newArrayC(@ConstantNodeParameter ForeignCallDescriptor newArrayC, Word thread, Word hub, int length);
