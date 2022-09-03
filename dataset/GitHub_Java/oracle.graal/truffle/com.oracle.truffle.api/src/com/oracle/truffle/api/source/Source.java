@@ -543,7 +543,6 @@ public abstract class Source {
      * @return newly created object representing the specified region
      */
     public final SourceSection createSection(String identifier, int startLine, int startColumn, int charIndex, int length) {
-        checkRange(charIndex, length);
         return new SourceSection(null, this, identifier, startLine, startColumn, charIndex, length);
     }
 
@@ -729,7 +728,7 @@ public abstract class Source {
 
         @Override
         public String getPath() {
-            return description;
+            return null;
         }
 
         @Override
