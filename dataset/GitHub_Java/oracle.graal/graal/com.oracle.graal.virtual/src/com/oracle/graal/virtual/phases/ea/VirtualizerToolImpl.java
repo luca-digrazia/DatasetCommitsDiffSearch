@@ -33,6 +33,8 @@ import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
+import com.oracle.graal.nodes.spi.Virtualizable.State;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 
@@ -76,39 +78,42 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
     }
 
     @Override
-    public ValueNode getAlias(ValueNode value) {
-        return closure.getAliasAndResolve(state, value);
-    }
-
-    public ValueNode getEntry(VirtualObjectNode virtualObject, int index) {
-        return state.getObjectState(virtualObject).getEntry(index);
+    public State getObjectState(ValueNode value) {
+        return closure.getObjectState(state, value);
     }
 
     @Override
-    public void setVirtualEntry(VirtualObjectNode virtual, int index, ValueNode value, boolean unsafe) {
-        ObjectState obj = state.getObjectState(virtual);
-        assert obj.isVirtual() : "not virtual: " + obj;
+    public void setVirtualEntry(State objectState, int index, ValueNode value, boolean unsafe) {
+        ObjectState obj = (ObjectState) objectState;
+        assert obj != null && obj.isVirtual() : "not virtual: " + obj;
         ValueNode newValue;
         if (value == null) {
             newValue = null;
         } else {
-            newValue = closure.getAliasAndResolve(state, value);
-            assert unsafe || obj.getEntry(index) == null || obj.getEntry(index).getKind() == newValue.getKind() || (isObjectEntry(obj.getEntry(index)) && isObjectEntry(newValue));
+            ObjectState valueState = closure.getObjectState(state, value);
+            if (valueState == null) {
+                newValue = getReplacedValue(value);
+                assert unsafe || obj.getEntry(index) == null || obj.getEntry(index).getKind() == newValue.getKind() || (isObjectEntry(obj.getEntry(index)) && isObjectEntry(newValue));
+            } else {
+                if (valueState.getState() != EscapeState.Virtual) {
+                    newValue = valueState.getMaterializedValue();
+                    assert newValue.getKind() == Kind.Object;
+                } else {
+                    newValue = valueState.getVirtualObject();
+                }
+                assert obj.getEntry(index) == null || isObjectEntry(obj.getEntry(index));
+            }
         }
-        state.setEntry(virtual.getObjectId(), index, newValue);
-    }
-
-    public void setEnsureVirtualized(VirtualObjectNode virtualObject, boolean ensureVirtualized) {
-        int id = virtualObject.getObjectId();
-        state.setEnsureVirtualized(id, ensureVirtualized);
-    }
-
-    public boolean getEnsureVirtualized(VirtualObjectNode virtualObject) {
-        return state.getObjectState(virtualObject).getEnsureVirtualized();
+        obj.setEntry(index, newValue);
     }
 
     private static boolean isObjectEntry(ValueNode value) {
         return value.getKind() == Kind.Object || value instanceof VirtualObjectNode;
+    }
+
+    @Override
+    public ValueNode getReplacedValue(ValueNode original) {
+        return closure.getScalarAlias(original);
     }
 
     @Override
@@ -152,16 +157,16 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
             effects.addFloatingNode(virtualObject, "newVirtualObject");
         }
         for (int i = 0; i < entryState.length; i++) {
-            ValueNode entry = entryState[i];
-            entryState[i] = entry instanceof VirtualObjectNode ? entry : closure.getAliasAndResolve(state, entry);
+            if (!(entryState[i] instanceof VirtualObjectNode)) {
+                ObjectState v = closure.getObjectState(state, entryState[i]);
+                if (v != null) {
+                    entryState[i] = v.isVirtual() ? v.getVirtualObject() : v.getMaterializedValue();
+                } else {
+                    entryState[i] = closure.getScalarAlias(entryState[i]);
+                }
+            }
         }
-        int id = virtualObject.getObjectId();
-        if (id == -1) {
-            id = closure.virtualObjects.size();
-            closure.virtualObjects.add(virtualObject);
-            virtualObject.setObjectId(id);
-        }
-        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized));
+        state.addObject(virtualObject, new ObjectState(virtualObject, entryState, EscapeState.Virtual, locks, ensureVirtualized));
         closure.addAndMarkAlias(virtualObject, virtualObject);
         PartialEscapeClosure.METRIC_ALLOCATION_REMOVED.increment();
     }
@@ -173,21 +178,16 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
 
     @Override
     public void replaceWith(ValueNode node) {
-        if (node instanceof VirtualObjectNode) {
-            replaceWithVirtual((VirtualObjectNode) node);
-        } else {
+        State resultState = getObjectState(node);
+        if (resultState == null) {
             replaceWithValue(node);
+        } else {
+            if (resultState.getState() == EscapeState.Virtual) {
+                replaceWithVirtual(resultState.getVirtualObject());
+            } else {
+                replaceWithValue(resultState.getMaterializedValue());
+            }
         }
-    }
-
-    public void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId) {
-        int id = virtualObject.getObjectId();
-        state.addLock(id, monitorId);
-    }
-
-    public MonitorIdNode removeLock(VirtualObjectNode virtualObject) {
-        int id = virtualObject.getObjectId();
-        return state.removeLock(id);
     }
 
     public MetaAccessProvider getMetaAccess() {

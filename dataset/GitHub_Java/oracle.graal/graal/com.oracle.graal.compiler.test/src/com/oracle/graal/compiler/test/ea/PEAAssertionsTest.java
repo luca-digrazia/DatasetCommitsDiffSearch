@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
-import jdk.vm.ci.code.SourceStackTrace;
+import jdk.internal.jvmci.code.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.api.directives.GraalDirectives;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.api.directives.*;
+import com.oracle.graal.compiler.test.*;
 
 public class PEAAssertionsTest extends GraalCompilerTest {
 
@@ -123,7 +123,6 @@ public class PEAAssertionsTest extends GraalCompilerTest {
         if (b) {
             GraalDirectives.ensureVirtualized(object);
         }
-        GraalDirectives.controlFlowAnchor();
         field = object;
     }
 
@@ -139,7 +138,6 @@ public class PEAAssertionsTest extends GraalCompilerTest {
         } else {
             GraalDirectives.ensureVirtualized(object);
         }
-        GraalDirectives.controlFlowAnchor();
         field = object; // assert here
     }
 
@@ -156,7 +154,6 @@ public class PEAAssertionsTest extends GraalCompilerTest {
         } else {
             field = 2;
         }
-        GraalDirectives.controlFlowAnchor();
         field = object; // assert here
     }
 

@@ -22,19 +22,14 @@
  */
 package com.oracle.graal.truffle.nodes.frame;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * Intrinsic node for materializing a Truffle frame.
  */
-@NodeInfo(nameTemplate = "MaterializeFrame{p#frame/s}", cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo(nameTemplate = "MaterializeFrame{p#frame/s}")
 public final class MaterializeFrameNode extends FixedWithNextNode implements IterableNodeType {
 
     public static final NodeClass<MaterializeFrameNode> TYPE = NodeClass.create(MaterializeFrameNode.class);

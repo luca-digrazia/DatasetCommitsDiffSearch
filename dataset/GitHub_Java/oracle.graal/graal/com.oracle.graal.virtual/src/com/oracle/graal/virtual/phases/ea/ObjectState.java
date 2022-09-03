@@ -24,10 +24,12 @@ package com.oracle.graal.virtual.phases.ea;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.debug.*;
 
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.virtual.nodes.*;
 
@@ -36,11 +38,14 @@ import com.oracle.graal.virtual.nodes.*;
  * the fields or array elements (called "entries") and the lock count if the object is still
  * virtual. If the object was materialized, it contains the current materialized value.
  */
-public class ObjectState {
+public class ObjectState extends Virtualizable.State {
 
     public static final DebugMetric CREATE_ESCAPED_OBJECT_STATE = Debug.metric("CreateEscapeObjectState");
     public static final DebugMetric GET_ESCAPED_OBJECT_STATE = Debug.metric("GetEscapeObjectState");
 
+    final VirtualObjectNode virtual;
+
+    private EscapeState state;
     private ValueNode[] entries;
     private ValueNode materializedValue;
     private LockState locks;
@@ -48,32 +53,35 @@ public class ObjectState {
 
     private EscapeObjectState cachedState;
 
-    boolean copyOnWrite;
-
-    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized) {
-        this(entries, (LockState) null, ensureVirtualized);
+    public ObjectState(VirtualObjectNode virtual, ValueNode[] entries, EscapeState state, List<MonitorIdNode> locks, boolean ensureVirtualized) {
+        this(virtual, entries, state, (LockState) null, ensureVirtualized);
         for (int i = locks.size() - 1; i >= 0; i--) {
             this.locks = new LockState(locks.get(i), this.locks);
         }
     }
 
-    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
+    public ObjectState(VirtualObjectNode virtual, ValueNode[] entries, EscapeState state, LockState locks, boolean ensureVirtualized) {
+        this.virtual = virtual;
         this.entries = entries;
+        this.state = state;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
     }
 
-    public ObjectState(ValueNode materializedValue, LockState locks, boolean ensureVirtualized) {
-        assert materializedValue != null;
+    public ObjectState(VirtualObjectNode virtual, ValueNode materializedValue, EscapeState state, LockState locks, boolean ensureVirtualized) {
+        this.virtual = virtual;
         this.materializedValue = materializedValue;
+        this.state = state;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
     }
 
     private ObjectState(ObjectState other) {
+        virtual = other.virtual;
         entries = other.entries == null ? null : other.entries.clone();
         materializedValue = other.materializedValue;
         locks = other.locks;
+        state = other.state;
         cachedState = other.cachedState;
         ensureVirtualized = other.ensureVirtualized;
     }
@@ -82,7 +90,7 @@ public class ObjectState {
         return new ObjectState(this);
     }
 
-    public EscapeObjectState createEscapeObjectState(VirtualObjectNode virtual) {
+    public EscapeObjectState createEscapeObjectState() {
         GET_ESCAPED_OBJECT_STATE.increment();
         if (cachedState == null) {
             CREATE_ESCAPED_OBJECT_STATE.increment();
@@ -92,55 +100,68 @@ public class ObjectState {
 
     }
 
-    public boolean isVirtual() {
-        assert materializedValue == null ^ entries == null;
-        return materializedValue == null;
+    @Override
+    public EscapeState getState() {
+        return state;
     }
 
-    /**
-     * Users of this method are not allowed to change the entries of the returned array.
-     */
+    @Override
+    public VirtualObjectNode getVirtualObject() {
+        return virtual;
+    }
+
+    public boolean isVirtual() {
+        return state == EscapeState.Virtual;
+    }
+
     public ValueNode[] getEntries() {
-        assert isVirtual();
+        assert isVirtual() && entries != null;
         return entries;
     }
 
+    @Override
     public ValueNode getEntry(int index) {
         assert isVirtual();
         return entries[index];
     }
 
-    public ValueNode getMaterializedValue() {
-        assert !isVirtual();
-        return materializedValue;
-    }
-
     public void setEntry(int index, ValueNode value) {
         assert isVirtual();
-        cachedState = null;
-        entries[index] = value;
+        if (entries[index] != value) {
+            cachedState = null;
+            entries[index] = value;
+        }
     }
 
-    public void escape(ValueNode materialized) {
-        assert isVirtual();
-        assert materialized != null;
+    public void escape(ValueNode materialized, EscapeState newState) {
+        assert state == EscapeState.Virtual && newState == EscapeState.Materialized;
+        state = newState;
         materializedValue = materialized;
         entries = null;
         cachedState = null;
         assert !isVirtual();
     }
 
-    public void updateMaterializedValue(ValueNode value) {
-        assert !isVirtual();
-        assert value != null;
-        cachedState = null;
-        materializedValue = value;
+    @Override
+    public ValueNode getMaterializedValue() {
+        assert state == EscapeState.Materialized;
+        return materializedValue;
     }
 
+    public void updateMaterializedValue(ValueNode value) {
+        assert !isVirtual();
+        if (value != materializedValue) {
+            cachedState = null;
+            materializedValue = value;
+        }
+    }
+
+    @Override
     public void addLock(MonitorIdNode monitorId) {
         locks = new LockState(monitorId, locks);
     }
 
+    @Override
     public MonitorIdNode removeLock() {
         try {
             return locks.monitorId;
@@ -167,10 +188,12 @@ public class ObjectState {
         return a == null && b == null;
     }
 
+    @Override
     public void setEnsureVirtualized(boolean ensureVirtualized) {
         this.ensureVirtualized = ensureVirtualized;
     }
 
+    @Override
     public boolean getEnsureVirtualized() {
         return ensureVirtualized;
     }
@@ -183,7 +206,7 @@ public class ObjectState {
         }
         if (entries != null) {
             for (int i = 0; i < entries.length; i++) {
-                str.append("entry").append(i).append('=').append(entries[i]).append(' ');
+                str.append(virtual.entryName(i)).append('=').append(entries[i]).append(' ');
             }
         }
         if (materializedValue != null) {
@@ -200,6 +223,8 @@ public class ObjectState {
         result = prime * result + Arrays.hashCode(entries);
         result = prime * result + (locks != null ? locks.monitorId.getLockDepth() : 0);
         result = prime * result + ((materializedValue == null) ? 0 : materializedValue.hashCode());
+        result = prime * result + ((state == null) ? 0 : state.hashCode());
+        result = prime * result + ((virtual == null) ? 0 : virtual.hashCode());
         return result;
     }
 
@@ -225,11 +250,13 @@ public class ObjectState {
         } else if (!materializedValue.equals(other.materializedValue)) {
             return false;
         }
+        if (state != other.state) {
+            return false;
+        }
+        assert virtual != null && other.virtual != null;
+        if (!virtual.equals(other.virtual)) {
+            return false;
+        }
         return true;
-    }
-
-    public ObjectState share() {
-        copyOnWrite = true;
-        return this;
     }
 }

@@ -22,110 +22,74 @@
  */
 package com.oracle.graal.nodes.java;
 
+import java.lang.ref.*;
 import java.util.*;
 
-import com.oracle.max.cri.ri.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
  */
-public final class NewInstanceNode extends FixedWithNextNode implements EscapeAnalyzable, LIRLowerable, Node.IterableNodeType {
+@NodeInfo(nameTemplate = "New {p#instanceClass/s}")
+public class NewInstanceNode extends AbstractNewObjectNode implements VirtualizableAllocation {
 
-    private final RiResolvedType instanceClass;
+    public static final NodeClass<NewInstanceNode> TYPE = NodeClass.create(NewInstanceNode.class);
+    protected final ResolvedJavaType instanceClass;
 
-    /**
-     * Constructs a NewInstanceNode.
-     * @param type the class being allocated
-     */
-    public NewInstanceNode(RiResolvedType type) {
-        super(StampFactory.exactNonNull(type));
+    public NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
+        this(TYPE, type, fillContents, null);
+    }
+
+    public NewInstanceNode(ResolvedJavaType type, boolean fillContents, FrameState stateBefore) {
+        this(TYPE, type, fillContents, stateBefore);
+    }
+
+    protected NewInstanceNode(NodeClass<? extends NewInstanceNode> c, ResolvedJavaType type, boolean fillContents, FrameState stateBefore) {
+        super(c, StampFactory.exactNonNull(type), fillContents, stateBefore);
+        assert !type.isArray() && !type.isInterface() && !type.isPrimitive();
         this.instanceClass = type;
     }
 
     /**
      * Gets the instance class being allocated by this node.
+     *
      * @return the instance class allocated
      */
-    public RiResolvedType instanceClass() {
+    public ResolvedJavaType instanceClass() {
         return instanceClass;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.visitNewInstance(this);
+    public void virtualize(VirtualizerTool tool) {
+        /*
+         * Reference objects can escape into their ReferenceQueue at any safepoint, therefore
+         * they're excluded from escape analysis.
+         */
+        if (!tool.getMetaAccessProvider().lookupJavaType(Reference.class).isAssignableFrom(instanceClass)) {
+            VirtualInstanceNode virtualObject = createVirtualInstanceNode(true);
+            ResolvedJavaField[] fields = virtualObject.getFields();
+            ValueNode[] state = new ValueNode[fields.length];
+            for (int i = 0; i < state.length; i++) {
+                state[i] = defaultFieldValue(fields[i]);
+            }
+            tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList(), false);
+            tool.replaceWithVirtual(virtualObject);
+        }
     }
 
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("instanceClass", instanceClass);
-        return properties;
+    protected VirtualInstanceNode createVirtualInstanceNode(boolean hasIdentity) {
+        return new VirtualInstanceNode(instanceClass(), hasIdentity);
     }
 
-    public EscapeOp getEscapeOp() {
-        return ESCAPE;
+    /* Factored out in a separate method so that subclasses can override it. */
+    protected ConstantNode defaultFieldValue(ResolvedJavaField field) {
+        return ConstantNode.defaultForKind(field.getType().getKind(), graph());
     }
-
-    private static final EscapeOp ESCAPE = new EscapeOp() {
-
-        @Override
-        public boolean canAnalyze(Node node) {
-            return true;
-        }
-
-        private void fillEscapeFields(RiResolvedType type, List<EscapeField> escapeFields) {
-            if (type != null) {
-                fillEscapeFields(type.superType(), escapeFields);
-                RiField[] declaredFields = type.declaredFields();
-                assert declaredFields != null : "the runtime must specify the declared fields of that type";
-                for (RiField field : declaredFields) {
-                    escapeFields.add(new EscapeField(field.name(), field, field.type()));
-                }
-            }
-        }
-
-        @Override
-        public EscapeField[] fields(Node node) {
-            NewInstanceNode x = (NewInstanceNode) node;
-            List<EscapeField> escapeFields = new ArrayList<>();
-            fillEscapeFields(x.instanceClass(), escapeFields);
-            return escapeFields.toArray(new EscapeField[escapeFields.size()]);
-        }
-
-        @Override
-        public void beforeUpdate(Node node, Node usage) {
-            if (usage instanceof RegisterFinalizerNode) {
-                RegisterFinalizerNode x = (RegisterFinalizerNode) usage;
-                ((StructuredGraph) x.graph()).removeFixed(x);
-            } else {
-                super.beforeUpdate(node, usage);
-            }
-        }
-
-        @Override
-        public int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, ValueNode[] fieldState) {
-            if (current instanceof AccessFieldNode) {
-                AccessFieldNode x = (AccessFieldNode) current;
-                if (GraphUtil.unProxify(x.object()) == node) {
-                    int field = fieldIndex.get(x.field());
-                    StructuredGraph graph = (StructuredGraph) x.graph();
-                    if (current instanceof LoadFieldNode) {
-                        assert fieldState[field] != null : field + ", " + x.field();
-                        x.replaceAtUsages(fieldState[field]);
-                        graph.removeFixed(x);
-                    } else if (current instanceof StoreFieldNode) {
-                        fieldState[field] = ((StoreFieldNode) x).value();
-                        graph.removeFixed(x);
-                        return field;
-                    }
-                }
-            }
-            return -1;
-        }
-    };
 }

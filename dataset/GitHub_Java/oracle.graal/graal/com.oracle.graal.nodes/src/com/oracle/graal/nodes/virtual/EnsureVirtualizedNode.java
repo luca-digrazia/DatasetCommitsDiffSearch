@@ -44,15 +44,14 @@ public final class EnsureVirtualizedNode extends FixedWithNextNode implements Vi
     }
 
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(object);
-        if (alias instanceof VirtualObjectNode) {
-            VirtualObjectNode virtual = (VirtualObjectNode) alias;
-            if (virtual instanceof VirtualBoxingNode) {
-                Throwable exception = new VerificationError("ensureVirtual is not valid for boxing objects: %s", virtual.type().getName());
+        State state = tool.getObjectState(object);
+        if (state != null && state.getState() == EscapeState.Virtual) {
+            if (state.getVirtualObject() instanceof VirtualBoxingNode) {
+                Throwable exception = new VerificationError("ensureVirtual is not valid for boxing objects: %s", state.getVirtualObject().type().getName());
                 throw GraphUtil.approxSourceException(this, exception);
             }
             if (!localOnly) {
-                tool.setEnsureVirtualized(virtual, true);
+                state.setEnsureVirtualized(true);
             }
             tool.delete();
         }
