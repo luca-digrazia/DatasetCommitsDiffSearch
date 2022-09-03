@@ -379,6 +379,7 @@ public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhas
                             spillCandidate = i;
                         } else if (isStackSlotValue(fromLocation) && spillCandidate == -1) {
                             // fall back to spill a stack slot in case no other candidate is found
+                            assert mappingFromStack.get(i) == null : String.format("StackSlot %s with spill slot %s", fromLocation, mappingFromStack.get(i));
                             spillCandidate = i;
                         }
                     }
@@ -404,8 +405,7 @@ public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhas
         Value from = mappingFrom.get(spillCandidate);
         try (Indent indent = Debug.logAndIndent("BreakCycle: %s", from)) {
             AllocatableValue spillSlot = null;
-            if (TraceRegisterAllocationPhase.Options.TraceRAreuseStackSlotsForMoveResolutionCycleBreaking.getValue() && !isStackSlotValue(from)) {
-                // don't use the stack slot if from is already the stack slot
+            if (TraceRegisterAllocationPhase.Options.TraceRAreuseStackSlotsForMoveResolutionCycleBreaking.getValue()) {
                 Value fromStack = mappingFromStack.get(spillCandidate);
                 if (fromStack != null) {
                     spillSlot = (AllocatableValue) fromStack;
