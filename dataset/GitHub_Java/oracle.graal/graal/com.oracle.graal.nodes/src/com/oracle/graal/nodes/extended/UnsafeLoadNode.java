@@ -41,11 +41,19 @@ import com.oracle.graal.nodes.spi.*;
 public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtualizable {
     @OptionalInput(InputType.Condition) LogicNode guardingCondition;
 
-    public UnsafeLoadNode(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity) {
+    public static UnsafeLoadNode create(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity) {
+        return new UnsafeLoadNode(object, offset, accessKind, locationIdentity);
+    }
+
+    protected UnsafeLoadNode(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity) {
         this(object, offset, accessKind, locationIdentity, null);
     }
 
-    public UnsafeLoadNode(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity, LogicNode condition) {
+    public static UnsafeLoadNode create(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity, LogicNode condition) {
+        return new UnsafeLoadNode(object, offset, accessKind, locationIdentity, condition);
+    }
+
+    protected UnsafeLoadNode(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity, LogicNode condition) {
         super(StampFactory.forKind(accessKind.getStackKind()), object, offset, accessKind, locationIdentity);
         this.guardingCondition = condition;
     }
@@ -70,9 +78,8 @@ public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtu
 
                 if (entryIndex != -1) {
                     ValueNode entry = state.getEntry(entryIndex);
-                    Kind entryKind = state.getVirtualObject().entryKind(entryIndex);
-                    boolean isLoadSafe = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN || accessKind() == entryKind;
-                    if (isLoadSafe && (entry.getKind() == getKind() || entryKind == accessKind())) {
+                    boolean isLoadSafe = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN || accessKind() == entry.getKind();
+                    if (isLoadSafe && (entry.getKind() == getKind() || state.getVirtualObject().entryKind(entryIndex) == accessKind())) {
                         tool.replaceWith(entry);
                     }
                 }
@@ -82,12 +89,12 @@ public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtu
 
     @Override
     protected ValueNode cloneAsFieldAccess(ResolvedJavaField field) {
-        return new LoadFieldNode(object(), field);
+        return LoadFieldNode.create(object(), field);
     }
 
     @Override
     protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
-        return new UnsafeLoadNode(object(), location, accessKind(), identity, guardingCondition);
+        return UnsafeLoadNode.create(object(), location, accessKind(), identity, guardingCondition);
     }
 
     @SuppressWarnings({"unchecked", "unused"})

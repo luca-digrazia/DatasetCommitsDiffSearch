@@ -43,11 +43,19 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
+    public static UnsafeStoreNode create(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
+        return new UnsafeStoreNode(object, offset, value, accessKind, locationIdentity);
+    }
+
+    protected UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
         this(object, offset, value, accessKind, locationIdentity, null);
     }
 
-    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
+    public static UnsafeStoreNode create(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
+        return new UnsafeStoreNode(object, offset, value, accessKind, locationIdentity, stateAfter);
+    }
+
+    protected UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
         super(StampFactory.forVoid(), object, offset, accessKind, locationIdentity);
         this.value = value;
         this.stateAfter = stateAfter;
@@ -88,7 +96,7 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
                 if (entryIndex != -1) {
                     Kind entryKind = state.getVirtualObject().entryKind(entryIndex);
                     ValueNode entry = state.getEntry(entryIndex);
-                    boolean isLoadSafe = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN || accessKind() == entryKind;
+                    boolean isLoadSafe = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN || accessKind() == entry.getKind();
                     if (isLoadSafe) {
                         if (entry.getKind() == value.getKind() || entryKind == accessKind()) {
                             tool.setVirtualEntry(state, entryIndex, value(), true);
@@ -114,12 +122,12 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
 
     @Override
     protected ValueNode cloneAsFieldAccess(ResolvedJavaField field) {
-        return new StoreFieldNode(object(), field, value(), stateAfter());
+        return StoreFieldNode.create(object(), field, value(), stateAfter());
     }
 
     @Override
     protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
-        return new UnsafeStoreNode(object(), location, value, accessKind(), identity, stateAfter());
+        return UnsafeStoreNode.create(object(), location, value, accessKind(), identity, stateAfter());
     }
 
     public FrameState getState() {

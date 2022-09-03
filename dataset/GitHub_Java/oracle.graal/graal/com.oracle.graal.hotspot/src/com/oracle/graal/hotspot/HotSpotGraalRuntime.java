@@ -31,6 +31,7 @@ import static com.oracle.graal.hotspot.InitTimer.*;
 
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.function.*;
 
 import sun.misc.*;
 
@@ -79,11 +80,25 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
         }
     }
 
+    private static Predicate<Void> runtimeAccessCheck;
+
+    /**
+     * Sets a predicate which will be used to assert a valid calling context for a call to
+     * {@link #runtime()}. This is useful for verifying execution scopes that should not make a
+     * static access to {@link HotSpotGraalRuntime}. Such scopes are responsible for resetting the
+     * predicate to null.
+     */
+    public static void setRuntimeAccessCheck(Predicate<Void> predicate) {
+        assert runtimeAccessCheck == null || predicate == null : "at most once runtime access check can be active";
+        runtimeAccessCheck = predicate;
+    }
+
     /**
      * Gets the singleton {@link HotSpotGraalRuntime} object.
      */
     public static HotSpotGraalRuntime runtime() {
         assert instance != null;
+        assert runtimeAccessCheck == null || runtimeAccessCheck.test(null);
         return instance;
     }
 
@@ -91,7 +106,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
      * Do deferred initialization.
      */
     public void completeInitialization() {
-        TTY.initialize(Options.LogFile.getStream(compilerToVm));
 
         // Proxies for the VM/Compiler interfaces cannot be initialized
         // in the constructor as proxy creation causes static
@@ -110,9 +124,11 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
 
         this.compilerToVm = toVM;
 
-        if (Log.getValue() == null && !areScopedMetricsOrTimersEnabled() && Dump.getValue() == null && Verify.getValue() == null) {
+        TTY.initialize(Options.LogFile.getStream(compilerToVm));
+
+        if (Log.getValue() == null && Meter.getValue() == null && Time.getValue() == null && Dump.getValue() == null && Verify.getValue() == null) {
             if (MethodFilter.getValue() != null) {
-                TTY.println("WARNING: Ignoring MethodFilter option since Log, Meter, Time, TrackMemUse, Dump and Verify options are all null");
+                TTY.println("WARNING: Ignoring MethodFilter option since Log, Meter, Time, Dump and Verify options are all null");
             }
         }
 
@@ -133,7 +149,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
             }
         }
 
-        if (Debug.areUnconditionalMetricsEnabled() || Debug.areUnconditionalTimersEnabled() || (Debug.isEnabled() && areScopedMetricsOrTimersEnabled())) {
+        if (Debug.areUnconditionalMetricsEnabled() || Debug.areUnconditionalTimersEnabled() || (Debug.isEnabled() && areMetricsOrTimersEnabled())) {
             // This must be created here to avoid loading the DebugValuesPrinter class
             // during shutdown() which in turn can cause a deadlock
             debugValuesPrinter = new DebugValuesPrinter();
