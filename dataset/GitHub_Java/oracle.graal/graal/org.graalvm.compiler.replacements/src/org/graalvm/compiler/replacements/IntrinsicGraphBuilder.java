@@ -22,6 +22,8 @@
  */
 package org.graalvm.compiler.replacements;
 
+import static org.graalvm.compiler.core.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
@@ -30,8 +32,8 @@ import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.debug.GraalError;
-import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
+import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.FrameState;
@@ -46,7 +48,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
 import org.graalvm.compiler.nodes.spi.StampProvider;
-import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodeFrame;
@@ -76,14 +77,12 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
     protected ValueNode[] arguments;
     protected ValueNode returnValue;
 
-    public IntrinsicGraphBuilder(OptionValues options, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
-                    StampProvider stampProvider,
+    public IntrinsicGraphBuilder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, StampProvider stampProvider,
                     Bytecode code, int invokeBci) {
-        this(options, metaAccess, constantReflection, constantFieldProvider, stampProvider, code, invokeBci, AllowAssumptions.YES);
+        this(metaAccess, constantReflection, constantFieldProvider, stampProvider, code, invokeBci, AllowAssumptions.YES);
     }
 
-    protected IntrinsicGraphBuilder(OptionValues options, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
-                    StampProvider stampProvider,
+    protected IntrinsicGraphBuilder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, StampProvider stampProvider,
                     Bytecode code, int invokeBci, AllowAssumptions allowAssumptions) {
         this.metaAccess = metaAccess;
         this.constantReflection = constantReflection;
@@ -91,7 +90,7 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
         this.stampProvider = stampProvider;
         this.code = code;
         this.method = code.getMethod();
-        this.graph = new StructuredGraph.Builder(options, allowAssumptions).method(method).build();
+        this.graph = new StructuredGraph(method, allowAssumptions, INVALID_COMPILATION_ID);
         this.invokeBci = invokeBci;
         this.lastInstr = graph.start();
 
