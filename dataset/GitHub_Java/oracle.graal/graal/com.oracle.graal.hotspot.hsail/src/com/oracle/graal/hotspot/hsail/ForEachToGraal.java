@@ -106,7 +106,7 @@ public class ForEachToGraal implements CompileAndDispatch {
         if (code != null) {
             try {
                 // No return value from HSAIL kernels
-                getHSAILBackend().executeKernel(code, jobSize, args);
+                code.executeParallel(jobSize, 0, 0, args);
                 return true;
             } catch (InvalidInstalledCodeException iice) {
                 Debug.log("WARNING: Invalid installed code at exec time." + iice);

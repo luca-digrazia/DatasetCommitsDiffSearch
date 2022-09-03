@@ -49,10 +49,6 @@ import com.oracle.graal.phases.*;
 
 public abstract class GraalKernelTester extends KernelTester {
 
-    public GraalKernelTester() {
-        super(getHSAILBackend().isDeviceInitialized());
-    }
-
     private static HSAILHotSpotBackend getHSAILBackend() {
         Backend backend = runtime().getBackend(HSAIL.class);
         Assume.assumeTrue(backend instanceof HSAILHotSpotBackend);
@@ -104,10 +100,11 @@ public abstract class GraalKernelTester extends KernelTester {
     @Override
     protected void dispatchKernelOkra(int range, Object... args) {
         HSAILHotSpotBackend backend = getHSAILBackend();
-        if (backend.isDeviceInitialized()) {
+        HotSpotNmethod code = backend.compileAndInstallKernel(testMethod);
+
+        if (code != null) {
             try {
-                HotSpotNmethod code = backend.compileAndInstallKernel(testMethod);
-                backend.executeKernel(code, range, args);
+                code.executeParallel(range, 0, 0, args);
             } catch (InvalidInstalledCodeException e) {
                 Debug.log("WARNING:Invalid installed code: " + e);
                 e.printStackTrace();
