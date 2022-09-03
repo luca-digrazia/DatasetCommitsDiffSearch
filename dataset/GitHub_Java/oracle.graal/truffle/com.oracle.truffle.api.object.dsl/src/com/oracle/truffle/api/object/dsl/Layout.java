@@ -201,212 +201,212 @@ public @interface Layout {
 
     Class<? extends ObjectType> objectTypeSuperclass() default ObjectType.class;
 
-}
+    class Snippets {
 
-class Snippets {
-
-    // BEGIN: rectlayout
-    @Layout
-    private interface RectLayout {
-
-    }
-
-    // END: rectlayout
-
-    private static class RectLayoutImpl {
-        public static final RectLayoutImpl INSTANCE = new RectLayoutImpl();
-    }
-
-    static Object rectLayoutImpl() {
-        return
-        // BEGIN: rectlayoutimpl
-        RectLayoutImpl.INSTANCE;
-        // END: rectlayoutimpl
-    }
-
-    interface InterfaceSnippets {
-        // BEGIN: rectlayoutcreate
-        DynamicObject createRect();
-
-        // END: rectlayoutcreate
-
-        // BEGIN: rectlayoutguards
-        boolean isRect(DynamicObject object);
-
-        boolean isRect(Object object);
-
-        boolean isRect(ObjectType objectType);
-
-        // END: rectlayoutguards
-
-        // BEGIN: rectlayoutprops
-        DynamicObject createRect(int x, int y, int width, int height);
-
-        int getX(DynamicObject object);
-
-        void setX(DynamicObject object, int value);
-
-        int getWidth(DynamicObject object);
-
-        void setWidth(DynamicObject object, int value);
-
-        // END: rectlayoutprops
-
-        // BEGIN: nullable
-        DynamicObject createObject(@Nullable Object nullableProperty);
-
-        // END: nullable
-
-        // BEGIN: volatile
-        boolean compareAndSetWidth(DynamicObject object,
-                        int expectedValue, int newValue);
-
-        int getAndSet(DynamicObject object, int value);
-
-        // END: volatile
-
-        // BEGIN: semifinal
-        void setValueUnsafe(DynamicObject object, Object value);
-
-        // END: semifinal
-
-        class JavaClass {
-        }
-
-        // BEGIN: javaobject
+        // BEGIN: rectlayout
         @Layout
-        interface JavaObjectLayout {
-
-            DynamicObjectFactory createJavaObjectShape(JavaClass klass);
-
-            DynamicObject createJavaObject(DynamicObjectFactory factory, int hashCode);
-
-            JavaClass getKlass(DynamicObjectFactory factory);
-
-            JavaClass getKlass(ObjectType objectType);
-
-            JavaClass getKlass(DynamicObject object);
-
-            int getHashCode(DynamicObject object);
+        private interface RectLayout {
 
         }
 
-        // END: javaobject
+        // END: rectlayout
 
-        // BEGIN: shapesetters
-        DynamicObjectFactory setKlass(DynamicObjectFactory factory, JavaClass value);
+        private static class RectLayoutImpl {
+            public static final RectLayoutImpl INSTANCE = new RectLayoutImpl();
+        }
 
-        void setKlass(DynamicObject object, JavaClass value);
-        // END: shapesetters
-    }
+        static Object rectLayoutImpl() {
+            return
+            // BEGIN: rectlayoutimpl
+            RectLayoutImpl.INSTANCE;
+            // END: rectlayoutimpl
+        }
 
-    static class JavaObjectImpl {
+        interface InterfaceSnippets {
+            // BEGIN: rectlayoutcreate
+            DynamicObject createRect();
 
-        static final JavaObjectImpl INSTANCE = new JavaObjectImpl();
+            // END: rectlayoutcreate
 
-        @SuppressWarnings("unused")
-        Object createJavaObject(Object x, Object y) {
+            // BEGIN: rectlayoutguards
+            boolean isRect(DynamicObject object);
+
+            boolean isRect(Object object);
+
+            boolean isRect(ObjectType objectType);
+
+            // END: rectlayoutguards
+
+            // BEGIN: rectlayoutprops
+            DynamicObject createRect(int x, int y, int width, int height);
+
+            int getX(DynamicObject object);
+
+            void setX(DynamicObject object, int value);
+
+            int getWidth(DynamicObject object);
+
+            void setWidth(DynamicObject object, int value);
+
+            // END: rectlayoutprops
+
+            // BEGIN: nullable
+            DynamicObject createObject(@Nullable Object nullableProperty);
+
+            // END: nullable
+
+            // BEGIN: volatile
+            boolean compareAndSetWidth(DynamicObject object,
+                            int expectedValue, int newValue);
+
+            int getAndSet(DynamicObject object, int value);
+
+            // END: volatile
+
+            // BEGIN: semifinal
+            void setValueUnsafe(DynamicObject object, Object value);
+
+            // END: semifinal
+
+            class JavaClass {
+            }
+
+            // BEGIN: javaobject
+            @Layout
+            interface JavaObjectLayout {
+
+                DynamicObjectFactory createJavaObjectShape(JavaClass klass);
+
+                DynamicObject createJavaObject(DynamicObjectFactory factory, int hashCode);
+
+                JavaClass getKlass(DynamicObjectFactory factory);
+
+                JavaClass getKlass(ObjectType objectType);
+
+                JavaClass getKlass(DynamicObject object);
+
+                int getHashCode(DynamicObject object);
+
+            }
+
+            // END: javaobject
+
+            // BEGIN: shapesetters
+            DynamicObjectFactory setKlass(DynamicObjectFactory factory, JavaClass value);
+
+            void setKlass(DynamicObject object, JavaClass value);
+            // END: shapesetters
+        }
+
+        static class JavaObjectImpl {
+
+            static final JavaObjectImpl INSTANCE = new JavaObjectImpl();
+
+            @SuppressWarnings("unused")
+            Object createJavaObject(Object x, Object y) {
+                return null;
+            }
+
+            @SuppressWarnings("unused")
+            Object createJavaObjectShape(Object x) {
+                return null;
+            }
+
+            @SuppressWarnings("unused")
+            void setKlass(Object x, Object y) {
+            }
+
+        }
+
+        Object defaultHashCode() {
             return null;
         }
 
-        @SuppressWarnings("unused")
-        Object createJavaObjectShape(Object x) {
-            return null;
+        void closeCycle() {
+            Object
+            // BEGIN: closecycle
+            javaClassObject = JavaObjectImpl.INSTANCE.createJavaObject(
+                            JavaObjectImpl.INSTANCE.createJavaObjectShape(null),
+                            defaultHashCode());
+
+            JavaObjectImpl.INSTANCE.setKlass(javaClassObject, javaClassObject);
+            // END: closecycle
         }
 
-        @SuppressWarnings("unused")
-        void setKlass(Object x, Object y) {
+        // BEGIN: inheritanceinterfaces
+        @Layout
+        interface BaseLayout {
+
+            DynamicObject createBase(int a);
+
+            boolean isBase(DynamicObject object);
+
+            int getA(DynamicObject object);
+
+            void setA(DynamicObject object, int value);
+
         }
 
-    }
+        @Layout
+        interface SuperLayout extends BaseLayout {
 
-    Object defaultHashCode() {
-        return null;
-    }
+            DynamicObject createSuper(int a, int b);
 
-    void closeCycle() {
-        Object
-        // BEGIN: closecycle
-        javaClassObject = JavaObjectImpl.INSTANCE.createJavaObject(
-                        JavaObjectImpl.INSTANCE.createJavaObjectShape(null),
-                        defaultHashCode());
+            int getB(DynamicObject object);
 
-        JavaObjectImpl.INSTANCE.setKlass(javaClassObject, javaClassObject);
-        // END: closecycle
-    }
-
-    // BEGIN: inheritanceinterfaces
-    @Layout
-    interface BaseLayout {
-
-        DynamicObject createBase(int a);
-
-        boolean isBase(DynamicObject object);
-
-        int getA(DynamicObject object);
-
-        void setA(DynamicObject object, int value);
-
-    }
-
-    @Layout
-    interface SuperLayout extends BaseLayout {
-
-        DynamicObject createSuper(int a, int b);
-
-        int getB(DynamicObject object);
-
-        void setB(DynamicObject object, int value);
-    }
-
-    // END: inheritanceinterfaces
-
-    static class BaseImpl {
-
-        static final BaseImpl INSTANCE = new BaseImpl();
-
-        @SuppressWarnings("unused")
-        boolean isBase(Object x) {
-            return false;
+            void setB(DynamicObject object, int value);
         }
 
-        @SuppressWarnings("unused")
-        Object getA(Object x) {
-            return null;
+        // END: inheritanceinterfaces
+
+        static class BaseImpl {
+
+            static final BaseImpl INSTANCE = new BaseImpl();
+
+            @SuppressWarnings("unused")
+            boolean isBase(Object x) {
+                return false;
+            }
+
+            @SuppressWarnings("unused")
+            Object getA(Object x) {
+                return null;
+            }
+
         }
 
-    }
+        static class SuperImpl {
 
-    static class SuperImpl {
+            static final SuperImpl INSTANCE = new SuperImpl();
 
-        static final SuperImpl INSTANCE = new SuperImpl();
+            @SuppressWarnings("unused")
+            DynamicObject createSuper(int x, int y) {
+                return null;
+            }
 
-        @SuppressWarnings("unused")
-        DynamicObject createSuper(int x, int y) {
-            return null;
         }
 
+        void inheritanceUse() {
+            // BEGIN: inheritanceuse
+            DynamicObject object = SuperImpl.INSTANCE.createSuper(14, 2);
+            BaseImpl.INSTANCE.isBase(object);
+            BaseImpl.INSTANCE.getA(object);
+            // END: inheritanceuse
+        }
+
+        // Checkstyle: stop
+        // BEGIN: customid
+        @Layout
+        interface CustomIdentifierLayout {
+
+            public static final String A_IDENTIFIER = "A";
+
+            DynamicObject createCustomIdentifier(int a);
+
+        }
+        // END: customid
+        // Checkstyle: resume
+
     }
-
-    void inheritanceUse() {
-        // BEGIN: inheritanceuse
-        DynamicObject object = SuperImpl.INSTANCE.createSuper(14, 2);
-        BaseImpl.INSTANCE.isBase(object);
-        BaseImpl.INSTANCE.getA(object);
-        // END: inheritanceuse
-    }
-
-    // Checkstyle: stop
-    // BEGIN: customid
-    @Layout
-    interface CustomIdentifierLayout {
-
-        public static final String A_IDENTIFIER = "A";
-
-        DynamicObject createCustomIdentifier(int a);
-
-    }
-    // END: customid
-    // Checkstyle: resume
 
 }
