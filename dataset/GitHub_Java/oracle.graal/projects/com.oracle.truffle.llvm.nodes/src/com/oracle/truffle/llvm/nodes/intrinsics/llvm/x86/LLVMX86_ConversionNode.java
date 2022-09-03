@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,40 +29,82 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMBuiltin;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
 public abstract class LLVMX86_ConversionNode {
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMX86_ConversionFloatToIntNode extends LLVMBuiltin { // implements cvtss2si
+    public abstract static class LLVMX86_ConversionFloatToIntNode extends LLVMBuiltin { // implements
+                                                                                        // cvtss2si
 
         @Specialization
-        public int executeIntrinsic(LLVMFloatVector vector) {
-            if (vector.getLength() != 4)
+        protected int doIntrinsic(LLVMFloatVector vector) {
+            if (vector.getLength() != 4) {
+                CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("cvtss2si requires a float[4] as parameter");
+            }
 
-            return Math.round(vector.getValues()[0]);
+            return Math.round(vector.getValue(0));
         }
     }
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMX86_ConversionDoubleToIntNode extends LLVMBuiltin { // implements cvtsd2si
+    public abstract static class LLVMX86_ConversionDoubleToIntNode extends LLVMBuiltin { // implements
+                                                                                         // cvtsd2si
 
         @Specialization
-        public int executeIntrinsic(LLVMDoubleVector vector) {
-            if (vector.getLength() != 2)
+        protected int doIntrinsic(LLVMDoubleVector vector) {
+            if (vector.getLength() != 2) {
+                CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("cvtsd2si requires a double[2] as parameter");
+            }
 
             // returns an int instead of a long,
             // causes an exception in one OpenCV test application when returning a long
-            return Math.toIntExact(Math.round(vector.getValues()[0]));
+            return Math.toIntExact(Math.round(vector.getValue(0)));
         }
     }
 
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMX86_Pmovmskb128 extends LLVMBuiltin {
+
+        @Specialization
+        @ExplodeLoop
+        protected int doIntrinsic(LLVMI8Vector vector) {
+            if (vector.getLength() != 16) {
+                CompilerDirectives.transferToInterpreter();
+                throw new AssertionError("expected a <16 x i8> vector");
+            }
+            int result = 0;
+            for (int i = 0; i < vector.getLength(); i++) {
+                int currentByte = vector.getValue(i);
+                int mostSignificantBit = (currentByte & 0xff) >> (Byte.SIZE - 1);
+                result |= mostSignificantBit << i;
+            }
+
+            return result;
+        }
+    }
+
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMX86_Movmskpd extends LLVMBuiltin {
+
+        @Specialization
+        protected int doIntrinsic(LLVMDoubleVector vector) {
+            if (vector.getLength() != 2) {
+                CompilerDirectives.transferToInterpreter();
+                throw new AssertionError("expected a <2 x double> vector");
+            }
+            return ((vector.getValue(1) < 0 ? 1 : 0) << 1) | (vector.getValue(0) < 0 ? 1 : 0);
+        }
+    }
 }
