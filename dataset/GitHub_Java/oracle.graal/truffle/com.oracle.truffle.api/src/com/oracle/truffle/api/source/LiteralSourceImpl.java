@@ -57,7 +57,7 @@ final class LiteralSourceImpl extends Content {
 
     @Override
     public String getPath() {
-        return name;
+        return null;
     }
 
     @Override
