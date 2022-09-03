@@ -79,7 +79,7 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Vi
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         virtualObject.materializeAt(this, values, isDefault(), lockCount);
     }
 

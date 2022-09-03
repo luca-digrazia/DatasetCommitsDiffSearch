@@ -104,17 +104,17 @@ public class GraphEffectList extends EffectList {
      * 
      * @param node The floating node to be added.
      */
-    public void addFloatingNode(final ValueNode node, final String cause) {
+    public void addFloatingNode(final ValueNode node) {
         add(new Effect() {
 
             @Override
             public String name() {
-                return "addFloatingNode " + cause;
+                return "addFloatingNode";
             }
 
             @Override
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                assert !node.isAlive() && !node.isDeleted() : node + " " + cause;
+                assert !node.isAlive() && !node.isDeleted();
                 graph.add(node);
             }
         });
@@ -164,7 +164,7 @@ public class GraphEffectList extends EffectList {
 
             @Override
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                assert node.isAlive() && value.isAlive() : node + " " + value;
+                assert node.isAlive() && value.isAlive();
                 node.addInput(value);
             }
         });
