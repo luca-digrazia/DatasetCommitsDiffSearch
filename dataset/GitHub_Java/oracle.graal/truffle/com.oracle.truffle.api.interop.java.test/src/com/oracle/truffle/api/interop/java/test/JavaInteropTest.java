@@ -163,13 +163,13 @@ public class JavaInteropTest {
         return callTarget;
     }
 
-    class PrivatePOJO {
+    class POJO {
         public int x;
     }
 
     @Test
     public void accessAllProperties() {
-        TruffleObject pojo = JavaInterop.asTruffleObject(new PrivatePOJO());
+        TruffleObject pojo = JavaInterop.asTruffleObject(new POJO());
         Map<?, ?> map = JavaInterop.asJavaObject(Map.class, pojo);
         int cnt = 0;
         for (Map.Entry<?, ?> entry : map.entrySet()) {
@@ -182,61 +182,6 @@ public class JavaInteropTest {
         }
         assertEquals("No properties", 0, cnt);
         assertEquals("Empty: " + map, 0, map.size());
-    }
-
-    @Test
-    public void accessAllPropertiesDirectly() {
-        TruffleObject pojo = JavaInterop.asTruffleObject(new PrivatePOJO());
-        CallTarget callKeys = sendKeys();
-        TruffleObject result = (TruffleObject) callKeys.call(pojo);
-        List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
-        assertEquals("No props, class isn't public", 0, propertyNames.size());
-    }
-
-    public static class PublicPOJO {
-        PublicPOJO() {
-        }
-
-        public int x;
-        public static int y;
-
-        public int readX() {
-            return x;
-        }
-
-        void writeX(int value) {
-            this.x = value;
-        }
-
-        public static int readY() {
-            return y;
-        }
-
-        static void writeY(int value) {
-            y = value;
-        }
-    }
-
-    @Test
-    public void accessAllPublicPropertiesDirectly() {
-        TruffleObject pojo = JavaInterop.asTruffleObject(new PublicPOJO());
-        CallTarget callKeys = sendKeys();
-        TruffleObject result = (TruffleObject) callKeys.call(pojo);
-        List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
-        assertEquals("One instance field and one method", 2, propertyNames.size());
-        assertEquals("One field x", "x", propertyNames.get(0));
-        assertEquals("One method to access x", "readX", propertyNames.get(1));
-    }
-
-    @Test
-    public void noNonStaticPropertiesForAClass() {
-        TruffleObject pojo = JavaInterop.asTruffleObject(PublicPOJO.class);
-        CallTarget callKeys = sendKeys();
-        TruffleObject result = (TruffleObject) callKeys.call(pojo);
-        List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
-        assertEquals("One static field and one method", 2, propertyNames.size());
-        assertEquals("One field y", "y", propertyNames.get(0));
-        assertEquals("One method to read y", "readY", propertyNames.get(1));
     }
 
     @Test
