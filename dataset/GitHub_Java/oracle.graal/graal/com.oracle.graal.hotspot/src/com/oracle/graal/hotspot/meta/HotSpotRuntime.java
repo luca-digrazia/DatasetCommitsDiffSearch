@@ -50,7 +50,6 @@ import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 import static com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub.*;
 import static com.oracle.graal.java.GraphBuilderPhase.RuntimeCalls.*;
 import static com.oracle.graal.nodes.java.RegisterFinalizerNode.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.replacements.Log.*;
 import static com.oracle.graal.replacements.MathSubstitutionsX86.*;
 
@@ -85,6 +84,7 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.word.*;
@@ -294,26 +294,26 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         linkForeignCall(r, VM_ERROR, c.vmErrorAddress, PREPEND_THREAD, REEXECUTABLE, NO_LOCATIONS);
         linkForeignCall(r, OSR_MIGRATION_END, c.osrMigrationEndAddress, DONT_PREPEND_THREAD, NOT_REEXECUTABLE, NO_LOCATIONS);
 
-        if (IntrinsifyObjectMethods.getValue()) {
+        if (GraalOptions.IntrinsifyObjectMethods) {
             r.registerSubstitutions(ObjectSubstitutions.class);
         }
-        if (IntrinsifySystemMethods.getValue()) {
+        if (GraalOptions.IntrinsifySystemMethods) {
             r.registerSubstitutions(SystemSubstitutions.class);
         }
-        if (IntrinsifyThreadMethods.getValue()) {
+        if (GraalOptions.IntrinsifyThreadMethods) {
             r.registerSubstitutions(ThreadSubstitutions.class);
         }
-        if (IntrinsifyUnsafeMethods.getValue()) {
+        if (GraalOptions.IntrinsifyUnsafeMethods) {
             r.registerSubstitutions(UnsafeSubstitutions.class);
         }
-        if (IntrinsifyClassMethods.getValue()) {
+        if (GraalOptions.IntrinsifyClassMethods) {
             r.registerSubstitutions(ClassSubstitutions.class);
         }
-        if (IntrinsifyAESMethods.getValue()) {
+        if (GraalOptions.IntrinsifyAESMethods) {
             r.registerSubstitutions(AESCryptSubstitutions.class);
             r.registerSubstitutions(CipherBlockChainingSubstitutions.class);
         }
-        if (IntrinsifyReflectionMethods.getValue()) {
+        if (GraalOptions.IntrinsifyReflectionMethods) {
             r.registerSubstitutions(ReflectionSubstitutions.class);
         }
 
@@ -492,7 +492,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                 JavaType[] signature = MetaUtil.signatureToTypes(callTarget.targetMethod().getSignature(), callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
 
                 LoweredCallTargetNode loweredCallTarget = null;
-                if (callTarget.invokeKind() == InvokeKind.Virtual && InlineVTableStubs.getValue() && (AlwaysInlineVTableStubs.getValue() || invoke.isPolymorphic())) {
+                if (callTarget.invokeKind() == InvokeKind.Virtual && GraalOptions.InlineVTableStubs && (GraalOptions.AlwaysInlineVTableStubs || invoke.isPolymorphic())) {
 
                     HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
                     if (!hsMethod.getDeclaringClass().isInterface()) {
@@ -634,7 +634,9 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             graph.replaceFixed(loadMethodNode, metaspaceMethod);
         } else if (n instanceof FixedGuardNode) {
             FixedGuardNode node = (FixedGuardNode) n;
-            ValueAnchorNode newAnchor = graph.add(new ValueAnchorNode(tool.createGuard(node.condition(), node.getReason(), node.getAction(), node.isNegated()).asNode()));
+            GuardingNode guard = tool.createGuard(node.condition(), node.getReason(), node.getAction(), node.isNegated());
+            ValueAnchorNode newAnchor = graph.add(new ValueAnchorNode(guard.asNode()));
+            node.replaceAtUsages(guard.asNode());
             graph.replaceFixedWithFixed(node, newAnchor);
         } else if (n instanceof CommitAllocationNode) {
             CommitAllocationNode commit = (CommitAllocationNode) n;

@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}")
-public final class FixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, Lowerable, Node.IterableNodeType, Negatable, GuardingNode {
+public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, Node.IterableNodeType, Negatable, GuardingNode {
 
     @Input private LogicNode condition;
     private final DeoptimizationReason reason;
@@ -106,7 +106,6 @@ public final class FixedGuardNode extends DeoptimizingFixedWithNextNode implemen
             FixedNode next = next();
             setNext(null);
             DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
-            deopt.setDeoptimizationState(getDeoptimizationState());
             IfNode ifNode;
             if (negated) {
                 ifNode = graph().add(new IfNode(condition, deopt, next, 0));
@@ -128,15 +127,5 @@ public final class FixedGuardNode extends DeoptimizingFixedWithNextNode implemen
     @Override
     public FixedGuardNode asNode() {
         return this;
-    }
-
-    @Override
-    public boolean canDeoptimize() {
-        return true;
-    }
-
-    @Override
-    public DeoptimizationReason getDeoptimizationReason() {
-        return reason;
     }
 }
