@@ -313,14 +313,8 @@ public final class SchedulePhase extends Phase {
             }
         }
         FixedNode endNode = b.getEndNode();
-        FixedNode fixedEndNode = null;
-        if (endNode instanceof ControlSplitNode || endNode instanceof AbstractEndNode) {
-            // Only if the end node is either a control split or an end node, we need to force it to
-            // be the last node in the schedule.
-            fixedEndNode = endNode;
-        }
         for (Node n : earliestSorting) {
-            if (n != fixedEndNode) {
+            if (n != endNode) {
                 if (n instanceof FixedNode) {
                     assert nodeMap.get(n) == b;
                     checkWatchList(b, nodeMap, unprocessed, result, watchList, n);
@@ -343,11 +337,11 @@ public final class SchedulePhase extends Phase {
             assert nodeMap.get(n) == b;
             assert !(n instanceof FixedNode);
             if (unprocessed.isMarked(n)) {
-                sortIntoList(n, b, result, nodeMap, unprocessed, fixedEndNode);
+                sortIntoList(n, b, result, nodeMap, unprocessed, endNode);
             }
         }
 
-        if (endNode != null && unprocessed.isMarked(endNode)) {
+        if (unprocessed.isMarked(endNode)) {
             sortIntoList(endNode, b, result, nodeMap, unprocessed, null);
         }
 
@@ -685,8 +679,7 @@ public final class SchedulePhase extends Phase {
                                         inputEarliest = nodeToBlock.get(((ControlSplitNode) input).getPrimarySuccessor());
                                     } else {
                                         assert inputEarliest.getSuccessorCount() == 1;
-                                        assert !(input instanceof AbstractEndNode);
-                                        // Keep regular inputEarliest
+                                        inputEarliest = inputEarliest.getSuccessors().get(0);
                                     }
                                 }
                                 if (earliest.getDominatorDepth() < inputEarliest.getDominatorDepth()) {
