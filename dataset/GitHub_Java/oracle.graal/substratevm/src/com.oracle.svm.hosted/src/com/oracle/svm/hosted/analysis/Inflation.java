@@ -117,12 +117,19 @@ public class Inflation extends BigBang {
 
     @Override
     public void checkUnsupportedSynchronization(AnalysisMethod method, int bci, AnalysisType aType) {
+        /* Can not synchronize on a non-instance type. For example, an array. */
+        checkUnsupportedSynchronization(aType.isInstanceClass(), method, bci, aType);
         /*
          * We want DynamicHub instances to be immutable, but synchronization would require
          * installing a Lock object. Static synchronized methods are handled by synchronizing on a
          * dedicated type instead.
          */
         checkUnsupportedSynchronization(!aType.equals(metaAccess.lookupJavaType(DynamicHub.class)), method, bci, aType);
+        /*
+         * We want String instances to be immutable, because they are a major part of the boot image
+         * heap.
+         */
+        checkUnsupportedSynchronization(!aType.equals(metaAccess.lookupJavaType(String.class)), method, bci, aType);
     }
 
     private static void checkUnsupportedSynchronization(boolean condition, AnalysisMethod method, int bci, AnalysisType aType) {
@@ -233,8 +240,6 @@ public class Inflation extends BigBang {
         Class<?> javaClass = type.getJavaClass();
 
         TypeVariable<?>[] typeParameters = javaClass.getTypeParameters();
-        /* The bounds are lazily initialized. Initialize them eagerly in the native image. */
-        Arrays.stream(typeParameters).forEach(TypeVariable::getBounds);
         Type[] genericInterfaces = Arrays.stream(javaClass.getGenericInterfaces()).filter(this::filterGenericInterfaces).toArray(Type[]::new);
         Type[] cachedGenericInterfaces = genericInterfacesMap.computeIfAbsent(new GenericInterfacesEncodingKey(genericInterfaces), k -> genericInterfaces);
         Type genericSuperClass = javaClass.getGenericSuperclass();
