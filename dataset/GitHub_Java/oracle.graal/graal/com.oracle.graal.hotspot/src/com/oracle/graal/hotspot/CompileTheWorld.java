@@ -279,11 +279,7 @@ public final class CompileTheWorld {
     }
 
     public void println(String s) {
-        println(verbose, s);
-    }
-
-    public static void println(boolean cond, String s) {
-        if (cond) {
+        if (verbose) {
             TTY.println(s);
         }
     }
@@ -609,12 +605,6 @@ public final class CompileTheWorld {
                                     compileMethod(javaMethod);
                                 }
                             }
-
-                            // Also compile the class initializer if it exists
-                            HotSpotResolvedJavaMethod clinit = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaType(javaClass).getClassInitializer();
-                            if (clinit != null && canBeCompiled(clinit, clinit.getModifiers())) {
-                                compileMethod(clinit);
-                            }
                         }
                     } catch (Throwable t) {
                         println("CompileTheWorld (%d) : Skipping %s %s", classFileCounter, className, t.toString());
@@ -724,16 +714,12 @@ public final class CompileTheWorld {
      *
      * @return true if it can be compiled, false otherwise
      */
-    private boolean canBeCompiled(HotSpotResolvedJavaMethod javaMethod, int modifiers) {
+    private static boolean canBeCompiled(HotSpotResolvedJavaMethod javaMethod, int modifiers) {
         if (Modifier.isAbstract(modifiers) || Modifier.isNative(modifiers)) {
             return false;
         }
         HotSpotVMConfig c = config();
         if (c.dontCompileHugeMethods && javaMethod.getCodeSize() > c.hugeMethodLimit) {
-            println(verbose || methodFilters != null,
-                            String.format("CompileTheWorld (%d) : Skipping huge method %s (use -XX:-DontCompileHugeMethods or -XX:HugeMethodLimit=%d to include it)", classFileCounter,
-                                            javaMethod.format("%H.%n(%p):%r"),
-                                            javaMethod.getCodeSize()));
             return false;
         }
         // Allow use of -XX:CompileCommand=dontinline to exclude problematic methods
