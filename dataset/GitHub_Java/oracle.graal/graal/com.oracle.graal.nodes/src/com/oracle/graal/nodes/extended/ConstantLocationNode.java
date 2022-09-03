@@ -56,16 +56,16 @@ public final class ConstantLocationNode extends LocationNode {
     }
 
     @Override
-    public Object getLocationIdentity() {
+    public Object locationIdentity() {
         return locationIdentity;
     }
 
-    public long getDisplacement() {
+    public long displacement() {
         return displacement;
     }
 
     @Override
     public Value generateAddress(LIRGeneratorTool gen, Value base) {
-        return gen.emitAddress(base, getDisplacement(), Value.ILLEGAL, 0);
+        return gen.emitAddress(base, displacement(), Value.ILLEGAL, 0);
     }
 }
