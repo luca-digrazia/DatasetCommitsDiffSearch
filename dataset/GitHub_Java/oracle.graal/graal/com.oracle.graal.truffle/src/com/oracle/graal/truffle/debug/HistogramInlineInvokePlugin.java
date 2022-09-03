@@ -22,45 +22,60 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import java.io.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.IntSummaryStatistics;
+import java.util.List;
+import java.util.Map;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.truffle.*;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.BeginNode;
+import com.oracle.graal.nodes.DeoptimizeNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.VirtualState;
+import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.truffle.OptimizedCallTarget;
 
 public class HistogramInlineInvokePlugin implements InlineInvokePlugin {
 
     private final Map<ResolvedJavaMethod, MethodStatistics> histogram = new HashMap<>();
     private final StructuredGraph graph;
-    private final InlineInvokePlugin delegate;
 
     private HistogramInlineInvokePlugin.MethodStatistic currentStatistic;
 
-    public HistogramInlineInvokePlugin(StructuredGraph graph, InlineInvokePlugin delegate) {
+    public HistogramInlineInvokePlugin(StructuredGraph graph) {
         this.graph = graph;
-        this.delegate = delegate;
     }
 
-    public InlineInfo getInlineInfo(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType) {
-        InlineInfo inlineInfo = delegate.getInlineInfo(b, method, args, returnType);
-        if (inlineInfo != null) {
-            currentStatistic = new MethodStatistic(currentStatistic, inlineInfo.methodToInline, graph.getNodeCount(), graph.getNodes(MethodCallTargetNode.TYPE).count());
-        }
-        return inlineInfo;
+    @Override
+    public void notifyBeforeInline(ResolvedJavaMethod methodToInline) {
+        currentStatistic = new MethodStatistic(currentStatistic, methodToInline, countNodes(), countCalls());
     }
 
-    public void postInline(ResolvedJavaMethod inlinedTargetMethod) {
-        delegate.postInline(inlinedTargetMethod);
+    @Override
+    public void notifyAfterInline(ResolvedJavaMethod methodToInline) {
+        assert methodToInline.equals(currentStatistic.method);
 
-        if (currentStatistic != null) {
-            currentStatistic.applyNodeCountAfter(graph.getNodeCount());
-            currentStatistic.applyCallsAfter(graph.getNodes(MethodCallTargetNode.TYPE).count());
-            accept(currentStatistic);
-            currentStatistic = currentStatistic.getParent();
-        }
+        currentStatistic.applyNodeCountAfter(countNodes());
+        currentStatistic.applyCallsAfter(countCalls());
+        accept(currentStatistic);
+        currentStatistic = currentStatistic.getParent();
+    }
+
+    private int countNodes() {
+        return graph.getNodes().filter(node -> isNonTrivial(node)).count();
+    }
+
+    private int countCalls() {
+        return graph.getNodes(MethodCallTargetNode.TYPE).count();
+    }
+
+    private static boolean isNonTrivial(Node node) {
+        return !(node instanceof VirtualState || node instanceof VirtualObjectNode || node instanceof BeginNode || node instanceof DeoptimizeNode);
     }
 
     private void accept(MethodStatistic current) {
@@ -73,13 +88,13 @@ public class HistogramInlineInvokePlugin implements InlineInvokePlugin {
         statistics.accept(current);
     }
 
-    public void print(OptimizedCallTarget target, PrintStream out) {
-        out.printf("Truffle expansion histogram for %s", target);
-        out.println("  Invocations = Number of expanded invocations");
-        out.println("  Nodes = Number of Graal nodes created for this method during partial evaluation.");
-        out.println("  Calls = Number of not expanded calls created for this method during partial evaluation.");
-        out.printf(" %-11s |Nodes %5s %5s %5s %8s |Calls %5s %5s %5s %8s | Method Name%n", "Invocations", "Sum", "Min", "Max", "Avg", "Sum", "Min", "Max", "Avg");
-        histogram.values().stream().sorted().forEach(statistics -> statistics.print(out));
+    public void print(OptimizedCallTarget target) {
+        OptimizedCallTarget.log(String.format("Truffle expansion histogram for %s", target));
+        OptimizedCallTarget.log("  Invocations = Number of expanded invocations");
+        OptimizedCallTarget.log("  Nodes = Number of non-trival Graal nodes created for this method during partial evaluation.");
+        OptimizedCallTarget.log("  Calls = Number of not expanded calls created for this method during partial evaluation.");
+        OptimizedCallTarget.log(String.format(" %-11s |Nodes %5s %5s %5s %8s |Calls %5s %5s %5s %8s | Method Name", "Invocations", "Sum", "Min", "Max", "Avg", "Sum", "Min", "Max", "Avg"));
+        histogram.values().stream().filter(statistics -> statistics.shallowCount.getSum() > 0).sorted().forEach(statistics -> statistics.print());
     }
 
     private static class MethodStatistics implements Comparable<MethodStatistics> {
@@ -90,21 +105,21 @@ public class HistogramInlineInvokePlugin implements InlineInvokePlugin {
         private final IntSummaryStatistics shallowCount = new IntSummaryStatistics();
         private final IntSummaryStatistics callCount = new IntSummaryStatistics();
 
-        public MethodStatistics(ResolvedJavaMethod method) {
+        MethodStatistics(ResolvedJavaMethod method) {
             this.method = method;
         }
 
-        public void print(PrintStream out) {
-            out.printf(" %11d |        %5d %5d %5d %8.2f |      %5d %5d %5d %8.2f | %s%n", //
+        public void print() {
+            OptimizedCallTarget.log(String.format(" %11d |      %5d %5d %5d %8.2f |      %5d %5d %5d %8.2f | %s", //
                             count, shallowCount.getSum(), shallowCount.getMin(), shallowCount.getMax(), //
                             shallowCount.getAverage(), callCount.getSum(), callCount.getMin(), callCount.getMax(), //
-                            callCount.getAverage(), method.format("%h.%n(%p)"));
+                            callCount.getAverage(), method.format("%h.%n(%p)")));
         }
 
         public int compareTo(MethodStatistics o) {
-            int result = (int) (o.shallowCount.getSum() - shallowCount.getSum());
+            int result = Long.compare(o.shallowCount.getSum(), shallowCount.getSum());
             if (result == 0) {
-                return o.count - count;
+                return Integer.compare(o.count, count);
             }
             return result;
         }
@@ -128,7 +143,7 @@ public class HistogramInlineInvokePlugin implements InlineInvokePlugin {
         private int deepNodeCount;
         private int callCount;
 
-        public MethodStatistic(MethodStatistic parent, ResolvedJavaMethod method, int nodeCountBefore, int callsBefore) {
+        MethodStatistic(MethodStatistic parent, ResolvedJavaMethod method, int nodeCountBefore, int callsBefore) {
             this.parent = parent;
             this.method = method;
             this.callCount = callsBefore;

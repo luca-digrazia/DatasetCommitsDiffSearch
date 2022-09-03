@@ -22,13 +22,18 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import java.util.*;
+import static com.oracle.graal.compiler.GraalCompilerOptions.PrintBailout;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.truffle.*;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-public class TraceCompilationFailureListener extends AbstractDebugCompilationListener {
+import jdk.vm.ci.code.BailoutException;
+
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.truffle.GraalTruffleRuntime;
+import com.oracle.graal.truffle.OptimizedCallTarget;
+
+public final class TraceCompilationFailureListener extends AbstractDebugCompilationListener {
 
     private TraceCompilationFailureListener() {
     }
@@ -39,14 +44,14 @@ public class TraceCompilationFailureListener extends AbstractDebugCompilationLis
 
     @Override
     public void notifyCompilationFailed(OptimizedCallTarget target, StructuredGraph graph, Throwable t) {
-        if (isPermanentBailout(t)) {
+        if (isPermanentBailout(t) || PrintBailout.getValue()) {
             Map<String, Object> properties = new LinkedHashMap<>();
             properties.put("Reason", t.toString());
             log(0, "opt fail", target.toString(), properties);
         }
     }
 
-    public static final boolean isPermanentBailout(Throwable t) {
+    public static boolean isPermanentBailout(Throwable t) {
         return !(t instanceof BailoutException) || ((BailoutException) t).isPermanent();
     }
 

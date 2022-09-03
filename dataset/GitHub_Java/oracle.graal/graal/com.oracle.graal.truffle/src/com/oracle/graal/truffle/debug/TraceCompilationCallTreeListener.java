@@ -51,15 +51,14 @@ public final class TraceCompilationCallTreeListener extends AbstractDebugCompila
     }
 
     @Override
-    public void notifyCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph, CompilationResult result) {
-        log(0, "opt call tree", target.toString(), target.getDebugProperties(inliningDecision));
-        logTruffleCallTree(target, inliningDecision);
+    public void notifyCompilationSuccess(OptimizedCallTarget target, StructuredGraph graph, CompilationResult result) {
+        log(0, "opt call tree", target.toString(), target.getDebugProperties());
+        logTruffleCallTree(target);
     }
 
-    private static void logTruffleCallTree(OptimizedCallTarget compilable, TruffleInlining inliningDecision) {
+    private static void logTruffleCallTree(OptimizedCallTarget compilable) {
         CallTreeNodeVisitor visitor = new CallTreeNodeVisitor() {
 
-            @Override
             public boolean visit(List<TruffleInlining> decisionStack, Node node) {
                 if (node instanceof OptimizedDirectCallNode) {
                     OptimizedDirectCallNode callNode = ((OptimizedDirectCallNode) node);
@@ -70,8 +69,8 @@ public final class TraceCompilationCallTreeListener extends AbstractDebugCompila
                         dispatched = "";
                     }
                     Map<String, Object> properties = new LinkedHashMap<>();
-                    addASTSizeProperty(callNode.getCurrentCallTarget(), inliningDecision, properties);
-                    properties.putAll(callNode.getCurrentCallTarget().getDebugProperties(inliningDecision));
+                    addASTSizeProperty(callNode.getCurrentCallTarget(), properties);
+                    properties.putAll(callNode.getCurrentCallTarget().getDebugProperties());
                     log(depth, "opt call tree", callNode.getCurrentCallTarget().toString() + dispatched, properties);
                 } else if (node instanceof OptimizedIndirectCallNode) {
                     int depth = decisionStack == null ? 0 : decisionStack.size() - 1;
@@ -81,7 +80,7 @@ public final class TraceCompilationCallTreeListener extends AbstractDebugCompila
             }
 
         };
-        compilable.accept(visitor, inliningDecision);
+        compilable.accept(visitor, true);
     }
 
 }
