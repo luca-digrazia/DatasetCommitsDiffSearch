@@ -27,6 +27,7 @@ import static com.oracle.graal.api.meta.LocationIdentity.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.extended.*;
@@ -41,7 +42,7 @@ public class FloatingReadPhase extends Phase {
         ANALYSIS_ONLY, CREATE_FLOATING_READS
     }
 
-    public static class MemoryMapImpl extends MemoryMapNode {
+    public static class MemoryMapImpl implements MemoryMap<Node> {
 
         private IdentityHashMap<LocationIdentity, ValueNode> lastMemorySnapshot;
 
@@ -73,6 +74,11 @@ public class FloatingReadPhase extends Phase {
             }
         }
 
+        @Override
+        public String toString() {
+            return "Map=" + lastMemorySnapshot.toString();
+        }
+
         public boolean isEmpty() {
             if (lastMemorySnapshot.size() == 0) {
                 return true;
@@ -86,7 +92,7 @@ public class FloatingReadPhase extends Phase {
         }
 
         public Set<LocationIdentity> getLocations() {
-            return lastMemorySnapshot.keySet();
+            return new HashSet<>(lastMemorySnapshot.keySet());
         }
 
     }
@@ -176,10 +182,6 @@ public class FloatingReadPhase extends Phase {
 
         @Override
         protected MemoryMapImpl processNode(FixedNode node, MemoryMapImpl state) {
-            if (node instanceof MemoryAccess) {
-                processAccess((MemoryAccess) node, state);
-            }
-
             if (node instanceof FloatableAccessNode && execmode == ExecutionMode.CREATE_FLOATING_READS) {
                 processFloatable((FloatableAccessNode) node, state);
             } else if (node instanceof MemoryCheckpoint.Single) {
@@ -190,17 +192,9 @@ public class FloatingReadPhase extends Phase {
             assert MemoryCheckpoint.TypeAssertion.correctType(node) : node;
 
             if (execmode == ExecutionMode.ANALYSIS_ONLY && node instanceof ReturnNode) {
-                ((ReturnNode) node).setMemoryMap(node.graph().unique(new MemoryMapImpl(state)));
+                node.graph().add(new MemoryState(new MemoryMapImpl(state), node));
             }
             return state;
-        }
-
-        private static void processAccess(MemoryAccess access, MemoryMapImpl state) {
-            LocationIdentity locationIdentity = access.getLocationIdentity();
-            if (locationIdentity != LocationIdentity.ANY_LOCATION) {
-                ValueNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
-                access.setLastLocationAccess(lastLocationAccess);
-            }
         }
 
         private static void processCheckpoint(MemoryCheckpoint.Single checkpoint, MemoryMapImpl state) {
