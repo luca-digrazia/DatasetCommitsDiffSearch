@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -38,8 +37,7 @@ import com.oracle.graal.nodes.util.*;
  * The {@code TypeSwitchNode} performs a lookup based on the type of the input value. The type
  * comparison is an exact type comparison, not an instanceof.
  */
-@NodeInfo
-public class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifiable {
+public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifiable {
 
     private final ResolvedJavaType[] keys;
 
