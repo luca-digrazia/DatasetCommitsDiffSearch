@@ -416,10 +416,6 @@ public final class Meta {
             public String guestToString() {
                 return toHost((StaticObject) method("toString", String.class).invokeDirect());
             }
-
-            public Meta getMeta() {
-                return instance.getKlass().getContext().getMeta();
-            }
         }
 
         public Klass array() {

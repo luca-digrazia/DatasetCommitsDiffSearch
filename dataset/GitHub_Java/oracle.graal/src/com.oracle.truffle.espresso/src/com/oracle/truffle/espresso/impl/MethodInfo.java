@@ -24,7 +24,7 @@ public final class MethodInfo implements ModifiersProvider {
     private final String name;
     private final SignatureDescriptor signature;
 
-    @CompilerDirectives.CompilationFinal(dimensions = 1)
+    // @CompilationFinal(dimensions = 1)
     private final byte[] code;
 
     private final int maxStackSize;
