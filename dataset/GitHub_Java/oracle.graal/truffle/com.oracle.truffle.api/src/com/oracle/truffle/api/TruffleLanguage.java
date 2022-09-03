@@ -165,13 +165,12 @@ public abstract class TruffleLanguage<C> {
      *            {@link CallTarget#call(java.lang.Object...)}
      * @return a call target to invoke which also keeps in memory the {@link Node} tree representing
      *         just parsed <code>code</code>
-     * @throws Exception if parsing goes wrong. Here-in thrown exception is propagated to the user
-     *             who called one of <code>eval</code> methods of
+     * @throws IOException thrown when I/O or parsing goes wrong. Here-in thrown exception is
+     *             propagate to the user who called one of <code>eval</code> methods of
      *             {@link com.oracle.truffle.api.vm.PolyglotEngine}
      * @since 0.8 or earlier
      */
-    protected abstract CallTarget parse(Source code, Node context, String... argumentNames)
-                    throws Exception;
+    protected abstract CallTarget parse(Source code, Node context, String... argumentNames) throws IOException;
 
     /**
      * Called when some other language is seeking for a global symbol. This method is supposed to do
@@ -432,16 +431,12 @@ public abstract class TruffleLanguage<C> {
          * @param argumentNames the names of {@link CallTarget#call(java.lang.Object...)} arguments
          *            that can be referenced from the source
          * @return the call target representing the parsed result
-         * @throws Exception if the parsing or evaluation fails for some reason
+         * @throws IOException if the parsing or evaluation fails for some reason
          * @since 0.8 or earlier
          */
-        public CallTarget parse(Source source, String... argumentNames) {
+        public CallTarget parse(Source source, String... argumentNames) throws IOException {
             TruffleLanguage<?> language = AccessAPI.engineAccess().findLanguageImpl(vm, null, source.getMimeType());
-            try {
-                return language.parse(source, null, argumentNames);
-            } catch (Exception ex) {
-                throw raise(RuntimeException.class, ex);
-            }
+            return language.parse(source, null, argumentNames);
         }
 
         /**
@@ -568,25 +563,17 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public CallTarget parse(TruffleLanguage<?> truffleLanguage, Source code, Node context, String... argumentNames) {
-            try {
-                return truffleLanguage.parse(code, context, argumentNames);
-            } catch (Exception ex) {
-                throw raise(RuntimeException.class, ex);
-            }
+        public CallTarget parse(TruffleLanguage<?> truffleLanguage, Source code, Node context, String... argumentNames) throws IOException {
+            return truffleLanguage.parse(code, context, argumentNames);
         }
 
         @Override
-        public Object eval(TruffleLanguage<?> language, Source source, Map<Source, CallTarget> cache) {
+        public Object eval(TruffleLanguage<?> language, Source source, Map<Source, CallTarget> cache) throws IOException {
             CallTarget target = cache.get(source);
             if (target == null) {
-                try {
-                    target = language.parse(source, null);
-                } catch (Exception ex) {
-                    throw raise(RuntimeException.class, ex);
-                }
+                target = language.parse(source, null);
                 if (target == null) {
-                    throw new IllegalStateException("Parsing has not produced a CallTarget for " + source);
+                    throw new IOException("Parsing has not produced a CallTarget for " + source);
                 }
                 cache.put(source, target);
             }
@@ -594,6 +581,8 @@ public abstract class TruffleLanguage<C> {
                 return target.call();
             } catch (ThreadDeath ex) {
                 throw ex;
+            } catch (Throwable ex) {
+                throw new IOException(ex);
             }
         }
 
@@ -653,10 +642,6 @@ public abstract class TruffleLanguage<C> {
         }
     }
 
-    @SuppressWarnings({"unchecked", "unused"})
-    static <E extends Throwable> E raise(Class<E> castTo, Throwable t) throws E {
-        throw (E) t;
-    }
 }
 
 class TruffleLanguageSnippets {

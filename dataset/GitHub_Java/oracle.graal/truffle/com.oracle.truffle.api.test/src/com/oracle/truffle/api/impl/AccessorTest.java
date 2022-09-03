@@ -97,10 +97,4 @@ public class AccessorTest {
             instrumenthandler.set(null, savedAccessor);
         }
     }
-
-    @Test
-    public void loadClassExistsInTruffleLocator() throws Exception {
-        Method method = TruffleLocator.class.getDeclaredMethod("loadClass", String.class);
-        assertEquals(Class.class, method.getReturnType());
-    }
 }

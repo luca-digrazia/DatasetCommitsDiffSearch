@@ -99,7 +99,6 @@ public class TruffleRuntimeTest {
         assertSame(rootNode, target.getRootNode());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testGetCallTargets1() {
         RootNode rootNode = createTestRootNode(null);
@@ -107,7 +106,6 @@ public class TruffleRuntimeTest {
         assertTrue(runtime.getCallTargets().contains(target));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testGetCallTargets2() {
         RootNode rootNode = createTestRootNode(null);
@@ -124,7 +122,7 @@ public class TruffleRuntimeTest {
      */
     @Test
     public void testGetCallTargets3() {
-        Source source1 = Source.fromText("a\nb\n", "");
+        Source source1 = Source.newBuilder("a\nb\n").name("").mimeType("content/unknown").build();
         SourceSection sourceSection1 = source1.createSection("foo", 1);
         SourceSection sourceSection2 = source1.createSection("bar", 2);
 
@@ -151,7 +149,6 @@ public class TruffleRuntimeTest {
         assertTrue(target2 == targets2.get(1) ^ target2Copy == targets2.get(1));
     }
 
-    @SuppressWarnings("deprecation")
     private static Map<SourceSection, List<RootCallTarget>> groupUniqueCallTargets() {
         Map<SourceSection, List<RootCallTarget>> groupedTargets = new HashMap<>();
         for (RootCallTarget target : Truffle.getRuntime().getCallTargets()) {
