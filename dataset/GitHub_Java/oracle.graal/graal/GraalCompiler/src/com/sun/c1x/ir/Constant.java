@@ -24,6 +24,7 @@ package com.sun.c1x.ir;
 
 import static com.sun.c1x.C1XCompilation.*;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -31,21 +32,23 @@ import com.sun.cri.ri.*;
 /**
  * The {@code Constant} instruction represents a constant such as an integer value,
  * long, float, object reference, address, etc.
- *
- * @author Ben L. Titzer
  */
-public final class Constant extends Instruction {
+public final class Constant extends FloatingNode {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     public final CiConstant value;
 
     /**
      * Constructs a new instruction representing the specified constant.
      * @param value the constant
+     * @param graph
      */
-    public Constant(CiConstant value) {
-        super(value.kind.stackKind());
+    public Constant(CiConstant value, Graph graph) {
+        super(value.kind.stackKind(), INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.value = value;
-        initFlag(Value.Flag.NonNull, value.isNonNull());
+        setNonNull(true);
     }
 
     @Override
@@ -56,10 +59,11 @@ public final class Constant extends Instruction {
     /**
      * Creates an instruction for a double constant.
      * @param d the double value for which to create the instruction
+     * @param graph
      * @return an instruction representing the double
      */
-    public static Constant forDouble(double d) {
-        return new Constant(CiConstant.forDouble(d));
+    public static Constant forDouble(double d, Graph graph) {
+        return new Constant(CiConstant.forDouble(d), graph);
     }
 
     /**
@@ -67,8 +71,8 @@ public final class Constant extends Instruction {
      * @param f the float value for which to create the instruction
      * @return an instruction representing the float
      */
-    public static Constant forFloat(float f) {
-        return new Constant(CiConstant.forFloat(f));
+    public static Constant forFloat(float f, Graph graph) {
+        return new Constant(CiConstant.forFloat(f), graph);
     }
 
     /**
@@ -76,8 +80,8 @@ public final class Constant extends Instruction {
      * @param i the long value for which to create the instruction
      * @return an instruction representing the long
      */
-    public static Constant forLong(long i) {
-        return new Constant(CiConstant.forLong(i));
+    public static Constant forLong(long i, Graph graph) {
+        return new Constant(CiConstant.forLong(i), graph);
     }
 
     /**
@@ -85,8 +89,8 @@ public final class Constant extends Instruction {
      * @param i the integer value for which to create the instruction
      * @return an instruction representing the integer
      */
-    public static Constant forInt(int i) {
-        return new Constant(CiConstant.forInt(i));
+    public static Constant forInt(int i, Graph graph) {
+        return new Constant(CiConstant.forInt(i), graph);
     }
 
     /**
@@ -94,8 +98,8 @@ public final class Constant extends Instruction {
      * @param i the boolean value for which to create the instruction
      * @return an instruction representing the boolean
      */
-    public static Constant forBoolean(boolean i) {
-        return new Constant(CiConstant.forBoolean(i));
+    public static Constant forBoolean(boolean i, Graph graph) {
+        return new Constant(CiConstant.forBoolean(i), graph);
     }
 
     /**
@@ -103,8 +107,8 @@ public final class Constant extends Instruction {
      * @param i the address value for which to create the instruction
      * @return an instruction representing the address
      */
-    public static Constant forJsr(int i) {
-        return new Constant(CiConstant.forJsr(i));
+    public static Constant forJsr(int i, Graph graph) {
+        return new Constant(CiConstant.forJsr(i), graph);
     }
 
     /**
@@ -112,8 +116,8 @@ public final class Constant extends Instruction {
      * @param o the object value for which to create the instruction
      * @return an instruction representing the object
      */
-    public static Constant forObject(Object o) {
-        return new Constant(CiConstant.forObject(o));
+    public static Constant forObject(Object o, Graph graph) {
+        return new Constant(CiConstant.forObject(o), graph);
     }
 
     /**
@@ -121,8 +125,32 @@ public final class Constant extends Instruction {
      * @param val the word value for which to create the instruction
      * @return an instruction representing the word
      */
-    public static Constant forWord(long val) {
-        return new Constant(CiConstant.forWord(val));
+    public static Constant forWord(long val, Graph graph) {
+        return new Constant(CiConstant.forWord(val), graph);
+    }
+
+    public static Constant defaultForKind(CiKind kind, Graph graph) {
+        switch(kind) {
+            case Boolean:
+                return Constant.forBoolean(false, graph);
+            case Byte:
+            case Char:
+            case Short:
+            case Int:
+                return Constant.forInt(0, graph);
+            case Double:
+                return Constant.forDouble(0.0, graph);
+            case Float:
+                return Constant.forFloat(0.0f, graph);
+            case Long:
+                return Constant.forLong(0L, graph);
+            case Object:
+                return Constant.forObject(null, graph);
+            case Word:
+                return Constant.forWord(0L, graph);
+            default:
+                return null;
+        }
     }
 
     @Override
@@ -136,7 +164,7 @@ public final class Constant extends Instruction {
     }
 
     @Override
-    public boolean valueEqual(Instruction i) {
+    public boolean valueEqual(Node i) {
         return i instanceof Constant && ((Constant) i).value.equivalent(this.value);
     }
 
@@ -157,5 +185,17 @@ public final class Constant extends Instruction {
     @Override
     public void print(LogStream out) {
         out.print(value.valueString());
+    }
+
+    @Override
+    public String shortName() {
+        return value.name();
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        Constant x = new Constant(value, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

@@ -22,17 +22,18 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code NewInstance} instruction represents the allocation of an instance class object.
- *
- * @author Ben L. Titzer
  */
-public final class NewInstance extends StateSplit {
+public final class NewInstance extends FloatingNode {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     final RiType instanceClass;
     public final int cpi;
@@ -43,14 +44,14 @@ public final class NewInstance extends StateSplit {
      * @param type the class being allocated
      * @param cpi the constant pool index
      * @param stateBefore the state before executing this instruction
+     * @param graph
      */
-    public NewInstance(RiType type, int cpi, RiConstantPool constantPool, FrameState stateBefore) {
-        super(CiKind.Object, stateBefore);
+    public NewInstance(RiType type, int cpi, RiConstantPool constantPool, Graph graph) {
+        super(CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.instanceClass = type;
         this.cpi = cpi;
         this.constantPool = constantPool;
-        setFlag(Flag.NonNull);
-        setFlag(Flag.ResultIsUnique);
+        setNonNull(true);
     }
 
     /**
@@ -59,15 +60,6 @@ public final class NewInstance extends StateSplit {
      */
     public RiType instanceClass() {
         return instanceClass;
-    }
-
-    /**
-     * Checks whether this instruction can trap.
-     * @return {@code true}, assuming that allocation can cause OutOfMemory or other exceptions
-     */
-    @Override
-    public boolean canTrap() {
-        return true;
     }
 
     /**
@@ -88,5 +80,12 @@ public final class NewInstance extends StateSplit {
     @Override
     public void print(LogStream out) {
         out.print("new instance ").print(CiUtil.toJavaName(instanceClass()));
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        NewInstance x = new NewInstance(instanceClass, cpi, constantPool, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

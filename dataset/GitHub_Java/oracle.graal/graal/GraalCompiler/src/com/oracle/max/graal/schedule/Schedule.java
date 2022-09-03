@@ -81,12 +81,12 @@ public class Schedule {
         return b;
     }
 
-    public static boolean isFixed(Node n) {
+    private static boolean isCFG(Node n) {
         return n != null && ((n instanceof FixedNode) || n == n.graph().start());
     }
 
     public static boolean isBlockEnd(Node n) {
-        return trueSuccessorCount(n) > 1 || n instanceof Anchor || n instanceof Return || n instanceof Unwind;
+        return trueSuccessorCount(n) > 1 || n instanceof Anchor || n instanceof Return || n instanceof Throw;
     }
 
     private void identifyBlocks() {
@@ -95,7 +95,7 @@ public class Schedule {
         NodeIterator.iterate(EdgeType.SUCCESSORS, graph.start(), null, new NodeVisitor() {
             @Override
             public boolean visit(Node n) {
-                if (!isFixed(n)) {
+                if (!isCFG(n)) {
                     return false;
                 }
 
@@ -108,7 +108,7 @@ public class Schedule {
 
                 Node singlePred = null;
                 for (Node pred : n.predecessors()) {
-                    if (isFixed(pred)) {
+                    if (isCFG(pred)) {
                         if (singlePred == null) {
                             singlePred = pred;
                         } else {
@@ -128,6 +128,7 @@ public class Schedule {
                     // We have a single predecessor => check its successor count.
                     if (isBlockEnd(singlePred)) {
                         Block b = assignBlock(n);
+                        b.setExceptionEntry(singlePred instanceof Throw);
                         blockBeginNodes.add(n);
                     } else {
                         assignBlock(n, nodeToBlock.get(singlePred));
@@ -141,7 +142,7 @@ public class Schedule {
         for (Node n : blockBeginNodes) {
             Block block = nodeToBlock.get(n);
             for (Node pred : n.predecessors()) {
-                if (isFixed(pred)) {
+                if (isCFG(pred)) {
                     Block predBlock = nodeToBlock.get(pred);
                     predBlock.addSuccessor(block);
                 }
@@ -229,7 +230,7 @@ public class Schedule {
             } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
                 Merge merge = ((FrameState) usage).block();
                 for (Node pred : merge.predecessors()) {
-                    if (isFixed(pred)) {
+                    if (isCFG(pred)) {
                         block = getCommonDominator(block, nodeToBlock.get(pred));
                     }
                 }
@@ -394,6 +395,9 @@ public class Schedule {
         for (Block b : blocks) {
            TTY.println();
            TTY.print(b.toString());
+           if (b.isExceptionEntry()) {
+               TTY.print(" (ex)");
+           }
 
            TTY.print(" succs=");
            for (Block succ : b.getSuccessors()) {
@@ -432,31 +436,11 @@ public class Schedule {
     }
 
     public static int trueSuccessorCount(Node n) {
-        if (n == null) {
-            return 0;
-        }
         int i = 0;
         for (Node s : n.successors()) {
-            if (isFixed(s)) {
+            if (isCFG(s)) {
                 i++;
             }
-        }
-        return i;
-    }
-
-    public static int truePredecessorCount(Node n) {
-        if (n == null) {
-            return 0;
-        }
-        int i = 0;
-        for (Node s : n.predecessors()) {
-            if (isFixed(s)) {
-                i++;
-            }
-        }
-
-        if (n instanceof LoopBegin) {
-            i++;
         }
         return i;
     }

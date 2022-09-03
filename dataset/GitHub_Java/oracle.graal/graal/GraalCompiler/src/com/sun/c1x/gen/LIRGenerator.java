@@ -42,7 +42,6 @@ import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
-import com.sun.cri.bytecode.*;
 import com.sun.cri.bytecode.Bytecodes.MemoryBarriers;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -216,7 +215,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         public final LIRDebugInfo info;
 
         public DeoptimizationStub(FrameState state) {
-            info = new LIRDebugInfo(state);
+            info = new LIRDebugInfo(state, null);
         }
     }
 
@@ -300,7 +299,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         if (Modifier.isSynchronized(compilation.method.accessFlags())) {
             bci = Instruction.SYNCHRONIZATION_ENTRY_BCI;
         }
-        FrameState fs = new FrameState(compilation.method, bci, compilation.method.maxLocals(), 0, 0, compilation.graph);
+        FrameState fs = new FrameState(bci, compilation.method.maxLocals(), 0, 0, compilation.graph);
         for (Node node : compilation.graph.start().usages()) {
             if (node instanceof Local) {
                 Local local = (Local) node;
@@ -388,7 +387,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             dims[i] = toXirArgument(x.dimension(i));
         }
 
-        XirSnippet snippet = xir.genNewMultiArray(site(x), dims, x.elementType);
+        XirSnippet snippet = xir.genNewMultiArray(site(x), dims, x.elementKind);
         emitXir(snippet, x, stateFor(x), null, true);
     }
 
@@ -477,9 +476,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         RiMethod target = x.target();
         LIRDebugInfo info = stateFor(x, stateBeforeInvokeWithArguments(x));
         LIRDebugInfo info2 = stateFor(x, stateBeforeInvokeReturn(x));
-        if (x.exceptionEdge() != null) {
-            info2.setExceptionEdge(getLIRBlock(x.exceptionEdge()));
-        }
 
         XirSnippet snippet = null;
 
@@ -880,6 +876,20 @@ public abstract class LIRGenerator extends ValueVisitor {
                 lir.tableswitch(tag, x.lowKey(), getLIRBlock(x.defaultSuccessor()), targets);
             }
         }
+    }
+
+    @Override
+    public void visitThrow(Throw x) {
+        setNoResult(x);
+        CiValue exceptionOpr = load(x.exception());
+        LIRDebugInfo info = stateFor(x, x.stateBefore());
+
+        // move exception oop into fixed register
+        CiCallingConvention callingConvention = compilation.frameMap().getCallingConvention(new CiKind[]{CiKind.Object}, RuntimeCall);
+        CiValue argumentOperand = callingConvention.locations[0];
+        lir.move(exceptionOpr, argumentOperand);
+
+        lir.throwException(CiValue.IllegalValue, argumentOperand, info);
     }
 
     @Override
@@ -1397,7 +1407,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     protected void preGCWriteBarrier(CiValue addrOpr, boolean patch, LIRDebugInfo info) {
     }
 
-    protected void setNoResult(Instruction x) {
+    protected void setNoResult(Value x) {
         x.clearOperand();
     }
 
@@ -1477,7 +1487,16 @@ public abstract class LIRGenerator extends ValueVisitor {
         if (compilation.placeholderState != null) {
             state = compilation.placeholderState;
         }
-        return new LIRDebugInfo(state);
+
+        assert state != null;
+        LIRBlock exceptionEdge = null;
+        if (x instanceof ExceptionEdgeInstruction) {
+            Instruction begin = ((ExceptionEdgeInstruction) x).exceptionEdge();
+            if (begin != null) {
+                exceptionEdge = getLIRBlock(begin);
+            }
+        }
+        return new LIRDebugInfo(state, exceptionEdge);
     }
 
     List<CiValue> visitInvokeArguments(CiCallingConvention cc, Invoke x, List<CiValue> pointerSlots) {

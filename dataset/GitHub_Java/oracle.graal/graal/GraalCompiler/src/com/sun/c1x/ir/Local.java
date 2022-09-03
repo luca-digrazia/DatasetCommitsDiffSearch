@@ -31,30 +31,27 @@ import com.sun.cri.ri.*;
  * The {@code Local} instruction is a placeholder for an incoming argument
  * to a function call.
  */
-public final class Local extends Value {
+public final class Local extends FloatingNode {
 
-    private static final int INPUT_COUNT = 0;
+    private static final int INPUT_COUNT = 1;
+
     private static final int SUCCESSOR_COUNT = 0;
 
-    private final int javaIndex;
+    private final int index;
     private RiType declaredType;
 
     public Local(CiKind kind, int javaIndex, Graph graph) {
         super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-        this.javaIndex = javaIndex;
-    }
-
-    @Override
-    public BlockBegin block() {
-        return null;
+        this.index = javaIndex;
+        this.inputs().set(0, graph.start());
     }
 
     /**
      * Gets the index of this local.
      * @return the index
      */
-    public int javaIndex() {
-        return javaIndex;
+    public int index() {
+        return index;
     }
 
     /**
@@ -81,6 +78,26 @@ public final class Local extends Value {
 
     @Override
     public void print(LogStream out) {
-        out.print("local[index ").print(javaIndex()).print(']');
+        out.print("local[index ").print(index()).print(']');
     }
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        Local x = new Local(kind, index, into);
+        x.setDeclaredType(declaredType());
+        x.setNonNull(isNonNull());
+        return x;
+    }
+
+
 }

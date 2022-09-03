@@ -30,7 +30,7 @@ import com.sun.cri.ci.*;
  * The {@code Phi} instruction represents the merging of dataflow
  * in the instruction graph. It refers to a join block and a variable.
  */
-public final class Phi extends Value {
+public final class Phi extends FixedNode {
 
     private static final int DEFAULT_MAX_VALUES = 2;
 
@@ -131,11 +131,15 @@ public final class Phi extends Value {
     @Override
     public String shortName() {
         StringBuilder str = new StringBuilder();
-        for (int i = 0; i < valueCount(); ++i) {
-            if (i != 0) {
+        for (int i = 1; i < inputs().size(); ++i) {
+            if (i != 1) {
                 str.append(' ');
             }
-            str.append(valueAt(i) == null ? "-" : valueAt(i).id());
+            if (inputs().get(i) != null) {
+                str.append(inputs().get(i).id());
+            } else {
+                str.append("-");
+            }
         }
         return "Phi: (" + str + ")";
     }

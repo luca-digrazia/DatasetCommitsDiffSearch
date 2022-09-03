@@ -22,48 +22,51 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.util.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code ArrayLength} instruction gets the length of an array.
- *
- * @author Ben L. Titzer
  */
-public final class ArrayLength extends AccessArray {
+public final class ArrayLength extends FloatingNode {
+
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_ARRAY = 0;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The instruction that produces the array object.
+     */
+     public Value array() {
+        return (Value) inputs().get(super.inputCount() + INPUT_ARRAY);
+    }
+
+    public Value setArray(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_ARRAY, n);
+    }
 
     /**
      * Constructs a new ArrayLength instruction.
      * @param array the instruction producing the array
-     * @param newFrameState the state before executing this instruction
+     * @param newFrameState the state after executing this instruction
      */
-    public ArrayLength(Value array, FrameState newFrameState) {
-        super(CiKind.Int, array, newFrameState);
-        if (array.isNonNull()) {
-            eliminateNullCheck();
-        }
-    }
-
-    /**
-     * Clears the state associated with a null check.
-     */
-    @Override
-    public void runtimeCheckCleared() {
-        if (!needsNullCheck()) {
-            clearState();
-        }
-    }
-
-    /**
-     * Checks whether this instruction can cause a trap.
-     * @return {@code true} if this instruction can cause a trap
-     */
-    @Override
-    public boolean canTrap() {
-        return needsNullCheck();
+    public ArrayLength(Value array, Graph graph) {
+        super(CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        setArray(array);
     }
 
     @Override
@@ -73,20 +76,27 @@ public final class ArrayLength extends AccessArray {
 
     @Override
     public int valueNumber() {
-        return Util.hash1(Bytecodes.ARRAYLENGTH, array);
+        return Util.hash1(Bytecodes.ARRAYLENGTH, array());
     }
 
     @Override
-    public boolean valueEqual(Instruction i) {
+    public boolean valueEqual(Node i) {
         if (i instanceof ArrayLength) {
             ArrayLength o = (ArrayLength) i;
-            return array == o.array;
+            return array() == o.array();
         }
         return false;
     }
 
     @Override
     public void print(LogStream out) {
-        out.print(array).print(".length");
+        out.print(array()).print(".length");
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        ArrayLength x = new ArrayLength(null, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }
