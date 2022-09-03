@@ -130,7 +130,9 @@ public final class ForeignAccess {
     }
 
     private void checkThread() {
-        assert initThread == Thread.currentThread();
+        if (initThread != Thread.currentThread()) {
+            throw new IllegalStateException("ForeignAccess created on " + initThread.getName() + " but used on " + Thread.currentThread().getName());
+        }
     }
 
     CallTarget access(Message message) {
