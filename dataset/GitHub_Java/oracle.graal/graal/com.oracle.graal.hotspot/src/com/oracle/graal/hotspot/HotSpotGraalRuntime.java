@@ -41,6 +41,7 @@ import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.options.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.runtime.*;
 
 //JaCoCo Exclude
@@ -153,7 +154,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
      * Checks that a factory overriding is valid. A factory B can only override/replace a factory A
      * if the B.getClass() is a subclass of A.getClass(). This models the assumption that B is
      * extends the behavior of A and has therefore understood the behavior expected of A.
-     *
+     * 
      * @param baseFactory
      * @param overridingFactory
      */
@@ -195,6 +196,8 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
     protected/* final */CompilerToVM compilerToVm;
     protected/* final */VMToCompiler vmToCompiler;
 
+    private volatile HotSpotGraphCache cache;
+
     protected final HotSpotVMConfig config;
     private final HotSpotBackend hostBackend;
 
@@ -235,9 +238,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
         if (HotSpotPrintInlining.getValue() == false) {
             HotSpotPrintInlining.setValue(config.printInlining);
         }
-        if (HotSpotCIPrintCompilerName.getValue() == false) {
-            HotSpotCIPrintCompilerName.setValue(config.printCompilerName);
-        }
 
         if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {
             printConfig(config);
@@ -254,6 +254,10 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
             }
             registerBackend(factory.createBackend(this, hostBackend));
         }
+
+        if (GraalOptions.CacheGraphs.getValue()) {
+            cache = new HotSpotGraphCache(compilerToVm);
+        }
     }
 
     private HotSpotBackend registerBackend(HotSpotBackend backend) {
@@ -265,12 +269,14 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
 
     /**
      * Gets the Graal mirror for a {@link Class} object.
-     *
+     * 
      * @return the {@link HotSpotResolvedJavaType} corresponding to {@code javaClass}
      */
     public ResolvedJavaType fromClass(Class<?> javaClass) {
         return graalMirrors.get(javaClass);
     }
+
+    public static final String GRAAL_GPU_ISALIST_PROPERTY_NAME = "graal.gpu.isalist";
 
     /**
      * Gets the names of the supported GPU architectures for the purpose of finding the
@@ -308,6 +314,10 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
         return hostBackend.getTarget();
     }
 
+    public HotSpotGraphCache getGraphCache() {
+        return cache;
+    }
+
     public CompilerToVM getCompilerToVM() {
         return compilerToVm;
     }
@@ -318,7 +328,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
 
     /**
      * Converts a name to a Java type.
-     *
+     * 
      * @param name a well formed Java type in {@linkplain JavaType#getName() internal} format
      * @param accessingType the context of resolution (may be null)
      * @param resolve force resolution to a {@link ResolvedJavaType}. If true, this method will
@@ -381,7 +391,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
 
     /**
      * The offset from the origin of an array to the first element.
-     *
+     * 
      * @return the offset in bytes
      */
     public static int getArrayBaseOffset(Kind kind) {
@@ -411,7 +421,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
 
     /**
      * The scale used for the index when accessing elements of an array of this kind.
-     *
+     * 
      * @return the scale in order to convert the index into a byte offset
      */
     public static int getArrayIndexScale(Kind kind) {
