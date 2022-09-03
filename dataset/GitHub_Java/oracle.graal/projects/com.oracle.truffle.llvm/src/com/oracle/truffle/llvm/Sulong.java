@@ -46,7 +46,6 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.parser.NodeFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObject;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 @TruffleLanguage.Registration(id = "llvm", name = "llvm", version = "0.01", mimeType = {Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.LLVM_BITCODE_BASE64_MIME_TYPE,
@@ -82,11 +81,6 @@ public final class Sulong extends LLVMLanguage {
 
     @Override
     protected Object findExportedSymbol(LLVMContext context, String globalName, boolean onlyExplicit) {
-        return lookupSymbol(context, globalName);
-    }
-
-    @Override
-    protected Object lookupSymbol(LLVMContext context, String globalName) {
         String atname = "@" + globalName; // for interop
         if (context.getGlobalScope().functionExists(atname)) {
             return context.getGlobalScope().getFunctionDescriptor(context, atname);
@@ -154,17 +148,4 @@ public final class Sulong extends LLVMLanguage {
         throw new IllegalStateException();
     }
 
-    @Override
-    protected Object findMetaObject(LLVMContext context, Object value) {
-        if (value instanceof LLVMDebugObject) {
-            return ((LLVMDebugObject) value).getType();
-        }
-
-        return super.findMetaObject(context, value);
-    }
-
-    @Override
-    protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
-        return true;
-    }
 }
