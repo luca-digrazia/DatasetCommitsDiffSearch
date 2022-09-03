@@ -112,9 +112,9 @@ public class IdealGraphPrinter {
     public void print(Graph graph, String title, boolean shortNames) {
         stream.printf(" <graph name='%s'>%n", escape(title));
         noBlockNodes.clear();
-        IdentifyBlocksPhase schedule = null;
+        Schedule schedule = null;
         try {
-            schedule = new IdentifyBlocksPhase(true);
+            schedule = new Schedule();
             schedule.apply(graph);
         } catch (Throwable t) {
             // nothing to do here...
@@ -173,7 +173,7 @@ public class IdealGraphPrinter {
             }
             for (Entry<Object, Object> entry : props.entrySet()) {
                 String key = entry.getKey().toString();
-                String value = entry.getValue() == null ? "null" : entry.getValue().toString();
+                String value = entry.getValue().toString();
                 stream.printf("    <p name='%s'>%s</p>%n", escape(key), escape(value));
             }
 

@@ -55,7 +55,6 @@ public final class GraalOptions {
     public static boolean ZapStackOnMethodEntry              = ____;
     public static boolean StressLinearScan                   = ____;
     public static boolean BailoutOnException                 = ____;
-    public static boolean DeoptALot                          = ____;
 
     /**
      * See {@link Filter#Filter(String, Object)}.

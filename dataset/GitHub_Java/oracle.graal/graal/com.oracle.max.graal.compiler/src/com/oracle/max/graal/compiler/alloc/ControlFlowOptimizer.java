@@ -105,7 +105,7 @@ final class ControlFlowOptimizer {
         assert instructions.get(0).code == LIROpcode.Label : "first instruction must always be a label";
         assert instructions.get(instructions.size() - 1) instanceof LIRBranch : "last instruction must always be a branch but is " + instructions.get(instructions.size() - 1);
         assert ((LIRBranch) instructions.get(instructions.size() - 1)).cond() == Condition.TRUE : "branch must be unconditional";
-        assert ((LIRBranch) instructions.get(instructions.size() - 1)).block() == block.suxAt(0) : "branch target must be the successor " + ((LIRBranch) instructions.get(instructions.size() - 1)).block();
+        assert ((LIRBranch) instructions.get(instructions.size() - 1)).block() == block.suxAt(0) : "branch target must be the successor";
 
         // block must have exactly one successor
 
@@ -246,8 +246,8 @@ final class ControlFlowOptimizer {
             for (LIRInstruction instr : instructions) {
                 if (instr instanceof LIRBranch) {
                     LIRBranch opBranch = (LIRBranch) instr;
-                    assert opBranch.block() == null || opBranch.block().blockID() == -1 || code.contains(opBranch.block()) : "missing successor branch from: " + block + " to: " + opBranch.block();
-                    assert opBranch.unorderedBlock() == null || opBranch.unorderedBlock().blockID() == -1 || code.contains(opBranch.unorderedBlock()) : "missing successor branch from: " + block + " to: " + opBranch.unorderedBlock();
+                    assert opBranch.block() == null || code.contains(opBranch.block()) : "missing successor branch from: " + block + " to: " + opBranch.block();
+                    assert opBranch.unorderedBlock() == null || code.contains(opBranch.unorderedBlock()) : "missing successor branch from: " + block + " to: " + opBranch.unorderedBlock();
                 }
             }
 

@@ -169,7 +169,7 @@ public final class BlockMap {
      */
     public BlockMap(RiMethod method) {
         this.method = method;
-        this.blockMap = new Block[method.codeSize()];
+        this.blockMap = new Block[method.code().length];
         if (method.exceptionHandlers().length != 0) {
             this.canTrap = new BitSet(blockMap.length);
         }
