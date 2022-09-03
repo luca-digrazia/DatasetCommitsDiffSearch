@@ -20,91 +20,102 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
 package com.oracle.graal.hotspot;
 
-import java.lang.reflect.*;
+import static com.oracle.graal.compiler.GraalDebugConfig.*;
+import static com.oracle.graal.hotspot.HotSpotOptionsLoader.*;
+import static java.lang.Double.*;
 
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.hotspot.logging.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.options.OptionUtils.OptionConsumer;
 
+//JaCoCo Exclude
+
+/**
+ * Sets Graal options from the HotSpot command line. Such options are distinguished by the
+ * {@link #GRAAL_OPTION_PREFIX} prefix.
+ */
 public class HotSpotOptions {
 
-    public static void setDefaultOptions() {
-        GraalOptions.MethodEndBreakpointGuards = 2;
-        GraalOptions.ResolveClassBeforeStaticInvoke = false;
+    private static final String GRAAL_OPTION_PREFIX = "-G:";
+
+    /**
+     * Parses the Graal specific options specified to HotSpot (e.g., on the command line).
+     */
+    private static native void parseVMOptions();
+
+    static {
+        parseVMOptions();
+
+        assert !Debug.Initialization.isDebugInitialized() : "The class " + Debug.class.getName() + " must not be initialized before the Graal runtime has been initialized. " +
+                        "This can be fixed by placing a call to " + Graal.class.getName() + ".runtime() on the path that triggers initialization of " + Debug.class.getName();
+        if (areDebugScopePatternsEnabled()) {
+            System.setProperty(Debug.Initialization.INITIALIZER_PROPERTY_NAME, "true");
+        }
+        if ("".equals(Meter.getValue())) {
+            System.setProperty(Debug.ENABLE_UNSCOPED_METRICS_PROPERTY_NAME, "true");
+        }
+        if ("".equals(Time.getValue())) {
+            System.setProperty(Debug.ENABLE_UNSCOPED_TIMERS_PROPERTY_NAME, "true");
+        }
+        if ("".equals(TrackMemUse.getValue())) {
+            System.setProperty(Debug.ENABLE_UNSCOPED_MEM_USE_TRACKERS_PROPERTY_NAME, "true");
+        }
     }
 
-    public static boolean setOption(String option) {
-        if (option.length() == 0) {
-            return false;
+    /**
+     * Ensures {@link HotSpotOptions} is initialized.
+     */
+    public static void initialize() {
+    }
+
+    /**
+     * Helper for the VM code called by {@link #parseVMOptions()}.
+     *
+     * @param name the name of a parsed option
+     * @param option the object encapsulating the option
+     * @param spec specification of boolean option value, type of option value or action to take
+     */
+    static void setOption(String name, OptionValue<?> option, char spec, String stringValue, long primitiveValue) {
+        switch (spec) {
+            case '+':
+                option.setValue(Boolean.TRUE);
+                break;
+            case '-':
+                option.setValue(Boolean.FALSE);
+                break;
+            case '?':
+                OptionUtils.printFlags(options, GRAAL_OPTION_PREFIX);
+                break;
+            case ' ':
+                OptionUtils.printNoMatchMessage(options, name, GRAAL_OPTION_PREFIX);
+                break;
+            case 'i':
+                option.setValue((int) primitiveValue);
+                break;
+            case 'f':
+                option.setValue((float) longBitsToDouble(primitiveValue));
+                break;
+            case 'd':
+                option.setValue(longBitsToDouble(primitiveValue));
+                break;
+            case 's':
+                option.setValue(stringValue);
+                break;
         }
+    }
 
-        Object value = null;
-        String fieldName = null;
-        String valueString = null;
-
-        char first = option.charAt(0);
-        if (first == '+' || first == '-') {
-            fieldName = option.substring(1);
-            value = (first == '+');
-        } else {
-            int index = option.indexOf('=');
-            if (index == -1) {
-                fieldName = option;
-                valueString = null;
-            } else {
-                fieldName = option.substring(0, index);
-                valueString = option.substring(index + 1);
-            }
-        }
-
-        Field f;
-        try {
-            f = GraalOptions.class.getField(fieldName);
-
-            if (value == null) {
-                if (f.getType() == Float.TYPE) {
-                    value = Float.parseFloat(valueString);
-                } else if (f.getType() == Double.TYPE) {
-                    value = Double.parseDouble(valueString);
-                } else if (f.getType() == Integer.TYPE) {
-                    value = Integer.parseInt(valueString);
-                } else if (f.getType() == Boolean.TYPE) {
-                    if (valueString == null || valueString.length() == 0) {
-                        value = true;
-                    } else {
-                        value = Boolean.parseBoolean(valueString);
-                    }
-                } else if (f.getType() == String.class) {
-                    if (valueString == null) {
-                        value = "";
-                    } else {
-                        value = valueString;
-                    }
-                }
-            }
-            if (value != null) {
-                f.set(null, value);
-                //Logger.info("Set option " + fieldName + " to " + value);
-            } else {
-                Logger.info("Wrong value \"" + valueString + "\" for option " + fieldName);
-                return false;
-            }
-        } catch (SecurityException e) {
-            Logger.info("Security exception when setting option " + option);
-            return false;
-        } catch (NoSuchFieldException e) {
-            Logger.info("Could not find option " + fieldName);
-            return false;
-        } catch (IllegalArgumentException e) {
-            Logger.info("Illegal value for option " + option);
-            return false;
-        } catch (IllegalAccessException e) {
-            Logger.info("Illegal access exception when setting option " + option);
-            return false;
-        }
-
-        return true;
+    /**
+     * Parses a given option value specification.
+     *
+     * @param option the specification of an option and its value
+     * @param setter the object to notify of the parsed option and value. If null, the
+     *            {@link OptionValue#setValue(Object)} method of the specified option is called
+     *            instead.
+     */
+    public static boolean parseOption(String option, OptionConsumer setter) {
+        return OptionUtils.parseOption(options, option, GRAAL_OPTION_PREFIX, setter);
     }
 }
