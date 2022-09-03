@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,16 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.debug.GraalDebugConfig.Options.DebugValueSummary;
-import static com.oracle.graal.debug.GraalDebugConfig.Options.DebugValueThreadFilter;
-import static com.oracle.graal.debug.GraalDebugConfig.Options.SuppressZeroDebugValues;
+import static com.oracle.graal.compiler.GraalDebugConfig.*;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import java.io.*;
+import java.util.*;
+import java.util.regex.*;
+import java.util.stream.*;
 
-import jdk.internal.jvmci.common.JVMCIError;
-
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.debug.internal.DebugValue;
-import com.oracle.graal.debug.internal.DebugValueMap;
-import com.oracle.graal.debug.internal.KeyRegistry;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.internal.*;
 
 /**
  * Facility for printing the {@linkplain KeyRegistry#getDebugValues() values} collected across all
@@ -46,7 +39,7 @@ import com.oracle.graal.debug.internal.KeyRegistry;
  */
 public class DebugValuesPrinter {
 
-    public void printDebugValues() throws JVMCIError {
+    public void printDebugValues() throws GraalInternalError {
         TTY.println();
         TTY.println("<DebugValues>");
         List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
@@ -98,7 +91,7 @@ public class DebugValuesPrinter {
                         }
                         break;
                     default:
-                        throw new JVMCIError("Unknown summary type: %s", summary);
+                        throw new GraalInternalError("Unknown summary type: %s", summary);
                 }
                 for (DebugValueMap topLevelMap : topLevelMaps) {
                     topLevelMap.reset();
