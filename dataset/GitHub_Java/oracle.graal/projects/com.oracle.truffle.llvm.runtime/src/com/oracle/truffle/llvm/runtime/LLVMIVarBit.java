@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -439,9 +439,6 @@ public final class LLVMIVarBit {
     @Override
     @TruffleBoundary
     public String toString() {
-        if (arr == null) {
-            return Integer.toString(0);
-        }
         return String.format("i%d %s", getBitSize(), asBigInteger().toString());
     }
 
@@ -468,4 +465,5 @@ public final class LLVMIVarBit {
         LLVMIVarBit other = (LLVMIVarBit) obj;
         return compare(other) == 0;
     }
+
 }
