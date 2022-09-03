@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,138 +29,130 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
-import java.util.Objects;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
+import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.types.metadata.MetadataBlock;
-import com.oracle.truffle.llvm.runtime.types.metadata.MetadataBlock.MetadataReference;
+public final class VectorType extends AggregateType {
 
-public class VectorType implements AggregateType {
-
-    private final Type elementType;
-
+    @CompilationFinal private Assumption elementTypeAssumption;
+    @CompilationFinal private Type elementType;
     private final int length;
 
-    private MetadataReference metadata = MetadataBlock.voidRef;
-
-    public VectorType(Type type, int length) {
-        this.elementType = type;
+    public VectorType(Type elementType, int length) {
+        if (elementType != null && !(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw new AssertionError("Invalid ElementType of Vector: " + elementType);
+        }
+        this.elementTypeAssumption = Truffle.getRuntime().createAssumption("VectorType.elementType");
+        this.elementType = elementType;
         this.length = length;
     }
 
-    @Override
-    public int getBits() {
-        return getElementType().getBits() * length;
-    }
-
     public Type getElementType() {
+        if (!elementTypeAssumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+        }
         return elementType;
     }
 
     @Override
-    public int getLength() {
-        return length;
+    public int getBitSize() {
+        return getElementType().getBitSize() * length;
     }
 
     @Override
-    public Type getElementType(int index) {
+    public int getNumberOfElements() {
+        return length;
+    }
+
+    public void setElementType(Type elementType) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        if (elementType == null || !(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
+            throw new AssertionError("Invalid ElementType of Vector: " + elementType);
+        }
+        this.elementTypeAssumption.invalidate();
+        this.elementType = elementType;
+        this.elementTypeAssumption = Truffle.getRuntime().createAssumption("VectorType.elementType");
+    }
+
+    @Override
+    public Type getElementType(long index) {
+        if (index >= length) {
+            CompilerDirectives.transferToInterpreter();
+            throw new ArrayIndexOutOfBoundsException();
+        }
         return getElementType();
     }
 
     @Override
-    public LLVMBaseType getLLVMBaseType() {
-        final LLVMBaseType llvmBaseType = this.getElementType().getLLVMBaseType();
-        switch (llvmBaseType) {
-            case I1:
-                return LLVMBaseType.I1_VECTOR;
-            case I8:
-                return LLVMBaseType.I8_VECTOR;
-            case I16:
-                return LLVMBaseType.I16_VECTOR;
-            case I32:
-                return LLVMBaseType.I32_VECTOR;
-            case I64:
-                return LLVMBaseType.I64_VECTOR;
-            case FLOAT:
-                return LLVMBaseType.FLOAT_VECTOR;
-            case DOUBLE:
-                return LLVMBaseType.DOUBLE_VECTOR;
-            default:
-                throw new UnsupportedOperationException("Unsupported Vector Element Type: " + getElementType());
-        }
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
     }
 
     @Override
-    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
-        switch (getElementType().getRuntimeType()) {
-            case I1:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I1_VECTOR;
-            case I8:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I8_VECTOR;
-            case I16:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I16_VECTOR;
-            case I32:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I32_VECTOR;
-            case I64:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I64_VECTOR;
-            case FLOAT:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.FLOAT_VECTOR;
-            case DOUBLE:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.DOUBLE_VECTOR;
-            default:
-                throw new UnsupportedOperationException("Unsupported Vector Element Type: " + getElementType());
-        }
-    }
-
-    @Override
-    public int getAlignment(DataSpecConverter targetDataLayout) {
+    public int getAlignment(DataLayout targetDataLayout) {
         return getElementType().getAlignment(targetDataLayout);
     }
 
     @Override
-    public int getSize(DataSpecConverter targetDataLayout) {
+    public int getSize(DataLayout targetDataLayout) {
         return getElementType().getSize(targetDataLayout) * length;
     }
 
     @Override
-    public int getIndexOffset(int index, DataSpecConverter targetDataLayout) {
+    public Type shallowCopy() {
+        final VectorType copy = new VectorType(getElementType(), length);
+        copy.setInteropType(getInteropType());
+        return copy;
+    }
+
+    @Override
+    public long getOffsetOf(long index, DataLayout targetDataLayout) {
         return getElementType().getSize(targetDataLayout) * index;
     }
 
     @Override
-    public void setMetadataReference(MetadataReference metadata) {
-        this.metadata = metadata;
-    }
-
-    @Override
-    public MetadataReference getMetadataReference() {
-        return metadata;
+    @TruffleBoundary
+    public String toString() {
+        return String.format("< %d x %s >", getNumberOfElements(), getElementType());
     }
 
     @Override
     public int hashCode() {
-        int hash = 5;
-        hash = 59 * hash + Objects.hashCode(this.getElementType());
-        hash = 59 * hash + this.length;
-        return hash;
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((getElementType() == null) ? 0 : getElementType().hashCode());
+        result = prime * result + length;
+        return result;
     }
 
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
-
-        } else if (obj instanceof VectorType) {
-            final VectorType other = (VectorType) obj;
-            return length == other.length && getElementType().equals(other.getElementType());
-
-        } else {
+        }
+        if (obj == null) {
             return false;
         }
-    }
-
-    @Override
-    public String toString() {
-        return String.format("<%d x %s>", getLength(), getElementType());
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        VectorType other = (VectorType) obj;
+        if (getElementType() == null) {
+            if (other.getElementType() != null) {
+                return false;
+            }
+        } else if (!getElementType().equals(other.getElementType())) {
+            return false;
+        }
+        if (length != other.length) {
+            return false;
+        }
+        return true;
     }
 }
