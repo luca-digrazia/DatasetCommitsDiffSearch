@@ -32,118 +32,83 @@ package com.oracle.truffle.llvm.nodes.others;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMFunctionNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVM80BitFloatNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
+import com.oracle.truffle.api.profiles.ConditionProfile;
+import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-public abstract class LLVMSelectNode {
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+public abstract class LLVMSelectNode extends LLVMExpressionNode {
+    protected final ConditionProfile conditionProfile = ConditionProfile.createCountingProfile();
 
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMI1Node.class)})
-    public abstract static class LLVMI1SelectNode extends LLVMI1Node {
+    public abstract static class LLVMI1SelectNode extends LLVMSelectNode {
 
         @Specialization
-        public boolean execute(boolean cond, boolean trueBranch, boolean elseBranch) {
-            return cond ? trueBranch : elseBranch;
-        }
-
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMI8Node.class), @NodeChild(type = LLVMI8Node.class)})
-    public abstract static class LLVMI8SelectNode extends LLVMI8Node {
-
-        @Specialization
-        public byte execute(boolean cond, byte trueBranch, byte elseBranch) {
-            return cond ? trueBranch : elseBranch;
-        }
-
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMI16Node.class), @NodeChild(type = LLVMI16Node.class)})
-    public abstract static class LLVMI16SelectNode extends LLVMI16Node {
-
-        @Specialization
-        public short execute(boolean cond, short trueBranch, short elseBranch) {
-            return cond ? trueBranch : elseBranch;
-        }
-
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMI32Node.class), @NodeChild(type = LLVMI32Node.class)})
-    public abstract static class LLVMI32SelectNode extends LLVMI32Node {
-
-        @Specialization
-        public int execute(boolean cond, int trueBranch, int elseBranch) {
-            return cond ? trueBranch : elseBranch;
-        }
-
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMI64Node.class), @NodeChild(type = LLVMI64Node.class)})
-    public abstract static class LLVMI64SelectNode extends LLVMI64Node {
-
-        @Specialization
-        public long execute(boolean cond, long trueBranch, long elseBranch) {
-            return cond ? trueBranch : elseBranch;
+        protected boolean doOp(boolean cond, boolean trueBranch, boolean elseBranch) {
+            return conditionProfile.profile(cond) ? trueBranch : elseBranch;
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMFloatNode.class), @NodeChild(type = LLVMFloatNode.class)})
-    public abstract static class LLVMFloatSelectNode extends LLVMFloatNode {
+    public abstract static class LLVMI8SelectNode extends LLVMSelectNode {
 
         @Specialization
-        public float execute(boolean cond, float trueBranch, float elseBranch) {
-            return cond ? trueBranch : elseBranch;
-        }
-
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMDoubleNode.class), @NodeChild(type = LLVMDoubleNode.class)})
-    public abstract static class LLVMDoubleSelectNode extends LLVMDoubleNode {
-
-        @Specialization
-        public double execute(boolean cond, double trueBranch, double elseBranch) {
-            return cond ? trueBranch : elseBranch;
-        }
-
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVM80BitFloatNode.class), @NodeChild(type = LLVM80BitFloatNode.class)})
-    public abstract static class LLVM80BitFloatSelectNode extends LLVM80BitFloatNode {
-
-        @Specialization
-        public LLVM80BitFloat execute(boolean cond, LLVM80BitFloat trueBranch, LLVM80BitFloat elseBranch) {
-            return cond ? trueBranch : elseBranch;
+        protected byte doOp(boolean cond, byte trueBranch, byte elseBranch) {
+            return conditionProfile.profile(cond) ? trueBranch : elseBranch;
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMAddressNode.class)})
-    public abstract static class LLVMAddressSelectNode extends LLVMAddressNode {
+    public abstract static class LLVMI16SelectNode extends LLVMSelectNode {
 
         @Specialization
-        public LLVMAddress execute(boolean cond, LLVMAddress trueBranch, LLVMAddress elseBranch) {
-            return cond ? trueBranch : elseBranch;
+        protected short doOp(boolean cond, short trueBranch, short elseBranch) {
+            return conditionProfile.profile(cond) ? trueBranch : elseBranch;
         }
-
     }
 
-    @NodeChildren({@NodeChild(type = LLVMI1Node.class), @NodeChild(type = LLVMFunctionNode.class), @NodeChild(type = LLVMFunctionNode.class)})
-    public abstract static class LLVMFunctionSelectNode extends LLVMFunctionNode {
+    public abstract static class LLVMI32SelectNode extends LLVMSelectNode {
 
         @Specialization
-        public LLVMFunctionDescriptor execute(boolean cond, LLVMFunctionDescriptor trueBranch, LLVMFunctionDescriptor elseBranch) {
-            return cond ? trueBranch : elseBranch;
+        protected int doOp(boolean cond, int trueBranch, int elseBranch) {
+            return conditionProfile.profile(cond) ? trueBranch : elseBranch;
         }
-
     }
 
+    public abstract static class LLVMI64SelectNode extends LLVMSelectNode {
+
+        @Specialization
+        protected long doOp(boolean cond, long trueBranch, long elseBranch) {
+            return conditionProfile.profile(cond) ? trueBranch : elseBranch;
+        }
+    }
+
+    public abstract static class LLVMFloatSelectNode extends LLVMSelectNode {
+
+        @Specialization
+        protected float doOp(boolean cond, float trueBranch, float elseBranch) {
+            return conditionProfile.profile(cond) ? trueBranch : elseBranch;
+        }
+    }
+
+    public abstract static class LLVMDoubleSelectNode extends LLVMSelectNode {
+
+        @Specialization
+        protected double doOp(boolean cond, double trueBranch, double elseBranch) {
+            return conditionProfile.profile(cond) ? trueBranch : elseBranch;
+        }
+    }
+
+    public abstract static class LLVM80BitFloatSelectNode extends LLVMSelectNode {
+
+        @Specialization
+        protected LLVM80BitFloat doOp(boolean cond, LLVM80BitFloat trueBranch, LLVM80BitFloat elseBranch) {
+            return conditionProfile.profile(cond) ? trueBranch : elseBranch;
+        }
+    }
+
+    public abstract static class LLVMGenericSelectNode extends LLVMSelectNode {
+
+        @Specialization
+        protected Object doOp(boolean cond, Object trueBranch, Object elseBranch) {
+            return conditionProfile.profile(cond) ? trueBranch : elseBranch;
+        }
+    }
 }
