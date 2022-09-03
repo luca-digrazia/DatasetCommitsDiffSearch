@@ -24,31 +24,29 @@ package com.oracle.max.graal.compiler.tests;
 
 import org.junit.*;
 
-import com.oracle.max.graal.debug.*;
-import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.lir.cfg.*;
+import com.oracle.max.graal.compiler.loop.*;
 import com.oracle.max.graal.nodes.*;
 
 public class NestedLoopTest extends GraphTest {
 
     @Test
     public void test1() {
-        test("test1Snippet", 1, 2, 2);
+        test("test1Snippet", 5, 5, 4);
     }
 
     @Test
     public void test2() {
-        test("test2Snippet", 1, 2, 2);
+        test("test2Snippet", 2, 5, 4);
     }
 
     @Test
     public void test3() {
-        test("test3Snippet", 1, 2, 2);
+        test("test3Snippet", 1, 5, 4);
     }
 
     @Test
     public void test4() {
-        test("test4Snippet", 1, 3, 2);
+        test("test4Snippet", 1, 6, 4);
     }
 
     @SuppressWarnings("all")
@@ -144,41 +142,25 @@ public class NestedLoopTest extends GraphTest {
 
     private void test(String snippet, int rootExits, int nestedExits, int innerExits) {
         StructuredGraph graph = parse(snippet);
-        Debug.dump(graph, "Graph");
-        ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);
-
-        Assert.assertTrue(cfg.getLoops().length == 3);
-        Loop rootLoop = cfg.getLoops()[0];
-        Loop nestedLoop = cfg.getLoops()[1];
-        Loop innerMostLoop = cfg.getLoops()[2];
+        print(graph);
+        LoopInfo loopInfo = LoopUtil.computeLoopInfo(graph);
+        loopInfo.print();
+        Loop rootLoop = loopInfo.rootLoops().get(0);
+        Loop nestedLoop = rootLoop.children().get(0);
+        Loop innerMostLoop = nestedLoop.children().get(0);
         Invoke a = getInvoke("a", graph);
         Invoke b = getInvoke("b", graph);
         Invoke c = getInvoke("c", graph);
         Invoke d = getInvoke("d", graph);
-        Assert.assertTrue(containsDirect(rootLoop, a, cfg));
-        Assert.assertTrue(containsDirect(nestedLoop, b, cfg));
-        Assert.assertTrue(containsDirect(innerMostLoop, c, cfg));
-        Assert.assertTrue(containsDirect(innerMostLoop, d, cfg));
-        Assert.assertTrue(contains(rootLoop, d, cfg));
-        Assert.assertTrue(contains(nestedLoop, d, cfg));
-        Assert.assertEquals(rootExits, rootLoop.exits.size());
-        Assert.assertEquals(nestedExits, nestedLoop.exits.size());
-        Assert.assertEquals(innerExits, innerMostLoop.exits.size());
-        Debug.dump(graph, "Graph");
-    }
-
-    private static boolean contains(Loop loop, Invoke node, ControlFlowGraph cfg) {
-        Block block = cfg.blockFor((Node) node);
-        Assert.assertNotNull(block);
-        return loop.blocks.contains(block);
-    }
-
-    private static boolean containsDirect(Loop loop, Invoke node, ControlFlowGraph cfg) {
-        for (Loop child : loop.children) {
-            if (contains(child, node, cfg)) {
-                return false;
-            }
-        }
-        return contains(loop, node, cfg);
+        Assert.assertTrue(rootLoop.containsDirectFixed((FixedNode) a));
+        Assert.assertTrue(nestedLoop.containsDirectFixed((FixedNode) b));
+        Assert.assertTrue(innerMostLoop.containsDirectFixed((FixedNode) c));
+        Assert.assertTrue(innerMostLoop.containsDirectFixed((FixedNode) d));
+        Assert.assertTrue(rootLoop.containsFixed((FixedNode) d));
+        Assert.assertTrue(nestedLoop.containsFixed((FixedNode) d));
+        Assert.assertEquals(rootExits, rootLoop.exits().cardinality());
+        Assert.assertEquals(nestedExits, nestedLoop.exits().cardinality());
+        Assert.assertEquals(innerExits, innerMostLoop.exits().cardinality());
+        print(graph);
     }
 }

@@ -43,9 +43,17 @@ public class FilteredNodeIterable<T extends Node> extends NodeIterable<T> {
         this.predicate = predicate.or(new TypePredicate(clazz));
         return (FilteredNodeIterable<Node>) this;
     }
+    public FilteredNodeIterable<T> and(NodePredicate nodePredicate) {
+        this.predicate = this.predicate.and(nodePredicate);
+        return this;
+    }
+    public FilteredNodeIterable<T> or(NodePredicate nodePredicate) {
+        this.predicate = this.predicate.or(nodePredicate);
+        return this;
+    }
     @Override
     public Iterator<T> iterator() {
         final Iterator<T> iterator = nodeIterable.iterator();
-        return new PredicatedProxyNodeIterator<T>(until, iterator, predicate);
+        return new PredicatedProxyNodeIterator<>(until, iterator, predicate);
     }
 }
