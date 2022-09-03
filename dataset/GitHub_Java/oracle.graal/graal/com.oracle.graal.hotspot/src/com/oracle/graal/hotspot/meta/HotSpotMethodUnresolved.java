@@ -28,28 +28,41 @@ import com.oracle.graal.api.meta.*;
  * Implementation of {@link JavaMethod} for unresolved HotSpot methods.
  */
 public final class HotSpotMethodUnresolved extends HotSpotMethod {
+
     private static final long serialVersionUID = 5610263481791970079L;
     private final Signature signature;
     protected JavaType holder;
 
-    public HotSpotMethodUnresolved(String name, String signature, JavaType holder) {
-        this.name = name;
+    public HotSpotMethodUnresolved(String name, Signature signature, JavaType holder) {
+        super(name);
         this.holder = holder;
-        this.signature = new HotSpotSignature(signature);
+        this.signature = signature;
     }
 
     @Override
-    public Signature signature() {
+    public Signature getSignature() {
         return signature;
     }
 
     @Override
-    public JavaType holder() {
+    public JavaType getDeclaringClass() {
         return holder;
     }
 
     @Override
-    public String toString() {
-        return "HotSpotMethod<" + holder.name() + ". " + name + ", unresolved>";
+    public int hashCode() {
+        return super.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || !(obj instanceof HotSpotMethodUnresolved)) {
+            return false;
+        }
+        HotSpotMethodUnresolved that = (HotSpotMethodUnresolved) obj;
+        return this.name.equals(that.name) && this.signature.equals(that.signature) && this.holder.equals(that.holder);
     }
 }

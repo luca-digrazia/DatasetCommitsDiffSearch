@@ -46,18 +46,19 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider, Remote {
         this.runtime = runtime;
     }
 
-    public ResolvedJavaType lookupJavaType(Class<?> clazz) {
+    public HotSpotResolvedJavaType lookupJavaType(Class<?> clazz) {
         if (clazz == null) {
             throw new IllegalArgumentException("Class parameter was null");
         }
-        return runtime.fromClass(clazz);
+        return fromClass(clazz);
     }
 
-    public HotSpotResolvedObjectType lookupJavaType(JavaConstant constant) {
+    public HotSpotResolvedObjectTypeImpl lookupJavaType(JavaConstant constant) {
         if (constant.isNull() || !(constant instanceof HotSpotObjectConstant)) {
             return null;
         }
-        return ((HotSpotObjectConstant) constant).getType();
+        Object o = ((HotSpotObjectConstantImpl) constant).object();
+        return fromObjectClass(o.getClass());
     }
 
     public Signature parseMethodDescriptor(String signature) {
@@ -105,11 +106,11 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider, Remote {
         final int modifiers = reflectionField.getModifiers();
         final long offset = Modifier.isStatic(modifiers) ? unsafe.staticFieldOffset(reflectionField) : unsafe.objectFieldOffset(reflectionField);
 
-        HotSpotResolvedObjectType holder = fromObjectClass(fieldHolder);
-        JavaType type = fromClass(fieldType);
+        HotSpotResolvedObjectTypeImpl holder = fromObjectClass(fieldHolder);
+        HotSpotResolvedJavaType type = fromClass(fieldType);
 
         if (offset != -1) {
-            HotSpotResolvedObjectType resolved = holder;
+            HotSpotResolvedObjectTypeImpl resolved = holder;
             return resolved.createField(name, type, offset, modifiers);
         } else {
             throw GraalInternalError.shouldNotReachHere("unresolved field " + reflectionField);
@@ -285,7 +286,7 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider, Remote {
     @Override
     public long getMemorySize(JavaConstant constant) {
         if (constant.getKind() == Kind.Object) {
-            HotSpotResolvedObjectType lookupJavaType = lookupJavaType(constant);
+            HotSpotResolvedObjectTypeImpl lookupJavaType = this.lookupJavaType(constant);
 
             if (lookupJavaType == null) {
                 return 0;

@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.hotspot.meta;
 
+import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.*;
-import static jdk.internal.jvmci.code.CallingConvention.Type.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition;
@@ -152,7 +151,7 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
 
     public boolean canDeoptimize(ForeignCallDescriptor descriptor) {
         assert foreignCalls.containsKey(descriptor) : "unknown foreign call: " + descriptor;
-        return foreignCalls.get(descriptor).needsDebugInfo();
+        return foreignCalls.get(descriptor).canDeoptimize();
     }
 
     public LocationIdentity[] getKilledLocations(ForeignCallDescriptor descriptor) {

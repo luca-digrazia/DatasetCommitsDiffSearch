@@ -35,7 +35,7 @@ import com.oracle.graal.hotspot.*;
 /**
  * Implementation of {@link ConstantPool} for HotSpot.
  */
-public class HotSpotConstantPool extends CompilerObject implements ConstantPool, HotSpotProxified {
+public class HotSpotConstantPool extends CompilerObject implements ConstantPool, Remote {
 
     private static final long serialVersionUID = -5443206401485234850L;
 
@@ -119,13 +119,9 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool,
      * Reference to the C++ ConstantPool object.
      */
     private final long metaspaceConstantPool;
-    private final Object[] cache;
-    private ResolvedJavaType lastType;
-    private int lastTypeCpi = Integer.MIN_VALUE;
 
     public HotSpotConstantPool(long metaspaceConstantPool) {
         this.metaspaceConstantPool = metaspaceConstantPool;
-        cache = new Object[length()];
     }
 
     /**
@@ -457,20 +453,10 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool,
 
     @Override
     public JavaMethod lookupMethod(int cpi, int opcode) {
-        if (opcode != Bytecodes.INVOKEDYNAMIC) {
-            Object result = cache[cpi];
-            if (result != null) {
-                return (ResolvedJavaMethod) result;
-            }
-        }
         final int index = toConstantPoolIndex(cpi, opcode);
         final long metaspaceMethod = runtime().getCompilerToVM().lookupMethodInPool(metaspaceConstantPool, index, (byte) opcode);
         if (metaspaceMethod != 0L) {
-            HotSpotResolvedJavaMethod result = HotSpotResolvedJavaMethodImpl.fromMetaspace(metaspaceMethod);
-            if (opcode != Bytecodes.INVOKEDYNAMIC) {
-                cache[cpi] = result;
-            }
-            return result;
+            return HotSpotResolvedJavaMethodImpl.fromMetaspace(metaspaceMethod);
         } else {
             // Get the method's name and signature.
             String name = getNameRefAt(index);
@@ -489,26 +475,12 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool,
 
     @Override
     public JavaType lookupType(int cpi, int opcode) {
-        synchronized (this) {
-            if (cpi == this.lastTypeCpi) {
-                return this.lastType;
-            }
-        }
         final long metaspacePointer = runtime().getCompilerToVM().lookupKlassInPool(metaspaceConstantPool, cpi);
-        JavaType result = getJavaType(metaspacePointer);
-        if (result instanceof ResolvedJavaType) {
-            this.lastType = (ResolvedJavaType) result;
-            this.lastTypeCpi = cpi;
-        }
-        return result;
+        return getJavaType(metaspacePointer);
     }
 
     @Override
     public JavaField lookupField(int cpi, int opcode) {
-        Object resolvedJavaField = cache[cpi];
-        if (resolvedJavaField != null) {
-            return (ResolvedJavaField) resolvedJavaField;
-        }
         final int index = toConstantPoolIndex(cpi, opcode);
         final int nameAndTypeIndex = getNameAndTypeRefIndexAt(index);
         final int nameIndex = getNameRefIndexAt(nameAndTypeIndex);
@@ -535,11 +507,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool,
             HotSpotResolvedObjectTypeImpl resolvedHolder = HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(metaspaceKlass);
             final int flags = (int) info[0];
             final long offset = info[1];
-            HotSpotResolvedJavaField result = resolvedHolder.createField(name, type, offset, flags);
-            if (type instanceof ResolvedJavaType) {
-                cache[cpi] = result;
-            }
-            return result;
+            return resolvedHolder.createField(name, type, offset, flags);
         } else {
             return new HotSpotUnresolvedField(holder, name, type);
         }
