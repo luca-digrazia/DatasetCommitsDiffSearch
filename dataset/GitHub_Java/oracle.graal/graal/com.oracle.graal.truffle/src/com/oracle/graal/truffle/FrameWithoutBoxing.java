@@ -104,8 +104,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private Object getObjectUnsafe(int slotIndex, FrameSlot slot) {
-        boolean condition = this.getTags()[slotIndex] == OBJECT_TAG;
-        return unsafeGetObject(getLocals(), Unsafe.ARRAY_OBJECT_BASE_OFFSET + slotIndex * (long) Unsafe.ARRAY_OBJECT_INDEX_SCALE, condition, slot);
+        return unsafeGetObject(getLocals(), Unsafe.ARRAY_OBJECT_BASE_OFFSET + slotIndex * (long) Unsafe.ARRAY_OBJECT_INDEX_SCALE, this.getTags()[slotIndex] == FrameSlotKind.Object.tag, slot);
     }
 
     @Override
@@ -128,7 +127,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     private byte getByteUnsafe(int slotIndex, FrameSlot slot) {
         long offset = getPrimitiveOffset(slotIndex);
-        boolean condition = this.getTags()[slotIndex] == BYTE_TAG;
+        boolean condition = this.getTags()[slotIndex] == FrameSlotKind.Byte.tag;
         return (byte) unsafeGetInt(getPrimitiveLocals(), offset, condition, slot);
     }
 
@@ -153,7 +152,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     private boolean getBooleanUnsafe(int slotIndex, FrameSlot slot) {
         long offset = getPrimitiveOffset(slotIndex);
-        boolean condition = this.getTags()[slotIndex] == BOOLEAN_TAG;
+        boolean condition = this.getTags()[slotIndex] == FrameSlotKind.Boolean.tag;
         return unsafeGetInt(getPrimitiveLocals(), offset, condition, slot) != 0;
     }
 
@@ -178,7 +177,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     private float getFloatUnsafe(int slotIndex, FrameSlot slot) {
         long offset = getPrimitiveOffset(slotIndex);
-        boolean condition = this.getTags()[slotIndex] == FLOAT_TAG;
+        boolean condition = this.getTags()[slotIndex] == FrameSlotKind.Float.tag;
         return unsafeGetFloat(getPrimitiveLocals(), offset, condition, slot);
     }
 
@@ -203,7 +202,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     private long getLongUnsafe(int slotIndex, FrameSlot slot) {
         long offset = getPrimitiveOffset(slotIndex);
-        boolean condition = this.getTags()[slotIndex] == LONG_TAG;
+        boolean condition = this.getTags()[slotIndex] == FrameSlotKind.Long.tag;
         return unsafeGetLong(getPrimitiveLocals(), offset, condition, slot);
     }
 
@@ -228,7 +227,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     private int getIntUnsafe(int slotIndex, FrameSlot slot) {
         long offset = getPrimitiveOffset(slotIndex);
-        boolean condition = this.getTags()[slot.getIndex()] == INT_TAG;
+        boolean condition = this.getTags()[slot.getIndex()] == FrameSlotKind.Int.tag;
         return unsafeGetInt(getPrimitiveLocals(), offset, condition, slot);
     }
 
@@ -253,7 +252,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     private double getDoubleUnsafe(int slotIndex, FrameSlot slot) {
         long offset = getPrimitiveOffset(slotIndex);
-        boolean condition = this.getTags()[slotIndex] == DOUBLE_TAG;
+        boolean condition = this.getTags()[slotIndex] == FrameSlotKind.Double.tag;
         return unsafeGetDouble(getPrimitiveLocals(), offset, condition, slot);
     }
 
@@ -307,20 +306,20 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
             resize();
         }
         byte tag = getTags()[slotIndex];
-        if (tag == BOOLEAN_TAG) {
+        if (tag == FrameSlotKind.Boolean.tag) {
             return getBooleanUnsafe(slotIndex, slot);
-        } else if (tag == BYTE_TAG) {
+        } else if (tag == FrameSlotKind.Byte.tag) {
             return getByteUnsafe(slotIndex, slot);
-        } else if (tag == INT_TAG) {
+        } else if (tag == FrameSlotKind.Int.tag) {
             return getIntUnsafe(slotIndex, slot);
-        } else if (tag == DOUBLE_TAG) {
+        } else if (tag == FrameSlotKind.Double.tag) {
             return getDoubleUnsafe(slotIndex, slot);
-        } else if (tag == LONG_TAG) {
+        } else if (tag == FrameSlotKind.Long.tag) {
             return getLongUnsafe(slotIndex, slot);
-        } else if (tag == FLOAT_TAG) {
+        } else if (tag == FrameSlotKind.Float.tag) {
             return getFloatUnsafe(slotIndex, slot);
         } else {
-            assert tag == OBJECT_TAG;
+            assert tag == FrameSlotKind.Object.tag;
             return getObjectUnsafe(slotIndex, slot);
         }
     }
@@ -349,37 +348,37 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     @Override
     public boolean isObject(FrameSlot slot) {
-        return getTag(slot) == OBJECT_TAG;
+        return getTag(slot) == FrameSlotKind.Object.tag;
     }
 
     @Override
     public boolean isByte(FrameSlot slot) {
-        return getTag(slot) == BYTE_TAG;
+        return getTag(slot) == FrameSlotKind.Byte.tag;
     }
 
     @Override
     public boolean isBoolean(FrameSlot slot) {
-        return getTag(slot) == BOOLEAN_TAG;
+        return getTag(slot) == FrameSlotKind.Boolean.tag;
     }
 
     @Override
     public boolean isInt(FrameSlot slot) {
-        return getTag(slot) == INT_TAG;
+        return getTag(slot) == FrameSlotKind.Int.tag;
     }
 
     @Override
     public boolean isLong(FrameSlot slot) {
-        return getTag(slot) == LONG_TAG;
+        return getTag(slot) == FrameSlotKind.Long.tag;
     }
 
     @Override
     public boolean isFloat(FrameSlot slot) {
-        return getTag(slot) == FLOAT_TAG;
+        return getTag(slot) == FrameSlotKind.Float.tag;
     }
 
     @Override
     public boolean isDouble(FrameSlot slot) {
-        return getTag(slot) == DOUBLE_TAG;
+        return getTag(slot) == FrameSlotKind.Double.tag;
     }
 
     @SuppressWarnings({"unchecked", "unused"})
