@@ -51,9 +51,10 @@ public abstract class Stamp {
     public abstract Kind getStackKind();
 
     /**
-     * Gets a platform dependent {@link LIRKind} that can be used to store a value of this stamp.
+     * Gets a platform dependent {@link PlatformKind} that can be used to store a value of this
+     * stamp.
      */
-    public abstract LIRKind getLIRKind(LIRKindTool tool);
+    public abstract PlatformKind getPlatformKind(PlatformKindTool tool);
 
     /**
      * Returns the union of this stamp and the given stamp. Typically used to create stamps for phi
@@ -114,20 +115,5 @@ public abstract class Stamp {
      */
     public Constant asConstant() {
         return null;
-    }
-
-    /**
-     * Tries to improve this stamp with the stamp given as parameter. If successful, returns the new
-     * improved stamp. Otherwise, returns null.
-     * 
-     * @param other the stamp that should be used to improve this stamp
-     * @return the newly improved stamp of null if an improvement was not possible
-     */
-    public Stamp tryImprove(Stamp other) {
-        Stamp newStamp = this.join(other);
-        if (newStamp.equals(this)) {
-            return null;
-        }
-        return newStamp;
     }
 }

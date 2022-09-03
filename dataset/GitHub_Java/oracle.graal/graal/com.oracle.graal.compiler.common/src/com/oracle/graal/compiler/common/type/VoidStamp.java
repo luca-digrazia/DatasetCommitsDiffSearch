@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,7 +45,7 @@ public final class VoidStamp extends Stamp {
     }
 
     @Override
-    public LIRKind getLIRKind(LIRKindTool tool) {
+    public PlatformKind getPlatformKind(PlatformKindTool tool) {
         throw GraalInternalError.shouldNotReachHere("void stamp has no value");
     }
 
@@ -103,16 +103,11 @@ public final class VoidStamp extends Stamp {
     }
 
     @Override
-    public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
-        throw GraalInternalError.shouldNotReachHere("can't read values of void stamp");
-    }
-
-    @Override
     public Stamp constant(Constant c, MetaAccessProvider meta) {
         throw GraalInternalError.shouldNotReachHere("void stamp has no value");
     }
 
-    private static final VoidStamp instance = new VoidStamp();
+    private static VoidStamp instance = new VoidStamp();
 
     static VoidStamp getInstance() {
         return instance;

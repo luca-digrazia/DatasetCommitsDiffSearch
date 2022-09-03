@@ -40,7 +40,7 @@ public final class IllegalStamp extends Stamp {
     }
 
     @Override
-    public LIRKind getLIRKind(LIRKindTool tool) {
+    public PlatformKind getPlatformKind(PlatformKindTool tool) {
         throw GraalInternalError.shouldNotReachHere("illegal stamp should not reach backend");
     }
 
@@ -89,12 +89,7 @@ public final class IllegalStamp extends Stamp {
         return false;
     }
 
-    @Override
-    public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
-        throw GraalInternalError.shouldNotReachHere("can't read values of illegal stamp");
-    }
-
-    private static final IllegalStamp instance = new IllegalStamp();
+    private static IllegalStamp instance = new IllegalStamp();
 
     static IllegalStamp getInstance() {
         return instance;
