@@ -25,7 +25,6 @@ package com.oracle.graal.replacements.test;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.oracle.graal.compiler.common.CompilationIdentifier;
 import com.oracle.graal.compiler.phases.HighTier;
 import com.oracle.graal.compiler.test.GraalCompilerTest;
 import com.oracle.graal.nodes.StructuredGraph;
@@ -63,8 +62,8 @@ public class CompiledExceptionHandlerTest extends GraalCompilerTest {
     }
 
     @Override
-    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
-        StructuredGraph graph = super.parseEager(m, allowAssumptions, compilationId);
+    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
+        StructuredGraph graph = super.parseEager(m, allowAssumptions);
         int handlers = graph.getNodes().filter(ExceptionObjectNode.class).count();
         Assert.assertEquals(1, handlers);
         return graph;
