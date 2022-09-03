@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.alloc;
 
 import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import java.util.*;
@@ -510,7 +509,7 @@ public final class LinearScan {
         // the list is sorted by Interval.spillDefinitionPos
         Interval interval;
         interval = createUnhandledLists(mustStoreAtDefinition, null).first;
-        if (DetailedAsserts.getValue()) {
+        if (GraalOptions.DetailedAsserts) {
             checkIntervals(interval);
         }
 
@@ -659,7 +658,7 @@ public final class LinearScan {
         assert index == numInstructions : "must match";
         assert (index << 1) == opId : "must match: " + (index << 1);
 
-        if (DetailedAsserts.getValue()) {
+        if (GraalOptions.DetailedAsserts) {
             for (int i = 0; i < variables.size(); i++) {
                 assert variables.get(i) != null && variables.get(i).index == i;
             }
@@ -706,7 +705,7 @@ public final class LinearScan {
                             }
                         }
 
-                        if (DetailedAsserts.getValue()) {
+                        if (GraalOptions.DetailedAsserts) {
                             verifyInput(block, liveKill, operand);
                         }
                         return operand;
@@ -738,7 +737,7 @@ public final class LinearScan {
                             }
                         }
 
-                        if (DetailedAsserts.getValue()) {
+                        if (GraalOptions.DetailedAsserts) {
                             // fixed intervals are never live at block boundaries, so
                             // they need not be processed in live sets
                             // process them only in debug mode so that this can be checked
@@ -862,7 +861,7 @@ public final class LinearScan {
             }
         } while (changeOccurred);
 
-        if (DetailedAsserts.getValue()) {
+        if (GraalOptions.DetailedAsserts) {
             verifyLiveness();
         }
 
@@ -870,7 +869,7 @@ public final class LinearScan {
         Block startBlock = ir.cfg.getStartBlock();
         BitSet liveInArgs = new BitSet(blockData.get(startBlock).liveIn.size());
         if (!blockData.get(startBlock).liveIn.equals(liveInArgs)) {
-            if (DetailedAsserts.getValue()) {
+            if (GraalOptions.DetailedAsserts) {
                 reportFailure(numBlocks);
             }
 
@@ -1088,7 +1087,7 @@ public final class LinearScan {
             MoveOp move = (MoveOp) op;
             if (optimizeMethodArgument(move.getInput())) {
                 StackSlot slot = asStackSlot(move.getInput());
-                if (DetailedAsserts.getValue()) {
+                if (GraalOptions.DetailedAsserts) {
                     assert op.id() > 0 : "invalid id";
                     assert blockForId(op.id()).getPredecessorCount() == 0 : "move from stack must be in first block";
                     assert isVariable(move.getResult()) : "result of move must be a variable";
@@ -1482,7 +1481,7 @@ public final class LinearScan {
             Interval fromInterval = intervalAtBlockEnd(fromBlock, liveOperand);
             Interval toInterval = intervalAtBlockBegin(toBlock, liveOperand);
 
-            if (fromInterval != toInterval && !fromInterval.location().equals(toInterval.location())) {
+            if (fromInterval != toInterval && (fromInterval.location() != toInterval.location())) {
                 // need to insert move instruction
                 moveResolver.addMapping(fromInterval, toInterval);
             }
@@ -1509,7 +1508,7 @@ public final class LinearScan {
                 TTY.println("inserting moves at beginning of toBlock B%d", toBlock.getId());
             }
 
-            if (DetailedAsserts.getValue()) {
+            if (GraalOptions.DetailedAsserts) {
                 assert ir.lir(fromBlock).get(0) instanceof StandardOp.LabelOp : "block does not start with a label";
 
                 // because the number of predecessor edges matches the number of
@@ -1615,7 +1614,7 @@ public final class LinearScan {
         assert interval != null : "interval must exist";
 
         if (opId != -1) {
-            if (DetailedAsserts.getValue()) {
+            if (GraalOptions.DetailedAsserts) {
                 Block block = blockForId(opId);
                 if (block.getSuccessorCount() <= 1 && opId == getLastLirInstructionId(block)) {
                     // check if spill moves could have been appended at the end of this block, but
@@ -1781,7 +1780,7 @@ public final class LinearScan {
             // remove useless moves
             if (op instanceof MoveOp) {
                 MoveOp move = (MoveOp) op;
-                if (move.getInput().equals(move.getResult())) {
+                if (move.getInput() == move.getResult()) {
                     instructions.set(j, null);
                     hasDead = true;
                 }
@@ -1840,14 +1839,14 @@ public final class LinearScan {
 
                 sortIntervalsAfterAllocation();
 
-                if (DetailedAsserts.getValue()) {
+                if (GraalOptions.DetailedAsserts) {
                     verify();
                 }
 
                 eliminateSpillMoves();
                 assignLocations();
 
-                if (DetailedAsserts.getValue()) {
+                if (GraalOptions.DetailedAsserts) {
                     verifyIntervals();
                 }
             }
@@ -1987,7 +1986,7 @@ public final class LinearScan {
                 Value l1 = i1.location();
                 Value l2 = i2.location();
                 if (i1.intersects(i2) && (l1.equals(l2))) {
-                    if (DetailedAsserts.getValue()) {
+                    if (GraalOptions.DetailedAsserts) {
                         TTY.println("Intervals %d and %d overlap and have the same register assigned", i1.operandNumber, i2.operandNumber);
                         TTY.println(i1.logString(this));
                         TTY.println(i2.logString(this));
