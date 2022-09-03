@@ -106,7 +106,6 @@ public interface ResolvedJavaType extends JavaType {
     /**
      * Returns the Java language modifiers for this type, as an integer. The {@link Modifier} class should be used to
      * decode the modifiers. Only the flags specified in the JVM specification will be included in the returned mask.
-     * This method is identical to {@link Class#getModifiers()} in terms of the value return for this type.
      */
     int getModifiers();
 
@@ -139,25 +138,18 @@ public interface ResolvedJavaType extends JavaType {
     boolean isInstance(Constant obj);
 
     /**
-     * Returns this type if it is an exact type otherwise returns null.
-     * This type is exact if it is void, primitive, final, or an array of a final or primitive type.
+     * Attempts to get an exact type for this type. Final classes, arrays of final classes, and primitive types all have
+     * exact types.
      *
-     * @return this type if it is exact; {@code null} otherwise
+     * @return the exact type of this type, if it exists; {@code null} otherwise
      */
-    ResolvedJavaType asExactType();
+    ResolvedJavaType getExactType();
 
     /**
-     * Gets the super class of this type.
-     * If this type represents either the {@code Object} class, a primitive type, or void, then
-     * null is returned.  If this object represents an array class or an interface then the
-     * type object representing the {@code Object} class is returned.
+     * Gets the superclass of this type, or {@code null} if it does not exist. This method is analogous to
+     * {@link Class#getSuperclass()}.
      */
     ResolvedJavaType getSuperclass();
-
-    /**
-     * Gets the interfaces that this type defines. This method is analogous to {@link Class#getInterfaces()}.
-     */
-    ResolvedJavaType[] getInterfaces();
 
     /**
      * Walks the class hierarchy upwards and returns the least common class that is a superclass of both the current and
@@ -191,9 +183,9 @@ public interface ResolvedJavaType extends JavaType {
     ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method);
 
     /**
-     * Given a {@link ResolvedJavaMethod} a, returns a concrete {@link ResolvedJavaMethod} b that is the only possible
-     * unique target for a virtual call on a(). Returns {@code null} if either no such concrete method or more than one
-     * such method exists. Returns the method a if a is a concrete method that is not overridden.
+     * Given an JavaMethod a, returns a concrete JavaMethod b that is the only possible unique target for a virtual call
+     * on a(). Returns {@code null} if either no such concrete method or more than one such method exists. Returns the
+     * method a if a is a concrete method that is not overridden.
      * <p>
      * If the compiler uses the result of this method for its compilation, it must register an assumption because
      * dynamic class loading can invalidate the result of this method.
@@ -205,14 +197,12 @@ public interface ResolvedJavaType extends JavaType {
     ResolvedJavaMethod findUniqueConcreteMethod(ResolvedJavaMethod method);
 
     /**
-     * Returns the instance fields of this class, including {@linkplain ResolvedJavaField#isInternal() internal} fields.
-     * A zero-length array is returned for array and primitive types. The order of fields returned by this method is
-     * stable. That is, for a single JVM execution the same order is returned each time this method is called.
+     * Returns the instance fields declared in this class. A zero-length array is returned for array and primitive
+     * types.
      *
-     * @param includeSuperclasses if true, then instance fields for the complete hierarchy of this type are included in the result
      * @return an array of instance fields
      */
-    ResolvedJavaField[] getInstanceFields(boolean includeSuperclasses);
+    ResolvedJavaField[] getDeclaredFields();
 
     /**
      * Returns the annotation for the specified type of this class, if such an annotation is present.
