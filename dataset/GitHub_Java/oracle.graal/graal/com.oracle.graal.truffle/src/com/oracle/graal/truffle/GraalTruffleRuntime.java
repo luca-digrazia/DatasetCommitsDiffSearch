@@ -56,7 +56,6 @@ import com.oracle.graal.truffle.debug.TraceCompilationListener;
 import com.oracle.graal.truffle.debug.TraceCompilationPolymorphismListener;
 import com.oracle.graal.truffle.debug.TraceInliningListener;
 import com.oracle.graal.truffle.debug.TraceSplittingListener;
-import com.oracle.graal.truffle.phases.InstrumentBranchesPhase;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -250,7 +249,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     private static final class FrameVisitor<T> implements InspectedFrameVisitor<T> {
 
         private final FrameInstanceVisitor<T> visitor;
-        private final CallMethods methods;
+        private final ResolvedJavaMethod callTargetMethod;
+        private final ResolvedJavaMethod callNodeMethod;
 
         private boolean first = true;
         private int skipFrames;
@@ -259,16 +259,13 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
         FrameVisitor(FrameInstanceVisitor<T> visitor, CallMethods methods, int skip) {
             this.visitor = visitor;
-            this.methods = methods;
+            this.callTargetMethod = methods.callTargetMethod;
+            this.callNodeMethod = methods.callNodeMethod;
             this.skipFrames = skip;
         }
 
         public T visitFrame(InspectedFrame frame) {
-			if (frame.isMethod(methods.callOSRMethod)) {
-                // we ignore OSR frames.
-                skipFrames++;
-                return null;
-            } else if (frame.isMethod(methods.callTargetMethod)) {
+            if (frame.isMethod(callTargetMethod)) {
                 try {
                     if (skipFrames == 0) {
                         return visitor.visitFrame(new GraalFrameInstance(first, frame, callNodeFrame));
@@ -279,7 +276,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
                     callNodeFrame = null;
                     first = false;
                 }
-            } else if (frame.isMethod(methods.callNodeMethod)) {
+            } else if (frame.isMethod(callNodeMethod)) {
                 callNodeFrame = frame;
             }
             return null;
@@ -360,9 +357,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     private void shutdown() {
         getCompilationNotify().notifyShutdown(this);
-        if (TruffleCompilerOptions.TruffleInstrumentBranches.getValue()) {
-            InstrumentBranchesPhase.instrumentation.dumpAccessTable();
-        }
     }
 
     protected void doCompile(OptimizedCallTarget optimizedCallTarget) {
@@ -571,14 +565,12 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     protected static final class CallMethods {
         public final ResolvedJavaMethod callNodeMethod;
         public final ResolvedJavaMethod callTargetMethod;
-        public final ResolvedJavaMethod callOSRMethod;
         public final ResolvedJavaMethod[] anyFrameMethod;
 
         private CallMethods(MetaAccessProvider metaAccess) {
             this.callNodeMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_NODE_METHOD);
             this.callTargetMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_TARGET_METHOD);
-            this.callOSRMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_OSR_METHOD);
-            this.anyFrameMethod = new ResolvedJavaMethod[]{callNodeMethod, callTargetMethod, callOSRMethod};
+            this.anyFrameMethod = new ResolvedJavaMethod[]{callNodeMethod, callTargetMethod};
         }
 
         public static CallMethods lookup(MetaAccessProvider metaAccess) {
