@@ -45,7 +45,7 @@ public class InterpreterFrame extends Frame {
     }
 
     private InterpreterFrame(ResolvedJavaMethod method, InterpreterFrame parent, int additionalStackSpace, int depth) {
-        super(method.getMaxLocals() + method.getMaxStackSize() + BASE_LENGTH + additionalStackSpace, parent);
+        super(method.maxLocals() + method.maxStackSize() + BASE_LENGTH + additionalStackSpace, parent);
         setMethod(method);
         setBCI(0);
         this.depth = depth;
@@ -54,9 +54,9 @@ public class InterpreterFrame extends Frame {
 
     public InterpreterFrame create(ResolvedJavaMethod method, boolean hasReceiver) {
         InterpreterFrame frame = new InterpreterFrame(method, this, 0, this.depth + 1);
-        int length = method.getSignature().getParameterSlots(hasReceiver);
+        int length = method.signature().argumentSlots(hasReceiver);
 
-        frame.pushVoid(method.getMaxLocals());
+        frame.pushVoid(method.maxLocals());
         if (length > 0) {
             copyArguments(frame, length);
             popVoid(length);
@@ -74,16 +74,19 @@ public class InterpreterFrame extends Frame {
     }
 
     private int stackTos() {
-        return BASE_LENGTH + getMethod().getMaxLocals();
+        return BASE_LENGTH + getMethod().maxLocals();
     }
 
     private void copyArguments(InterpreterFrame dest, int length) {
-        System.arraycopy(locals, tosSingle(length - 1), dest.locals, BASE_LENGTH, length);
-        System.arraycopy(primitiveLocals, tosSingle(length - 1), dest.primitiveLocals, BASE_LENGTH, length);
+        System.arraycopy(locals, tosSingle(length - 1), dest.locals,
+                        BASE_LENGTH, length);
+        System.arraycopy(primitiveLocals, tosSingle(length - 1), dest.primitiveLocals,
+                        BASE_LENGTH, length);
     }
 
+
     public Object peekReceiver(ResolvedJavaMethod method) {
-        return getObject(tosSingle(method.getSignature().getParameterSlots(false)));
+        return getObject(tosSingle(method.signature().argumentSlots(false)));
     }
 
     public void pushBoth(Object oValue, int intValue) {
@@ -295,9 +298,11 @@ public class InterpreterFrame extends Frame {
     }
 
     public void pushTo(InterpreterFrame childFrame, int argumentSlots) {
-        System.arraycopy(locals, tos - argumentSlots, childFrame.locals, InterpreterFrame.MIN_FRAME_SIZE, argumentSlots);
+        System.arraycopy(locals, tos - argumentSlots, childFrame.locals,
+                        InterpreterFrame.MIN_FRAME_SIZE, argumentSlots);
 
-        System.arraycopy(primitiveLocals, tos - argumentSlots, childFrame.primitiveLocals, InterpreterFrame.MIN_FRAME_SIZE, argumentSlots);
+        System.arraycopy(primitiveLocals, tos - argumentSlots, childFrame.primitiveLocals,
+                        InterpreterFrame.MIN_FRAME_SIZE, argumentSlots);
         popVoid(argumentSlots);
     }
 
@@ -313,7 +318,7 @@ public class InterpreterFrame extends Frame {
     @Override
     public String toString() {
         ResolvedJavaMethod method = getMethod();
-        StringBuilder b = new StringBuilder(getMethod().asStackTraceElement(getBCI()).toString());
+        StringBuilder b = new StringBuilder(getMethod().toStackTraceElement(getBCI()).toString());
         for (int i = 0; i < tos; i++) {
             Object object = getObject(tosSingle(i));
             long primitive = getLong(tosSingle(i));
@@ -332,7 +337,7 @@ public class InterpreterFrame extends Frame {
                 typeString = "bci";
             } else if (index == PARENT_FRAME_SLOT) {
                 typeString = "parent";
-            } else if (index < BASE_LENGTH + method.getMaxLocals()) {
+            } else if (index < BASE_LENGTH + method.maxLocals()) {
                 typeString = "var " + (index - BASE_LENGTH);
             } else {
                 typeString = "local";

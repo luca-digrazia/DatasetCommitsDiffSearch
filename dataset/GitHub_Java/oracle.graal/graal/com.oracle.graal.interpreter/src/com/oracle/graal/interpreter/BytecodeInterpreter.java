@@ -25,9 +25,9 @@ package com.oracle.graal.interpreter;
 import java.lang.reflect.*;
 import java.util.*;
 
+import com.oracle.graal.api.*;
 import com.oracle.graal.api.interpreter.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.bytecode.*;
 
 /**
@@ -135,7 +135,7 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     public void addDelegate(Method method, InterpreterCallable callable) {
-        ResolvedJavaMethod resolvedMethod = metaAccessProvider.lookupJavaMethod(method);
+        ResolvedJavaMethod resolvedMethod = metaAccessProvider.getResolvedJavaMethod(method);
         if (methodDelegates.containsKey(resolvedMethod)) {
             throw new IllegalArgumentException("Delegate for method " + method + " already added.");
         }
@@ -144,22 +144,22 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     public void removeDelegate(Method method) {
-        methodDelegates.remove(metaAccessProvider.lookupJavaMethod(method));
+        methodDelegates.remove(metaAccessProvider.getResolvedJavaMethod(method));
     }
 
     @Override
     public Object execute(ResolvedJavaMethod method, Object... boxedArguments) throws Throwable {
         try {
             boolean receiver = hasReceiver(method);
-            Signature signature = method.getSignature();
+            Signature signature = method.signature();
             assert boxedArguments != null;
-            assert signature.getParameterCount(receiver) == boxedArguments.length;
+            assert signature.argumentCount(receiver) == boxedArguments.length;
 
             if (TRACE) {
                 trace(0, "Executing root method " + method);
             }
 
-            InterpreterFrame rootFrame = new InterpreterFrame(rootMethod, signature.getParameterSlots(true));
+            InterpreterFrame rootFrame = new InterpreterFrame(rootMethod, signature.argumentSlots(true));
             rootFrame.pushObject(this);
             rootFrame.pushObject(method);
             rootFrame.pushObject(boxedArguments);
@@ -171,12 +171,12 @@ public final class BytecodeInterpreter implements Interpreter {
             }
 
             for (int i = 0; index < boxedArguments.length; i++, index++) {
-                pushAsObject(rootFrame, signature.getParameterKind(i), boxedArguments[index]);
+                pushAsObject(rootFrame, signature.argumentKindAt(i), boxedArguments[index]);
             }
 
             InterpreterFrame frame = rootFrame.create(method, receiver);
             executeRoot(rootFrame, frame);
-            return popAsObject(rootFrame, signature.getReturnKind());
+            return popAsObject(rootFrame, signature.returnKind());
         } catch (Exception e) {
             // TODO (chaeubl): remove this exception handler (only used for debugging)
             throw e;
@@ -184,24 +184,24 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     public Object execute(Method javaMethod, Object... boxedArguments) throws Throwable {
-        return execute(metaAccessProvider.lookupJavaMethod(javaMethod), boxedArguments);
+        return execute(metaAccessProvider.getResolvedJavaMethod(javaMethod), boxedArguments);
     }
 
     private boolean hasReceiver(ResolvedJavaMethod method) {
-        return !Modifier.isStatic(method.getModifiers());
+        return !Modifier.isStatic(method.accessFlags());
     }
 
     private void executeRoot(InterpreterFrame root, InterpreterFrame frame) throws Throwable {
         // TODO reflection redirection
         InterpreterFrame prevFrame = frame;
         InterpreterFrame currentFrame = frame;
-        BytecodeStream bs = new BytecodeStream(currentFrame.getMethod().getCode());
+        BytecodeStream bs = new BytecodeStream(currentFrame.getMethod().code());
         if (TRACE) {
             traceCall(frame, "Call");
         }
         while (currentFrame != root) {
             if (prevFrame != currentFrame) {
-                bs = new BytecodeStream(currentFrame.getMethod().getCode());
+                bs = new BytecodeStream(currentFrame.getMethod().code());
             }
             bs.setBCI(currentFrame.getBCI());
 
@@ -925,7 +925,7 @@ public final class BytecodeInterpreter implements Interpreter {
                 currentFrame = popFrame(currentFrame);
             } else {
                 // found a handler -> execute it
-                currentFrame.setBCI(handler.getHandlerBCI());
+                currentFrame.setBCI(handler.handlerBCI());
                 currentFrame.popStack();
                 currentFrame.pushObject(t);
                 return currentFrame;
@@ -963,10 +963,10 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private ExceptionHandler resolveExceptionHandlers(InterpreterFrame frame, int bci, Throwable t) {
-        ExceptionHandler[] handlers = frame.getMethod().getExceptionHandlers();
+        ExceptionHandler[] handlers = frame.getMethod().exceptionHandlers();
         for (int i = 0; i < handlers.length; i++) {
             ExceptionHandler handler = handlers[i];
-            if (bci >= handler.getStartBCI() && bci <= handler.getEndBCI()) {
+            if (bci >= handler.startBCI() && bci <= handler.endBCI()) {
                 ResolvedJavaType catchType = null;
                 if (!handler.isCatchAll()) {
                     // exception handlers are similar to instanceof bytecodes, so we pass instanceof
@@ -995,12 +995,12 @@ public final class BytecodeInterpreter implements Interpreter {
             if (TRACE) {
                 traceCall(nextFrame, "Call");
             }
-            if (Modifier.isSynchronized(nextFrame.getMethod().getModifiers())) {
+            if (Modifier.isSynchronized(nextFrame.getMethod().accessFlags())) {
                 if (TRACE) {
                     traceOp(frame, "Method monitor enter");
                 }
-                if (Modifier.isStatic(nextFrame.getMethod().getModifiers())) {
-                    runtimeInterface.monitorEnter(nextFrame.getMethod().getDeclaringClass().toJava());
+                if (Modifier.isStatic(nextFrame.getMethod().accessFlags())) {
+                    runtimeInterface.monitorEnter(nextFrame.getMethod().holder().toJava());
                 } else {
                     Object enterObject = nextFrame.getObject(frame.resolveLocalIndex(0));
                     assert enterObject != null;
@@ -1017,12 +1017,12 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private InterpreterFrame popFrame(InterpreterFrame frame) {
         InterpreterFrame parent = frame.getParentFrame();
-        if (Modifier.isSynchronized(frame.getMethod().getModifiers())) {
+        if (Modifier.isSynchronized(frame.getMethod().accessFlags())) {
             if (TRACE) {
                 traceOp(frame, "Method monitor exit");
             }
-            if (Modifier.isStatic(frame.getMethod().getModifiers())) {
-                runtimeInterface.monitorExit(frame.getMethod().getDeclaringClass().toJava());
+            if (Modifier.isStatic(frame.getMethod().accessFlags())) {
+                runtimeInterface.monitorExit(frame.getMethod().holder().toJava());
             } else {
                 Object exitObject = frame.getObject(frame.resolveLocalIndex(0));
                 if (exitObject != null) {
@@ -1043,7 +1043,7 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private void traceCall(InterpreterFrame frame, String type) {
-        trace(frame.depth(), type + " " + frame.getMethod() + " - " + frame.getMethod().getSignature());
+        trace(frame.depth(), type + " " + frame.getMethod() + " - " + frame.getMethod().signature().asString());
     }
 
     private void trace(int level, String message) {
@@ -1187,11 +1187,11 @@ public final class BytecodeInterpreter implements Interpreter {
     private ResolvedJavaType resolveType(InterpreterFrame frame, int opcode, char cpi) {
         ConstantPool constantPool = frame.getConstantPool();
         constantPool.loadReferencedType(cpi, opcode);
-        return constantPool.lookupType(cpi, opcode).resolve(frame.getMethod().getDeclaringClass());
+        return constantPool.lookupType(cpi, opcode).resolve(frame.getMethod().holder());
     }
 
     private ResolvedJavaType resolveType(InterpreterFrame frame, Class< ? > javaClass) {
-        return metaAccessProvider.lookupJavaType(javaClass).resolve(frame.getMethod().getDeclaringClass());
+        return metaAccessProvider.getResolvedJavaType(javaClass).resolve(frame.getMethod().holder());
     }
 
     private ResolvedJavaMethod resolveMethod(InterpreterFrame frame, int opcode, char cpi) {
@@ -1216,7 +1216,7 @@ public final class BytecodeInterpreter implements Interpreter {
 
         if (constant instanceof Constant) {
             Constant c = ((Constant) constant);
-            switch (c.getKind()) {
+            switch (c.kind) {
                 case Int:
                     frame.pushInt(c.asInt());
                     break;
@@ -1236,7 +1236,7 @@ public final class BytecodeInterpreter implements Interpreter {
                     assert false : "unspecified case";
             }
         } else if (constant instanceof JavaType) {
-            frame.pushObject(((JavaType) constant).resolve(method.getDeclaringClass()).toJava());
+            frame.pushObject(((JavaType) constant).resolve(method.holder()).toJava());
         } else {
             assert false : "unexpected case";
         }
@@ -1290,7 +1290,7 @@ public final class BytecodeInterpreter implements Interpreter {
     private InterpreterFrame resolveAndInvoke(InterpreterFrame parent, ResolvedJavaMethod m) throws Throwable {
         Object receiver = nullCheck(parent.peekReceiver(m));
 
-        ResolvedJavaMethod method = resolveType(parent, receiver.getClass()).resolveMethod(m);
+        ResolvedJavaMethod method = resolveType(parent, receiver.getClass()).resolveMethodImpl(m);
 
         if (method == null) {
             throw new AbstractMethodError();
@@ -1301,7 +1301,7 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private InterpreterFrame invokeVirtual(InterpreterFrame frame, char cpi) throws Throwable {
         ResolvedJavaMethod m = resolveMethod(frame, Bytecodes.INVOKEVIRTUAL, cpi);
-        if (Modifier.isFinal(m.getModifiers())) {
+        if (Modifier.isFinal(m.accessFlags())) {
             return invoke(frame, m, nullCheck(frame.peekReceiver(m)));
         } else {
             return resolveAndInvoke(frame, m);
@@ -1314,14 +1314,14 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private Object[] popArgumentsAsObject(InterpreterFrame frame, ResolvedJavaMethod method, boolean hasReceiver) {
-        Signature signature = method.getSignature();
-        int argumentCount = method.getSignature().getParameterCount(hasReceiver);
+        Signature signature = method.signature();
+        int argumentCount = method.signature().argumentCount(hasReceiver);
         Object[] parameters = new Object[argumentCount];
 
         int lastSignatureIndex = hasReceiver ? 1 : 0;
         for (int i = argumentCount - 1; i >= lastSignatureIndex; i--) {
-            ResolvedJavaType type = signature.getParameterType(i - lastSignatureIndex, method.getDeclaringClass()).resolve(method.getDeclaringClass());
-            parameters[i] = popAsObject(frame, type.getKind());
+            ResolvedJavaType type = signature.argumentTypeAt(i - lastSignatureIndex, method.holder()).resolve(method.holder());
+            parameters[i] = popAsObject(frame, type.kind());
         }
 
         if (hasReceiver) {
@@ -1335,7 +1335,7 @@ public final class BytecodeInterpreter implements Interpreter {
             throw new StackOverflowError("Maximum callstack of " + maxStackFrames + " exceeded.");
         }
 
-        if (Modifier.isNative(method.getModifiers())) {
+        if (Modifier.isNative(method.accessFlags())) {
             return invokeNativeMethodViaVM(caller, method, receiver != null);
         } else {
             MethodRedirectionInfo redirectedMethod = methodDelegates.get(method);
@@ -1356,7 +1356,7 @@ public final class BytecodeInterpreter implements Interpreter {
         // mark the current thread as high level and execute the native method
         Object[] parameters = popArgumentsAsObject(caller, method, hasReceiver);
         Object returnValue = runtimeInterface.invoke(method, parameters);
-        pushAsObject(caller, method.getSignature().getReturnKind(), returnValue);
+        pushAsObject(caller, method.signature().returnKind(), returnValue);
 
         return null;
     }
@@ -1371,7 +1371,7 @@ public final class BytecodeInterpreter implements Interpreter {
         Object[] originalCalleeParameters = popArgumentsAsObject(caller, originalMethod, hasReceiver);
         Object[] parameters = new Object[]{caller, originalMethod, originalCalleeParameters};
         Object returnValue = redirectionInfo.getTargetMethod().invoke(redirectionInfo.getReceiver(), parameters);
-        pushAsObject(caller, originalMethod.getSignature().getReturnKind(), returnValue);
+        pushAsObject(caller, originalMethod.signature().returnKind(), returnValue);
 
         return null;
     }
@@ -1393,7 +1393,7 @@ public final class BytecodeInterpreter implements Interpreter {
     private ResolvedJavaType getLastDimensionType(ResolvedJavaType type) {
         ResolvedJavaType result = type;
         while (result.isArrayClass()) {
-            result = result.getComponentType();
+            result = result.componentType();
         }
         return result;
     }
@@ -1446,7 +1446,7 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private void putFieldStatic(InterpreterFrame frame, ResolvedJavaField field) {
-        switch (field.getKind()) {
+        switch (field.kind()) {
             case Boolean:
             case Byte:
             case Char:
@@ -1472,7 +1472,7 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private void putFieldVirtual(InterpreterFrame frame, ResolvedJavaField field) {
-        switch (field.getKind()) {
+        switch (field.kind()) {
             case Boolean:
             case Byte:
             case Char:
@@ -1499,7 +1499,7 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private void getField(InterpreterFrame frame, Object base, int opcode, char cpi) {
         ResolvedJavaField field = resolveField(frame, opcode, cpi);
-        switch (field.getKind()) {
+        switch (field.kind()) {
             case Boolean:
                 frame.pushInt(runtimeInterface.getFieldBoolean(base, field) ? 1 : 0);
                 break;
@@ -1599,7 +1599,7 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private ResolvedJavaMethod resolveRootMethod() {
         try {
-            return metaAccessProvider.lookupJavaMethod(BytecodeInterpreter.class.getDeclaredMethod("execute", Method.class, Object[].class));
+            return metaAccessProvider.getResolvedJavaMethod(BytecodeInterpreter.class.getDeclaredMethod("execute", Method.class, Object[].class));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -1620,7 +1620,7 @@ public final class BytecodeInterpreter implements Interpreter {
         while (tmp != null) {
             if (first || !filterStackElement(tmp)) {
                 first = true;
-                elements.add(tmp.getMethod().asStackTraceElement(tmp.getBCI()));
+                elements.add(tmp.getMethod().toStackTraceElement(tmp.getBCI()));
             }
             tmp = tmp.getParentFrame();
         }
@@ -1628,14 +1628,14 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private static boolean filterStackElement(InterpreterFrame frame) {
-        return Throwable.class.isAssignableFrom(frame.getMethod().getDeclaringClass().toJava());
+        return Throwable.class.isAssignableFrom(frame.getMethod().holder().toJava());
     }
 
     private ResolvedJavaField findThrowableField(InterpreterFrame frame, String name) {
         ResolvedJavaType throwableType = resolveType(frame, Throwable.class);
-        ResolvedJavaField[] fields = throwableType.getDeclaredFields();
+        ResolvedJavaField[] fields = throwableType.declaredFields();
         for (int i = 0; i < fields.length; i++) {
-            if (fields[i].getName().equals(name)) {
+            if (fields[i].name().equals(name)) {
                 return fields[i];
             }
         }
