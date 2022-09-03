@@ -97,15 +97,13 @@ public class SPARCHotSpotBackend extends HotSpotBackend {
 
         @Override
         public void enter(TargetMethodAssembler tasm) {
-            final int alignment = target.wordSize * 2;
-            final int frameSize = (tasm.frameMap.frameSize() + (alignment - 1)) & ~(alignment - 1);
-            assert frameSize % alignment == 0 : "must preserve 2*wordSize alignment";
+            final int frameSize = tasm.frameMap.frameSize();
 
             SPARCMacroAssembler masm = (SPARCMacroAssembler) tasm.asm;
             if (!isStub) {
                 emitStackOverflowCheck(tasm, false);
             }
-            new Save(sp, -frameSize, sp).emit(masm);
+            new Save(sp, frameSize, sp).emit(masm);
 
             if (ZapStackOnMethodEntry.getValue()) {
                 final int slotSize = 8;
