@@ -150,8 +150,7 @@ public final class Sulong extends LLVMLanguage {
 
     @Override
     protected boolean isObjectOfLanguage(Object object) {
-        return LLVMPointer.isInstance(object) || object instanceof LLVMInternalTruffleObject || object instanceof SulongLibrary ||
-                        object instanceof LLVMDebugObject || object instanceof LLVMSourceType;
+        return LLVMPointer.isInstance(object) || object instanceof LLVMInternalTruffleObject || object instanceof SulongLibrary;
     }
 
     @Override
