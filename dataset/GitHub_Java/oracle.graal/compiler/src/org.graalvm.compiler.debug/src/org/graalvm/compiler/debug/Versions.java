@@ -22,7 +22,6 @@
  */
 package org.graalvm.compiler.debug;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,12 +31,6 @@ import java.util.Map;
 
 /** Only public for unit testing */
 public final class Versions {
-    static final Versions VERSIONS;
-    static {
-        String home = System.getProperty("java.home");
-        VERSIONS = new Versions(home == null ? null : new File(home).toPath());
-    }
-
     private final Map<Object, Object> versions;
 
     public Versions(Path home) {
