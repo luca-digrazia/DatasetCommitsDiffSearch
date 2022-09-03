@@ -102,7 +102,6 @@ public class NewArrayStub extends Stub {
 
     @Fold
     private static boolean forceSlowPath() {
-        // TODO (ds) make default "false" once refill issue is resolved
-        return "true".equalsIgnoreCase(System.getProperty("graal.newArrayStub.forceSlowPath", "true"));
+        return Boolean.getBoolean("graal.newArrayStub.forceSlowPath");
     }
 }
