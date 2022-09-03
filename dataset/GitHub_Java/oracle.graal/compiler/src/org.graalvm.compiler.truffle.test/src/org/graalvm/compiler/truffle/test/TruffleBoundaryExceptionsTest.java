@@ -65,7 +65,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
                 }
                 try {
                     throwExceptionBoundary();
-                } catch (RuntimeException e) {
+                } catch (AssertionError e) {
                     catchCounter++;
                 }
                 if (startedCompiled && CompilerDirectives.inInterpreter()) {
@@ -181,7 +181,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
                 boolean startedCompiled = CompilerDirectives.inCompiledCode();
                 try {
                     throwExceptionBoundary();
-                } catch (RuntimeException e) {
+                } catch (AssertionError e) {
                     catchCounter++;
                 }
                 if (startedCompiled && CompilerDirectives.inInterpreter()) {
@@ -192,7 +192,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
 
             @CompilerDirectives.TruffleBoundary(transferToInterpreterOnException = false)
             public void throwExceptionBoundary() {
-                throw new RuntimeException();
+                throw new AssertionError();
             }
         }
 
@@ -240,7 +240,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
 
             @CompilerDirectives.TruffleBoundary
             public void throwExceptionBoundary() {
-                throw new RuntimeException();
+                throw new AssertionError();
             }
         }
 
@@ -249,7 +249,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
         for (int i = 0; i < compilationThreshold; i++) {
             try {
                 outerTarget.call();
-            } catch (RuntimeException e) {
+            } catch (AssertionError e) {
                 // do nothing
             }
         }
@@ -259,7 +259,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
         for (int i = 0; i < execCount; i++) {
             try {
                 outerTarget.call();
-            } catch (RuntimeException e) {
+            } catch (AssertionError e) {
                 // do nothing
             }
         }
@@ -292,7 +292,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
 
             @CompilerDirectives.TruffleBoundary(transferToInterpreterOnException = false)
             public void throwExceptionBoundary() {
-                throw new RuntimeException();
+                throw new AssertionError();
             }
         }
 
@@ -301,7 +301,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
         for (int i = 0; i < compilationThreshold; i++) {
             try {
                 outerTarget.call();
-            } catch (RuntimeException e) {
+            } catch (AssertionError e) {
                 // do nothing
             }
         }
@@ -311,7 +311,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
         for (int i = 0; i < execCount; i++) {
             try {
                 outerTarget.call();
-            } catch (RuntimeException e) {
+            } catch (AssertionError e) {
                 // do nothing
             }
         }
