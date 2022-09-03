@@ -25,13 +25,14 @@
 package com.oracle.truffle.api.impl;
 
 import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 
 final class ContextStoreProfile {
 
-    private static final ContextStore UNINTIALIZED_STORE = new ContextStore(0);
+    private static final ContextStore UNINTIALIZED_STORE = new ContextStore(null, 0);
 
     private final Assumption dynamicStoreAssumption = Truffle.getRuntime().createAssumption("constant context store");
     private final Assumption constantStoreAssumption = Truffle.getRuntime().createAssumption("dynamic context store");
@@ -39,12 +40,12 @@ final class ContextStoreProfile {
     @CompilationFinal private ContextStore constantStore;
 
     private volatile ContextStore dynamicStore = UNINTIALIZED_STORE;
-    private volatile Thread dynamicStoreThread;
+    private volatile Thread singleThread;
 
-    private final ThreadLocal<ContextStore> threadStore = new ThreadLocal<>();
+    private volatile ThreadLocal<ContextStore> threadStore;
 
     ContextStoreProfile(ContextStore initialStore) {
-        this.constantStore = initialStore;
+        this.constantStore = initialStore == null ? UNINTIALIZED_STORE : initialStore;
     }
 
     ContextStore get() {
@@ -71,16 +72,17 @@ final class ContextStoreProfile {
         }
 
         // fast path single thread
-        if (Thread.currentThread() == dynamicStoreThread) {
+        if (Thread.currentThread() == singleThread && dynamicStore != UNINTIALIZED_STORE) {
             dynamicStore = store;
             return;
         }
 
         // fast path multiple threads
-        ContextStore tlstore = threadStore.get();
+        ThreadLocal<ContextStore> tlstore = threadStore;
         if (tlstore != null) {
-            if (tlstore != store) {
-                threadStore.set(tlstore);
+            ContextStore currentstore = tlstore.get();
+            if (currentstore != store) {
+                tlstore.set(store);
             }
             return;
         }
@@ -91,39 +93,43 @@ final class ContextStoreProfile {
 
     @TruffleBoundary
     private synchronized void slowPathProfile(ContextStore store) {
+
         if (constantStoreAssumption.isValid()) {
             if (constantStore == UNINTIALIZED_STORE) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
                 constantStore = store;
+                singleThread = Thread.currentThread();
                 return;
             } else {
-                assert constantStore != store;
-                constantStore = null;
                 constantStoreAssumption.invalidate();
             }
         }
         if (dynamicStoreAssumption.isValid()) {
             Thread currentThread = Thread.currentThread();
-            assert currentThread != dynamicStoreThread;
-            if (dynamicStore == UNINTIALIZED_STORE) {
-                dynamicStoreThread = currentThread;
+            if (dynamicStore == UNINTIALIZED_STORE && singleThread == currentThread) {
                 dynamicStore = store;
                 return;
             } else {
-                dynamicStore = null;
-                dynamicStoreThread = null;
+                final ContextStore initialStore = dynamicStore == UNINTIALIZED_STORE ? constantStore : dynamicStore;
+                threadStore = new ThreadLocal<ContextStore>() {
+                    @Override
+                    protected ContextStore initialValue() {
+                        return initialStore;
+                    }
+                };
+                threadStore.set(store);
                 dynamicStoreAssumption.invalidate();
             }
         }
+        constantStore = null;
+        dynamicStore = null;
+        singleThread = null;
 
         assert !constantStoreAssumption.isValid();
         assert !dynamicStoreAssumption.isValid();
 
         // ensure cleaned up speculation
-        assert dynamicStoreThread == null;
-        assert constantStore == null;
-        assert dynamicStore == null;
-
-        threadStore.set(store);
+        assert threadStore != null;
     }
 
     @TruffleBoundary
