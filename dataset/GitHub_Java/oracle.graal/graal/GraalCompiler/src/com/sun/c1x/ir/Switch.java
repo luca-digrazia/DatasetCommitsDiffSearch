@@ -64,9 +64,10 @@ public abstract class Switch extends BlockEnd {
      * @param value the instruction that provides the value to be switched over
      * @param successors the list of successors of this switch
      * @param stateAfter the state after the switch
+     * @param isSafepoint {@code true} if this switch is a safepoint
      * @param graph
      */
-    public Switch(Value value, List<? extends Instruction> successors, FrameState stateAfter, int inputCount, int successorCount, Graph graph) {
+    public Switch(Value value, List<BlockBegin> successors, FrameState stateAfter, int inputCount, int successorCount, Graph graph) {
         super(CiKind.Illegal, stateAfter, successors, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
         setValue(value);
     }
