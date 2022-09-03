@@ -73,13 +73,8 @@ public class StampFactory {
 
         setCache(Kind.Object, objectStamp);
         setCache(Kind.Void, VoidStamp.getInstance());
-
         for (Kind k : Kind.values()) {
-            if (stampCache[k.ordinal()] != null) {
-                illegalStampCache[k.ordinal()] = stampCache[k.ordinal()].illegal();
-            } else {
-                illegalStampCache[k.ordinal()] = IllegalStamp.getInstance();
-            }
+            illegalStampCache[k.ordinal()] = new IllegalStamp(k);
         }
     }
 
@@ -125,10 +120,6 @@ public class StampFactory {
 
     public static Stamp positiveInt() {
         return positiveInt;
-    }
-
-    public static Stamp illegal() {
-        return illegal(Kind.Illegal);
     }
 
     public static Stamp illegal(Kind kind) {

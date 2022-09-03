@@ -123,7 +123,7 @@ public final class TypeProfileProxyNode extends FloatingNode implements Canonica
     }
 
     @Override
-    public ValueNode getOriginalNode() {
+    public ValueNode getOriginalValue() {
         return object;
     }
 }

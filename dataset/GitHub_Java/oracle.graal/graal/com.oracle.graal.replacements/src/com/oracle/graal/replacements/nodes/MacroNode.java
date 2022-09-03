@@ -159,7 +159,7 @@ public class MacroNode extends AbstractMemoryCheckpoint implements Lowerable, Me
         InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci));
         if (stateAfter() != null) {
             invoke.setStateAfter(stateAfter().duplicate());
-            if (getKind() != Kind.Void) {
+            if (kind() != Kind.Void) {
                 invoke.stateAfter().replaceFirstInput(this, invoke);
             }
         }

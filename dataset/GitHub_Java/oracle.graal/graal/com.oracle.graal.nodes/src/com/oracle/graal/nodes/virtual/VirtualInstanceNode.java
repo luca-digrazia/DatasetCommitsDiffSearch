@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.virtual;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 @NodeInfo(nameTemplate = "VirtualInstance {p#type/s}")
@@ -32,19 +32,11 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     private final ResolvedJavaType type;
     private final ResolvedJavaField[] fields;
 
-    public static VirtualInstanceNode create(ResolvedJavaType type, boolean hasIdentity) {
-        return new VirtualInstanceNodeGen(type, hasIdentity);
-    }
-
-    VirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity) {
+    public VirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity) {
         this(type, type.getInstanceFields(true), hasIdentity);
     }
 
-    public static VirtualInstanceNode create(ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity) {
-        return new VirtualInstanceNodeGen(type, fields, hasIdentity);
-    }
-
-    protected VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity) {
+    public VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity) {
         super(type, hasIdentity);
         this.type = type;
         this.fields = fields;
@@ -71,7 +63,7 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     @Override
     public String toString(Verbosity verbosity) {
         if (verbosity == Verbosity.Name) {
-            return super.toString(Verbosity.Name) + " " + type.toJavaName(false);
+            return super.toString(Verbosity.Name) + " " + MetaUtil.toJavaName(type, false);
         } else {
             return super.toString(verbosity);
         }
@@ -105,11 +97,11 @@ public class VirtualInstanceNode extends VirtualObjectNode {
 
     @Override
     public VirtualInstanceNode duplicate() {
-        return VirtualInstanceNode.create(type, fields, super.hasIdentity());
+        return new VirtualInstanceNode(type, fields, super.hasIdentity());
     }
 
     @Override
     public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
-        return AllocatedObjectNode.create(this);
+        return new AllocatedObjectNode(this);
     }
 }

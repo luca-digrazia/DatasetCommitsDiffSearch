@@ -363,10 +363,6 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     @Override
     public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method) {
         assert method instanceof HotSpotMethod;
-        if (!isAbstract(method.getModifiers()) && method.getDeclaringClass().equals(this)) {
-            return method;
-        }
-
         final long resolvedMetaspaceMethod = runtime().getCompilerToVM().resolveMethod(metaspaceKlass(), method.getName(), ((HotSpotSignature) method.getSignature()).getMethodDescriptor());
         if (resolvedMetaspaceMethod == 0) {
             return null;

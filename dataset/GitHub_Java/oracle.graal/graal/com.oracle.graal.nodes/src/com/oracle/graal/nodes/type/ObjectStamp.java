@@ -37,6 +37,7 @@ public class ObjectStamp extends Stamp {
     private final boolean alwaysNull;
 
     public ObjectStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull) {
+        assert !exactType || (type != null && (isConcreteType(type)));
         this.type = type;
         this.exactType = exactType;
         this.nonNull = nonNull;
@@ -46,16 +47,6 @@ public class ObjectStamp extends Stamp {
     @Override
     public Stamp unrestricted() {
         return StampFactory.object();
-    }
-
-    @Override
-    public Stamp illegal() {
-        return new ObjectStamp(null, true, true, false);
-    }
-
-    @Override
-    public boolean isLegal() {
-        return !exactType || (type != null && (isConcreteType(type)));
     }
 
     @Override
@@ -105,6 +96,9 @@ public class ObjectStamp extends Stamp {
         if (this == otherStamp) {
             return this;
         }
+        if (otherStamp instanceof IllegalStamp) {
+            return otherStamp.meet(this);
+        }
         if (!(otherStamp instanceof ObjectStamp)) {
             return StampFactory.illegal(Kind.Illegal);
         }
@@ -125,11 +119,7 @@ public class ObjectStamp extends Stamp {
             meetAlwaysNull = other.alwaysNull;
         } else {
             meetType = meetTypes(type(), other.type());
-            meetExactType = exactType && other.exactType;
-            if (meetExactType && type != null && other.type != null) {
-                // meeting two valid exact types may result in a non-exact type
-                meetExactType = Objects.equals(meetType, type) && Objects.equals(meetType, other.type);
-            }
+            meetExactType = Objects.equals(meetType, type) && Objects.equals(meetType, other.type) && exactType && other.exactType;
             meetNonNull = nonNull && other.nonNull;
             meetAlwaysNull = false;
         }
@@ -156,6 +146,9 @@ public class ObjectStamp extends Stamp {
         if (other instanceof ObjectStamp) {
             return true;
         }
+        if (other instanceof IllegalStamp) {
+            return ((IllegalStamp) other).kind() == Kind.Object;
+        }
         return false;
     }
 
@@ -165,12 +158,12 @@ public class ObjectStamp extends Stamp {
      * where both types are not obviously related, the cast operation will prefer the type of the
      * {@code to} stamp. This is necessary as long as ObjectStamps are not able to accurately
      * represent intersection types.
-     *
+     * 
      * For example when joining the {@link RandomAccess} type with the {@link AbstractList} type,
      * without intersection types, this would result in the most generic type ({@link Object} ). For
      * this reason, in some cases a {@code castTo} operation is preferable in order to keep at least
      * the {@link AbstractList} type.
-     *
+     * 
      * @param to the stamp this stamp should be casted to
      * @return This stamp casted to the {@code to} stamp
      */
@@ -182,16 +175,13 @@ public class ObjectStamp extends Stamp {
         if (this == otherStamp) {
             return this;
         }
+        if (otherStamp instanceof IllegalStamp) {
+            return otherStamp.join(this);
+        }
         if (!(otherStamp instanceof ObjectStamp)) {
             return StampFactory.illegal(Kind.Illegal);
         }
         ObjectStamp other = (ObjectStamp) otherStamp;
-        if (!isLegal()) {
-            return this;
-        } else if (!other.isLegal()) {
-            return other;
-        }
-
         ResolvedJavaType joinType;
         boolean joinAlwaysNull = alwaysNull || other.alwaysNull;
         boolean joinNonNull = nonNull || other.nonNull;
@@ -301,7 +291,7 @@ public class ObjectStamp extends Stamp {
     }
 
     public static boolean isObjectAlwaysNull(Stamp stamp) {
-        return (stamp instanceof ObjectStamp && ((ObjectStamp) stamp).isLegal() && ((ObjectStamp) stamp).alwaysNull());
+        return (stamp instanceof ObjectStamp && ((ObjectStamp) stamp).alwaysNull());
     }
 
     public static boolean isObjectNonNull(ValueNode node) {
@@ -309,7 +299,7 @@ public class ObjectStamp extends Stamp {
     }
 
     public static boolean isObjectNonNull(Stamp stamp) {
-        return stamp instanceof ObjectStamp && ((ObjectStamp) stamp).isLegal() && ((ObjectStamp) stamp).nonNull();
+        return (stamp instanceof ObjectStamp && ((ObjectStamp) stamp).nonNull());
     }
 
     public static ResolvedJavaType typeOrNull(ValueNode node) {
@@ -332,5 +322,15 @@ public class ObjectStamp extends Stamp {
             return ((ObjectStamp) stamp).isExactType();
         }
         return false;
+    }
+
+    public static boolean isObject(Stamp stamp) {
+        if (stamp instanceof ObjectStamp) {
+            return true;
+        } else if (stamp instanceof IllegalStamp) {
+            return ((IllegalStamp) stamp).kind() == Kind.Object;
+        } else {
+            return false;
+        }
     }
 }

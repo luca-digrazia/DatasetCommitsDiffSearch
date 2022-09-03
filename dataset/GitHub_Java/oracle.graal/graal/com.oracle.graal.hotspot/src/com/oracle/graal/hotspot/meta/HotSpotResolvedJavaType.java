@@ -32,7 +32,7 @@ public abstract class HotSpotResolvedJavaType extends HotSpotJavaType implements
 
     /**
      * Gets the Graal mirror for a {@link Class} object.
-     *
+     * 
      * @return the {@link HotSpotResolvedJavaType} corresponding to {@code javaClass}
      */
     public static ResolvedJavaType fromClass(Class<?> javaClass) {

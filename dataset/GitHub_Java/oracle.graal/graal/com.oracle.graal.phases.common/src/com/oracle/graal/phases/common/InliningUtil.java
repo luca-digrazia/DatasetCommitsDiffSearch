@@ -318,9 +318,14 @@ public class InliningUtil {
         }
 
         protected static void inline(Invoke invoke, ResolvedJavaMethod concrete, Inlineable inlineable, Assumptions assumptions, boolean receiverNullCheck) {
+            StructuredGraph graph = invoke.asNode().graph();
             if (inlineable instanceof InlineableGraph) {
                 StructuredGraph calleeGraph = ((InlineableGraph) inlineable).getGraph();
                 InliningUtil.inline(invoke, calleeGraph, receiverNullCheck);
+
+                graph.getLeafGraphIds().add(calleeGraph.graphId());
+                // we might at some point cache already-inlined graphs, so add recursively:
+                graph.getLeafGraphIds().addAll(calleeGraph.getLeafGraphIds());
             } else {
                 assert inlineable instanceof InlineableMacroNode;
 
@@ -625,7 +630,7 @@ public class InliningUtil {
 
             PhiNode returnValuePhi = null;
             if (invoke.asNode().kind() != Kind.Void) {
-                returnValuePhi = graph.addWithoutUnique(new PhiNode(invoke.asNode().stamp().unrestricted(), returnMerge));
+                returnValuePhi = graph.addWithoutUnique(new PhiNode(invoke.asNode().kind(), returnMerge));
             }
 
             MergeNode exceptionMerge = null;
@@ -638,7 +643,7 @@ public class InliningUtil {
 
                 FixedNode exceptionSux = exceptionEdge.next();
                 graph.addBeforeFixed(exceptionSux, exceptionMerge);
-                exceptionObjectPhi = graph.addWithoutUnique(new PhiNode(StampFactory.forKind(Kind.Object), exceptionMerge));
+                exceptionObjectPhi = graph.addWithoutUnique(new PhiNode(Kind.Object, exceptionMerge));
                 exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, Kind.Object, exceptionObjectPhi));
             }
 
@@ -1486,7 +1491,7 @@ public class InliningUtil {
 
             if (returnNode.result() != null) {
                 if (returnValuePhi == null) {
-                    returnValuePhi = merge.graph().addWithoutUnique(new PhiNode(returnNode.result().stamp().unrestricted(), merge));
+                    returnValuePhi = merge.graph().addWithoutUnique(new PhiNode(returnNode.result().kind(), merge));
                 }
                 returnValuePhi.addInput(returnNode.result());
             }
