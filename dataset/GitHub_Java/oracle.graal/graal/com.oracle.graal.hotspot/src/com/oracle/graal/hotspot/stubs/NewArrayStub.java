@@ -108,7 +108,7 @@ public class NewArrayStub extends Stub {
                     printf("newArray: allocated new array at %p\n", memory.rawValue());
                 }
                 formatArray(hub, sizeInBytes, length, headerSize, memory, Word.unsigned(arrayPrototypeMarkWord()), true);
-                return verifyObject(memory.toObject());
+                return memory.toObject();
             }
         }
         if (logging()) {
@@ -124,7 +124,7 @@ public class NewArrayStub extends Stub {
             getAndClearObjectResult(thread());
             DeoptimizeCallerNode.deopt(InvalidateReprofile, RuntimeConstraint);
         }
-        return verifyObject(getAndClearObjectResult(thread()));
+        return getAndClearObjectResult(thread());
     }
 
     public static final Descriptor NEW_ARRAY_C = descriptorFor(NewArrayStub.class, "newArrayC", false);
