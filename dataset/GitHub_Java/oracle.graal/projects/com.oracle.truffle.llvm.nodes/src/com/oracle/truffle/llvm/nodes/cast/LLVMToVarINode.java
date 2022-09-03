@@ -65,13 +65,13 @@ public abstract class LLVMToVarINode extends LLVMExpressionNode {
         }
 
         @Specialization
-        public LLVMIVarBit executeVarI(LLVMIVarBit from) {
-            return LLVMIVarBit.create(getBits(), from.getSignExtendedBytes(), from.getBitSize(), true);
+        public LLVMIVarBit executeI8(LLVMIVarBit from) {
+            return LLVMIVarBit.create(getBits(), from.getSignExtendedBytes());
         }
 
         @Specialization
-        public LLVMIVarBit execute80BitFloat(LLVM80BitFloat from) {
-            return LLVMIVarBit.create(getBits(), from.getBytesBigEndian(), LLVM80BitFloat.BIT_WIDTH, true);
+        public LLVMIVarBit executeI8(LLVM80BitFloat from) {
+            return LLVMIVarBit.create(getBits(), from.getBytes());
         }
     }
 
@@ -103,7 +103,7 @@ public abstract class LLVMToVarINode extends LLVMExpressionNode {
 
         @Specialization
         public LLVMIVarBit executeVarI(LLVMIVarBit from) {
-            return LLVMIVarBit.create(getBits(), from.getBytes(), from.getBitSize(), false);
+            return LLVMIVarBit.create(getBits(), from.getBytes());
         }
     }
 
@@ -112,7 +112,7 @@ public abstract class LLVMToVarINode extends LLVMExpressionNode {
 
         @Specialization
         public LLVMIVarBit execute80BitFloat(LLVM80BitFloat from) {
-            return LLVMIVarBit.create(LLVM80BitFloat.BIT_WIDTH, from.getBytesBigEndian(), LLVM80BitFloat.BIT_WIDTH, false);
+            return LLVMIVarBit.create(80, from.getBytes());
         }
     }
 
