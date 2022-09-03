@@ -1160,6 +1160,13 @@ class FlatNodeGenFactory {
             executable.addParameter(new CodeVariableElement(getType(int.class), OLD_CACHE_COUNT));
         }
         CodeTreeBuilder builder = executable.createBuilder();
+        builder.startIf().string(OLD_STATE + " != 0");
+        if (requiresExclude) {
+            builder.string(" || " + OLD_EXCLUDE + " != 0");
+        }
+        builder.end();
+
+        builder.startBlock();
         builder.declaration(state.bitSetType, NEW_STATE, state.createMaskedReference(FrameState.load(this), reachableSpecializations.toArray()));
         if (requiresExclude) {
             builder.declaration(exclude.bitSetType, NEW_EXCLUDE, exclude.createReference(FrameState.load(this)));
@@ -1179,7 +1186,7 @@ class FlatNodeGenFactory {
             builder.startBlock().startStatement().startCall("this", REPORT_POLYMORPHIC_SPECIALIZE).end(2);
             builder.end();
         }
-        builder.end();
+        builder.end(2); // if
         return executable;
     }
 
@@ -1206,12 +1213,6 @@ class FlatNodeGenFactory {
     }
 
     private void generateCheckNewPolymorphismState(CodeTreeBuilder builder) {
-        builder.startIf().string(OLD_STATE + " != 0");
-        if (requiresExclude()) {
-            builder.string(" || " + OLD_EXCLUDE + " != 0");
-        }
-        builder.end();
-        builder.startBlock();
         builder.string(CHECK_FOR_POLYMORPHIC_SPECIALIZE + "(" + OLD_STATE);
         if (requiresExclude()) {
             builder.string(", " + OLD_EXCLUDE);
@@ -1220,17 +1221,18 @@ class FlatNodeGenFactory {
             builder.string(", " + OLD_CACHE_COUNT);
         }
         builder.string(");").newLine();
-        builder.end(); // block
     }
 
     private void generateSaveOldPolymorphismState(CodeTreeBuilder builder, FrameState frameState) {
+        // TODO: call cashe count only if state is not 0, use ternary old_state == 0 ? 0 : countCaches();
+        // TODO: guard checkForPolymorphicSpecialize with the if that is in the method
         // TODO: Tests
         builder.declaration(state.bitSetType, OLD_STATE, state.createMaskedReference(frameState, reachableSpecializations.toArray()));
         if (requiresExclude()) {
             builder.declaration(exclude.bitSetType, OLD_EXCLUDE, "exclude");
         }
         if (requiresCacheCheck()) {
-            builder.declaration(context.getType(int.class), OLD_CACHE_COUNT, "state == 0 ? 0 : " + COUNT_CACHES + "()");
+            builder.declaration(context.getType(int.class), OLD_CACHE_COUNT, COUNT_CACHES + "()");
         }
     }
 
