@@ -53,7 +53,7 @@ import com.oracle.graal.nodes.ValuePhiNode;
 import com.oracle.graal.nodes.calc.CompareNode;
 import com.oracle.graal.nodes.extended.BoxNode;
 import com.oracle.graal.nodes.extended.BranchProbabilityNode;
-import com.oracle.graal.nodes.extended.GuardedUnsafeLoadNode;
+import com.oracle.graal.nodes.extended.UnsafeLoadNode;
 import com.oracle.graal.nodes.extended.UnsafeStoreNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
@@ -536,7 +536,7 @@ public class TruffleGraphBuilderPlugins {
                 ValueNode frame = receiver.get();
                 if (Options.TruffleIntrinsifyFrameAccess.getValue() && frame instanceof NewFrameNode && ((NewFrameNode) frame).getIntrinsifyAccessors()) {
                     JavaConstant speculation = b.getGraph().getSpeculationLog().speculate(((NewFrameNode) frame).getIntrinsifyAccessorsSpeculation());
-                    b.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.TransferToInterpreter, speculation));
+                    b.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.RuntimeConstraint, speculation));
                     return true;
                 }
 
@@ -620,8 +620,7 @@ public class TruffleGraphBuilderPlugins {
                     locationIdentity = ObjectLocationIdentity.create(location.asJavaConstant());
                 }
                 LogicNode compare = b.add(CompareNode.createCompareNode(Condition.EQ, condition, ConstantNode.forBoolean(true, object.graph()), b.getConstantReflection()));
-                ConditionAnchorNode anchor = b.add(new ConditionAnchorNode(compare));
-                b.addPush(returnKind, b.add(new GuardedUnsafeLoadNode(object, offset, returnKind, locationIdentity, anchor)));
+                b.addPush(returnKind, b.add(new UnsafeLoadNode(object, offset, returnKind, locationIdentity, compare)));
                 return true;
             }
             // TODO: should we throw b.bailout() here?
