@@ -63,12 +63,10 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.Source;
-import java.util.ArrayList;
-import java.util.List;
 
 final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
 
@@ -107,7 +105,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     @CompilationFinal private volatile Lazy lazy;
 
     @CompilationFinal volatile Env env; // effectively final
-    @CompilationFinal private volatile List<Object> languageServices = Collections.emptyList();
 
     PolyglotLanguageContext(PolyglotContextImpl context, PolyglotLanguage language) {
         this.context = context;
@@ -270,7 +267,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         VMAccessor.INSTRUMENT.notifyThreadFinished(context.engine, context.truffleContext, thread);
     }
 
-    void ensureCreated(PolyglotLanguage accessingLanguage) {
+    private void ensureCreated(PolyglotLanguage accessingLanguage) {
         if (creating) {
             throw new PolyglotIllegalStateException(String.format("Cyclic access to language context for language %s. " +
                             "The context is currently being created.", language.getId()));
@@ -302,11 +299,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                         assert VMAccessor.LANGUAGE.getLanguage(env) != null;
 
                         try {
-                            List<Object> languageServicesCollector = new ArrayList<>();
-                            LANGUAGE.createEnvContext(localEnv, languageServicesCollector);
-                            String errorMessage = verifyServices(language.info, languageServicesCollector, language.cache.serices());
-                            assert errorMessage == null : errorMessage;
-                            this.languageServices = languageServicesCollector;
+                            LANGUAGE.createEnvContext(localEnv);
                             lang.language.profile.notifyContextCreate(this, localEnv);
                             if (eventsEnabled) {
                                 VMAccessor.INSTRUMENT.notifyLanguageContextCreated(context.engine, context.truffleContext, language.info);
@@ -329,40 +322,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                 }
             }
         }
-    }
-
-    private static String verifyServices(LanguageInfo info, List<Object> registeredServices, String[] expectedServices) {
-        for (String expectedServiceClass : expectedServices) {
-            for (Object registeredService : registeredServices) {
-                boolean found = false;
-                if (isSubType(registeredService.getClass(), expectedServiceClass)) {
-                    found = true;
-                    break;
-                }
-                if (!found) {
-                    return String.format("Language %s declares service %s but doesn't register it", info.getName(), expectedServiceClass);
-                }
-            }
-        }
-        return null;
-    }
-
-    private static boolean isSubType(Class<?> clazz, String serviceClass) {
-        if (clazz == null) {
-            return false;
-        }
-        if (serviceClass.equals(clazz.getName()) || serviceClass.equals(clazz.getCanonicalName())) {
-            return true;
-        }
-        if (isSubType(clazz.getSuperclass(), serviceClass)) {
-            return true;
-        }
-        for (Class<?> implementedInterface : clazz.getInterfaces()) {
-            if (isSubType(implementedInterface, serviceClass)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     boolean ensureInitialized(PolyglotLanguage accessingLanguage) {
@@ -456,15 +415,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         } else {
             return true;
         }
-    }
-
-    <S> S lookupService(Class<S> type) {
-        for (Object languageService : languageServices) {
-            if (type.isInstance(languageService)) {
-                return type.cast(languageService);
-            }
-        }
-        return null;
     }
 
     static final class ToGuestValuesNode {
@@ -718,6 +668,8 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             return HostObject.forObject(hostValue, this);
         } else if (HostWrapper.isInstance(hostValue)) {
             return migrateHostWrapper(HostWrapper.asInstance(hostValue));
+        } else if (TruffleOptions.AOT) {
+            return HostObject.forObject(hostValue, this);
         } else {
             return HostInteropReflect.asTruffleViaReflection(hostValue, this);
         }
