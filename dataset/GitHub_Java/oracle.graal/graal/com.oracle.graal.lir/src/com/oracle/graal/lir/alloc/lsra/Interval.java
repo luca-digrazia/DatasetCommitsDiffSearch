@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,19 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.util.IntList;
-import com.oracle.graal.compiler.common.util.Util;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.Variable;
+import com.oracle.graal.compiler.common.util.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
 
 /**
  * Represents an interval in the {@linkplain LinearScan linear scan register allocator}.
@@ -345,9 +330,7 @@ public final class Interval {
          * The interval has more than one definition (e.g. resulting from phi moves), so stores to
          * memory are not optimized.
          */
-        NoOptimization;
-
-        public static final EnumSet<SpillState> ALWAYS_IN_MEMORY = EnumSet.of(SpillInDominator, StoreAtDefinition, StartInMemory);
+        NoOptimization
     }
 
     /**
@@ -470,7 +453,7 @@ public final class Interval {
     /**
      * The stack slot to which all splits of this interval are spilled if necessary.
      */
-    private AllocatableValue spillSlot;
+    private StackSlotValue spillSlot;
 
     /**
      * The kind of this interval.
@@ -633,12 +616,11 @@ public final class Interval {
     /**
      * Gets the canonical spill slot for this interval.
      */
-    public AllocatableValue spillSlot() {
+    public StackSlotValue spillSlot() {
         return splitParent().spillSlot;
     }
 
-    public void setSpillSlot(AllocatableValue slot) {
-        assert isStackSlotValue(slot);
+    public void setSpillSlot(StackSlotValue slot) {
         assert splitParent().spillSlot == null || (isVirtualStackSlot(splitParent().spillSlot) && isStackSlot(slot)) : "connot overwrite existing spill slot";
         splitParent().spillSlot = slot;
     }
@@ -680,7 +662,8 @@ public final class Interval {
 
     // returns true if this interval has a shadow copy on the stack that is always correct
     public boolean alwaysInMemory() {
-        return SpillState.ALWAYS_IN_MEMORY.contains(spillState()) && !canMaterialize();
+        return (splitParent().spillState == SpillState.SpillInDominator || splitParent().spillState == SpillState.StoreAtDefinition || splitParent().spillState == SpillState.StartInMemory) &&
+                        !canMaterialize();
     }
 
     void removeFirstUsePos() {
