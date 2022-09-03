@@ -186,14 +186,12 @@ public class AMD64GraphBuilderPlugins {
     }
 
     private static void registerStringPlugins(InvocationPlugins plugins, AMD64 arch, BytecodeProvider replacementsBytecodeProvider) {
-        if (Java8OrEarlier) {
+        if (Java8OrEarlier && arch.getFeatures().contains(CPUFeature.SSE4_2)) {
             Registration r;
             r = new Registration(plugins, String.class, replacementsBytecodeProvider);
             r.setAllowOverwrite(true);
-            if (arch.getFeatures().contains(CPUFeature.SSE4_2)) {
-                r.registerMethodSubstitution(AMD64StringSubstitutions.class, "indexOf", char[].class, int.class,
-                                int.class, char[].class, int.class, int.class, int.class);
-            }
+            r.registerMethodSubstitution(AMD64StringSubstitutions.class, "indexOf", char[].class, int.class,
+                            int.class, char[].class, int.class, int.class, int.class);
             r.registerMethodSubstitution(AMD64StringSubstitutions.class, "compareTo", Receiver.class, String.class);
         }
     }
