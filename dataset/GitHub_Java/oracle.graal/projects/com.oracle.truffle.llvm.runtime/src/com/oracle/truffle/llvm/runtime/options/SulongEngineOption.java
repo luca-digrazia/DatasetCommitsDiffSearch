@@ -61,10 +61,4 @@ abstract class SulongEngineOption {
 
     @Option(commandLineName = "DisableNativeInterface", help = "Disables Sulongs native interface.", name = "disableNativeInterface") //
     protected static final Boolean DISABLE_NFI = false;
-
-    @Option(commandLineName = "TraceNativeCalls", help = "Traces Sulongs native calls via Truffle native interface.", name = "traceNativeCalls") //
-    protected static final Boolean TRACE_NATIVE_CALLS = false;
-
-    @Option(commandLineName = "LazyParsing", help = "Transforms LLVM IR functions to Sulong ASTs lazily.", name = "lazyParsing") //
-    protected static final Boolean LAZY_PARSING = true;
 }

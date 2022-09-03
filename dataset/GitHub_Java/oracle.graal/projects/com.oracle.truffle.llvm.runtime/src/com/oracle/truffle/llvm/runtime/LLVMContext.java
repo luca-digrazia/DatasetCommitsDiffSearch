@@ -34,25 +34,21 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.ExecutionContext;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.runtime.memory.LLVMHeapFunctions;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
-import com.oracle.truffle.llvm.runtime.types.FunctionType;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
-public class LLVMContext {
+public class LLVMContext extends ExecutionContext {
 
     private final List<RootCallTarget> globalVarInits = new ArrayList<>();
     private final List<RootCallTarget> globalVarDeallocs = new ArrayList<>();
@@ -65,7 +61,7 @@ public class LLVMContext {
 
     private final NativeLookup nativeLookup;
 
-    private final LLVMNativeFunctions nativeFunctions;
+    private final LLVMHeapFunctions heapFunctions;
 
     private final LLVMStack stack = new LLVMStack();
 
@@ -80,141 +76,14 @@ public class LLVMContext {
     private final List<LLVMFunctionDescriptor> functionDescriptors = new ArrayList<>();
     private final HashMap<String, LLVMFunctionDescriptor> functionIndex;
 
-    private final LinkedList<LLVMAddress> caughtExceptionStack = new LinkedList<>();
-    private final LinkedList<DestructorStackElement> destructorStack = new LinkedList<>();
-    private final HashMap<String, Integer> nativeCallStatistics;
-
-    private final Object handlesLock;
-    private final Map<TruffleObject, LLVMAddress> toNative;
-    private final Map<LLVMAddress, TruffleObject> toManaged;
-
-    // #define SIG_DFL ((__sighandler_t) 0) /* Default action. */
-    private final LLVMFunction sigDfl;
-
-    // # define SIG_IGN ((__sighandler_t) 1) /* Ignore signal. */
-    private final LLVMFunction sigIgn;
-
-    // #define SIG_ERR ((__sighandler_t) -1) /* Error return. */
-    private final LLVMFunction sigErr;
-
-    public static final class DestructorStackElement {
-        private final LLVMFunctionDescriptor destructor;
-        private final LLVMAddress thiz;
-
-        public DestructorStackElement(LLVMFunctionDescriptor destructor, LLVMAddress thiz) {
-            this.destructor = destructor;
-            this.thiz = thiz;
-        }
-
-        public LLVMFunctionDescriptor getDestructor() {
-            return destructor;
-        }
-
-        public LLVMAddress getThiz() {
-            return thiz;
-        }
-    }
-
     public LLVMContext(Env env) {
         this.nativeLookup = LLVMOptions.ENGINE.disableNativeInterface() ? null : new NativeLookup(env);
-        this.nativeCallStatistics = LLVMOptions.ENGINE.traceNativeCalls() ? new HashMap<>() : null;
         this.functionIndex = new HashMap<>();
-        this.nativeFunctions = new LLVMNativeFunctionsImpl(nativeLookup);
-        this.sigDfl = new LLVMFunctionHandle(0);
-        this.sigIgn = new LLVMFunctionHandle(1);
-        this.sigErr = new LLVMFunctionHandle(-1);
-        this.toNative = new HashMap<>();
-        this.toManaged = new HashMap<>();
-        this.handlesLock = new Object();
+        this.heapFunctions = new LLVMHeapFunctionsImpl(nativeLookup);
     }
 
-    public LLVMFunction getSigDfl() {
-        return sigDfl;
-    }
-
-    public LLVMFunction getSigIgn() {
-        return sigIgn;
-    }
-
-    public LLVMFunction getSigErr() {
-        return sigErr;
-    }
-
-    @TruffleBoundary
-    public TruffleObject getManagedObjectForHandle(LLVMAddress address) {
-        synchronized (handlesLock) {
-            final TruffleObject object = toManaged.get(address);
-
-            if (object == null) {
-                throw new UnsupportedOperationException("Cannot resolve native handle: " + address);
-            }
-
-            return object;
-        }
-    }
-
-    @TruffleBoundary
-    public void releaseHandle(LLVMAddress address) {
-        synchronized (handlesLock) {
-            final TruffleObject object = toManaged.get(address);
-
-            if (object == null) {
-                throw new UnsupportedOperationException("Cannot resolve native handle: " + address);
-            }
-
-            toManaged.remove(address);
-            toNative.remove(object);
-        }
-    }
-
-    @TruffleBoundary
-    public LLVMAddress getHandleForManagedObject(TruffleObject object) {
-        synchronized (handlesLock) {
-            return toNative.computeIfAbsent(object, (k) -> {
-                LLVMAddress allocatedMemory = LLVMMemory.allocateMemory(Long.BYTES);
-                LLVMMemory.putI64(allocatedMemory, 0xdeadbeef);
-                toManaged.put(allocatedMemory, object);
-                return allocatedMemory;
-            });
-        }
-    }
-
-    @TruffleBoundary
-    public void registerNativeCall(LLVMFunctionDescriptor descriptor) {
-        if (LLVMOptions.ENGINE.traceNativeCalls()) {
-            String name = descriptor.getName() + " " + descriptor.getType();
-            if (nativeCallStatistics.containsKey(name)) {
-                int count = nativeCallStatistics.get(name) + 1;
-                nativeCallStatistics.put(name, count);
-            } else {
-                nativeCallStatistics.put(name, 1);
-            }
-        }
-    }
-
-    public void printNativeCallStatistic() {
-        if (LLVMOptions.ENGINE.traceNativeCalls()) {
-            LinkedHashMap<String, Integer> sorted = nativeCallStatistics.entrySet().stream().sorted(Map.Entry.comparingByValue()).collect(Collectors.toMap(
-                            Map.Entry::getKey,
-                            Map.Entry::getValue,
-                            (e1, e2) -> e1,
-                            LinkedHashMap::new));
-            for (String s : sorted.keySet()) {
-                System.err.println(String.format("Function %s \t count: %d", s, sorted.get(s)));
-            }
-        }
-    }
-
-    public LLVMNativeFunctions getNativeFunctions() {
-        return nativeFunctions;
-    }
-
-    public LinkedList<LLVMAddress> getCaughtExceptionStack() {
-        return caughtExceptionStack;
-    }
-
-    public LinkedList<DestructorStackElement> getDestructorStack() {
-        return destructorStack;
+    public LLVMHeapFunctions getHeapFunctions() {
+        return heapFunctions;
     }
 
     public LLVMGlobalVariableRegistry getGlobalVariableRegistry() {
@@ -334,8 +203,8 @@ public class LLVMContext {
         haveLoadedDynamicBitcodeLibraries = true;
     }
 
-    public static String getNativeSignature(FunctionType type, int skipArguments) {
-        return NativeLookup.prepareSignature(type, skipArguments);
+    public static String getNativeSignature(LLVMRuntimeType retType, Type[] args, int skipArguments) {
+        return NativeLookup.prepareSignature(retType, args, skipArguments);
     }
 
     public TruffleObject resolveAsNativeFunction(LLVMFunctionDescriptor descriptor) {
@@ -374,14 +243,6 @@ public class LLVMContext {
         }
         return function;
 
-    }
-
-    public LLVMFunctionDescriptor getDescriptorForName(String name) {
-        CompilerAsserts.neverPartOfCompilation();
-        if (functionIndex.containsKey(name)) {
-            return functionDescriptors.get(functionIndex.get(name).getFunctionIndex());
-        }
-        throw new IllegalStateException();
     }
 
     public NativeLookup getNativeLookup() {
