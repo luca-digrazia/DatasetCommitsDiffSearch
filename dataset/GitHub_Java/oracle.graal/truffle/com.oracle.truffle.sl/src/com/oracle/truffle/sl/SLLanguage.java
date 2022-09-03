@@ -192,7 +192,7 @@ import java.util.WeakHashMap;
  */
 
 /*
- *
+ * 
  * <p> <b>Tools:</b><br> The use of some of Truffle's support for developer tools (based on the
  * Truffle {@linkplain Instrumenter Instrumentation Framework}) are demonstrated in this file, for
  * example: <ul> <li>a {@linkplain NodeExecCounter counter for node executions}, tabulated by node
@@ -259,7 +259,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
             throw new SLException("No function main() defined in SL source file.");
         }
         while (repeats-- > 0) {
-            main.execute();
+            main.invoke(null);
         }
         reportToolDemos();
     }
@@ -307,7 +307,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
                 long start = System.nanoTime();
                 /* Call the main entry point, without any arguments. */
                 try {
-                    result = main.execute().get();
+                    result = main.invoke(null).get();
                     if (result != null) {
                         out.println(result);
                     }
