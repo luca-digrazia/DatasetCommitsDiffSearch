@@ -258,10 +258,6 @@ public final class SpecializationGroup {
         return false;
     }
 
-    public static SpecializationGroup create(SpecializationData specialization) {
-        return new SpecializationGroup(specialization);
-    }
-
     public static SpecializationGroup create(List<SpecializationData> specializations) {
         List<SpecializationGroup> groups = new ArrayList<>();
         for (SpecializationData specialization : specializations) {
