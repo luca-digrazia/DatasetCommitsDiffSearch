@@ -22,14 +22,13 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
 
-public final class IntegerMul extends IntegerArithmeticNode {
+public final class IntegerMul extends IntegerArithmetic {
     private static final IntegerMulCanonicalizerOp CANONICALIZER = new IntegerMulCanonicalizerOp();
 
     public IntegerMul(CiKind kind, Value x, Value y, Graph graph) {
@@ -57,7 +56,7 @@ public final class IntegerMul extends IntegerArithmeticNode {
 
     private static class IntegerMulCanonicalizerOp implements CanonicalizerOp {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             IntegerMul mul = (IntegerMul) node;
             Value x = mul.x();
             Value y = mul.y();

@@ -834,11 +834,11 @@ public final class LinearScan {
 
                 if (instr instanceof Phi) {
                     Phi phi = (Phi) instr;
-                    TTY.println("phi block begin: " + phi.merge());
-                    TTY.println("pred count on blockbegin: " + phi.merge().predecessors().size());
+                    TTY.println("phi block begin: " + phi.block());
+                    TTY.println("pred count on blockbegin: " + phi.block().predecessors().size());
                     TTY.println("phi values: " + phi.valueCount());
                     TTY.println("phi block preds:");
-                    for (Node n : phi.merge().predecessors()) {
+                    for (Node n : phi.block().predecessors()) {
                         TTY.println(n.toString());
                     }
                 }
@@ -2019,7 +2019,7 @@ public final class LinearScan {
     }
 
     public void allocate() {
-        if (GraalOptions.PrintTimers) {
+        if (GraalOptions.Time) {
             GraalTimers.LIFETIME_ANALYSIS.start();
         }
 
@@ -2033,7 +2033,7 @@ public final class LinearScan {
         buildIntervals();
         sortIntervalsBeforeAllocation();
 
-        if (GraalOptions.PrintTimers) {
+        if (GraalOptions.Time) {
             GraalTimers.LIFETIME_ANALYSIS.stop();
             GraalTimers.LINEAR_SCAN.start();
         }
@@ -2042,14 +2042,14 @@ public final class LinearScan {
 
         allocateRegisters();
 
-        if (GraalOptions.PrintTimers) {
+        if (GraalOptions.Time) {
             GraalTimers.LINEAR_SCAN.stop();
             GraalTimers.RESOLUTION.start();
         }
 
         resolveDataFlow();
 
-        if (GraalOptions.PrintTimers) {
+        if (GraalOptions.Time) {
             GraalTimers.RESOLUTION.stop();
             GraalTimers.DEBUG_INFO.start();
         }
@@ -2075,7 +2075,7 @@ public final class LinearScan {
             verifyIntervals();
         }
 
-        if (GraalOptions.PrintTimers) {
+        if (GraalOptions.Time) {
             GraalTimers.DEBUG_INFO.stop();
             GraalTimers.CODE_CREATE.start();
         }

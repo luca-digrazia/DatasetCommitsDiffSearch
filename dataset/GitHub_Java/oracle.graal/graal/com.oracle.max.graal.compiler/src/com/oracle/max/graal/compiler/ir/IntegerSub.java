@@ -78,9 +78,17 @@ public final class IntegerSub extends IntegerArithmetic {
                     return Constant.forLong(x.asConstant().asLong() - y.asConstant().asLong(), graph);
                 }
             } else if (y.isConstant()) {
-                long c = y.asConstant().asLong();
-                if (c == 0) {
-                    return x;
+                if (kind == CiKind.Int) {
+                    int c = y.asConstant().asInt();
+                    if (c == 0) {
+                        return x;
+                    }
+                } else {
+                    assert kind == CiKind.Long;
+                    long c = y.asConstant().asLong();
+                    if (c == 0) {
+                        return x;
+                    }
                 }
             } else if (x.isConstant()) {
                 long c = x.asConstant().asLong();

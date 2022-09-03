@@ -205,7 +205,7 @@ public final class GraalCompilation {
             emitLIR();
             targetMethod = emitCode();
 
-            if (GraalOptions.Meter) {
+            if (GraalOptions.PrintMetrics) {
                 GraalMetrics.BytecodesCompiled += method.code().length;
             }
         } catch (CiBailout b) {

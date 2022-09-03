@@ -22,14 +22,13 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
 
-public final class IntegerAdd extends IntegerArithmeticNode {
+public final class IntegerAdd extends IntegerArithmetic {
     private static final IntegerAddCanonicalizerOp CANONICALIZER = new IntegerAddCanonicalizerOp();
 
     public IntegerAdd(CiKind kind, Value x, Value y, Graph graph) {
@@ -57,7 +56,7 @@ public final class IntegerAdd extends IntegerArithmeticNode {
 
     private static class IntegerAddCanonicalizerOp implements CanonicalizerOp {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             IntegerAdd add = (IntegerAdd) node;
             Value x = add.x();
             Value y = add.y();
