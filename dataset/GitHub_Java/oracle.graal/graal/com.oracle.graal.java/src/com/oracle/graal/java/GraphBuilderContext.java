@@ -27,7 +27,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -57,18 +56,6 @@ public interface GraphBuilderContext {
 
     void push(Kind kind, ValueNode value);
 
-    StructuredGraph getGraph();
-
-    /**
-     * Gets the parsing context for the method that inlines the method being parsed by this context.
-     */
-    GraphBuilderContext getParent();
-
-    /**
-     * Gets the inline depth of this context. 0 implies this is the context for the root method.
-     */
-    int getDepth();
-
     /**
      * Determines if the graph builder is parsing a snippet or method substitution.
      */
@@ -84,6 +71,4 @@ public interface GraphBuilderContext {
         }
         return nonNullValue;
     }
-
-    GuardingNode getCurrentBlockGuard();
 }
