@@ -49,8 +49,8 @@ public class FrameSlotTypeSpecializationTest {
         TruffleRuntime runtime = Truffle.getRuntime();
         FrameDescriptor frameDescriptor = new FrameDescriptor();
         FrameSlot slot = frameDescriptor.addFrameSlot("localVar", FrameSlotKind.Int);
-        TestRootNode rootNode = new TestRootNode(frameDescriptor, new IntAssignLocal(slot, new StringTestChildNode()), new IntReadLocal(slot));
-        CallTarget target = runtime.createCallTarget(rootNode);
+        TestRootNode rootNode = new TestRootNode(new IntAssignLocal(slot, new StringTestChildNode()), new IntReadLocal(slot));
+        CallTarget target = runtime.createCallTarget(rootNode, frameDescriptor);
         Assert.assertEquals(FrameSlotKind.Int, slot.getKind());
         Object result = target.call();
         Assert.assertEquals("42", result);
@@ -62,10 +62,10 @@ public class FrameSlotTypeSpecializationTest {
         @Child TestChildNode left;
         @Child TestChildNode right;
 
-        public TestRootNode(FrameDescriptor descriptor, TestChildNode left, TestChildNode right) {
-            super(null, descriptor);
-            this.left = left;
-            this.right = right;
+        public TestRootNode(TestChildNode left, TestChildNode right) {
+            super(null);
+            this.left = adoptChild(left);
+            this.right = adoptChild(right);
         }
 
         @Override
@@ -108,7 +108,7 @@ public class FrameSlotTypeSpecializationTest {
 
         IntAssignLocal(FrameSlot slot, TestChildNode value) {
             super(slot);
-            this.value = value;
+            this.value = adoptChild(value);
         }
 
         @Override
@@ -130,7 +130,7 @@ public class FrameSlotTypeSpecializationTest {
 
         ObjectAssignLocal(FrameSlot slot, TestChildNode value) {
             super(slot);
-            this.value = value;
+            this.value = adoptChild(value);
         }
 
         @Override

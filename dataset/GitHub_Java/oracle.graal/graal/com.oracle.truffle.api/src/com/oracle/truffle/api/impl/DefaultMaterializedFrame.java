@@ -27,16 +27,11 @@ package com.oracle.truffle.api.impl;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 
-/**
- * This is an implementation-specific class. Do not use or instantiate it. Instead, use
- * {@link TruffleRuntime#createMaterializedFrame(Arguments)} or {@link Frame#materialize()} to
- * create a {@link MaterializedFrame}.
- */
 final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
 
     private final DefaultVirtualFrame wrapped;
 
-    DefaultMaterializedFrame(DefaultVirtualFrame wrapped) {
+    protected DefaultMaterializedFrame(DefaultVirtualFrame wrapped) {
         this.wrapped = wrapped;
     }
 
@@ -141,37 +136,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
     }
 
     @Override
-    public boolean isObject(FrameSlot slot) {
-        return wrapped.isObject(slot);
-    }
-
-    @Override
-    public boolean isByte(FrameSlot slot) {
-        return wrapped.isByte(slot);
-    }
-
-    @Override
-    public boolean isBoolean(FrameSlot slot) {
-        return wrapped.isBoolean(slot);
-    }
-
-    @Override
-    public boolean isInt(FrameSlot slot) {
-        return wrapped.isInt(slot);
-    }
-
-    @Override
-    public boolean isLong(FrameSlot slot) {
-        return wrapped.isLong(slot);
-    }
-
-    @Override
-    public boolean isFloat(FrameSlot slot) {
-        return wrapped.isFloat(slot);
-    }
-
-    @Override
-    public boolean isDouble(FrameSlot slot) {
-        return wrapped.isDouble(slot);
+    public boolean isInitialized(FrameSlot slot) {
+        return wrapped.isInitialized(slot);
     }
 }

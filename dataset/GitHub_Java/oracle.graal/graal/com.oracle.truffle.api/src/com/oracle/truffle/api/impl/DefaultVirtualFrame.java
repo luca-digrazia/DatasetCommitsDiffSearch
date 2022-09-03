@@ -160,9 +160,7 @@ public final class DefaultVirtualFrame implements VirtualFrame {
     public Object getValue(FrameSlot slot) {
         int slotIndex = slot.getIndex();
         if (slotIndex >= tags.length) {
-            if (!resize()) {
-                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
-            }
+            resize();
         }
         return locals[slotIndex];
     }
@@ -170,9 +168,7 @@ public final class DefaultVirtualFrame implements VirtualFrame {
     private void verifySet(FrameSlot slot, FrameSlotKind accessKind) {
         int slotIndex = slot.getIndex();
         if (slotIndex >= tags.length) {
-            if (!resize()) {
-                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
-            }
+            resize();
         }
         tags[slotIndex] = (byte) accessKind.ordinal();
     }
@@ -180,9 +176,7 @@ public final class DefaultVirtualFrame implements VirtualFrame {
     private void verifyGet(FrameSlot slot, FrameSlotKind accessKind) throws FrameSlotTypeException {
         int slotIndex = slot.getIndex();
         if (slotIndex >= tags.length) {
-            if (!resize()) {
-                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
-            }
+            resize();
         }
         byte tag = tags[slotIndex];
         if (accessKind == FrameSlotKind.Object ? tag != 0 : tag != accessKind.ordinal()) {
@@ -196,60 +190,22 @@ public final class DefaultVirtualFrame implements VirtualFrame {
         }
     }
 
-    private boolean resize() {
+    private void resize() {
         int oldSize = tags.length;
         int newSize = descriptor.getSize();
         if (newSize > oldSize) {
             locals = Arrays.copyOf(locals, newSize);
             Arrays.fill(locals, oldSize, newSize, descriptor.getTypeConversion().getDefaultValue());
             tags = Arrays.copyOf(tags, newSize);
-            return true;
         }
-        return false;
     }
 
-    private byte getTag(FrameSlot slot) {
+    @Override
+    public boolean isInitialized(FrameSlot slot) {
         int slotIndex = slot.getIndex();
         if (slotIndex >= tags.length) {
-            if (!resize()) {
-                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
-            }
+            resize();
         }
-        return tags[slotIndex];
-    }
-
-    @Override
-    public boolean isObject(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Object.ordinal();
-    }
-
-    @Override
-    public boolean isByte(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Byte.ordinal();
-    }
-
-    @Override
-    public boolean isBoolean(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Boolean.ordinal();
-    }
-
-    @Override
-    public boolean isInt(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Int.ordinal();
-    }
-
-    @Override
-    public boolean isLong(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Long.ordinal();
-    }
-
-    @Override
-    public boolean isFloat(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Float.ordinal();
-    }
-
-    @Override
-    public boolean isDouble(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Double.ordinal();
+        return tags[slotIndex] != 0;
     }
 }

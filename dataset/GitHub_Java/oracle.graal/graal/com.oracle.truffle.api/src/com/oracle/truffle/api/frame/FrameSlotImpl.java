@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,13 +29,13 @@ public final class FrameSlotImpl implements FrameSlot {
     private final FrameDescriptor descriptor;
     private final Object identifier;
     private final int index;
-    private Class<?> type;
+    @com.oracle.truffle.api.CompilerDirectives.CompilationFinal private FrameSlotKind kind;
 
-    protected FrameSlotImpl(FrameDescriptor descriptor, Object identifier, int index, Class<?> type) {
+    public FrameSlotImpl(FrameDescriptor descriptor, Object identifier, int index, FrameSlotKind kind) {
         this.descriptor = descriptor;
         this.identifier = identifier;
         this.index = index;
-        this.type = type;
+        this.kind = kind;
     }
 
     public Object getIdentifier() {
@@ -44,19 +46,20 @@ public final class FrameSlotImpl implements FrameSlot {
         return index;
     }
 
-    public Class<?> getType() {
-        return type;
+    public FrameSlotKind getKind() {
+        return kind;
     }
 
-    public void setType(final Class<?> type) {
-        assert this.type != type;
-        this.type = type;
-        this.descriptor.updateVersion();
+    public void setKind(final FrameSlotKind kind) {
+        if (this.kind != kind) {
+            this.kind = kind;
+            this.descriptor.updateVersion();
+        }
     }
 
     @Override
     public String toString() {
-        return "[" + index + "," + identifier + "," + type + "]";
+        return "[" + index + "," + identifier + "," + kind + "]";
     }
 
     @Override

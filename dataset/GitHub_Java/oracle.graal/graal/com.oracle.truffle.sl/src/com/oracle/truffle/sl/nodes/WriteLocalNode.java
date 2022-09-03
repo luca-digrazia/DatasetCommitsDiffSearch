@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.sl.nodes;
 
-import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.frame.*;
 
@@ -37,51 +36,22 @@ public abstract class WriteLocalNode extends FrameSlotNode {
         this(node.slot);
     }
 
-    @Specialization(guards = "isIntKind")
+    @Specialization
     public int write(VirtualFrame frame, int right) {
         frame.setInt(slot, right);
         return right;
     }
 
-    @Specialization(guards = "isBooleanKind")
+    @Specialization
     public boolean write(VirtualFrame frame, boolean right) {
         frame.setBoolean(slot, right);
         return right;
     }
 
-    @Specialization(guards = "isObjectKind")
+    @Specialization
     public Object writeGeneric(VirtualFrame frame, Object right) {
         frame.setObject(slot, right);
         return right;
-    }
-
-    protected final boolean isIntKind() {
-        return isKind(FrameSlotKind.Int);
-    }
-
-    protected final boolean isBooleanKind() {
-        return isKind(FrameSlotKind.Boolean);
-    }
-
-    protected final boolean isObjectKind() {
-        if (slot.getKind() != FrameSlotKind.Object) {
-            CompilerDirectives.transferToInterpreter();
-            slot.setKind(FrameSlotKind.Object);
-        }
-        return true;
-    }
-
-    private boolean isKind(FrameSlotKind kind) {
-        return slot.getKind() == kind || initialSetKind(kind);
-    }
-
-    private boolean initialSetKind(FrameSlotKind kind) {
-        if (slot.getKind() == FrameSlotKind.Illegal) {
-            CompilerDirectives.transferToInterpreter();
-            slot.setKind(kind);
-            return true;
-        }
-        return false;
     }
 
 }
