@@ -280,12 +280,7 @@ public final class JavaInterop {
      * @since 0.9
      */
     public static TruffleObject asTruffleObject(Object obj) {
-        // legacy behavior: treat class as static class
-        return asTruffleObject(obj, currentPolyglotContext(), true);
-    }
-
-    static TruffleObject asTruffleObject(Object obj, Object languageContext) {
-        return asTruffleObject(obj, languageContext, false);
+        return asTruffleObject(obj, currentPolyglotContext());
     }
 
     /**
@@ -294,15 +289,11 @@ public final class JavaInterop {
      * @param obj a Java object to convert into one suitable for <em>Truffle</em> languages
      * @return converted object
      */
-    static TruffleObject asTruffleObject(Object obj, Object languageContext, boolean asStaticClass) {
+    static TruffleObject asTruffleObject(Object obj, Object languageContext) {
         if (obj instanceof TruffleObject) {
             return ((TruffleObject) obj);
         } else if (obj instanceof Class) {
-            if (asStaticClass) {
-                return JavaObject.forStaticClass((Class<?>) obj, languageContext);
-            } else {
-                return JavaObject.forClass((Class<?>) obj, languageContext);
-            }
+            return JavaObject.forClass((Class<?>) obj, languageContext);
         } else if (obj == null) {
             return JavaObject.NULL;
         } else if (obj.getClass().isArray()) {
