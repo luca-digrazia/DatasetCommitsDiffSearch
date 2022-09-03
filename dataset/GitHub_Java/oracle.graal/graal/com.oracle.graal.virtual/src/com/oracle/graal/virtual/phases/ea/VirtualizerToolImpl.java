@@ -39,6 +39,7 @@ class VirtualizerToolImpl implements VirtualizerTool {
     private final NodeBitMap usages;
     private final MetaAccessProvider metaAccess;
     private final Assumptions assumptions;
+    private GraphEffectList effects;
 
     VirtualizerToolImpl(NodeBitMap usages, MetaAccessProvider metaAccess, Assumptions assumptions) {
         this.usages = usages;
@@ -47,10 +48,9 @@ class VirtualizerToolImpl implements VirtualizerTool {
     }
 
     private boolean deleted;
-    private PartialEscapeBlockState state;
+    private BlockState state;
     private ValueNode current;
     private FixedNode position;
-    private GraphEffectList effects;
 
     @Override
     public MetaAccessProvider getMetaAccessProvider() {
@@ -62,12 +62,15 @@ class VirtualizerToolImpl implements VirtualizerTool {
         return assumptions;
     }
 
-    public void reset(PartialEscapeBlockState newState, ValueNode newCurrent, FixedNode newPosition, GraphEffectList newEffects) {
+    public void setEffects(GraphEffectList effects) {
+        this.effects = effects;
+    }
+
+    public void reset(BlockState newState, ValueNode newCurrent, FixedNode newPosition) {
         deleted = false;
         state = newState;
         current = newCurrent;
         position = newPosition;
-        effects = newEffects;
     }
 
     public boolean isDeleted() {
@@ -105,6 +108,12 @@ class VirtualizerToolImpl implements VirtualizerTool {
     }
 
     @Override
+    public ValueNode getMaterializedValue(ValueNode value) {
+        ObjectState obj = state.getObjectState(value);
+        return obj != null && !obj.isVirtual() ? obj.getMaterializedValue() : null;
+    }
+
+    @Override
     public ValueNode getReplacedValue(ValueNode original) {
         return state.getScalarAlias(original);
     }
@@ -127,6 +136,7 @@ class VirtualizerToolImpl implements VirtualizerTool {
 
     @Override
     public void delete() {
+        assert current instanceof FixedWithNextNode;
         effects.deleteFixedNode((FixedWithNextNode) current);
         deleted = true;
     }
@@ -177,6 +187,28 @@ class VirtualizerToolImpl implements VirtualizerTool {
             } else {
                 replaceWithValue(resultState.getMaterializedValue());
             }
+        }
+    }
+
+    @Override
+    public void addReadCache(ValueNode object, ResolvedJavaField identity, ValueNode value) {
+        if (OptEarlyReadElimination.getValue()) {
+            state.addReadCache(object, identity, value);
+        }
+    }
+
+    @Override
+    public ValueNode getReadCache(ValueNode object, ResolvedJavaField identity) {
+        if (OptEarlyReadElimination.getValue()) {
+            return state.getReadCache(object, identity);
+        }
+        return null;
+    }
+
+    @Override
+    public void killReadCache(ResolvedJavaField identity) {
+        if (OptEarlyReadElimination.getValue()) {
+            state.killReadCache(identity);
         }
     }
 }
