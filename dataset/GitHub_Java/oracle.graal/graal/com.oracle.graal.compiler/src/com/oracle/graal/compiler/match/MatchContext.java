@@ -41,7 +41,7 @@ public class MatchContext {
 
     private final ValueNode root;
 
-    private final List<ValueNode> nodes;
+    private final List<ScheduledNode> nodes;
 
     private final MatchStatement rule;
 
@@ -65,7 +65,7 @@ public class MatchContext {
         }
     }
 
-    public MatchContext(NodeLIRBuilder builder, MatchStatement rule, int index, ValueNode node, List<ValueNode> nodes) {
+    public MatchContext(NodeLIRBuilder builder, MatchStatement rule, int index, ValueNode node, List<ScheduledNode> nodes) {
         this.builder = builder;
         this.rule = rule;
         this.root = node;
@@ -90,7 +90,7 @@ public class MatchContext {
             return Result.OK;
         } else {
             if (current.value != value || current.type != type) {
-                return Result.namedValueMismatch(value, rule.getPattern());
+                return Result.NAMED_VALUE_MISMATCH(value, rule.getPattern());
             }
             return Result.OK;
         }
@@ -99,7 +99,7 @@ public class MatchContext {
     public Result validate() {
         // Ensure that there's no unsafe work in between these operations.
         for (int i = startIndex; i <= endIndex; i++) {
-            ValueNode node = nodes.get(i);
+            ScheduledNode node = nodes.get(i);
             if (node instanceof VirtualObjectNode || node instanceof FloatingNode) {
                 // The order of evaluation of these nodes controlled by data dependence so they
                 // don't interfere with this match.
@@ -108,11 +108,11 @@ public class MatchContext {
                 if (LogVerbose.getValue()) {
                     Debug.log("unexpected node %s", node);
                     for (int j = startIndex; j <= endIndex; j++) {
-                        ValueNode theNode = nodes.get(j);
+                        ScheduledNode theNode = nodes.get(j);
                         Debug.log("%s(%s) %1s", (consumed != null && consumed.contains(theNode) || theNode == root) ? "*" : " ", theNode.usages().count(), theNode);
                     }
                 }
-                return Result.notSafe(node, rule.getPattern());
+                return Result.NOT_SAFE(node, rule.getPattern());
             }
         }
         return Result.OK;
@@ -152,11 +152,11 @@ public class MatchContext {
         // Check NOT_IN_BLOCK first since that usually implies ALREADY_USED
         int index = nodes.indexOf(node);
         if (index == -1) {
-            return Result.notInBlock(node, rule.getPattern());
+            return Result.NOT_IN_BLOCK(node, rule.getPattern());
         }
 
         if (builder.hasOperand(node)) {
-            return Result.alreadyUsed(node, rule.getPattern());
+            return Result.ALREADY_USED(node, rule.getPattern());
         }
 
         startIndex = Math.min(startIndex, index);
