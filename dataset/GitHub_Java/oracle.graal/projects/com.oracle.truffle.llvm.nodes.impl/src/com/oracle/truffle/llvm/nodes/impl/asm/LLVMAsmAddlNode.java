@@ -27,27 +27,19 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.nodes.impl.func;
+package com.oracle.truffle.llvm.nodes.impl.asm;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 
-public class LLVMInlineAssemblyRootNode extends RootNode {
+@NodeChildren({@NodeChild("leftNode"), @NodeChild("rightNode")})
+public abstract class LLVMAsmAddlNode extends LLVMI32Node {
 
-    @Child private LLVMExpressionNode node;
-
-    public LLVMInlineAssemblyRootNode(@SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> language, SourceSection sourceSection, FrameDescriptor frameDescriptor, LLVMExpressionNode node) {
-        super(language, sourceSection, frameDescriptor);
-        this.node = node;
-    }
-
-    @Override
-    public Object execute(VirtualFrame frame) {
-        return node.executeGeneric(frame);
+    @Specialization
+    protected int executeI32(int left, int right) {
+        return left + right;
     }
 
 }
