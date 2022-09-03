@@ -388,7 +388,7 @@ public class IdentifyBlocksPhase extends Phase {
             if (nodeToBlock.get(node) == null) {
                 n = node;
             } else {
-                n = node.clone(node.graph());
+                n = node.copy(node.graph());
                 for (NodeClassIterator iter = node.inputs().iterator(); iter.hasNext();) {
                     Position pos = iter.nextPosition();
                     n.getNodeClass().set(n, pos, node.getNodeClass().get(node, pos));
