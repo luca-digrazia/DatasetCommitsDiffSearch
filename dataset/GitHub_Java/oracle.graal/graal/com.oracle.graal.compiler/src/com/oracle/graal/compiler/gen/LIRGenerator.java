@@ -63,7 +63,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     protected final TargetDescription target;
     protected final ResolvedJavaMethod method;
 
-    protected final DebugInfoBuilder debugInfoBuilder;
+    private final DebugInfoBuilder debugInfoBuilder;
 
     protected Block currentBlock;
     private ValueNode currentInstruction;
@@ -74,6 +74,22 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
      * Mapping from blocks to the last encountered frame state at the end of the block.
      */
     private final BlockMap<FrameState> blockLastState;
+
+    /**
+     * The number of currently locked monitors.
+     */
+    private int currentLockCount;
+
+    /**
+     * Mapping from blocks to the number of locked monitors at the end of the block.
+     */
+    private final BlockMap<Integer> blockLastLockCount;
+
+    /**
+     * Contains the lock data slot for each lock depth (so these may be reused within a compiled
+     * method).
+     */
+    private final ArrayList<StackSlot> lockDataSlots;
 
     /**
      * Checks whether the supplied constant can be used without loading it into a register for store
@@ -93,13 +109,10 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         this.method = method;
         this.nodeOperands = graph.createNodeMap();
         this.lir = lir;
-        this.debugInfoBuilder = createDebugInfoBuilder(nodeOperands);
+        this.debugInfoBuilder = new DebugInfoBuilder(nodeOperands);
+        this.blockLastLockCount = new BlockMap<>(lir.cfg);
+        this.lockDataSlots = new ArrayList<>();
         this.blockLastState = new BlockMap<>(lir.cfg);
-    }
-
-    @SuppressWarnings("hiding")
-    protected DebugInfoBuilder createDebugInfoBuilder(NodeMap<Value> nodeOperands) {
-        return new DebugInfoBuilder(nodeOperands);
     }
 
     @Override
@@ -218,11 +231,13 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return false;
     }
 
-    public LIRFrameState state(DeoptimizingNode deopt) {
-        if (!deopt.canDeoptimize()) {
-            return null;
-        }
-        return stateFor(deopt.getDeoptimizationState(), deopt.getDeoptimizationReason());
+    public LIRFrameState state() {
+        return state(null);
+    }
+
+    public LIRFrameState state(DeoptimizationReason reason) {
+        assert lastState != null || needOnlyOopMaps() : "must have state before instruction";
+        return stateFor(lastState, reason);
     }
 
     public LIRFrameState stateFor(FrameState state, DeoptimizationReason reason) {
@@ -233,7 +248,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         if (needOnlyOopMaps()) {
             return new LIRFrameState(null, null, null, (short) -1);
         }
-        return debugInfoBuilder.build(state, lir.getDeoptimizationReasons().addSpeculation(reason), exceptionEdge);
+        return debugInfoBuilder.build(state, lockDataSlots.subList(0, currentLockCount), lir.getDeoptimizationReasons().addSpeculation(reason), exceptionEdge);
     }
 
     /**
@@ -282,10 +297,22 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
         if (block == lir.cfg.getStartBlock()) {
             assert block.getPredecessorCount() == 0;
+            currentLockCount = 0;
             emitPrologue();
 
         } else {
             assert block.getPredecessorCount() > 0;
+
+            currentLockCount = -1;
+            for (Block pred : block.getPredecessors()) {
+                Integer predLocks = blockLastLockCount.get(pred);
+                if (currentLockCount == -1) {
+                    currentLockCount = predLocks;
+                } else {
+                    assert (predLocks == null && pred.isLoopEnd()) || currentLockCount == predLocks;
+                }
+            }
+
             FrameState fs = null;
 
             for (Block pred : block.getPredecessors()) {
@@ -329,12 +356,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             FrameState stateAfter = null;
             if (instr instanceof StateSplit) {
                 stateAfter = ((StateSplit) instr).stateAfter();
-            }
-            if (instr instanceof DeoptimizingNode) {
-                DeoptimizingNode deopt = (DeoptimizingNode) instr;
-                if (deopt.canDeoptimize() && deopt.getDeoptimizationState() == null) {
-                    deopt.setDeoptimizationState(lastState);
-                }
             }
             if (instr instanceof ValueNode) {
 
@@ -380,6 +401,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         // share the frame state that flowed into the loop
         assert blockLastState.get(block) == null || blockLastState.get(block) == lastState;
 
+        blockLastLockCount.put(currentBlock, currentLockCount);
         blockLastState.put(block, lastState);
         currentBlock = null;
 
@@ -456,6 +478,36 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     public void emitIncomingValues(Value[] params) {
         append(new ParametersOp(params));
+    }
+
+    /**
+     * Increases the number of currently locked monitors and makes sure that a lock data slot is
+     * available for the new lock.
+     */
+    public void lock() {
+        if (lockDataSlots.size() == currentLockCount) {
+            lockDataSlots.add(frameMap.allocateStackBlock(runtime.getSizeOfLockData(), false));
+        }
+        currentLockCount++;
+    }
+
+    /**
+     * Decreases the number of currently locked monitors.
+     * 
+     * @throws GraalInternalError if the number of currently locked monitors is already zero.
+     */
+    public void unlock() {
+        if (currentLockCount == 0) {
+            throw new GraalInternalError("unmatched locks");
+        }
+        currentLockCount--;
+    }
+
+    /**
+     * @return The lock data slot for the topmost locked monitor.
+     */
+    public StackSlot peekLock() {
+        return lockDataSlots.get(currentLockCount - 1);
     }
 
     @Override
@@ -662,8 +714,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     @Override
-    public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention cc, DeoptimizingNode info, Value... args) {
-        LIRFrameState state = info != null ? state(info) : null;
+    public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention cc, boolean canTrap, Value... args) {
+        LIRFrameState info = canTrap ? state() : null;
 
         // move the arguments into the correct location
         frameMap.callsMethod(cc);
@@ -675,7 +727,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             emitMove(loc, arg);
             argLocations[i] = loc;
         }
-        emitCall(callTarget, cc.getReturn(), argLocations, cc.getTemporaries(), state);
+        emitCall(callTarget, cc.getReturn(), argLocations, cc.getTemporaries(), info);
 
         if (isLegal(cc.getReturn())) {
             return emitMove(cc.getReturn());
@@ -692,7 +744,25 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         Value resultOperand = cc.getReturn();
         Value[] args = visitInvokeArguments(cc, x.arguments());
 
-        emitCall(call, resultOperand, args, cc.getTemporaries(), state(x));
+        LIRFrameState info = null;
+        FrameState stateAfter = x.stateAfter();
+        if (stateAfter != null) {
+            // (cwimmer) I made the code that modifies the operand stack conditional. My scenario:
+            // runtime calls to, e.g.,
+            // CreateNullPointerException have no equivalent in the bytecodes, so there is no invoke
+            // bytecode.
+            // Therefore, the result of the runtime call was never pushed to the stack, and we
+            // cannot pop it here.
+            FrameState stateBeforeReturn = stateAfter;
+            if ((stateAfter.stackSize() > 0 && stateAfter.stackAt(stateAfter.stackSize() - 1) == x) || (stateAfter.stackSize() > 1 && stateAfter.stackAt(stateAfter.stackSize() - 2) == x)) {
+                stateBeforeReturn = stateAfter.duplicateModified(stateAfter.bci, stateAfter.rethrowException(), x.kind());
+            }
+            info = stateFor(stateBeforeReturn, null);
+        } else {
+            info = state();
+        }
+
+        emitCall(call, resultOperand, args, cc.getTemporaries(), info);
 
         if (isLegal(resultOperand)) {
             setResult(x, emitMove(resultOperand));

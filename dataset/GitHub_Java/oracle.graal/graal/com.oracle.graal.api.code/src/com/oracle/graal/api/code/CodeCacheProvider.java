@@ -43,6 +43,11 @@ public interface CodeCacheProvider extends MetaAccessProvider {
     InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult);
 
     /**
+     * Returns the size in bytes for locking information on the stack.
+     */
+    int getSizeOfLockData();
+
+    /**
      * Returns a disassembly of some compiled code.
      * 
      * @param compResult some compiled code
@@ -58,6 +63,13 @@ public interface CodeCacheProvider extends MetaAccessProvider {
      * Gets the register configuration to use when compiling a given method.
      */
     RegisterConfig lookupRegisterConfig();
+
+    /**
+     * Custom area on the stack of each compiled method that the VM can use for its own purposes.
+     * 
+     * @return the size of the custom area in bytes
+     */
+    int getCustomStackAreaSize();
 
     /**
      * Minimum size of the stack area reserved for outgoing parameters. This area is reserved in all
