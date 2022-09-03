@@ -28,6 +28,7 @@ import java.lang.annotation.*;
 import java.lang.reflect.*;
 import java.util.*;
 
+import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 
 /**
@@ -545,10 +546,21 @@ public class MetaUtil {
             }
 
             JavaTypeProfile typeProfile = info.getTypeProfile(i);
-            appendProfile(buf, typeProfile, i, "types", sep);
-
-            JavaMethodProfile methodProfile = info.getMethodProfile(i);
-            appendProfile(buf, methodProfile, i, "methods", sep);
+            if (typeProfile != null) {
+                ProfiledType[] ptypes = typeProfile.getTypes();
+                if (ptypes != null) {
+                    buf.append(String.format("types@%d:", i));
+                    for (int j = 0; j < ptypes.length; j++) {
+                        ProfiledType ptype = ptypes[j];
+                        buf.append(String.format(" %.6f (%s)%s", ptype.getProbability(), ptype.getType(), sep));
+                    }
+                    if (typeProfile.getNotRecordedProbability() != 0) {
+                        buf.append(String.format(" %.6f <other types>%s", typeProfile.getNotRecordedProbability(), sep));
+                    } else {
+                        buf.append(String.format(" <no other types>%s", sep));
+                    }
+                }
+            }
         }
 
         boolean firstDeoptReason = true;
@@ -568,24 +580,6 @@ public class MetaUtil {
         String s = buf.toString();
         assert s.endsWith(sep);
         return s.substring(0, s.length() - sep.length());
-    }
-
-    private static void appendProfile(StringBuilder buf, AbstractJavaProfile profile, int bci, String kind, String sep) {
-        if (profile != null) {
-            AbstractProfiledItem[] pitems = profile.getItems();
-            if (pitems != null) {
-                buf.append(String.format("%s@%d:", kind, bci));
-                for (int j = 0; j < pitems.length; j++) {
-                    AbstractProfiledItem pitem = pitems[j];
-                    buf.append(String.format(" %.6f (%s)%s", pitem.getProbability(), pitem.getItem(), sep));
-                }
-                if (profile.getNotRecordedProbability() != 0) {
-                    buf.append(String.format(" %.6f <other %s>%s", profile.getNotRecordedProbability(), kind, sep));
-                } else {
-                    buf.append(String.format(" <no other %s>%s", kind, sep));
-                }
-            }
-        }
     }
 
     /**
