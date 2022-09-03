@@ -35,27 +35,27 @@ public class BC_dreturn extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 0.0d);
+        runTestWithDelta(0, "test", 0.0d);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest("test", 1.1d);
+        runTestWithDelta(0, "test", 1.1d);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", -1.4d);
+        runTestWithDelta(0, "test", -1.4d);
     }
 
     @Test
     public void run3() throws Throwable {
-        runTest("test", 256.33d);
+        runTestWithDelta(0, "test", 256.33d);
     }
 
     @Test
     public void run4() throws Throwable {
-        runTest("test", 1000.001d);
+        runTestWithDelta(0, "test", 1000.001d);
     }
 
 }

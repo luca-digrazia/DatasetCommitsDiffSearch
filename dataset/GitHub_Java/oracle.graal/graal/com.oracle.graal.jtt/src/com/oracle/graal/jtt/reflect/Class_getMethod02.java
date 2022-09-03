@@ -23,7 +23,7 @@
 package com.oracle.graal.jtt.reflect;
 
 import com.oracle.graal.jtt.*;
-import com.oracle.graal.test.*;
+import org.junit.*;
 
 /*
  */
@@ -52,37 +52,37 @@ public class Class_getMethod02 extends JTTTest {
         field = args[0];
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test", 0);
     }
 
-    @LongTest
+    @Test
     public void run1() throws Throwable {
         runTest("test", 1);
     }
 
-    @LongTest
+    @Test
     public void run2() throws Throwable {
         runTest("test", 2);
     }
 
-    @LongTest
+    @Test
     public void run3() throws Throwable {
         runTest("test", 3);
     }
 
-    @LongTest
+    @Test
     public void run4() throws Throwable {
         runTest("test", 4);
     }
 
-    @LongTest
+    @Test
     public void run5() throws Throwable {
         runTest("test", 5);
     }
 
-    @LongTest
+    @Test
     public void run6() throws Throwable {
         runTest("test", 6);
     }

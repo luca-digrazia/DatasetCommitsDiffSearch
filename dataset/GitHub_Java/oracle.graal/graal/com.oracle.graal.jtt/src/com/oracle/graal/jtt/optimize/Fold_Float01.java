@@ -76,27 +76,27 @@ public class Fold_Float01 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 0f);
+        runTestWithDelta(0, "test", 0f);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest("test", 1f);
+        runTestWithDelta(0, "test", 1f);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", 2f);
+        runTestWithDelta(0, "test", 2f);
     }
 
     @Test
     public void run3() throws Throwable {
-        runTest("test", 3f);
+        runTestWithDelta(0, "test", 3f);
     }
 
     @Test
     public void run4() throws Throwable {
-        runTest("test", 4f);
+        runTestWithDelta(0, "test", 4f);
     }
 
 }

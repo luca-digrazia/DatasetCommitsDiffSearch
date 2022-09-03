@@ -39,10 +39,12 @@ public class Finally02 extends JTTTest {
         return c();
     }
 
+// @NEVER_INLINE
     static int a() {
         return 0;
     }
 
+// @NEVER_INLINE
     static int b() {
         return -3;
     }

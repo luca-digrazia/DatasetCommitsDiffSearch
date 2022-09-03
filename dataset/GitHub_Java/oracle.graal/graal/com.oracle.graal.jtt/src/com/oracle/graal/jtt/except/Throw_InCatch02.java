@@ -24,9 +24,8 @@
  */
 package com.oracle.graal.jtt.except;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 public class Throw_InCatch02 extends JTTTest {
 

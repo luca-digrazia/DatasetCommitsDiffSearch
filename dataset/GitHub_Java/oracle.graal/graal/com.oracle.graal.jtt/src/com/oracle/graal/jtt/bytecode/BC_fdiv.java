@@ -35,7 +35,7 @@ public class BC_fdiv extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 311.0f, 10f);
+        runTestWithDelta(0, "test", 311.0f, 10f);
     }
 
 }

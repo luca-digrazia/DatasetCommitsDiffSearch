@@ -109,67 +109,67 @@ public class Fold_Math01 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 0);
+        runTestWithDelta(0, "test", 0);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest("test", 1);
+        runTestWithDelta(0, "test", 1);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", 2);
+        runTestWithDelta(0, "test", 2);
     }
 
     @Test
     public void run3() throws Throwable {
-        runTest("test", 3);
+        runTestWithDelta(0, "test", 3);
     }
 
     @Test
     public void run4() throws Throwable {
-        runTest("test", 4);
+        runTestWithDelta(0, "test", 4);
     }
 
     @Test
     public void run5() throws Throwable {
-        runTest("test", 5);
+        runTestWithDelta(0, "test", 5);
     }
 
     @Test
     public void run6() throws Throwable {
-        runTest("test", 6);
+        runTestWithDelta(0, "test", 6);
     }
 
     @Test
     public void run7() throws Throwable {
-        runTest("test", 7);
+        runTestWithDelta(0, "test", 7);
     }
 
     @Test
     public void run8() throws Throwable {
-        runTest("test", 8);
+        runTestWithDelta(0, "test", 8);
     }
 
     @Test
     public void run9() throws Throwable {
-        runTest("test", 9);
+        runTestWithDelta(0, "test", 9);
     }
 
     @Test
     public void run10() throws Throwable {
-        runTest("test", 10);
+        runTestWithDelta(0, "test", 10);
     }
 
     @Test
     public void run11() throws Throwable {
-        runTest("test", 11);
+        runTestWithDelta(0, "test", 11);
     }
 
     @Test
     public void run12() throws Throwable {
-        runTest("test", 12);
+        runTestWithDelta(0, "test", 12);
     }
 
 }

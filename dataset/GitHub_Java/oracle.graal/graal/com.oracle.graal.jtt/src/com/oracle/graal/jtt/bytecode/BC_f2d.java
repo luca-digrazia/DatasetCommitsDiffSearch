@@ -35,17 +35,17 @@ public class BC_f2d extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 0.0f);
+        runTestWithDelta(0, "test", 0.0f);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest("test", 1.0f);
+        runTestWithDelta(0, "test", 1.0f);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", -2.00f);
+        runTestWithDelta(0, "test", -2.00f);
     }
 
 }

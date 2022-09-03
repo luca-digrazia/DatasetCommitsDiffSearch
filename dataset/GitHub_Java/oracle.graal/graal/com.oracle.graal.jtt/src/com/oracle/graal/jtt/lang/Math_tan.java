@@ -59,12 +59,12 @@ public class Math_tan extends JTTTest {
 
     @Test
     public void run3() throws Throwable {
-        runTest("test", -0.0d);
+        runTestWithDelta(0, "test", -0.0d);
     }
 
     @Test
     public void run4() throws Throwable {
-        runTest("test", 0.0d);
+        runTestWithDelta(0, "test", 0.0d);
     }
 
 }

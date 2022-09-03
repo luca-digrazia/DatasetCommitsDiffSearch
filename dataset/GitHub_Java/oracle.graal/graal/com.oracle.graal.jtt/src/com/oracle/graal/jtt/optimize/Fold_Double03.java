@@ -43,22 +43,22 @@ public class Fold_Double03 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 0, 5.0);
+        runTestWithDelta(0, "test", 0, 5.0);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest("test", 1, 5.0);
+        runTestWithDelta(0, "test", 1, 5.0);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", 0, -5.0);
+        runTestWithDelta(0, "test", 0, -5.0);
     }
 
     @Test
     public void run3() throws Throwable {
-        runTest("test", 1, -5.0);
+        runTestWithDelta(0, "test", 1, -5.0);
     }
 
 }

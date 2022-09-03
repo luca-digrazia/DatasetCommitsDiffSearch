@@ -29,11 +29,29 @@ import org.junit.*;
 
 public class Except_Synchronized05 extends JTTTest {
 
-    static class Foo {
+    Object field;
 
-        Object field;
+    public static int test(int arg) {
+        Except_Synchronized05 obj = new Except_Synchronized05();
+        int a = obj.bar(arg) != null ? 1 : 0;
+        int b = obj.baz(arg) != null ? 1 : 0;
+        return a + b;
+    }
 
-        public synchronized Object bar(int arg) {
+    public synchronized Object bar(int arg) {
+        try {
+            String f = foo1(arg);
+            if (f == null) {
+                field = new Object();
+            }
+        } catch (NullPointerException e) {
+            // do nothing
+        }
+        return field;
+    }
+
+    public Object baz(int arg) {
+        synchronized (this) {
             try {
                 String f = foo1(arg);
                 if (f == null) {
@@ -44,36 +62,14 @@ public class Except_Synchronized05 extends JTTTest {
             }
             return field;
         }
-
-        public Object baz(int arg) {
-            synchronized (this) {
-                try {
-                    String f = foo1(arg);
-                    if (f == null) {
-                        field = new Object();
-                    }
-                } catch (NullPointerException e) {
-                    // do nothing
-                }
-                return field;
-            }
-        }
-
-        @SuppressWarnings("static-method")
-        private String foo1(int arg) {
-            if (arg == 0) {
-                throw null;
-            }
-            return null;
-        }
-
     }
 
-    public static int test(int arg) {
-        Foo obj = new Foo();
-        int a = obj.bar(arg) != null ? 1 : 0;
-        int b = obj.baz(arg) != null ? 1 : 0;
-        return a + b;
+    @SuppressWarnings("static-method")
+    private String foo1(int arg) {
+        if (arg == 0) {
+            throw null;
+        }
+        return null;
     }
 
     @Test

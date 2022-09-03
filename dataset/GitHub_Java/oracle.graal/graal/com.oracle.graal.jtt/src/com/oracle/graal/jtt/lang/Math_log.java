@@ -44,7 +44,7 @@ public class Math_log extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", java.lang.Math.E);
+        runTestWithDelta(0, "test", java.lang.Math.E);
     }
 
     @Test
@@ -64,17 +64,17 @@ public class Math_log extends JTTTest {
 
     @Test
     public void run4() throws Throwable {
-        runTest("test", java.lang.Double.POSITIVE_INFINITY);
+        runTestWithDelta(0, "test", java.lang.Double.POSITIVE_INFINITY);
     }
 
     @Test
     public void run5() throws Throwable {
-        runTest("test", 0.0d);
+        runTestWithDelta(0, "test", 0.0d);
     }
 
     @Test
     public void run6() throws Throwable {
-        runTest("test", -0.0d);
+        runTestWithDelta(0, "test", -0.0d);
     }
 
 }

@@ -29,7 +29,8 @@ import java.util.*;
 import com.oracle.graal.jtt.*;
 import org.junit.*;
 
-//@formatter:off
+/*
+ */
 public class HP_idea extends JTTTest {
 
     public boolean test() {

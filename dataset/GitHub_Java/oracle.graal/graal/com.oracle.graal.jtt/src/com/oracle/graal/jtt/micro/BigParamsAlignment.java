@@ -27,9 +27,8 @@
  */
 package com.oracle.graal.jtt.micro;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 public class BigParamsAlignment extends JTTTest {
 

@@ -82,7 +82,6 @@ public class HP_scope01 extends JTTTest {
         return sum;
     }
 
-    @Ignore
     @Test
     public void run0() throws Throwable {
         runTest("test", 40);

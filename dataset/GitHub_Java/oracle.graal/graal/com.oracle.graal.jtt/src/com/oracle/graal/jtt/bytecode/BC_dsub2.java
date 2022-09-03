@@ -35,7 +35,7 @@ public class BC_dsub2 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 0.0d);
+        runTestWithDelta(0, "test", 0.0d);
     }
 
 }

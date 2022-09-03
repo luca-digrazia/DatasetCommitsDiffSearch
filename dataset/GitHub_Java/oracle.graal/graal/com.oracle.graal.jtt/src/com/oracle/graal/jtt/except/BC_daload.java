@@ -48,7 +48,7 @@ public class BC_daload extends JTTTest {
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", 0);
+        runTestWithDelta(0, "test", 0);
     }
 
     @Test

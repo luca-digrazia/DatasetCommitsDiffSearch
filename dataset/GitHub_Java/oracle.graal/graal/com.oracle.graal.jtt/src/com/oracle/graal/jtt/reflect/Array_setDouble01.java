@@ -40,17 +40,17 @@ public class Array_setDouble01 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 0, 11.1d);
+        runTestWithDelta(0, "test", 0, 11.1d);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest("test", 1, 21.1d);
+        runTestWithDelta(0, "test", 1, 21.1d);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", 0, 42.1d);
+        runTestWithDelta(0, "test", 0, 42.1d);
     }
 
     @Test

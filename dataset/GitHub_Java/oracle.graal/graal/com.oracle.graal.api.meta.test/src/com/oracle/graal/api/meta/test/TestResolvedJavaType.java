@@ -71,6 +71,7 @@ public class TestResolvedJavaType {
         }
     }
 
+
     @Test
     public void isInstanceClassTest() {
         for (Class c : classes) {
@@ -125,7 +126,7 @@ public class TestResolvedJavaType {
         for (Constant c : constants) {
             if (c.getKind() == Kind.Object && !c.isNull()) {
                 Object o = c.asObject();
-                Class<? extends Object> cls = o.getClass();
+                Class< ? extends Object> cls = o.getClass();
                 while (cls != null) {
                     ResolvedJavaType type = runtime.lookupJavaType(cls);
                     boolean expected = cls.isInstance(o);
@@ -215,14 +216,14 @@ public class TestResolvedJavaType {
             Class<?> c1 = c1Initial;
             Class<?> c2 = c2Initial;
             while (true) {
-                if (c1.isAssignableFrom(c2)) {
-                    return c1;
-                }
-                if (c2.isAssignableFrom(c1)) {
-                    return c2;
-                }
-                c1 = getSupertype(c1);
-                c2 = getSupertype(c2);
+              if (c1.isAssignableFrom(c2)) {
+                  return c1;
+              }
+              if (c2.isAssignableFrom(c1)) {
+                  return c2;
+              }
+              c1 = getSupertype(c1);
+              c2 = getSupertype(c2);
             }
         }
     }
@@ -248,26 +249,13 @@ public class TestResolvedJavaType {
         }
     }
 
-    private static class Base {
-    }
-
-    abstract static class Abstract1 extends Base {
-    }
-
-    interface Interface1 {
-    }
-
-    static class Concrete1 extends Abstract1 {
-    }
-
-    static class Concrete2 extends Abstract1 implements Interface1 {
-    }
-
-    static class Concrete3 extends Concrete2 {
-    }
-
-    abstract static class Abstract4 extends Concrete3 {
-    }
+    private static class Base {}
+    abstract static class Abstract1 extends Base {}
+    interface Interface1 {}
+    static class Concrete1 extends Abstract1 {}
+    static class Concrete2 extends Abstract1 implements Interface1 {}
+    static class Concrete3 extends Concrete2 {}
+    abstract static class Abstract4 extends Concrete3 {}
 
     static void checkConcreteSubtype(ResolvedJavaType type, Class expected) {
         ResolvedJavaType subtype = type.findUniqueConcreteSubtype();
@@ -349,7 +337,6 @@ public class TestResolvedJavaType {
     }
 
     static class Declarations {
-
         final Method implementation;
         final Set<Method> declarations;
 
@@ -360,8 +347,7 @@ public class TestResolvedJavaType {
     }
 
     /**
-     * See <a href="http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-5.html#jvms-5.4.5">Method
-     * overriding</a>.
+     * See <a href="http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-5.html#jvms-5.4.5">Method overriding</a>.
      */
     static boolean isOverriderOf(Method impl, Method m) {
         if (!isPrivate(m.getModifiers()) && !isFinal(m.getModifiers())) {
@@ -385,7 +371,6 @@ public class TestResolvedJavaType {
     static final Map<Class, VTable> vtables = new HashMap<>();
 
     static class VTable {
-
         final Map<NameAndSignature, Method> methods = new HashMap<>();
     }
 
@@ -401,7 +386,7 @@ public class TestResolvedJavaType {
                 if (!isStatic(m.getModifiers()) && !isPrivate(m.getModifiers())) {
                     Method overridden = vtable.methods.put(new NameAndSignature(m), m);
                     if (overridden != null) {
-                        // System.out.println(m + " overrides " + overridden);
+                        //System.out.println(m + " overrides " + overridden);
                     }
                 }
             }
@@ -475,8 +460,9 @@ public class TestResolvedJavaType {
     }
 
     public static boolean fieldsEqual(Field f, ResolvedJavaField rjf) {
-        return rjf.getDeclaringClass().equals(runtime.lookupJavaType(f.getDeclaringClass())) && rjf.getName().equals(f.getName()) &&
-                        rjf.getType().resolve(rjf.getDeclaringClass()).equals(runtime.lookupJavaType(f.getType()));
+        return rjf.getDeclaringClass().equals(runtime.lookupJavaType(f.getDeclaringClass())) &&
+               rjf.getName().equals(f.getName()) &&
+               rjf.getType().resolve(rjf.getDeclaringClass()).equals(runtime.lookupJavaType(f.getType()));
     }
 
     public static ResolvedJavaField lookupField(ResolvedJavaField[] fields, Field key) {
@@ -513,7 +499,7 @@ public class TestResolvedJavaType {
     public void getInstanceFieldsTest() {
         for (Class c : classes) {
             ResolvedJavaType type = runtime.lookupJavaType(c);
-            for (boolean includeSuperclasses : new boolean[]{true, false}) {
+            for (boolean includeSuperclasses : new boolean[] {true, false}) {
                 Set<Field> expected = getInstanceFields(c, includeSuperclasses);
                 ResolvedJavaField[] actual = type.getInstanceFields(includeSuperclasses);
                 for (Field f : expected) {

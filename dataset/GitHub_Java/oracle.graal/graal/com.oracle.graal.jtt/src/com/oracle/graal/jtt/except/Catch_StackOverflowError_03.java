@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.jtt.except;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /**
  * Some basic checking of the stack trace produced after a StackOverflowError.

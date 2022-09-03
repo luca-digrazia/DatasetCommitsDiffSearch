@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.jtt.loop;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 public class LoopInline extends JTTTest {
 

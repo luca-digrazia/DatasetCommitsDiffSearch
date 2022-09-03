@@ -25,7 +25,7 @@
 package com.oracle.graal.jtt.threads;
 
 import com.oracle.graal.jtt.*;
-import com.oracle.graal.test.*;
+import org.junit.*;
 
 public class Monitor_notowner01 extends JTTTest {
 
@@ -62,7 +62,7 @@ public class Monitor_notowner01 extends JTTTest {
         }
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test");
     }

@@ -52,12 +52,12 @@ public class Fold_Convert04 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 0.0D);
+        runTestWithDelta(0, "test", 0.0D);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest("test", 1.0D);
+        runTestWithDelta(0, "test", 1.0D);
     }
 
 }

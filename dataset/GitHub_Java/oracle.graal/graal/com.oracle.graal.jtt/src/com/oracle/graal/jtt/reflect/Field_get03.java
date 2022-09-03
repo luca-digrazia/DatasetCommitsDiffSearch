@@ -24,8 +24,8 @@ package com.oracle.graal.jtt.reflect;
 
 import java.lang.reflect.*;
 
-import com.oracle.graal.test.*;
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /*
  */
@@ -50,8 +50,10 @@ public class Field_get03 extends JTTTest {
             FloatField = Field_get03.class.getField("floatField");
             DoubleField = Field_get03.class.getField("doubleField");
             BooleanField = Field_get03.class.getField("booleanField");
-        } catch (SecurityException | NoSuchFieldException e) {
-            throw new RuntimeException(e);
+        } catch (SecurityException e) {
+            e.printStackTrace();
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
         }
     }
 
@@ -87,47 +89,47 @@ public class Field_get03 extends JTTTest {
         return false;
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test", 0);
     }
 
-    @LongTest
+    @Test
     public void run1() throws Throwable {
         runTest("test", 1);
     }
 
-    @LongTest
+    @Test
     public void run2() throws Throwable {
         runTest("test", 2);
     }
 
-    @LongTest
+    @Test
     public void run3() throws Throwable {
         runTest("test", 3);
     }
 
-    @LongTest
+    @Test
     public void run4() throws Throwable {
         runTest("test", 4);
     }
 
-    @LongTest
+    @Test
     public void run5() throws Throwable {
         runTest("test", 5);
     }
 
-    @LongTest
+    @Test
     public void run6() throws Throwable {
         runTest("test", 6);
     }
 
-    @LongTest
+    @Test
     public void run7() throws Throwable {
         runTest("test", 7);
     }
 
-    @LongTest
+    @Test
     public void run8() throws Throwable {
         runTest("test", 8);
     }

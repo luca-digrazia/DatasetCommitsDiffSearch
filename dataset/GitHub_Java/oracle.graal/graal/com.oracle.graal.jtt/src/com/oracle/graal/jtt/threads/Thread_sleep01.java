@@ -25,7 +25,7 @@
 package com.oracle.graal.jtt.threads;
 
 import com.oracle.graal.jtt.*;
-import com.oracle.graal.test.*;
+import org.junit.*;
 
 public final class Thread_sleep01 extends JTTTest {
 
@@ -35,17 +35,17 @@ public final class Thread_sleep01 extends JTTTest {
         return System.currentTimeMillis() - before >= i;
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test", 10);
     }
 
-    @LongTest
+    @Test
     public void run1() throws Throwable {
         runTest("test", 20);
     }
 
-    @LongTest
+    @Test
     public void run2() throws Throwable {
         runTest("test", 100);
     }

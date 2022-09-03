@@ -25,7 +25,7 @@ package com.oracle.graal.jtt.lang;
 import java.net.*;
 
 import com.oracle.graal.jtt.*;
-import com.oracle.graal.test.*;
+import org.junit.*;
 
 /*
  */
@@ -43,22 +43,22 @@ public final class ClassLoader_loadClass01 extends JTTTest {
         return null;
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test", 0);
     }
 
-    @LongTest
+    @Test
     public void run1() throws Throwable {
         runTest("test", 1);
     }
 
-    @LongTest
+    @Test
     public void run2() throws Throwable {
         runTest("test", 2);
     }
 
-    @LongTest
+    @Test
     public void run3() throws Throwable {
         runTest("test", 5);
     }

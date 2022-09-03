@@ -25,7 +25,7 @@
 package com.oracle.graal.jtt.except;
 
 import com.oracle.graal.jtt.*;
-import com.oracle.graal.test.*;
+import org.junit.*;
 
 public class Throw_InNested extends JTTTest {
 
@@ -48,12 +48,12 @@ public class Throw_InNested extends JTTTest {
         return i;
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test", 0);
     }
 
-    @LongTest
+    @Test
     public void run1() throws Throwable {
         runTest("test", 1);
     }

@@ -24,9 +24,8 @@
  */
 package com.oracle.graal.jtt.threads;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 public final class Monitorenter01 extends JTTTest {
 

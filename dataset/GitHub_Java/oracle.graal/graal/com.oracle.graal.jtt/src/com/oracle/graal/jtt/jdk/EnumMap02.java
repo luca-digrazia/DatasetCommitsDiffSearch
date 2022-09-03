@@ -24,8 +24,8 @@ package com.oracle.graal.jtt.jdk;
 
 import java.util.*;
 
-import com.oracle.graal.test.*;
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /*
  */
@@ -40,22 +40,20 @@ public class EnumMap02 extends JTTTest {
     }
 
     private enum Enum {
-        A,
-        B,
-        C
+        A, B, C
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test", 0);
     }
 
-    @LongTest
+    @Test
     public void run1() throws Throwable {
         runTest("test", 1);
     }
 
-    @LongTest
+    @Test
     public void run2() throws Throwable {
         runTest("test", 2);
     }

@@ -28,7 +28,7 @@
 package com.oracle.graal.jtt.threads;
 
 import com.oracle.graal.jtt.*;
-import com.oracle.graal.test.*;
+import org.junit.*;
 
 public class Thread_join03 extends JTTTest implements Runnable {
 
@@ -47,7 +47,7 @@ public class Thread_join03 extends JTTTest implements Runnable {
         cont = false;
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test");
     }

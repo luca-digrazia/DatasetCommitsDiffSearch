@@ -24,9 +24,8 @@
  */
 package com.oracle.graal.jtt.lang;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 public class Object_clone02 extends JTTTest implements Cloneable {
 

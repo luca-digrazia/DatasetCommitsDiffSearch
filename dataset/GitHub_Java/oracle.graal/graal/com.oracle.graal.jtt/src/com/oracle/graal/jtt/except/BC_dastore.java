@@ -49,7 +49,7 @@ public class BC_dastore extends JTTTest {
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", 0, 0.01d);
+        runTestWithDelta(0, "test", 0, 0.01d);
     }
 
     @Test

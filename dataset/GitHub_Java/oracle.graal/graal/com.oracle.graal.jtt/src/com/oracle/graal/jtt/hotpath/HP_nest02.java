@@ -24,7 +24,7 @@
 package com.oracle.graal.jtt.hotpath;
 
 import com.oracle.graal.jtt.*;
-import com.oracle.graal.test.*;
+import org.junit.*;
 
 /*
  */
@@ -48,7 +48,7 @@ public class HP_nest02 extends JTTTest {
         return sum;
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test", 15);
     }
