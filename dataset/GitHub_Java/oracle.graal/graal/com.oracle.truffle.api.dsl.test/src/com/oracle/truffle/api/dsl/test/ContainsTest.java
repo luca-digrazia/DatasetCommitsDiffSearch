@@ -23,8 +23,6 @@
 package com.oracle.truffle.api.dsl.test;
 
 import static com.oracle.truffle.api.dsl.test.TestHelper.*;
-import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
 
 import org.junit.*;
 
@@ -34,7 +32,6 @@ import com.oracle.truffle.api.dsl.test.ContainsTestFactory.Contains1Factory;
 import com.oracle.truffle.api.dsl.test.ContainsTestFactory.Contains2Factory;
 import com.oracle.truffle.api.dsl.test.ContainsTestFactory.Contains3Factory;
 import com.oracle.truffle.api.dsl.test.ContainsTestFactory.Contains4Factory;
-import com.oracle.truffle.api.dsl.test.ContainsTestFactory.PolymorphicToMonomorphic0Factory;
 import com.oracle.truffle.api.dsl.test.TestHelper.ExecutionListener;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
@@ -50,16 +47,12 @@ public class ContainsTest {
     public void testContains1() {
         assertRuns(Contains1Factory.getInstance(), //
                         array(1, "a", 2, "b"), //
-                        array(2, "aa", 3, "ba"), //
+                        array(2, "aa", 3, "ba"),//
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 if (value instanceof String) {
-                                    if (node.getNode() instanceof DSLNode) {
-                                        // assert that the final specialization is always Object
-                                        Assert.assertEquals(Object.class, ((DSLNode) node.getNode()).getMetadata0().getSpecializedTypes()[0]);
-                                    } else {
-                                        Assert.assertTrue(((SpecializedNode) node.getNode()).getSpecializationNode().toString().startsWith("ObjectNode"));
-                                    }
+                                    // assert that the final specialization is always Object
+                                    Assert.assertEquals(Object.class, ((DSLNode) node.getNode()).getMetadata0().getSpecializedTypes()[0]);
                                 }
                             }
                         });
@@ -126,7 +119,7 @@ public class ContainsTest {
     public void testContains3() {
         assertRuns(Contains3Factory.getInstance(), //
                         array(2, 1, 2, -3, -4), //
-                        array(-2, 2, -2, -3, -4), //
+                        array(-2, 2, -2, -3, -4),//
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 // assert that we are always monomorphic
@@ -179,7 +172,7 @@ public class ContainsTest {
     public void testContains4() {
         assertRuns(Contains4Factory.getInstance(), //
                         array(-1, 0, 1, 2), //
-                        array(1, 0, 1, 2), //
+                        array(1, 0, 1, 2),//
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 Assert.assertEquals(NodeCost.MONOMORPHIC, node.getNode().getCost());
@@ -605,43 +598,6 @@ public class ContainsTest {
         Object f2() {
             return null;
         }
-    }
-
-    @Test
-    public void testPolymorphicToMonomorphic0() {
-        TestRootNode<PolymorphicToMonomorphic0> root = createRoot(PolymorphicToMonomorphic0Factory.getInstance());
-        assertThat((int) executeWith(root, 1), is(1));
-        assertThat((int) executeWith(root, 2), is(2));
-        assertThat((int) executeWith(root, 3), is(3));
-        assertThat(root.getNode().getCost(), is(NodeCost.MONOMORPHIC));
-    }
-
-    @NodeChild("a")
-    static class PolymorphicToMonomorphic0 extends ValueNode {
-
-        boolean isOne(int a) {
-            return a == 1;
-        }
-
-        boolean isTwo(int a) {
-            return a == 2;
-        }
-
-        @Specialization(guards = "isOne")
-        int do1(int a) {
-            return a;
-        }
-
-        @Specialization(guards = "isTwo")
-        int do2(int a) {
-            return a;
-        }
-
-        @Specialization(contains = {"do1", "do2"})
-        int do3(int a) {
-            return a;
-        }
-
     }
 
 }
