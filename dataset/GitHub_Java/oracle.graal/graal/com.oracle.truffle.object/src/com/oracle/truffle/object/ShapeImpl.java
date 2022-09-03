@@ -353,8 +353,9 @@ public abstract class ShapeImpl extends Shape {
      */
     private ShapeImpl addPropertyInternal(Property prop) {
         CompilerAsserts.neverPartOfCompilation();
-        assert prop.isShadow() || !(this.hasProperty(prop.getKey())) : "duplicate property " + prop.getKey();
+        assert prop.isShadow() || !(this.hasProperty(prop.getKey())) : "duplicate property";
         assert !getPropertyListInternal(false).contains(prop);
+        // invalidatePropertyAssumption(prop.getName());
 
         AddPropertyTransition addTransition = new AddPropertyTransition(prop);
         ShapeImpl cachedShape = queryTransition(addTransition);
@@ -652,7 +653,7 @@ public abstract class ShapeImpl extends Shape {
                 newShape = newShape.applyTransition(previous, true);
             }
 
-            addIndirectTransition(transition, newShape);
+            getTransitionMapForWrite().put(transition, newShape);
             return newShape;
         } else {
             return null;
@@ -898,7 +899,7 @@ public abstract class ShapeImpl extends Shape {
     private Property[] createPropertiesArray() {
         propertyListAllocCount.inc();
         Property[] propertiesArray = new Property[getPropertyCount()];
-        List<Property> ownProperties = getPropertyList();
+        List<Property> ownProperties = getPropertyList(ALL);
         assert ownProperties.size() == getPropertyCount();
         for (int i = 0; i < getPropertyCount(); i++) {
             propertiesArray[i] = ownProperties.get(i);
@@ -1098,7 +1099,7 @@ public abstract class ShapeImpl extends Shape {
     /**
      * Match all filter.
      */
-    private static final Pred<Property> ALL = new Pred<Property>() {
+    public static final Pred<Property> ALL = new Pred<Property>() {
         public boolean test(Property t) {
             return true;
         }
