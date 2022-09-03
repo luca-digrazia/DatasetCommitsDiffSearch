@@ -26,7 +26,7 @@ import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 
 /**
@@ -52,8 +52,7 @@ public interface HotSpotMethodDataAccessor {
         ArgInfoData(config().dataLayoutArgInfoDataTag),
         CallTypeData(config().dataLayoutCallTypeDataTag),
         VirtualCallTypeData(config().dataLayoutVirtualCallTypeDataTag),
-        ParametersTypeData(config().dataLayoutParametersTypeDataTag),
-        SpeculativeTrapData(config().dataLayoutSpeculativeTrapDataTag);
+        ParametersTypeData(config().dataLayoutParametersTypeDataTag);
 
         private final int value;
 
