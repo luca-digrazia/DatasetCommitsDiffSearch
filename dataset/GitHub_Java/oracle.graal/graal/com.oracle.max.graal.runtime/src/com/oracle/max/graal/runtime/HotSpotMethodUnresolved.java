@@ -181,9 +181,4 @@ public final class HotSpotMethodUnresolved extends HotSpotMethod {
     public double[] switchProbability(int bci) {
         return null;
     }
-
-    @Override
-    public int compiledCodeSize() {
-        return -1;
-    }
 }

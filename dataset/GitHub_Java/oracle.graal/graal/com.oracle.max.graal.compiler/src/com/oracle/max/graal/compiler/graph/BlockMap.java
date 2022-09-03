@@ -26,6 +26,7 @@ import static com.sun.cri.bytecode.Bytecodes.*;
 
 import java.util.*;
 
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.sun.cri.bytecode.*;
@@ -120,17 +121,26 @@ public final class BlockMap {
         public boolean isLoopHeader;
         public int blockID;
 
-        public Instruction firstInstruction;
+        public FixedNodeWithNext firstInstruction;
 
-        final HashSet<Block> successors = new HashSet<Block>();
+        final HashSet<Block> successors = new LinkedHashSet<Block>();
         private boolean visited;
         private boolean active;
-        private int loops;
+        private long loops;
     }
 
     public static class ExceptionBlock  extends Block {
         public RiExceptionHandler handler;
         public Block next;
+        public int deoptBci;
+    }
+
+    public static class DeoptBlock  extends Block {
+    }
+
+    public static class BranchOverride {
+        public DeoptBlock block;
+        public boolean taken;
     }
 
     private static final Block[] NO_SUCCESSORS = new Block[0];
@@ -148,6 +158,10 @@ public final class BlockMap {
 
     private final RiMethod method;
 
+    private final RiExceptionHandler[] exceptionHandlers;
+
+    public final HashMap<Integer, BranchOverride> branchOverride;
+
     private Block[] blockMap;
 
     private BitSet canTrap;
@@ -158,12 +172,18 @@ public final class BlockMap {
      */
     public BlockMap(RiMethod method) {
         this.method = method;
-        this.blockMap = new Block[method.code().length];
+        exceptionHandlers = method.exceptionHandlers();
+        this.blockMap = new Block[method.codeSize()];
         if (method.exceptionHandlers().length != 0) {
             this.canTrap = new BitSet(blockMap.length);
         }
         this.blocks = new ArrayList<Block>();
         this.storesInLoops = new BitSet(method.maxLocals());
+        branchOverride = new HashMap<Integer, BranchOverride>();
+    }
+
+    public RiExceptionHandler[] exceptionHandlers() {
+        return exceptionHandlers;
     }
 
     /**
@@ -190,7 +210,7 @@ public final class BlockMap {
 
     private void makeExceptionEntries() {
         // start basic blocks at all exception handler blocks and mark them as exception entries
-        for (RiExceptionHandler h : method.exceptionHandlers()) {
+        for (RiExceptionHandler h : this.exceptionHandlers) {
             Block xhandler = makeBlock(h.handlerBCI());
             xhandler.isExceptionEntry = true;
         }
@@ -258,8 +278,11 @@ public final class BlockMap {
                 case IFNULL:    // fall through
                 case IFNONNULL: {
                     current = null;
-                    Block b1 = makeBlock(bci + 3);
-                    Block b2 = makeBlock(bci + Bytes.beS2(code, bci + 1));
+
+                    double probability = GraalOptions.UseBranchPrediction ? method.branchProbability(bci) : -1;
+
+                    Block b1 = probability == 1.0 ? makeBranchOverrideBlock(bci, bci + 3, false) : makeBlock(bci + 3);
+                    Block b2 = probability == 0.0 ? makeBranchOverrideBlock(bci, bci + Bytes.beS2(code, bci + 1), true) : makeBlock(bci + Bytes.beS2(code, bci + 1));
                     setSuccessors(bci, b1, b2);
 
                     assert lengthOf(code, bci) == 3;
@@ -376,6 +399,17 @@ public final class BlockMap {
         }
     }
 
+    private Block makeBranchOverrideBlock(int branchBci, int startBci, boolean taken) {
+        DeoptBlock newBlock = new DeoptBlock();
+        newBlock.startBci = startBci;
+        BranchOverride override = new BranchOverride();
+        override.block = newBlock;
+        override.taken = taken;
+        assert branchOverride.get(branchBci) == null;
+        branchOverride.put(branchBci, override);
+        return newBlock;
+    }
+
     private Block[] makeSwitchSuccessors(BytecodeSwitch tswitch) {
         int max = tswitch.numberOfCases();
         Block[] successors = new Block[max + 1];
@@ -401,7 +435,7 @@ public final class BlockMap {
 
     private ExceptionBlock unwindBlock;
 
-    private Block makeExceptionDispatch(List<RiExceptionHandler> handlers, int index) {
+    private Block makeExceptionDispatch(List<RiExceptionHandler> handlers, int index, int bci) {
         RiExceptionHandler handler = handlers.get(index);
         if (handler.isCatchAll()) {
             return blockMap[handler.handlerBCI()];
@@ -411,10 +445,11 @@ public final class BlockMap {
             block = new ExceptionBlock();
             block.startBci = -1;
             block.endBci = -1;
+            block.deoptBci = bci;
             block.handler = handler;
             block.successors.add(blockMap[handler.handlerBCI()]);
             if (index < handlers.size() - 1) {
-                block.next = makeExceptionDispatch(handlers, index + 1);
+                block.next = makeExceptionDispatch(handlers, index + 1, bci);
                 block.successors.add(block.next);
             }
             exceptionDispatch.put(handler, block);
@@ -431,7 +466,7 @@ public final class BlockMap {
             Block block = blockMap[bci];
 
             ArrayList<RiExceptionHandler> handlers = null;
-            for (RiExceptionHandler h : method.exceptionHandlers()) {
+            for (RiExceptionHandler h : this.exceptionHandlers) {
                 if (h.startBCI() <= bci && bci < h.endBCI()) {
                     if (handlers == null) {
                         handlers = new ArrayList<RiExceptionHandler>();
@@ -443,14 +478,14 @@ public final class BlockMap {
                 }
             }
             if (handlers != null) {
-                Block dispatch = makeExceptionDispatch(handlers, 0);
+                Block dispatch = makeExceptionDispatch(handlers, 0, bci);
                 block.successors.add(dispatch);
             }
         }
     }
 
     private void computeBlockOrder() {
-        int loop = computeBlockOrder(blockMap[0]);
+        long loop = computeBlockOrder(blockMap[0]);
 
         if (loop != 0) {
             // There is a path from a loop end to the method entry that does not pass the loop header.
@@ -466,7 +501,7 @@ public final class BlockMap {
     /**
      * The next available loop number.
      */
-    private int nextLoop = 0;
+    private int nextLoop;
 
     /**
      * Mark the block as a loop header, using the next available loop number.
@@ -481,17 +516,17 @@ public final class BlockMap {
                 // Don't compile such methods for now, until we see a concrete case that allows checking for correctness.
                 throw new CiBailout("Loop formed by an exception handler");
             }
-            if (nextLoop >= Integer.SIZE) {
+            if (nextLoop >= Long.SIZE) {
                 // This restriction can be removed by using a fall-back to a BitSet in case we have more than 32 loops
                 // Don't compile such methods for now, until we see a concrete case that allows checking for correctness.
                 throw new CiBailout("Too many loops in method");
             }
 
             assert block.loops == 0;
-            block.loops = 1 << nextLoop;
+            block.loops = (long) 1 << (long) nextLoop;
             nextLoop++;
         }
-        assert Integer.bitCount(block.loops) == 1;
+        assert Long.bitCount(block.loops) == 1;
     }
 
     /**
@@ -499,7 +534,7 @@ public final class BlockMap {
      * visit every block only once. The flag {@linkplain Block#active} is used to detect cycles (backward
      * edges).
      */
-    private int computeBlockOrder(Block block) {
+    private long computeBlockOrder(Block block) {
         if (block.visited) {
             if (block.active) {
                 // Reached block via backward branch.
@@ -522,7 +557,7 @@ public final class BlockMap {
             processLoopBlock(block);
         }
         if (block.isLoopHeader) {
-            assert Integer.bitCount(block.loops) == 1;
+            assert Long.bitCount(block.loops) == 1;
             loops &= ~block.loops;
         }
 
@@ -659,6 +694,6 @@ public final class BlockMap {
         }
         out.println();
 
-        out.print("loop_depth ").println(Integer.bitCount(block.loops));
+        out.print("loop_depth ").println(Long.bitCount(block.loops));
     }
 }

@@ -101,9 +101,5 @@ public interface VMEntries {
 
     RiField[] RiType_fields(HotSpotTypeResolved klass);
 
-    boolean RiMethod_hasCompiledCode(HotSpotMethodResolved method);
-
-    int RiMethod_compiledCodeSize(HotSpotMethodResolved method);
-
     // Checkstyle: resume
 }

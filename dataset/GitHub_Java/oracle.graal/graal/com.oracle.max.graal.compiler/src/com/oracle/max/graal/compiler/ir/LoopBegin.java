@@ -131,6 +131,12 @@ public class LoopBegin extends Merge {
     }
 
     @Override
+    public Node singlePredecessor() {
+        assert endCount() == 1;
+        return endAt(0).singlePredecessor();
+    }
+
+    @Override
     public Iterable< ? extends Node> dataUsages() {
         final Iterator< ? extends Node> dataUsages = super.dataUsages().iterator();
         return new Iterable<Node>() {

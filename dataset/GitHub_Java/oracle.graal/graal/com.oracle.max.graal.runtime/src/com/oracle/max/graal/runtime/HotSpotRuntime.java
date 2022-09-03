@@ -263,9 +263,7 @@ public class HotSpotRuntime implements RiRuntime {
             assert field.kind != CiKind.Illegal;
             ReadNode memoryRead = new ReadNode(field.field().kind().stackKind(), field.object(), LocationNode.create(field.field(), field.field().kind(), displacement, graph), graph);
             memoryRead.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
-            FixedNode next = field.next();
-            field.setNext(null);
-            memoryRead.setNext(next);
+            memoryRead.setNext(field.next());
             field.replaceAndDelete(memoryRead);
         } else if (n instanceof StoreField) {
             StoreField field = (StoreField) n;
@@ -277,14 +275,13 @@ public class HotSpotRuntime implements RiRuntime {
             WriteNode memoryWrite = new WriteNode(CiKind.Illegal, field.object(), field.value(), LocationNode.create(field.field(), field.field().kind(), displacement, graph), graph);
             memoryWrite.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
             memoryWrite.setStateAfter(field.stateAfter());
-            FixedNode next = field.next();
-            field.setNext(null);
+            memoryWrite.setNext(field.next());
             if (field.field().kind() == CiKind.Object && !field.value().isNullConstant()) {
                 FieldWriteBarrier writeBarrier = new FieldWriteBarrier(field.object(), graph);
                 memoryWrite.setNext(writeBarrier);
-                writeBarrier.setNext(next);
+                writeBarrier.setNext(field.next());
             } else {
-                memoryWrite.setNext(next);
+                memoryWrite.setNext(field.next());
             }
             field.replaceAndDelete(memoryWrite);
         } else if (n instanceof LoadIndexed) {
@@ -297,9 +294,7 @@ public class HotSpotRuntime implements RiRuntime {
             arrayLocation.setIndex(loadIndexed.index());
             ReadNode memoryRead = new ReadNode(elementKind.stackKind(), loadIndexed.array(), arrayLocation, graph);
             memoryRead.setGuard(boundsCheck);
-            FixedNode next = loadIndexed.next();
-            loadIndexed.setNext(null);
-            memoryRead.setNext(next);
+            memoryRead.setNext(loadIndexed.next());
             loadIndexed.replaceAndDelete(memoryRead);
         } else if (n instanceof StoreIndexed) {
             StoreIndexed storeIndexed = (StoreIndexed) n;
@@ -332,15 +327,13 @@ public class HotSpotRuntime implements RiRuntime {
             WriteNode memoryWrite = new WriteNode(elementKind.stackKind(), array, value, arrayLocation, graph);
             memoryWrite.setGuard(boundsCheck);
             memoryWrite.setStateAfter(storeIndexed.stateAfter());
-            FixedNode next = storeIndexed.next();
-            storeIndexed.setNext(null);
             anchor.setNext(memoryWrite);
             if (elementKind == CiKind.Object && !value.isNullConstant()) {
                 ArrayWriteBarrier writeBarrier = new ArrayWriteBarrier(array, arrayLocation, graph);
                 memoryWrite.setNext(writeBarrier);
-                writeBarrier.setNext(next);
+                writeBarrier.setNext(storeIndexed.next());
             } else {
-                memoryWrite.setNext(next);
+                memoryWrite.setNext(storeIndexed.next());
             }
             storeIndexed.replaceAtPredecessors(anchor);
             storeIndexed.delete();

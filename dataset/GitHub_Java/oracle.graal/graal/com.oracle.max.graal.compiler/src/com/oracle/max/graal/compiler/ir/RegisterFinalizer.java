@@ -35,20 +35,34 @@ import com.sun.cri.ri.*;
  */
 public final class RegisterFinalizer extends StateSplit {
 
-    @NodeInput
-    private Value object;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_OBJECT = 0;
 
-    public Value object() {
-        return object;
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setObject(Value x) {
-        updateUsages(object, x);
-        object = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The instruction that produces the object whose finalizer should be registered.
+     */
+     public Value object() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    }
+
+    public Value setObject(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
     }
 
     public RegisterFinalizer(Value object, Graph graph) {
-        super(CiKind.Void, graph);
+        super(CiKind.Void, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setObject(object);
     }
 

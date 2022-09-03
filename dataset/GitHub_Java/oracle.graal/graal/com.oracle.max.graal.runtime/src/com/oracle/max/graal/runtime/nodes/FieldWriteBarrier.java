@@ -30,21 +30,29 @@ import com.sun.cri.ci.*;
 
 
 public final class FieldWriteBarrier extends WriteBarrier {
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_OBJECT = 0;
 
-    @NodeInput
-    private Value object;
+    private static final int SUCCESSOR_COUNT = 0;
 
-    public Value object() {
-        return object;
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setObject(Value x) {
-        updateUsages(object, x);
-        object = x;
+    /**
+     * The instruction that produces the object tested against null.
+     */
+     public Value object() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    }
+
+    public void setObject(Value n) {
+        inputs().set(super.inputCount() + INPUT_OBJECT, n);
     }
 
     public FieldWriteBarrier(Value object, Graph graph) {
-        super(graph);
+        super(INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.setObject(object);
     }
 

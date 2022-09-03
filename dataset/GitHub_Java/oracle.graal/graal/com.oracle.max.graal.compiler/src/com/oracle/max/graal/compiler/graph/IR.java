@@ -111,10 +111,9 @@ public class IR {
         }
 
         if (GraalOptions.OptLoops) {
-            graph.mark();
             new LoopPhase().apply(graph);
             if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase(true).apply(graph);
+                new CanonicalizerPhase().apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
             }
         }
@@ -127,9 +126,6 @@ public class IR {
 
         if (GraalOptions.OptGVN) {
             new GlobalValueNumberingPhase().apply(graph);
-            if (GraalOptions.Rematerialize) {
-                new RematerializationPhase().apply(graph);
-            }
         }
 
         new LoweringPhase(compilation.runtime).apply(graph);
@@ -137,9 +133,6 @@ public class IR {
             new MemoryPhase().apply(graph);
             if (GraalOptions.OptGVN) {
                 new GlobalValueNumberingPhase().apply(graph);
-                if (GraalOptions.Rematerialize) {
-                    new RematerializationPhase().apply(graph);
-                }
             }
             if (GraalOptions.OptReadElimination) {
                 new ReadEliminationPhase().apply(graph);

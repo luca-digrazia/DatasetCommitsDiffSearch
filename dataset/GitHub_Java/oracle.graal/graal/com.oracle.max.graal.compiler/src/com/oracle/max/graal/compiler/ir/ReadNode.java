@@ -28,9 +28,12 @@ import com.sun.cri.ci.*;
 
 
 public final class ReadNode extends AccessNode {
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
 
     public ReadNode(CiKind kind, Value object, LocationNode location, Graph graph) {
-        super(kind, object, location, graph);
+        super(kind, object, location, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override

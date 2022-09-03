@@ -26,9 +26,10 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.observer.*;
+import com.oracle.max.graal.compiler.phases.EscapeAnalysisPhase.MergeableState;
+import com.oracle.max.graal.compiler.phases.EscapeAnalysisPhase.PostOrderNodeIterator;
 import com.oracle.max.graal.graph.*;
 
 public class ComputeProbabilityPhase extends Phase {
@@ -202,8 +203,8 @@ public class ComputeProbabilityPhase extends Phase {
 
         @Override
         public void afterSplit(FixedNode node) {
-            assert node.predecessor() != null;
-            Node pred = node.predecessor();
+            assert node.predecessors().size() == 1;
+            Node pred = node.predecessors().get(0);
             if (pred instanceof Invoke) {
                 Invoke x = (Invoke) pred;
                 if (x.next() != node) {

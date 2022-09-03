@@ -30,21 +30,20 @@ import com.sun.cri.ci.*;
 
 
 public final class IntegerAddVectorNode extends AbstractVectorNode {
-
-    @NodeInput
-    private Value value;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_VALUE = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     public Value value() {
-        return value;
+        return (Value) inputs().get(super.inputCount() + INPUT_VALUE);
     }
 
-    public void setValue(Value x) {
-        updateUsages(value, x);
-        value = x;
+    public void setValue(Value v) {
+        inputs().set(super.inputCount() + INPUT_VALUE, v);
     }
 
     public IntegerAddVectorNode(AbstractVectorNode vector, Value value, Graph graph) {
-        super(CiKind.Illegal, vector, graph);
+        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, vector, graph);
         setValue(value);
     }
 

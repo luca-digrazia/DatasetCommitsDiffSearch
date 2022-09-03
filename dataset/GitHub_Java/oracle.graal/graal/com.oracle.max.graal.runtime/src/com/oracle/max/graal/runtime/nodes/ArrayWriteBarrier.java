@@ -30,32 +30,41 @@ import com.sun.cri.ci.*;
 
 
 public final class ArrayWriteBarrier extends WriteBarrier {
+    private static final int INPUT_COUNT = 2;
+    private static final int INPUT_OBJECT = 0;
+    private static final int INPUT_LOCATION = 1;
 
-    @NodeInput
-    private Value object;
-    @NodeInput
-    private LocationNode location;
+    private static final int SUCCESSOR_COUNT = 0;
 
-    public Value object() {
-        return object;
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setObject(Value x) {
-        updateUsages(this.object, x);
-        this.object = x;
+    /**
+     * The instruction that produces the object tested against null.
+     */
+     public Value object() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
     }
 
-    public LocationNode location() {
-        return location;
+    public void setObject(Value n) {
+        inputs().set(super.inputCount() + INPUT_OBJECT, n);
     }
 
-    public void setLocation(LocationNode x) {
-        updateUsages(location, x);
-        location = x;
+    /**
+     * The instruction that produces the object tested against null.
+     */
+     public LocationNode location() {
+        return (LocationNode) inputs().get(super.inputCount() + INPUT_LOCATION);
+    }
+
+    public void setLocation(LocationNode n) {
+        inputs().set(super.inputCount() + INPUT_LOCATION, n);
     }
 
     public ArrayWriteBarrier(Value object, LocationNode index, Graph graph) {
-        super(graph);
+        super(INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.setObject(object);
         this.setLocation(index);
     }

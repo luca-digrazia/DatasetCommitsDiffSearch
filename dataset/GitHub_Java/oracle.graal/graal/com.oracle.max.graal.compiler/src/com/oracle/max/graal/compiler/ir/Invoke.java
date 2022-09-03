@@ -36,25 +36,17 @@ import com.sun.cri.ri.*;
  */
 public final class Invoke extends AbstractMemoryCheckpointNode implements ExceptionEdgeInstruction {
 
-    @NodeSuccessor
-    private FixedNode exceptionEdge;
-
-    @NodeInput
-    private final NodeInputList<Value> arguments;
-
-    @Override
-    public FixedNode exceptionEdge() {
-        return exceptionEdge;
-    }
-
-    public void setExceptionEdge(FixedNode x) {
-        updatePredecessors(exceptionEdge, x);
-        exceptionEdge = x;
-    }
-
     private final int argumentCount;
 
+    private static final int SUCCESSOR_COUNT = 1;
+    private static final int SUCCESSOR_EXCEPTION_EDGE = 0;
+
     private boolean canInline = true;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + argumentCount;
+    }
 
     public boolean canInline() {
         return canInline;
@@ -64,8 +56,41 @@ public final class Invoke extends AbstractMemoryCheckpointNode implements Except
         canInline = b;
     }
 
-    public NodeInputList<Value> arguments() {
-        return arguments;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    public List<Value> arguments() {
+        return new AbstractList<Value>() {
+            @Override
+            public int size() {
+                return argumentCount;
+            }
+
+            @Override
+            public Value get(int index) {
+                return (Value) inputs().get(Invoke.super.inputCount() + index);
+            }
+
+            @Override
+            public Value set(int index, Value node) {
+                return (Value) inputs().set(Invoke.super.inputCount() + index, node);
+            }
+        };
+
+    }
+
+    /**
+     * The entry to the exception dispatch chain for this invoke.
+     */
+    @Override
+    public FixedNode exceptionEdge() {
+        return (FixedNode) successors().get(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE);
+    }
+
+    public FixedNode setExceptionEdge(FixedNode n) {
+        return (FixedNode) successors().set(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE, n);
     }
 
     public final int opcode;
@@ -83,8 +108,7 @@ public final class Invoke extends AbstractMemoryCheckpointNode implements Except
      * @param target the target method being called
      */
     public Invoke(int bci, int opcode, CiKind result, Value[] args, RiMethod target, RiType returnType, Graph graph) {
-        super(result, graph);
-        arguments = new NodeInputList<Value>(this, args.length);
+        super(result, args.length, SUCCESSOR_COUNT, graph);
         this.opcode = opcode;
         this.target = target;
         this.returnType = returnType;

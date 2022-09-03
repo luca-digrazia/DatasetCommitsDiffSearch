@@ -31,8 +31,8 @@ public abstract class FixedNode extends Value {
 
     private double probability;
 
-    public FixedNode(CiKind kind, Graph graph) {
-        super(kind, graph);
+    public FixedNode(CiKind kind, int inputCount, int successorCount, Graph graph) {
+        super(kind, inputCount, successorCount, graph);
     }
 
     public double probability() {
@@ -50,7 +50,7 @@ public abstract class FixedNode extends Value {
     @Override
     public Map<Object, Object> getDebugProperties() {
         Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("probability", String.format(Locale.ENGLISH, "%7.5f", probability));
+        properties.put("probability", String.format("%7.5f", probability));
         return properties;
     }
 

@@ -31,16 +31,31 @@ import com.sun.cri.ci.*;
  */
 public final class Return extends FixedNode {
 
-    @NodeInput
-    private Value result;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_RESULT = 0;
 
-    public Value result() {
-        return result;
+    private static final int SUCCESSOR_COUNT = 1;
+    private static final int SUCCESSOR_END = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setResult(Value x) {
-        updateUsages(this.result, x);
-        this.result = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The instruction that produces the result for the return.
+     */
+     public Value result() {
+        return (Value) inputs().get(super.inputCount() + INPUT_RESULT);
+    }
+
+    public Value setResult(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_RESULT, n);
     }
 
     /**
@@ -50,13 +65,13 @@ public final class Return extends FixedNode {
      * @param graph
      */
     public Return(Value result, Graph graph) {
-        super(result == null ? CiKind.Void : result.kind, graph);
+        super(result == null ? CiKind.Void : result.kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setResult(result);
     }
 
     // for copying
     private Return(CiKind kind, Graph graph) {
-        super(kind, graph);
+        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override

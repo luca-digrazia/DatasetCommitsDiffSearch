@@ -34,6 +34,9 @@ import com.sun.cri.ri.*;
  */
 public final class LoadIndexed extends AccessIndexed {
 
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
     /**
      * Creates a new LoadIndexed instruction.
      * @param array the instruction producing the array
@@ -43,7 +46,7 @@ public final class LoadIndexed extends AccessIndexed {
      * @param graph
      */
     public LoadIndexed(Value array, Value index, Value length, CiKind elementKind, Graph graph) {
-        super(elementKind.stackKind(), array, index, length, elementKind, graph);
+        super(elementKind.stackKind(), array, index, length, elementKind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     /**

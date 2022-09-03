@@ -32,6 +32,9 @@ import com.sun.cri.ri.*;
  */
 public final class NewObjectArray extends NewArray {
 
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
     final RiType elementClass;
 
     /**
@@ -41,7 +44,7 @@ public final class NewObjectArray extends NewArray {
      * @param graph
      */
     public NewObjectArray(RiType elementClass, Value length, Graph graph) {
-        super(length, graph);
+        super(length, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.elementClass = elementClass;
     }
 

@@ -183,8 +183,8 @@ public class InliningPhase extends Phase {
                 if (concrete != null && checkTargetConditions(concrete, iterations) && checkSizeConditions(parent, iterations, concrete, invoke, profile, ratio)) {
                     IsType isType = new IsType(invoke.receiver(), profile.types[0], compilation.graph);
                     FixedGuard guard = new FixedGuard(isType, graph);
-                    assert invoke.predecessor() != null;
-                    invoke.predecessor().replaceFirstSuccessor(invoke, guard);
+                    assert invoke.predecessors().size() == 1;
+                    invoke.predecessors().get(0).successors().replace(invoke, guard);
                     guard.setNext(invoke);
 
                     if (GraalOptions.TraceInlining) {
@@ -245,7 +245,7 @@ public class InliningPhase extends Phase {
             }
             return false;
         }
-        if (invoke.predecessor() == null) {
+        if (invoke.predecessors().size() == 0) {
             if (GraalOptions.TraceInlining) {
                 TTY.println("not inlining %s because the invoke is dead code", methodName(invoke.target, invoke));
             }
@@ -446,14 +446,14 @@ public class InliningPhase extends Phase {
                 TTY.println("Building graph for %s, locals: %d, stack: %d", methodName(method, invoke), method.maxLocals(), method.maxStackSize());
             }
             graph = new CompilerGraph(null);
-            new GraphBuilderPhase(compilation, method, true).apply(graph, true, false);
+            new GraphBuilderPhase(compilation, method, true).apply(graph);
             if (GraalOptions.ProbabilityAnalysis) {
-                new DeadCodeEliminationPhase().apply(graph, true, false);
-                new ComputeProbabilityPhase().apply(graph, true, false);
+                new DeadCodeEliminationPhase().apply(graph);
+                new ComputeProbabilityPhase().apply(graph);
             }
         }
 
-        invoke.clearInputs();
+        invoke.inputs().clearAll();
 
         HashMap<Node, Node> replacements = new HashMap<Node, Node>();
         ArrayList<Node> nodes = new ArrayList<Node>();
@@ -482,8 +482,8 @@ public class InliningPhase extends Phase {
             TTY.println("inlining %s: %d frame states, %d nodes", methodName(method), frameStates.size(), nodes.size());
         }
 
-        assert invoke.successors().first() != null : invoke;
-        assert invoke.predecessor() != null;
+        assert invoke.successors().get(0) != null : invoke;
+        assert invoke.predecessors().size() == 1 : "size: " + invoke.predecessors().size();
         FixedNodeWithNext pred;
         if (withReceiver) {
             pred = new FixedGuard(new IsNonNull(parameters[0], compilation.graph), compilation.graph);
@@ -534,15 +534,16 @@ public class InliningPhase extends Phase {
         }
 
         if (returnNode != null) {
-            for (Node usage : invoke.usages().snapshot()) {
+            List<Node> usages = new ArrayList<Node>(invoke.usages());
+            for (Node usage : usages) {
                 if (returnNode.result() instanceof Local) {
-                    usage.replaceFirstInput(invoke, replacements.get(returnNode.result()));
+                    usage.inputs().replace(invoke, replacements.get(returnNode.result()));
                 } else {
-                    usage.replaceFirstInput(invoke, duplicates.get(returnNode.result()));
+                    usage.inputs().replace(invoke, duplicates.get(returnNode.result()));
                 }
             }
             Node returnDuplicate = duplicates.get(returnNode);
-            returnDuplicate.clearInputs();
+            returnDuplicate.inputs().clearAll();
             Node n = invoke.next();
             invoke.setNext(null);
             returnDuplicate.replaceAndDelete(n);
@@ -550,15 +551,16 @@ public class InliningPhase extends Phase {
 
         if (exceptionEdge != null) {
             if (unwindNode != null) {
-                assert unwindNode.predecessor()!= null;
-                assert exceptionEdge.successors().explicitCount() == 1;
+                assert unwindNode.predecessors().size() == 1;
+                assert exceptionEdge.successors().size() == 1;
                 ExceptionObject obj = (ExceptionObject) exceptionEdge;
 
                 Unwind unwindDuplicate = (Unwind) duplicates.get(unwindNode);
-                for (Node usage : obj.usages().snapshot()) {
-                    usage.replaceFirstInput(obj, unwindDuplicate.exception());
+                List<Node> usages = new ArrayList<Node>(obj.usages());
+                for (Node usage : usages) {
+                    usage.inputs().replace(obj, unwindDuplicate.exception());
                 }
-                unwindDuplicate.clearInputs();
+                unwindDuplicate.inputs().clearAll();
                 Node n = obj.next();
                 obj.setNext(null);
                 unwindDuplicate.replaceAndDelete(n);
