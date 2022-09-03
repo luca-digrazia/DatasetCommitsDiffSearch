@@ -51,10 +51,9 @@ public class LayoutGenerator {
         boolean needsIncompatibleLocationException = false;
         boolean needsFinalLocationException = false;
         boolean needsHiddenKey = false;
-        boolean needsBoundary = false;
 
         for (PropertyModel property : layout.getProperties()) {
-            if (!property.isShapeProperty() && !property.hasIdentifier()) {
+            if (!property.hasIdentifier()) {
                 needsHiddenKey = true;
             }
 
@@ -74,13 +73,9 @@ public class LayoutGenerator {
                     }
                 }
             }
-
-            if (property.isShapeProperty() && (property.hasSetter() || property.hasShapeSetter())) {
-                needsBoundary = true;
-            }
         }
 
-        if (layout.hasFinalInstanceProperties() || layout.hasNonNullableInstanceProperties()) {
+        if (layout.hasFinalProperties() || layout.hasNonNullableProperties()) {
             stream.println("import java.util.EnumSet;");
         }
 
@@ -98,7 +93,7 @@ public class LayoutGenerator {
 
         stream.println("import com.oracle.truffle.api.CompilerAsserts;");
 
-        if (needsBoundary) {
+        if (!layout.getShapeProperties().isEmpty()) {
             stream.println("import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;");
         }
 
@@ -121,7 +116,7 @@ public class LayoutGenerator {
             stream.println("import com.oracle.truffle.api.object.Layout;");
         }
 
-        if (layout.hasFinalInstanceProperties() || layout.hasNonNullableInstanceProperties()) {
+        if (layout.hasFinalProperties() || layout.hasNonNullableProperties()) {
             stream.println("import com.oracle.truffle.api.object.LocationModifier;");
         }
 

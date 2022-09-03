@@ -137,9 +137,9 @@ public class LayoutModel {
         return !selectProperties(true, true, true, true, false).isEmpty();
     }
 
-    public boolean hasNonNullableInstanceProperties() {
+    public boolean hasNonNullableProperties() {
         for (PropertyModel property : properties) {
-            if (!property.isNullable() && property.isInstanceProperty()) {
+            if (!property.isNullable()) {
                 return true;
             }
         }
@@ -147,9 +147,9 @@ public class LayoutModel {
         return false;
     }
 
-    public boolean hasFinalInstanceProperties() {
+    public boolean hasFinalProperties() {
         for (PropertyModel property : properties) {
-            if (property.isFinal() && property.isInstanceProperty()) {
+            if (property.isFinal()) {
                 return true;
             }
         }
