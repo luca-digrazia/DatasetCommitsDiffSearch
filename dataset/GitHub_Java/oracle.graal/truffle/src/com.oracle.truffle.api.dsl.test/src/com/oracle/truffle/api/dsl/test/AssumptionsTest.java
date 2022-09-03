@@ -25,10 +25,12 @@ package com.oracle.truffle.api.dsl.test;
 import static com.oracle.truffle.api.dsl.test.TestHelper.createCallTarget;
 import static com.oracle.truffle.api.dsl.test.TestHelper.getNode;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.fail;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,7 +47,8 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionArrayTestFactory;
-import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionArraysAreCompilationFinalFactory.AssumptionArraysAreCompilationFinalNodeGen;
+import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionArraysAreCompilationFinalCachedFactory;
+import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionArraysAreCompilationFinalFactory;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionInvalidateTest1NodeGen;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionInvalidateTest2NodeGen;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionInvalidateTest3NodeGen;
@@ -60,6 +63,7 @@ import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.StaticFieldTestFac
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 import com.oracle.truffle.api.dsl.test.examples.ExampleNode;
 import com.oracle.truffle.api.dsl.test.examples.ExampleTypes;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 
 public class AssumptionsTest {
@@ -202,7 +206,7 @@ public class AssumptionsTest {
 
         private final Map<Integer, Assumption> assumptions = new HashMap<>();
 
-        @Specialization(guards = "value == cachedValue", assumptions = "getAssumption(cachedValue)")
+        @Specialization(guards = "value == cachedValue", limit = "3", assumptions = "getAssumption(cachedValue)")
         static String do1(int value, @Cached("value") int cachedValue) {
             return "do1";
         }
@@ -357,7 +361,7 @@ public class AssumptionsTest {
 
         abstract int execute(int value);
 
-        @Specialization(guards = "value == cachedValue", assumptions = "createAssumption(cachedValue)")
+        @Specialization(guards = "value == cachedValue", limit = "3", assumptions = "createAssumption(cachedValue)")
         public int s0(int value, @SuppressWarnings("unused") @Cached("value") int cachedValue) {
             return value;
         }
@@ -392,7 +396,7 @@ public class AssumptionsTest {
 
         abstract int execute(int value);
 
-        @Specialization(guards = "value == cachedValue", assumptions = "createAssumption(cachedValue)")
+        @Specialization(guards = "value == cachedValue", limit = "3", assumptions = "createAssumption(cachedValue)")
         @SuppressWarnings("unused")
         public int s0(int value, @Cached("value") int cachedValue, @Cached("createChild()") Node node) {
             return value;
@@ -484,8 +488,10 @@ public class AssumptionsTest {
     }
 
     @Test
-    public void testAssumptionArraysAreCompilationFinal() throws NoSuchFieldException, SecurityException {
-        Field field = AssumptionArraysAreCompilationFinalNodeGen.class.getDeclaredField("do1_assumption0_");
+    public void testAssumptionArraysAreCompilationFinal() throws NoSuchFieldException,
+                    SecurityException {
+        AssumptionArraysAreCompilationFinal node = TestHelper.createNode(AssumptionArraysAreCompilationFinalFactory.getInstance(), false);
+        Field field = node.getClass().getDeclaredField("do1_assumption0_");
         field.setAccessible(true);
         assertEquals(Assumption[].class, field.getType());
         CompilationFinal compilationFinal = field.getAnnotation(CompilationFinal.class);
@@ -497,6 +503,39 @@ public class AssumptionsTest {
 
         @Specialization(assumptions = "createAssumptions()")
         static int do1(int value) {
+            return value;
+        }
+
+        Assumption[] createAssumptions() {
+            return new Assumption[]{Truffle.getRuntime().createAssumption()};
+        }
+    }
+
+    @Test
+    public void testAssumptionArraysAreCompilationFinalCached() throws NoSuchFieldException,
+                    SecurityException, IllegalArgumentException {
+        AssumptionArraysAreCompilationFinalCached node = TestHelper.createNode(AssumptionArraysAreCompilationFinalCachedFactory.getInstance(), false);
+        Field doCachedField = node.getClass().getDeclaredField("do1_cache");
+        doCachedField.setAccessible(true);
+        Field field = doCachedField.getType().getDeclaredField("assumption0_");
+        field.setAccessible(true);
+        assertEquals(Assumption[].class, field.getType());
+        CompilationFinal compilationFinal = field.getAnnotation(CompilationFinal.class);
+        assertEquals(1, compilationFinal.dimensions());
+    }
+
+    @Test
+    public void testAssumptionArraysCheckUseExplodeLoop() throws SecurityException, IllegalArgumentException, NoSuchMethodException {
+        AssumptionArraysAreCompilationFinalCached node = TestHelper.createNode(AssumptionArraysAreCompilationFinalCachedFactory.getInstance(), false);
+        Method isValidMethod = node.getClass().getDeclaredMethod("isValid_", Assumption[].class);
+        assertNotNull(isValidMethod.getAnnotation(ExplodeLoop.class));
+    }
+
+    @NodeChild
+    static class AssumptionArraysAreCompilationFinalCached extends ValueNode {
+
+        @Specialization(guards = "value == cachedValue", limit = "3", assumptions = "createAssumptions()")
+        static int do1(int value, @SuppressWarnings("unused") @Cached("value") int cachedValue) {
             return value;
         }
 
