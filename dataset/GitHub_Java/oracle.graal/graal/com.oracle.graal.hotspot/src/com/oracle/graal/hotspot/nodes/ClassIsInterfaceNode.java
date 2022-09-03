@@ -46,9 +46,7 @@ public class ClassIsInterfaceNode extends MacroNode implements Canonicalizable {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
             Class c = (Class) javaClass.asConstant().asObject();
-            if (c != null) {
-                return ConstantNode.forBoolean(c.isInterface(), graph());
-            }
+            return ConstantNode.forBoolean(c.isInterface(), graph());
         }
         return this;
     }
