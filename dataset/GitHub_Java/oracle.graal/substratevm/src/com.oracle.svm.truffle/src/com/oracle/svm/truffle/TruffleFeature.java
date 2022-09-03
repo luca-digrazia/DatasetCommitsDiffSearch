@@ -81,12 +81,9 @@ import org.graalvm.nativeimage.ImageSingletons;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.HostedProviders;
-import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.NeverInline;
-import com.oracle.svm.core.annotate.RecomputeFieldValue;
-import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.deopt.Deoptimizer;
 import com.oracle.svm.core.heap.Heap;
@@ -689,27 +686,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
     }
 }
 
-// Checkstyle: stop
-
-@TargetClass(className = "com.oracle.truffle.api.vm.PolyglotContextImpl", onlyWith = TruffleFeature.IsEnabled.class)
-final class Target_com_oracle_truffle_api_vm_PolyglotContextImpl {
-
-    /**
-     * Truffle code can run during image generation, i.e., one or many contexts can be used during
-     * image generation. Truffle optimizes the case where only one context is ever created, and also
-     * stores additional information regarding which thread or threads used the context. We need to
-     * start with a completely fresh specialization state. To simplify that, all static state that
-     * stores context information is abstracted in the SingleContextState class, and it is enough to
-     * recompute a single static field to a new SingleContextState instance.
-     */
-    @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClassName = "com.oracle.truffle.api.vm.PolyglotContextImpl$SingleContextState", isFinal = true) //
-    static Target_com_oracle_truffle_api_vm_PolyglotContextImpl_SingleContextState SINGLE_CONTEXT_STATE;
-}
-
-@TargetClass(className = "com.oracle.truffle.api.vm.PolyglotContextImpl$SingleContextState", onlyWith = TruffleFeature.IsEnabled.class)
-final class Target_com_oracle_truffle_api_vm_PolyglotContextImpl_SingleContextState {
-}
-
 /*
  * Java interoperability cannot be supported on Substrate VM. Ensure that the nodes are not used by
  * marking the node classes as deleted.
@@ -733,4 +709,29 @@ final class Target_com_oracle_truffle_api_interop_java_FunctionProxyHandler {
 @Delete
 @TargetClass(className = "com.oracle.truffle.api.interop.java.ObjectProxyHandler", onlyWith = TruffleFeature.IsEnabled.class)
 final class Target_com_oracle_truffle_api_interop_java_ObjectProxyHandler {
+}
+
+@Delete
+@TargetClass(className = "com.oracle.truffle.api.interop.java.ObjectProxyHandler", innerClass = "MethodNode", onlyWith = TruffleFeature.IsEnabled.class)
+final class Target_com_oracle_truffle_api_interop_java_ObjectProxyHandler_MethodNodeGen {
+}
+
+@Delete
+@TargetClass(className = "com.oracle.truffle.api.interop.java.ObjectProxyHandlerFactory", innerClass = "MethodNodeGen", onlyWith = TruffleFeature.IsEnabled.class)
+final class Target_com_oracle_truffle_api_interop_java_ObjectProxyHandlerFactory_MethodNodeGen {
+}
+
+@Delete
+@TargetClass(className = "com.oracle.truffle.api.interop.java.ObjectProxyHandlerFactory$MethodNodeGen$CachedData", onlyWith = TruffleFeature.IsEnabled.class)
+final class Target_com_oracle_truffle_api_interop_java_ObjectProxyHandlerFactory_MethodNodeGen_CachedData {
+}
+
+@Delete
+@TargetClass(className = "com.oracle.truffle.api.interop.java.ObjectProxyHandler", innerClass = "InvokeAndReadExecNode", onlyWith = TruffleFeature.IsEnabled.class)
+final class Target_com_oracle_truffle_api_interop_java_ObjectProxyHandler_InvokeAndReadExecNode {
+}
+
+@Delete
+@TargetClass(className = "com.oracle.truffle.api.interop.java.ObjectProxyHandlerFactory", innerClass = "InvokeAndReadExecNodeGen", onlyWith = TruffleFeature.IsEnabled.class)
+final class Target_com_oracle_truffle_api_interop_java_ObjectProxyHandlerFactory_InvokeAndReadExecNodeGen {
 }
