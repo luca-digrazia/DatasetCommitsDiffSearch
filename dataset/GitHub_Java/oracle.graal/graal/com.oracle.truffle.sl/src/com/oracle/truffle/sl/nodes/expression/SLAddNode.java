@@ -25,10 +25,8 @@ package com.oracle.truffle.sl.nodes.expression;
 import java.math.*;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.*;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.sl.nodes.*;
 
 /**
@@ -43,10 +41,6 @@ import com.oracle.truffle.sl.nodes.*;
  */
 @NodeInfo(shortName = "+")
 public abstract class SLAddNode extends SLBinaryNode {
-
-    public SLAddNode(SourceSection src) {
-        super(src);
-    }
 
     /**
      * Specialization for primitive {@code long} values. This is the fast path of the
@@ -81,7 +75,6 @@ public abstract class SLAddNode extends SLBinaryNode {
      * both input values are {@code long} values but the primitive addition overflows.
      */
     @Specialization
-    @TruffleBoundary
     protected BigInteger add(BigInteger left, BigInteger right) {
         return left.add(right);
     }
@@ -95,7 +88,6 @@ public abstract class SLAddNode extends SLBinaryNode {
      * function is defined in {@link #isString this class}, but could also be in any superclass.
      */
     @Specialization(guards = "isString")
-    @TruffleBoundary
     protected String add(Object left, Object right) {
         return left.toString() + right.toString();
     }
