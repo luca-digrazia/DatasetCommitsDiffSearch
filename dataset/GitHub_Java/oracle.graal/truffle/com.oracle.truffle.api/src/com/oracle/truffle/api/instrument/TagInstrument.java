@@ -38,29 +38,23 @@ package com.oracle.truffle.api.instrument;
  *
  * @see SyntaxTag
  * @see Instrumenter
- * @since 0.8 or earlier
  */
-@SuppressWarnings("deprecation")
-@Deprecated
 public abstract class TagInstrument extends Instrument {
 
     private Instrumenter instrumenter;
 
     private SyntaxTag tag = null;
 
-    /** @since 0.8 or earlier */
     protected TagInstrument(Instrumenter instrumenter, SyntaxTag tag, String instrumentInfo) {
         super(instrumentInfo);
         this.instrumenter = instrumenter;
         this.tag = tag;
     }
 
-    /** @since 0.8 or earlier */
     public final SyntaxTag getTag() {
         return tag;
     }
 
-    /** @since 0.8 or earlier */
     protected final Instrumenter getInstrumenter() {
         return instrumenter;
     }
