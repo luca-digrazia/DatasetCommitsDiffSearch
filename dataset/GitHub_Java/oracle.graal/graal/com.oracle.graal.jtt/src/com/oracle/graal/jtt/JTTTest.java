@@ -50,7 +50,7 @@ public class JTTTest extends GraalCompilerTest {
     Object[] argsToBind;
 
     public JTTTest() {
-        Assert.assertNotNull(getCodeCache());
+        Assert.assertNotNull(runtime);
     }
 
     @Override
@@ -59,13 +59,13 @@ public class JTTTest extends GraalCompilerTest {
         if (argsToBind != null) {
             Object receiver = isStatic(m.getModifiers()) ? null : this;
             Object[] args = argsWithReceiver(receiver, argsToBind);
-            JavaType[] parameterTypes = signatureToTypes(getMetaAccess().lookupJavaMethod(m));
+            JavaType[] parameterTypes = signatureToTypes(runtime.lookupJavaMethod(m));
             assert parameterTypes.length == args.length;
             for (int i = 0; i < args.length; i++) {
-                ParameterNode param = graph.getParameter(i);
+                LocalNode local = graph.getLocal(i);
                 Constant c = Constant.forBoxed(parameterTypes[i].getKind(), args[i]);
-                ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
-                param.replaceAtUsages(replacement);
+                ConstantNode replacement = ConstantNode.forConstant(c, runtime, graph);
+                local.replaceAtUsages(replacement);
             }
         }
         return graph;
