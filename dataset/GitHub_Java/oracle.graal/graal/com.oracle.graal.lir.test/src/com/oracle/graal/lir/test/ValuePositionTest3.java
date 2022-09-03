@@ -131,11 +131,11 @@ public class ValuePositionTest3 {
         HashMap<Value, EnumSet<OperandFlag>> positionMap = new HashMap<>();
         HashMap<Value, EnumSet<OperandFlag>> normalMap = new HashMap<>();
 
-        op.forEachInputPos(new ValuePositionProcedure() {
+        op.forEachInput(new ValuePositionProcedure() {
 
             @Override
             public void doValue(LIRInstruction instruction, ValuePosition position) {
-                positionMap.put(position.get(instruction), position.getFlags());
+                positionMap.put(position.get(instruction), position.getFlags(instruction));
             }
         });
         op.visitEachInput(new InstructionValueConsumer() {
