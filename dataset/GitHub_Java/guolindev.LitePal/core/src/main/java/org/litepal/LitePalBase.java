@@ -79,12 +79,12 @@ public abstract class LitePalBase {
     /**
      * This is map of class name to fields list. Indicates that each class has which supported fields.
      */
-    private Map<String, List<Field>> classFieldsMap = new HashMap<String, List<Field>>();
+    private Map<String, List<Field>> classFieldsMap = new HashMap<>();
 
 	/**
 	 * This is map of class name to generic fields list. Indicates that each class has which supported generic fields.
 	 */
-    private Map<String, List<Field>> classGenericFieldsMap = new HashMap<String, List<Field>>();
+    private Map<String, List<Field>> classGenericFieldsMap = new HashMap<>();
 
 	/**
 	 * The collection contains all association models.
@@ -138,10 +138,10 @@ public abstract class LitePalBase {
 	 */
 	protected Collection<AssociationsModel> getAssociations(List<String> classNames) {
 		if (mAssociationModels == null) {
-			mAssociationModels = new HashSet<AssociationsModel>();
+			mAssociationModels = new HashSet<>();
 		}
         if (mGenericModels == null) {
-            mGenericModels = new HashSet<GenericModel>();
+            mGenericModels = new HashSet<>();
         }
 		mAssociationModels.clear();
         mGenericModels.clear();
@@ -168,7 +168,7 @@ public abstract class LitePalBase {
 	 */
 	protected Collection<AssociationsInfo> getAssociationInfo(String className) {
 		if (mAssociationInfos == null) {
-			mAssociationInfos = new HashSet<AssociationsInfo>();
+			mAssociationInfos = new HashSet<>();
 		}
 		mAssociationInfos.clear();
 		analyzeClassFields(className, GET_ASSOCIATION_INFO_ACTION);
@@ -188,7 +188,7 @@ public abstract class LitePalBase {
 	protected List<Field> getSupportedFields(String className) {
         List<Field> fieldList = classFieldsMap.get(className);
         if (fieldList == null) {
-            List<Field> supportedFields = new ArrayList<Field>();
+            List<Field> supportedFields = new ArrayList<>();
             Class<?> clazz;
             try {
                 clazz = Class.forName(className);
@@ -211,7 +211,7 @@ public abstract class LitePalBase {
 	protected List<Field> getSupportedGenericFields(String className) {
         List<Field> genericFieldList = classGenericFieldsMap.get(className);
         if (genericFieldList == null) {
-            List<Field> supportedGenericFields = new ArrayList<Field>();
+            List<Field> supportedGenericFields = new ArrayList<>();
             Class<?> clazz;
             try {
                 clazz = Class.forName(className);
@@ -324,7 +324,7 @@ public abstract class LitePalBase {
             return;
         }
         Field[] fields = clazz.getDeclaredFields();
-        if (fields != null && fields.length > 0) {
+        if (fields.length > 0) {
             for (Field field : fields) {
                 Column annotation = field.getAnnotation(Column.class);
                 if (annotation != null && annotation.ignore()) {
@@ -348,7 +348,7 @@ public abstract class LitePalBase {
             return;
         }
         Field[] fields = clazz.getDeclaredFields();
-        if (fields != null && fields.length > 0) {
+        if (fields.length > 0) {
             for (Field field : fields) {
                 Column annotation = field.getAnnotation(Column.class);
                 if (annotation != null && annotation.ignore()) {
@@ -414,7 +414,7 @@ public abstract class LitePalBase {
      *            The field to check.
      * @return True if the field is private, false otherwise.
      */
-	private boolean isPrivate(Field field) {
+	protected boolean isPrivate(Field field) {
         return Modifier.isPrivate(field.getModifiers());
     }
 
@@ -441,8 +441,6 @@ public abstract class LitePalBase {
 	 * @param action
 	 *            Between {@link org.litepal.LitePalBase#GET_ASSOCIATIONS_ACTION} and
 	 *            {@link org.litepal.LitePalBase#GET_ASSOCIATION_INFO_ACTION}
-	 * 
-	 * @throws ClassNotFoundException
 	 */
 	private void oneToAnyConditions(String className, Field field, int action) throws ClassNotFoundException {
 		Class<?> fieldTypeClass = field.getType();
@@ -527,8 +525,6 @@ public abstract class LitePalBase {
 	 * @param action
 	 *            Between {@link org.litepal.LitePalBase#GET_ASSOCIATIONS_ACTION} and
 	 *            {@link org.litepal.LitePalBase#GET_ASSOCIATION_INFO_ACTION}
-	 * 
-	 * @throws ClassNotFoundException
 	 */
 	private void manyToAnyConditions(String className, Field field, int action) throws ClassNotFoundException {
 		if (isCollection(field.getType())) {
@@ -693,12 +689,14 @@ public abstract class LitePalBase {
         String columnType = getColumnType(fieldType);
         boolean nullable = true;
         boolean unique = false;
+        boolean hasIndex = false;
         String defaultValue = "";
         Column annotation = field.getAnnotation(Column.class);
         if (annotation != null) {
             nullable = annotation.nullable();
             unique = annotation.unique();
             defaultValue = annotation.defaultValue();
+            hasIndex = annotation.index();
         }
         ColumnModel columnModel = new ColumnModel();
         columnModel.setColumnName(DBUtility.convertToValidColumnName(field.getName()));
@@ -706,6 +704,7 @@ public abstract class LitePalBase {
         columnModel.setNullable(nullable);
         columnModel.setUnique(unique);
         columnModel.setDefaultValue(defaultValue);
+        columnModel.setHasIndex(hasIndex);
         return columnModel;
     }
 

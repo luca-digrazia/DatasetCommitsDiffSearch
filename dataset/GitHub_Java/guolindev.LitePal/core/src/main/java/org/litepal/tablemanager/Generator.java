@@ -66,7 +66,7 @@ public abstract class Generator extends LitePalBase {
 	 */
 	protected Collection<TableModel> getAllTableModels() {
 		if (mTableModels == null) {
-			mTableModels = new ArrayList<TableModel>();
+			mTableModels = new ArrayList<>();
 		}
 		if (!canUseCache()) {
 			mTableModels.clear();
@@ -99,8 +99,6 @@ public abstract class Generator extends LitePalBase {
 	 *            SQLs that want to execute.
 	 * @param db
 	 *            instance of SQLiteDatabase
-	 * 
-	 * @throws org.litepal.exceptions.DatabaseGenerateException
 	 */
 	protected void execute(List<String> sqls, SQLiteDatabase db) {
 		String throwSQL = "";

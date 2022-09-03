@@ -28,7 +28,7 @@ import org.litepal.tablemanager.model.GenericModel;
 import org.litepal.util.BaseUtility;
 import org.litepal.util.Const;
 import org.litepal.util.DBUtility;
-import org.litepal.util.LogUtil;
+import org.litepal.util.LitePalLog;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -75,7 +75,7 @@ public abstract class AssociationCreator extends Generator {
      *            an auto increment id.
 	 * @return A generated create table SQL.
 	 */
-	protected String generateCreateTableSQL(String tableName, List<ColumnModel> columnModels,
+	protected String generateCreateTableSQL(String tableName, Collection<ColumnModel> columnModels,
 			boolean autoIncrementId) {
 		StringBuilder createTableSQL = new StringBuilder("create table ");
 		createTableSQL.append(tableName).append(" (");
@@ -108,8 +108,27 @@ public abstract class AssociationCreator extends Generator {
             }
         }
 		createTableSQL.append(")");
-		LogUtil.d(TAG, "create table sql is >> " + createTableSQL);
+		LitePalLog.d(TAG, "create table sql is >> " + createTableSQL);
 		return createTableSQL.toString();
+	}
+
+	/**
+	 * Generate create index SQLs by the passed in parameters.
+	 *
+	 * @param tableName
+	 *            The table name.
+	 * @param columnModels
+	 *            A list contains all column models with column info.
+	 * @return A generated create index SQLs.
+	 */
+	protected List<String> generateCreateIndexSQLs(String tableName, Collection<ColumnModel> columnModels) {
+		List<String> sqls = new ArrayList<>();
+		for (ColumnModel columnModel : columnModels) {
+			if (columnModel.hasIndex()) {
+				sqls.add(generateCreateIndexSQL(tableName, columnModel));
+			}
+		}
+		return sqls;
 	}
 
 	/**
@@ -157,8 +176,32 @@ public abstract class AssociationCreator extends Generator {
                 addColumnSQL.append(" default ").append(defaultValue);
             }
         }
-		LogUtil.d(TAG, "add column sql is >> " + addColumnSQL);
+		LitePalLog.d(TAG, "add column sql is >> " + addColumnSQL);
 		return addColumnSQL.toString();
+	}
+
+	/**
+	 * Generate create index SQL by the passed in parameters.
+	 *
+	 * @param tableName
+	 *            The table name.
+	 * @param columnModel
+	 *            Column model with column info.
+	 * @return A generated create index SQL.
+	 */
+	protected String generateCreateIndexSQL(String tableName, ColumnModel columnModel) {
+		StringBuilder createIndexSQL = new StringBuilder();
+		if (columnModel.hasIndex()) {
+			createIndexSQL.append("create index ");
+			createIndexSQL.append(DBUtility.getIndexName(tableName, columnModel.getColumnName()));
+			createIndexSQL.append(" on ");
+			createIndexSQL.append(tableName);
+			createIndexSQL.append(" (");
+			createIndexSQL.append(columnModel.getColumnName());
+			createIndexSQL.append(")");
+			LitePalLog.d(TAG, "create table index sql is >> " + createIndexSQL);
+		}
+		return createIndexSQL.toString();
 	}
 
 	/**
@@ -192,7 +235,7 @@ public abstract class AssociationCreator extends Generator {
 	protected void giveTableSchemaACopy(String tableName, int tableType, SQLiteDatabase db) {
 		StringBuilder sql = new StringBuilder("select * from ");
 		sql.append(Const.TableSchema.TABLE_NAME);
-		LogUtil.d(TAG, "giveTableSchemaACopy SQL is >> " + sql);
+		LitePalLog.d(TAG, "giveTableSchemaACopy SQL is >> " + sql);
 		Cursor cursor = null;
 		try {
 			cursor = db.rawQuery(sql.toString(), null);
@@ -313,7 +356,7 @@ public abstract class AssociationCreator extends Generator {
 	 */
 	private void createIntermediateTable(String tableName, String associatedTableName,
 			SQLiteDatabase db, boolean force) {
-        List<ColumnModel> columnModelList = new ArrayList<ColumnModel>();
+        List<ColumnModel> columnModelList = new ArrayList<>();
         ColumnModel column1 = new ColumnModel();
         column1.setColumnName(tableName + "_id");
         column1.setColumnType("integer");
@@ -324,7 +367,7 @@ public abstract class AssociationCreator extends Generator {
         columnModelList.add(column2);
         String intermediateTableName = DBUtility.getIntermediateTableName(tableName,
                 associatedTableName);
-		List<String> sqls = new ArrayList<String>();
+		List<String> sqls = new ArrayList<>();
 		if (DBUtility.isTableExists(intermediateTableName, db)) {
 			if (force) {
 				sqls.add(generateDropTableSQL(intermediateTableName));
@@ -353,7 +396,7 @@ public abstract class AssociationCreator extends Generator {
         String valueColumnName = genericModel.getValueColumnName();
         String valueColumnType = genericModel.getValueColumnType();
         String valueIdColumnName = genericModel.getValueIdColumnName();
-        List<ColumnModel> columnModelList = new ArrayList<ColumnModel>();
+        List<ColumnModel> columnModelList = new ArrayList<>();
         ColumnModel column1 = new ColumnModel();
         column1.setColumnName(valueColumnName);
         column1.setColumnType(valueColumnType);
@@ -362,7 +405,7 @@ public abstract class AssociationCreator extends Generator {
         column2.setColumnType("integer");
         columnModelList.add(column1);
         columnModelList.add(column2);
-        List<String> sqls = new ArrayList<String>();
+        List<String> sqls = new ArrayList<>();
         if (DBUtility.isTableExists(tableName, db)) {
             if (force) {
                 sqls.add(generateDropTableSQL(tableName));
@@ -389,8 +432,6 @@ public abstract class AssociationCreator extends Generator {
 	 *            The table which holds the foreign key.
 	 * @param db
 	 *            Instance of SQLiteDatabase.
-	 * 
-	 * @throws org.litepal.exceptions.DatabaseGenerateException
 	 */
 	protected void addForeignKeyColumn(String tableName, String associatedTableName,
 			String tableHoldsForeignKey, SQLiteDatabase db) {
@@ -406,11 +447,11 @@ public abstract class AssociationCreator extends Generator {
                     ColumnModel columnModel = new ColumnModel();
                     columnModel.setColumnName(foreignKeyColumn);
                     columnModel.setColumnType("integer");
-                    List<String> sqls = new ArrayList<String>();
+                    List<String> sqls = new ArrayList<>();
                     sqls.add(generateAddColumnSQL(tableHoldsForeignKey, columnModel));
 					execute(sqls, db);
 				} else {
-					LogUtil.d(TAG, "column " + foreignKeyColumn
+					LitePalLog.d(TAG, "column " + foreignKeyColumn
 							+ " is already exist, no need to add one");
 				}
 			} else {
@@ -429,10 +470,11 @@ public abstract class AssociationCreator extends Generator {
      *          List contains model fields.
      * @return If ColumnModel list is empty or contains only id, _id field, return true. Otherwise return false.
      */
-    private boolean isContainsOnlyIdField(List<ColumnModel> columnModels) {
-        return columnModels.size() == 0
-                || (columnModels.size() == 1 && isIdColumn(columnModels.get(0).getColumnName()))
-                || (columnModels.size() == 2 && isIdColumn(columnModels.get(0).getColumnName()) && isIdColumn(columnModels.get(1).getColumnName()));
+    private boolean isContainsOnlyIdField(Collection<ColumnModel> columnModels) {
+    	for (ColumnModel columnModel : columnModels) {
+    		if (!columnModel.isIdColumn()) return false;
+		}
+    	return true;
     }
 
 }

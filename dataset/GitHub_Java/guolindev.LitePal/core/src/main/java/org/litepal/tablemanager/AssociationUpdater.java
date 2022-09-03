@@ -28,7 +28,7 @@ import org.litepal.tablemanager.model.TableModel;
 import org.litepal.util.Const;
 import org.litepal.util.DBUtility;
 import org.litepal.util.BaseUtility;
-import org.litepal.util.LogUtil;
+import org.litepal.util.LitePalLog;
 
 import android.database.sqlite.SQLiteDatabase;
 
@@ -85,14 +85,14 @@ public abstract class AssociationUpdater extends Creator {
 	 * @return All the foreign key columns in a list.
 	 */
 	protected List<String> getForeignKeyColumns(TableModel tableModel) {
-		List<String> foreignKeyColumns = new ArrayList<String>();
-        List<ColumnModel> columnModelList = getTableModelFromDB(tableModel.getTableName()).getColumnModels();
-		for (ColumnModel columnModel : columnModelList) {
+		List<String> foreignKeyColumns = new ArrayList<>();
+        Collection<ColumnModel> columnModels = getTableModelFromDB(tableModel.getTableName()).getColumnModels();
+		for (ColumnModel columnModel : columnModels) {
             String columnName = columnModel.getColumnName();
 			if (isForeignKeyColumnFormat(columnModel.getColumnName())) {
                 if (!tableModel.containsColumn(columnName)) {
                     // Now this is a foreign key column.
-                    LogUtil.d(TAG, "getForeignKeyColumnNames >> foreign key column is " + columnName);
+                    LitePalLog.d(TAG, "getForeignKeyColumnNames >> foreign key column is " + columnName);
                     foreignKeyColumns.add(columnName);
                 }
 			}
@@ -124,7 +124,6 @@ public abstract class AssociationUpdater extends Creator {
 	 * @param tableName
 	 *            The table name use to get table model from database.
 	 * @return A table model object with values from database table.
-	 * @throws org.litepal.exceptions.DatabaseGenerateException
 	 */
 	protected TableModel getTableModelFromDB(String tableName) {
 		return DBUtility.findPragmaTableInfo(tableName, mDb);
@@ -140,7 +139,7 @@ public abstract class AssociationUpdater extends Creator {
 	 */
 	protected void dropTables(List<String> dropTableNames, SQLiteDatabase db) {
 		if (dropTableNames != null && !dropTableNames.isEmpty()) {
-            List<String> dropTableSQLS = new ArrayList<String>();
+            List<String> dropTableSQLS = new ArrayList<>();
 			for (int i = 0; i < dropTableNames.size(); i++) {
                 dropTableSQLS.add(generateDropTableSQL(dropTableNames.get(i)));
 			}
@@ -184,8 +183,8 @@ public abstract class AssociationUpdater extends Creator {
 				deleteData.append(" lower(").append(Const.TableSchema.COLUMN_NAME).append(") ");
 				deleteData.append("=").append(" lower('").append(tableName).append("')");
 			}
-			LogUtil.d(TAG, "clear table schema value sql is " + deleteData);
-            List<String> sqls = new ArrayList<String>();
+			LitePalLog.d(TAG, "clear table schema value sql is " + deleteData);
+            List<String> sqls = new ArrayList<>();
             sqls.add(deleteData.toString());
 			execute(sqls, mDb);
 		}
@@ -243,7 +242,7 @@ public abstract class AssociationUpdater extends Creator {
 	 * @return The foreign key columns need to remove in a list.
 	 */
 	private List<String> findForeignKeyToRemove(TableModel tableModel) {
-		List<String> removeRelations = new ArrayList<String>();
+		List<String> removeRelations = new ArrayList<>();
 		List<String> foreignKeyColumns = getForeignKeyColumns(tableModel);
 		String selfTableName = tableModel.getTableName();
 		for (String foreignKeyColumn : foreignKeyColumns) {
@@ -252,7 +251,7 @@ public abstract class AssociationUpdater extends Creator {
 				removeRelations.add(foreignKeyColumn);
 			}
 		}
-		LogUtil.d(TAG, "findForeignKeyToRemove >> " + tableModel.getTableName() + " "
+		LitePalLog.d(TAG, "findForeignKeyToRemove >> " + tableModel.getTableName() + " "
 				+ removeRelations);
 		return removeRelations;
 	}
@@ -266,7 +265,7 @@ public abstract class AssociationUpdater extends Creator {
 	 * @return A list with all intermediate join tables to drop.
 	 */
 	private List<String> findIntermediateTablesToDrop() {
-		List<String> intermediateTables = new ArrayList<String>();
+		List<String> intermediateTables = new ArrayList<>();
 		for (String tableName : DBUtility.findAllTableNames(mDb)) {
 			if (DBUtility.isIntermediateTable(tableName, mDb)) {
 				boolean dropIntermediateTable = true;
@@ -286,7 +285,7 @@ public abstract class AssociationUpdater extends Creator {
 				}
 			}
 		}
-		LogUtil.d(TAG, "findIntermediateTablesToDrop >> " + intermediateTables);
+		LitePalLog.d(TAG, "findIntermediateTablesToDrop >> " + intermediateTables);
 		return intermediateTables;
 	}
 
@@ -298,15 +297,16 @@ public abstract class AssociationUpdater extends Creator {
      * @return A list with all generic tables to drop.
      */
     private List<String> findGenericTablesToDrop() {
-        List<String> genericTablesToDrop = new ArrayList<String>();
+        List<String> genericTablesToDrop = new ArrayList<>();
         for (String tableName : DBUtility.findAllTableNames(mDb)) {
             if (DBUtility.isGenericTable(tableName, mDb)) {
                 boolean dropGenericTable = true;
                 for (GenericModel genericModel : getGenericModels()) {
                     String genericTableName = genericModel.getTableName();
-                    if (tableName.equalsIgnoreCase(genericTableName)) {
-                        dropGenericTable = false;
-                    }
+					if (tableName.equalsIgnoreCase(genericTableName)) {
+						dropGenericTable = false;
+						break;
+					}
                 }
                 if (dropGenericTable) {
                     // drop the generic table
@@ -357,7 +357,7 @@ public abstract class AssociationUpdater extends Creator {
 	 */
 	protected String generateDataMigrationSQL(TableModel tableModel) {
         String tableName = tableModel.getTableName();
-		List<ColumnModel> columnModels = tableModel.getColumnModels();
+		Collection<ColumnModel> columnModels = tableModel.getColumnModels();
 		if (!columnModels.isEmpty()) {
 			StringBuilder sql = new StringBuilder();
 			sql.append("insert into ").append(tableName).append("(");
@@ -422,18 +422,20 @@ public abstract class AssociationUpdater extends Creator {
 	private List<String> getRemoveColumnSQLs(Collection<String> removeColumnNames, String tableName) {
         TableModel tableModelFromDB = getTableModelFromDB(tableName);
 		String alterToTempTableSQL = generateAlterToTempTableSQL(tableName);
-		LogUtil.d(TAG, "generateRemoveColumnSQL >> " + alterToTempTableSQL);
+		LitePalLog.d(TAG, "generateRemoveColumnSQL >> " + alterToTempTableSQL);
 		String createNewTableSQL = generateCreateNewTableSQL(removeColumnNames, tableModelFromDB);
-		LogUtil.d(TAG, "generateRemoveColumnSQL >> " + createNewTableSQL);
+		LitePalLog.d(TAG, "generateRemoveColumnSQL >> " + createNewTableSQL);
 		String dataMigrationSQL = generateDataMigrationSQL(tableModelFromDB);
-		LogUtil.d(TAG, "generateRemoveColumnSQL >> " + dataMigrationSQL);
+		LitePalLog.d(TAG, "generateRemoveColumnSQL >> " + dataMigrationSQL);
 		String dropTempTableSQL = generateDropTempTableSQL(tableName);
-		LogUtil.d(TAG, "generateRemoveColumnSQL >> " + dropTempTableSQL);
-        List<String> sqls = new ArrayList<String>();
+		LitePalLog.d(TAG, "generateRemoveColumnSQL >> " + dropTempTableSQL);
+		List<String> createIndexSQLs = generateCreateIndexSQLs(tableModelFromDB);
+        List<String> sqls = new ArrayList<>();
         sqls.add(alterToTempTableSQL);
         sqls.add(createNewTableSQL);
         sqls.add(dataMigrationSQL);
         sqls.add(dropTempTableSQL);
+        sqls.addAll(createIndexSQLs);
 		return sqls;
 	}
 
