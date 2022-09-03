@@ -107,7 +107,7 @@ import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsicRootNodeF
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
+import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 
 public final class LLVMFunctionFactory {
@@ -166,7 +166,7 @@ public final class LLVMFunctionFactory {
             throw new AssertionError();
         }
         LLVMExpressionNode argNode = createArgNode(argIndex, paramType);
-        if (LLVMBaseOptionFacade.valueProfileFunctionArgs()) {
+        if (LLVMOptions.valueProfileFunctionArgs()) {
             return LLVMValueProfileFactory.createValueProfiledNode(argNode, paramType);
         } else {
             return argNode;
@@ -270,8 +270,6 @@ public final class LLVMFunctionFactory {
                 return new LLVMMainFunctionReturnValueRootNode.LLVMMainFunctionReturnNumberRootNode(mainCallTarget);
             case I_VAR_BITWIDTH:
                 return new LLVMMainFunctionReturnValueRootNode.LLVMMainFunctionReturnIVarBitRootNode(mainCallTarget);
-            case VOID:
-                return new LLVMMainFunctionReturnValueRootNode.LLVMMainFunctionReturnVoidRootNode(mainCallTarget);
             default:
                 throw new AssertionError(returnType);
         }
