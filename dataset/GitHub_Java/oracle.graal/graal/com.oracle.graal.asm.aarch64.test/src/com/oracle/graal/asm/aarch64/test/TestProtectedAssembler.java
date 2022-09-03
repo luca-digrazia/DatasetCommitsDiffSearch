@@ -36,7 +36,7 @@ import jdk.vm.ci.code.TargetDescription;
  */
 class TestProtectedAssembler extends AArch64Assembler {
 
-    public TestProtectedAssembler(TargetDescription target) {
+    TestProtectedAssembler(TargetDescription target) {
         super(target);
     }
 
@@ -121,33 +121,33 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    protected void ldxr(int size, Register rt, AArch64Address address) {
-        super.ldxr(size, rt, address);
+    protected void ldxr(int size, Register rt, Register rn) {
+        super.ldxr(size, rt, rn);
     }
 
     @Override
-    protected void stxr(int size, Register rs, Register rt, AArch64Address address) {
-        super.stxr(size, rs, rt, address);
+    protected void stxr(int size, Register rs, Register rt, Register rn) {
+        super.stxr(size, rs, rt, rn);
     }
 
     @Override
-    protected void ldar(int size, Register rt, AArch64Address address) {
-        super.ldar(size, rt, address);
+    protected void ldar(int size, Register rt, Register rn) {
+        super.ldar(size, rt, rn);
     }
 
     @Override
-    protected void stlr(int size, Register rt, AArch64Address address) {
-        super.stlr(size, rt, address);
+    protected void stlr(int size, Register rt, Register rn) {
+        super.stlr(size, rt, rn);
     }
 
     @Override
-    public void ldaxr(int size, Register rt, AArch64Address address) {
-        super.ldaxr(size, rt, address);
+    public void ldaxr(int size, Register rt, Register rn) {
+        super.ldaxr(size, rt, rn);
     }
 
     @Override
-    public void stlxr(int size, Register rs, Register rt, AArch64Address address) {
-        super.stlxr(size, rs, rt, address);
+    public void stlxr(int size, Register rs, Register rt, Register rn) {
+        super.stlxr(size, rs, rt, rn);
     }
 
     @Override
@@ -226,12 +226,12 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    protected void adds(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int imm) {
+    public void adds(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int imm) {
         super.adds(size, dst, src1, src2, shiftType, imm);
     }
 
     @Override
-    protected void subs(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int imm) {
+    public void subs(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int imm) {
         super.subs(size, dst, src1, src2, shiftType, imm);
     }
 
@@ -261,7 +261,7 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    protected void subs(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
+    public void subs(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
         super.subs(size, dst, src1, src2, extendType, shiftAmt);
     }
 
@@ -336,7 +336,7 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    protected void rbit(int size, Register dst, Register src) {
+    public void rbit(int size, Register dst, Register src) {
         super.rbit(size, dst, src);
     }
 
@@ -539,7 +539,7 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public AbstractAddress getPlaceholder() {
+    public AbstractAddress getPlaceholder(int instructionStartPosition) {
         throw new UnsupportedOperationException();
     }
 

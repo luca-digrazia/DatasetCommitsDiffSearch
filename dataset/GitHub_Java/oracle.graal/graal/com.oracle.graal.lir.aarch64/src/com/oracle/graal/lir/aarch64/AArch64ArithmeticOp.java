@@ -29,17 +29,18 @@ import static com.oracle.graal.lir.aarch64.AArch64ArithmeticOp.ARMv8ConstantCate
 import static com.oracle.graal.lir.aarch64.AArch64ArithmeticOp.ARMv8ConstantCategory.SHIFT;
 import static jdk.vm.ci.aarch64.AArch64.zr;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaConstant;
 
 import com.oracle.graal.asm.aarch64.AArch64Assembler;
 import com.oracle.graal.asm.aarch64.AArch64Assembler.ConditionFlag;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.JavaConstant;
 
 public enum AArch64ArithmeticOp {
     // TODO At least add and sub *can* be used with SP, so this should be supported
@@ -50,6 +51,7 @@ public enum AArch64ArithmeticOp {
     SUB(ARITHMETIC),
     SUBS(ARITHMETIC),
     MUL,
+    MULVS,
     DIV,
     SMULH,
     UMULH,
@@ -113,7 +115,6 @@ public enum AArch64ArithmeticOp {
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
             Register dst = asRegister(result);
             Register src = asRegister(x);
-            // TODO remove
             int size = result.getPlatformKind().getSizeInBytes() * Byte.SIZE;
             switch (opcode) {
                 case NEG:
@@ -136,7 +137,7 @@ public enum AArch64ArithmeticOp {
                     masm.fsqrt(size, dst, src);
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere("op=" + opcode.name());
+                    throw GraalError.shouldNotReachHere("op=" + opcode.name());
             }
         }
     }
@@ -162,7 +163,6 @@ public enum AArch64ArithmeticOp {
             assert op.category != NONE;
             Register dst = asRegister(result);
             Register src = asRegister(a);
-            // TODO remove
             int size = result.getPlatformKind().getSizeInBytes() * Byte.SIZE;
             switch (op) {
                 case ADD:
@@ -177,8 +177,21 @@ public enum AArch64ArithmeticOp {
                     assert AArch64MacroAssembler.isArithmeticImmediate(b.asLong());
                     masm.sub(size, dst, src, (int) b.asLong());
                     break;
+                case ADDS:
+                    assert AArch64MacroAssembler.isArithmeticImmediate(b.asLong());
+                    masm.adds(size, dst, src, (int) b.asLong());
+                    break;
+                case SUBS:
+                    assert AArch64MacroAssembler.isArithmeticImmediate(b.asLong());
+                    masm.subs(size, dst, src, (int) b.asLong());
+                    break;
                 case AND:
-                    masm.and(size, dst, src, b.asLong());
+                    // XXX Should this be handled somewhere else?
+                    if (size == 32 && b.asLong() == 0xFFFF_FFFFL) {
+                        masm.mov(size, dst, src);
+                    } else {
+                        masm.and(size, dst, src, b.asLong());
+                    }
                     break;
                 case ANDS:
                     masm.ands(size, dst, src, b.asLong());
@@ -199,7 +212,7 @@ public enum AArch64ArithmeticOp {
                     masm.ashr(size, dst, src, b.asLong());
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere("op=" + op.name());
+                    throw GraalError.shouldNotReachHere("op=" + op.name());
             }
         }
     }
@@ -225,7 +238,6 @@ public enum AArch64ArithmeticOp {
             Register dst = asRegister(result);
             Register src1 = asRegister(a);
             Register src2 = asRegister(b);
-            // TODO remove
             int size = result.getPlatformKind().getSizeInBytes() * Byte.SIZE;
             switch (op) {
                 case ADD:
@@ -288,8 +300,11 @@ public enum AArch64ArithmeticOp {
                 case FDIV:
                     masm.fdiv(size, dst, src1, src2);
                     break;
+                case MULVS:
+                    masm.mulvs(size, dst, src1, src2);
+                    break;
                 default:
-                    throw JVMCIError.shouldNotReachHere("op=" + op.name());
+                    throw GraalError.shouldNotReachHere("op=" + op.name());
             }
         }
     }
@@ -321,7 +336,6 @@ public enum AArch64ArithmeticOp {
             Register dst = asRegister(result);
             Register src1 = asRegister(a);
             Register src2 = asRegister(b);
-            // TODO remove
             int size = result.getPlatformKind().getSizeInBytes() * Byte.SIZE;
             switch (op) {
                 case REM:
@@ -334,7 +348,7 @@ public enum AArch64ArithmeticOp {
                     masm.frem(size, dst, src1, src2);
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalError.shouldNotReachHere();
             }
         }
     }
@@ -365,7 +379,6 @@ public enum AArch64ArithmeticOp {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            // TODO remove
             int size = result.getPlatformKind().getSizeInBytes() * Byte.SIZE;
             switch (op) {
                 case ADD:
@@ -375,7 +388,7 @@ public enum AArch64ArithmeticOp {
                     masm.sub(size, asRegister(result), asRegister(src1), asRegister(src2), shiftType, shiftAmt);
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalError.shouldNotReachHere();
             }
         }
     }
@@ -405,7 +418,6 @@ public enum AArch64ArithmeticOp {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            // TODO remove
             int size = result.getPlatformKind().getSizeInBytes() * Byte.SIZE;
             masm.add(size, asRegister(result), asRegister(src1), asRegister(src2), extendType, shiftAmt);
         }
