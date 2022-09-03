@@ -29,7 +29,7 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 
 public class FieldLocationIdentity extends LocationIdentity implements FormatWithToString {
 
-    private final ResolvedJavaField inner;
+    private ResolvedJavaField inner;
 
     public FieldLocationIdentity(ResolvedJavaField inner) {
         this.inner = inner;
@@ -53,10 +53,6 @@ public class FieldLocationIdentity extends LocationIdentity implements FormatWit
         return false;
     }
 
-    public ResolvedJavaField getField() {
-        return inner;
-    }
-
     @Override
     public int hashCode() {
         return inner.hashCode();
@@ -64,6 +60,6 @@ public class FieldLocationIdentity extends LocationIdentity implements FormatWit
 
     @Override
     public String toString() {
-        return inner.getName() + (isImmutable() ? ":immutable" : "");
+        return inner.getName();
     }
 }

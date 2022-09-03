@@ -123,11 +123,6 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
             }
             return false;
         }
-
-        @Override
-        public String toString() {
-            return "UNSAFE:" + super.toString() + " location:" + locationIdentity;
-        }
     }
 
     public ReadEliminationBlockState() {

@@ -248,10 +248,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                 boolean phi = false;
                 for (int i = 1; i < states.size(); i++) {
                     ValueNode otherValue = states.get(i).readCache.get(key);
-                    // e.g. unsafe loads / stores with different access kinds have different stamps
-                    // although location, object and offset are the same, in this case we cannot
-                    // create a phi nor can we set a common value
-                    if (otherValue == null || !value.stamp().isCompatible(otherValue.stamp())) {
+                    if (otherValue == null) {
                         value = null;
                         phi = false;
                         break;
@@ -264,13 +261,10 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                     PhiNode phiNode = getCachedPhi(entry, value.stamp().unrestricted());
                     mergeEffects.addFloatingNode(phiNode, "mergeReadCache");
                     for (int i = 0; i < states.size(); i++) {
-                        ValueNode v = states.get(i).getCacheEntry(key);
-                        assert phiNode.stamp().isCompatible(v.stamp()) : "Cannot create read elimination phi for inputs with incompatible stamps.";
-                        setPhiInput(phiNode, i, v);
+                        setPhiInput(phiNode, i, states.get(i).getCacheEntry(key));
                     }
                     newState.addCacheEntry(key, phiNode);
                 } else if (value != null) {
-                    // case that there is the same value on all branches
                     newState.addCacheEntry(key, value);
                 }
             }
