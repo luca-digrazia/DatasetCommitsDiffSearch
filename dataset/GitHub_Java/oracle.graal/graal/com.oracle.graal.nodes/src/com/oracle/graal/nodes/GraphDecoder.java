@@ -103,7 +103,7 @@ public class GraphDecoder {
         /** All return nodes encountered during decoding. */
         public final List<ReturnNode> returnNodes;
         /** The exception unwind node encountered during decoding, or null. */
-        public final List<UnwindNode> unwindNodes;
+        public UnwindNode unwindNode;
 
         /** All merges created during loop explosion. */
         public final NodeBitMap loopExplosionMerges;
@@ -121,7 +121,6 @@ public class GraphDecoder {
             this.loopExplosion = loopExplosion;
             this.cleanupTasks = new ArrayList<>();
             this.returnNodes = new ArrayList<>();
-            this.unwindNodes = new ArrayList<>();
 
             if (encodedGraph != null) {
                 reader = UnsafeArrayTypeReader.create(encodedGraph.getEncoding(), encodedGraph.getStartOffset(), architecture.supportsUnalignedMemoryAccess());
@@ -552,7 +551,8 @@ public class GraphDecoder {
         } else if (node instanceof ReturnNode) {
             methodScope.returnNodes.add((ReturnNode) node);
         } else if (node instanceof UnwindNode) {
-            methodScope.unwindNodes.add((UnwindNode) node);
+            assert methodScope.unwindNode == null : "graph can have only one UnwindNode";
+            methodScope.unwindNode = (UnwindNode) node;
 
         } else {
             handleFixedNode(methodScope, loopScope, nodeOrderId, node);
