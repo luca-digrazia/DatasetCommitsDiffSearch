@@ -40,7 +40,6 @@ import org.graalvm.compiler.debug.DebugDumpHandler;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.GlobalMetrics;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.internal.ComparisonCriteria;
@@ -65,7 +64,7 @@ public class GraalTest {
         }
     }
 
-    public static final boolean Java8OrEarlier = GraalServices.Java8OrEarlier;
+    public static final boolean Java8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
 
     protected Method getMethod(String methodName) {
         return getMethod(getClass(), methodName);
