@@ -97,19 +97,7 @@ public class TruffleInliningTest {
         private Map<String, OptimizedCallTarget> targets = new HashMap<>();
         private String lastAddedTargetName = null;
         private Map<String, Integer> targetInstructions = new HashMap<>();
-        private Map<String, Integer> executeTargetInstructions = new HashMap<>();
-
-        class CallInstruction {
-            public String target;
-            public int count;
-
-            public CallInstruction(String target, int count) {
-                this.target = target;
-                this.count = count;
-            }
-        }
-
-        private Map<String, List<CallInstruction>> callInstructions = new HashMap<>();
+        private Map<String, List<String>> callInstructions = new HashMap<>();
 
         TruffleInliningTestScenarioBuilder target(String name) {
             return target(name, 0);
@@ -121,63 +109,29 @@ public class TruffleInliningTest {
             return this;
         }
 
-        TruffleInliningTestScenarioBuilder execute() {
-            execute(1);
-            return this;
-        }
-
-        TruffleInliningTestScenarioBuilder execute(int times) {
-            executeTargetInstructions.put(lastAddedTargetName, times);
-            return this;
-        }
-
         TruffleInliningTestScenarioBuilder calls(String name) {
-            return calls(name, 1);
-        }
-
-        TruffleInliningTestScenarioBuilder calls(String name, int count) {
             // Increment the caller size to make room for the call
             int targetSize = targetInstructions.get(lastAddedTargetName);
             targetInstructions.replace(lastAddedTargetName, targetSize, targetSize + 1);
 
             // Update call Instructions
-            List<CallInstruction> existingCalls = callInstructions.get(lastAddedTargetName);
+            List<String> existingCalls = callInstructions.get(lastAddedTargetName);
             if (existingCalls == null) {
                 existingCalls = new ArrayList<>();
                 callInstructions.put(lastAddedTargetName, existingCalls);
             }
-            existingCalls.add(new CallInstruction(name, count));
+            existingCalls.add(name);
             return this;
         }
 
         TruffleInlining build() {
-            return build(false);
-        }
-
-        TruffleInlining build(boolean andExecute) {
             try {
                 buildTargets();
                 buildCalls();
-                if (andExecute) {
-                    targets.get(lastAddedTargetName).call(0);
-                }
+                targets.get(lastAddedTargetName).call(0);
                 return new TruffleInlining(targets.get(lastAddedTargetName), new DefaultInliningPolicy());
             } finally {
                 cleanup();
-            }
-        }
-
-        private void buildTargets() {
-            for (String targetName : targetInstructions.keySet()) {
-                int size = targetInstructions.get(targetName);
-                OptimizedCallTarget newTarget = new OptimizedCallTarget(null, new InlineTestRootNode(size, targetName));
-                Integer calledFromOutside = executeTargetInstructions.get(targetName);
-                if (calledFromOutside != null) {
-                    for (int i = 0; i < calledFromOutside; i++) {
-                        newTarget.call(0);
-                    }
-                }
-                targets.put(targetName, newTarget);
             }
         }
 
@@ -185,21 +139,25 @@ public class TruffleInliningTest {
             for (String callerName : callInstructions.keySet()) {
                 OptimizedCallTarget caller = targets.get(callerName);
                 List<OptimizedDirectCallNode> callSites = new ArrayList<>();
-                for (CallInstruction instruction : callInstructions.get(callerName)) {
-                    OptimizedCallTarget target = targets.get(instruction.target);
+                for (String targetName : callInstructions.get(callerName)) {
+                    OptimizedCallTarget target = targets.get(targetName);
                     if (target == null) {
-                        throw new IllegalStateException("Call to undefined target: " + instruction.target);
+                        throw new IllegalStateException("Call to undefined target: " + targetName);
                     }
                     OptimizedDirectCallNode callNode = new OptimizedDirectCallNode(GraalTruffleRuntime.getRuntime(), target);
                     callSites.add(callNode);
-                    for (int i = 0; i < instruction.count; i++) {
-                        Integer[] args = {0};
-                        callNode.call(args);
-                    }
                 }
                 InlineTestRootNode rootNode = (InlineTestRootNode) caller.getRootNode();
                 rootNode.addCallSites((OptimizedDirectCallNode[]) callSites.toArray(new OptimizedDirectCallNode[0]));
                 rootNode.adoptChildren();
+            }
+        }
+
+        private void buildTargets() {
+            for (String targetName : targetInstructions.keySet()) {
+                int size = targetInstructions.get(targetName);
+                OptimizedCallTarget newTarget = new OptimizedCallTarget(null, new InlineTestRootNode(size, targetName));
+                targets.put(targetName, newTarget);
             }
         }
 
@@ -218,7 +176,7 @@ public class TruffleInliningTest {
     }
 
     void assertNotInlined(TruffleInlining decisions, String name) {
-        assertTrue(countInlines(decisions, name) == 0, name + " was inlined!");
+        assertTrue(countInlines(decisions, name) == 0, name + " was not inlined!");
     }
 
     void traverseDecisions(List<TruffleInliningDecision> decisions, Consumer<TruffleInliningDecision> f) {
@@ -247,10 +205,10 @@ public class TruffleInliningTest {
 
     @Test
     public void testMultipleInline() {
-        TruffleInlining decisions = builder.target("callee").target("caller").calls("callee").calls("callee").build();
+        TruffleInlining decisions = builder.target("callee").target("caller", 2).calls("callee").calls("callee").build();
         assertTrue(countInlines(decisions, "callee") == 2);
 
-        decisions = builder.target("callee").target("caller").calls("callee").calls("callee").calls("callee").build();
+        decisions = builder.target("callee").target("caller", 3).calls("callee").calls("callee").calls("callee").build();
         assertTrue(countInlines(decisions, "callee") == 3);
 
         builder.target("callee").target("caller", 100);
@@ -322,12 +280,5 @@ public class TruffleInliningTest {
         final int[] inlineDepth = {0};
         TruffleInlining decisions = builder.build();
         assertTrue(countInlines(decisions, "leaf") == width);
-    }
-
-    @Test
-    public void testFrequency() {
-        TruffleInlining decisions = builder.target("callee").target("caller").execute(4).calls("callee", 2).build();
-        assertInlined(decisions, "callee");
-        assert (decisions.getCallSites().get(0).getProfile().getFrequency() == 0.5);
     }
 }
