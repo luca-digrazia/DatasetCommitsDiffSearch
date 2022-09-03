@@ -26,7 +26,6 @@ import java.util.ArrayList;
 
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.GraalDebugConfig;
 import com.oracle.graal.serviceprovider.ServiceProvider;
 
 import jdk.vm.ci.code.CompiledCode;
@@ -59,15 +58,6 @@ public class HotSpotGraalVMEventListener extends HotSpotVMEventListener {
         }
         if (Debug.isLogEnabled()) {
             Debug.log("%s", codeCache.disassemble(installedCode));
-        }
-    }
-
-    @Override
-    public void notifyBootstrapFinished() {
-        if (GraalDebugConfig.Options.ClearMetricsAfterBootstrap.getValue()) {
-            for (HotSpotGraalRuntime runtime : runtimes) {
-                runtime.clearMeters();
-            }
         }
     }
 }
