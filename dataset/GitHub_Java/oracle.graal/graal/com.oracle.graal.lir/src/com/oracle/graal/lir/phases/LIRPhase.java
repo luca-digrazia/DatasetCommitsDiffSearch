@@ -22,17 +22,16 @@
  */
 package com.oracle.graal.lir.phases;
 
+import com.oracle.jvmci.code.TargetDescription;
 import java.util.*;
 import java.util.regex.*;
-
-import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-import jdk.internal.jvmci.options.*;
 
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.gen.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
+import com.oracle.jvmci.options.*;
 
 /**
  * Base class for all {@link LIR low-level} phases. Subclasses should be stateless. There will be
@@ -117,7 +116,6 @@ public abstract class LIRPhase<C> {
         apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, true);
     }
 
-    @SuppressWarnings("try")
     public final <B extends AbstractBlockBase<B>> void apply(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context, boolean dumpLIR) {
         try (Scope s = Debug.scope(getName(), this)) {
             try (DebugCloseable a = timer.start(); DebugCloseable c = memUseTracker.start()) {

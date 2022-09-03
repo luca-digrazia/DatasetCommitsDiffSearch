@@ -24,10 +24,10 @@ package com.oracle.graal.phases;
 
 import java.util.regex.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
 
 /**
  * Base class for all compiler phases. Subclasses should be stateless. There will be one global
@@ -135,7 +135,6 @@ public abstract class BasePhase<C> {
         apply(graph, context, true);
     }
 
-    @SuppressWarnings("try")
     protected final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
         try (DebugCloseable a = timer.start(); Scope s = Debug.scope(getClass(), this); DebugCloseable c = memUseTracker.start()) {
             if (dumpGraph && Debug.isDumpEnabled(BEFORE_PHASE_DUMP_LEVEL)) {

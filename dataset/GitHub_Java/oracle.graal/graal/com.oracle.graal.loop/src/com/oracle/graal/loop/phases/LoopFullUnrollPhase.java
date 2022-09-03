@@ -22,23 +22,24 @@
  */
 package com.oracle.graal.loop.phases;
 
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.debug.*;
 
+public class LoopFullUnrollPhase extends BasePhase<PhaseContext> {
 
-public class LoopFullUnrollPhase extends Phase {
     private static final DebugMetric FULLY_UNROLLED_LOOPS = Debug.metric("FullUnrolls");
-    private final GraalCodeCacheProvider runtime;
+    private final CanonicalizerPhase canonicalizer;
 
-    public LoopFullUnrollPhase(GraalCodeCacheProvider runtime) {
-        this.runtime = runtime;
+    public LoopFullUnrollPhase(CanonicalizerPhase canonicalizer) {
+        this.canonicalizer = canonicalizer;
     }
 
     @Override
-    protected void run(StructuredGraph graph) {
+    protected void run(StructuredGraph graph, PhaseContext context) {
         if (graph.hasLoops()) {
             boolean peeled;
             do {
@@ -48,15 +49,15 @@ public class LoopFullUnrollPhase extends Phase {
                 for (LoopEx loop : dataCounted.countedLoops()) {
                     if (LoopPolicies.shouldFullUnroll(loop)) {
                         Debug.log("FullUnroll %s", loop);
-                        LoopTransformations.fullUnroll(loop, runtime);
+                        LoopTransformations.fullUnroll(loop, context, canonicalizer);
                         FULLY_UNROLLED_LOOPS.increment();
-                        Debug.dump(graph, "After fullUnroll %s", loop);
+                        Debug.dump(graph, "FullUnroll %s", loop);
                         peeled = true;
                         break;
                     }
                 }
-            } while(peeled);
+                dataCounted.deleteUnusedNodes();
+            } while (peeled);
         }
     }
-
 }
