@@ -25,6 +25,7 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import com.oracle.truffle.api.CompilerOptions;
+import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 
