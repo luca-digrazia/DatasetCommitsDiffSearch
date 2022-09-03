@@ -33,25 +33,16 @@ import com.oracle.graal.nodes.spi.*;
  * control flow anchors.
  */
 @NodeInfo
-public final class ControlFlowAnchorNode extends FixedWithNextNode implements LIRLowerable {
-
-    public static final NodeClass TYPE = NodeClass.get(ControlFlowAnchorNode.class);
+public class ControlFlowAnchorNode extends FixedWithNextNode implements LIRLowerable {
 
     private static class Unique {
     }
 
     protected Unique unique;
 
-    public ControlFlowAnchorNode() {
-        super(TYPE, StampFactory.forVoid());
-        this.unique = new Unique();
-    }
-
-    /**
-     * Used by MacroSubstitution.
-     */
     public ControlFlowAnchorNode(@SuppressWarnings("unused") Invoke invoke) {
-        this();
+        super(StampFactory.forVoid());
+        this.unique = new Unique();
     }
 
     public void generate(NodeLIRBuilderTool generator) {
