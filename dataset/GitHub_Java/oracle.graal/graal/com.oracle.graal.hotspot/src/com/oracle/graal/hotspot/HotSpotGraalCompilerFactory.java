@@ -29,7 +29,6 @@ import static jdk.vm.ci.common.InitTimer.timer;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,7 +47,7 @@ import com.oracle.graal.phases.tiers.CompilerConfiguration;
 import jdk.vm.ci.common.InitTimer;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotSignature;
-import jdk.vm.ci.hotspot.HotSpotJVMCICompilerFactory;
+import jdk.vm.ci.hotspot.services.HotSpotJVMCICompilerFactory;
 import jdk.vm.ci.runtime.JVMCIRuntime;
 
 public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFactory {
@@ -79,10 +78,10 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
         return GRAAL_OPTION_PROPERTY_PREFIX + value.getName() + "=" + value.getValue();
     }
 
-    private final HotSpotGraalJVMCIServiceLocator locator;
+    private final HotSpotGraalJVMCIAccess access;
 
-    HotSpotGraalCompilerFactory(HotSpotGraalJVMCIServiceLocator locator) {
-        this.locator = locator;
+    public HotSpotGraalCompilerFactory(HotSpotGraalJVMCIAccess access) {
+        this.access = access;
     }
 
     @Override
@@ -94,13 +93,6 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
     public void onSelection() {
         initializeOptions();
         JVMCIVersionCheck.check(false);
-    }
-
-    @Override
-    public void printProperties(PrintStream out) {
-        ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
-        out.println("[Graal properties]");
-        OptionsParser.printFlags(loader, out, allOptionsSettings.keySet(), GRAAL_OPTION_PROPERTY_PREFIX);
     }
 
     static class Options {
@@ -118,7 +110,7 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
 
     }
 
-    private static Map<String, String> allOptionsSettings;
+    private static boolean optionsInitialized;
 
     /**
      * Initializes options if they haven't already been initialized.
@@ -127,12 +119,12 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
      * {@code VM.getSavedProperty(String) saved} system property named
      * {@value HotSpotGraalCompilerFactory#GRAAL_OPTIONS_FILE_PROPERTY_NAME} if the file exists
      * followed by parsing the options encoded in saved system properties whose names start with
-     * {@value #GRAAL_OPTION_PROPERTY_PREFIX}. Key/value pairs are parsed from the aforementioned
-     * file with {@link Properties#load(java.io.Reader)}.
+     * {@code "graal.option."}. Key/value pairs are parsed from the aforementioned file with
+     * {@link Properties#load(java.io.Reader)}.
      */
     @SuppressWarnings("try")
     private static synchronized void initializeOptions() {
-        if (allOptionsSettings == null) {
+        if (!optionsInitialized) {
             try (InitTimer t = timer("InitializeOptions")) {
                 ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
                 Properties savedProps = getSavedProperties(Java8OrEarlier);
@@ -150,11 +142,6 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
                             }
                             try {
                                 OptionsParser.parseOptions(optionSettings, null, loader);
-                                if (allOptionsSettings == null) {
-                                    allOptionsSettings = new HashMap<>(optionSettings);
-                                } else {
-                                    allOptionsSettings.putAll(optionSettings);
-                                }
                             } catch (Throwable e) {
                                 throw new InternalError("Error parsing an option from " + graalOptions, e);
                             }
@@ -179,12 +166,6 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
 
                 OptionsParser.parseOptions(optionSettings, null, loader);
 
-                if (allOptionsSettings == null) {
-                    allOptionsSettings = optionSettings;
-                } else {
-                    allOptionsSettings.putAll(optionSettings);
-                }
-
                 if (Options.GraalCompileOnly.getValue() != null) {
                     graalCompileOnlyFilter = MethodFilter.parse(Options.GraalCompileOnly.getValue());
                     if (graalCompileOnlyFilter.length == 0) {
@@ -201,6 +182,7 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
                     adjustCompilationLevelInternal(Object.class, "hashCode", "()I", CompilationLevel.Simple);
                 }
             }
+            optionsInitialized = true;
         }
     }
 
@@ -222,7 +204,7 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
         // Only the HotSpotGraalRuntime associated with the compiler created via
         // jdk.vm.ci.runtime.JVMCIRuntime.getCompiler() is registered for receiving
         // VM events.
-        locator.onCompilerCreation(compiler);
+        access.onCompilerCreation(compiler);
         return compiler;
     }
 
