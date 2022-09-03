@@ -32,7 +32,7 @@ import javax.lang.model.type.*;
 import javax.lang.model.util.*;
 
 import com.oracle.truffle.dsl.processor.ast.*;
-import com.oracle.truffle.dsl.processor.ast.CodeTypeMirror.*;
+import com.oracle.truffle.dsl.processor.ast.CodeTypeMirror.DeclaredCodeTypeMirror;
 import com.oracle.truffle.dsl.processor.compiler.*;
 
 /**
@@ -48,6 +48,19 @@ public class Utils {
             }
         }
         return null;
+    }
+
+    public static boolean needsCastTo(ProcessorContext context, TypeMirror sourceType, TypeMirror targetType) {
+        if (typeEquals(sourceType, targetType)) {
+            return false;
+        } else if (isObject(targetType)) {
+            return false;
+        } else if (isVoid(targetType)) {
+            return false;
+        } else if (isAssignable(context, sourceType, targetType)) {
+            return false;
+        }
+        return true;
     }
 
     public static VariableElement findVariableElement(DeclaredType type, String name) {
@@ -179,6 +192,10 @@ public class Utils {
             return true;
         }
 
+        if (isObject(to)) {
+            return true;
+        }
+
         // JLS 5.1.2 widening primitives
         if (Utils.isPrimitive(from) && Utils.isPrimitive(to)) {
             TypeKind fromKind = from.getKind();
@@ -244,6 +261,10 @@ public class Utils {
             return isAssignable(context, ((ArrayType) from).getComponentType(), ((ArrayType) to).getComponentType());
         }
 
+        if (from instanceof ArrayType || to instanceof ArrayType) {
+            return false;
+        }
+
         TypeElement fromType = Utils.fromTypeMirror(from);
         TypeElement toType = Utils.fromTypeMirror(to);
         if (fromType == null || toType == null) {
@@ -285,7 +306,7 @@ public class Utils {
             case LONG:
                 return "Long";
             case DECLARED:
-                return ((DeclaredType) mirror).asElement().getSimpleName().toString();
+                return fixECJBinaryNameIssue(((DeclaredType) mirror).asElement().getSimpleName().toString());
             case ARRAY:
                 return getTypeId(((ArrayType) mirror).getComponentType()) + "Array";
             case VOID:
@@ -358,7 +379,7 @@ public class Utils {
     }
 
     private static String getDeclaredName(DeclaredType element) {
-        String simpleName = element.asElement().getSimpleName().toString();
+        String simpleName = fixECJBinaryNameIssue(element.asElement().getSimpleName().toString());
 
         if (element.getTypeArguments().size() == 0) {
             return simpleName;
@@ -378,8 +399,28 @@ public class Utils {
         return b.toString();
     }
 
+    public static String fixECJBinaryNameIssue(String name) {
+        if (name.contains("$")) {
+            int lastIndex = name.lastIndexOf('$');
+            return name.substring(lastIndex + 1, name.length());
+        }
+        return name;
+    }
+
     public static String getQualifiedName(TypeElement element) {
-        return element.getQualifiedName().toString();
+        String qualifiedName = element.getQualifiedName().toString();
+        if (qualifiedName.contains("$")) {
+            /*
+             * If a class gets loaded in its binary form by the ECJ compiler it fails to produce the
+             * proper canonical class name. It leaves the $ in the qualified name of the class. So
+             * one instance of a TypeElement may be loaded in binary and one in source form. The
+             * current type comparison in #typeEquals compares by the qualified name so the
+             * qualified name must match. This is basically a hack to fix the returned qualified
+             * name of eclipse.
+             */
+            qualifiedName = qualifiedName.replace('$', '.');
+        }
+        return qualifiedName;
     }
 
     public static String getQualifiedName(TypeMirror mirror) {
@@ -410,6 +451,8 @@ public class Utils {
                 return getSimpleName(mirror);
             case ERROR:
                 throw new CompileErrorException("Type error " + mirror);
+            case EXECUTABLE:
+                return ((ExecutableType) mirror).toString();
             case NONE:
                 return "$none";
             default:
@@ -500,6 +543,24 @@ public class Utils {
         }
 
         return types;
+    }
+
+    public static List<TypeMirror> getAssignableTypes(ProcessorContext context, TypeMirror type) {
+        if (isPrimitive(type)) {
+            return Arrays.asList(type, boxType(context, type), context.getType(Object.class));
+        } else if (type.getKind() == TypeKind.ARRAY) {
+            return Arrays.asList(type, context.getType(Object.class));
+        } else if (type.getKind() == TypeKind.DECLARED) {
+            List<TypeElement> types = getSuperTypes(fromTypeMirror(type));
+            List<TypeMirror> mirrors = new ArrayList<>(types.size());
+            mirrors.add(type);
+            for (TypeElement typeElement : types) {
+                mirrors.add(typeElement.asType());
+            }
+            return mirrors;
+        } else {
+            return Collections.emptyList();
+        }
     }
 
     public static List<TypeElement> getSuperTypes(TypeElement element) {
@@ -724,6 +785,10 @@ public class Utils {
 
     public static AnnotationMirror findAnnotationMirror(ProcessingEnvironment processingEnv, List<? extends AnnotationMirror> mirrors, Class<?> annotationClass) {
         TypeElement expectedAnnotationType = processingEnv.getElementUtils().getTypeElement(annotationClass.getCanonicalName());
+        return findAnnotationMirror(mirrors, expectedAnnotationType);
+    }
+
+    public static AnnotationMirror findAnnotationMirror(List<? extends AnnotationMirror> mirrors, TypeElement expectedAnnotationType) {
         for (AnnotationMirror mirror : mirrors) {
             DeclaredType annotationType = mirror.getAnnotationType();
             TypeElement actualAnnotationType = (TypeElement) annotationType.asElement();
@@ -821,6 +886,8 @@ public class Utils {
             return true;
         } else if (type1 == null || type2 == null) {
             return false;
+        } else if (type1 == type2) {
+            return true;
         }
         String qualified1 = getQualifiedName(type1);
         String qualified2 = getQualifiedName(type2);
@@ -908,7 +975,7 @@ public class Utils {
     }
 
     public static boolean isObject(TypeMirror actualType) {
-        return getQualifiedName(actualType).equals("java.lang.Object");
+        return actualType.getKind() == TypeKind.DECLARED && getQualifiedName(actualType).equals("java.lang.Object");
     }
 
     public static boolean isFieldAccessible(Element element, VariableElement variable) {
