@@ -965,8 +965,6 @@ public final class TruffleLogger {
             final Set<String> toRemove = collectRemovedLevels();
             if (!toRemove.isEmpty()) {
                 reconfigure(Collections.emptyMap(), toRemove);
-                // Logger's effective level may changed
-                return getLogger(loggerName).isLoggable(level);
             }
             final Map<String, Level> current = TruffleLanguage.AccessAPI.engineAccess().getLogLevels(currentContext);
             if (current.isEmpty()) {
@@ -1164,7 +1162,7 @@ public final class TruffleLogger {
                     removedLevels.add(loggerName);
                 } else {
                     final Level currentLevel = newEffectiveLevels.get(loggerName);
-                    if (currentLevel != level) {
+                    if (min(level, currentLevel) != currentLevel) {
                         newEffectiveLevels.put(loggerName, level);
                         changedLevels.add(loggerName);
                     }
