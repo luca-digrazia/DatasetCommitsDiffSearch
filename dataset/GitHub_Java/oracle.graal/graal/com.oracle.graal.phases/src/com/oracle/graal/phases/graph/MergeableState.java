@@ -62,7 +62,7 @@ public abstract class MergeableState<T> {
         // empty default implementation
     }
 
-    public static final class EmptyState extends MergeableState<EmptyState> implements Cloneable {
+    public static final class EmptyState extends MergeableState<EmptyState> {
 
         @Override
         public EmptyState clone() {

@@ -292,7 +292,7 @@ public final class SchedulePhase extends Phase {
     }
 
     private void printSchedule(String desc) {
-        if (Debug.isLogEnabled()) {
+        if (Debug.isEnabled()) {
             Debug.printf("=== %s / %s / %s (%s) ===\n", getCFG().getStartBlock().getBeginNode().graph(), selectedStrategy, memsched, desc);
             for (Block b : getCFG().getBlocks()) {
                 Debug.printf("==== b: %s (loopDepth: %s). ", b, b.getLoopDepth());
@@ -388,7 +388,8 @@ public final class SchedulePhase extends Phase {
     private void assignBlockToNode(ScheduledNode node, SchedulingStrategy strategy) {
         assert !node.isDeleted();
 
-        if (cfg.getNodeToBlock().containsKey(node)) {
+        Block prevBlock = cfg.getNodeToBlock().get(node);
+        if (prevBlock != null) {
             return;
         }
         // PhiNodes, ProxyNodes and FixedNodes should already have been placed in blocks by
@@ -417,7 +418,6 @@ public final class SchedulePhase extends Phase {
                     block = latestBlock(node, strategy);
                 }
                 if (block == null) {
-                    // handle nodes without usages
                     block = earliestBlock;
                 } else if (strategy == SchedulingStrategy.LATEST_OUT_OF_LOOPS && !(node instanceof VirtualObjectNode)) {
                     // schedule at the latest position possible in the outermost loop possible
@@ -752,14 +752,10 @@ public final class SchedulePhase extends Phase {
                     if (!(usage instanceof FrameState)) {
                         throw new SchedulingError(usage.toString());
                     }
-                    if (unscheduledUsage instanceof StartNode) {
-                        closure.apply(cfg.getNodeToBlock().get(unscheduledUsage));
-                    } else {
-                        // If a FrameState belongs to a BeginNode then it's inputs will be placed at
-                        // the common dominator of all EndNodes.
-                        for (Node pred : unscheduledUsage.cfgPredecessors()) {
-                            closure.apply(cfg.getNodeToBlock().get(pred));
-                        }
+                    // If a FrameState belongs to a BeginNode then it's inputs will be placed at the
+                    // common dominator of all EndNodes.
+                    for (Node pred : unscheduledUsage.cfgPredecessors()) {
+                        closure.apply(cfg.getNodeToBlock().get(pred));
                     }
                 } else {
                     // For the time being, FrameStates can only be connected to NodeWithState.
