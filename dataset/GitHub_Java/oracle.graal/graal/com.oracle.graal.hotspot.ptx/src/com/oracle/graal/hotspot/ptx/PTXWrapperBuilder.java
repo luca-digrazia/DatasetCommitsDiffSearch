@@ -244,7 +244,7 @@ public class PTXWrapperBuilder extends GraphKit {
             append(new WriteNode(buf, nullWord, location, BarrierType.NONE, false, false));
         }
 
-        HIRFrameStateBuilder fsb = new HIRFrameStateBuilder(method, getGraph(), true);
+        FrameStateBuilder fsb = new FrameStateBuilder(method, getGraph(), true);
         FrameState fs = fsb.create(0);
         getGraph().start().setStateAfter(fs);
 
