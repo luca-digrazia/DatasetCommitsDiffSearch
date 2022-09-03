@@ -26,10 +26,8 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.hsail.replacements.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -39,42 +37,26 @@ import com.oracle.graal.nodes.spi.*;
 
 public class HSAILHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider {
 
-    private HSAILNewObjectSnippets.Templates hsailNewObjectSnippets;
-
-    abstract class LoweringStrategy {
+    abstract static class LoweringStrategy {
         abstract void lower(Node n, LoweringTool tool);
     }
 
-    LoweringStrategy PassThruStrategy = new LoweringStrategy() {
+    static LoweringStrategy PassThruStrategy = new LoweringStrategy() {
         @Override
         void lower(Node n, LoweringTool tool) {
             return;
         }
     };
 
-    LoweringStrategy RejectStrategy = new LoweringStrategy() {
+    static LoweringStrategy RejectStrategy = new LoweringStrategy() {
         @Override
         void lower(Node n, LoweringTool tool) {
             throw new GraalInternalError("Node implementing Lowerable not handled in HSAIL Backend: " + n);
         }
     };
 
-    LoweringStrategy NewObjectStrategy = new LoweringStrategy() {
-        @Override
-        void lower(Node n, LoweringTool tool) {
-            StructuredGraph graph = (StructuredGraph) n.graph();
-            if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
-                if (n instanceof NewInstanceNode) {
-                    hsailNewObjectSnippets.lower((NewInstanceNode) n, tool);
-                } else if (n instanceof NewArrayNode) {
-                    hsailNewObjectSnippets.lower((NewArrayNode) n, tool);
-                }
-            }
-        }
-    };
-
     // strategy to replace an UnwindNode with a DeoptNode
-    LoweringStrategy UnwindNodeStrategy = new LoweringStrategy() {
+    static LoweringStrategy UnwindNodeStrategy = new LoweringStrategy() {
         @Override
         void lower(Node n, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) n.graph();
@@ -94,7 +76,7 @@ public class HSAILHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
                     default:
                         reason = DeoptimizationReason.None;
                 }
-                unwind.replaceAtPredecessor(graph.add(DeoptimizeNode.create(DeoptimizationAction.InvalidateReprofile, reason)));
+                unwind.replaceAtPredecessor(graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, reason)));
                 unwind.safeDelete();
             } else {
                 // unwind whose exception is not an instance of ForeignCallNode
@@ -103,13 +85,12 @@ public class HSAILHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
         }
     };
 
-    private HashMap<Class<?>, LoweringStrategy> strategyMap = new HashMap<>();
-
-    void initStrategyMap() {
+    private static HashMap<Class<?>, LoweringStrategy> strategyMap = new HashMap<>();
+    static {
         strategyMap.put(ConvertNode.class, PassThruStrategy);
         strategyMap.put(FloatConvertNode.class, PassThruStrategy);
-        strategyMap.put(NewInstanceNode.class, NewObjectStrategy);
-        strategyMap.put(NewArrayNode.class, NewObjectStrategy);
+        strategyMap.put(NewInstanceNode.class, RejectStrategy);
+        strategyMap.put(NewArrayNode.class, RejectStrategy);
         strategyMap.put(NewMultiArrayNode.class, RejectStrategy);
         strategyMap.put(DynamicNewArrayNode.class, RejectStrategy);
         strategyMap.put(MonitorEnterNode.class, RejectStrategy);
@@ -117,19 +98,12 @@ public class HSAILHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
         strategyMap.put(UnwindNode.class, UnwindNodeStrategy);
     }
 
-    private LoweringStrategy getStrategy(Node n) {
+    private static LoweringStrategy getStrategy(Node n) {
         return strategyMap.get(n.getClass());
     }
 
-    public HSAILHotSpotLoweringProvider(HotSpotGraalRuntime runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers, TargetDescription target) {
-        super(runtime, metaAccess, foreignCalls, registers, target);
-        initStrategyMap();
-    }
-
-    @Override
-    public void initialize(HotSpotProviders providers, HotSpotVMConfig config) {
-        super.initialize(providers, config);
-        hsailNewObjectSnippets = new HSAILNewObjectSnippets.Templates(providers, target);
+    public HSAILHotSpotLoweringProvider(HotSpotGraalRuntime runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers) {
+        super(runtime, metaAccess, foreignCalls, registers);
     }
 
     @Override

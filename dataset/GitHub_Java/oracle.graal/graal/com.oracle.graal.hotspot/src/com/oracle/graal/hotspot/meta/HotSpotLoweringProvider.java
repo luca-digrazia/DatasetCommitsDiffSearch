@@ -39,8 +39,4 @@ public interface HotSpotLoweringProvider extends LoweringProvider {
     int getScalingFactor(Kind kind);
 
     IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index, boolean initialization);
-
-    ValueNode implicitLoadConvert(StructuredGraph graph, Kind kind, ValueNode value);
-
-    ValueNode implicitStoreConvert(StructuredGraph graph, Kind kind, ValueNode value);
 }
