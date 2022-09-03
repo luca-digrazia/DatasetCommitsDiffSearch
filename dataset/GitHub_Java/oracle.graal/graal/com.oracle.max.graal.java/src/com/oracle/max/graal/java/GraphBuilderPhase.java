@@ -535,8 +535,12 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void genGoto() {
-        appendGoto(createBlockTarget(profilingInfo.getBranchTakenProbability(bci()), currentBlock.successors.get(0), frameState));
-        assert currentBlock.normalSuccessors == 1;
+        if (profilingInfo.getBranchTakenProbability(bci()) == 0) {
+            append(currentGraph.add(new DeoptimizeNode(DeoptAction.InvalidateReprofile)));
+        } else {
+            appendGoto(createTarget(currentBlock.successors.get(0), frameState));
+            assert currentBlock.normalSuccessors == 1;
+        }
     }
 
     private void ifNode(ValueNode x, Condition cond, ValueNode y) {
@@ -1260,14 +1264,12 @@ public final class GraphBuilderPhase extends Phase {
      */
     private BeginNode createBlockTarget(double probability, Block block, FrameStateBuilder stateAfter) {
         assert probability >= 0 && probability <= 1;
-        if (probability == 0) {
-            FrameStateBuilder state = stateAfter.copy();
-            state.clearNonLiveLocals(block.localsLiveIn);
-
+        if (probability == 0 && config.useBranchPrediction()) {
             BeginNode begin = currentGraph.add(new BeginNode());
             DeoptimizeNode deopt = currentGraph.add(new DeoptimizeNode(DeoptAction.InvalidateReprofile));
             begin.setNext(deopt);
-            begin.setStateAfter(state.create(block.startBci));
+            // Note: We are not allowed to set the stateAfter of the begin node, because we have to deoptimize to
+            // a bci _before_ the actual if, so that the interpreter can update the profiling information.
             return begin;
         }
 
