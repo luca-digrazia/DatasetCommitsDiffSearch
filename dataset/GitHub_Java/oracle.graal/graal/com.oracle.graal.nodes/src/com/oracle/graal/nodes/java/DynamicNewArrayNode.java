@@ -42,36 +42,25 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
 
     @Input ValueNode elementType;
 
-    /**
-     * A non-null value indicating the worst case element type. Mainly useful for distinguishing
-     * Object arrays from primitive arrays.
-     */
-    protected final Kind knownElementKind;
-
     public static DynamicNewArrayNode create(ValueNode elementType, ValueNode length) {
         return new DynamicNewArrayNode(elementType, length);
     }
 
     protected DynamicNewArrayNode(ValueNode elementType, ValueNode length) {
-        this(elementType, length, true, null);
+        this(elementType, length, true);
     }
 
-    public static DynamicNewArrayNode create(ValueNode elementType, ValueNode length, boolean fillContents, Kind knownElementKind) {
-        return new DynamicNewArrayNode(elementType, length, fillContents, knownElementKind);
+    public static DynamicNewArrayNode create(ValueNode elementType, ValueNode length, boolean fillContents) {
+        return new DynamicNewArrayNode(elementType, length, fillContents);
     }
 
-    protected DynamicNewArrayNode(ValueNode elementType, ValueNode length, boolean fillContents, Kind knownElementKind) {
+    protected DynamicNewArrayNode(ValueNode elementType, ValueNode length, boolean fillContents) {
         super(StampFactory.objectNonNull(), length, fillContents);
         this.elementType = elementType;
-        this.knownElementKind = knownElementKind;
     }
 
     public ValueNode getElementType() {
         return elementType;
-    }
-
-    public Kind getKnownElementKind() {
-        return knownElementKind;
     }
 
     protected NewArrayNode forConstantType(ResolvedJavaType type) {
@@ -105,10 +94,10 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
     }
 
     @NodeIntrinsic
-    private static native Object newArray(Class<?> componentType, int length, @ConstantNodeParameter boolean fillContents, @ConstantNodeParameter Kind knownElementKind);
+    private static native Object newArray(Class<?> componentType, int length, @ConstantNodeParameter boolean fillContents);
 
-    public static Object newUninitializedArray(Class<?> componentType, int length, Kind knownElementKind) {
-        return newArray(componentType, length, false, knownElementKind);
+    public static Object newUninitializedArray(Class<?> componentType, int length) {
+        return newArray(componentType, length, false);
     }
 
 }
