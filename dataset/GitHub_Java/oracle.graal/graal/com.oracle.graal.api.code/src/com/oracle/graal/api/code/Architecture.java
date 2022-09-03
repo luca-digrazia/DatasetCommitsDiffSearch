@@ -23,6 +23,9 @@
 package com.oracle.graal.api.code;
 
 import java.nio.*;
+import java.util.*;
+
+import com.oracle.graal.api.code.Register.RegisterFlag;
 
 /**
  * Represents a CPU architecture, including information such as its endianness, CPU registers, word

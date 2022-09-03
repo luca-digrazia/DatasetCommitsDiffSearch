@@ -70,11 +70,17 @@ import com.oracle.graal.asm.*;
  * The spill slot area also includes stack allocated memory blocks (ALLOCA blocks). The size of such
  * a block may be greater than the size of a normal spill slot or the word size.
  * <p>
- * A runtime can reserve space at the beginning of the overflow argument area. The calling
- * convention can specify that the first overflow stack argument is not at offset 0, but at a
- * specified offset. Use {@link CodeCacheProvider#getMinimumOutgoingSize()} to make sure that
- * call-free methods also have this space reserved. Then the VM can use the memory at offset 0
- * relative to the stack pointer.
+ * A runtime has two ways to reserve space in the stack frame for its own use:
+ * <ul>
+ * <li>A memory block somewhere in the frame of size
+ * {@link CodeCacheProvider#getCustomStackAreaSize()}. The offset to this block is returned in
+ * {@link CompilationResult#getCustomStackAreaOffset()}.
+ * <li>At the beginning of the overflow argument area: The calling convention can specify that the
+ * first overflow stack argument is not at offset 0, but at a specified offset o. Use
+ * {@link CodeCacheProvider#getMinimumOutgoingSize()} to make sure that call-free methods also have
+ * this space reserved. Then the VM can use memory the memory at offset 0 relative to the stack
+ * pointer.
+ * </ul>
  */
 public final class FrameMap {
 
@@ -111,6 +117,12 @@ public final class FrameMap {
     private final List<StackSlot> objectStackBlocks;
 
     /**
+     * The stack area reserved for use by the VM, or {@code null} if the VM does not request stack
+     * space.
+     */
+    private final StackSlot customArea;
+
+    /**
      * Records whether an offset to an incoming stack argument was ever returned by
      * {@link #offsetForStackSlot(StackSlot)}.
      */
@@ -127,6 +139,7 @@ public final class FrameMap {
         this.spillSize = returnAddressSize() + calleeSaveAreaSize();
         this.outgoingSize = runtime.getMinimumOutgoingSize();
         this.objectStackBlocks = new ArrayList<>();
+        this.customArea = allocateStackBlock(runtime.getCustomStackAreaSize(), false);
         this.initialFrameSize = currentFrameSize();
     }
 
@@ -207,6 +220,16 @@ public final class FrameMap {
      */
     public int offsetToCalleeSaveArea() {
         return frameSize() - calleeSaveAreaSize();
+    }
+
+    /**
+     * Gets the offset of the stack area stack block reserved for use by the VM, or -1 if the VM
+     * does not request stack space.
+     * 
+     * @return The offset to the custom area (in bytes).
+     */
+    public int offsetToCustomArea() {
+        return customArea == null ? -1 : offsetForStackSlot(customArea);
     }
 
     /**
