@@ -25,7 +25,7 @@
 
 /*
  @ApiInfo(
- group="Truffle"
+ group="Stable"
  )
  */
 
@@ -36,7 +36,9 @@
  *
  * <h4>Getting started using the debugger</h4>
  *
- * First the debugger instance needs to be discovered using a Truffle guest language with
+ * First the debugger instance needs to be discovered using a
+ * {@link com.oracle.truffle.api.debug.Debugger#find(com.oracle.truffle.api.vm.PolyglotEngine)}
+ * instance or from a Truffle guest language with
  * {@link com.oracle.truffle.api.debug.Debugger#find(com.oracle.truffle.api.TruffleLanguage.Env)}.
  * Next a debugger session needs to be started with
  * {@link com.oracle.truffle.api.debug.Debugger#startSession(SuspendedCallback)} providing a
@@ -50,6 +52,8 @@
  * {@link com.oracle.truffle.api.debug.DebuggerSession} and
  * {@link com.oracle.truffle.api.debug.Breakpoint}.
  * <p>
+ * There is also a <a href="doc-files/faq-using.html">list of FAQs</a> that may provide useful hints
+ * when writing your own Truffle debugger frontend.
  *
  * <h4>Enable Debugging for your Truffle guest language</h4>
  *

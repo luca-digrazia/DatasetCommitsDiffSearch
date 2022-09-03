@@ -87,7 +87,7 @@ public abstract class ExecutionEventNode extends Node {
      * @param inputValue the return value of the input child
      * @see #saveInputValue(VirtualFrame, int, Object)
      * @see #getSavedInputValues(VirtualFrame)
-     * @since 0.33
+     * @since 0.32
      */
     protected void onInputValue(VirtualFrame frame, EventContext inputContext, int inputIndex, Object inputValue) {
         // do nothing by default
@@ -125,8 +125,7 @@ public abstract class ExecutionEventNode extends Node {
      * Invoked when an {@link EventContext#getInstrumentedNode() instrumented node} is unwound from
      * the execution stack by {@link EventContext#createUnwind(Object) unwind throwable} thrown in
      * this node implementation. Any nodes between the instrumented ones are unwound off without any
-     * notification. The default implementation returns <code>null</code> to indicate continue
-     * unwind.
+     * notification. The default implementation returns <code>null</code>.
      *
      * @param frame the frame that was used for executing instrumented node
      * @param info an info associated with the unwind - the object passed to
@@ -166,7 +165,7 @@ public abstract class ExecutionEventNode extends Node {
      * @throws IndexOutOfBoundsException if the index is out of bounds.
      * @see #onInputValue(VirtualFrame, EventContext, int, Object)
      * @see #getInputCount()
-     * @since 0.33
+     * @since 0.32
      */
     protected final EventContext getInputContext(int index) {
         if (index < 0 || index >= getInputCount()) {
@@ -186,7 +185,7 @@ public abstract class ExecutionEventNode extends Node {
      * {@link #onInputValue(VirtualFrame, EventContext, int, Object) input events} when executed.
      *
      * @see #onInputValue(VirtualFrame, EventContext, int, Object)
-     * @since 0.33
+     * @since 0.32
      */
     protected final int getInputCount() {
         EventProviderWithInputChainNode node = getChainNode();
@@ -212,7 +211,7 @@ public abstract class ExecutionEventNode extends Node {
      * @param inputValue the input value
      * @throws IllegalArgumentException for invalid input indexes for non-existing input nodes.
      * @see #onInputValue(VirtualFrame, EventContext, int, Object)
-     * @since 0.33
+     * @since 0.32
      */
     protected final void saveInputValue(VirtualFrame frame, int inputIndex, Object inputValue) {
         EventProviderWithInputChainNode node = getChainNode();
@@ -229,7 +228,7 @@ public abstract class ExecutionEventNode extends Node {
      * @param frame the frame to read the input values from.
      * @see #saveInputValue(VirtualFrame, int, Object)
      * @see #onInputValue(VirtualFrame, EventContext, int, Object)
-     * @since 0.33
+     * @since 0.32
      */
     protected final Object[] getSavedInputValues(VirtualFrame frame) {
         EventProviderWithInputChainNode node = getChainNode();
