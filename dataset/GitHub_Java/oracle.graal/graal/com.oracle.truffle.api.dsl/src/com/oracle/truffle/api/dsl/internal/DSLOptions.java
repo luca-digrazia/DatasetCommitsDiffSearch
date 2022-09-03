@@ -34,8 +34,9 @@ import java.lang.annotation.*;
 @Target({ElementType.TYPE})
 public @interface DSLOptions {
 
-    /** Enable the new DSL generation layout. */
-    boolean useNewLayout() default false;
+    /** Flag has no effect anymore. Is going to be removed soon. */
+    @Deprecated
+    boolean useNewLayout() default true;
 
     /**
      * Lazy class loading ensures that all generated specialization classes are loaded lazily.
@@ -57,7 +58,7 @@ public @interface DSLOptions {
         /** Perform no informed optimization for implicit casts. */
         NONE,
 
-        /** Duplicate specializations for each used implicit cast combination */
+        /** Duplicate specializations for each used implicit cast combination. */
         DUPLICATE_TAIL,
 
         /**

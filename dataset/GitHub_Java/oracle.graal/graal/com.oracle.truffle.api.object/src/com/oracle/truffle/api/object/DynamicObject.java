@@ -27,11 +27,11 @@ package com.oracle.truffle.api.object;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.interop.*;
 
-public abstract class DynamicObject implements TypedObject, TruffleObject {
+public interface DynamicObject extends TypedObject, TruffleObject {
     /**
      * Get the object's current shape.
      */
-    public abstract Shape getShape();
+    Shape getShape();
 
     /**
      * Get property value.
@@ -40,7 +40,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param defaultValue return value if property is not found
      * @return property value or defaultValue if object has no such property
      */
-    public abstract Object get(Object key, Object defaultValue);
+    Object get(Object key, Object defaultValue);
 
     /**
      * Set value of existing property.
@@ -49,24 +49,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param value value to be set
      * @return {@code true} if successful or {@code false} if property not found
      */
-    public abstract boolean set(Object key, Object value);
-
-    /**
-     * Returns {@code true} if this object contains a property with the given key.
-     */
-    public final boolean containsKey(Object key) {
-        return getShape().getProperty(key) != null;
-    }
-
-    /**
-     * Define new property or redefine existing property.
-     *
-     * @param key property identifier
-     * @param value value to be set
-     */
-    public final void define(Object key, Object value) {
-        define(key, value, 0);
-    }
+    boolean set(Object key, Object value);
 
     /**
      * Define new property or redefine existing property.
@@ -75,7 +58,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param value value to be set
      * @param flags flags to be set
      */
-    public abstract void define(Object key, Object value, int flags);
+    void define(Object key, Object value, int flags);
 
     /**
      * Define new property with a static location or change existing property.
@@ -85,7 +68,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param flags flags to be set
      * @param locationFactory factory function that creates a location for a given shape and value
      */
-    public abstract void define(Object key, Object value, int flags, LocationFactory locationFactory);
+    void define(Object key, Object value, int flags, LocationFactory locationFactory);
 
     /**
      * Change property flags.
@@ -94,7 +77,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param newFlags flags to be set
      * @return {@code true} if successful or {@code false} if property not found
      */
-    public abstract boolean changeFlags(Object key, int newFlags);
+    boolean changeFlags(Object key, int newFlags);
 
     /**
      * Change property flags.
@@ -103,7 +86,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param flagsUpdateFunction function updating old flags to new flags
      * @return {@code true} if successful or {@code false} if property not found
      */
-    public abstract boolean changeFlags(Object key, FlagsFunction flagsUpdateFunction);
+    boolean changeFlags(Object key, FlagsFunction flagsUpdateFunction);
 
     /**
      * Delete property.
@@ -111,17 +94,17 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param key property identifier
      * @return {@code true} if successful or {@code false} if property not found
      */
-    public abstract boolean delete(Object key);
+    boolean delete(Object key);
 
     /**
      * Returns the number of properties in this object.
      */
-    public abstract int size();
+    int size();
 
     /**
      * Returns {@code true} if this object contains no properties.
      */
-    public abstract boolean isEmpty();
+    boolean isEmpty();
 
     /**
      * Set object shape and grow storage if necessary.
@@ -129,7 +112,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param oldShape the object's current shape (must equal {@link #getShape()})
      * @param newShape the new shape to be set
      */
-    public abstract void setShapeAndGrow(Shape oldShape, Shape newShape);
+    void setShapeAndGrow(Shape oldShape, Shape newShape);
 
     /**
      * Set object shape and resize storage if necessary.
@@ -137,14 +120,14 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param oldShape the object's current shape (must equal {@link #getShape()})
      * @param newShape the new shape to be set
      */
-    public abstract void setShapeAndResize(Shape oldShape, Shape newShape);
+    void setShapeAndResize(Shape oldShape, Shape newShape);
 
     /**
      * Ensure object shape is up-to-date.
      *
      * @return {@code true} if shape has changed
      */
-    public abstract boolean updateShape();
+    boolean updateShape();
 
     public interface FlagsFunction {
         int apply(int t);

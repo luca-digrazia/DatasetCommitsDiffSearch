@@ -24,10 +24,11 @@
  */
 package com.oracle.truffle.api.object;
 
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.interop.exception.*;
+import com.oracle.truffle.api.interop.messages.*;
 
 public class ObjectType {
     /**
@@ -61,16 +62,26 @@ public class ObjectType {
         return null;
     }
 
-    public ForeignAccess getForeignAccessFactory() {
-        return ForeignAccess.create(new com.oracle.truffle.api.interop.ForeignAccess.Factory() {
+    /**
+     * Called when a new property is added to a shape.
+     *
+     * @param property the added property
+     * @param shapeBefore shape before the property was added
+     * @param shapeAfter shape after the property was added
+     */
+    public void onPropertyAdded(Property property, Shape shapeBefore, Shape shapeAfter) {
+    }
 
-            public boolean canHandle(TruffleObject obj) {
-                throw new IllegalArgumentException(this.toString() + " cannot be shared");
+    public ForeignAccessFactory getForeignAccessFactory() {
+        return new ForeignAccessFactory() {
+
+            public InteropPredicate getLanguageCheck() {
+                throw new AccessException(this.toString() + " cannot be shared");
             }
 
-            public CallTarget accessMessage(Message tree) {
-                throw new IllegalArgumentException(this.toString() + " cannot be shared; Message not possible: " + tree.toString());
+            public CallTarget getAccess(Message tree) {
+                throw new AccessException(this.toString() + " cannot be shared; Message not possible: " + tree.toString());
             }
-        });
+        };
     }
 }
