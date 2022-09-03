@@ -36,15 +36,12 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.InstrumentableFactory;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.func.LLVMFunctionStartNode;
-import com.oracle.truffle.llvm.runtime.GuestLanguageRuntimeException;
 import com.oracle.truffle.llvm.runtime.SulongRuntimeException;
 import com.oracle.truffle.llvm.runtime.SulongStackTrace;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
@@ -72,6 +69,7 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
     private final BranchProfile blockEntered = BranchProfile.create();
 
     @CompilationFinal(dimensions = 1) private final long[] successorExecutionCount;
+    @CompilationFinal private long totalExecutionCount = 0;
 
     @Override
     public Object executeGeneric(VirtualFrame frame) {
@@ -100,9 +98,6 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
             } catch (ControlFlowException e) {
                 controlFlowExceptionProfile.enter();
                 throw e;
-            } catch (GuestLanguageRuntimeException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw e;
             } catch (SulongRuntimeException e) {
                 CompilerDirectives.transferToInterpreter();
                 fillStackTrace(e.getCStackTrace(), i);
@@ -130,11 +125,7 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
         CompilerAsserts.neverPartOfCompilation();
         SourceSection s = null;
         for (int j = i; j >= 0; j--) {
-            Node node = statements[j];
-            if (node instanceof InstrumentableFactory.WrapperNode) {
-                node = ((InstrumentableFactory.WrapperNode) node).getDelegateNode();
-            }
-            s = node.getSourceSection();
+            s = statements[j].getSourceSection();
             if (s != null) {
                 break;
             }
@@ -199,31 +190,13 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
      * @param successorIndex
      * @return the probability between 0 and 1
      */
-    @ExplodeLoop
     public double getBranchProbability(int successorIndex) {
         assert termInstruction.needsBranchProfiling();
         double successorBranchProbability;
-
-        /*
-         * It is possible to get race conditions (compiler and AST interpeter thread). This avoids a
-         * probability > 1.
-         *
-         * We make sure that we read each element only once. We also make sure that the compiler
-         * reduces the conditions to constants.
-         */
-        long succCount = 0;
-        long totalExecutionCount = 0;
-        for (int i = 0; i < successorExecutionCount.length; i++) {
-            long v = successorExecutionCount[i];
-            if (successorIndex == i) {
-                succCount = v;
-            }
-            totalExecutionCount += v;
-        }
+        long succCount = successorExecutionCount[successorIndex];
         if (succCount == 0) {
             successorBranchProbability = 0;
         } else {
-            assert totalExecutionCount > 0;
             successorBranchProbability = (double) succCount / totalExecutionCount;
         }
         assert !Double.isNaN(successorBranchProbability) && successorBranchProbability >= 0 && successorBranchProbability <= 1;
@@ -239,6 +212,9 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
 
     private void incrementCountAtIndex(int successorIndex) {
         assert termInstruction.needsBranchProfiling();
-        successorExecutionCount[successorIndex]++;
+        if (totalExecutionCount != Long.MAX_VALUE) {
+            totalExecutionCount++;
+            successorExecutionCount[successorIndex]++;
+        }
     }
 }
