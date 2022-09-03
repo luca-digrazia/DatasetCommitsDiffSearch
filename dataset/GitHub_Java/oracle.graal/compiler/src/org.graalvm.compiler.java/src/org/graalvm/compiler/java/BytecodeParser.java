@@ -372,7 +372,6 @@ import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.extended.LoadMethodNode;
 import org.graalvm.compiler.nodes.extended.MembarNode;
 import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
-import org.graalvm.compiler.nodes.extended.StateSplitProxyNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.ClassInitializationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
@@ -1237,10 +1236,6 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    protected StateSplitProxyNode genVolatileFieldReadProxy(ValueNode fieldRead) {
-        return new StateSplitProxyNode(fieldRead);
-    }
-
     protected ValueNode emitExplicitNullCheck(ValueNode receiver) {
         if (StampTool.isPointerNonNull(receiver.stamp())) {
             return receiver;
@@ -1681,7 +1676,7 @@ public class BytecodeParser implements GraphBuilderContext {
         final Mark mark;
 
         InvocationPluginAssertions(InvocationPlugin plugin, ValueNode[] args, ResolvedJavaMethod targetMethod, JavaKind resultType) {
-            guarantee(Assertions.assertionsEnabled(), "%s should only be loaded and instantiated if assertions are enabled", getClass().getSimpleName());
+            guarantee(Assertions.ENABLED, "%s should only be loaded and instantiated if assertions are enabled", getClass().getSimpleName());
             this.plugin = plugin;
             this.targetMethod = targetMethod;
             this.args = args;
@@ -1913,7 +1908,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 }
             }
 
-            InvocationPluginAssertions assertions = Assertions.assertionsEnabled() ? new InvocationPluginAssertions(plugin, args, targetMethod, resultType) : null;
+            InvocationPluginAssertions assertions = Assertions.ENABLED ? new InvocationPluginAssertions(plugin, args, targetMethod, resultType) : null;
             if (plugin.execute(this, targetMethod, pluginReceiver, args)) {
                 afterInvocationPluginExecution(true, assertions, intrinsicGuard, invokeKind, args, targetMethod, resultType, returnType);
                 return true;
@@ -3793,21 +3788,10 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
 
-        ValueNode fieldRead = append(genLoadField(receiver, resolvedField));
-
+        frameState.push(resolvedField.getJavaKind(), append(genLoadField(receiver, resolvedField)));
         if (resolvedField.getDeclaringClass().getName().equals("Ljava/lang/ref/Reference;") && resolvedField.getName().equals("referent")) {
             LocationIdentity referentIdentity = new FieldLocationIdentity(resolvedField);
             append(new MembarNode(0, referentIdentity));
-        }
-
-        JavaKind fieldKind = resolvedField.getJavaKind();
-
-        if (resolvedField.isVolatile() && fieldRead instanceof LoadFieldNode) {
-            StateSplitProxyNode readProxy = append(genVolatileFieldReadProxy(fieldRead));
-            frameState.push(fieldKind, readProxy);
-            readProxy.setStateAfter(frameState.create(stream.nextBCI(), readProxy));
-        } else {
-            frameState.push(fieldKind, fieldRead);
         }
     }
 
