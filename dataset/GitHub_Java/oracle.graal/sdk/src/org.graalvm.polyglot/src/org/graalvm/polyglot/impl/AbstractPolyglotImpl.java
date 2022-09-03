@@ -48,6 +48,7 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.PolyglotException.StackFrame;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
+import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 
 @SuppressWarnings("unused")
@@ -111,10 +112,6 @@ public abstract class AbstractPolyglotImpl {
 
     public abstract Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> arguments, long timeout, TimeUnit timeoutUnit, boolean sandbox,
                     long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean boundEngine);
-
-    public abstract void preInitializeEngine();
-
-    public abstract void resetPreInitializedEngine();
 
     public abstract AbstractSourceImpl getSourceImpl();
 
@@ -225,6 +222,8 @@ public abstract class AbstractPolyglotImpl {
         public abstract Engine getEngineImpl();
 
         public abstract void close(boolean interuptExecution);
+
+        public abstract Value asValue(Object hostValue);
 
     }
 
@@ -443,20 +442,12 @@ public abstract class AbstractPolyglotImpl {
             throw unsupported(receiver, "newInstance(Object...)", "canInstantiate()");
         }
 
-        public void executeVoid(Object receiver, Object[] arguments) {
-            executeVoidUnsupported(receiver);
-        }
-
-        public final void executeVoidUnsupported(Object receiver) {
-            throw unsupported(receiver, "executeVoid(Object...)", "canExecute()");
-        }
-
         public boolean isString(Object receiver) {
             return false;
         }
 
         public String asString(Object receiver) {
-            throw unsupported(receiver, "asString()", "isString()");
+            throw classcast(receiver, "asString()", "isString()");
         }
 
         public boolean isBoolean(Object receiver) {
@@ -464,7 +455,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public boolean asBoolean(Object receiver) {
-            throw unsupported(receiver, "asBoolean()", "isBoolean()");
+            throw classcast(receiver, "asBoolean()", "isBoolean()");
         }
 
         public boolean fitsInInt(Object receiver) {
@@ -472,7 +463,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public int asInt(Object receiver) {
-            throw unsupported(receiver, "asInt()", "isNumber()");
+            throw classcast(receiver, "asInt()", "fitsInInt()");
         }
 
         public boolean fitsInLong(Object receiver) {
@@ -480,7 +471,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public long asLong(Object receiver) {
-            throw unsupported(receiver, "asLong()", "isNumber()");
+            throw classcast(receiver, "asLong()", "fitsInLong()");
         }
 
         public boolean fitsInDouble(Object receiver) {
@@ -488,7 +479,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public double asDouble(Object receiver) {
-            throw unsupported(receiver, "asDouble()", "isNumber()");
+            throw classcast(receiver, "asDouble()", "fitsInDouble()");
         }
 
         public boolean fitsInFloat(Object receiver) {
@@ -496,7 +487,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public float asFloat(Object receiver) {
-            throw unsupported(receiver, "asFloat()", "isNumber()");
+            throw classcast(receiver, "asFloat()", "fitsInFloat()");
         }
 
         public boolean isNull(Object receiver) {
@@ -507,12 +498,20 @@ public abstract class AbstractPolyglotImpl {
             return false;
         }
 
+        public boolean fitsInShort(Object receiver) {
+            return false;
+        }
+
+        public short asShort(Object receiver) {
+            throw classcast(receiver, "asShort()", "fitsInShort()");
+        }
+
         public long asNativePointer(Object receiver) {
             return asNativePointerUnsupported(receiver);
         }
 
         public final long asNativePointerUnsupported(Object receiver) {
-            throw unsupported(receiver, "asNativePointer()", "isNativeObject()");
+            throw classcast(receiver, "asNativePointer()", "isNativeObject()");
         }
 
         public boolean isHostObject(Object receiver) {
@@ -520,10 +519,12 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public Object asHostObject(Object receiver) {
-            throw unsupported(receiver, "asHostObject()", "isHostObject()");
+            throw classcast(receiver, "asHostObject()", "isHostObject()");
         }
 
         protected abstract RuntimeException unsupported(Object receiver, String message, String useToCheck);
+
+        protected abstract RuntimeException classcast(Object receiver, String message, String useToCheck);
 
         public abstract String toString(Object receiver);
 
@@ -534,12 +535,16 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public byte asByte(Object receiver) {
-            throw unsupported(receiver, "asByte()", "isNumber()");
+            throw classcast(receiver, "asByte()", "fitsInByte()");
         }
 
         public boolean isNumber(Object receiver) {
             return false;
         }
+
+        public abstract <T> T as(Object receiver, Class<T> targetType);
+
+        public abstract <T> T as(Object receiver, TypeLiteral<T> targetType);
 
     }
 

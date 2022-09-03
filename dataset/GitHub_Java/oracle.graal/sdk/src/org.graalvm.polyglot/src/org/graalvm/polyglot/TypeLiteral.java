@@ -25,8 +25,6 @@
 
 package org.graalvm.polyglot;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 
@@ -45,10 +43,9 @@ import java.lang.reflect.Type;
  *
  * @since 1.0
  */
-public abstract class TypeLiteral<T> {
+public class TypeLiteral<T> {
 
-    private final Type type;
-    private final Class<T> rawType;
+    private final Type literal;
 
     /**
      * Constructs a new type literal. Derives represented class from type parameter.
@@ -57,13 +54,11 @@ public abstract class TypeLiteral<T> {
      * Clients create an empty anonymous subclass. Doing so embeds the type parameter in the
      * anonymous class's type hierarchy so we can reconstitute it at runtime despite erasure.
      */
-    @SuppressWarnings("unchecked")
     protected TypeLiteral() {
-        this.type = extractLiteralType(this.getClass());
-        this.rawType = (Class<T>) extractRawType(type);
+        this.literal = extractLiteralType(this.getClass());
     }
 
-    private static Type extractLiteralType(@SuppressWarnings("rawtypes") Class<? extends TypeLiteral> literalClass) {
+    private static Type extractLiteralType(@SuppressWarnings("rawtypes") Class<? extends TypeLiteral> literalClass) throws AssertionError {
         Type superType = literalClass.getGenericSuperclass();
         Type typeArgument = null;
         while (true) {
@@ -90,31 +85,8 @@ public abstract class TypeLiteral<T> {
         return typeArgument;
     }
 
-    private static Class<?> extractRawType(Type type) {
-        Class<?> rawType;
-        if (type instanceof Class) {
-            rawType = (Class<?>) type;
-        } else if (type instanceof ParameterizedType) {
-            rawType = (Class<?>) ((ParameterizedType) type).getRawType();
-        } else if (type instanceof GenericArrayType) {
-            rawType = arrayTypeFromComponentType(extractRawType(((GenericArrayType) type).getGenericComponentType()));
-        } else {
-            throw new IllegalArgumentException("Unsupported type: " + type);
-        }
-        return rawType;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> Class<T[]> arrayTypeFromComponentType(Class<T> componentType) {
-        return (Class<T[]>) Array.newInstance(componentType, 0).getClass();
-    }
-
-    public final Type getType() {
-        return this.type;
-    }
-
-    public final Class<T> getRawType() {
-        return rawType;
+    public Type getLiteral() {
+        return this.literal;
     }
 
     /**
@@ -144,7 +116,7 @@ public abstract class TypeLiteral<T> {
      */
     @Override
     public final String toString() {
-        return "TypeLiteral<" + type + ">";
+        return "TypeLiteral<" + literal + ">";
     }
 
 }

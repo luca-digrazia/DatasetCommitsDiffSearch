@@ -26,13 +26,14 @@ package org.graalvm.polyglot;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 import org.graalvm.polyglot.proxy.Proxy;
@@ -56,7 +57,7 @@ import org.graalvm.polyglot.proxy.Proxy;
  * configuration by using a {@linkplain #newBuilder(String...) builder}. The builder can configure
  * input, error and output streams, both engine and context options, and application arguments.
  * <p>
- * A context that is no longer needed should be {@linkplain #close() closed} to ensure that
+ * A context that is no longer needed should be {@linkplain #close() closed} to guarantee that all
  * allocated resources are freed. Contexts are {@link AutoCloseable} for use with the Java
  * {@code try-with-resources} statement.
  *
@@ -249,43 +250,42 @@ public final class Context implements AutoCloseable {
      * the identity.
      * <p>
      * When a host value is converted to a polyglot value the following rules apply:
-     * <p>
-     * When the <code>hostValue</code> represents a {@link Class}, then the created
-     * {@link TruffleObject} will allow access to <b>public</b> and <b>static</b> fields and methods
-     * from the class.
-     *
      * <ol>
-     * <li>If the <code>hostValue</code> is <code>null</code> then it will be interpreted as
-     * polyglot {@link Value#isNull() null}.
-     * <li>If the <code>hostValue</code> is already a {@link Value polyglot value} then it will be
-     * cast to {@link Value}.
-     * <li>If the <code>hostValue</code> is an instance of {@link Byte}, {@link Short},
-     * {@link Integer}, {@link Long}, {@link Float} or {@link Double} then it will be interpreted as
-     * polyglot {@link Value#isNumber() number}.
-     * <li>If the <code>hostValue</code> is an instance of {@link Character} or {@link String} then
-     * it will be interpreted as polyglot {@link Value#isString() string}.
-     * <li>If the <code>hostValue</code> is an instance of {@link Boolean} then it will be
-     * interpreted as polyglot {@link Value#isBoolean() boolean}.
-     * <li>If the <code>hostValue</code> is a {@link Proxy polyglot proxy} then it will be
-     * interpreted according to the behavior specified by the proxy. See the javadoc of the proxy
-     * subclass for further details.
-     * <li>If the <code>hostValue</code> is a non-primitive {@link Value#as(Class) mapped Java
-     * value} then the original value will be restored. For example if a guest language object was
-     * mapped to {@link Map} then the original object identity will be preserved when converting
-     * back to a polyglot value.
-     * <li>Any other <code>hostValue</code> will be interpreted as {@link Value#isHostObject() host
-     * object}. Host objects expose all their public java fields and methods as
-     * {@link Value#getMember(String) members}. In addition, Java arrays and subtypes of
-     * {@link List} will be interpreted as value with {@link Value#hasArrayElements() array
-     * elements} and single method interfaces annotated with {@link FunctionalInterface} are
-     * {@link Value#execute(Object...) executable} directly. Java {@link Class} instances are
-     * interpreted as {@link Value#canInstantiate() instantiable}, but they do not expose Class
-     * methods as members.
+     * <li>If the host value is <code>null</code> then it will be interpreted as polyglot
+     * {@link Value#isNull() null}.
+     * <li>If the host value is already a {@link Value polyglot value} then it will be cast to
+     * {@link Value}.
+     * <li>If the host value is an instance of {@link Byte}, {@link Short}, {@link Integer},
+     * {@link Long}, {@link Float} or {@link Double} then it will be interpreted as polyglot
+     * {@link Value#isNumber() number}.
+     * <li>If the host value is an instance of {@link Character} or {@link String} then it will be
+     * interpreted as polyglot {@link Value#isString() string}.
+     * <li>If the host value is an instance of {@link Boolean} then it will be interpreted as
+     * polyglot {@link Value#isBoolean() boolean}.
+     * <li>If the host value is a {@link Proxy polyglot proxy} then it will be interpreted according
+     * to the behavior specified by the proxy. See the javadoc of the proxy subclass for further
+     * details.
+     * <li>If the host value is a non-primitive {@link Value#as(Class) mapped Java value} then the
+     * it will be interpreted according to the original value. For example if a guest language
+     * object was mapped to {@link Map} then the original guest language object will be preserved
+     * when converting to a polyglot value.
+     * <li>TODO do we want to support Map here?
+     * <li>If the host value is of type {@link List}, {@link Set}, {@link Collection} or
+     * {@link Iterable} then it will be interpreted as value with {@link Value#hasArrayElements()
+     * array elements}. The value will also be treated as {@link Value#isHostObject() host object}.
+     * <li>If the host value is an array then it will be interpreted as value with
+     * {@link Value#hasArrayElements() array elements}. The value will also be treated as
+     * {@link Value#isHostObject() host object}.
+     * <li>Any other, not explicitly mentioned, Java type will be interpreted as
+     * {@link Value#isHostObject() host object}. Host objects expose all their public java fields
+     * and methods as {@link Value#getMember(String) members}. Each member is
+     * {@link Value#canExecute() executable}.
      * </ol>
      * <p>
+     *
      * <b>Basic Examples:</b>
      *
-     * The following assertion statements always hold:
+     * The following assertion statements always hold.
      *
      * <pre>
      * Context context = Context.create();
@@ -295,70 +295,54 @@ public final class Context implements AutoCloseable {
      * assert context.asValue('c').isString();
      * assert context.asValue(new String[0]).hasArrayElements();
      * assert context.asValue(new ArrayList<>()).isHostObject();
-     * assert context.asValue(new ArrayList<>()).hasArrayElements();
-     * assert context.asValue((Supplier<Integer>) () -> 42).execute().asInt() == 42;
      * </pre>
      *
-     * <h1>Mapping to Java methods and fields</h1>
+     * <b>Host Object Example:</b>
      *
-     * When Java host objects are passed to guest languages, their public methods and fields are
-     * provided as {@link #getMember(String) members}. Methods and fields are grouped by name, so
-     * only one member is exposed for each name.
+     * This example first creates a new instance of the Java class <code>Foo</code> and inspects it
+     * first using the polyglot value API and later using JavaScript.
      *
-     * When an argument value needs to be mapped to match a required Java method parameter type then
-     * the semantics of {@link #as(Class) host value mapping} is used. The result of the mapping is
-     * equivalent of calling {@link Value#as(Class)} with the parameter type. Therefore a
-     * {@link ClassCastException} is thrown if a parameter value cannot be cast to the required
-     * parameter type.
-     * <p>
-     * Overloaded java methods are selected based on the arguments that are provided. In case
-     * multiple mapped Java methods with the same name are applicable for
-     * {@link Value#execute(Object...) executions} or {@link Value#newInstance(Object...)
-     * instantiations} then the method with the most concrete method with applicable arguments will
-     * be used used.
-     * <p>
-     * The following parameter type hierarchy is used for method resolution. Left-most parameter
-     * types are prioritized over types to their right.
-     * <ul>
-     * <li>{@link #isBoolean() Boolean} values: boolean, Boolean, Object
-     * <li>String values: char, Character, String, CharSequence, Object
-     * <li>Number values: byte, Byte, short, Short, int, Integer, long, Long, float, Float, double,
-     * Double, Number, Object
-     * <li>Other values are resolved based on their Java type hierarchy.
-     * </ul>
-     * If there are multiple most concrete methods or too many arguments were provided then a
-     * {@link IllegalArgumentException} will be thrown.
-     * <p>
-     * <b>Advanced Example:</b>
-     *
-     * This example first creates a new instance of the Java class <code>Record</code> and inspects
-     * it first using the polyglot value API and later using the JavaScript guest language.
-     * <p>
-     * In the following examples all assertions hold.
+     * The JavaScript examples pass
      *
      * <pre>
-     * <b>class</b> JavaRecord {
-     *   <b>public int</b> x = 42;
-     *   <b>public double</b> y = 42.0;
-     *   <b>public</b> String name() {
-     *     <b>return</b> "foo";
-     *   }
-     * }
-     * Context context = Context.create();
-     * Value record = context.asValue(new JavaRecord());
-     * assert record.getMember("x").asInt() == 42;
-     * assert record.getMember("y").asDouble() == 42.0d;
-     * assert record.getMember("name").execute().asString().equals("foo");
+     * public static class Foo {
+     *     public String bar = "barField";
      *
-     * assert context.eval("js", "(function(record) record.x)")
-     *               .execute(record).asInt() == 42;
-     * assert context.eval("js", "(function(record) record.y)")
-     *               .execute(record).asDouble() == 42.0d;
-     * assert context.eval("js", "(function(record) record.name())")
-     *               .execute(record).asString().equals("foo");
+     *     public String bar(int value) {
+     *         return "barInt";
+     *     }
+     *
+     *     public String bar(String stringValue) {
+     *         return "barString";
+     *     }
+     * }
+     *
+     * Context context = Context.create();
+     * Value foo = context.asValue(new Foo());
+     * assert foo.isHostObject();
+     * assert foo.getMember("bar").execute(42).asString().equals("barInt");
+     * assert foo.getMember("bar").execute("").asString().equals("barString");
+     * assert foo.getMember("bar").execute().asString().equals("barField");
+     *
+     * assert context.eval("js", "function(foo) foo.bar(42)")
+     *               .execute(foo).asString().equals("barInt");
+     * assert context.eval("js", "function(foo) foo.bar("")")
+     *               .execute(foo).asString().equals("barString");
+     * assert context.eval("js", "function(foo) foo.bar")
+     *               .execute(foo).asString().equals("barField");
      * </pre>
      *
-     * @see Value#as(Class)
+     * <b>Mapping Example using JavaScript:</b> This example first creates a new JavaScript object
+     * and maps it to a {@link Map}. Using the {@link #asValue(Object)} it is possible to recreate
+     * the {@link Value polyglot value} from the Java map. The JavaScript object identity is
+     * preserved in the process.
+     *
+     * <pre>
+     * Context context = Context.create();
+     * Map<Object, Object> javaMap = context.eval("js", "{}").as(Map.class);
+     * Value polyglotValue = context.asValue(javaMap);
+     * </pre>
+     *
      * @throws IllegalStateException if the context is already closed
      * @param hostValue the host value to convert to a polyglot value.
      * @return the polyglot value.
