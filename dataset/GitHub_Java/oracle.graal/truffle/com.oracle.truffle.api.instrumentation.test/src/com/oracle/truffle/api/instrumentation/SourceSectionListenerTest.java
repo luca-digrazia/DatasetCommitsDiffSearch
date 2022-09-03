@@ -32,7 +32,6 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine.Instrument;
@@ -57,6 +56,10 @@ public class SourceSectionListenerTest extends AbstractInstrumentationTest {
     private void testLoadSourceSectionImpl(int runTimes) throws IOException {
         Instrument instrument = engine.getInstruments().get("testLoadSourceSection1");
         SourceSection[] sourceSections1 = sections("STATEMENT(EXPRESSION, EXPRESSION)", "STATEMENT(EXPRESSION, EXPRESSION)", "EXPRESSION");
+
+        final SourceSectionFilter statementFilter = SourceSectionFilter.newBuilder().tagIs(StandardTags.StatementTag.class).build();
+        final SourceSectionFilter exprFilter = SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build();
+
         Source source1 = sourceSections1[0].getSource();
         for (int i = 0; i < runTimes; i++) {
             run(source1);
@@ -64,6 +67,10 @@ public class SourceSectionListenerTest extends AbstractInstrumentationTest {
 
         instrument.setEnabled(true);
         TestLoadSourceSection1 impl = instrument.lookup(TestLoadSourceSection1.class);
+
+        assertSections(impl.query(SourceSectionFilter.ANY), sourceSections1);
+        assertSections(impl.query(statementFilter), sourceSections1[0]);
+        assertSections(impl.query(exprFilter), sourceSections1[1], sourceSections1[2]);
 
         SourceSection[] sourceSections2 = sections("STATEMENT(EXPRESSION)", "STATEMENT(EXPRESSION)", "EXPRESSION");
         Source source2 = sourceSections2[0].getSource();
@@ -75,6 +82,10 @@ public class SourceSectionListenerTest extends AbstractInstrumentationTest {
         assertEvents(impl.onlyNewEvents, sourceSections2);
         assertEvents(impl.onlyStatements, sourceSections1[0], sourceSections2[0]);
         assertEvents(impl.onlyExpressions, sourceSections1[1], sourceSections1[2], sourceSections2[1]);
+
+        assertSections(impl.query(SourceSectionFilter.ANY), merge(sourceSections1, sourceSections2));
+        assertSections(impl.query(statementFilter), sourceSections1[0], sourceSections2[0]);
+        assertSections(impl.query(exprFilter), sourceSections1[1], sourceSections1[2], sourceSections2[1]);
 
         instrument.setEnabled(false);
 
@@ -89,6 +100,10 @@ public class SourceSectionListenerTest extends AbstractInstrumentationTest {
         assertEvents(impl.onlyStatements, sourceSections1[0], sourceSections2[0]);
         assertEvents(impl.onlyExpressions, sourceSections1[1], sourceSections1[2], sourceSections2[1]);
 
+        assertSections(impl.query(SourceSectionFilter.ANY), merge(sourceSections1, sourceSections2, sourceSections3));
+        assertSections(impl.query(statementFilter), sourceSections1[0], sourceSections2[0], sourceSections3[0]);
+        assertSections(impl.query(exprFilter), sourceSections1[1], sourceSections1[2], sourceSections2[1], sourceSections3[1], sourceSections3[2], sourceSections3[3]);
+
         instrument.setEnabled(true);
         // new instrument needs update
         impl = instrument.lookup(TestLoadSourceSection1.class);
@@ -100,13 +115,13 @@ public class SourceSectionListenerTest extends AbstractInstrumentationTest {
     }
 
     private static SourceSection[] sections(String code, String... match) {
-        Source source = Source.fromText(code, null).withMimeType(InstrumentationTestLanguage.MIME_TYPE);
+        Source source = Source.newBuilder(code).name("sourceSectionTest").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
 
         List<SourceSection> sections = new ArrayList<>();
         for (String matchExpression : match) {
             int index = -1;
             while ((index = code.indexOf(matchExpression, index + 1)) != -1) {
-                sections.add(source.createSection(null, index, matchExpression.length()));
+                sections.add(source.createSection(index, matchExpression.length()));
             }
         }
         return sections.toArray(new SourceSection[0]);
@@ -127,59 +142,60 @@ public class SourceSectionListenerTest extends AbstractInstrumentationTest {
         return newArray;
     }
 
-    private static void assertEvents(List<SourceSectionEvent> actualEvents, SourceSection... expectedSourceSections) {
+    private static void assertEvents(List<LoadSourceSectionEvent> actualEvents, SourceSection... expectedSourceSections) {
         Assert.assertEquals(expectedSourceSections.length, actualEvents.size());
         for (int i = 0; i < expectedSourceSections.length; i++) {
-            SourceSectionEvent actualEvent = actualEvents.get(i);
+            LoadSourceSectionEvent actualEvent = actualEvents.get(i);
             SourceSection expectedSourceSection = expectedSourceSections[i];
-            Assert.assertEquals("index " + i, expectedSourceSection, actualEvent.sourceSection);
-            Assert.assertSame("index " + i, actualEvent.node.getSourceSection(), actualEvent.sourceSection);
+            Assert.assertEquals("index " + i, expectedSourceSection, actualEvent.getSourceSection());
+            Assert.assertSame("index " + i, actualEvent.getNode().getSourceSection(), actualEvent.getSourceSection());
         }
     }
 
-    private static class SourceSectionEvent {
-
-        final SourceSection sourceSection;
-        final Node node;
-
-        SourceSectionEvent(SourceSection sourceSection, Node node) {
-            this.sourceSection = sourceSection;
-            this.node = node;
+    private static void assertSections(List<SourceSection> actualSections, SourceSection... expectedSections) {
+        Assert.assertEquals(expectedSections.length, actualSections.size());
+        for (int i = 0; i < expectedSections.length; i++) {
+            Assert.assertEquals("index " + i, expectedSections[i], actualSections.get(i));
         }
-
     }
 
     @Registration(id = "testLoadSourceSection1")
     public static class TestLoadSourceSection1 extends TruffleInstrument {
-        List<SourceSectionEvent> onlyNewEvents = new ArrayList<>();
-        List<SourceSectionEvent> allEvents = new ArrayList<>();
-        List<SourceSectionEvent> onlyStatements = new ArrayList<>();
-        List<SourceSectionEvent> onlyExpressions = new ArrayList<>();
+        List<LoadSourceSectionEvent> onlyNewEvents = new ArrayList<>();
+        List<LoadSourceSectionEvent> allEvents = new ArrayList<>();
+        List<LoadSourceSectionEvent> onlyStatements = new ArrayList<>();
+        List<LoadSourceSectionEvent> onlyExpressions = new ArrayList<>();
+        Instrumenter instrumenter = null;
 
         @Override
         protected void onCreate(Env env) {
-            env.getInstrumenter().attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().build(), new SourceSectionListener(allEvents), true);
-            env.getInstrumenter().attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().build(),
+            instrumenter = env.getInstrumenter();
+            instrumenter.attachLoadSourceSectionListener(SourceSectionFilter.ANY, new SourceSectionListener(allEvents), true);
+            instrumenter.attachLoadSourceSectionListener(SourceSectionFilter.ANY,
                             new SourceSectionListener(onlyNewEvents), false);
-            env.getInstrumenter().attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().tagIs(StandardTags.StatementTag.class).build(),
+            instrumenter.attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().tagIs(StandardTags.StatementTag.class).build(),
                             new SourceSectionListener(onlyStatements), true);
-            env.getInstrumenter().attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build(),
+            instrumenter.attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build(),
                             new SourceSectionListener(onlyExpressions), true);
 
             env.registerService(this);
         }
 
-        private class SourceSectionListener implements LoadSourceSectionEventListener {
+        private class SourceSectionListener implements LoadSourceSectionListener {
 
-            private final List<SourceSectionEvent> events;
+            private final List<LoadSourceSectionEvent> events;
 
-            SourceSectionListener(List<SourceSectionEvent> events) {
+            SourceSectionListener(List<LoadSourceSectionEvent> events) {
                 this.events = events;
             }
 
-            public void onLoad(SourceSection sourceSection, Node node) {
-                events.add(new SourceSectionEvent(sourceSection, node));
+            public void onLoad(LoadSourceSectionEvent event) {
+                events.add(event);
             }
+        }
+
+        private List<SourceSection> query(SourceSectionFilter filter) {
+            return instrumenter.querySourceSections(filter);
         }
 
     }
@@ -202,8 +218,8 @@ public class SourceSectionListenerTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            env.getInstrumenter().attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().build(), new LoadSourceSectionEventListener() {
-                public void onLoad(SourceSection sourceSection, Node node) {
+            env.getInstrumenter().attachLoadSourceSectionListener(SourceSectionFilter.ANY, new LoadSourceSectionListener() {
+                public void onLoad(LoadSourceSectionEvent event) {
                     throw new TestLoadSourceSectionExceptionClass();
                 }
             }, true);
