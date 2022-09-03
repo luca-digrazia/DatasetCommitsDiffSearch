@@ -59,7 +59,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.DefaultCompilerOptions;
-import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.NodeVisitor;
@@ -77,7 +76,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     private static final String NODE_REWRITING_ASSUMPTION_NAME = "nodeRewritingAssumption";
     private static final long ENTRY_POINT_OFFSET;
-    static final String CALL_BOUNDARY_METHOD_NAME = "callProxy";
 
     static {
         try {
@@ -188,8 +186,8 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     public final Object callDirect(Object... args) {
-        getCompilationProfile().profileDirectCall(args);
         try {
+            getCompilationProfile().profileDirectCall(args);
             Object result = doInvoke(args);
             if (CompilerDirectives.inCompiledCode()) {
                 result = compilationProfile.injectReturnValueProfile(result);
@@ -221,6 +219,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         } else {
             // We come here from compiled code
         }
+
         return callRoot(args);
     }
 
@@ -232,7 +231,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             args = profile.injectArgumentProfile(originalArguments);
         }
         Object result = callProxy(createFrame(getRootNode().getFrameDescriptor(), args));
-
         if (profile != null) {
             profile.profileReturnValue(result);
         }
@@ -243,12 +241,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         final boolean inCompiled = CompilerDirectives.inCompiledCode();
         try {
             return getRootNode().execute(frame);
-        } catch (ControlFlowException t) {
-            throw rethrow(compilationProfile.profileExceptionType(t));
-        } catch (Throwable t) {
-            Throwable profiledT = compilationProfile.profileExceptionType(t);
-            runtime().getTvmci().onThrowable(rootNode, profiledT);
-            throw rethrow(profiledT);
         } finally {
             // this assertion is needed to keep the values from being cleared as non-live locals
             assert frame != null && this != null;
@@ -307,8 +299,8 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             if (task != null) {
                 Future<?> submitted = task.getFuture();
                 if (submitted != null) {
-                    boolean allowBackgroundCompilation = !TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal) &&
-                                    !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown);
+                    boolean allowBackgroundCompilation = !(TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal) &&
+                                    !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown));
                     boolean mayBeAsynchronous = TruffleCompilerOptions.getValue(TruffleBackgroundCompilation) && allowBackgroundCompilation;
                     runtime().finishCompilation(this, submitted, mayBeAsynchronous);
                 }
