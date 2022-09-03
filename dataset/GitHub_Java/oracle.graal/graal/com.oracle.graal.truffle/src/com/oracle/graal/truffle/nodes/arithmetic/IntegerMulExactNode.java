@@ -24,7 +24,6 @@ package com.oracle.graal.truffle.nodes.arithmetic;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -35,7 +34,6 @@ import com.oracle.truffle.api.*;
  * Node representing an exact integer multiplication that will throw an {@link ArithmeticException}
  * in case the addition would overflow the 32 bit range.
  */
-@NodeInfo
 public class IntegerMulExactNode extends IntegerMulNode implements IntegerExactArithmeticNode {
 
     public IntegerMulExactNode(ValueNode x, ValueNode y) {
@@ -49,7 +47,19 @@ public class IntegerMulExactNode extends IntegerMulNode implements IntegerExactA
             return new IntegerMulExactNode(forY, forX);
         }
         if (forX.isConstant()) {
-            return canonicalXconstant(forX, forY);
+            Constant xConst = forX.asConstant();
+            Constant yConst = forY.asConstant();
+            assert xConst.getKind() == yConst.getKind();
+            try {
+                if (xConst.getKind() == Kind.Int) {
+                    return ConstantNode.forInt(ExactMath.multiplyExact(xConst.asInt(), yConst.asInt()));
+                } else {
+                    assert xConst.getKind() == Kind.Long;
+                    return ConstantNode.forLong(ExactMath.multiplyExact(xConst.asLong(), yConst.asLong()));
+                }
+            } catch (ArithmeticException ex) {
+                // The operation will result in an overflow exception, so do not canonicalize.
+            }
         } else if (forY.isConstant()) {
             long c = forY.asConstant().asLong();
             if (c == 1) {
@@ -58,23 +68,6 @@ public class IntegerMulExactNode extends IntegerMulNode implements IntegerExactA
             if (c == 0) {
                 return ConstantNode.forIntegerStamp(stamp(), 0);
             }
-        }
-        return this;
-    }
-
-    private ValueNode canonicalXconstant(ValueNode forX, ValueNode forY) {
-        Constant xConst = forX.asConstant();
-        Constant yConst = forY.asConstant();
-        assert xConst.getKind() == yConst.getKind();
-        try {
-            if (xConst.getKind() == Kind.Int) {
-                return ConstantNode.forInt(ExactMath.multiplyExact(xConst.asInt(), yConst.asInt()));
-            } else {
-                assert xConst.getKind() == Kind.Long;
-                return ConstantNode.forLong(ExactMath.multiplyExact(xConst.asLong(), yConst.asLong()));
-            }
-        } catch (ArithmeticException ex) {
-            // The operation will result in an overflow exception, so do not canonicalize.
         }
         return this;
     }

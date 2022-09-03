@@ -24,9 +24,9 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -35,15 +35,7 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(shortName = "-")
 public class IntegerSubNode extends IntegerArithmeticNode implements NarrowableArithmeticNode {
 
-    public static IntegerSubNode create(ValueNode x, ValueNode y) {
-        return new IntegerSubNodeGen(x, y);
-    }
-
-    public static Class<? extends IntegerSubNode> getGenClass() {
-        return IntegerSubNodeGen.class;
-    }
-
-    protected IntegerSubNode(ValueNode x, ValueNode y) {
+    public IntegerSubNode(ValueNode x, ValueNode y) {
         super(StampTool.sub(x.stamp(), y.stamp()), x, y);
     }
 
@@ -77,18 +69,18 @@ public class IntegerSubNode extends IntegerArithmeticNode implements NarrowableA
             IntegerSubNode x = (IntegerSubNode) forX;
             if (x.getX() == forY) {
                 // (a - b) - a
-                return NegateNode.create(x.getY());
+                return new NegateNode(x.getY());
             }
         }
         if (forY instanceof IntegerAddNode) {
             IntegerAddNode y = (IntegerAddNode) forY;
             if (y.getX() == forX) {
                 // a - (a + b)
-                return NegateNode.create(y.getY());
+                return new NegateNode(y.getY());
             }
             if (y.getY() == forX) {
                 // b - (a + b)
-                return NegateNode.create(y.getX());
+                return new NegateNode(y.getX());
             }
         } else if (forY instanceof IntegerSubNode) {
             IntegerSubNode y = (IntegerSubNode) forY;
@@ -116,7 +108,7 @@ public class IntegerSubNode extends IntegerArithmeticNode implements NarrowableA
         } else if (forX.isConstant()) {
             long c = forX.asConstant().asLong();
             if (c == 0) {
-                return NegateNode.create(forY);
+                return new NegateNode(forY);
             }
             return BinaryNode.reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
         }

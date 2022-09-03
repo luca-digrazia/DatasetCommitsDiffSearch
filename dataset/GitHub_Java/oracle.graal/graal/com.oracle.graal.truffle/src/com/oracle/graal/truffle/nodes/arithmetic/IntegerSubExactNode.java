@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@ package com.oracle.graal.truffle.nodes.arithmetic;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -37,7 +36,6 @@ import com.oracle.truffle.api.*;
  * Node representing an exact integer substraction that will throw an {@link ArithmeticException} in
  * case the addition would overflow the 32 bit range.
  */
-@NodeInfo
 public class IntegerSubExactNode extends IntegerSubNode implements IntegerExactArithmeticNode {
 
     public IntegerSubExactNode(ValueNode x, ValueNode y) {
@@ -57,29 +55,24 @@ public class IntegerSubExactNode extends IntegerSubNode implements IntegerExactA
             return ConstantNode.forIntegerStamp(stamp(), 0);
         }
         if (forX.isConstant() && forY.isConstant()) {
-            return canonicalXYconstant(forX, forY);
+            Constant xConst = forX.asConstant();
+            Constant yConst = forY.asConstant();
+            assert xConst.getKind() == yConst.getKind();
+            try {
+                if (xConst.getKind() == Kind.Int) {
+                    return ConstantNode.forInt(ExactMath.subtractExact(xConst.asInt(), yConst.asInt()), graph());
+                } else {
+                    assert xConst.getKind() == Kind.Long;
+                    return ConstantNode.forLong(ExactMath.subtractExact(xConst.asLong(), yConst.asLong()), graph());
+                }
+            } catch (ArithmeticException ex) {
+                // The operation will result in an overflow exception, so do not canonicalize.
+            }
         } else if (forY.isConstant()) {
             long c = forY.asConstant().asLong();
             if (c == 0) {
                 return forX;
             }
-        }
-        return this;
-    }
-
-    private ValueNode canonicalXYconstant(ValueNode forX, ValueNode forY) {
-        Constant xConst = forX.asConstant();
-        Constant yConst = forY.asConstant();
-        assert xConst.getKind() == yConst.getKind();
-        try {
-            if (xConst.getKind() == Kind.Int) {
-                return ConstantNode.forInt(ExactMath.subtractExact(xConst.asInt(), yConst.asInt()));
-            } else {
-                assert xConst.getKind() == Kind.Long;
-                return ConstantNode.forLong(ExactMath.subtractExact(xConst.asLong(), yConst.asLong()));
-            }
-        } catch (ArithmeticException ex) {
-            // The operation will result in an overflow exception, so do not canonicalize.
         }
         return this;
     }

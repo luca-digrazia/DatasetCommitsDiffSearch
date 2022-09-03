@@ -36,7 +36,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.util.*;
 
 public class LoopEx {
 
@@ -151,8 +150,7 @@ public class LoopEx {
                     assert !result.isDeleted();
                     result = graph.addOrUniqueWithInputs(result);
                 }
-                binary.replaceAtUsages(result);
-                GraphUtil.killWithUnusedFloatingInputs(binary);
+                graph.replaceFloating(binary, result);
             }
         }
     }
