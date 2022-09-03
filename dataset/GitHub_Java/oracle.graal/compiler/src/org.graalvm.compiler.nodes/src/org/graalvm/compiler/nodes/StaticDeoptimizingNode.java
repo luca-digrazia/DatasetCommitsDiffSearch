@@ -32,11 +32,7 @@ public interface StaticDeoptimizingNode extends ValueNodeInterface {
 
     DeoptimizationReason getReason();
 
-    void setReason(DeoptimizationReason reason);
-
     DeoptimizationAction getAction();
-
-    void setAction(DeoptimizationAction action);
 
     JavaConstant getSpeculation();
 
@@ -78,16 +74,5 @@ public interface StaticDeoptimizingNode extends ValueNodeInterface {
                 return GuardNode.GuardPriority.None;
         }
         throw GraalError.shouldNotReachHere();
-    }
-
-    static DeoptimizationAction mergeActions(DeoptimizationAction a1, DeoptimizationAction a2) {
-        if (a1 == a2) {
-            return a1;
-        }
-        if (a1 == DeoptimizationAction.InvalidateRecompile && a2 == DeoptimizationAction.InvalidateReprofile ||
-                        a1 == DeoptimizationAction.InvalidateReprofile && a2 == DeoptimizationAction.InvalidateRecompile) {
-            return DeoptimizationAction.InvalidateReprofile;
-        }
-        return null;
     }
 }
