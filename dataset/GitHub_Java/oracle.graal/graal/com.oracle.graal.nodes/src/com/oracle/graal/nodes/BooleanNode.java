@@ -34,7 +34,7 @@ public abstract class BooleanNode extends FloatingNode {
         super(stamp);
     }
 
-    public BooleanNode(Stamp stamp, ValueNode... dependencies) {
+    public BooleanNode(Stamp stamp, Node... dependencies) {
         super(stamp, dependencies);
     }
 

@@ -22,10 +22,6 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import java.util.concurrent.*;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.InputChangedListener;
@@ -33,6 +29,8 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 public class CanonicalizerPhase extends Phase {
     private static final int MAX_ITERATION_PER_NODE = 10;
@@ -42,16 +40,16 @@ public class CanonicalizerPhase extends Phase {
     public static final DebugMetric METRIC_GLOBAL_VALUE_NUMBERING_HITS = Debug.metric("GlobalValueNumberingHits");
 
     private final int newNodesMark;
-    private final TargetDescription target;
-    private final Assumptions assumptions;
-    private final CodeCacheProvider runtime;
+    private final CiTarget target;
+    private final CiAssumptions assumptions;
+    private final RiRuntime runtime;
     private final IsImmutablePredicate immutabilityPredicate;
     private final Iterable<Node> initWorkingSet;
 
     private NodeWorkList workList;
     private Tool tool;
 
-    public CanonicalizerPhase(TargetDescription target, CodeCacheProvider runtime, Assumptions assumptions) {
+    public CanonicalizerPhase(CiTarget target, RiRuntime runtime, CiAssumptions assumptions) {
         this(target, runtime, assumptions, null, 0, null);
     }
 
@@ -62,7 +60,7 @@ public class CanonicalizerPhase extends Phase {
      * @param workingSet the initial working set of nodes on which the canonicalizer works, should be an auto-grow node bitmap
      * @param immutabilityPredicate
      */
-    public CanonicalizerPhase(TargetDescription target, CodeCacheProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, IsImmutablePredicate immutabilityPredicate) {
+    public CanonicalizerPhase(CiTarget target, RiRuntime runtime, CiAssumptions assumptions, Iterable<Node> workingSet, IsImmutablePredicate immutabilityPredicate) {
         this(target, runtime, assumptions, workingSet, 0, immutabilityPredicate);
     }
 
@@ -70,11 +68,11 @@ public class CanonicalizerPhase extends Phase {
      * @param newNodesMark only the {@linkplain Graph#getNewNodes(int) new nodes} specified by
      *            this mark are processed otherwise all nodes in the graph are processed
      */
-    public CanonicalizerPhase(TargetDescription target, CodeCacheProvider runtime, Assumptions assumptions, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
+    public CanonicalizerPhase(CiTarget target, RiRuntime runtime, CiAssumptions assumptions, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
         this(target, runtime, assumptions, null, newNodesMark, immutabilityPredicate);
     }
 
-    private CanonicalizerPhase(TargetDescription target, CodeCacheProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
+    private CanonicalizerPhase(CiTarget target, RiRuntime runtime, CiAssumptions assumptions, Iterable<Node> workingSet, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
         this.newNodesMark = newNodesMark;
         this.target = target;
         this.assumptions = assumptions;
@@ -96,14 +94,6 @@ public class CanonicalizerPhase extends Phase {
         }
         tool = new Tool(workList, runtime, target, assumptions, immutabilityPredicate);
         processWorkSet(graph);
-
-        while (graph.getUsagesDroppedNodesCount() > 0) {
-            for (Node n : graph.getAndCleanUsagesDroppedNodes()) {
-                if (!n.isDeleted() && n.usages().size() == 0 && GraphUtil.isFloatingNode().apply(n)) {
-                    n.safeDelete();
-                }
-            }
-        }
     }
 
     public interface IsImmutablePredicate {
@@ -111,7 +101,7 @@ public class CanonicalizerPhase extends Phase {
          * Determines if a given constant is an object/array whose current
          * fields/elements will never change.
          */
-        boolean apply(Constant constant);
+        boolean apply(CiConstant constant);
     }
 
     private void processWorkSet(StructuredGraph graph) {
@@ -160,14 +150,10 @@ public class CanonicalizerPhase extends Phase {
         return false;
     }
 
-    public static void tryCanonicalize(final Node node, StructuredGraph graph, final SimplifierTool tool) {
+    public static void tryCanonicalize(Node node, StructuredGraph graph, SimplifierTool tool) {
         if (node instanceof Canonicalizable) {
             METRIC_CANONICALIZATION_CONSIDERED_NODES.increment();
-            ValueNode canonical = Debug.scope("CanonicalizeNode", node, new Callable<ValueNode>() {
-                public ValueNode call() throws Exception {
-                    return ((Canonicalizable) node).canonical(tool);
-                }
-            });
+            ValueNode canonical = ((Canonicalizable) node).canonical(tool);
 //     cases:                                           original node:
 //                                         |Floating|Fixed-unconnected|Fixed-connected|
 //                                         --------------------------------------------
@@ -229,12 +215,12 @@ public class CanonicalizerPhase extends Phase {
     private static final class Tool implements SimplifierTool {
 
         private final NodeWorkList nodeWorkSet;
-        private final CodeCacheProvider runtime;
-        private final TargetDescription target;
-        private final Assumptions assumptions;
+        private final RiRuntime runtime;
+        private final CiTarget target;
+        private final CiAssumptions assumptions;
         private final IsImmutablePredicate immutabilityPredicate;
 
-        public Tool(NodeWorkList nodeWorkSet, CodeCacheProvider runtime, TargetDescription target, Assumptions assumptions, IsImmutablePredicate immutabilityPredicate) {
+        public Tool(NodeWorkList nodeWorkSet, RiRuntime runtime, CiTarget target, CiAssumptions assumptions, IsImmutablePredicate immutabilityPredicate) {
             this.nodeWorkSet = nodeWorkSet;
             this.runtime = runtime;
             this.target = target;
@@ -252,7 +238,7 @@ public class CanonicalizerPhase extends Phase {
          * @return the current target or {@code null} if no target is available in the current context.
          */
         @Override
-        public TargetDescription target() {
+        public CiTarget target() {
             return target;
         }
 
@@ -260,12 +246,12 @@ public class CanonicalizerPhase extends Phase {
          * @return an object that can be used for recording assumptions or {@code null} if assumptions are not allowed in the current context.
          */
         @Override
-        public Assumptions assumptions() {
+        public CiAssumptions assumptions() {
             return assumptions;
         }
 
         @Override
-        public CodeCacheProvider runtime() {
+        public RiRuntime runtime() {
             return runtime;
         }
 
@@ -275,7 +261,7 @@ public class CanonicalizerPhase extends Phase {
         }
 
         @Override
-        public boolean isImmutable(Constant objectConstant) {
+        public boolean isImmutable(CiConstant objectConstant) {
             return immutabilityPredicate != null && immutabilityPredicate.apply(objectConstant);
         }
     }

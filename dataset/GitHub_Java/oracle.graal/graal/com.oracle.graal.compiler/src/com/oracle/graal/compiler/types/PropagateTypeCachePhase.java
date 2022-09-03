@@ -99,13 +99,15 @@ public class PropagateTypeCachePhase extends Phase {
             }
         }
         for (FixedGuardNode guard : graph.getNodes(FixedGuardNode.class)) {
-            BooleanNode condition = guard.condition();
-            if (condition != null && condition.usages().size() > 1) {
-                BooleanNode clone = (BooleanNode) condition.copyWithInputs();
-                if (DUMP) {
-                    out.println("replaced!! " + clone);
+            for (int i = 0; i < guard.conditions().size(); i++) {
+                BooleanNode condition = guard.conditions().get(i);
+                if (condition != null && condition.usages().size() > 1) {
+                    BooleanNode clone = (BooleanNode) condition.copyWithInputs();
+                    if (DUMP) {
+                        out.println("replaced!! " + clone);
+                    }
+                    guard.conditions().set(i, clone);
                 }
-                guard.setCondition(clone);
             }
         }
 
@@ -226,7 +228,7 @@ public class PropagateTypeCachePhase extends Phase {
                             if (canonical.dependencies.length > 0) {
                                 for (Node usage : node.usages()) {
                                     if (usage instanceof ValueNode) {
-                                        for (ValueNode dependency : canonical.dependencies) {
+                                        for (Node dependency : canonical.dependencies) {
                                             // TODO(lstadler) dead dependencies should be handled differently
                                             if (dependency.isAlive()) {
                                                 ((ValueNode) usage).dependencies().add(dependency);
@@ -245,7 +247,7 @@ public class PropagateTypeCachePhase extends Phase {
                         }
                     }
                     if (node.isAlive() && node instanceof TypeFeedbackProvider) {
-                        changed.node = (ValueNode) node;
+                        changed.node = node;
                         ((TypeFeedbackProvider) node).typeFeedback(cache);
                         if (DUMP) {
                             out.println("  " + cache);

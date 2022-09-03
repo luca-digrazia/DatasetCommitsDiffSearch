@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
@@ -37,8 +36,8 @@ public final class FloatEqualsNode extends CompareNode {
      */
     public FloatEqualsNode(ValueNode x, ValueNode y) {
         super(x, y);
-        assert x.kind() == Kind.Double || x.kind() == Kind.Float;
-        assert y.kind() == Kind.Double || y.kind() == Kind.Float;
+        assert x.kind().isFloatOrDouble();
+        assert y.kind().isFloatOrDouble();
     }
 
     @Override

@@ -90,7 +90,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
             FixedNode next = otherBegin.next();
             otherBegin.setNext(null);
             guard.setNext(next);
-            ifNode.replaceAtPredecessor(guard);
+            ifNode.replaceAtPredecessors(guard);
             GraphUtil.killCFG(ifNode);
         }
     }

@@ -74,9 +74,7 @@ public class ConditionalNode extends BinaryNode implements Canonicalizable, LIRL
     }
 
     @Override
-    public Negatable negate() {
-        ConditionalNode replacement = graph().unique(new ConditionalNode(condition, falseValue(), trueValue()));
-        ((StructuredGraph) graph()).replaceFloating(this, replacement);
-        return replacement;
+    public void negate() {
+        ((StructuredGraph) graph()).replaceFloating(this, graph().unique(new ConditionalNode(condition, falseValue(), trueValue())));
     }
 }

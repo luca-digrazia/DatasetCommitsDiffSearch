@@ -22,16 +22,17 @@
  */
 package com.oracle.graal.cri;
 
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 
 public interface CiLoweringTool {
     GraalRuntime getRuntime();
-    ValueNode getGuardAnchor();
-    ValueNode createNullCheckGuard(ValueNode object, long leafGraphId);
-    ValueNode createGuard(BooleanNode condition, RiDeoptReason deoptReason, RiDeoptAction action, long leafGraphId);
-    ValueNode createGuard(BooleanNode condition, RiDeoptReason deoptReason, RiDeoptAction action, boolean negated, long leafGraphId);
+    Node getGuardAnchor();
+    Node createNullCheckGuard(ValueNode object, long leafGraphId);
+    Node createGuard(Node condition, RiDeoptReason deoptReason, RiDeoptAction action, long leafGraphId);
+    Node createGuard(Node condition, RiDeoptReason deoptReason, RiDeoptAction action, boolean negated, long leafGraphId);
     CiAssumptions assumptions();
 }
 

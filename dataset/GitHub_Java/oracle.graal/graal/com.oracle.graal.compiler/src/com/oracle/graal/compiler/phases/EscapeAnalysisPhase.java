@@ -81,13 +81,13 @@ public class EscapeAnalysisPhase extends Phase {
             PhiNode[] valuePhis = new PhiNode[fieldState.length];
             for (BlockExitState other : withStates) {
                 if (virtualObjectField != other.virtualObjectField && vobjPhi == null) {
-                    vobjPhi = graph.add(new PhiNode(PhiType.Virtual, merge));
+                    vobjPhi = graph.add(new PhiNode(CiKind.Illegal, merge, PhiType.Virtual));
                     vobjPhi.addInput(virtualObjectField);
                     virtualObjectField = vobjPhi;
                 }
                 for (int i2 = 0; i2 < fieldState.length; i2++) {
                     if (fieldState[i2] != other.fieldState[i2] && valuePhis[i2] == null) {
-                        valuePhis[i2] = graph.add(new PhiNode(fieldState[i2].kind(), merge));
+                        valuePhis[i2] = graph.add(new PhiNode(fieldState[i2].kind(), merge, PhiType.Value));
                         valuePhis[i2].addInput(fieldState[i2]);
                         fieldState[i2] = valuePhis[i2];
                     }
@@ -117,11 +117,11 @@ public class EscapeAnalysisPhase extends Phase {
         public void loopBegin(LoopBeginNode loopBegin) {
             assert virtualObjectField != null : "unexpected null virtualObjectField";
             PhiNode vobjPhi = null;
-            vobjPhi = graph.add(new PhiNode(PhiType.Virtual, loopBegin));
+            vobjPhi = graph.add(new PhiNode(CiKind.Illegal, loopBegin, PhiType.Virtual));
             vobjPhi.addInput(virtualObjectField);
             virtualObjectField = vobjPhi;
             for (int i2 = 0; i2 < fieldState.length; i2++) {
-                PhiNode valuePhi = graph.add(new PhiNode(fieldState[i2].kind(), loopBegin));
+                PhiNode valuePhi = graph.add(new PhiNode(fieldState[i2].kind(), loopBegin, PhiType.Value));
                 valuePhi.addInput(fieldState[i2]);
                 fieldState[i2] = valuePhi;
                 updateField(i2);
@@ -180,8 +180,7 @@ public class EscapeAnalysisPhase extends Phase {
             for (int i = 0; i < escapeFields.length; i++) {
                 fields.put(escapeFields[i].representation(), i);
             }
-            assert node.objectStamp().isExactType();
-            final VirtualObjectNode virtual = graph.add(new VirtualObjectNode(node.objectStamp().type(), escapeFields));
+            final VirtualObjectNode virtual = graph.add(new VirtualObjectNode(((ValueNode) node).exactType(), escapeFields));
             if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
                 TTY.println("new virtual object: " + virtual);
             }
@@ -386,7 +385,7 @@ public class EscapeAnalysisPhase extends Phase {
             double weight = analyze(op, node, exits, invokes);
             if (exits.size() != 0) {
                 if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
-                    TTY.println("%n####### escaping object: %s (%s)", node, node.stamp());
+                    TTY.println("%n####### escaping object: %s (%s)", node, node.exactType());
                     if (GraalOptions.TraceEscapeAnalysis) {
                         TTY.print("%d: new value: %s, weight %f, escapes at ", iterations, node, weight);
                         for (Node n : exits) {
@@ -403,7 +402,7 @@ public class EscapeAnalysisPhase extends Phase {
             if (invokes.size() == 0) {
 
                 Debug.dump(graph, "Before escape %s", node);
-                Debug.log("!!!!!!!! non-escaping object: %s (%s)", node, node.stamp());
+                Debug.log("!!!!!!!! non-escaping object: %s (%s)", node, node.exactType());
                 removeAllocation(node, op);
                 Debug.dump(graph, "After escape", graph);
                 break;
@@ -424,7 +423,7 @@ public class EscapeAnalysisPhase extends Phase {
             new DeadCodeEliminationPhase().apply(graph);
             if (node.isDeleted()) {
                 if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
-                    TTY.println("!!!!!!!! object died while performing escape analysis: %s (%s)", node, node.stamp());
+                    TTY.println("!!!!!!!! object died while performing escape analysis: %s (%s)", node, node.exactType());
                 }
                 break;
             }
