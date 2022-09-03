@@ -28,8 +28,8 @@ import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
 import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
@@ -45,9 +45,9 @@ import com.oracle.graal.word.*;
  * Stub called by an {@link UnwindNode}. This stub executes in the frame of the method throwing an
  * exception and completes by jumping to the exception handler in the calling frame.
  */
-public class UnwindExceptionToCallerStub extends SnippetStub {
+public class UnwindExceptionToCallerStub extends CRuntimeStub {
 
-    public UnwindExceptionToCallerStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotForeignCallLinkage linkage) {
+    public UnwindExceptionToCallerStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
         super(runtime, replacements, target, linkage);
     }
 
@@ -97,8 +97,8 @@ public class UnwindExceptionToCallerStub extends SnippetStub {
         return enabled || graalRuntime().getConfig().cAssertions;
     }
 
-    public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_RETURN_ADDRESS = descriptorFor(UnwindExceptionToCallerStub.class, "exceptionHandlerForReturnAddress");
+    public static final Descriptor EXCEPTION_HANDLER_FOR_RETURN_ADDRESS = descriptorFor(UnwindExceptionToCallerStub.class, "exceptionHandlerForReturnAddress", false);
 
-    @NodeIntrinsic(value = StubForeignCallNode.class, setStampFromReturnType = true)
-    public static native Word exceptionHandlerForReturnAddress(@ConstantNodeParameter ForeignCallDescriptor exceptionHandlerForReturnAddress, Word thread, Word returnAddress);
+    @NodeIntrinsic(value = CRuntimeCall.class, setStampFromReturnType = true)
+    public static native Word exceptionHandlerForReturnAddress(@ConstantNodeParameter Descriptor exceptionHandlerForReturnAddress, Word thread, Word returnAddress);
 }
