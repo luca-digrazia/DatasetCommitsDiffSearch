@@ -22,17 +22,18 @@
  */
 package org.graalvm.compiler.replacements;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import static org.graalvm.compiler.debug.GraalError.unimplemented;
+import static org.graalvm.compiler.java.BytecodeParserOptions.DumpDuringGraphBuilding;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
+import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.core.common.PermanentBailoutException;
@@ -46,6 +47,7 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeSourcePosition;
+import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.graph.spi.Canonicalizable;
 import org.graalvm.compiler.java.GraphBuilderPhase;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
@@ -83,6 +85,8 @@ import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin.LoopExplosionKind;
 import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
+import org.graalvm.compiler.nodes.java.InstanceOfDynamicNode;
+import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
@@ -100,17 +104,17 @@ import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import static org.graalvm.compiler.debug.GraalError.unimplemented;
-import static org.graalvm.compiler.java.BytecodeParserOptions.DumpDuringGraphBuilding;
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * A graph decoder that performs partial evaluation, i.e., that performs method inlining and
@@ -800,19 +804,21 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         NodePlugin nodePlugin = methodScope.nodePlugin;
         FixedWithNextNode predecessor = (node.predecessor() instanceof FixedWithNextNode) ? (FixedWithNextNode) node.predecessor() : null;
         PEAppendGraphBuilderContext graphBuilderContext = new PEAppendGraphBuilderContext(methodScope, node, predecessor, -1);
-        FixedNode replacedNode = node;
+
+        // Remove the node from the graph so that the plugin can append a replacement node to the predecessor.
+        if (predecessor != null) {
+            node.replaceAtPredecessor(null);
+        }
 
         if (node instanceof ForeignCallNode) {
             ForeignCallNode foreignCall = (ForeignCallNode) node;
             if (foreignCall.getBci() == BytecodeFrame.UNKNOWN_BCI && methodScope.invokeData != null) {
                 foreignCall.setBci(methodScope.invokeData.invoke.bci());
             }
-        } else if (nodePlugin != null) {
-            // Remove the node from the graph so that the plugin can append a replacement node to the predecessor.
             if (predecessor != null) {
-                node.replaceAtPredecessor(null);
+                predecessor.setNext(node);
             }
-
+        } else if (nodePlugin != null) {
             if (node instanceof Invoke) {
                 // TODO
                 if (predecessor != null) {
@@ -833,14 +839,13 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 ValueNode array = loadIndexedNode.array();
                 ValueNode index = loadIndexedNode.index();
                 if (nodePlugin.handleLoadIndexed(graphBuilderContext, array, index, loadIndexedNode.elementKind())) {
-                    registerNode(loopScope, nodeOrderId, graphBuilderContext.pushedNode, true, false);
+                    registerNode(loopScope, nodeOrderId, graphBuilderContext.pushedNode, true, true);
                     node.replaceAtUsages(graphBuilderContext.pushedNode);
-                    // FixedNode successor = nodeAfterFixedNode(methodScope, loopScope, node, AbstractBeginNode.prevBegin(graphBuilderContext.lastInstr));
-                    FixedNode successor = loadIndexedNode.next();
+                    FixedNode successor = nodeAfterFixedNode(methodScope, loopScope, node, AbstractBeginNode.prevBegin(graphBuilderContext.lastInstr));
                     successor.replaceAtPredecessor(null);
                     graphBuilderContext.lastInstr.setNext(successor);
                     deleteFixedNode(node);
-                    replacedNode = graphBuilderContext.lastInstr;
+                    node = graphBuilderContext.lastInstr;
                 } else {
                     if (predecessor != null) {
                         predecessor.setNext(node);
@@ -873,22 +878,22 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             }
         }
 
-        NodeSourcePosition pos = replacedNode.getNodeSourcePosition();
+        NodeSourcePosition pos = node.getNodeSourcePosition();
         if (pos != null && methodScope.isInlinedMethod()) {
             NodeSourcePosition newPosition = pos.addCaller(methodScope.getCallerBytecodePosition());
-            try (DebugCloseable scope = replacedNode.graph().withNodeSourcePosition(newPosition)) {
-                super.handleFixedNode(s, loopScope, nodeOrderId, replacedNode);
+            try (DebugCloseable scope = node.graph().withNodeSourcePosition(newPosition)) {
+                super.handleFixedNode(s, loopScope, nodeOrderId, node);
             }
-            if (replacedNode.isAlive()) {
-                replacedNode.setNodeSourcePosition(newPosition);
+            if (node.isAlive()) {
+                node.setNodeSourcePosition(newPosition);
             }
         } else {
-            super.handleFixedNode(s, loopScope, nodeOrderId, replacedNode);
+            super.handleFixedNode(s, loopScope, nodeOrderId, node);
         }
 
     }
 
-    private static void deleteFixedNode(FixedNode node) {
+    private void deleteFixedNode(FixedNode node) {
         FrameState frameState = null;
         if (node instanceof StateSplit) {
             frameState = ((StateSplit) node).stateAfter();
@@ -897,6 +902,12 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         if (frameState != null && frameState.hasNoUsages()) {
             frameState.safeDelete();
         }
+    }
+
+    private FixedNode nodeAfterFixedNode(PEMethodScope methodScope, LoopScope loopScope, FixedNode node, AbstractBeginNode lastBlock) {
+        assert lastBlock.isAlive();
+        FixedNode n = makeStubNode(methodScope, loopScope, loopScope.nodesToProcess.nextSetBit(0));
+        return n;
     }
 
     @Override
