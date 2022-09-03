@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.loop;
 
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
-
 import java.util.*;
 
 import com.oracle.graal.compiler.common.cfg.*;
@@ -34,8 +32,8 @@ import com.oracle.graal.nodes.cfg.*;
 
 public class LoopsData {
 
-    private Map<Loop<Block>, LoopEx> loopToEx = newIdentityMap();
-    private Map<LoopBeginNode, LoopEx> loopBeginToEx = newNodeIdentityMap();
+    private Map<Loop<Block>, LoopEx> lirLoopToEx = new IdentityHashMap<>();
+    private Map<LoopBeginNode, LoopEx> loopBeginToEx = new IdentityHashMap<>();
     private ControlFlowGraph cfg;
 
     public LoopsData(final StructuredGraph graph) {
@@ -45,15 +43,15 @@ public class LoopsData {
             throw Debug.handle(e);
         }
 
-        for (Loop<Block> loop : cfg.getLoops()) {
-            LoopEx ex = new LoopEx(loop, this);
-            loopToEx.put(loop, ex);
+        for (Loop<Block> lirLoop : cfg.getLoops()) {
+            LoopEx ex = new LoopEx(lirLoop, this);
+            lirLoopToEx.put(lirLoop, ex);
             loopBeginToEx.put(ex.loopBegin(), ex);
         }
     }
 
-    public LoopEx loop(Loop<?> loop) {
-        return loopToEx.get(loop);
+    public LoopEx loop(Loop<?> lirLoop) {
+        return lirLoopToEx.get(lirLoop);
     }
 
     public LoopEx loop(LoopBeginNode loopBegin) {
@@ -61,7 +59,7 @@ public class LoopsData {
     }
 
     public Collection<LoopEx> loops() {
-        return loopToEx.values();
+        return lirLoopToEx.values();
     }
 
     public List<LoopEx> outterFirst() {
@@ -70,7 +68,7 @@ public class LoopsData {
 
             @Override
             public int compare(LoopEx o1, LoopEx o2) {
-                return o1.loop().getDepth() - o2.loop().getDepth();
+                return o1.lirLoop().getDepth() - o2.lirLoop().getDepth();
             }
         });
         return loops;
@@ -82,7 +80,7 @@ public class LoopsData {
 
             @Override
             public int compare(LoopEx o1, LoopEx o2) {
-                return o2.loop().getDepth() - o1.loop().getDepth();
+                return o2.lirLoop().getDepth() - o1.lirLoop().getDepth();
             }
         });
         return loops;

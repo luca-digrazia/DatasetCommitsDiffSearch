@@ -145,7 +145,7 @@ public class NestedLoopTest extends GraalCompilerTest {
     }
 
     private void test(String snippet, int rootExits, int nestedExits, int innerExits) {
-        StructuredGraph graph = parseEager(snippet);
+        StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);
 

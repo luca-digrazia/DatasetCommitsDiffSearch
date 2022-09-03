@@ -25,6 +25,7 @@ package com.oracle.graal.loop;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 
@@ -39,22 +40,22 @@ public class LoopFragmentWhole extends LoopFragment {
     }
 
     @Override
-    public LoopFragmentWhole duplicate(boolean createExitFrameStates) {
+    public LoopFragmentWhole duplicate() {
         LoopFragmentWhole loopFragmentWhole = new LoopFragmentWhole(this);
-        loopFragmentWhole.reify(createExitFrameStates);
+        loopFragmentWhole.reify();
         return loopFragmentWhole;
     }
 
-    private void reify(boolean createExitFrameStates) {
+    private void reify() {
         assert this.isDuplicate();
 
         patchNodes(null);
 
-        mergeEarlyExits(createExitFrameStates);
+        mergeEarlyExits();
     }
 
     @Override
-    public NodeBitMap nodes() {
+    public NodeIterable<Node> nodes() {
         if (nodes == null) {
             Loop<Block> lirLoop = loop().lirLoop();
             nodes = LoopFragment.computeNodes(graph(), LoopFragment.toHirBlocks(lirLoop.getBlocks()), LoopFragment.toHirExits(lirLoop.getExits()));
@@ -102,7 +103,7 @@ public class LoopFragmentWhole extends LoopFragment {
     }
 
     @Override
-    public void insertBefore(LoopEx loop, boolean createExitFrameStates) {
+    public void insertBefore(LoopEx loop) {
         // TODO Auto-generated method stub
 
     }

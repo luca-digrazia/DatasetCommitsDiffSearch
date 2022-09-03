@@ -25,259 +25,241 @@ package com.oracle.graal.alloc;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.cfg.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.compiler.common.cfg.*;
 
 /**
- * Computes an ordering of the block that can be used by the linear scan register allocator
- * and the machine code generator.
+ * Computes an ordering of the block that can be used by the linear scan register allocator and the
+ * machine code generator. The machine code generation order will start with the first block and
+ * produce a straight sequence always following the most likely successor. Then it will continue
+ * with the most likely path that was left out during this process. The process iteratively
+ * continues until all blocks are scheduled. Additionally, it is guaranteed that all blocks of a
+ * loop are scheduled before any block following the loop is scheduled.
+ *
+ * The machine code generator order includes reordering of loop headers such that the backward jump
+ * is a conditional jump if there is only one loop end block. Additionally, the target of loop
+ * backward jumps are always marked as aligned. Aligning the target of conditional jumps does not
+ * bring a measurable benefit and is therefore avoided to keep the code size small.
+ *
+ * The linear scan register allocator order has an additional mechanism that prevents merge nodes
+ * from being scheduled if there is at least one highly likely predecessor still unscheduled. This
+ * increases the probability that the merge node and the corresponding predecessor are more closely
+ * together in the schedule thus decreasing the probability for inserted phi moves. Also, the
+ * algorithm sets the linear scan order number of the block that corresponds to its index in the
+ * linear scan order.
  */
 public final class ComputeBlockOrder {
-    private int blockCount;
-    private List<Block> linearScanOrder;
-    private List<Block> codeEmittingOrder;
-    private final BitSet visitedBlocks; // used for recursive processing of blocks
-    private final BitSet activeBlocks; // used for recursive processing of blocks
-    private final int[] forwardBranches; // number of incoming forward branches for each block
-    private final List<Block> workList; // temporary list (used in markLoops and computeOrder)
-    private final List<Block> loopHeaders;
-    private final boolean reorderLoops;
-
-    public ComputeBlockOrder(int maxBlockId, int loopCount, Block startBlock, boolean reorderLoops) {
-        loopHeaders = new ArrayList<>(loopCount);
-        while (loopHeaders.size() < loopCount) {
-            loopHeaders.add(null);
-        }
-        visitedBlocks = new BitSet(maxBlockId);
-        activeBlocks = new BitSet(maxBlockId);
-        forwardBranches = new int[maxBlockId];
-        workList = new ArrayList<>(8);
-        this.reorderLoops = reorderLoops;
-
-        countEdges(startBlock, null);
-        computeOrder(startBlock);
-    }
 
     /**
-     * Returns the block order used for the linear scan register allocator.
-     * @return list of sorted blocks
+     * The initial capacities of the worklists used for iteratively finding the block order.
      */
-    public List<Block> linearScanOrder() {
-        return linearScanOrder;
-    }
+    private static final int INITIAL_WORKLIST_CAPACITY = 10;
 
     /**
-     * Returns the block order used for machine code generation.
-     * @return list of sorted blocks2222
+     * Divisor used for degrading the probability of the current path versus unscheduled paths at a
+     * merge node when calculating the linear scan order. A high value means that predecessors of
+     * merge nodes are more likely to be scheduled before the merge node.
      */
-    public List<Block> codeEmittingOrder() {
-        return codeEmittingOrder;
-    }
-
-    private boolean isVisited(Block b) {
-        return visitedBlocks.get(b.getId());
-    }
-
-    private boolean isActive(Block b) {
-        return activeBlocks.get(b.getId());
-    }
-
-    private void setVisited(Block b) {
-        assert !isVisited(b);
-        visitedBlocks.set(b.getId());
-    }
-
-    private void setActive(Block b) {
-        assert !isActive(b);
-        activeBlocks.set(b.getId());
-    }
-
-    private void clearActive(Block b) {
-        assert isActive(b);
-        activeBlocks.clear(b.getId());
-    }
-
-    private void incForwardBranches(Block b) {
-        forwardBranches[b.getId()]++;
-    }
-
-    private int decForwardBranches(Block b) {
-        return --forwardBranches[b.getId()];
-    }
+    private static final int PENALTY_VERSUS_UNSCHEDULED = 10;
 
     /**
-     * Traverses the CFG to analyze block and edge info. The analysis performed is:
+     * Computes the block order used for the linear scan register allocator.
      *
-     * 1. Count of total number of blocks.
-     * 2. Count of all incoming edges and backward incoming edges.
-     * 3. Number loop header blocks.
-     * 4. Create a list with all loop end blocks.
+     * @return sorted list of blocks
      */
-    private void countEdges(Block cur, Block parent) {
-        Debug.log("Counting edges for block B%d%s", cur.getId(), parent == null ? "" : " coming from B" + parent.getId());
-
-        if (isActive(cur)) {
-            return;
-        }
-
-        // increment number of incoming forward branches
-        incForwardBranches(cur);
-
-        if (isVisited(cur)) {
-            return;
-        }
-
-        blockCount++;
-        setVisited(cur);
-        setActive(cur);
-
-        // recursive call for all successors
-        for (int i = cur.numberOfSux() - 1; i >= 0; i--) {
-            countEdges(cur.suxAt(i), cur);
-        }
-
-        clearActive(cur);
-
-        Debug.log("Finished counting edges for block B%d", cur.getId());
+    public static <T extends AbstractBlock<T>> List<T> computeLinearScanOrder(int blockCount, T startBlock) {
+        List<T> order = new ArrayList<>();
+        BitSet visitedBlocks = new BitSet(blockCount);
+        PriorityQueue<T> worklist = initializeWorklist(startBlock, visitedBlocks);
+        computeLinearScanOrder(order, worklist, visitedBlocks);
+        assert checkOrder(order, blockCount);
+        return order;
     }
 
-    private static int computeWeight(Block cur) {
-
-        // limit loop-depth to 15 bit (only for security reason, it will never be so big)
-        int weight = (cur.getLoopDepth() & 0x7FFF) << 16;
-
-        int curBit = 15;
-
-        // loop end blocks (blocks that end with a backward branch) are added
-        // after all other blocks of the loop.
-        if (!cur.isLoopEnd()) {
-            weight |= 1 << curBit;
-        }
-        curBit--;
-
-        // exceptions handlers are added as late as possible
-        if (!cur.isExceptionEntry()) {
-            weight |= 1 << curBit;
-        }
-        curBit--;
-
-        // guarantee that weight is > 0
-        weight |= 1;
-
-        assert curBit >= 0 : "too many flags";
-        assert weight > 0 : "weight cannot become negative";
-
-        return weight;
+    /**
+     * Computes the block order used for code emission.
+     *
+     * @return sorted list of blocks
+     */
+    public static <T extends AbstractBlock<T>> List<T> computeCodeEmittingOrder(int blockCount, T startBlock) {
+        List<T> order = new ArrayList<>();
+        BitSet visitedBlocks = new BitSet(blockCount);
+        PriorityQueue<T> worklist = initializeWorklist(startBlock, visitedBlocks);
+        computeCodeEmittingOrder(order, worklist, visitedBlocks);
+        assert checkOrder(order, blockCount);
+        return order;
     }
 
-    private boolean readyForProcessing(Block cur) {
-        // Discount the edge just traveled.
-        // When the number drops to zero, all forward branches were processed
-        if (decForwardBranches(cur) != 0) {
-            return false;
+    /**
+     * Iteratively adds paths to the code emission block order.
+     */
+    private static <T extends AbstractBlock<T>> void computeCodeEmittingOrder(List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+        while (!worklist.isEmpty()) {
+            T nextImportantPath = worklist.poll();
+            addPathToCodeEmittingOrder(nextImportantPath, order, worklist, visitedBlocks);
         }
+    }
 
-        assert !linearScanOrder.contains(cur) : "block already processed (block can be ready only once)";
-        assert !workList.contains(cur) : "block already in work-list (block can be ready only once)";
+    /**
+     * Iteratively adds paths to the linear scan block order.
+     */
+    private static <T extends AbstractBlock<T>> void computeLinearScanOrder(List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+        while (!worklist.isEmpty()) {
+            T nextImportantPath = worklist.poll();
+            addPathToLinearScanOrder(nextImportantPath, order, worklist, visitedBlocks);
+        }
+    }
+
+    /**
+     * Initializes the priority queue used for the work list of blocks and adds the start block.
+     */
+    private static <T extends AbstractBlock<T>> PriorityQueue<T> initializeWorklist(T startBlock, BitSet visitedBlocks) {
+        PriorityQueue<T> result = new PriorityQueue<>(INITIAL_WORKLIST_CAPACITY, new BlockOrderComparator<>());
+        result.add(startBlock);
+        visitedBlocks.set(startBlock.getId());
+        return result;
+    }
+
+    /**
+     * Add a linear path to the linear scan order greedily following the most likely successor.
+     */
+    private static <T extends AbstractBlock<T>> void addPathToLinearScanOrder(T block, List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+        block.setLinearScanNumber(order.size());
+        order.add(block);
+        T mostLikelySuccessor = findAndMarkMostLikelySuccessor(block, visitedBlocks);
+        enqueueSuccessors(block, worklist, visitedBlocks);
+        if (mostLikelySuccessor != null) {
+            if (!mostLikelySuccessor.isLoopHeader() && mostLikelySuccessor.getPredecessorCount() > 1) {
+                // We are at a merge. Check probabilities of predecessors that are not yet
+                // scheduled.
+                double unscheduledSum = 0.0;
+                for (T pred : mostLikelySuccessor.getPredecessors()) {
+                    if (pred.getLinearScanNumber() == -1) {
+                        unscheduledSum += pred.probability();
+                    }
+                }
+
+                if (unscheduledSum > block.probability() / PENALTY_VERSUS_UNSCHEDULED) {
+                    // Add this merge only after at least one additional predecessor gets scheduled.
+                    visitedBlocks.clear(mostLikelySuccessor.getId());
+                    return;
+                }
+            }
+            addPathToLinearScanOrder(mostLikelySuccessor, order, worklist, visitedBlocks);
+        }
+    }
+
+    /**
+     * Add a linear path to the code emission order greedily following the most likely successor.
+     */
+    private static <T extends AbstractBlock<T>> void addPathToCodeEmittingOrder(T initialBlock, List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+        T block = initialBlock;
+        while (block != null) {
+            // Skip loop headers if there is only a single loop end block to
+            // make the backward jump be a conditional jump.
+            if (!skipLoopHeader(block)) {
+
+                // Align unskipped loop headers as they are the target of the backward jump.
+                if (block.isLoopHeader()) {
+                    block.setAlign(true);
+                }
+                addBlock(block, order);
+            }
+
+            Loop<T> loop = block.getLoop();
+            if (block.isLoopEnd() && skipLoopHeader(loop.getHeader())) {
+
+                // This is the only loop end of a skipped loop header.
+                // Add the header immediately afterwards.
+                addBlock(loop.getHeader(), order);
+
+                // Make sure the loop successors of the loop header are aligned
+                // as they are the target
+                // of the backward jump.
+                for (T successor : loop.getHeader().getSuccessors()) {
+                    if (successor.getLoopDepth() == block.getLoopDepth()) {
+                        successor.setAlign(true);
+                    }
+                }
+            }
+
+            T mostLikelySuccessor = findAndMarkMostLikelySuccessor(block, visitedBlocks);
+            enqueueSuccessors(block, worklist, visitedBlocks);
+            block = mostLikelySuccessor;
+        }
+    }
+
+    /**
+     * Adds a block to the ordering.
+     */
+    private static <T extends AbstractBlock<T>> void addBlock(T header, List<T> order) {
+        assert !order.contains(header) : "Cannot insert block twice";
+        order.add(header);
+    }
+
+    /**
+     * Find the highest likely unvisited successor block of a given block.
+     */
+    private static <T extends AbstractBlock<T>> T findAndMarkMostLikelySuccessor(T block, BitSet visitedBlocks) {
+        T result = null;
+        for (T successor : block.getSuccessors()) {
+            assert successor.probability() >= 0.0 : "Probabilities must be positive";
+            if (!visitedBlocks.get(successor.getId()) && successor.getLoopDepth() >= block.getLoopDepth() && (result == null || successor.probability() >= result.probability())) {
+                result = successor;
+            }
+        }
+        if (result != null) {
+            visitedBlocks.set(result.getId());
+        }
+        return result;
+    }
+
+    /**
+     * Add successor blocks into the given work list if they are not already marked as visited.
+     */
+    private static <T extends AbstractBlock<T>> void enqueueSuccessors(T block, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+        for (T successor : block.getSuccessors()) {
+            if (!visitedBlocks.get(successor.getId())) {
+                visitedBlocks.set(successor.getId());
+                worklist.add(successor);
+            }
+        }
+    }
+
+    /**
+     * Skip the loop header block if the loop consists of more than one block and it has only a
+     * single loop end block.
+     */
+    private static <T extends AbstractBlock<T>> boolean skipLoopHeader(AbstractBlock<T> block) {
+        return (block.isLoopHeader() && !block.isLoopEnd() && block.getLoop().numBackedges() == 1);
+    }
+
+    /**
+     * Checks that the ordering contains the expected number of blocks.
+     */
+    private static boolean checkOrder(List<? extends AbstractBlock<?>> order, int expectedBlockCount) {
+        assert order.size() == expectedBlockCount : String.format("Number of blocks in ordering (%d) does not match expected block count (%d)", order.size(), expectedBlockCount);
         return true;
     }
 
-    private void sortIntoWorkList(Block cur) {
-        assert !workList.contains(cur) : "block already in work list";
+    /**
+     * Comparator for sorting blocks based on loop depth and probability.
+     */
+    private static class BlockOrderComparator<T extends AbstractBlock<T>> implements Comparator<T> {
 
-        int curWeight = computeWeight(cur);
-
-        // the linearScanNumber is used to cache the weight of a block
-        cur.linearScanNumber = curWeight;
-
-        workList.add(null); // provide space for new element
-
-        int insertIdx = workList.size() - 1;
-        while (insertIdx > 0 && workList.get(insertIdx - 1).linearScanNumber > curWeight) {
-            workList.set(insertIdx, workList.get(insertIdx - 1));
-            insertIdx--;
-        }
-        workList.set(insertIdx, cur);
-
-        if (Debug.isLogEnabled()) {
-            Debug.log("Sorted B%d into worklist. new worklist:", cur.getId());
-            for (int i = 0; i < workList.size(); i++) {
-                Debug.log(String.format("%8d B%02d  weight:%6x", i, workList.get(i).getId(), workList.get(i).linearScanNumber));
+        @Override
+        public int compare(T a, T b) {
+            // Loop blocks before any loop exit block.
+            int diff = b.getLoopDepth() - a.getLoopDepth();
+            if (diff != 0) {
+                return diff;
             }
-        }
 
-        for (int i = 0; i < workList.size(); i++) {
-            assert workList.get(i).linearScanNumber > 0 : "weight not set";
-            assert i == 0 || workList.get(i - 1).linearScanNumber <= workList.get(i).linearScanNumber : "incorrect order in worklist";
-        }
-    }
-
-    private void appendBlock(Block cur) {
-        Debug.log("appending block B%d (weight 0x%06x) to linear-scan order", cur.getId(), cur.linearScanNumber);
-        assert !linearScanOrder.contains(cur) : "cannot add the same block twice";
-
-        cur.linearScanNumber = linearScanOrder.size();
-        linearScanOrder.add(cur);
-
-        if (cur.isLoopEnd() && cur.isLoopHeader()) {
-            codeEmittingOrder.add(cur);
-        } else {
-            if (!cur.isLoopHeader() || ((LoopBeginNode) cur.getBeginNode()).loopEnds().count() > 1 || !reorderLoops) {
-                codeEmittingOrder.add(cur);
-
-                if (cur.isLoopEnd() && reorderLoops) {
-                    Block loopHeader = loopHeaders.get(cur.getLoop().index);
-                    if (loopHeader != null) {
-                        codeEmittingOrder.add(loopHeader);
-
-                        for (int i = 0; i < loopHeader.numberOfSux(); i++) {
-                            Block succ = loopHeader.suxAt(i);
-                            if (succ.getLoopDepth() == loopHeader.getLoopDepth()) {
-                                succ.align = true;
-                            }
-                        }
-                    }
-                }
+            // Blocks with high probability before blocks with low probability.
+            if (a.probability() > b.probability()) {
+                return -1;
             } else {
-                loopHeaders.set(cur.getLoop().index, cur);
+                return 1;
             }
         }
-    }
-
-    private void checkAndSortIntoWorkList(Block b) {
-        if (readyForProcessing(b)) {
-            sortIntoWorkList(b);
-        }
-    }
-
-    private void computeOrder(Block startBlock) {
-        // the start block is always the first block in the linear scan order
-        linearScanOrder = new ArrayList<>(blockCount);
-
-        codeEmittingOrder = new ArrayList<>(blockCount);
-
-        // start processing with standard entry block
-        assert workList.isEmpty() : "list must be empty before processing";
-
-        assert readyForProcessing(startBlock);
-        sortIntoWorkList(startBlock);
-
-        do {
-            Block cur = workList.remove(workList.size() - 1);
-            appendBlock(cur);
-
-            Node endNode = cur.getEndNode();
-            if (endNode instanceof IfNode && ((IfNode) endNode).probability() < 0.5) {
-                assert cur.numberOfSux() == 2;
-                checkAndSortIntoWorkList(cur.suxAt(1));
-                checkAndSortIntoWorkList(cur.suxAt(0));
-            } else {
-                for (Block sux : cur.getSuccessors()) {
-                    checkAndSortIntoWorkList(sux);
-                }
-            }
-        } while (workList.size() > 0);
     }
 }

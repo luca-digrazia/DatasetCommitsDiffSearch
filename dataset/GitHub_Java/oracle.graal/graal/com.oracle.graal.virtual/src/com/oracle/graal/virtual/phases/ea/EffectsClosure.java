@@ -23,7 +23,6 @@
 package com.oracle.graal.virtual.phases.ea;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
 
 import java.util.*;
 
@@ -42,22 +41,20 @@ import com.oracle.graal.virtual.phases.ea.EffectList.Effect;
 
 public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> extends EffectsPhase.Closure<BlockT> {
 
-    private final ControlFlowGraph cfg;
     private final SchedulePhase schedule;
 
     protected final NodeMap<ValueNode> aliases;
     protected final BlockMap<GraphEffectList> blockEffects;
-    private final Map<Loop<Block>, GraphEffectList> loopMergeEffects = newIdentityMap();
-    private final Map<LoopBeginNode, BlockT> loopEntryStates = newNodeIdentityMap();
+    private final IdentityHashMap<Loop<Block>, GraphEffectList> loopMergeEffects = new IdentityHashMap<>();
+    private final IdentityHashMap<LoopBeginNode, BlockT> loopEntryStates = new IdentityHashMap<>();
 
     private boolean changed;
 
-    public EffectsClosure(SchedulePhase schedule, ControlFlowGraph cfg) {
+    public EffectsClosure(SchedulePhase schedule) {
         this.schedule = schedule;
-        this.cfg = cfg;
-        this.aliases = cfg.graph.createNodeMap();
-        this.blockEffects = new BlockMap<>(cfg);
-        for (Block block : cfg.getBlocks()) {
+        this.aliases = schedule.getCFG().graph.createNodeMap();
+        this.blockEffects = new BlockMap<>(schedule.getCFG());
+        for (Block block : schedule.getCFG().getBlocks()) {
             blockEffects.put(block, new GraphEffectList());
         }
     }
@@ -69,7 +66,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
 
     @Override
     public void applyEffects() {
-        final StructuredGraph graph = cfg.graph;
+        final StructuredGraph graph = schedule.getCFG().graph;
         final ArrayList<Node> obsoleteNodes = new ArrayList<>(0);
         BlockIteratorClosure<Void> closure = new BlockIteratorClosure<Void>() {
 
@@ -116,7 +113,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                 return info.exitStates;
             }
         };
-        ReentrantBlockIterator.apply(closure, cfg.getStartBlock());
+        ReentrantBlockIterator.apply(closure, schedule.getCFG().getStartBlock());
         assert VirtualUtil.assertNonReachable(graph, obsoleteNodes);
     }
 
@@ -126,8 +123,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
 
         GraphEffectList effects = blockEffects.get(block);
         FixedWithNextNode lastFixedNode = null;
-        Iterable<? extends Node> nodes = schedule != null ? schedule.getBlockToNodesMap().get(block) : block.getNodes();
-        for (Node node : nodes) {
+        for (Node node : schedule.getBlockToNodesMap().get(block)) {
             aliases.set(node, null);
             if (node instanceof LoopExitNode) {
                 LoopExitNode loopExit = (LoopExitNode) node;

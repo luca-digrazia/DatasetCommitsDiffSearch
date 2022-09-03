@@ -55,29 +55,29 @@ public class DeoptimizationGroupingPhase extends BasePhase<MidTierContext> {
                     }
                     MergeNode merge;
                     if (target instanceof AbstractDeoptimizeNode) {
-                        merge = graph.add(MergeNode.create());
-                        EndNode firstEnd = graph.add(EndNode.create());
-                        reasonActionPhi = graph.addWithoutUnique(ValuePhiNode.create(StampFactory.forKind(Kind.Int), merge));
-                        speculationPhi = graph.addWithoutUnique(ValuePhiNode.create(StampFactory.forKind(Kind.Object), merge));
+                        merge = graph.add(new MergeNode());
+                        EndNode firstEnd = graph.add(new EndNode());
+                        reasonActionPhi = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forKind(Kind.Int), merge));
+                        speculationPhi = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forKind(Kind.Object), merge));
                         merge.addForwardEnd(firstEnd);
                         reasonActionPhi.addInput(((AbstractDeoptimizeNode) target).getActionAndReason(context.getMetaAccess()));
                         speculationPhi.addInput(((AbstractDeoptimizeNode) target).getSpeculation(context.getMetaAccess()));
-                        target.replaceAtPredecessor(firstEnd);
+                        target.predecessor().replaceFirstSuccessor(target, firstEnd);
 
                         exitLoops((AbstractDeoptimizeNode) target, firstEnd, cfg);
 
-                        merge.setNext(graph.add(DynamicDeoptimizeNode.create(reasonActionPhi, speculationPhi)));
+                        merge.setNext(graph.add(new DynamicDeoptimizeNode(reasonActionPhi, speculationPhi)));
                         obsoletes = new LinkedList<>();
                         obsoletes.add((AbstractDeoptimizeNode) target);
                         target = merge;
                     } else {
                         merge = (MergeNode) target;
                     }
-                    EndNode newEnd = graph.add(EndNode.create());
+                    EndNode newEnd = graph.add(new EndNode());
                     merge.addForwardEnd(newEnd);
                     reasonActionPhi.addInput(deopt.getActionAndReason(context.getMetaAccess()));
                     speculationPhi.addInput(deopt.getSpeculation(context.getMetaAccess()));
-                    deopt.replaceAtPredecessor(newEnd);
+                    deopt.predecessor().replaceFirstSuccessor(deopt, newEnd);
                     exitLoops(deopt, newEnd, cfg);
                     obsoletes.add(deopt);
                 }
@@ -95,7 +95,7 @@ public class DeoptimizationGroupingPhase extends BasePhase<MidTierContext> {
         Block block = cfg.blockFor(deopt);
         Loop<Block> loop = block.getLoop();
         while (loop != null) {
-            end.graph().addBeforeFixed(end, end.graph().add(LoopExitNode.create((LoopBeginNode) loop.getHeader().getBeginNode())));
+            end.graph().addBeforeFixed(end, end.graph().add(new LoopExitNode((LoopBeginNode) loop.getHeader().getBeginNode())));
             loop = loop.getParent();
         }
     }

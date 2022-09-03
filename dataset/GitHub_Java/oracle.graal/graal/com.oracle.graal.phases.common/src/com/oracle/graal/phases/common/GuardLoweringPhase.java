@@ -23,7 +23,6 @@
 package com.oracle.graal.phases.common;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
 
 import java.util.*;
 import java.util.Map.Entry;
@@ -62,7 +61,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
 
     private static class UseImplicitNullChecks extends ScheduledNodeIterator {
 
-        private final Map<ValueNode, GuardNode> nullGuarded = newIdentityMap();
+        private final IdentityHashMap<ValueNode, GuardNode> nullGuarded = new IdentityHashMap<>();
         private final int implicitNullCheckLimit;
 
         UseImplicitNullChecks(int implicitNullCheckLimit) {
@@ -98,14 +97,8 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
                     access.setGuard(null);
                     FixedAccessNode fixedAccess;
                     if (access instanceof FloatingAccessNode) {
-                        FloatingAccessNode floatingAccessNode = (FloatingAccessNode) access;
-                        MemoryNode lastLocationAccess = floatingAccessNode.getLastLocationAccess();
-                        fixedAccess = floatingAccessNode.asFixedNode();
+                        fixedAccess = ((FloatingAccessNode) access).asFixedNode();
                         replaceCurrent(fixedAccess);
-                        if (lastLocationAccess != null) {
-                            // fixed accesses are not currently part of the memory graph
-                            GraphUtil.tryKillUnused(lastLocationAccess.asNode());
-                        }
                     } else {
                         fixedAccess = (FixedAccessNode) access;
                     }
@@ -123,7 +116,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
         private void processGuard(Node node) {
             GuardNode guard = (GuardNode) node;
             if (guard.negated() && guard.condition() instanceof IsNullNode && (guard.getSpeculation() == null || guard.getSpeculation().equals(Constant.NULL_OBJECT))) {
-                ValueNode obj = ((IsNullNode) guard.condition()).getValue();
+                ValueNode obj = ((IsNullNode) guard.condition()).object();
                 nullGuarded.put(obj, guard);
             }
         }
@@ -164,7 +157,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
             StructuredGraph graph = guard.graph();
             BeginNode fastPath = graph.add(new BeginNode());
             @SuppressWarnings("deprecation")
-            DeoptimizeNode deopt = graph.add(new DeoptimizeNode(guard.action(), guard.reason(), useGuardIdAsDebugId ? guard.getId() : 0, guard.getSpeculation(), null));
+            DeoptimizeNode deopt = graph.add(new DeoptimizeNode(guard.action(), guard.reason(), useGuardIdAsDebugId ? guard.getId() : 0, guard.getSpeculation()));
             BeginNode deoptBranch = BeginNode.begin(deopt);
             BeginNode trueSuccessor;
             BeginNode falseSuccessor;

@@ -23,10 +23,9 @@
 
 package com.oracle.graal.compiler.common.cfg;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
-public abstract class Loop<T extends AbstractBlockBase<T>> {
+public abstract class Loop<T extends AbstractBlock<T>> {
 
     private final Loop<T> parent;
     private final List<Loop<T>> children;
@@ -85,24 +84,5 @@ public abstract class Loop<T extends AbstractBlockBase<T>> {
 
     public List<T> getExits() {
         return exits;
-    }
-
-    /**
-     * Determines if one loop is a transitive parent of another loop.
-     *
-     * @param childLoop The loop for which parentLoop might be a transitive parent loop.
-     * @param parentLoop The loop which might be a transitive parent loop of child loop.
-     * @return {@code true} if parentLoop is a (transitive) parent loop of childLoop, {@code false}
-     *         otherwise
-     */
-    public static <T extends AbstractBlockBase<T>> boolean transitiveParentLoop(Loop<T> childLoop, Loop<T> parentLoop) {
-        Loop<T> curr = childLoop;
-        while (curr != null) {
-            if (curr == parentLoop) {
-                return true;
-            }
-            curr = curr.getParent();
-        }
-        return false;
     }
 }
