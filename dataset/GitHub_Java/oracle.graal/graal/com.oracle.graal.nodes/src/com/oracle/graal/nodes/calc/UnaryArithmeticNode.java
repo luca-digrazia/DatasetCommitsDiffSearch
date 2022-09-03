@@ -31,13 +31,12 @@ import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ArithmeticOperation;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 
 @NodeInfo
-public abstract class UnaryArithmeticNode<OP> extends UnaryNode implements ArithmeticOperation, ArithmeticLIRLowerable {
+public abstract class UnaryArithmeticNode<OP> extends UnaryNode implements ArithmeticLIRLowerable {
 
     @SuppressWarnings("rawtypes") public static final NodeClass<UnaryArithmeticNode> TYPE = NodeClass.create(UnaryArithmeticNode.class);
 
@@ -53,10 +52,6 @@ public abstract class UnaryArithmeticNode<OP> extends UnaryNode implements Arith
 
     protected final UnaryOp<OP> getOp(ValueNode forValue) {
         return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp()));
-    }
-
-    public final UnaryOp<OP> getArithmeticOp() {
-        return getOp(getValue());
     }
 
     @Override

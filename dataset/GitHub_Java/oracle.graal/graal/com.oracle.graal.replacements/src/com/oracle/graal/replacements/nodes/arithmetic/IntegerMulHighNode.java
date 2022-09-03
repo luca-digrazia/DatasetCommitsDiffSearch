@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.replacements.nodes.arithmetic;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
-
 import java.util.function.BiFunction;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
 
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -40,10 +40,7 @@ import com.oracle.graal.nodes.calc.BinaryNode;
 import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
-
-@NodeInfo(shortName = "*H", cycles = CYCLES_2, size = SIZE_2)
+@NodeInfo(shortName = "*H")
 public final class IntegerMulHighNode extends BinaryNode implements ArithmeticLIRLowerable {
     public static final NodeClass<IntegerMulHighNode> TYPE = NodeClass.create(IntegerMulHighNode.class);
 

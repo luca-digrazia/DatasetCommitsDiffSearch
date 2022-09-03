@@ -24,6 +24,9 @@ package com.oracle.graal.replacements.nodes.arithmetic;
 
 import java.util.function.BiFunction;
 
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
@@ -36,9 +39,6 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.BinaryNode;
 import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
 
 @NodeInfo(shortName = "|*H|")
 public final class UnsignedMulHighNode extends BinaryNode implements ArithmeticLIRLowerable {
@@ -53,18 +53,6 @@ public final class UnsignedMulHighNode extends BinaryNode implements ArithmeticL
         super(TYPE, stamp, x, y);
     }
 
-    private static long[] getUnsignedExtremes(IntegerStamp stamp) {
-        if (stamp.lowerBound() < 0 && stamp.upperBound() >= 0) {
-            /*
-             * If -1 and 0 are both in the signed range, then we can't say anything about the
-             * unsigned range, so we have to return [0, MAX_UNSIGNED].
-             */
-            return new long[]{0, -1L};
-        } else {
-            return new long[]{stamp.lowerBound(), stamp.upperBound()};
-        }
-    }
-
     /**
      * Determines the minimum and maximum result of this node for the given inputs and returns the
      * result of the given BiFunction on the minimum and maximum values. Note that the minima and
@@ -77,8 +65,8 @@ public final class UnsignedMulHighNode extends BinaryNode implements ArithmeticL
 
         JavaKind kind = getStackKind();
         assert kind == JavaKind.Int || kind == JavaKind.Long;
-        long[] xExtremes = getUnsignedExtremes(xStamp);
-        long[] yExtremes = getUnsignedExtremes(yStamp);
+        long[] xExtremes = {xStamp.lowerBound(), xStamp.upperBound()};
+        long[] yExtremes = {yStamp.lowerBound(), yStamp.upperBound()};
         long min = Long.MAX_VALUE;
         long max = Long.MIN_VALUE;
         for (long a : xExtremes) {

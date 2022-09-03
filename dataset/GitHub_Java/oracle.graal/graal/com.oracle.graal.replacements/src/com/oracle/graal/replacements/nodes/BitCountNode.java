@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.PrimitiveStamp;
@@ -39,11 +40,7 @@ import com.oracle.graal.nodes.calc.UnaryNode;
 import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-
-@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+@NodeInfo
 public final class BitCountNode extends UnaryNode implements ArithmeticLIRLowerable {
 
     public static final NodeClass<BitCountNode> TYPE = NodeClass.create(BitCountNode.class);

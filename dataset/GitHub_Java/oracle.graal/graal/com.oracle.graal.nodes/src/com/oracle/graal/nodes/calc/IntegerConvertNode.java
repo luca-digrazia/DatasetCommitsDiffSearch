@@ -35,7 +35,6 @@ import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ArithmeticOperation;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
@@ -45,7 +44,7 @@ import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
  * An {@code IntegerConvert} converts an integer to an integer of different width.
  */
 @NodeInfo
-public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements ArithmeticOperation, ConvertNode, ArithmeticLIRLowerable {
+public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements ConvertNode, ArithmeticLIRLowerable {
     @SuppressWarnings("rawtypes") public static final NodeClass<IntegerConvertNode> TYPE = NodeClass.create(IntegerConvertNode.class);
 
     protected final SerializableIntegerConvertFunction<OP> getOp;
@@ -78,13 +77,9 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements A
         return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp()));
     }
 
-    public final IntegerConvertOp<OP> getArithmeticOp() {
-        return getOp(getValue());
-    }
-
     @Override
     public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
-        return getArithmeticOp().foldConstant(getInputBits(), getResultBits(), c);
+        return getOp(getValue()).foldConstant(getInputBits(), getResultBits(), c);
     }
 
     @Override
@@ -96,7 +91,7 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements A
     @Override
     public Stamp foldStamp(Stamp newStamp) {
         assert newStamp.isCompatible(getValue().stamp());
-        return getArithmeticOp().foldStamp(inputBits, resultBits, newStamp);
+        return getOp(getValue()).foldStamp(inputBits, resultBits, newStamp);
     }
 
     @Override

@@ -25,8 +25,9 @@ package com.oracle.graal.replacements.nodes.arithmetic;
 import static com.oracle.graal.compiler.common.type.IntegerStamp.addOverflowsNegatively;
 import static com.oracle.graal.compiler.common.type.IntegerStamp.addOverflowsPositively;
 import static com.oracle.graal.compiler.common.type.IntegerStamp.carryBits;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -40,15 +41,11 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.AddNode;
 import com.oracle.graal.nodes.spi.LoweringTool;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-
 /**
  * Node representing an exact integer addition that will throw an {@link ArithmeticException} in
  * case the addition would overflow the 32 bit range.
  */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_2)
+@NodeInfo
 public final class IntegerAddExactNode extends AddNode implements IntegerExactArithmeticNode {
     public static final NodeClass<IntegerAddExactNode> TYPE = NodeClass.create(IntegerAddExactNode.class);
 

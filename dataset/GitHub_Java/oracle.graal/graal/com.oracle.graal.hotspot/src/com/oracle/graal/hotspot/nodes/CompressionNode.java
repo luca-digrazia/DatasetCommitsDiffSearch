@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,20 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
+import jdk.vm.ci.hotspot.HotSpotConstant;
+import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.Value;
 
 import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
 import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.hotspot.CompressEncoding;
 import com.oracle.graal.hotspot.HotSpotLIRGenerator;
 import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
 import com.oracle.graal.hotspot.nodes.type.NarrowOopStamp;
@@ -44,17 +48,10 @@ import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 import com.oracle.graal.nodes.type.StampTool;
 
-import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
-import jdk.vm.ci.hotspot.HotSpotConstant;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.Value;
-
 /**
  * Compress or uncompress an oop or metaspace pointer.
  */
-@NodeInfo(nameTemplate = "{p#op/s}", cycles = CYCLES_2, size = SIZE_2)
+@NodeInfo(nameTemplate = "{p#op/s}")
 public final class CompressionNode extends UnaryNode implements ConvertNode, LIRLowerable {
 
     public static final NodeClass<CompressionNode> TYPE = NodeClass.create(CompressionNode.class);
@@ -97,7 +94,7 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
         } else if (c instanceof HotSpotConstant) {
             return ((HotSpotConstant) c).compress();
         } else {
-            throw GraalError.shouldNotReachHere("invalid constant input for compress op: " + c);
+            throw JVMCIError.shouldNotReachHere("invalid constant input for compress op: " + c);
         }
     }
 
@@ -105,7 +102,7 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
         if (c instanceof HotSpotConstant) {
             return ((HotSpotConstant) c).uncompress();
         } else {
-            throw GraalError.shouldNotReachHere("invalid constant input for uncompress op: " + c);
+            throw JVMCIError.shouldNotReachHere("invalid constant input for uncompress op: " + c);
         }
     }
 
@@ -117,7 +114,7 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
             case Uncompress:
                 return uncompress(c);
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
@@ -129,7 +126,7 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
             case Uncompress:
                 return compress(c);
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
@@ -161,7 +158,7 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
                 }
                 break;
         }
-        throw GraalError.shouldNotReachHere(String.format("Unexpected input stamp %s", input));
+        throw JVMCIError.shouldNotReachHere(String.format("Unexpected input stamp %s", input));
     }
 
     public CompressionOp getOp() {
@@ -175,9 +172,7 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            int stableDimension = ((ConstantNode) forValue).getStableDimension();
-            boolean isDefaultStable = ((ConstantNode) forValue).isDefaultStable();
-            return ConstantNode.forConstant(stamp(), convert(forValue.asConstant(), tool.getConstantReflection()), stableDimension, isDefaultStable, tool.getMetaAccess());
+            return ConstantNode.forConstant(stamp(), convert(forValue.asConstant(), tool.getConstantReflection()), tool.getMetaAccess());
         } else if (forValue instanceof CompressionNode) {
             CompressionNode other = (CompressionNode) forValue;
             if (op != other.op && encoding.equals(other.encoding)) {
@@ -207,7 +202,7 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
                 result = hsGen.emitUncompress(gen.operand(getValue()), encoding, nonNull);
                 break;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
         gen.setResult(this, result);
     }

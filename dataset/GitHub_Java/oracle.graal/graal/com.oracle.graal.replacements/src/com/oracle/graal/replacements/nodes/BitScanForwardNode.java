@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.PrimitiveStamp;
@@ -39,15 +40,11 @@ import com.oracle.graal.nodes.calc.UnaryNode;
 import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-
 /**
  * Determines the index of the least significant "1" bit. Note that the result is undefined if the
  * input is zero.
  */
-@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+@NodeInfo
 public final class BitScanForwardNode extends UnaryNode implements ArithmeticLIRLowerable {
 
     public static final NodeClass<BitScanForwardNode> TYPE = NodeClass.create(BitScanForwardNode.class);
@@ -77,20 +74,15 @@ public final class BitScanForwardNode extends UnaryNode implements ArithmeticLIR
         return StampFactory.forInteger(JavaKind.Int, min, max);
     }
 
-    public static ValueNode tryFold(ValueNode value) {
-        if (value.isConstant()) {
-            JavaConstant c = value.asJavaConstant();
-            if (c.asLong() != 0) {
-                return ConstantNode.forInt(value.getStackKind() == JavaKind.Int ? scan(c.asInt()) : scan(c.asLong()));
-            }
-        }
-        return null;
-    }
-
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        ValueNode folded = tryFold(forValue);
-        return folded != null ? folded : this;
+        if (forValue.isConstant()) {
+            JavaConstant c = forValue.asJavaConstant();
+            if (c.asLong() != 0) {
+                return ConstantNode.forInt(forValue.getStackKind() == JavaKind.Int ? scan(c.asInt()) : scan(c.asLong()));
+            }
+        }
+        return this;
     }
 
     /**

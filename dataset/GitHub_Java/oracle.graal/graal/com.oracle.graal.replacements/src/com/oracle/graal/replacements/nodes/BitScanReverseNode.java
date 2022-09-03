@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.PrimitiveStamp;
@@ -39,15 +40,11 @@ import com.oracle.graal.nodes.calc.UnaryNode;
 import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-
 /**
  * Determines the index of the most significant "1" bit. Note that the result is undefined if the
  * input is zero.
  */
-@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+@NodeInfo
 public final class BitScanReverseNode extends UnaryNode implements ArithmeticLIRLowerable {
 
     public static final NodeClass<BitScanReverseNode> TYPE = NodeClass.create(BitScanReverseNode.class);

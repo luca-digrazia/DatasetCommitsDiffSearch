@@ -36,7 +36,6 @@ import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ArithmeticOperation;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
@@ -45,7 +44,7 @@ import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
  * The {@code ShiftOp} class represents shift operations.
  */
 @NodeInfo
-public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticOperation, ArithmeticLIRLowerable, NarrowableArithmeticNode {
+public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
 
     @SuppressWarnings("rawtypes") public static final NodeClass<ShiftNode> TYPE = NodeClass.create(ShiftNode.class);
 
@@ -70,13 +69,9 @@ public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticOper
         return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp()));
     }
 
-    public final ShiftOp<OP> getArithmeticOp() {
-        return getOp(getX());
-    }
-
     @Override
     public Stamp foldStamp(Stamp stampX, Stamp stampY) {
-        return getArithmeticOp().foldStamp(stampX, (IntegerStamp) stampY);
+        return getOp(getX()).foldStamp(stampX, (IntegerStamp) stampY);
     }
 
     @Override
@@ -90,7 +85,7 @@ public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticOper
     }
 
     public int getShiftAmountMask() {
-        return getArithmeticOp().getShiftAmountMask(stamp());
+        return getOp(getX()).getShiftAmountMask(stamp());
     }
 
     public boolean isNarrowable(int resultBits) {
