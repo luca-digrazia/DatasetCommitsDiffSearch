@@ -282,7 +282,7 @@ public final class CPUSampler implements Closeable {
      * @return Total number of samples taken during execution
      * @since 0.29
      */
-    public long getSampleCount() {
+    public long getTotalSamples() {
         return samplesTaken.get();
     }
 
