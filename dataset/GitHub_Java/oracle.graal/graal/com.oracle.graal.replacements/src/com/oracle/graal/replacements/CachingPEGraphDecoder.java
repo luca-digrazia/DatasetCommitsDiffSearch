@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,6 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
-
-import java.util.HashMap;
-import java.util.Map;
-
-import com.oracle.graal.bytecode.BytecodeProvider;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.nodes.EncodedGraph;
@@ -38,12 +32,15 @@ import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
 import com.oracle.graal.phases.tiers.PhaseContext;
 import com.oracle.graal.phases.util.Providers;
-
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
 
 /**
  * A graph decoder that provides all necessary encoded graphs on-the-fly (by parsing the methods and
@@ -57,9 +54,8 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
     private final AllowAssumptions allowAssumptions;
     private final Map<ResolvedJavaMethod, EncodedGraph> graphCache;
 
-    public CachingPEGraphDecoder(Providers providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, AllowAssumptions allowAssumptions,
-                    Architecture architecture) {
-        super(providers.getMetaAccess(), providers.getConstantReflection(), providers.getConstantFieldProvider(), providers.getStampProvider(), architecture);
+    public CachingPEGraphDecoder(Providers providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, AllowAssumptions allowAssumptions, Architecture architecture) {
+        super(providers.getMetaAccess(), providers.getConstantReflection(), providers.getStampProvider(), architecture);
 
         this.providers = providers;
         this.graphBuilderConfig = graphBuilderConfig;
@@ -69,26 +65,21 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
     }
 
     protected GraphBuilderPhase.Instance createGraphBuilderPhaseInstance(IntrinsicContext initialIntrinsicContext) {
-        return new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), graphBuilderConfig,
-                        optimisticOpts, initialIntrinsicContext);
+        return new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(),
+                        providers.getConstantReflection(), graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
     }
 
     @SuppressWarnings("try")
-    private EncodedGraph createGraph(ResolvedJavaMethod method, BytecodeProvider intrinsicBytecodeProvider) {
+    private EncodedGraph createGraph(ResolvedJavaMethod method, boolean isIntrinsic) {
         StructuredGraph graph = new StructuredGraph(method, allowAssumptions);
         try (Debug.Scope scope = Debug.scope("createGraph", graph)) {
-            IntrinsicContext initialIntrinsicContext = intrinsicBytecodeProvider != null ? new IntrinsicContext(method, method, intrinsicBytecodeProvider, INLINE_AFTER_PARSING) : null;
+
+            IntrinsicContext initialIntrinsicContext = isIntrinsic ? new IntrinsicContext(method, method, INLINE_AFTER_PARSING) : null;
             GraphBuilderPhase.Instance graphBuilderPhaseInstance = createGraphBuilderPhaseInstance(initialIntrinsicContext);
             graphBuilderPhaseInstance.apply(graph);
 
             PhaseContext context = new PhaseContext(providers);
             new CanonicalizerPhase().apply(graph, context);
-            /*
-             * ConvertDeoptimizeToGuardPhase reduces the number of merges in the graph, so that
-             * fewer frame states will be created. This significantly reduces the number of nodes in
-             * the initial graph.
-             */
-            new ConvertDeoptimizeToGuardPhase().apply(graph, context);
 
             EncodedGraph encodedGraph = GraphEncoder.encodeSingleGraph(graph, architecture);
             graphCache.put(method, encodedGraph);
@@ -100,10 +91,10 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
     }
 
     @Override
-    protected EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method, BytecodeProvider intrinsicBytecodeProvider) {
+    protected EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method, boolean isIntrinsic) {
         EncodedGraph result = graphCache.get(method);
         if (result == null && method.hasBytecodes()) {
-            result = createGraph(method, intrinsicBytecodeProvider);
+            result = createGraph(method, isIntrinsic);
         }
         return result;
     }
