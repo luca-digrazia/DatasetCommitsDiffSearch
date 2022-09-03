@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -28,8 +28,6 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 package com.oracle.truffle.llvm.runtime;
-
-import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -127,23 +125,6 @@ public final class LLVMVirtualAllocationAddress {
 
     public LLVMVirtualAllocationAddress copy() {
         return new LLVMVirtualAllocationAddress(this.object, this.offset);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof LLVMVirtualAllocationAddress) {
-            LLVMVirtualAllocationAddress other = (LLVMVirtualAllocationAddress) obj;
-            return this.object == other.object && this.offset == other.offset;
-        }
-        return false;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = 1;
-        result = 31 * result + Objects.hashCode(object);
-        result = 31 * result + Long.hashCode(offset);
-        return result;
     }
 
     public static final class LLVMVirtualAllocationAddressTruffleObject implements LLVMInternalTruffleObject {

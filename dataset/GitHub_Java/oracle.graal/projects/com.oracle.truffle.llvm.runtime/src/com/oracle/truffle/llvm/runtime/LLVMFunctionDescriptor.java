@@ -161,7 +161,7 @@ public final class LLVMFunctionDescriptor implements LLVMInternalTruffleObject, 
 
             if (wrapper == null) {
                 pointer = LLVMAddress.fromLong(tagSulongFunctionPointer(descriptor.functionId));
-                wrapper = new LLVMTruffleAddress(pointer, descriptor.getType());
+                wrapper = new LLVMTruffleAddress(pointer, descriptor.getType(), descriptor.context);
             }
 
             descriptor.context.registerFunctionPointer(pointer, descriptor);
@@ -257,7 +257,7 @@ public final class LLVMFunctionDescriptor implements LLVMInternalTruffleObject, 
     static final class NullFunction extends Function {
         @Override
         TruffleObject createNativeWrapper(LLVMFunctionDescriptor descriptor) {
-            return new LLVMTruffleAddress(LLVMAddress.nullPointer(), descriptor.type);
+            return new LLVMTruffleAddress(LLVMAddress.nullPointer(), descriptor.type, descriptor.context);
         }
     }
 

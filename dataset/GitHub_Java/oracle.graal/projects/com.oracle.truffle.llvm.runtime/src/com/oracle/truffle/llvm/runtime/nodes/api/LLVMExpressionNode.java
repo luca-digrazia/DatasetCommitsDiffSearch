@@ -170,6 +170,6 @@ public abstract class LLVMExpressionNode extends LLVMNode implements Instrumenta
     }
 
     public static boolean notLLVM(TruffleObject object) {
-        return !(object instanceof LLVMInternalTruffleObject) && !(object instanceof LLVMTruffleObject);
+        return !(object instanceof LLVMInternalTruffleObject);
     }
 }

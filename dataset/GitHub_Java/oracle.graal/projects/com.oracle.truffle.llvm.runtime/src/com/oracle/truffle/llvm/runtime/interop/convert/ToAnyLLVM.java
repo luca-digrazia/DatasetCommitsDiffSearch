@@ -114,11 +114,6 @@ abstract class ToAnyLLVM extends ForeignToLLVM {
     }
 
     @Specialization
-    protected LLVMTruffleObject fromInternal(LLVMTruffleObject object) {
-        return object;
-    }
-
-    @Specialization
     protected LLVMTruffleObject fromInternal(LLVMInternalTruffleObject object) {
         return new LLVMTruffleObject(object);
     }
@@ -157,8 +152,6 @@ abstract class ToAnyLLVM extends ForeignToLLVM {
             return ((LLVMTruffleAddress) value).getAddress();
         } else if (value instanceof LLVMSharedGlobalVariable) {
             return ((LLVMSharedGlobalVariable) value).getDescriptor();
-        } else if (value instanceof LLVMTruffleObject) {
-            return value;
         } else if (value instanceof LLVMInternalTruffleObject) {
             return new LLVMTruffleObject((LLVMInternalTruffleObject) value);
         } else if (value instanceof TruffleObject && thiz.checkIsPointer((TruffleObject) value) && notLLVM((TruffleObject) value)) {

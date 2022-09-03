@@ -31,13 +31,11 @@ package com.oracle.truffle.llvm.runtime.interop.convert;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
@@ -49,122 +47,86 @@ import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress.LLVMVirtualA
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
-import com.oracle.truffle.llvm.runtime.interop.convert.ToPointer.Dummy;
-import com.oracle.truffle.llvm.runtime.interop.convert.ToPointer.InteropTypeNode;
 
-@NodeChild(type = Dummy.class)
-@NodeChild(type = InteropTypeNode.class)
 abstract class ToPointer extends ForeignToLLVM {
 
-    public static ToPointer create() {
-        return ToPointerNodeGen.create(null, new InteropTypeNode(null));
-    }
-
-    public static ToPointer create(LLVMInteropType.Structured type) {
-        return ToPointerNodeGen.create(null, new InteropTypeNode(type));
-    }
-
-    abstract static class Dummy extends Node {
-
-        protected abstract Object execute();
-    }
-
-    static final class InteropTypeNode extends Node {
-
-        private final LLVMInteropType.Structured type;
-
-        private InteropTypeNode(LLVMInteropType.Structured type) {
-            this.type = type;
-        }
-
-        public LLVMInteropType.Structured execute() {
-            return type;
-        }
-    }
-
     @Specialization
-    protected LLVMVirtualAllocationAddress fromLLVMByteArrayAddress(LLVMVirtualAllocationAddressTruffleObject value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected LLVMVirtualAllocationAddress fromLLVMByteArrayAddress(LLVMVirtualAllocationAddressTruffleObject value) {
         return value.getObject();
     }
 
     @Specialization
-    protected Object fromInt(int value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromInt(int value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromChar(char value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromChar(char value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromLong(long value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromLong(long value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromByte(byte value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromByte(byte value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromShort(short value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromShort(short value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromFloat(float value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromFloat(float value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromDouble(double value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromDouble(double value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromBoolean(boolean value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromBoolean(boolean value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected String fromString(String obj, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected String fromString(String obj) {
         return obj;
     }
 
     @Specialization
-    protected LLVMAddress fromLLVMTruffleAddress(LLVMTruffleAddress obj, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected LLVMAddress fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
         return obj.getAddress();
     }
 
     @Specialization
-    protected LLVMGlobal fromSharedDescriptor(LLVMSharedGlobalVariable shared, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected LLVMGlobal fromSharedDescriptor(LLVMSharedGlobalVariable shared) {
         return shared.getDescriptor();
     }
 
     @Specialization
-    protected LLVMFunctionDescriptor id(LLVMFunctionDescriptor fd, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected LLVMFunctionDescriptor id(LLVMFunctionDescriptor fd) {
         return fd;
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive id(LLVMBoxedPrimitive boxed, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected LLVMBoxedPrimitive id(LLVMBoxedPrimitive boxed) {
         return boxed;
     }
 
     @Specialization
-    protected LLVMTruffleObject fromInternal(LLVMTruffleObject object, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return object;
-    }
-
-    @Specialization
-    protected LLVMTruffleObject fromInternal(LLVMInternalTruffleObject object, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected LLVMTruffleObject fromInternal(LLVMInternalTruffleObject object) {
         return new LLVMTruffleObject(object);
     }
 
     @Specialization(guards = {"checkIsPointer(obj)", "notLLVM(obj)"})
-    protected LLVMAddress fromNativePointer(TruffleObject obj, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected LLVMAddress fromNativePointer(TruffleObject obj) {
         try {
             long raw = ForeignAccess.sendAsPointer(asPointer, obj);
             return LLVMAddress.fromLong(raw);
@@ -175,8 +137,8 @@ abstract class ToPointer extends ForeignToLLVM {
     }
 
     @Specialization(guards = {"!checkIsPointer(obj)", "notLLVM(obj)"})
-    protected LLVMTruffleObject fromTruffleObject(TruffleObject obj, LLVMInteropType.Structured type) {
-        return new LLVMTruffleObject(LLVMTypedForeignObject.create(obj, type));
+    protected LLVMTruffleObject fromTruffleObject(TruffleObject obj) {
+        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown(obj));
     }
 
     @TruffleBoundary
@@ -197,8 +159,6 @@ abstract class ToPointer extends ForeignToLLVM {
             return ((LLVMTruffleAddress) value).getAddress();
         } else if (value instanceof LLVMSharedGlobalVariable) {
             return ((LLVMSharedGlobalVariable) value).getDescriptor();
-        } else if (value instanceof LLVMTruffleObject) {
-            return value;
         } else if (value instanceof LLVMInternalTruffleObject) {
             return new LLVMTruffleObject((LLVMInternalTruffleObject) value);
         } else if (value instanceof TruffleObject && thiz.checkIsPointer((TruffleObject) value) && notLLVM((TruffleObject) value)) {
