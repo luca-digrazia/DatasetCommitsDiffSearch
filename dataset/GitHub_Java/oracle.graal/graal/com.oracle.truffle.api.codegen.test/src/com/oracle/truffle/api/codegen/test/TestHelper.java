@@ -42,7 +42,7 @@ class TestHelper {
         return nodes;
     }
 
-    static <E extends ValueNode> E createNode(NodeFactory<E> factory, Object... constants) {
+    static <E extends ValueNode> TestRootNode<E> create(NodeFactory<E> factory, Object... constants) {
         ArgumentNode[] argumentNodes = arguments(factory.getExecutionSignature().size());
 
         List<Object> argumentList = new ArrayList<>();
@@ -52,23 +52,11 @@ class TestHelper {
         } else {
             argumentList.addAll(Arrays.asList(argumentNodes));
         }
-        return factory.createNode(argumentList.toArray(new Object[argumentList.size()]));
-    }
-
-    static <E extends ValueNode> TestRootNode<E> createRoot(NodeFactory<E> factory, Object... constants) {
-        return new TestRootNode<>(createNode(factory, constants));
-    }
-
-    static CallTarget createCallTarget(ValueNode node) {
-        return createCallTarget(new TestRootNode<>(node));
-    }
-
-    static CallTarget createCallTarget(TestRootNode<? extends ValueNode> node) {
-        return Truffle.getRuntime().createCallTarget(node);
+        return new TestRootNode<>(factory.createNode(argumentList.toArray(new Object[argumentList.size()])));
     }
 
     static <E> Object executeWith(TestRootNode<? extends ValueNode> node, Object... values) {
-        return createCallTarget(node).call(new TestArguments(values));
+        return Truffle.getRuntime().createCallTarget(node).call(new TestArguments(values));
     }
 
 }
