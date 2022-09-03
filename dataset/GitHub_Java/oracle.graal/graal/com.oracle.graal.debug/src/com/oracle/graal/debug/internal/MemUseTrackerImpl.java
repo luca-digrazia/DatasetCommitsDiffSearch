@@ -22,44 +22,51 @@
  */
 package com.oracle.graal.debug.internal;
 
-import java.lang.management.*;
+import static com.oracle.graal.debug.DebugCloseable.VOID_CLOSEABLE;
 
-import com.oracle.graal.debug.*;
-import com.sun.management.ThreadMXBean;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.debug.DebugMemUseTracker;
+import com.oracle.graal.debug.Management;
+import com.oracle.graal.debug.internal.method.MethodMetricsImpl;
 
-public final class MemUseTrackerImpl extends DebugValue implements DebugMemUseTracker {
+public class MemUseTrackerImpl extends AccumulatedDebugValue implements DebugMemUseTracker {
+    private final boolean intercepting;
 
-    private static final ThreadMXBean threadMXBean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
-
-    public static final Closeable VOID_CLOSEABLE = new Closeable() {
-
-        @Override
-        public void close() {
-        }
-    };
+    public static long getCurrentThreadAllocatedBytes() {
+        return Management.getCurrentThreadAllocatedBytes();
+    }
 
     /**
      * Records the most recent active tracker.
      */
-    private static final ThreadLocal<CloseableImpl> currentTracker = new ThreadLocal<>();
+    private static final ThreadLocal<CloseableCounterImpl> currentTracker = new ThreadLocal<>();
 
-    private final DebugValue flat;
-
-    public MemUseTrackerImpl(String name) {
-        super(name + "_Accm", false);
-        this.flat = new DebugValue(name + "_Flat", false) {
+    public MemUseTrackerImpl(String name, boolean conditional, boolean intercepting) {
+        super(name, conditional, new DebugValue(name + "_Flat", conditional) {
 
             @Override
             public String toString(long value) {
                 return valueToString(value);
             }
-        };
+
+            @Override
+            public String rawUnit() {
+                return "B";
+            }
+
+            @Override
+            public String toRawString(long value) {
+                return Long.toString(value);
+            }
+        });
+        this.intercepting = intercepting;
     }
 
     @Override
-    public Closeable start() {
-        if (!isConditional() || Debug.isTimeEnabled()) {
-            CloseableImpl result = new CloseableImpl();
+    public DebugCloseable start() {
+        if (!isConditional() || Debug.isMemUseTrackingEnabled()) {
+            CloseableCounterImpl result = intercepting ? new MemUseInterceptingCloseableCounterImpl(this) : new MemUseCloseableCounterImpl(this);
             currentTracker.set(result);
             return result;
         } else {
@@ -76,27 +83,63 @@ public final class MemUseTrackerImpl extends DebugValue implements DebugMemUseTr
         return valueToString(value);
     }
 
-    private final class CloseableImpl implements Closeable {
+    private static final class MemUseCloseableCounterImpl extends CloseableCounterImpl implements DebugCloseable {
 
-        private final CloseableImpl parent;
-        private final long start;
-        private long nestedAmountToSubtract;
+        private MemUseCloseableCounterImpl(AccumulatedDebugValue counter) {
+            super(currentTracker.get(), counter);
+        }
 
-        private CloseableImpl() {
-            this.parent = currentTracker.get();
-            this.start = threadMXBean.getThreadAllocatedBytes(Thread.currentThread().getId());
+        @Override
+        long getCounterValue() {
+            return getCurrentThreadAllocatedBytes();
         }
 
         @Override
         public void close() {
-            long end = threadMXBean.getThreadAllocatedBytes(Thread.currentThread().getId());
-            long allocated = end - start;
-            if (parent != null) {
-                parent.nestedAmountToSubtract += allocated;
-            }
+            super.close();
             currentTracker.set(parent);
-            MemUseTrackerImpl.this.addToCurrentValue(allocated);
-            flat.addToCurrentValue(allocated - nestedAmountToSubtract);
         }
+    }
+
+    private static final class MemUseInterceptingCloseableCounterImpl extends CloseableCounterImpl implements DebugCloseable {
+
+        private MemUseInterceptingCloseableCounterImpl(AccumulatedDebugValue counter) {
+            super(currentTracker.get(), counter);
+        }
+
+        @Override
+        long getCounterValue() {
+            return getCurrentThreadAllocatedBytes();
+        }
+
+        @Override
+        public void close() {
+            super.close();
+            currentTracker.set(parent);
+        }
+
+        @Override
+        protected void interceptDifferenceAccm(long difference) {
+            if (Debug.isMethodMeterEnabled()) {
+                MethodMetricsImpl.addToCurrentScopeMethodMetrics(counter.getName(), difference);
+            }
+        }
+
+        @Override
+        protected void interceptDifferenceFlat(long difference) {
+            if (Debug.isMethodMeterEnabled()) {
+                MethodMetricsImpl.addToCurrentScopeMethodMetrics(counter.flat.getName(), difference);
+            }
+        }
+    }
+
+    @Override
+    public String rawUnit() {
+        return "B";
+    }
+
+    @Override
+    public String toRawString(long value) {
+        return Long.toString(value);
     }
 }

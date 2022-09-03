@@ -22,48 +22,157 @@
  */
 package com.oracle.graal.debug.internal;
 
-import com.oracle.graal.debug.*;
+import static com.oracle.graal.debug.DebugCloseable.VOID_CLOSEABLE;
 
-public final class TimerImpl extends DebugValue implements DebugTimer {
+import java.util.concurrent.TimeUnit;
 
-    public static final TimerCloseable VOID_CLOSEABLE = new TimerCloseable() {
-        @Override
-        public void close() {
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.debug.DebugTimer;
+import com.oracle.graal.debug.TimeSource;
+import com.oracle.graal.debug.internal.method.MethodMetricsImpl;
+
+public final class TimerImpl extends AccumulatedDebugValue implements DebugTimer {
+    private final boolean intercepting;
+
+    /**
+     * Records the most recent active timer.
+     */
+    private static final ThreadLocal<CloseableCounterImpl> currentTimer = new ThreadLocal<>();
+
+    static class FlatTimer extends DebugValue implements DebugTimer {
+        private TimerImpl accm;
+
+        FlatTimer(String name, boolean conditional) {
+            super(name + "_Flat", conditional);
         }
-    };
 
-    private ThreadLocal<Long> valueToSubstract = new ThreadLocal<>();
+        @Override
+        public String toString(long value) {
+            return valueToString(value);
+        }
 
-    public TimerImpl(String name) {
-        super(name);
+        @Override
+        public TimeUnit getTimeUnit() {
+            return accm.getTimeUnit();
+        }
+
+        @Override
+        public DebugCloseable start() {
+            return accm.start();
+        }
+
+        @Override
+        public String rawUnit() {
+            return "us";
+        }
+
+        @Override
+        public String toRawString(long value) {
+            return valueToRawString(value);
+        }
+    }
+
+    public TimerImpl(String name, boolean conditional, boolean intercepting) {
+        super(name, conditional, new FlatTimer(name, conditional));
+        ((FlatTimer) flat).accm = this;
+        this.intercepting = intercepting;
     }
 
     @Override
-    public TimerCloseable start() {
-        if (Debug.isTimeEnabled()) {
-            final long startTime = System.nanoTime();
-            if (valueToSubstract.get() == null) {
-                valueToSubstract.set(0L);
-            }
-            final long previousValueToSubstract = valueToSubstract.get();
-            TimerCloseable result = new TimerCloseable() {
-                @Override
-                public void close() {
-                    long timeSpan = System.nanoTime() - startTime;
-                    long oldValueToSubstract = valueToSubstract.get();
-                    valueToSubstract.set(timeSpan + previousValueToSubstract);
-                    TimerImpl.this.addToCurrentValue(timeSpan - oldValueToSubstract);
-                }
-            };
-            valueToSubstract.set(0L);
+    public DebugCloseable start() {
+        if (!isConditional() || Debug.isTimeEnabled()) {
+            AbstractTimer result = intercepting ? new InterceptingTimer(this) : new Timer(this);
+            currentTimer.set(result);
             return result;
         } else {
             return VOID_CLOSEABLE;
         }
     }
 
-    @Override
-    public String toString(long value) {
+    public static String valueToString(long value) {
         return String.format("%d.%d ms", value / 1000000, (value / 100000) % 10);
     }
+
+    @Override
+    public DebugTimer getFlat() {
+        return (FlatTimer) flat;
+    }
+
+    @Override
+    public String toString(long value) {
+        return valueToString(value);
+    }
+
+    @Override
+    public TimeUnit getTimeUnit() {
+        return TimeUnit.NANOSECONDS;
+    }
+
+    private abstract class AbstractTimer extends CloseableCounterImpl implements DebugCloseable {
+
+        private AbstractTimer(AccumulatedDebugValue counter) {
+            super(currentTimer.get(), counter);
+        }
+
+        @Override
+        public void close() {
+            super.close();
+            currentTimer.set(parent);
+        }
+    }
+
+    private final class Timer extends AbstractTimer {
+
+        private Timer(TimerImpl timer) {
+            super(timer);
+        }
+
+        @Override
+        protected long getCounterValue() {
+            return TimeSource.getTimeNS();
+        }
+
+    }
+
+    private final class InterceptingTimer extends AbstractTimer {
+
+        private InterceptingTimer(TimerImpl timer) {
+            super(timer);
+        }
+
+        @Override
+        protected long getCounterValue() {
+            return TimeSource.getTimeNS();
+        }
+
+        @Override
+        protected void interceptDifferenceAccm(long difference) {
+            if (Debug.isMethodMeterEnabled()) {
+                MethodMetricsImpl.addToCurrentScopeMethodMetrics(counter.getName(), difference);
+            }
+        }
+
+        @Override
+        protected void interceptDifferenceFlat(long difference) {
+            if (Debug.isMethodMeterEnabled()) {
+                MethodMetricsImpl.addToCurrentScopeMethodMetrics(counter.flat.getName(), difference);
+            }
+        }
+    }
+
+    @Override
+    public String rawUnit() {
+        return "us";
+    }
+
+    @Override
+    public String toRawString(long value) {
+        return valueToRawString(value);
+    }
+
+    public static String valueToRawString(long value) {
+        return Long.toString(value / 1000);
+    }
+
 }
