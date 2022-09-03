@@ -59,16 +59,16 @@ import com.oracle.truffle.api.source.MissingNameException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
-import com.oracle.truffle.llvm.context.LLVMContext;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
 import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacadeProvider;
-import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMBitcodeVisitor;
 import com.oracle.truffle.llvm.parser.impl.LLVMVisitor;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 
 /**
  * This is the main LLVM execution class.
@@ -91,7 +91,7 @@ public class LLVM {
             throw new AssertionError("Could not find a " + NodeFactoryFacadeProvider.class.getSimpleName() + " for the creation of the Truffle nodes");
         }
         NodeFactoryFacade facade = null;
-        String expectedConfigName = LLVMOptions.ENGINE.nodeConfiguration();
+        String expectedConfigName = LLVMBaseOptionFacade.getNodeConfiguration();
         for (NodeFactoryFacadeProvider prov : loader) {
             String configName = prov.getConfigurationName();
             if (configName != null && configName.equals(expectedConfigName)) {
@@ -134,7 +134,7 @@ public class LLVM {
                     }
                     mainFunction[0] = parserResult.getMainFunction();
                     handleParserResult(context, parserResult);
-                } else if (code.getMimeType().equals(LLVMLanguage.LLVM_BITCODE_MIME_TYPE) || code.getMimeType().equals(LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE)) {
+                } else if (code.getMimeType().equals(LLVMLanguage.LLVM_BITCODE_MIME_TYPE)) {
                     LLVMParserResult parserResult = parseBitcodeFile(code, context);
                     mainFunction[0] = parserResult.getMainFunction();
                     handleParserResult(context, parserResult);
@@ -147,26 +147,15 @@ public class LLVM {
                         sourceFiles.add(source);
                     });
                     for (Source source : sourceFiles) {
-                        String mimeType = source.getMimeType();
+                        LLVMParserResult parserResult;
                         try {
-                            LLVMParserResult parserResult;
-                            if (mimeType.equals(LLVMLanguage.LLVM_BITCODE_MIME_TYPE) || mimeType.equals(LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE)) {
-                                parserResult = parseBitcodeFile(source, context);
-                            } else if (mimeType.equals(LLVMLanguage.LLVM_IR_MIME_TYPE)) {
-                                try {
-                                    parserResult = parseString(source, context);
-                                } catch (IOException e) {
-                                    throw new UncheckedIOException(e);
-                                }
-                            } else {
-                                throw new UnsupportedOperationException(mimeType);
-                            }
-                            handleParserResult(context, parserResult);
-                            if (parserResult.getMainFunction() != null) {
-                                mainFunction[0] = parserResult.getMainFunction();
-                            }
-                        } catch (Throwable t) {
-                            throw new IOException("Error while trying to parse " + source.getName(), t);
+                            parserResult = parseString(source, context);
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                        handleParserResult(context, parserResult);
+                        if (parserResult.getMainFunction() != null) {
+                            mainFunction[0] = parserResult.getMainFunction();
                         }
                     }
                     if (mainFunction[0] == null) {
@@ -184,7 +173,7 @@ public class LLVM {
             }
 
             private void visitBitcodeLibraries(Consumer<Source> sharedLibraryConsumer) throws IOException {
-                String[] dynamicLibraryPaths = LLVMOptions.ENGINE.dynamicBitcodeLibraries();
+                String[] dynamicLibraryPaths = LLVMBaseOptionFacade.getDynamicBitcodeLibraries();
                 if (dynamicLibraryPaths != null && dynamicLibraryPaths.length != 0) {
                     for (String s : dynamicLibraryPaths) {
                         Source source;
