@@ -22,14 +22,15 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import jdk.internal.jvmci.code.*;
 import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.sparc.*;
 
 /**
  * Removes the current frame and tail calls the uncommon trap routine.
@@ -37,10 +38,9 @@ import com.oracle.graal.lir.sparc.*;
 @Opcode("DEOPT_CALLER")
 final class SPARCHotSpotDeoptimizeCallerOp extends SPARCHotSpotEpilogueOp {
     public static final LIRInstructionClass<SPARCHotSpotDeoptimizeCallerOp> TYPE = LIRInstructionClass.create(SPARCHotSpotDeoptimizeCallerOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(32);
 
     protected SPARCHotSpotDeoptimizeCallerOp() {
-        super(TYPE, SIZE);
+        super(TYPE);
     }
 
     @Override

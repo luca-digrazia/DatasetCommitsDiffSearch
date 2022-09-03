@@ -39,8 +39,7 @@ import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.lir.*;
@@ -48,6 +47,7 @@ import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.sparc.SPARC.CPUFeature;
+import com.oracle.graal.sparc.*;
 
 public class SPARCControlFlow {
 
@@ -225,12 +225,8 @@ public class SPARCControlFlow {
                     SPARCMove.move(crb, masm, scratchValue, actualY, SPARCDelayedControlTransfer.DUMMY);
                     actualY = scratchValue;
                 }
-                // Test if the previous instruction was cbcond, if so, put a nop inbetween (See
-                // SPARC Architecture 2011 manual)
-                if (masm.isCbcond(masm.getInt(masm.position() - 1))) {
-                    masm.nop();
-                }
                 emitCBCond(masm, actualX, actualY, actualTrueTarget, actualConditionFlag);
+                masm.nop();
             }
             if (needJump) {
                 masm.jmp(actualFalseTarget);

@@ -39,7 +39,6 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
@@ -265,11 +264,9 @@ public enum SPARCArithmetic {
             case IMULCC:
                 throw GraalInternalError.unimplemented();
             case IDIV:
-                masm.sra(asRegister(src1), 0, asRegister(src1));
                 masm.sdivx(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IUDIV:
-                masm.srl(asRegister(src1), 0, asRegister(src1));
                 masm.udivx(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IAND:
@@ -401,8 +398,8 @@ public enum SPARCArithmetic {
                 masm.sdivx(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IUDIV:
-                masm.srl(asIntReg(src1), 0, asIntReg(src1));
-                masm.srl(asIntReg(src2), 0, asIntReg(src2));
+                masm.signx(asIntReg(src1), asIntReg(src1));
+                masm.signx(asIntReg(src2), asIntReg(src2));
                 delaySlotLir.emitControlTransfer(crb, masm);
                 exceptionOffset = masm.position();
                 masm.udivx(asIntReg(src1), asIntReg(src2), asIntReg(dst));
@@ -725,7 +722,6 @@ public enum SPARCArithmetic {
                 masm.fcmp(Fcc0, Fcmps, asFloatReg(src), asFloatReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
                 masm.fstox(asFloatReg(src), asDoubleReg(dst));
-                masm.fxtod(asRegister(dst), asRegister(dst));
                 masm.fsubd(asDoubleReg(dst), asDoubleReg(dst), asDoubleReg(dst));
                 masm.bind(notOrdered);
                 break;
@@ -749,8 +745,8 @@ public enum SPARCArithmetic {
                 masm.fcmp(Fcc0, Fcmpd, asDoubleReg(src), asDoubleReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
                 masm.fdtoi(asDoubleReg(src), asFloatReg(dst));
-                masm.fitos(asFloatReg(dst), asFloatReg(dst));
                 masm.fsubs(asFloatReg(dst), asFloatReg(dst), asFloatReg(dst));
+                masm.fstoi(asFloatReg(dst), asFloatReg(dst));
                 masm.bind(notOrdered);
                 break;
             case FNEG:
@@ -878,8 +874,6 @@ public enum SPARCArithmetic {
             assert isRegister(x) && isRegister(y) && isRegister(result) && isRegister(scratch);
             switch (opcode) {
                 case IMUL:
-                    masm.sra(asRegister(x), 0, asRegister(x));
-                    masm.sra(asRegister(y), 0, asRegister(y));
                     masm.mulx(asIntReg(x), asIntReg(y), asIntReg(result));
                     masm.srax(asIntReg(result), 32, asIntReg(result));
                     break;
