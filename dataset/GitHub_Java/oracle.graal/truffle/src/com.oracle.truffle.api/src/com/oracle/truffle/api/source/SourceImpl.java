@@ -42,11 +42,6 @@ final class SourceImpl extends Source {
         this.sourceId = new Object();
     }
 
-    private SourceImpl(Key key, Object sourceId) {
-        this.key = key;
-        this.sourceId = sourceId;
-    }
-
     @Override
     protected Object getSourceId() {
         return sourceId;
@@ -55,11 +50,6 @@ final class SourceImpl extends Source {
     @Override
     public CharSequence getCharacters() {
         return key.characters;
-    }
-
-    @Override
-    Source copy() {
-        return new SourceImpl(key, sourceId);
     }
 
     @Override
