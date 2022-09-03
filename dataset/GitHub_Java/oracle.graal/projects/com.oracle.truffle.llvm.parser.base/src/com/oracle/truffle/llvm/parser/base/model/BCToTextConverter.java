@@ -60,7 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 
-public final class BCToTextConverter {
+public class BCToTextConverter {
 
     private interface ReplacingResolvedType {
         void replaceResolvedType(ResolvedType old, ResolvedType replacement);
@@ -78,24 +78,6 @@ public final class BCToTextConverter {
         @Override
         public ResolvedType getContainedType(int index) {
             return containedType;
-        }
-
-        @Override
-        public String toString() {
-            String addrSpaceStr = "";
-            if (this.getAddrSpace().equals(BigInteger.valueOf(-1L))) {
-                addrSpaceStr = " addrspace(m)";
-            } else if (!this.getAddrSpace().equals(BigInteger.ZERO)) {
-                addrSpaceStr = " addrspace(" + this.getAddrSpace().toString() + ")";
-            }
-
-            return this.containedType.toString() + addrSpaceStr + "*";
-        }
-
-        @Override
-        protected boolean uniAccepts(ResolvedType t) {
-            return t instanceof ResolvedPointerType && (this.getAddrSpace().longValue() == -1L || this.getAddrSpace().equals(((ResolvedPointerType) t).getAddrSpace())) &&
-                            this.containedType.accepts(t.getContainedType(-1));
         }
 
         @Override
@@ -396,6 +378,7 @@ public final class BCToTextConverter {
             } else {
                 final ResolvedType convertedFieldType = convert(currentFieldType, false);
                 resolvedFields.add(convertedFieldType);
+                alreadyResolvedTypes.put(currentFieldType, convertedFieldType);
             }
         }
 
@@ -450,7 +433,6 @@ public final class BCToTextConverter {
             temp.parentType = v;
             temp.referredType = elementType;
             cyclicReferences.add(temp);
-            alreadyResolvedTypes.putIfAbsent(type, v);
             return v;
 
         } else {
@@ -472,7 +454,6 @@ public final class BCToTextConverter {
             temp.parentType = a;
             temp.referredType = elementType;
             cyclicReferences.add(temp);
-            alreadyResolvedTypes.putIfAbsent(type, a);
             return a;
 
         } else {
@@ -495,7 +476,6 @@ public final class BCToTextConverter {
             temp.parentType = p;
             temp.referredType = pointeeType;
             cyclicReferences.add(temp);
-            alreadyResolvedTypes.putIfAbsent(type, p);
             return p;
 
         } else {
