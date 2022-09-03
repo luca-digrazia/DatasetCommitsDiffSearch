@@ -90,11 +90,8 @@ public class IntegerStamp extends PrimitiveStamp {
 
     @Override
     public Stamp constant(Constant c, MetaAccessProvider meta) {
-        if (c instanceof PrimitiveConstant) {
-            long value = ((PrimitiveConstant) c).asLong();
-            return StampFactory.forInteger(getBits(), value, value);
-        }
-        return this;
+        long value = ((PrimitiveConstant) c).asLong();
+        return StampFactory.forInteger(getBits(), value, value);
     }
 
     @Override

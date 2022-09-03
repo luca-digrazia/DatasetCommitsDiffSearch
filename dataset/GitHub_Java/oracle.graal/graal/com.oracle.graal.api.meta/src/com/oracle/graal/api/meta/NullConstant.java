@@ -85,6 +85,7 @@ final class NullConstant extends AbstractValue implements JavaConstant {
 
     @Override
     public boolean equals(Object o) {
-        return o instanceof NullConstant;
+        assert o == this || !(o instanceof NullConstant) : "null constant is a singleton";
+        return o == this;
     }
 }

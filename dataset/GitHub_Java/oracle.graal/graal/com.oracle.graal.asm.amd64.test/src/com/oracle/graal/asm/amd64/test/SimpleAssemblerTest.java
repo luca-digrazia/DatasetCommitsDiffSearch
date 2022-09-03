@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,30 +22,20 @@
  */
 package com.oracle.graal.asm.amd64.test;
 
-import static org.junit.Assume.assumeTrue;
+import static org.junit.Assume.*;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import java.nio.*;
 
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.code.site.DataSectionReference;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
+import org.junit.*;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import com.oracle.graal.asm.amd64.AMD64Assembler;
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.asm.test.AssemblerTest;
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.code.DataSection.Data;
-import com.oracle.graal.code.DataSection.RawData;
-import com.oracle.graal.code.DataSection.SerializableData;
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CompilationResult.DataSectionReference;
+import com.oracle.graal.api.code.DataSection.Data;
+import com.oracle.graal.api.code.DataSection.DataBuilder;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.asm.test.*;
 
 public class SimpleAssemblerTest extends AssemblerTest {
 
@@ -60,8 +50,8 @@ public class SimpleAssemblerTest extends AssemblerTest {
 
             @Override
             public byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
-                AMD64Assembler asm = new AMD64Assembler(target);
-                Register ret = registerConfig.getReturnRegister(JavaKind.Int);
+                AMD64Assembler asm = new AMD64Assembler(target, registerConfig);
+                Register ret = registerConfig.getReturnRegister(Kind.Int);
                 asm.movl(ret, 8472);
                 asm.ret(0);
                 return asm.close(true);
@@ -76,12 +66,12 @@ public class SimpleAssemblerTest extends AssemblerTest {
 
             @Override
             public byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
-                AMD64MacroAssembler asm = new AMD64MacroAssembler(target);
-                Register ret = registerConfig.getReturnRegister(JavaKind.Double);
-                Data data = new SerializableData(JavaConstant.forDouble(84.72), 8);
+                AMD64MacroAssembler asm = new AMD64MacroAssembler(target, registerConfig);
+                Register ret = registerConfig.getReturnRegister(Kind.Double);
+                Data data = new Data(8, 8, DataBuilder.primitive(JavaConstant.forDouble(84.72)));
                 DataSectionReference ref = compResult.getDataSection().insertData(data);
                 compResult.recordDataPatch(asm.position(), ref);
-                asm.movdbl(ret, asm.getPlaceholder(-1));
+                asm.movdbl(ret, asm.getPlaceholder());
                 asm.ret(0);
                 return asm.close(true);
             }
@@ -95,15 +85,15 @@ public class SimpleAssemblerTest extends AssemblerTest {
 
             @Override
             public byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
-                AMD64MacroAssembler asm = new AMD64MacroAssembler(target);
-                Register ret = registerConfig.getReturnRegister(JavaKind.Double);
+                AMD64MacroAssembler asm = new AMD64MacroAssembler(target, registerConfig);
+                Register ret = registerConfig.getReturnRegister(Kind.Double);
 
                 byte[] rawBytes = new byte[8];
                 ByteBuffer.wrap(rawBytes).order(ByteOrder.nativeOrder()).putDouble(84.72);
-                Data data = new RawData(rawBytes, 8);
+                Data data = new Data(8, 8, DataBuilder.raw(rawBytes));
                 DataSectionReference ref = compResult.getDataSection().insertData(data);
                 compResult.recordDataPatch(asm.position(), ref);
-                asm.movdbl(ret, asm.getPlaceholder(-1));
+                asm.movdbl(ret, asm.getPlaceholder());
                 asm.ret(0);
                 return asm.close(true);
             }
