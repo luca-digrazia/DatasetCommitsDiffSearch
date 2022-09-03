@@ -30,8 +30,6 @@ import java.util.stream.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -222,10 +220,10 @@ public class InvocationPlugins {
      */
     private InvocationPlugins parent;
 
-    private InvocationPlugins(InvocationPlugins parent, MetaAccessProvider metaAccess, int estimatePluginCount) {
+    private InvocationPlugins(InvocationPlugins parent, MetaAccessProvider metaAccess) {
         this.registrationThread = Thread.currentThread();
         this.metaAccess = metaAccess;
-        this.registrations = new ArrayList<>(estimatePluginCount);
+        this.registrations = new ArrayList<>(INITIAL_PLUGIN_CAPACITY);
         InvocationPlugins p = parent;
         // Only adopt a non-empty parent
         while (p != null && p.size() == 0) {
@@ -234,21 +232,17 @@ public class InvocationPlugins {
         this.parent = p;
     }
 
-    private static final int DEFAULT_ESTIMATE_PLUGIN_COUNT = 16;
+    private static final int INITIAL_PLUGIN_CAPACITY = 64;
 
     /**
      * Creates a set of invocation plugins with a non-null {@linkplain #getParent() parent}.
      */
     public InvocationPlugins(InvocationPlugins parent) {
-        this(parent, parent.metaAccess, DEFAULT_ESTIMATE_PLUGIN_COUNT);
+        this(parent, parent.metaAccess);
     }
 
     public InvocationPlugins(MetaAccessProvider metaAccess) {
-        this(metaAccess, DEFAULT_ESTIMATE_PLUGIN_COUNT);
-    }
-
-    public InvocationPlugins(MetaAccessProvider metaAccess, int estimatePluginCount) {
-        this(null, metaAccess, estimatePluginCount);
+        this(null, metaAccess);
     }
 
     /**
@@ -386,19 +380,5 @@ public class InvocationPlugins {
 
     public int size() {
         return registrations.size();
-    }
-
-    /**
-     * Checks a set of nodes added to the graph by an {@link InvocationPlugin}.
-     *
-     * @param b the graph builder that applied the plugin
-     * @param plugin a plugin that was just applied
-     * @param newNodes the nodes added to the graph by {@code plugin}
-     * @throws AssertionError if any check fail
-     */
-    public void checkNewNodes(GraphBuilderContext b, InvocationPlugin plugin, NodeIterable<Node> newNodes) {
-        if (parent != null) {
-            parent.checkNewNodes(b, plugin, newNodes);
-        }
     }
 }
