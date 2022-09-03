@@ -194,7 +194,7 @@ public class HotSpotMemoryAccessProviderImpl implements HotSpotMemoryAccessProvi
         int compressed = (int) readRawValue(base, displacement, 32);
         long klass = encoding.uncompress(compressed);
         if (klass == 0) {
-            return HotSpotCompressedNullConstant.COMPRESSED_NULL;
+            return JavaConstant.NULL_POINTER;
         }
         HotSpotResolvedObjectType metaKlass = HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(klass);
         return HotSpotMetaspaceConstantImpl.forMetaspaceObject(Kind.Int, compressed, metaKlass, true);
