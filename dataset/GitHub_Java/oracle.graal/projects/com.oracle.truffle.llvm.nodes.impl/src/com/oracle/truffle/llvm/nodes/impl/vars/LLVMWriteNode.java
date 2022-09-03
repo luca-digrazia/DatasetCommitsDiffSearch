@@ -34,6 +34,7 @@ import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
@@ -49,7 +50,6 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
-import com.oracle.truffle.llvm.types.LLVMTruffleObject;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 
 @NodeField(name = "slot", type = FrameSlot.class)
@@ -155,7 +155,7 @@ public abstract class LLVMWriteNode extends LLVMNode {
         }
 
         @Specialization
-        protected void writeObject(VirtualFrame frame, LLVMTruffleObject value) {
+        protected void writeObject(VirtualFrame frame, TruffleObject value) {
             frame.setObject(getSlot(), value);
         }
 
