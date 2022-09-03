@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,13 +22,8 @@
  */
 package org.graalvm.compiler.replacements;
 
-import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
 import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
-
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
 
 // JaCoCo Exclude
 public final class ReplacementsUtil {
@@ -47,13 +40,7 @@ public final class ReplacementsUtil {
      */
     public static void staticAssert(boolean condition, String message) {
         if (REPLACEMENTS_ASSERTIONS_ENABLED) {
-            AssertionNode.staticAssert(condition, message);
-        }
-    }
-
-    public static void staticAssert(boolean condition, String message, Object arg1) {
-        if (REPLACEMENTS_ASSERTIONS_ENABLED) {
-            AssertionNode.staticAssert(condition, message, arg1, "");
+            AssertionNode.assertion(true, condition, message);
         }
     }
 
@@ -61,20 +48,9 @@ public final class ReplacementsUtil {
      * Asserts that condition evaluates to true at runtime. This is intended to be used within
      * snippets or stubs, and will lead to a VM error if it fails.
      */
-    public static void dynamicAssert(boolean condition, String message) {
+    public static void runtimeAssert(boolean condition, String message) {
         if (REPLACEMENTS_ASSERTIONS_ENABLED) {
-            AssertionNode.dynamicAssert(condition, message);
+            AssertionNode.assertion(false, condition, message);
         }
     }
-
-    @Fold
-    public static int arrayIndexScale(@InjectedParameter MetaAccessProvider metaAccessProvider, JavaKind elementKind) {
-        return metaAccessProvider.getArrayIndexScale(elementKind);
-    }
-
-    @Fold
-    public static int getArrayBaseOffset(@InjectedParameter MetaAccessProvider metaAccessProvider, JavaKind elementKind) {
-        return metaAccessProvider.getArrayBaseOffset(elementKind);
-    }
-
 }

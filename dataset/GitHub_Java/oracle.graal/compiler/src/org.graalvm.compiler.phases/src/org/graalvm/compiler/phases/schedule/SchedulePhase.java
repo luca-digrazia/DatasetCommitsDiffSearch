@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Formatter;
 import java.util.List;
 
+import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.core.common.cfg.AbstractControlFlowGraph;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
@@ -177,7 +178,7 @@ public final class SchedulePhase extends Phase {
                 sortNodesLatestWithinBlock(cfg, earliestBlockToNodesMap, latestBlockToNodesMap, currentNodeMap, watchListMap, visited);
 
                 assert verifySchedule(cfg, latestBlockToNodesMap, currentNodeMap);
-                assert (!Assertions.detailedAssertionsEnabled(graph.getOptions())) || MemoryScheduleVerification.check(cfg.getStartBlock(), latestBlockToNodesMap);
+                assert (!GraalOptions.DetailedAsserts.getValue(graph.getOptions())) || MemoryScheduleVerification.check(cfg.getStartBlock(), latestBlockToNodesMap);
 
                 this.blockToNodesMap = latestBlockToNodesMap;
 
@@ -879,7 +880,7 @@ public final class SchedulePhase extends Phase {
                 }
             }
 
-            assert (!Assertions.detailedAssertionsEnabled(cfg.graph.getOptions())) || MemoryScheduleVerification.check(cfg.getStartBlock(), blockToNodes);
+            assert (!GraalOptions.DetailedAsserts.getValue(cfg.graph.getOptions())) || MemoryScheduleVerification.check(cfg.getStartBlock(), blockToNodes);
         }
 
         private static void processStackPhi(NodeStack stack, PhiNode phiNode, NodeMap<MicroBlock> nodeToBlock, NodeBitMap visited) {

@@ -34,11 +34,11 @@ import java.util.function.Consumer;
 
 import org.graalvm.compiler.asm.AbstractAddress;
 import org.graalvm.compiler.asm.Assembler;
-import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.code.CompilationResult.CodeAnnotation;
 import org.graalvm.compiler.code.DataSection.Data;
 import org.graalvm.compiler.code.DataSection.RawData;
+import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.type.DataPointerConstant;
@@ -130,12 +130,12 @@ public class CompilationResultBuilder {
     /**
      * The LIR for which code is being generated.
      */
-    protected LIR lir;
+    private LIR lir;
 
     /**
      * The index of the block currently being emitted.
      */
-    protected int currentBlockIndex;
+    private int currentBlockIndex;
 
     /**
      * The object that emits code for managing a method's frame.
@@ -310,15 +310,6 @@ public class CompilationResultBuilder {
             debug.log("Data reference in code: pos = %d, data = %s", asm.position(), Arrays.toString(data));
         }
         return recordDataSectionReference(new RawData(data, alignment));
-    }
-
-    /**
-     * Notifies this object of a branch instruction at offset {@code pos} in the code.
-     *
-     * @param isNegated negation status of the branch's condition.
-     */
-    @SuppressWarnings("unused")
-    public void recordBranch(int pos, boolean isNegated) {
     }
 
     /**
@@ -529,5 +520,4 @@ public class CompilationResultBuilder {
     public OptionValues getOptions() {
         return options;
     }
-
 }
