@@ -31,25 +31,16 @@ import javax.lang.model.type.*;
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
-import com.oracle.truffle.codegen.processor.typesystem.*;
 
-
-public class SpecializationMethodParser extends MethodParser<SpecializationData> {
-
-    private final MethodSpec specification;
+public class SpecializationMethodParser extends NodeMethodParser<SpecializationData> {
 
     public SpecializationMethodParser(ProcessorContext context, NodeData operation) {
         super(context, operation);
-        this.specification = createDefaultMethodSpec(null);
     }
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        return specification;
-    }
-
-    public MethodSpec getSpecification() {
-        return specification;
+        return createDefaultMethodSpec(method, mirror, true, null);
     }
 
     @Override
@@ -58,117 +49,48 @@ public class SpecializationMethodParser extends MethodParser<SpecializationData>
     }
 
     @Override
-    public Class< ? extends Annotation> getAnnotationType() {
+    public Class<? extends Annotation> getAnnotationType() {
         return Specialization.class;
     }
 
     private SpecializationData parseSpecialization(TemplateMethod method) {
-        int order = Utils.getAnnotationValueInt(method.getMarkerAnnotation(), "order");
+        int order = Utils.getAnnotationValue(Integer.class, method.getMarkerAnnotation(), "order");
         if (order < 0 && order != Specialization.DEFAULT_ORDER) {
-            getContext().getLog().error(method.getMethod(), method.getMarkerAnnotation(), "Invalid order attribute %d. The value must be >= 0 or the default value.");
+            method.addError("Invalid order attribute %d. The value must be >= 0 or the default value.");
             return null;
         }
 
-        List<AnnotationMirror> exceptionDefs = Utils.collectAnnotations(getContext(), method.getMarkerAnnotation(), "exceptions", method.getMethod(), SpecializationThrows.class);
-        SpecializationThrowsData[] exceptionData = new SpecializationThrowsData[exceptionDefs.size()];
-        for (int i = 0; i < exceptionData.length; i++) {
-            AnnotationMirror mirror = exceptionDefs.get(i);
-            TypeMirror javaClass = Utils.getAnnotationValueType(mirror, "javaClass");
-            String transitionTo = Utils.getAnnotationValueString(mirror, "transitionTo");
-            exceptionData[i] = new SpecializationThrowsData(mirror, javaClass, transitionTo);
-
-            if (!Utils.canThrowType(method.getMethod().getThrownTypes(), javaClass)) {
-                getContext().getLog().error(method.getMethod(), "Method must specify a throws clause with the exception type '%s'.", Utils.getQualifiedName(javaClass));
-                return null;
+        AnnotationValue rewriteValue = Utils.getAnnotationValue(method.getMarkerAnnotation(), "rewriteOn");
+        List<TypeMirror> exceptionTypes = Utils.getAnnotationValueList(TypeMirror.class, method.getMarkerAnnotation(), "rewriteOn");
+        List<SpecializationThrowsData> exceptionData = new ArrayList<>();
+        for (TypeMirror exceptionType : exceptionTypes) {
+            SpecializationThrowsData throwsData = new SpecializationThrowsData(method.getMarkerAnnotation(), rewriteValue, exceptionType);
+            if (!Utils.canThrowType(method.getMethod().getThrownTypes(), exceptionType)) {
+                throwsData.addError("Method must specify a throws clause with the exception type '%s'.", Utils.getQualifiedName(exceptionType));
             }
+            exceptionData.add(throwsData);
         }
 
-        Arrays.sort(exceptionData, new Comparator<SpecializationThrowsData>() {
+        Collections.sort(exceptionData, new Comparator<SpecializationThrowsData>() {
+
             @Override
             public int compare(SpecializationThrowsData o1, SpecializationThrowsData o2) {
                 return Utils.compareByTypeHierarchy(o1.getJavaClass(), o2.getJavaClass());
             }
         });
         SpecializationData specialization = new SpecializationData(method, order, exceptionData);
-        boolean valid = true;
-        List<AnnotationMirror> guardDefs = Utils.collectAnnotations(getContext(), method.getMarkerAnnotation(), "guards", method.getMethod(), SpecializationGuard.class);
-        SpecializationGuardData[] guardData = new SpecializationGuardData[guardDefs.size()];
-        for (int i = 0; i < guardData.length; i++) {
-            AnnotationMirror guardMirror = guardDefs.get(i);
-            String guardMethod = Utils.getAnnotationValueString(guardMirror, "methodName");
-            boolean onSpecialization = Utils.getAnnotationValueBoolean(guardMirror, "onSpecialization");
-            boolean onExecution = Utils.getAnnotationValueBoolean(guardMirror, "onExecution");
+        List<String> guardDefs = Utils.getAnnotationValueList(String.class, specialization.getMarkerAnnotation(), "guards");
+        specialization.setGuardDefinitions(guardDefs);
 
-            if (!onSpecialization && !onExecution) {
-                String message = "Either onSpecialization, onExecution or both must be enabled.";
-                getContext().getLog().error(method.getMethod(), guardMirror, message);
-                valid = false;
-                continue;
-            }
+        List<String> assumptionDefs = Utils.getAnnotationValueList(String.class, specialization.getMarkerAnnotation(), "assumptions");
+        specialization.setAssumptions(assumptionDefs);
 
-            guardData[i] = new SpecializationGuardData(guardMethod, onSpecialization, onExecution);
-
-            GuardData compatibleGuard = matchSpecializationGuard(guardMirror, specialization, guardData[i]);
-            if (compatibleGuard != null) {
-                guardData[i].setGuardDeclaration(compatibleGuard);
-            } else {
-                valid = false;
+        for (String assumption : assumptionDefs) {
+            if (!getNode().getAssumptions().contains(assumption)) {
+                specialization.addError("Undeclared assumption '%s' used. Use @NodeAssumptions to declare them.", assumption);
             }
         }
-
-        if (!valid) {
-            return null;
-        }
-
-        specialization.setGuards(guardData);
 
         return specialization;
     }
-
-    private GuardData matchSpecializationGuard(AnnotationMirror mirror, SpecializationData specialization, SpecializationGuardData specializationGuard)  {
-        List<GuardData> foundGuards = getNode().findGuards(specializationGuard.getGuardMethod());
-
-        GuardData compatibleGuard = null;
-        for (GuardData guardData : foundGuards) {
-            if (isGuardCompatible(specialization, guardData)) {
-                compatibleGuard = guardData;
-                break;
-            }
-        }
-
-        if (compatibleGuard == null) {
-            ParameterSpec returnTypeSpec = new ParameterSpec("returnValue", getContext().getType(boolean.class), false);
-            List<ParameterSpec> expectedParameterSpecs = new ArrayList<>();
-
-            for (ActualParameter param : specialization.getParameters()) {
-                ParameterSpec spec = param.getSpecification();
-                expectedParameterSpecs.add(new ParameterSpec(spec.getName(), param.getActualType(), false));
-            }
-            String expectedSignature = TemplateMethodParser.createExpectedSignature(specializationGuard.getGuardMethod(), returnTypeSpec, expectedParameterSpecs);
-            AnnotationValue value = Utils.getAnnotationValue(mirror, "methodName");
-            getContext().getLog().error(specialization.getMethod(), mirror, value, "No guard with signature '%s' found in type system.", expectedSignature);
-            return null;
-        }
-
-        return compatibleGuard;
-    }
-
-    private static boolean isGuardCompatible(SpecializationData specialization, GuardData guard) {
-        Iterator<ActualParameter> guardParameters = Arrays.asList(guard.getParameters()).iterator();
-        for (ActualParameter param : specialization.getParameters()) {
-            if (!guardParameters.hasNext()) {
-                return false;
-            }
-            ActualParameter guardParam = guardParameters.next();
-            if (!Utils.typeEquals(guardParam.getActualType(), param.getActualType())) {
-                return false;
-            }
-        }
-        if (guardParameters.hasNext()) {
-            return false;
-        }
-        return true;
-    }
-
-
 }

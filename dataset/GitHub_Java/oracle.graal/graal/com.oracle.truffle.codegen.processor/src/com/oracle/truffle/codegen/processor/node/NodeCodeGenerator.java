@@ -629,9 +629,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                     clazz.add(createUserConstructor(clazz, constructor));
                 }
             }
-            if (node.needsRewrites(getContext())) {
-                clazz.add(createCopyConstructor(clazz, findCopyConstructor(node.getNodeType())));
-            }
+            clazz.add(createCopyConstructor(clazz, findCopyConstructor(node.getNodeType())));
         }
 
         private CodeExecutableElement createUserConstructor(CodeTypeElement type, ExecutableElement superConstructor) {
