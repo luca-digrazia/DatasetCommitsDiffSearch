@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.c;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -51,18 +50,20 @@ public abstract class LLVMCMathsIntrinsics {
     public abstract static class LLVMSqrt extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.sqrt(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMLog extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.log(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
@@ -71,72 +72,73 @@ public abstract class LLVMCMathsIntrinsics {
         private static final double LOG_2 = Math.log(2);
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.log(value) / LOG_2;
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMLog10 extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.log10(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMRint extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.rint(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMCeil extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.ceil(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMFloor extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.floor(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMAbs extends LLVMIntrinsic {
 
         @Specialization
-        protected int doIntrinsic(int value) {
+        public int executeIntrinsic(int value) {
             return Math.abs(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMFAbs extends LLVMBuiltin {
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return Math.abs(value);
         }
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.abs(value);
-        }
-
-        @Specialization
-        public LLVM80BitFloat executeIntrinsic(LLVM80BitFloat value) {
-            return value.abs();
         }
 
         @Override
@@ -148,261 +150,264 @@ public abstract class LLVMCMathsIntrinsics {
     public abstract static class LLVMExp extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.exp(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMExp2 extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.pow(2, value);
         }
+
     }
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     public abstract static class LLVMLdexp extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value, int exp) {
+        public double executeIntrinsic(double value, int exp) {
             return value * Math.pow(2, exp);
         }
+
     }
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     public abstract static class LLVMModf extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value, LLVMAddress integralAddr,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+        public double executeIntrinsic(double value, LLVMAddress integralAddr) {
             double fractional = Math.IEEEremainder(value, 1);
             double integral = value - fractional;
-            memory.putDouble(integralAddr, integral);
+            LLVMMemory.putDouble(integralAddr, integral);
             return fractional;
         }
+
     }
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     public abstract static class LLVMFmod extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double numer, double denom) {
+        public double executeIntrinsic(double numer, double denom) {
             if (CompilerDirectives.injectBranchProbability(CompilerDirectives.SLOWPATH_PROBABILITY, denom == 0)) {
                 return 0;
             } else {
                 return Math.IEEEremainder(numer, denom);
             }
         }
-    }
 
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMFmodl extends LLVMIntrinsic {
-
-        @Specialization
-        protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat numer, LLVM80BitFloat denom) {
-            if (CompilerDirectives.injectBranchProbability(CompilerDirectives.SLOWPATH_PROBABILITY, denom.isZero())) {
-                return LLVM80BitFloat.fromInt(0);
-            } else {
-                return numer.rem(denom);
-            }
-        }
     }
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     public abstract static class LLVMPow extends LLVMBuiltin {
 
         @Specialization
-        protected float doFloat(float val, int pow) {
+        public float executeFloat(float val, int pow) {
             return (float) Math.pow(val, pow);
         }
 
         @Specialization
-        protected float doFloat(float val, float pow) {
+        public float executeFloat(float val, float pow) {
             return (float) Math.pow(val, pow);
         }
 
         @Specialization
-        protected double doDouble(double a, int b) {
+        public double executeDouble(double a, int b) {
             return Math.pow(a, b);
         }
 
         @Specialization
-        protected double doDouble(double a, double b) {
+        public double executeDouble(double a, double b) {
             return Math.pow(a, b);
         }
 
         @Specialization
-        protected LLVM80BitFloat do80BitFloat(LLVM80BitFloat val, int pow) {
+        public LLVM80BitFloat execute80BitFloat(LLVM80BitFloat val, int pow) {
             return val.pow(pow);
         }
 
         @Specialization
-        protected LLVM80BitFloat do80BitFloat(LLVM80BitFloat val, LLVM80BitFloat pow) {
+        public LLVM80BitFloat execute80BitFloat(LLVM80BitFloat val, LLVM80BitFloat pow) {
             return val.pow(pow);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMLAbs extends LLVMIntrinsic {
 
         @Specialization
-        protected long doIntrinsic(long value) {
+        public long executeIntrinsic(long value) {
             return Math.abs(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMSin extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.sin(value);
         }
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return (float) Math.sin(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMSinh extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.sinh(value);
         }
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return (float) Math.sinh(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMASin extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.asin(value);
         }
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return (float) Math.asin(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMCos extends LLVMBuiltin {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.cos(value);
         }
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return (float) Math.cos(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMCosh extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.cosh(value);
         }
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return (float) Math.cosh(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMACos extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.acos(value);
         }
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return (float) Math.acos(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMTan extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.tan(value);
         }
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return (float) Math.tan(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMTanh extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.tanh(value);
         }
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return (float) Math.tanh(value);
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMATan extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value) {
+        public double executeIntrinsic(double value) {
             return Math.atan(value);
         }
 
         @Specialization
-        protected float doIntrinsic(float value) {
+        public float executeIntrinsic(float value) {
             return (float) Math.atan(value);
         }
+
     }
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     public abstract static class LLVMATan2 extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value1, double value2) {
+        public double executeIntrinsic(double value1, double value2) {
             return Math.atan2(value1, value2);
         }
 
         @Specialization
-        protected float doIntrinsic(float value1, float value2) {
+        public float executeIntrinsic(float value1, float value2) {
             return (float) Math.atan2(value1, value2);
         }
+
     }
 
     @NodeChildren({@NodeChild(value = "magnitude", type = LLVMExpressionNode.class), @NodeChild(value = "sign", type = LLVMExpressionNode.class)})
     public abstract static class LLVMCopySign extends LLVMBuiltin {
 
         @Specialization
-        protected float doFloat(float magnitude, float sign) {
+        public float executeFloat(float magnitude, float sign) {
             return Math.copySign(magnitude, sign);
         }
 
         @Specialization
-        protected double doDouble(double magnitude, double sign) {
+        public double executeDouble(double magnitude, double sign) {
             return Math.copySign(magnitude, sign);
         }
     }
