@@ -64,7 +64,6 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public ConcreteSubtype(ResolvedJavaType context, ResolvedJavaType subtype) {
             this.context = context;
             this.subtype = subtype;
-            assert !subtype.isInterface();
         }
 
         @Override
