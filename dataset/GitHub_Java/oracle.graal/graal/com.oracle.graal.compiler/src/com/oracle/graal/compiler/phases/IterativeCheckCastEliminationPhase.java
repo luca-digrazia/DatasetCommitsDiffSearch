@@ -22,11 +22,7 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -38,35 +34,27 @@ public class IterativeCheckCastEliminationPhase extends Phase {
 
     public IterativeCheckCastEliminationPhase(TargetDescription target, GraalCodeCacheProvider runtime, Assumptions assumptions) {
         this.target = target;
+        // TODO Auto-generated constructor stub
         this.runtime = runtime;
         this.assumptions = assumptions;
     }
 
     @Override
     protected void run(StructuredGraph graph) {
-        Set<Node> canonicalizationRoots = new HashSet<>();
         CheckCastEliminationPhase eliminate = new CheckCastEliminationPhase();
-        Listener listener = new Listener(canonicalizationRoots);
+        CanonicalizerPhase canon = new CanonicalizerPhase(target, runtime, assumptions);
+        boolean canonRun = false;
         while (true) {
-            graph.trackInputChange(listener);
             eliminate.apply(graph);
-            graph.stopTrackingInputChange();
-            if (canonicalizationRoots.isEmpty()) {
+            if (!eliminate.wasGraphModfied()) {
                 break;
             }
-            new CanonicalizerPhase(target, runtime, assumptions, canonicalizationRoots, null).apply(graph);
-            canonicalizationRoots.clear();
+            canon.apply(graph);
+            canonRun = true;
+        }
+        if (!canonRun) {
+            canon.apply(graph);
         }
     }
 
-    private static class Listener implements InputChangedListener {
-        private final Set<Node> canonicalizationRoots;
-        public Listener(Set<Node> canonicalizationRoots) {
-            this.canonicalizationRoots = canonicalizationRoots;
-        }
-        @Override
-        public void inputChanged(Node node) {
-            canonicalizationRoots.add(node);
-        }
-    }
 }
