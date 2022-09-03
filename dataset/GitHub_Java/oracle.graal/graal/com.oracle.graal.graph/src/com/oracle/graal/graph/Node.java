@@ -59,13 +59,8 @@ import com.oracle.graal.nodeinfo.*;
 @NodeInfo
 public abstract class Node implements Cloneable, Formattable {
 
-    public final static boolean USE_GENERATED_VALUE_NUMBER = Boolean.parseBoolean(System.getProperty("graal.node.useGeneratedValueNumber", "true"));
-
-    public final static boolean USE_GENERATED_VALUE_EQUALS = Boolean.parseBoolean(System.getProperty("graal.node.useGeneratedValueEquals", "false"));
-
-    public final static boolean USE_UNSAFE_TO_CLONE = Boolean.parseBoolean(System.getProperty("graal.node.useUnsafeToClone", "true"));
-
-    public final static boolean USE_GENERATED_NODES = USE_GENERATED_VALUE_NUMBER || USE_GENERATED_VALUE_EQUALS;
+    public final static boolean USE_GENERATED_NODES = Boolean.parseBoolean(System.getProperty("graal.useGeneratedNodes", "true"));
+    public final static boolean USE_UNSAFE_TO_CLONE = Boolean.parseBoolean(System.getProperty("graal.useUnsafeToClone", "true"));
 
     static final int DELETED_ID_START = -1000000000;
     static final int INITIAL_ID = -1;
@@ -723,9 +718,15 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     public final Node copyWithInputs() {
-        Node newNode = clone(graph, WithOnlyInputEdges);
-        for (Node input : inputs()) {
-            input.addUsage(newNode);
+        return copyWithInputs(true);
+    }
+
+    public final Node copyWithInputs(boolean insertIntoGraph) {
+        Node newNode = clone(insertIntoGraph ? graph : null, WithOnlyInputEdges);
+        if (insertIntoGraph) {
+            for (Node input : inputs()) {
+                input.addUsage(newNode);
+            }
         }
         return newNode;
     }
@@ -1037,17 +1038,14 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     /**
-     * Gets a hash for this {@linkplain NodeClass#valueNumberable() value numberable}
-     * {@linkplain NodeClass#isLeafNode() leaf} node based on its {@linkplain NodeClass#getData()
-     * data} fields.
-     *
-     * This method must only be called if {@link #USE_GENERATED_VALUE_NUMBER} is true and this is a
-     * value numberable leaf node.
+     * If this node is a {@linkplain NodeClass#isLeafNode() leaf} node, returns a hash for this node
+     * based on its {@linkplain NodeClass#getData() data} fields otherwise return 0.
      *
      * Overridden by a method generated for leaf nodes.
      */
     public int valueNumberLeaf() {
-        throw new GraalInternalError("Node is not a value numberable leaf", this);
+        assert !getNodeClass().isLeafNode();
+        return 0;
     }
 
     /**
@@ -1070,6 +1068,6 @@ public abstract class Node implements Cloneable, Formattable {
      * @return true if the data fields of this object and {@code other} are equal
      */
     public boolean valueEquals(Node other) {
-        return USE_GENERATED_VALUE_EQUALS ? dataEquals(other) : getNodeClass().dataEquals(this, other);
+        return USE_GENERATED_NODES ? dataEquals(other) : getNodeClass().dataEquals(this, other);
     }
 }
