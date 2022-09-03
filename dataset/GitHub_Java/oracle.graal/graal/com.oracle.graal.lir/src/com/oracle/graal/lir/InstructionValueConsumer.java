@@ -31,8 +31,7 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
 /**
  * Non-modifying version of {@link InstructionValueProcedure}.
  */
-@FunctionalInterface
-public interface InstructionValueConsumer {
+public abstract class InstructionValueConsumer extends InstructionValueProcedureBase {
 
     /**
      * Iterator method to be overwritten.
@@ -42,5 +41,12 @@ public interface InstructionValueConsumer {
      * @param mode The operand mode for the value.
      * @param flags A set of flags for the value.
      */
-    void visitValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags);
+    public abstract void visitValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags);
+
+    @Override
+    public final Value processValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+        assert !(value instanceof CompositeValue) : String.format("Must not visit CompositeValues! Instruction: %s Value: %s", instruction, value);
+        visitValue(instruction, value, mode, flags);
+        return value;
+    }
 }

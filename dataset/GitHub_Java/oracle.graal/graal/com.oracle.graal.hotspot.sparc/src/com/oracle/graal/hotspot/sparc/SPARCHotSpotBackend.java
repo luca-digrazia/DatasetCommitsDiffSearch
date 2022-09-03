@@ -49,6 +49,8 @@ import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.OperandFlag;
+import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
@@ -345,13 +347,16 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         private final Set<Object> inputs = new HashSet<>(10);
         private boolean overlap = false;
 
-        private final InstructionValueConsumer valueConsumer = (instruction, value, mode, flags) -> {
-            Object valueObject = value;
-            if (isRegister(value)) { // Canonicalize registers
-                valueObject = asRegister(value);
-            }
-            if (!inputs.add(valueObject)) {
-                overlap = true;
+        private final InstructionValueConsumer valueConsumer = new InstructionValueConsumer() {
+            @Override
+            public void visitValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+                Object valueObject = value;
+                if (isRegister(value)) { // Canonicalize registers
+                    valueObject = asRegister(value);
+                }
+                if (!inputs.add(valueObject)) {
+                    overlap = true;
+                }
             }
         };
 
