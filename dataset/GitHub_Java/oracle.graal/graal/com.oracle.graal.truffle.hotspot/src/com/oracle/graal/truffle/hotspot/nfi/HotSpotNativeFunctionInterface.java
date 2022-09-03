@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,46 +22,32 @@
  */
 package com.oracle.graal.truffle.hotspot.nfi;
 
-import static com.oracle.graal.api.code.CodeUtil.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
-import static com.oracle.graal.truffle.hotspot.nfi.NativeCallStubGraphBuilder.*;
+import java.lang.reflect.Field;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.hotspot.jvmci.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.nfi.api.*;
+import com.oracle.graal.compiler.target.Backend;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.nfi.api.NativeFunctionInterface;
+import com.oracle.nfi.api.NativeFunctionPointer;
+import com.oracle.nfi.api.NativeLibraryHandle;
+
+import sun.misc.Unsafe;
 
 public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
 
-    private final HotSpotProviders providers;
-    private final Backend backend;
     private final HotSpotNativeLibraryHandle rtldDefault;
     private final HotSpotNativeFunctionPointer libraryLoadFunctionPointer;
     private final HotSpotNativeFunctionPointer functionLookupFunctionPointer;
-    private final RawNativeCallNodeFactory factory;
+    private final NativeCallStubGraphBuilder graphBuilder;
 
     private HotSpotNativeFunctionHandle libraryLookupFunctionHandle;
     private HotSpotNativeFunctionHandle dllLookupFunctionHandle;
 
     public HotSpotNativeFunctionInterface(HotSpotProviders providers, RawNativeCallNodeFactory factory, Backend backend, long dlopen, long dlsym, long rtldDefault) {
-        this.rtldDefault = rtldDefault == HotSpotVMConfig.INVALID_RTLD_DEFAULT_HANDLE ? null : new HotSpotNativeLibraryHandle("RTLD_DEFAULT", rtldDefault);
-        this.providers = providers;
-        assert backend != null;
-        this.backend = backend;
-        this.factory = factory;
+        this.rtldDefault = rtldDefault == GraalHotSpotVMConfig.INVALID_RTLD_DEFAULT_HANDLE ? null : new HotSpotNativeLibraryHandle("RTLD_DEFAULT", rtldDefault);
         this.libraryLoadFunctionPointer = new HotSpotNativeFunctionPointer(dlopen, "os::dll_load");
         this.functionLookupFunctionPointer = new HotSpotNativeFunctionPointer(dlsym, "os::dll_lookup");
+        this.graphBuilder = new NativeCallStubGraphBuilder(providers, backend, factory);
     }
 
     @Override
@@ -73,17 +59,17 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
         int ebufLen = 1024;
         // Allocating a single chunk for both the error message buffer and the
         // file name simplifies deallocation below.
-        long buffer = unsafe.allocateMemory(ebufLen + libPath.length() + 1);
+        long buffer = UNSAFE.allocateMemory(ebufLen + libPath.length() + 1);
         long ebuf = buffer;
-        long libPathCString = writeCString(libPath, buffer + ebufLen);
+        long libPathCString = writeCString(UNSAFE, libPath, buffer + ebufLen);
         try {
             long handle = (long) libraryLookupFunctionHandle.call(libPathCString, ebuf, ebufLen);
             if (handle == 0) {
-                throw new UnsatisfiedLinkError(libPath);
+                throw new UnsatisfiedLinkError(readCString(UNSAFE, ebuf, ebufLen));
             }
             return new HotSpotNativeLibraryHandle(libPath, handle);
         } finally {
-            unsafe.freeMemory(buffer);
+            UNSAFE.freeMemory(buffer);
         }
     }
 
@@ -122,7 +108,8 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
         if (dllLookupFunctionHandle == null) {
             dllLookupFunctionHandle = createHandle(functionLookupFunctionPointer, long.class, long.class, long.class);
         }
-        long nameCString = createCString(name);
+
+        long nameCString = createCString(UNSAFE, name);
         try {
             long functionPointer = (long) dllLookupFunctionHandle.call(((HotSpotNativeLibraryHandle) library).value, nameCString);
             if (functionPointer == 0L) {
@@ -133,7 +120,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
             }
             return new HotSpotNativeFunctionPointer(functionPointer, name);
         } finally {
-            unsafe.freeMemory(nameCString);
+            UNSAFE.freeMemory(nameCString);
         }
     }
 
@@ -148,31 +135,12 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     private HotSpotNativeFunctionHandle createHandle(NativeFunctionPointer functionPointer, Class<?> returnType, Class<?>... argumentTypes) {
         HotSpotNativeFunctionPointer hs = (HotSpotNativeFunctionPointer) functionPointer;
         if (hs != null) {
-            InstalledCode code = installNativeFunctionStub(hs.value, returnType, argumentTypes);
-            return new HotSpotNativeFunctionHandle(code, hs.name, argumentTypes);
+            HotSpotNativeFunctionHandle handle = new HotSpotNativeFunctionHandle(graphBuilder, hs, returnType, argumentTypes);
+            graphBuilder.installNativeFunctionStub(handle);
+            return handle;
         } else {
             return null;
         }
-    }
-
-    /**
-     * Creates and installs a stub for calling a native function.
-     */
-    private InstalledCode installNativeFunctionStub(long functionPointer, Class<?> returnType, Class<?>... argumentTypes) {
-        StructuredGraph g = getGraph(providers, factory, functionPointer, returnType, argumentTypes);
-        Suites suites = providers.getSuites().createSuites();
-        LIRSuites lirSuites = providers.getSuites().createLIRSuites();
-        PhaseSuite<HighTierContext> phaseSuite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
-        CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, g.method(), false);
-        CompilationResult compResult = GraalCompiler.compileGraph(g, cc, g.method(), providers, backend, backend.getTarget(), phaseSuite, OptimisticOptimizations.ALL,
-                        DefaultProfilingInfo.get(TriState.UNKNOWN), null, suites, lirSuites, new CompilationResult(), CompilationResultBuilderFactory.Default);
-        InstalledCode installedCode;
-        try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache(), g.method())) {
-            installedCode = providers.getCodeCache().addMethod(g.method(), compResult, null, null);
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
-        return installedCode;
     }
 
     @Override
@@ -190,6 +158,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
         return lookupFunctionPointer(name, rtldDefault, false);
     }
 
+    @Override
     public boolean isDefaultLibrarySearchSupported() {
         return rtldDefault != null;
     }
@@ -197,5 +166,65 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     @Override
     public NativeFunctionPointer getNativeFunctionPointerFromRawValue(long rawValue) {
         return new HotSpotNativeFunctionPointer(rawValue, null);
+    }
+
+    private static final Unsafe UNSAFE = initUnsafe();
+
+    private static Unsafe initUnsafe() {
+        try {
+            return Unsafe.getUnsafe();
+        } catch (SecurityException se) {
+            try {
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                return (Unsafe) theUnsafe.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe", e);
+            }
+        }
+    }
+
+    /**
+     * Copies the contents of a {@link String} to a native memory buffer as a {@code '\0'}
+     * terminated C string. The native memory buffer is allocated via
+     * {@link Unsafe#allocateMemory(long)}. The caller is responsible for releasing the buffer when
+     * it is no longer needed via {@link Unsafe#freeMemory(long)}.
+     *
+     * @return the native memory pointer of the C string created from {@code s}
+     */
+    private static long createCString(Unsafe unsafe, String s) {
+        return writeCString(unsafe, s, unsafe.allocateMemory(s.length() + 1));
+    }
+
+    /**
+     * Writes the contents of a {@link String} to a native memory buffer as a {@code '\0'}
+     * terminated C string. The caller is responsible for ensuring the buffer is at least
+     * {@code s.length() + 1} bytes long. The caller is also responsible for releasing the buffer
+     * when it is no longer.
+     *
+     * @return the value of {@code buf}
+     */
+    private static long writeCString(Unsafe unsafe, String s, long buf) {
+        int size = s.length();
+        for (int i = 0; i < size; i++) {
+            unsafe.putByte(buf + i, (byte) s.charAt(i));
+        }
+        unsafe.putByte(buf + size, (byte) '\0');
+        return buf;
+    }
+
+    /**
+     * Reads a {@code '\0'} terminated C string.
+     */
+    private static String readCString(Unsafe unsafe, long buf, long bufLen) {
+        final StringBuilder builder = new StringBuilder();
+        for (long n = 0; n < bufLen; n++) {
+            final char c = (char) unsafe.getByte(buf + n);
+            if (c == '\0') {
+                break;
+            }
+            builder.append(c);
+        }
+        return builder.toString();
     }
 }
