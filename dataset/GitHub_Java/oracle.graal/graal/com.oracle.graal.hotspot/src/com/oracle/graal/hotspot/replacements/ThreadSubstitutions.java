@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,46 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
+import static com.oracle.graal.compiler.common.LocationIdentity.any;
+import static com.oracle.graal.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.JAVA_THREAD_OSTHREAD_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.JAVA_THREAD_THREAD_OBJECT_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.osThreadInterruptedOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.osThreadOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.threadObjectOffset;
 
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.ClassSubstitution.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.api.replacements.ClassSubstitution;
+import com.oracle.graal.api.replacements.MethodSubstitution;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.graph.Node.ConstantNodeParameter;
+import com.oracle.graal.graph.Node.NodeIntrinsic;
+import com.oracle.graal.hotspot.nodes.CurrentJavaThreadNode;
+import com.oracle.graal.nodes.extended.ForeignCallNode;
+import com.oracle.graal.word.Word;
 
 /**
  * Substitutions for {@link java.lang.Thread} methods.
  */
-@ClassSubstitution(java.lang.Thread.class)
+@ClassSubstitution(Thread.class)
 public class ThreadSubstitutions {
 
-    @MethodSubstitution
-    public static Thread currentThread() {
-        return CurrentThread.get();
-    }
-
     @MethodSubstitution(isStatic = false)
-    private static boolean isInterrupted(final Thread thisObject, boolean clearInterrupted) {
-        Word rawThread = HotSpotCurrentRawThreadNode.get();
-        Thread thread = (Thread) rawThread.readObject(threadObjectOffset(), FINAL_LOCATION);
+    public static boolean isInterrupted(final Thread thisObject, boolean clearInterrupted) {
+        Word javaThread = CurrentJavaThreadNode.get();
+        Object thread = javaThread.readObject(threadObjectOffset(INJECTED_VMCONFIG), JAVA_THREAD_THREAD_OBJECT_LOCATION);
         if (thisObject == thread) {
-            Word osThread = rawThread.readWord(osThreadOffset(), FINAL_LOCATION);
-            boolean interrupted = osThread.readInt(osThreadInterruptedOffset(), UNKNOWN_LOCATION) != 0;
+            Word osThread = javaThread.readWord(osThreadOffset(INJECTED_VMCONFIG), JAVA_THREAD_OSTHREAD_LOCATION);
+            boolean interrupted = osThread.readInt(osThreadInterruptedOffset(INJECTED_VMCONFIG), any()) != 0;
             if (!interrupted || !clearInterrupted) {
                 return interrupted;
             }
         }
 
-        return ThreadIsInterruptedStubCall.call(thisObject, clearInterrupted) != 0;
+        return threadIsInterruptedStub(THREAD_IS_INTERRUPTED, thisObject, clearInterrupted);
     }
+
+    public static final ForeignCallDescriptor THREAD_IS_INTERRUPTED = new ForeignCallDescriptor("thread_is_interrupted", boolean.class, Thread.class, boolean.class);
+
+    @NodeIntrinsic(ForeignCallNode.class)
+    private static native boolean threadIsInterruptedStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Thread thread, boolean clearIsInterrupted);
 }
