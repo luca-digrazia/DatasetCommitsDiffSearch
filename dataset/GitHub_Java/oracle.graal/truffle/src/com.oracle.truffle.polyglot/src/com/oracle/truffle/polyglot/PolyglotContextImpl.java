@@ -1111,7 +1111,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         volatile boolean removed = false;
         final List<PolyglotLanguageInstance> freeInstances = new ArrayList<>();
 
-        ContextWeakReference(PolyglotContextImpl referent) {
+        public ContextWeakReference(PolyglotContextImpl referent) {
             super(referent, referent.engine.contextsReferenceQueue);
         }
 
