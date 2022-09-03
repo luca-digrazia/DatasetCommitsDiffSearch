@@ -24,30 +24,18 @@
  */
 package com.oracle.truffle.tck;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import com.oracle.truffle.tck.impl.LongBinaryOperation;
+import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
 
 import java.io.IOException;
-import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
-import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.debug.ExecutionEvent;
-import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.interop.ForeignAccess.Factory10;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -55,13 +43,22 @@ import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.EventConsumer;
 import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
+import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
 import com.oracle.truffle.tck.Schema.Type;
-import com.oracle.truffle.tck.impl.LongBinaryOperation;
-import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import org.junit.AfterClass;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Test compatibility kit (the <em>TCK</em>) is a collection of tests to certify your
@@ -76,12 +73,12 @@ import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
  *     <em>// create the engine</em>
  *     <em>// execute necessary scripts</em>
  *   }
- *
+ * 
  *   {@link Override @Override}
  *   <b>protected</b> {@link String} fourtyTwo() {
  *     <b>return</b> <em>// name of function that returns 42</em>
  *   }
- *
+ * 
  *   <em>// and so on...</em>
  * }
  * </pre>
@@ -119,7 +116,7 @@ import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
  * Should the <em>TCK</em> be found unsuitable for your {@link TruffleLanguage language
  * implementation} please speak-up (at <em>Truffle/Graal</em> mailing list for example) and we do
  * our best to analyze your case and adjust the <em>TCK</em> to suite everyone's needs.
- *
+ * 
  * @since 0.8 or earlier
  */
 public abstract class TruffleTCK {
@@ -133,7 +130,7 @@ public abstract class TruffleTCK {
 
     /**
      * Disposes {@link PolyglotEngine} used during the test execution.
-     *
+     * 
      * @since 0.12
      */
     @AfterClass
@@ -366,7 +363,7 @@ public abstract class TruffleTCK {
      * the array, index into the array (expected to be an instance of {@link Number}) and another
      * number to add to value already present at the index-location in the array. The first element
      * in the array has index zero.
-     *
+     * 
      * @since 0.14
      */
     protected String addToArray() {
@@ -459,7 +456,7 @@ public abstract class TruffleTCK {
      * provided function with a single argument - the value of the counter: 0, 1, 2, 3, etc. The
      * execution is stopped while the value returned from the provided function isn't
      * <code>true</code>. The code in JavaScript would look like:
-     *
+     * 
      * <pre>
      * function countUpWhile(fn) {
      *   var counter = 0;
@@ -471,8 +468,8 @@ public abstract class TruffleTCK {
      *   }
      * }
      * </pre>
-     *
-     *
+     * 
+     * 
      * @return the name of the function that implements the <code>while-loop</code> execution
      * @since 0.15
      */
@@ -1490,7 +1487,7 @@ public abstract class TruffleTCK {
     /**
      * Test for array access. Creates a {@link TruffleObject} around a Java array, fills it with
      * integers and asks the language to add one to each of the array elements.
-     *
+     * 
      * @since 0.14
      */
     @Test
@@ -1520,7 +1517,7 @@ public abstract class TruffleTCK {
 
     /**
      * Tests whether execution can be suspended in debugger.
-     *
+     * 
      * @since 0.15
      */
     @Test
@@ -1541,30 +1538,6 @@ public abstract class TruffleTCK {
         assertEquals("Executed " + index + " times, and counted down to zero", 0, obj.countDown);
         assertTrue("Last number bigger than requested", index <= obj.lastParameter);
         assertTrue("All tasks processed", executor.isShutdown());
-    }
-
-    /** @since 0.15 */
-    @Test
-    public void testRootNodeName() throws Exception {
-        final String name = applyNumbers();
-        final EventConsumer<ExecutionEvent> onExec = new EventConsumer<ExecutionEvent>(ExecutionEvent.class) {
-            @Override
-            protected void on(ExecutionEvent event) {
-                event.prepareStepInto();
-            }
-        };
-        final EventConsumer<SuspendedEvent> onHalted = new EventConsumer<SuspendedEvent>(SuspendedEvent.class) {
-            @Override
-            protected void on(SuspendedEvent ev) {
-                assertEquals(name, ev.getNode().getRootNode().getName());
-            }
-        };
-        final Builder builder = PolyglotEngine.newBuilder().onEvent(onExec).onEvent(onHalted);
-        final PolyglotEngine engine = prepareVM(builder);
-        final PolyglotEngine.Value apply = engine.findGlobalSymbol(name);
-        final int value = RANDOM.nextInt(100);
-        final TruffleObject fn = JavaInterop.asTruffleFunction(ObjectBinaryOperation.class, new ConstantFunction(value));
-        apply.execute(fn).as(Number.class);
     }
 
     private static void putDoubles(byte[] buffer, double[] values) {
