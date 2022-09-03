@@ -29,7 +29,6 @@ import java.nio.channels.WritableByteChannel;
 import java.nio.charset.Charset;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -255,7 +254,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
 
     protected abstract int findNodeSourcePositionBCI(NodeSourcePosition pos);
 
-    protected abstract Iterable<Location> findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos);
+    protected abstract Location findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos);
 
     protected abstract String findLocationFile(Location loc);
 
@@ -555,12 +554,11 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             writePoolObject(method);
             final int bci = findNodeSourcePositionBCI(pos);
             writeInt(bci);
-            Iterator<Location> ste = findLocation(method, bci, pos).iterator();
-            Location first = ste.hasNext() ? ste.next() : null;
-            String fileName = first != null ? findLocationFile(first) : null;
+            Location ste = findLocation(method, bci, pos);
+            String fileName = ste == null ? null : findLocationFile(ste);
             if (fileName != null) {
                 writePoolObject(fileName);
-                writeInt(findLocationLine(first));
+                writeInt(findLocationLine(ste));
             } else {
                 writePoolObject(null);
             }

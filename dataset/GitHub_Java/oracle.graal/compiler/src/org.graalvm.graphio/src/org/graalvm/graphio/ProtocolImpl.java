@@ -27,35 +27,29 @@ import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
 import java.util.Map;
 
-final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition, Location>
-                extends GraphProtocol<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition, Location> {
+final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition>
+                extends GraphProtocol<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition, StackTraceElement> {
     private final GraphStructure<Graph, Node, NodeClass, Port> structure;
     private final GraphTypes types;
     private final GraphBlocks<Graph, Block, Node> blocks;
     private final GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements;
-    private final GraphLocations<ResolvedJavaMethod, NodeSourcePosition, Location> locations;
 
     ProtocolImpl(int major, int minor, GraphStructure<Graph, Node, NodeClass, Port> structure, GraphTypes enums, GraphBlocks<Graph, Block, Node> blocks,
-                    GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements,
-                    GraphLocations<ResolvedJavaMethod, NodeSourcePosition, Location> locs,
-                    WritableByteChannel channel) throws IOException {
+                    GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements, WritableByteChannel channel) throws IOException {
         super(channel, major, minor);
         this.structure = structure;
         this.types = enums;
         this.blocks = blocks;
         this.elements = elements;
-        this.locations = locs;
     }
 
     ProtocolImpl(GraphProtocol<?, ?, ?, ?, ?, ?, ?, ?, ?, ?> parent, GraphStructure<Graph, Node, NodeClass, Port> structure, GraphTypes enums, GraphBlocks<Graph, Block, Node> blocks,
-                    GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements,
-                    GraphLocations<ResolvedJavaMethod, NodeSourcePosition, Location> locs) {
+                    GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements) {
         super(parent);
         this.structure = structure;
         this.types = enums;
         this.blocks = blocks;
         this.elements = elements;
-        this.locations = locs;
     }
 
     @Override
@@ -291,18 +285,18 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
     }
 
     @Override
-    protected Location findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos) {
-        return locations.methodStackTraceElement(method, bci, pos);
+    protected StackTraceElement findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos) {
+        return elements.methodStackTraceElement(method, bci, pos);
     }
 
     @Override
-    protected String findLocationFile(Location loc) {
-        return locations.locationFileName(loc);
+    protected String findLocationFile(StackTraceElement loc) {
+        return loc.getFileName();
     }
 
     @Override
-    protected int findLocationLine(Location loc) {
-        return locations.locationLineNumber(loc);
+    protected int findLocationLine(StackTraceElement loc) {
+        return loc.getLineNumber();
     }
 
     @Override
