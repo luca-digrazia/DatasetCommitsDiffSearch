@@ -177,7 +177,6 @@ public class NativeImage {
     protected final BuildConfiguration config;
 
     private final Map<String, String> userConfigProperties = new HashMap<>();
-    private final Map<String, String> propertyFileSubstitutionValues = new HashMap<>();
 
     private boolean verbose = Boolean.valueOf(System.getenv("VERBOSE_GRAALVM_LAUNCHERS"));
     private boolean dryRun = false;
@@ -632,16 +631,15 @@ public class NativeImage {
         for (Path classpathEntry : paths) {
             try {
                 String nativeImageMetaInfPrefix = "META-INF/native-image";
+                Path nativeImageMetaInfBase;
                 if (Files.isDirectory(classpathEntry)) {
-                    Path nativeImageMetaInfBase = classpathEntry.resolve(Paths.get(nativeImageMetaInfPrefix));
-                    processNativeImageProperties(nativeImageMetaInfBase);
+                    nativeImageMetaInfBase = classpathEntry.resolve(Paths.get(nativeImageMetaInfPrefix));
                 } else {
                     URI jarFileURI = URI.create("jar:file:" + classpathEntry);
-                    try (FileSystem jarFS = FileSystems.newFileSystem(jarFileURI, Collections.emptyMap())) {
-                        Path nativeImageMetaInfBase = jarFS.getPath("/" + nativeImageMetaInfPrefix);
-                        processNativeImageProperties(nativeImageMetaInfBase);
-                    }
+                    FileSystem jarFS = FileSystems.newFileSystem(jarFileURI, Collections.emptyMap());
+                    nativeImageMetaInfBase = jarFS.getPath("/" + nativeImageMetaInfPrefix);
                 }
+                processNativeImageProperties(nativeImageMetaInfBase);
             } catch (IOException e) {
                 throw showError("Invalid classpath entry " + classpathEntry, e);
             }
@@ -1141,10 +1139,6 @@ public class NativeImage {
             return true;
         }
         return false;
-    }
-
-    public void addOptionKeyValue(String key, String value) {
-        propertyFileSubstitutionValues.put(key, value);
     }
 
     static String resolvePropertyValue(String val, String optionArg, String componentDirectory) {
