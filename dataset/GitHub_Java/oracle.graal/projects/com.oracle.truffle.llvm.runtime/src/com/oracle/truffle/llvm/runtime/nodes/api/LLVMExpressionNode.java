@@ -35,6 +35,7 @@ import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
@@ -48,7 +49,6 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 /**
  * An expression node is a node that returns a result, e.g., a local variable read, or an addition
@@ -160,8 +160,8 @@ public abstract class LLVMExpressionNode extends LLVMNode implements Instrumenta
         return LLVMTypesGen.expectLLVMDoubleVector(executeGeneric(frame));
     }
 
-    public LLVMPointerVector executeLLVMPointerVector(VirtualFrame frame) throws UnexpectedResultException {
-        return LLVMTypesGen.expectLLVMPointerVector(executeGeneric(frame));
+    public LLVMFunctionDescriptor executeLLVMFunctionDescriptor(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMFunctionDescriptor(executeGeneric(frame));
     }
 
     public String getSourceDescription() {

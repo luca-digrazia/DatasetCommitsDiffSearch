@@ -89,8 +89,6 @@ public abstract class ToComparableValue extends LLVMNode {
 
         @Fallback
         protected long doOther(TruffleObject obj) {
-            // TODO (chaeubl): this code path is also used for pointers to global variables and
-            // functions
             return getHashCode(obj);
         }
     }
@@ -122,17 +120,12 @@ public abstract class ToComparableValue extends LLVMNode {
 
         @Specialization
         protected long doLLVMBoxedPrimitive(LLVMBoxedPrimitive address,
-                        @Cached("createForeignToI64()") ForeignToLLVM toLLVM) {
+                        @Cached("create(I64)") ForeignToLLVM toLLVM) {
             return (long) toLLVM.executeWithTarget(address.getValue());
         }
 
         public static ManagedToComparableValue create() {
             return ManagedToComparableValueNodeGen.create();
-        }
-
-        @TruffleBoundary
-        protected ForeignToLLVM createForeignToI64() {
-            return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I64);
         }
     }
 

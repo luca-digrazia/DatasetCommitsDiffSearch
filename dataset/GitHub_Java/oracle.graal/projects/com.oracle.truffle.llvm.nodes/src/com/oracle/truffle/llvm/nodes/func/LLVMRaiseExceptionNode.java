@@ -29,8 +29,10 @@
  */
 package com.oracle.truffle.llvm.nodes.func;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.runtime.LLVMException;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.llvm.runtime.except.LLVMUserException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public final class LLVMRaiseExceptionNode extends LLVMExpressionNode {
@@ -43,6 +45,11 @@ public final class LLVMRaiseExceptionNode extends LLVMExpressionNode {
 
     @Override
     public Object executeGeneric(VirtualFrame frame) {
-        throw new LLVMException(unwindHeader.executeGeneric(frame));
+        try {
+            throw new LLVMUserException(this, unwindHeader.executeLLVMPointer(frame));
+        } catch (UnexpectedResultException e) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException(e);
+        }
     }
 }

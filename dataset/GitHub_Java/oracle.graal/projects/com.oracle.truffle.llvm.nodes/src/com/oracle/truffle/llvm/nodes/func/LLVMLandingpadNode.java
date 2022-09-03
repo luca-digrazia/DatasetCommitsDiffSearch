@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -35,63 +35,55 @@ import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMException;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMI32StoreNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMI32StoreNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMPointerStoreNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMPointerStoreNodeGen;
+import com.oracle.truffle.llvm.nodes.op.ToComparableValue;
+import com.oracle.truffle.llvm.nodes.op.ToComparableValueNodeGen;
+import com.oracle.truffle.llvm.runtime.LLVMBitcodeLibraryFunctions;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.except.LLVMUserException;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
+    @Child private LLVMExpressionNode getStack;
     @Child private LLVMExpressionNode allocateLandingPadValue;
-    @Child private LLVMNativeFunctions.SulongGetUnwindHeaderNode getUnwindHeader;
-    @Child private LLVMNativeFunctions.SulongGetExceptionTypeNode getExceptionType;
+    @Child private LLVMPointerStoreNode writePointer;
+    @Child private LLVMI32StoreNode writeI32;
     @Children private final LandingpadEntryNode[] entries;
     private final FrameSlot exceptionSlot;
     private final boolean cleanup;
 
-    public LLVMLandingpadNode(LLVMExpressionNode allocateLandingPadValue, FrameSlot exceptionSlot, boolean cleanup,
+    public LLVMLandingpadNode(LLVMExpressionNode getStack, LLVMExpressionNode allocateLandingPadValue, FrameSlot exceptionSlot, boolean cleanup,
                     LandingpadEntryNode[] entries) {
+        this.getStack = getStack;
         this.allocateLandingPadValue = allocateLandingPadValue;
+        this.writePointer = LLVMPointerStoreNodeGen.create(null, null);
+        this.writeI32 = LLVMI32StoreNodeGen.create(null, null);
         this.exceptionSlot = exceptionSlot;
         this.cleanup = cleanup;
         this.entries = entries;
     }
 
-    public LLVMNativeFunctions.SulongGetUnwindHeaderNode getGetUnwindHeader() {
-        if (getUnwindHeader == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.getUnwindHeader = insert(getContext().getNativeFunctions().createGetUnwindHeader());
-        }
-        return getUnwindHeader;
-    }
-
-    public LLVMNativeFunctions.SulongGetExceptionTypeNode getGetExceptionType() {
-        if (getExceptionType == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.getExceptionType = insert(getContext().getNativeFunctions().createGetExceptionType());
-        }
-        return getExceptionType;
-    }
-
     @Override
     public Object executeGeneric(VirtualFrame frame) {
         try {
-            LLVMException exception = (LLVMException) frame.getObject(exceptionSlot);
-            LLVMAddress exceptionInfo = exception.getPointer();
-            LLVMAddress unwindHeader = getGetUnwindHeader().getUnwind(exceptionInfo);
-            LLVMAddress thrownTypeID = getGetExceptionType().get(unwindHeader);
+            LLVMUserException exception = (LLVMUserException) frame.getObject(exceptionSlot);
+            LLVMPointer unwindHeader = exception.getUnwindHeader();
+            LLVMStack.StackPointer stack = (LLVMStack.StackPointer) getStack.executeGeneric(frame);
 
-            int clauseId = getEntryIdentifier(frame, exceptionInfo, thrownTypeID);
+            int clauseId = getEntryIdentifier(frame, stack, unwindHeader);
             if (clauseId == 0 && !cleanup) {
                 throw exception;
             } else {
-                LLVMAddress executeLLVMAddress = allocateLandingPadValue.executeLLVMAddress(frame);
-                LLVMAddress pair0 = executeLLVMAddress;
-                LLVMMemory.putAddress(pair0, unwindHeader);
-                LLVMAddress pair1 = executeLLVMAddress.increment(LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES);
-                LLVMMemory.putI32(pair1, clauseId);
-                return executeLLVMAddress;
+                LLVMPointer landingPadValue = allocateLandingPadValue.executeLLVMPointer(frame);
+                writePointer.executeWithTarget(landingPadValue, unwindHeader);
+                writeI32.executeWithTarget(landingPadValue.increment(LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES), clauseId);
+                return landingPadValue;
             }
         } catch (FrameSlotTypeException | UnexpectedResultException e) {
             CompilerDirectives.transferToInterpreter();
@@ -100,9 +92,9 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
     }
 
     @ExplodeLoop
-    private int getEntryIdentifier(VirtualFrame frame, LLVMAddress exceptionInfo, LLVMAddress thrownTypeID) {
+    private int getEntryIdentifier(VirtualFrame frame, LLVMStack.StackPointer stack, LLVMPointer unwindHeader) {
         for (int i = 0; i < entries.length; i++) {
-            int clauseId = entries[i].getIdentifier(frame, exceptionInfo, thrownTypeID);
+            int clauseId = entries[i].getIdentifier(frame, stack, unwindHeader);
             if (clauseId != 0) {
                 return clauseId;
             }
@@ -112,70 +104,78 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
     public abstract static class LandingpadEntryNode extends LLVMExpressionNode {
 
-        public abstract int getIdentifier(VirtualFrame frame, LLVMAddress exceptionInfo, LLVMAddress thrownTypeID);
+        public abstract int getIdentifier(VirtualFrame frame, LLVMStack.StackPointer stack, LLVMPointer unwindHeader);
 
         @Override
         public final Object executeGeneric(VirtualFrame frame) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException();
         }
-
     }
 
     public static final class LandingpadCatchEntryNode extends LandingpadEntryNode {
 
         @Child private LLVMExpressionNode catchType;
-        @Child private LLVMNativeFunctions.SulongCanCatchNode canCatch;
+        @Child private LLVMBitcodeLibraryFunctions.SulongCanCatchNode canCatch;
+        @Child private ToComparableValue toComparableValue;
 
         public LandingpadCatchEntryNode(LLVMExpressionNode catchType) {
             this.catchType = catchType;
+            this.toComparableValue = ToComparableValueNodeGen.create();
         }
 
-        public LLVMNativeFunctions.SulongCanCatchNode getCanCatch() {
+        public LLVMBitcodeLibraryFunctions.SulongCanCatchNode getCanCatch() {
             if (canCatch == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                this.canCatch = insert(getContext().getNativeFunctions().createSulongCanCatch());
+                LLVMContext context = getContextReference().get();
+                this.canCatch = insert(new LLVMBitcodeLibraryFunctions.SulongCanCatchNode(context));
             }
             return canCatch;
         }
 
         @Override
-        public int getIdentifier(VirtualFrame frame, LLVMAddress exceptionInfo, LLVMAddress thrownTypeID) {
-            LLVMAddress catchAddress = catchType.enforceLLVMAddress(frame);
-            if (catchAddress.getVal() == 0) {
-                /*
-                 * If ExcType is null, any exception matches, so the landing pad should always be
-                 * entered. catch (...)
-                 */
-                return 1;
+        public int getIdentifier(VirtualFrame frame, LLVMStack.StackPointer stack, LLVMPointer unwindHeader) {
+            try {
+                LLVMPointer catchAddress = catchType.executeLLVMPointer(frame);
+                if (catchAddress.isNull()) {
+                    /*
+                     * If ExcType is null, any exception matches, so the landing pad should always
+                     * be entered. catch (...)
+                     */
+                    return 1;
+                }
+                if (getCanCatch().canCatch(stack, unwindHeader, catchAddress) != 0) {
+                    return (int) toComparableValue.executeWithTarget(catchAddress);
+                }
+                return 0;
+            } catch (UnexpectedResultException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
             }
-            if (getCanCatch().canCatch(exceptionInfo, thrownTypeID, catchAddress) != 0) {
-                return (int) catchAddress.getVal();
-            }
-            return 0;
         }
     }
 
     public static final class LandingpadFilterEntryNode extends LandingpadEntryNode {
 
         @Children private final LLVMExpressionNode[] filterTypes;
-        @Child private LLVMNativeFunctions.SulongCanCatchNode canCatch;
+        @Child private LLVMBitcodeLibraryFunctions.SulongCanCatchNode canCatch;
 
         public LandingpadFilterEntryNode(LLVMExpressionNode[] filterTypes) {
             this.filterTypes = filterTypes;
         }
 
-        public LLVMNativeFunctions.SulongCanCatchNode getCanCatch() {
+        public LLVMBitcodeLibraryFunctions.SulongCanCatchNode getCanCatch() {
             if (canCatch == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                this.canCatch = insert(getContext().getNativeFunctions().createSulongCanCatch());
+                LLVMContext context = getContextReference().get();
+                this.canCatch = insert(new LLVMBitcodeLibraryFunctions.SulongCanCatchNode(context));
             }
             return canCatch;
         }
 
         @Override
-        public int getIdentifier(VirtualFrame frame, LLVMAddress exceptionInfo, LLVMAddress thrownTypeID) {
-            if (!filterMatches(frame, exceptionInfo, thrownTypeID)) {
+        public int getIdentifier(VirtualFrame frame, LLVMStack.StackPointer stack, LLVMPointer unwindHeader) {
+            if (!filterMatches(frame, stack, unwindHeader)) {
                 // when this clause is matched, the selector value has to be negative
                 return -1;
             }
@@ -183,26 +183,30 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
         }
 
         @ExplodeLoop
-        private boolean filterMatches(VirtualFrame frame, LLVMAddress exceptionInfo, LLVMAddress thrownTypeID) {
+        private boolean filterMatches(VirtualFrame frame, LLVMStack.StackPointer stack, LLVMPointer unwindHeader) {
             /*
              * Landingpad should be entered if the exception being thrown does not match any of the
              * types in the list
              */
-            for (int i = 0; i < filterTypes.length; i++) {
-                LLVMAddress filterAddress = filterTypes[i].enforceLLVMAddress(frame);
-                if (filterAddress.getVal() == 0) {
-                    /*
-                     * If ExcType is null, any exception matches, so the landing pad should always
-                     * be entered. catch (...)
-                     */
-                    return true;
+            try {
+                for (int i = 0; i < filterTypes.length; i++) {
+                    LLVMPointer filterAddress = filterTypes[i].executeLLVMPointer(frame);
+                    if (filterAddress.isNull()) {
+                        /*
+                         * If ExcType is null, any exception matches, so the landing pad should
+                         * always be entered. catch (...)
+                         */
+                        return true;
+                    }
+                    if (getCanCatch().canCatch(stack, unwindHeader, filterAddress) != 0) {
+                        return true;
+                    }
                 }
-                if (getCanCatch().canCatch(exceptionInfo, thrownTypeID, filterAddress) != 0) {
-                    return true;
-                }
+                return false;
+            } catch (UnexpectedResultException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
             }
-            return false;
         }
-
     }
 }
