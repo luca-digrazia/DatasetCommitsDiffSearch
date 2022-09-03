@@ -72,8 +72,8 @@ public class MemoryPhase extends Phase {
             StartNode startNode = b.firstNode().graph().start();
             if (b.firstNode() == startNode) {
                 WriteMemoryCheckpointNode checkpoint = new WriteMemoryCheckpointNode(startNode.graph());
-                checkpoint.setNext((FixedNode) startNode.next());
-                startNode.setNext(checkpoint);
+                checkpoint.setNext((FixedNode) startNode.start());
+                startNode.setStart(checkpoint);
                 mergeForWrite = checkpoint;
                 mergeForRead = checkpoint;
             }
@@ -198,7 +198,7 @@ public class MemoryPhase extends Phase {
             }
 
             // Create dependency on previous write to same location.
-            node.addDependency(getLocationForWrite(node));
+            node.inputs().variablePart().add(getLocationForWrite(node));
 
             locationForWrite.put(location, node);
             locationForRead.put(location, node);
@@ -220,7 +220,7 @@ public class MemoryPhase extends Phase {
             }
 
             // Create dependency on previous node that creates the memory state for this location.
-            node.addDependency(getLocationForRead(node));
+            node.inputs().variablePart().add(getLocationForRead(node));
         }
 
         public Node getLocationForRead(ReadNode node) {
@@ -315,8 +315,6 @@ public class MemoryPhase extends Phase {
             LoopBegin begin = end.loopBegin();
             Block beginBlock = nodeMap.get(begin);
             MemoryMap memoryMap = memoryMaps[beginBlock.blockID()];
-            assert memoryMap != null : beginBlock.name();
-            assert memoryMap.getLoopEntryMap() != null;
             memoryMap.getLoopEntryMap().resetMergeOperationCount();
             memoryMap.getLoopEntryMap().mergeWith(map, beginBlock);
             Node loopCheckPoint = memoryMap.getLoopCheckPoint();

@@ -203,10 +203,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         this.operands = new OperandPool(compilation.target);
     }
 
-    public CiTarget target() {
-        return compilation.target;
-    }
-
     public LIRList lir() {
         return lir;
     }
@@ -480,14 +476,19 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     public void emitBooleanBranch(Node node, LIRBlock trueSuccessor, LIRBlock falseSuccessor, LIRDebugInfo info) {
-        if (node instanceof NegateBooleanNode) {
-            emitBooleanBranch(((NegateBooleanNode) node).value(), falseSuccessor, trueSuccessor, info);
-        } else if (node instanceof Compare) {
+        if (node instanceof Compare) {
             emitCompare((Compare) node, trueSuccessor, falseSuccessor);
         } else if (node instanceof InstanceOf) {
             emitInstanceOf((TypeCheck) node, trueSuccessor, falseSuccessor, info);
+        } else if (node instanceof NotInstanceOf) {
+            emitInstanceOf((TypeCheck) node, falseSuccessor, trueSuccessor, info);
         } else if (node instanceof Constant) {
-            emitConstantBranch(((Constant) node).asConstant().asBoolean(), trueSuccessor, falseSuccessor, info);
+            CiConstant constant = ((Constant) node).asConstant();
+            assert constant.kind == CiKind.Boolean;
+            LIRBlock target = constant.asBoolean() ? trueSuccessor : falseSuccessor;
+            if (target != null) {
+                lir.jump(target);
+            }
         } else {
             throw Util.unimplemented(node.toString());
         }
@@ -500,21 +501,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         LIRXirInstruction instr = (LIRXirInstruction) lir.instructionsList().get(lir.instructionsList().size() - 1);
         instr.setTrueSuccessor(trueSuccessor);
         instr.setFalseSuccessor(falseSuccessor);
-    }
-
-
-    public void emitConstantBranch(boolean value, LIRBlock trueSuccessorBlock, LIRBlock falseSuccessorBlock, LIRDebugInfo info) {
-        if (value) {
-            emitConstantBranch(trueSuccessorBlock, info);
-        } else {
-            emitConstantBranch(falseSuccessorBlock, info);
-        }
-    }
-
-    private void emitConstantBranch(LIRBlock block, LIRDebugInfo info) {
-        if (block != null) {
-            lir.jump(block);
-        }
     }
 
     public void emitCompare(Compare compare, LIRBlock trueSuccessorBlock, LIRBlock falseSuccessorBlock) {
@@ -599,11 +585,20 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     protected FrameState stateBeforeInvokeReturn(Invoke invoke) {
-        return invoke.stateAfter().duplicateModified(invoke.bci, invoke.stateAfter().rethrowException(), invoke.kind);
+        return invoke.stateAfter().duplicateModified(getBeforeInvokeBci(invoke), invoke.stateAfter().rethrowException(), invoke.kind);
     }
 
     protected FrameState stateBeforeInvokeWithArguments(Invoke invoke) {
-        return invoke.stateAfter().duplicateModified(invoke.bci, invoke.stateAfter().rethrowException(), invoke.kind, invoke.arguments().toArray(new Value[0]));
+        Value[] args = new Value[invoke.argumentCount()];
+        for (int i = 0; i < invoke.argumentCount(); i++) {
+            args[i] = invoke.argument(i);
+        }
+        return invoke.stateAfter().duplicateModified(getBeforeInvokeBci(invoke), invoke.stateAfter().rethrowException(), invoke.kind, args);
+    }
+
+    private int getBeforeInvokeBci(Invoke invoke) {
+        // Cannot calculate BCI, because the invoke can have changed from e.g. invokeinterface to invokespecial because of optimizations.
+        return invoke.bci;
     }
 
     @Override
@@ -756,11 +751,8 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitFixedGuard(FixedGuard fixedGuard) {
-        for (Node n : fixedGuard.inputs()) {
-            if (n != null) {
-                emitGuardComp((BooleanNode) n);
-    }
-        }
+        BooleanNode comp = fixedGuard.node();
+        emitGuardComp(comp);
     }
 
     public void emitGuardComp(BooleanNode comp) {
@@ -780,17 +772,13 @@ public abstract class LIRGenerator extends ValueVisitor {
             FrameState state = lastState;
             assert state != null : "deoptimize instruction always needs a state";
 
-            if (comp instanceof Constant && comp.asConstant().asBoolean()) {
-                // Nothing to emit.
-            } else {
             if (deoptimizationStubs == null) {
                 deoptimizationStubs = new ArrayList<DeoptimizationStub>();
             }
-
             DeoptimizationStub stub = new DeoptimizationStub(DeoptAction.InvalidateReprofile, state);
             deoptimizationStubs.add(stub);
+
             emitBooleanBranch(comp, null, new LIRBlock(stub.label, stub.info), stub.info);
-        }
         }
     }
 
@@ -1095,7 +1083,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             lastState = fs;
         } else if (block.blockPredecessors().size() == 1) {
             FrameState fs = block.blockPredecessors().get(0).lastState();
-            //assert fs != null;
+            assert fs != null;
             if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
                 TTY.println("STATE CHANGE (singlePred)");
                 if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
@@ -1115,7 +1103,7 @@ public abstract class LIRGenerator extends ValueVisitor {
      * @return the operand that is guaranteed to be a stack location when it is
      *         initially defined a by move from {@code value}
      */
-    public CiValue forceToSpill(CiValue value, CiKind kind, boolean mustStayOnStack) {
+    CiValue forceToSpill(CiValue value, CiKind kind, boolean mustStayOnStack) {
         assert value.isLegal() : "value should not be illegal";
         assert kind.jvmSlots == value.kind.jvmSlots : "size mismatch";
         if (!value.isVariableOrRegister()) {
@@ -1482,11 +1470,8 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitEndNode(EndNode end) {
         setNoResult(end);
-        assert end.merge() != null;
         moveToPhi(end.merge(), end);
-        LIRBlock lirBlock = getLIRBlock(end.merge());
-        assert lirBlock != null : end;
-        lir.jump(lirBlock);
+        lir.jump(getLIRBlock(end.merge()));
     }
 
     @Override
@@ -1599,7 +1584,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         x.clearOperand();
     }
 
-    public CiValue setResult(Value x, CiVariable operand) {
+    protected CiValue setResult(Value x, CiVariable operand) {
         x.setOperand(operand);
         if (GraalOptions.DetailedAsserts) {
             operands.recordResult(operand, x);
@@ -1668,9 +1653,10 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     List<CiValue> visitInvokeArguments(CiCallingConvention cc, Invoke x, List<CiValue> pointerSlots) {
         // for each argument, load it into the correct location
-        List<CiValue> argList = new ArrayList<CiValue>();
+        List<CiValue> argList = new ArrayList<CiValue>(x.argumentCount());
         int j = 0;
-        for (Value arg : x.arguments()) {
+        for (int i = 0; i < x.argumentCount(); i++) {
+            Value arg = x.argument(i);
             if (arg != null) {
                 CiValue operand = cc.locations[j++];
                 if (operand.isRegister()) {

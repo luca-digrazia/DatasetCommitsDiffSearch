@@ -101,7 +101,7 @@ public final class Phi extends FloatingNode {
      * @return the instruction that produced the value in the i'th predecessor
      */
     public Value valueAt(int i) {
-        return (Value) variableInputs().get(i);
+        return (Value) inputs().variablePart().get(i);
     }
 
     public void setValueAt(int i, Value x) {
@@ -113,7 +113,7 @@ public final class Phi extends FloatingNode {
      * @return the number of inputs in this phi
      */
     public int valueCount() {
-        return variableInputs().size();
+        return inputs().variablePart().size();
     }
 
     @Override
@@ -150,11 +150,11 @@ public final class Phi extends FloatingNode {
     }
 
     public void addInput(Node y) {
-        variableInputs().add(y);
+        inputs().variablePart().add(y);
     }
 
     public void removeInput(int index) {
-        variableInputs().remove(index);
+        inputs().variablePart().remove(index);
     }
 
     @Override

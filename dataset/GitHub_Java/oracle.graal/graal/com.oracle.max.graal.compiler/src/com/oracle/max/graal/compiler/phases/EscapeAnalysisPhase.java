@@ -29,12 +29,13 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Phi.PhiType;
+import com.oracle.max.graal.compiler.ir.Phi.*;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 
 public class EscapeAnalysisPhase extends Phase {
@@ -63,7 +64,7 @@ public class EscapeAnalysisPhase extends Phase {
             this.state = initialState;
         }
 
-        public void apply() {
+        public void apply(FixedNode start) {
             FixedNode current = start;
 
             do {
@@ -311,6 +312,7 @@ public class EscapeAnalysisPhase extends Phase {
         private final EscapeOp op;
         private final Graph graph;
         private final Node node;
+        private RiType type;
         private EscapeField[] escapeFields;
 
         public EscapementFixup(EscapeOp op, Graph graph, Node node) {
@@ -327,11 +329,13 @@ public class EscapeAnalysisPhase extends Phase {
         public void removeAllocation() {
             assert node instanceof FixedNodeWithNext;
 
+            type = ((Value) node).exactType();
             escapeFields = op.fields(node);
             for (int i = 0; i < escapeFields.length; i++) {
                 fields.put(escapeFields[i].representation(), i);
             }
-            final VirtualObject virtual = new VirtualObject(((Value) node).exactType(), escapeFields, graph);
+            final VirtualObject virtual = new VirtualObject(type, escapeFields, graph);
+            final BlockExitState startState = new BlockExitState(escapeFields, virtual);
             if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
                 TTY.println("new virtual object: " + virtual);
             }
@@ -339,8 +343,7 @@ public class EscapeAnalysisPhase extends Phase {
             final FixedNode next = ((FixedNodeWithNext) node).next();
             node.replaceAndDelete(next);
 
-            final BlockExitState startState = new BlockExitState(escapeFields, virtual);
-            final PostOrderNodeIterator<?> iterator = new PostOrderNodeIterator<BlockExitState>(next, startState) {
+            new PostOrderNodeIterator<BlockExitState>(next, startState) {
                 @Override
                 protected void node(FixedNode node) {
                     int changedField = op.updateState(virtual, node, fields, state.fieldState);
@@ -353,8 +356,7 @@ public class EscapeAnalysisPhase extends Phase {
                         }
                     }
                 }
-            };
-            iterator.apply();
+            }.apply(next);
         }
 
         private void process() {
@@ -496,57 +498,17 @@ public class EscapeAnalysisPhase extends Phase {
         }
     }
 
-    public abstract static class EscapeOp implements Op {
+    public static interface EscapeOp extends Op {
 
-        public abstract boolean canAnalyze(Node node);
+        boolean canAnalyze(Node node);
 
-        public boolean escape(Node node, Node usage) {
-            if (usage instanceof IsNonNull) {
-                IsNonNull x = (IsNonNull) usage;
-                assert x.object() == node;
-                return false;
-            } else if (usage instanceof IsType) {
-                IsType x = (IsType) usage;
-                assert x.object() == node;
-                return false;
-            } else if (usage instanceof FrameState) {
-                FrameState x = (FrameState) usage;
-                assert x.inputs().contains(node);
-                return true;
-            } else if (usage instanceof AccessMonitor) {
-                AccessMonitor x = (AccessMonitor) usage;
-                assert x.object() == node;
-                return false;
-            } else {
-                return true;
-            }
-        }
+        boolean escape(Node node, Node usage);
 
-        public abstract EscapeField[] fields(Node node);
+        EscapeField[] fields(Node node);
 
-        public void beforeUpdate(Node node, Node usage) {
-            if (usage instanceof IsNonNull) {
-                IsNonNull x = (IsNonNull) usage;
-                if (x.usages().size() == 1 && x.usages().get(0) instanceof FixedGuard) {
-                    FixedGuard guard = (FixedGuard) x.usages().get(0);
-                    guard.replaceAndDelete(guard.next());
-                }
-                x.delete();
-            } else if (usage instanceof IsType) {
-                IsType x = (IsType) usage;
-                assert x.type() == ((Value) node).exactType();
-                if (x.usages().size() == 1 && x.usages().get(0) instanceof FixedGuard) {
-                    FixedGuard guard = (FixedGuard) x.usages().get(0);
-                    guard.replaceAndDelete(guard.next());
-                }
-                x.delete();
-            } else if (usage instanceof AccessMonitor) {
-                AccessMonitor x = (AccessMonitor) usage;
-                x.replaceAndDelete(x.next());
-            }
-        }
+        void beforeUpdate(Node node, Node usage);
 
-        public abstract int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, Value[] fieldState);
+        int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, Value[] fieldState);
 
     }
 }
