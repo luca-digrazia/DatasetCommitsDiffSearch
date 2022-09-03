@@ -23,7 +23,6 @@
 package com.oracle.graal.phases.common;
 
 import static com.oracle.graal.api.meta.LocationIdentity.*;
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
 
 import java.util.*;
 
@@ -44,19 +43,19 @@ public class FloatingReadPhase extends Phase {
 
     public static class MemoryMapImpl extends MemoryMapNode {
 
-        private final Map<LocationIdentity, MemoryNode> lastMemorySnapshot;
+        private IdentityHashMap<LocationIdentity, MemoryNode> lastMemorySnapshot;
 
         public MemoryMapImpl(MemoryMapImpl memoryMap) {
-            lastMemorySnapshot = newIdentityMap(memoryMap.lastMemorySnapshot);
+            lastMemorySnapshot = new IdentityHashMap<>(memoryMap.lastMemorySnapshot);
         }
 
         public MemoryMapImpl(StartNode start) {
-            lastMemorySnapshot = newIdentityMap();
+            this();
             lastMemorySnapshot.put(ANY_LOCATION, start);
         }
 
         public MemoryMapImpl() {
-            lastMemorySnapshot = newIdentityMap();
+            lastMemorySnapshot = new IdentityHashMap<>();
         }
 
         @Override
@@ -91,17 +90,6 @@ public class FloatingReadPhase extends Phase {
             return lastMemorySnapshot.keySet();
         }
 
-        @Override
-        public boolean replaceLastLocationAccess(MemoryNode oldNode, MemoryNode newNode) {
-            boolean replaced = false;
-            for (Map.Entry<LocationIdentity, MemoryNode> entry : lastMemorySnapshot.entrySet()) {
-                if (entry.getValue() == oldNode) {
-                    entry.setValue(newNode);
-                    replaced = true;
-                }
-            }
-            return replaced;
-        }
     }
 
     private final ExecutionMode execmode;
@@ -116,9 +104,9 @@ public class FloatingReadPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        Map<LoopBeginNode, Set<LocationIdentity>> modifiedInLoops = newNodeIdentityMap();
-        ReentrantNodeIterator.apply(new CollectMemoryCheckpointsClosure(modifiedInLoops), graph.start(), new HashSet<LocationIdentity>());
-        ReentrantNodeIterator.apply(new FloatingReadClosure(modifiedInLoops, execmode), graph.start(), new MemoryMapImpl(graph.start()));
+        Map<LoopBeginNode, Set<LocationIdentity>> modifiedInLoops = new IdentityHashMap<>();
+        ReentrantNodeIterator.apply(new CollectMemoryCheckpointsClosure(modifiedInLoops), graph.start(), new HashSet<LocationIdentity>(), null);
+        ReentrantNodeIterator.apply(new FloatingReadClosure(modifiedInLoops, execmode), graph.start(), new MemoryMapImpl(graph.start()), null);
         if (execmode == ExecutionMode.CREATE_FLOATING_READS) {
             assert !graph.isAfterFloatingReadPhase();
             graph.setAfterFloatingReadPhase(true);
@@ -195,7 +183,7 @@ public class FloatingReadPhase extends Phase {
         }
 
         @Override
-        protected Set<LocationIdentity> afterSplit(BeginNode node, Set<LocationIdentity> oldState) {
+        protected Set<LocationIdentity> afterSplit(AbstractBeginNode node, Set<LocationIdentity> oldState) {
             return new HashSet<>(oldState);
         }
 
@@ -296,7 +284,7 @@ public class FloatingReadPhase extends Phase {
         }
 
         @Override
-        protected MemoryMapImpl afterSplit(BeginNode node, MemoryMapImpl oldState) {
+        protected MemoryMapImpl afterSplit(AbstractBeginNode node, MemoryMapImpl oldState) {
             MemoryMapImpl result = new MemoryMapImpl(oldState);
             if (node.predecessor() instanceof InvokeWithExceptionNode) {
                 /*

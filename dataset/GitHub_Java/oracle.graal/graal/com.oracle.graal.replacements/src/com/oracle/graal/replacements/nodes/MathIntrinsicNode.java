@@ -61,35 +61,35 @@ public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, 
     }
 
     @Override
-    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        Value input = builder.operand(x());
+    public void generate(NodeLIRBuiderTool gen) {
+        Value input = gen.operand(x());
         Value result;
         switch (operation()) {
             case ABS:
-                result = gen.emitMathAbs(input);
+                result = gen.getLIRGeneratorTool().emitMathAbs(input);
                 break;
             case SQRT:
-                result = gen.emitMathSqrt(input);
+                result = gen.getLIRGeneratorTool().emitMathSqrt(input);
                 break;
             case LOG:
-                result = gen.emitMathLog(input, false);
+                result = gen.getLIRGeneratorTool().emitMathLog(input, false);
                 break;
             case LOG10:
-                result = gen.emitMathLog(input, true);
+                result = gen.getLIRGeneratorTool().emitMathLog(input, true);
                 break;
             case SIN:
-                result = gen.emitMathSin(input);
+                result = gen.getLIRGeneratorTool().emitMathSin(input);
                 break;
             case COS:
-                result = gen.emitMathCos(input);
+                result = gen.getLIRGeneratorTool().emitMathCos(input);
                 break;
             case TAN:
-                result = gen.emitMathTan(input);
+                result = gen.getLIRGeneratorTool().emitMathTan(input);
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        builder.setResult(this, result);
+        gen.setResult(this, result);
     }
 
     public Constant evalConst(Constant... inputs) {

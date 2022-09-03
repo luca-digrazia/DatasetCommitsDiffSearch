@@ -26,21 +26,13 @@ package com.oracle.graal.api.code;
  * A reason for infopoint insertion.
  */
 public enum InfopointReason {
-    UNKNOWN(false),
-    SAFEPOINT(false),
-    CALL(false),
-    IMPLICIT_EXCEPTION(false),
-    METHOD_START(true),
-    METHOD_END(true),
-    LINE_NUMBER(true);
 
-    private InfopointReason(boolean canBeOmited) {
-        this.canBeOmited = canBeOmited;
-    }
+    UNKNOWN,
+    SAFEPOINT,
+    CALL,
+    IMPLICIT_EXCEPTION,
+    METHOD_START,
+    METHOD_END,
+    LINE_NUMBER;
 
-    private final boolean canBeOmited;
-
-    public boolean canBeOmited() {
-        return canBeOmited;
-    }
 }

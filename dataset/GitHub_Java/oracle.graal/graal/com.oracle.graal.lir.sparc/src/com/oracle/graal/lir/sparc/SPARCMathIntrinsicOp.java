@@ -25,9 +25,9 @@ package com.oracle.graal.lir.sparc;
 import static com.oracle.graal.api.code.ValueUtil.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fsqrtd;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -39,8 +39,7 @@ public class SPARCMathIntrinsicOp extends SPARCLIRInstruction {
         COS,
         TAN,
         LOG,
-        LOG10,
-        ABS
+        LOG10
     }
 
     @Opcode private final IntrinsicOpcode opcode;
@@ -55,31 +54,9 @@ public class SPARCMathIntrinsicOp extends SPARCLIRInstruction {
 
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        Kind inputKind = (Kind) input.getLIRKind().getPlatformKind();
         switch (opcode) {
             case SQRT:
-                switch (inputKind) {
-                    case Float:
-                        new Fsqrts(asFloatReg(input), asFloatReg(result)).emit(masm);
-                        break;
-                    case Double:
-                        new Fsqrtd(asDoubleReg(input), asDoubleReg(result)).emit(masm);
-                        break;
-                    default:
-                        GraalInternalError.shouldNotReachHere();
-                }
-                break;
-            case ABS:
-                switch (inputKind) {
-                    case Float:
-                        new Fabss(asFloatReg(input), asFloatReg(result)).emit(masm);
-                        break;
-                    case Double:
-                        new Fabsd(asDoubleReg(input), asDoubleReg(result)).emit(masm);
-                        break;
-                    default:
-                        GraalInternalError.shouldNotReachHere();
-                }
+                new Fsqrtd(asDoubleReg(input), asDoubleReg(result)).emit(masm);
                 break;
             case LOG:
             case LOG10:

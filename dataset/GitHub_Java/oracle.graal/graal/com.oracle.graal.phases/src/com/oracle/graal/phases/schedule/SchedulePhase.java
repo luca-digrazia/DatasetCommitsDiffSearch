@@ -345,7 +345,7 @@ public final class SchedulePhase extends Phase {
             buf.format(", lastAccess: %s", frn.getLastLocationAccess());
             buf.format(", object: %s", frn.object());
         } else if (n instanceof GuardNode) {
-            buf.format(", anchor: %s", ((GuardNode) n).getAnchor());
+            buf.format(", guard: %s", ((GuardNode) n).getGuard());
         }
         Debug.log("%s", buf);
     }

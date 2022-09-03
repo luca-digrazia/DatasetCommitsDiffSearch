@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.nodes.java;
 
+import java.lang.reflect.*;
+
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
@@ -54,7 +55,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
 
     /**
      * Gets the target method for this invocation instruction.
-     *
+     * 
      * @return the target method
      */
     public ResolvedJavaMethod targetMethod() {
@@ -75,7 +76,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
 
     /**
      * Gets the instruction that produces the receiver object for this invocation, if any.
-     *
+     * 
      * @return the instruction that produces the receiver object for this invocation if any,
      *         {@code null} if this invocation does not take a receiver object
      */
@@ -85,7 +86,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
 
     /**
      * Checks whether this is an invocation of a static method.
-     *
+     * 
      * @return {@code true} if the invocation is a static invocation
      */
     public boolean isStatic() {
@@ -107,12 +108,12 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
             assertTrue(n instanceof Invoke, "call target can only be used from an invoke (%s)", n);
         }
         if (invokeKind == InvokeKind.Special || invokeKind == InvokeKind.Static) {
-            assertFalse(targetMethod.isAbstract(), "special calls or static calls are only allowed for concrete methods (%s)", targetMethod);
+            assertFalse(Modifier.isAbstract(targetMethod.getModifiers()), "special calls or static calls are only allowed for concrete methods (%s)", targetMethod);
         }
         if (invokeKind == InvokeKind.Static) {
-            assertTrue(targetMethod.isStatic(), "static calls are only allowed for static methods (%s)", targetMethod);
+            assertTrue(Modifier.isStatic(targetMethod.getModifiers()), "static calls are only allowed for static methods (%s)", targetMethod);
         } else {
-            assertFalse(targetMethod.isStatic(), "static calls are only allowed for non-static methods (%s)", targetMethod);
+            assertFalse(Modifier.isStatic(targetMethod.getModifiers()), "static calls are only allowed for non-static methods (%s)", targetMethod);
         }
         return super.verify();
     }
@@ -137,17 +138,18 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                 return this;
             }
 
-            assert targetMethod.getDeclaringClass().asExactType() == null : "should have been handled by canBeStaticallyBound";
-
-            // check if the type of the receiver can narrow the result
+            // check if the exact type of the receiver can be determined
             ValueNode receiver = receiver();
-            ResolvedJavaType type = StampTool.typeOrNull(receiver);
-            if (type != null) {
+            ResolvedJavaType exact = targetMethod.getDeclaringClass().asExactType();
+            if (exact == null && ObjectStamp.isExactType(receiver)) {
+                exact = ObjectStamp.typeOrNull(receiver);
+            }
+            if (exact != null) {
                 // either the holder class is exact, or the receiver object has an exact type
-                ResolvedJavaMethod resolvedMethod = type.resolveMethod(targetMethod, invoke().getContextType());
-                if (resolvedMethod != null && (resolvedMethod.canBeStaticallyBound() || StampTool.isExactType(receiver))) {
+                ResolvedJavaMethod exactMethod = exact.resolveMethod(targetMethod);
+                if (exactMethod != null) {
                     invokeKind = InvokeKind.Special;
-                    targetMethod = resolvedMethod;
+                    targetMethod = exactMethod;
                     return this;
                 }
             }

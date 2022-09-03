@@ -38,6 +38,7 @@ import com.oracle.graal.api.meta.*;
 public class AMD64 extends Architecture {
 
     public static final RegisterCategory CPU = new RegisterCategory("CPU");
+    public static final RegisterCategory XMM = new RegisterCategory("XMM");
 
     // @formatter:off
 
@@ -64,10 +65,6 @@ public class AMD64 extends Architecture {
         rax, rcx, rdx, rbx, rsp, rbp, rsi, rdi,
         r8, r9, r10, r11, r12, r13, r14, r15
     };
-
-    private static final int XMM_REFERENCE_MAP_SHIFT = 2;
-
-    public static final RegisterCategory XMM = new RegisterCategory("XMM", cpuRegisters.length, XMM_REFERENCE_MAP_SHIFT);
 
     // XMM registers
     public static final Register xmm0 = new Register(16, 0, "xmm0", XMM);
@@ -138,7 +135,7 @@ public class AMD64 extends Architecture {
     private final EnumSet<CPUFeature> features;
 
     public AMD64(EnumSet<CPUFeature> features) {
-        super("AMD64", 8, ByteOrder.LITTLE_ENDIAN, true, allRegisters, LOAD_STORE | STORE_STORE, 1, cpuRegisters.length + (xmmRegisters.length << XMM_REFERENCE_MAP_SHIFT), 8);
+        super("AMD64", 8, ByteOrder.LITTLE_ENDIAN, true, allRegisters, LOAD_STORE | STORE_STORE, 1, r15.encoding + 1, 8);
         this.features = features;
         assert features.contains(CPUFeature.SSE2) : "minimum config for x64";
     }
@@ -154,7 +151,7 @@ public class AMD64 extends Architecture {
         }
 
         Kind kind = (Kind) platformKind;
-        if (category.equals(CPU)) {
+        if (category == CPU) {
             switch (kind) {
                 case Boolean:
                 case Byte:
@@ -165,7 +162,7 @@ public class AMD64 extends Architecture {
                 case Object:
                     return true;
             }
-        } else if (category.equals(XMM)) {
+        } else if (category == XMM) {
             switch (kind) {
                 case Float:
                 case Double:
@@ -178,9 +175,9 @@ public class AMD64 extends Architecture {
 
     @Override
     public PlatformKind getLargestStorableKind(RegisterCategory category) {
-        if (category.equals(CPU)) {
+        if (category == CPU) {
             return Kind.Long;
-        } else if (category.equals(XMM)) {
+        } else if (category == XMM) {
             return Kind.Double;
         } else {
             return Kind.Illegal;

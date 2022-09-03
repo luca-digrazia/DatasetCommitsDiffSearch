@@ -22,15 +22,10 @@
  */
 package com.oracle.graal.phases;
 
-import java.util.EnumSet;
-import java.util.Set;
+import java.util.*;
 
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.ProfilingInfo;
-
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
 
 public final class OptimisticOptimizations {
 
@@ -38,7 +33,7 @@ public final class OptimisticOptimizations {
     public static final OptimisticOptimizations NONE = new OptimisticOptimizations(EnumSet.noneOf(Optimization.class));
     private static final DebugMetric disabledOptimisticOptsMetric = Debug.metric("DisabledOptimisticOpts");
 
-    public enum Optimization {
+    public static enum Optimization {
         RemoveNeverExecutedCode,
         UseTypeCheckedInlining,
         UseTypeCheckHints,

@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code BinaryNode} class is the base of arithmetic and logic operations with two inputs.
@@ -35,17 +35,17 @@ public abstract class BinaryNode extends FloatingNode {
     @Input private ValueNode x;
     @Input private ValueNode y;
 
-    public ValueNode getX() {
+    public ValueNode x() {
         return x;
     }
 
-    public ValueNode getY() {
+    public ValueNode y() {
         return y;
     }
 
     /**
      * Creates a new BinaryNode instance.
-     *
+     * 
      * @param stamp the result type of this instruction
      * @param x the first input instruction
      * @param y the second input instruction
@@ -63,9 +63,9 @@ public abstract class BinaryNode extends FloatingNode {
         public ValueNode getValue(BinaryNode binary) {
             switch (this) {
                 case x:
-                    return binary.getX();
+                    return binary.x();
                 case y:
-                    return binary.getY();
+                    return binary.y();
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
@@ -74,9 +74,9 @@ public abstract class BinaryNode extends FloatingNode {
         public ValueNode getOtherValue(BinaryNode binary) {
             switch (this) {
                 case x:
-                    return binary.getY();
+                    return binary.y();
                 case y:
-                    return binary.getX();
+                    return binary.x();
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
@@ -89,7 +89,7 @@ public abstract class BinaryNode extends FloatingNode {
         if (stamp instanceof IntegerStamp) {
             return IntegerArithmeticNode.add(graph, x, y);
         } else if (stamp instanceof FloatStamp) {
-            return graph.unique(new FloatAddNode(x, y, false));
+            return graph.unique(new FloatAddNode(stamp, x, y, false));
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }
@@ -101,7 +101,7 @@ public abstract class BinaryNode extends FloatingNode {
         if (stamp instanceof IntegerStamp) {
             return IntegerArithmeticNode.sub(graph, x, y);
         } else if (stamp instanceof FloatStamp) {
-            return graph.unique(new FloatSubNode(x, y, false));
+            return graph.unique(new FloatSubNode(stamp, x, y, false));
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }
@@ -113,7 +113,7 @@ public abstract class BinaryNode extends FloatingNode {
         if (stamp instanceof IntegerStamp) {
             return IntegerArithmeticNode.mul(graph, x, y);
         } else if (stamp instanceof FloatStamp) {
-            return graph.unique(new FloatMulNode(x, y, false));
+            return graph.unique(new FloatMulNode(stamp, x, y, false));
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }
@@ -124,8 +124,8 @@ public abstract class BinaryNode extends FloatingNode {
     }
 
     public static ReassociateMatch findReassociate(BinaryNode binary, NodePredicate criterion) {
-        boolean resultX = criterion.apply(binary.getX());
-        boolean resultY = criterion.apply(binary.getY());
+        boolean resultX = criterion.apply(binary.x());
+        boolean resultY = criterion.apply(binary.y());
         if (resultX && !resultY) {
             return ReassociateMatch.x;
         }

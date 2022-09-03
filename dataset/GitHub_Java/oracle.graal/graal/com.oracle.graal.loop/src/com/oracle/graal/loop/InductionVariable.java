@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.loop;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * This class describes a value node that is an induction variable in a counted loop.
@@ -62,7 +62,7 @@ public abstract class InductionVariable {
     public abstract Direction direction();
 
     /**
-     * Returns the value node that is described by this induction variable.
+     * Returns the value node that is described by this InductionVariable instance.
      */
     public abstract ValueNode valueNode();
 
@@ -104,10 +104,4 @@ public abstract class InductionVariable {
      * induction variable at the loop exit.
      */
     public abstract ValueNode exitValueNode();
-
-    /**
-     * Deletes any nodes created within the scope of this object that have no usages.
-     */
-    public void deleteUnusedNodes() {
-    }
 }
