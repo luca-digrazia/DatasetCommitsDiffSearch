@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.nodes.StructuredGraph.*;
 import static com.oracle.graal.phases.common.InliningUtil.*;
 
 import java.util.concurrent.*;
@@ -35,7 +36,6 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
-import static com.oracle.graal.nodes.StructuredGraph.*;
 
 public final class CompilationTask implements Runnable, Comparable<CompilationTask> {
 
@@ -88,10 +88,6 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         return inProgress;
     }
 
-    public boolean isCancelled() {
-        return cancelled;
-    }
-
     public int getEntryBCI() {
         return entryBCI;
     }
@@ -110,10 +106,10 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                 }
             }
             runCompilation();
-        } finally {
-            if (method.currentTask() == this) {
+            if (method.currentTask() == this && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI) {
                 method.setCurrentTask(null);
             }
+        } finally {
             inProgress = false;
             withinEnqueue.set(Boolean.TRUE);
         }
