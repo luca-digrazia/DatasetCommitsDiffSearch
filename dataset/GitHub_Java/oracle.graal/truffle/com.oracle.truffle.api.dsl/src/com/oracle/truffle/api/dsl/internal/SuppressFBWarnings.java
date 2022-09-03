@@ -24,8 +24,7 @@
  */
 package com.oracle.truffle.api.dsl.internal;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.*;
 
 /**
  * Used to suppress <a href="http://findbugs.sourceforge.net">FindBugs</a> warnings.
