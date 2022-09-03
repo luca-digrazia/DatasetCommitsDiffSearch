@@ -22,39 +22,18 @@
  */
 package com.oracle.graal.phases.util;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.graph.GraalGraphJVMCIError;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.FullInfopointNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.VirtualState;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.phases.graph.ReentrantBlockIterator;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
-import com.oracle.graal.phases.graph.StatelessPostOrderNodeIterator;
-import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
 
 public final class GraphOrder {
@@ -112,7 +91,7 @@ public final class GraphOrder {
             assert node == null || node.isAlive() : node + " not alive";
             if (node != null && !visited.isMarked(node)) {
                 if (floatingOnly && node instanceof FixedNode) {
-                    throw new JVMCIError("unexpected reference to fixed node: %s (this indicates an unexpected cycle)", node);
+                    throw new GraalInternalError("unexpected reference to fixed node: %s (this indicates an unexpected cycle)", node);
                 }
                 visited.mark(node);
                 FrameState stateAfter = null;
@@ -141,8 +120,8 @@ public final class GraphOrder {
                     visitForward(nodes, visited, stateAfter, true);
                 }
             }
-        } catch (JVMCIError e) {
-            throw GraalGraphJVMCIError.transformAndAddContext(e, node);
+        } catch (GraalInternalError e) {
+            throw GraalGraphInternalError.transformAndAddContext(e, node);
         }
     }
 
@@ -155,10 +134,9 @@ public final class GraphOrder {
      */
     public static boolean assertSchedulableGraph(final StructuredGraph graph) {
         try {
-            final SchedulePhase schedulePhase = new SchedulePhase(SchedulingStrategy.LATEST_OUT_OF_LOOPS);
+            final SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.LATEST_OUT_OF_LOOPS);
             final Map<LoopBeginNode, NodeBitMap> loopEntryStates = Node.newIdentityMap();
-            schedulePhase.apply(graph, false);
-            final ScheduleResult schedule = graph.getLastSchedule();
+            schedule.apply(graph, false);
 
             BlockIteratorClosure<NodeBitMap> closure = new BlockIteratorClosure<NodeBitMap>() {
 
@@ -169,7 +147,7 @@ public final class GraphOrder {
 
                 @Override
                 protected NodeBitMap processBlock(final Block block, final NodeBitMap currentState) {
-                    final List<Node> list = graph.getLastSchedule().getBlockToNodesMap().get(block);
+                    final List<Node> list = schedule.getBlockToNodesMap().get(block);
 
                     /*
                      * A stateAfter is not valid directly after its associated state split, but
