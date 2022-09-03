@@ -154,12 +154,11 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                     ResolvedJavaType uniqueConcreteType = type.findUniqueConcreteSubtype();
                     if (uniqueConcreteType != null) {
                         ResolvedJavaMethod methodFromUniqueType = uniqueConcreteType.resolveMethod(targetMethod, invoke().getContextType());
-                        if (methodFromUniqueType != null) {
-                            tool.assumptions().recordConcreteSubtype(type, uniqueConcreteType);
-                            invokeKind = InvokeKind.Special;
-                            targetMethod = methodFromUniqueType;
-                            return this;
-                        }
+                        assert methodFromUniqueType != null;
+                        tool.assumptions().recordConcreteSubtype(type, uniqueConcreteType);
+                        invokeKind = InvokeKind.Special;
+                        targetMethod = methodFromUniqueType;
+                        return this;
                     }
 
                     ResolvedJavaMethod uniqueConcreteMethod = type.findUniqueConcreteMethod(targetMethod);
