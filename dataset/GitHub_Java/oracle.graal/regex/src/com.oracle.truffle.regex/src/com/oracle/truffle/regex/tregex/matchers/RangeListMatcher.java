@@ -33,14 +33,14 @@ import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 /**
  * Character range matcher using a sorted list of ranges.
  */
-public final class RangeListMatcher extends InvertibleCharMatcher {
+public final class RangeListMatcher extends ProfiledCharMatcher {
 
     @CompilationFinal(dimensions = 1) private final char[] ranges;
 
     /**
      * Constructs a new {@link RangeListMatcher}.
      * 
-     * @param invert see {@link InvertibleCharMatcher}.
+     * @param invert see {@link ProfiledCharMatcher}.
      * @param ranges a sorted array of character ranges in the form [lower inclusive bound of range
      *            0, higher inclusive bound of range 0, lower inclusive bound of range 1, higher
      *            inclusive bound of range 1, ...]. The array contents are not modified by this
@@ -62,11 +62,6 @@ public final class RangeListMatcher extends InvertibleCharMatcher {
                 if (lo == c) {
                     return true;
                 }
-            } else if (isTwoChars(lo, hi)) {
-                // do simple equality checks on ranges that contain two characters
-                if (c == lo || c == hi) {
-                    return true;
-                }
             } else {
                 if (lo <= c) {
                     if (hi >= c) {
@@ -84,12 +79,6 @@ public final class RangeListMatcher extends InvertibleCharMatcher {
         CompilerAsserts.partialEvaluationConstant(lo);
         CompilerAsserts.partialEvaluationConstant(hi);
         return lo == hi;
-    }
-
-    private static boolean isTwoChars(char lo, char hi) {
-        CompilerAsserts.partialEvaluationConstant(lo);
-        CompilerAsserts.partialEvaluationConstant(hi);
-        return lo + 1 == hi;
     }
 
     @Override

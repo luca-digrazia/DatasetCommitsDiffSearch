@@ -24,21 +24,20 @@
  */
 package com.oracle.truffle.regex.tregex.matchers;
 
+import com.oracle.truffle.regex.tregex.util.MathUtil;
+
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.regex.tregex.util.MathUtil;
 
 /**
  * Character range matcher using a left-balanced tree of ranges.
  */
-public abstract class RangeTreeMatcher extends InvertibleCharMatcher {
+public final class RangeTreeMatcher extends ProfiledCharMatcher {
 
     /**
      * Constructs a new {@link RangeTreeMatcher}.
      * 
-     * @param invert see {@link InvertibleCharMatcher}.
+     * @param invert see {@link ProfiledCharMatcher}.
      * @param ranges a sorted array of character ranges in the form [lower inclusive bound of range
      *            0, higher inclusive bound of range 0, lower inclusive bound of range 1, higher
      *            inclusive bound of range 1, ...]. The array contents are not modified by this
@@ -48,7 +47,7 @@ public abstract class RangeTreeMatcher extends InvertibleCharMatcher {
     public static RangeTreeMatcher fromRanges(boolean invert, char[] ranges) {
         char[] tree = new char[ranges.length];
         buildTree(tree, 0, ranges, 0, ranges.length / 2);
-        return RangeTreeMatcherNodeGen.create(invert, tree);
+        return new RangeTreeMatcher(invert, tree);
     }
 
     /**
@@ -105,21 +104,20 @@ public abstract class RangeTreeMatcher extends InvertibleCharMatcher {
 
     @CompilationFinal(dimensions = 1) private final char[] tree;
 
-    RangeTreeMatcher(boolean invert, char[] tree) {
+    private RangeTreeMatcher(boolean invert, char[] tree) {
         super(invert);
         this.tree = tree;
     }
 
-    @Specialization
-    public boolean match(char c, boolean compactString) {
-        assert !compactString : "this matcher should be avoided via ProfilingCharMatcher on compact strings";
+    @Override
+    public boolean matchChar(char c) {
         int i = 0;
         while (i < tree.length) {
             final char lo = tree[i];
             final char hi = tree[i + 1];
             if (lo <= c) {
                 if (hi >= c) {
-                    return result(true);
+                    return true;
                 } else {
                     i = rightChild(i);
                 }
@@ -127,7 +125,7 @@ public abstract class RangeTreeMatcher extends InvertibleCharMatcher {
                 i = leftChild(i);
             }
         }
-        return result(false);
+        return false;
     }
 
     @Override
