@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.nodes.cfg;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.nodes.LoopBeginNode;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.nodes.*;
 
 public final class HIRLoop extends Loop<Block> {
 
