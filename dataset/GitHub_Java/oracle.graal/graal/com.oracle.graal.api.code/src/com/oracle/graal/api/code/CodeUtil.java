@@ -75,7 +75,7 @@ public class CodeUtil {
      */
     public static int log2(int val) {
         assert val > 0;
-        return (Integer.SIZE - 1) - Integer.numberOfLeadingZeros(val);
+        return 31 - Integer.numberOfLeadingZeros(val);
     }
 
     /**
@@ -87,7 +87,7 @@ public class CodeUtil {
      */
     public static int log2(long val) {
         assert val > 0;
-        return (Long.SIZE - 1) - Long.numberOfLeadingZeros(val);
+        return 63 - Long.numberOfLeadingZeros(val);
     }
 
     /**
