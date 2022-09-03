@@ -181,6 +181,7 @@ public class GraalCompiler {
                 new ReadEliminationPhase().apply(graph);
             }
         }
+        new RemovePlaceholderPhase().apply(graph);
         new DeadCodeEliminationPhase().apply(graph);
 
         plan.runPhases(PhasePosition.MID_LEVEL, graph);
