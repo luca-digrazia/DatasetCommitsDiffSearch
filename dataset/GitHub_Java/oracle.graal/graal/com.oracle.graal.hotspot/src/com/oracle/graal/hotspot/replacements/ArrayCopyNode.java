@@ -22,152 +22,118 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
+import static com.oracle.graal.compiler.GraalCompiler.*;
+
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.IterableNodeType;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.loop.phases.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.phases.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.replacements.*;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.nodes.*;
 
-public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableNodeType, Lowerable {
+@NodeInfo
+public class ArrayCopyNode extends BasicArrayCopyNode implements Virtualizable, Lowerable {
 
-    public ArrayCopyNode(Invoke invoke) {
+    public static ArrayCopyNode create(Invoke invoke) {
+        return USE_GENERATED_NODES ? new ArrayCopyNodeGen(invoke) : new ArrayCopyNode(invoke);
+    }
+
+    protected ArrayCopyNode(Invoke invoke) {
         super(invoke);
     }
 
-    private ValueNode getSource() {
-        return arguments.get(0);
-    }
-
-    private ValueNode getSourcePosition() {
-        return arguments.get(1);
-    }
-
-    private ValueNode getDestination() {
-        return arguments.get(2);
-    }
-
-    private ValueNode getDestinationPosition() {
-        return arguments.get(3);
-    }
-
-    private ValueNode getLength() {
-        return arguments.get(4);
-    }
-
-    private StructuredGraph selectSnippet(LoweringTool tool) {
-        ResolvedJavaType srcType = getSource().objectStamp().type();
-        ResolvedJavaType destType = getDestination().objectStamp().type();
+    private StructuredGraph selectSnippet(LoweringTool tool, final Replacements replacements) {
+        ResolvedJavaType srcType = StampTool.typeOrNull(getSource().stamp());
+        ResolvedJavaType destType = StampTool.typeOrNull(getDestination().stamp());
 
         if (srcType == null || !srcType.isArray() || destType == null || !destType.isArray()) {
             return null;
         }
-        if (!destType.getComponentType().isAssignableFrom(srcType.getComponentType()) || !getDestination().objectStamp().isExactType()) {
+        if (!destType.getComponentType().isAssignableFrom(srcType.getComponentType())) {
+            return null;
+        }
+        if (!isExact()) {
             return null;
         }
         Kind componentKind = srcType.getComponentType().getKind();
-        ResolvedJavaMethod snippetMethod = tool.getRuntime().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(componentKind));
-        return (StructuredGraph) snippetMethod.getCompilerStorage().get(Snippet.class);
+        final ResolvedJavaMethod snippetMethod = tool.getMetaAccess().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(componentKind, shouldUnroll(), isExact()));
+        try (Scope s = Debug.scope("ArrayCopySnippet", snippetMethod)) {
+            return replacements.getSnippet(snippetMethod);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 
     private static void unrollFixedLengthLoop(StructuredGraph snippetGraph, int length, LoweringTool tool) {
-        LocalNode lengthLocal = snippetGraph.getLocal(4);
-        if (lengthLocal != null) {
-            snippetGraph.replaceFloating(lengthLocal, ConstantNode.forInt(length, snippetGraph));
+        ParameterNode lengthParam = snippetGraph.getParameter(4);
+        if (lengthParam != null) {
+            snippetGraph.replaceFloating(lengthParam, ConstantNode.forInt(length, snippetGraph));
         }
         // the canonicalization before loop unrolling is needed to propagate the length into
         // additions, etc.
-        new CanonicalizerPhase(tool.getRuntime(), tool.assumptions()).apply(snippetGraph);
-        new LoopFullUnrollPhase(tool.getRuntime(), tool.assumptions()).apply(snippetGraph);
-        new CanonicalizerPhase(tool.getRuntime(), tool.assumptions()).apply(snippetGraph);
-    }
-
-    private static void replaceSnippetInvokes(StructuredGraph snippetGraph, ResolvedJavaMethod targetMethod, int bci) {
-        for (InvokeNode invoke : snippetGraph.getNodes(InvokeNode.class)) {
-            if (invoke.methodCallTarget().targetMethod() != targetMethod) {
-                throw new GraalInternalError("unexpected invoke in arraycopy snippet");
-            }
-            if (invoke.stateAfter().bci == FrameState.INVALID_FRAMESTATE_BCI) {
-                InvokeNode newInvoke = snippetGraph.add(new InvokeNode(invoke.methodCallTarget(), bci));
-                newInvoke.setStateAfter(snippetGraph.add(new FrameState(FrameState.AFTER_BCI)));
-                snippetGraph.replaceFixedWithFixed(invoke, newInvoke);
-            } else {
-                assert invoke.stateAfter().bci == FrameState.AFTER_BCI : invoke;
-            }
-        }
+        PhaseContext context = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.assumptions());
+        new CanonicalizerPhase(true).apply(snippetGraph, context);
+        new LoopFullUnrollPhase(new CanonicalizerPhase(true)).apply(snippetGraph, context);
+        new CanonicalizerPhase(true).apply(snippetGraph, context);
     }
 
     @Override
-    protected StructuredGraph getSnippetGraph(LoweringTool tool) {
-        if (!GraalOptions.IntrinsifyArrayCopy) {
+    protected StructuredGraph getLoweredSnippetGraph(final LoweringTool tool) {
+        if (!shouldIntrinsify(getTargetMethod())) {
             return null;
         }
 
-        StructuredGraph snippetGraph = selectSnippet(tool);
+        final Replacements replacements = tool.getReplacements();
+        StructuredGraph snippetGraph = selectSnippet(tool, replacements);
         if (snippetGraph == null) {
-            ResolvedJavaMethod snippetMethod = tool.getRuntime().lookupJavaMethod(ArrayCopySnippets.genericArraycopySnippet);
-            snippetGraph = ((StructuredGraph) snippetMethod.getCompilerStorage().get(Snippet.class)).copy();
-            assert snippetGraph != null : "ArrayCopySnippets should be installed";
-
-            replaceSnippetInvokes(snippetGraph, getTargetMethod(), getBci());
+            final ResolvedJavaMethod snippetMethod = tool.getMetaAccess().lookupJavaMethod(ArrayCopySnippets.genericArraycopySnippet);
+            snippetGraph = null;
+            try (Scope s = Debug.scope("ArrayCopySnippet", snippetMethod)) {
+                snippetGraph = replacements.getSnippet(snippetMethod, getTargetMethod()).copy();
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
+            replaceSnippetInvokes(snippetGraph);
         } else {
             assert snippetGraph != null : "ArrayCopySnippets should be installed";
-
-            if (getLength().isConstant()) {
-                snippetGraph = snippetGraph.copy();
-                unrollFixedLengthLoop(snippetGraph, getLength().asConstant().asInt(), tool);
-            }
-        }
-        return snippetGraph;
-    }
-
-    private static boolean checkBounds(int position, int length, VirtualObjectNode virtualObject) {
-        return position >= 0 && position + length <= virtualObject.entryCount();
-    }
-
-    private static boolean checkEntryTypes(int srcPos, int length, State srcState, ResolvedJavaType destComponentType) {
-        if (destComponentType.getKind() == Kind.Object) {
-            for (int i = 0; i < length; i++) {
-                if (!destComponentType.isAssignableFrom(srcState.getEntry(srcPos + i).objectStamp().type())) {
-                    return false;
+            snippetGraph = snippetGraph.copy();
+            if (shouldUnroll()) {
+                final StructuredGraph copy = snippetGraph;
+                try (Scope s = Debug.scope("ArrayCopySnippetSpecialization", snippetGraph.method())) {
+                    unrollFixedLengthLoop(copy, getLength().asConstant().asInt(), tool);
+                } catch (Throwable e) {
+                    throw Debug.handle(e);
                 }
             }
         }
-        return true;
+        return lowerReplacement(snippetGraph, tool);
     }
 
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        if (getSourcePosition().isConstant() && getDestinationPosition().isConstant() && getLength().isConstant()) {
-            int srcPos = getSourcePosition().asConstant().asInt();
-            int destPos = getDestinationPosition().asConstant().asInt();
-            int length = getLength().asConstant().asInt();
-            State srcState = tool.getObjectState(getSource());
-            State destState = tool.getObjectState(getDestination());
+    private boolean shouldUnroll() {
+        return getLength().isConstant() && getLength().asConstant().asInt() <= GraalOptions.MaximumEscapeAnalysisArrayLength.getValue();
+    }
 
-            if (srcState != null && srcState.getState() == EscapeState.Virtual && destState != null && destState.getState() == EscapeState.Virtual) {
-                VirtualObjectNode srcVirtual = srcState.getVirtualObject();
-                VirtualObjectNode destVirtual = destState.getVirtualObject();
-                if (length < 0 || !checkBounds(srcPos, length, srcVirtual) || !checkBounds(destPos, length, destVirtual)) {
-                    return;
-                }
-                if (!checkEntryTypes(srcPos, length, srcState, destVirtual.type().getComponentType())) {
-                    return;
-                }
-                for (int i = 0; i < length; i++) {
-                    tool.setVirtualEntry(destState, destPos + i, srcState.getEntry(srcPos + i));
-                }
-                tool.delete();
-                if (Debug.isLogEnabled()) {
-                    Debug.log("virtualized arraycopyf(%s, %d, %s, %d, %d)", getSource(), srcPos, getDestination(), destPos, length);
-                }
+    /*
+     * Returns true if this copy doesn't require store checks. Trivially true for primitive arrays.
+     */
+    private boolean isExact() {
+        ResolvedJavaType srcType = StampTool.typeOrNull(getSource().stamp());
+        if (srcType.getComponentType().getKind().isPrimitive() || getSource() == getDestination()) {
+            return true;
+        }
+
+        ResolvedJavaType destType = StampTool.typeOrNull(getDestination().stamp());
+        if (StampTool.isExactType(getDestination().stamp())) {
+            if (destType != null && destType.isAssignableFrom(srcType)) {
+                return true;
             }
         }
+        return false;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,11 @@ import com.oracle.graal.nodes.virtual.*;
 @NodeInfo
 public class BasicArrayCopyNode extends MacroStateSplitNode implements Virtualizable {
 
-    public BasicArrayCopyNode(Invoke invoke) {
+    public static BasicArrayCopyNode create(Invoke invoke) {
+        return USE_GENERATED_NODES ? new BasicArrayCopyNodeGen(invoke) : new BasicArrayCopyNode(invoke);
+    }
+
+    protected BasicArrayCopyNode(Invoke invoke) {
         super(invoke);
     }
 
@@ -87,9 +91,9 @@ public class BasicArrayCopyNode extends MacroStateSplitNode implements Virtualiz
     @Override
     public void virtualize(VirtualizerTool tool) {
         if (getSourcePosition().isConstant() && getDestinationPosition().isConstant() && getLength().isConstant()) {
-            int srcPos = getSourcePosition().asJavaConstant().asInt();
-            int destPos = getDestinationPosition().asJavaConstant().asInt();
-            int length = getLength().asJavaConstant().asInt();
+            int srcPos = getSourcePosition().asConstant().asInt();
+            int destPos = getDestinationPosition().asConstant().asInt();
+            int length = getLength().asConstant().asInt();
             State srcState = tool.getObjectState(getSource());
             State destState = tool.getObjectState(getDestination());
 
