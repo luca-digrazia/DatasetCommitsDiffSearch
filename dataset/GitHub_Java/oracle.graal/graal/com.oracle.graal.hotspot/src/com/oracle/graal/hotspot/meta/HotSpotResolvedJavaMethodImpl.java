@@ -42,7 +42,7 @@ import com.oracle.graal.nodes.*;
 /**
  * Implementation of {@link JavaMethod} for resolved HotSpot methods.
  */
-public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implements HotSpotResolvedJavaMethod, HotSpotProxified {
+public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implements HotSpotResolvedJavaMethod, Remote {
 
     private static final long serialVersionUID = -5486975070147586588L;
 
@@ -511,9 +511,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
         int count = sig.getParameterCount(false);
         Class<?>[] result = new Class<?>[count];
         for (int i = 0; i < result.length; ++i) {
-            JavaType parameterType = sig.getParameterType(i, holder);
-            HotSpotResolvedJavaType resolvedParameterType = (HotSpotResolvedJavaType) parameterType.resolve(holder);
-            result[i] = resolvedParameterType.mirror();
+            result[i] = ((HotSpotResolvedJavaType) sig.getParameterType(i, holder).resolve(holder)).mirror();
         }
         return result;
     }
