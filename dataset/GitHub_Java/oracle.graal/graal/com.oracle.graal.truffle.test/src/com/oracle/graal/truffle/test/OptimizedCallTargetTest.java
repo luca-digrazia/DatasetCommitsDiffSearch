@@ -134,19 +134,27 @@ public class OptimizedCallTargetTest {
         int expectedCompiledCount = 0;
         int expectedInterpreterCount = 0;
         for (int i = 0; i < compilationThreshold; i++) {
-            assertNotCompiled(target);
             target.call();
         }
-        assertCompiled(target);
         expectedInterpreterCount += compilationThreshold;
+        assertCompiled(target);
         assertEquals(expectedCompiledCount, testInvalidationCounterCompiled);
         assertEquals(expectedInterpreterCount, testInvalidationCounterInterpreted);
 
         for (int j = 1; j < 100; j++) {
 
+            for (int i = 0; i < compilationThreshold; i++) {
+                target.call();
+            }
+            expectedCompiledCount += compilationThreshold;
+            assertEquals(expectedCompiledCount, testInvalidationCounterCompiled);
+            assertEquals(expectedInterpreterCount, testInvalidationCounterInterpreted);
+            assertCompiled(target);
+
             target.invalidate();
+            assertNotCompiled(target);
+
             for (int i = 0; i < reprofileCount; i++) {
-                assertNotCompiled(target);
                 target.call();
             }
             assertCompiled(target);
@@ -164,7 +172,6 @@ public class OptimizedCallTargetTest {
             assertEquals(expectedInterpreterCount, testInvalidationCounterInterpreted);
 
             for (int i = 0; i < reprofileCount; i++) {
-                assertNotCompiled(target);
                 target.call();
             }
             assertCompiled(target);
@@ -174,7 +181,6 @@ public class OptimizedCallTargetTest {
             assertEquals(expectedInterpreterCount, testInvalidationCounterInterpreted);
 
             for (int i = 0; i < compilationThreshold; i++) {
-                assertCompiled(target);
                 target.call();
             }
 
