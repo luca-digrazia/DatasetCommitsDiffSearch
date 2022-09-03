@@ -129,7 +129,7 @@ public class SourceSectionTest {
 
     @Test
     public void onceObtainedAlwaysTheSame() throws Exception {
-        File sample = File.createTempFile("hello", ".txt");
+        File sample = File.createTempFile("hello", ".tmp");
         sample.deleteOnExit();
         try (FileWriter w = new FileWriter(sample)) {
             w.write("Hello world!");

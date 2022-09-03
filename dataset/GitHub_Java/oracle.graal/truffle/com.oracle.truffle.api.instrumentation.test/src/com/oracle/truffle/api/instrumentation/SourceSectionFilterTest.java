@@ -94,7 +94,7 @@ public class SourceSectionFilterTest {
         Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root = createNode(sampleSource.createSection(null, 0, 23));
         Node unavailable = createNode(SourceSection.createUnavailable(null, null));
-        SourceSectionFilter filter = SourceSectionFilter.ANY;
+        SourceSectionFilter filter = SourceSectionFilter.newBuilder().build();
         Node sampleSection = createNode(sampleSource.createSection(null, 2));
 
         Assert.assertTrue(isInstrumentedNode(filter, source()));

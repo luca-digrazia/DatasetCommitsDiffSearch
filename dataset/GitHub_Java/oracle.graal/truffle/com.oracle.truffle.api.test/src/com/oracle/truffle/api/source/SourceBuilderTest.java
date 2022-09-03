@@ -33,8 +33,6 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.lang.ref.WeakReference;
 import java.net.URL;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
@@ -48,7 +46,7 @@ import org.junit.runner.RunWith;
 public class SourceBuilderTest {
     @Test
     public void assignMimeTypeAndIdentity() {
-        Source.Builder<RuntimeException, MissingMIMETypeException, RuntimeException> builder = Source.newBuilder("// a comment\n").name("Empty comment");
+        Source.Builder<Void, RuntimeException> builder = Source.newBuilder("// a comment\n").name("Empty comment");
         Source s1 = builder.mimeType("content/unknown").build();
         assertEquals("No mime type assigned", "content/unknown", s1.getMimeType());
         Source s2 = builder.mimeType("text/x-c").build();
@@ -79,7 +77,7 @@ public class SourceBuilderTest {
     @Test
     public void assignMimeTypeAndIdentityForReader() throws IOException {
         String text = "// Hello";
-        Source.Builder<IOException, MissingMIMETypeException, RuntimeException> builder = Source.newBuilder(new StringReader(text)).name("test.txt");
+        Source.Builder<Void, IOException> builder = Source.newBuilder(new StringReader(text)).name("test.txt");
         Source s1 = builder.name("Hello").mimeType("text/plain").build();
         assertEquals("Base type assigned", "text/plain", s1.getMimeType());
         Source s2 = builder.mimeType("text/x-c").build();
@@ -107,7 +105,7 @@ public class SourceBuilderTest {
         String nonCannonical = file.getParent() + File.separatorChar + ".." + File.separatorChar + file.getParentFile().getName() + File.separatorChar + file.getName();
         final File nonCannonicalFile = new File(nonCannonical);
         assertTrue("Exists, as it is the same file", nonCannonicalFile.exists());
-        Source.Builder<IOException, RuntimeException, RuntimeException> builder = Source.newBuilder(nonCannonicalFile);
+        final Source.Builder<Source, IOException> builder = Source.newBuilder(nonCannonicalFile);
 
         Source s1 = builder.build();
         assertEquals("Path is cannonicalized", file.getPath(), s1.getPath());
@@ -128,7 +126,7 @@ public class SourceBuilderTest {
         file.deleteOnExit();
 
         String text = "// Hello";
-        Source.Builder<RuntimeException, RuntimeException, RuntimeException> builder = Source.newBuilder(file).content(text).mimeType("text/x-java");
+        final Source.Builder<Source, RuntimeException> builder = Source.newBuilder(file).content(text).mimeType("text/x-java");
         // JDK8 default fails on OS X: https://bugs.openjdk.java.net/browse/JDK-8129632
         Source s1 = builder.build();
         assertEquals("Recognized as Java", "text/x-java", s1.getMimeType());
@@ -164,7 +162,7 @@ public class SourceBuilderTest {
             text = "// Hello";
             w.write(text);
         }
-        Source.Builder<IOException, RuntimeException, RuntimeException> builder = Source.newBuilder(file.toURI().toURL()).name("Hello.java");
+        final Source.Builder<Source, IOException> builder = Source.newBuilder(file.toURI().toURL()).name("Hello.java");
 
         Source s1 = builder.build();
         assertEquals("Recognized as Java", "text/x-java", s1.getMimeType());
@@ -221,6 +219,31 @@ public class SourceBuilderTest {
         assertEquals("File sources with different content have the same URI", source1.getURI(), source2.getURI());
     }
 
+    @Test
+    public void withName() throws Exception {
+        final String tmpName = "/tmp/hi.tmp";
+        final String realName = "/path/hi.txt";
+
+        Source orig = Source.newBuilder("Hi").name(tmpName).mimeType("content/unknown").build();
+        assertEquals(tmpName, orig.getName());
+        Source foundOrig = Source.find(tmpName);
+        assertEquals(orig, foundOrig);
+
+        Source source = orig.withName(realName);
+        assertEquals(realName, source.getName());
+
+        Source foundSource = Source.find(realName);
+        assertSame(source, foundSource);
+
+        WeakReference<Source> refOrig = new WeakReference<>(orig);
+        orig = null;
+        foundOrig = null;
+
+        assertGC("The source can disappear", refOrig);
+
+        Source notFoundSource = Source.find(tmpName);
+        assertNull("Original source isn't there anymore", notFoundSource);
+    }
 
     @Test
     public void relativeURL() throws Exception {
@@ -379,34 +402,6 @@ public class SourceBuilderTest {
             return;
         }
         fail("Expecting NullPointerException");
-    }
-
-    @Test
-    public void throwsErrorIfNameIsNull() {
-        try {
-            Source.newBuilder("Hi").mimeType("content/unknown").build();
-        } catch (MissingNameException ex) {
-            // OK
-            return;
-        }
-        fail("Expecting MissingNameException");
-    }
-
-    @Test
-    public void throwsErrorIfMIMETypeIsNull() {
-        try {
-            Source.newBuilder("Hi").name("unknown.txt").build();
-        } catch (MissingMIMETypeException ex) {
-            // OK
-            return;
-        }
-        fail("Expecting MissingNameException");
-    }
-
-    @Test
-    public void succeedsWithBothNameAndMIME() {
-        Source src = Source.newBuilder("Hi").mimeType("content/unknown").name("unknown.txt").build();
-        assertNotNull(src);
     }
 
     private static void assertGC(String msg, WeakReference<?> ref) {

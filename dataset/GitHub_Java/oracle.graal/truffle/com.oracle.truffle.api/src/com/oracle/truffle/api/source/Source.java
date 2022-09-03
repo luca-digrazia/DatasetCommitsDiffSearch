@@ -167,7 +167,7 @@ public abstract class Source {
      * @return new instance of builder
      * @since 0.15
      */
-    public static Builder<IOException, RuntimeException, RuntimeException> newBuilder(File file) {
+    public static Builder<Source, IOException> newBuilder(File file) {
         return EMPTY.new Builder<>(file);
     }
 
@@ -290,7 +290,7 @@ public abstract class Source {
      * @return new builder to configure additional properties
      * @since 0.15
      */
-    public static Builder<RuntimeException, MissingMIMETypeException, MissingNameException> newBuilder(String text) {
+    public static Builder<Void, RuntimeException> newBuilder(String text) {
         return EMPTY.new Builder<>(text);
     }
 
@@ -407,7 +407,7 @@ public abstract class Source {
      * @return new builder to configure and {@link Builder#build() construct} {@link Source} from
      * @since 0.15
      */
-    public static Builder<IOException, RuntimeException, RuntimeException> newBuilder(URL url) {
+    public static Builder<Source, IOException> newBuilder(URL url) {
         return EMPTY.new Builder<>(url);
     }
 
@@ -440,7 +440,7 @@ public abstract class Source {
      * @return new builder to configure and {@link Builder#build() construct} {@link Source} from
      * @since 0.15
      */
-    public static Builder<IOException, MissingMIMETypeException, MissingNameException> newBuilder(Reader reader) {
+    public static Builder<Void, IOException> newBuilder(Reader reader) {
         return EMPTY.new Builder<>(reader);
     }
 
@@ -936,6 +936,57 @@ public abstract class Source {
     }
 
     /**
+     * Associates the source with specified name.
+     *
+     * @param newName name to be returned from {@link #getName()} method
+     * @return new (identical) source, with changed {@link #getName()}
+     * @since 0.14
+     */
+    final Source withName(String newName) {
+        try {
+            Source another = (Source) clone();
+            another.name = newName;
+            return another;
+        } catch (CloneNotSupportedException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    /**
+     * Associates the source with specified short name.
+     *
+     * @param newShortName name to be returned from {@link #getShortName()} method
+     * @return new (identical) source, with changed {@link #getShortName()}
+     * @since 0.14
+     */
+    final Source withShortName(String newShortName) {
+        try {
+            Source another = (Source) clone();
+            another.shortName = newShortName;
+            return another;
+        } catch (CloneNotSupportedException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    /**
+     * Associates the source with specified short name.
+     *
+     * @param newPath name to be returned from {@link #getPath()} method
+     * @return new (identical) source, with changed {@link #getPath()}
+     * @since 0.14
+     */
+    final Source withPath(String newPath) {
+        try {
+            Source another = (Source) clone();
+            another.path = newPath;
+            return another;
+        } catch (CloneNotSupportedException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    /**
      * MIME type that is associated with this source. By default file extensions known to the system
      * are used to determine the MIME type (via registered {@link FileTypeDetector} classes), yet
      * one can directly {@link #withMimeType(java.lang.String) provide a MIME type} to each source.
@@ -997,18 +1048,14 @@ public abstract class Source {
      * Once your builder is configured, call {@link #build()} to perform the loading and
      * construction of new {@link Source}.
      *
-     * @param <E1> the (checked) exception that one should expect when calling {@link #build()}
+     * @param <R> the return type of the {@link #build()} method - initially {@link Void} changes to
+     *            {@link Source} once {@link Source#getMimeType() MIME type} can be known
+     * @param <E> the (checked) exception that one should expect when calling {@link #build()}
      *            method - usually an {@link IOException},
      *            {@link Source#newBuilder(java.lang.String) sometimes} none.
-     * @param <E2> either a {@link MissingMIMETypeException} to signal that one has to call
-     *            {@link #mimeType(java.lang.String)} or a {@link RuntimeException} to signal
-     *            everything seems to be OK
-     * @param <E3> either a {@link MissingNameException} to signal that one has to call
-     *            {@link #name(java.lang.String)} or a {@link RuntimeException} to signal everything
-     *            seems to be OK
      * @since 0.15
      */
-    public final class Builder<E1 extends Exception, E2 extends Exception, E3 extends Exception> {
+    public final class Builder<R, E extends Exception> {
         private final Object origin;
         private String name;
         private String path;
@@ -1027,14 +1074,13 @@ public abstract class Source {
          * @return instance of <code>this</code> builder
          * @since 0.15
          */
-        @SuppressWarnings("unchecked")
-        public Builder<E1, E2, RuntimeException> name(String newName) {
+        public Builder<R, E> name(String newName) {
             Objects.requireNonNull(newName);
             this.name = newName;
-            return (Builder<E1, E2, RuntimeException>) this;
+            return this;
         }
 
-        Builder<E1, E2, E3> path(String p) {
+        Builder<R, E> path(String p) {
             this.path = p;
             return this;
         }
@@ -1052,10 +1098,10 @@ public abstract class Source {
          * @since 0.15
          */
         @SuppressWarnings("unchecked")
-        public Builder<E1, RuntimeException, E3> mimeType(String newMimeType) {
+        public Builder<Source, E> mimeType(String newMimeType) {
             Objects.requireNonNull(newMimeType);
             this.mime = newMimeType;
-            return (Builder<E1, RuntimeException, E3>) this;
+            return (Builder<Source, E>) this;
         }
 
         /**
@@ -1066,7 +1112,7 @@ public abstract class Source {
          * @return the instance of this builder
          * @since 0.15
          */
-        public Builder<E1, E2, E3> internal() {
+        public Builder<R, E> internal() {
             this.internal = true;
             return this;
         }
@@ -1084,12 +1130,12 @@ public abstract class Source {
          * @since 0.15
          */
         @SuppressWarnings("unchecked")
-        public Builder<RuntimeException, E2, E3> content(String code) {
+        public Builder<R, RuntimeException> content(String code) {
             this.content = code;
-            return (Builder<RuntimeException, E2, E3>) this;
+            return (Builder<R, RuntimeException>) this;
         }
 
-        Builder<E1, E2, E3> content(byte[] arr, int offset, int length, Charset encoding) {
+        Builder<R, E> content(byte[] arr, int offset, int length, Charset encoding) {
             this.content = new String(arr, offset, length, encoding);
             return this;
         }
@@ -1110,13 +1156,11 @@ public abstract class Source {
          * when calling this method.
          *
          * @return the source object
-         * @throws E1 exception if something went wrong while creating the source
-         * @throws E2 eliminate this exception by calling {@link #mimeType}
-         * @throws E3 eliminate this exception by calling {@link #name}
+         * @throws E exception if something went wrong while creating the source
          * @since 0.15
          */
         @SuppressWarnings("unchecked")
-        public Source build() throws E1, E2, E3 {
+        public R build() throws E {
             Content holder;
             try {
                 if (origin instanceof File) {
@@ -1130,16 +1174,13 @@ public abstract class Source {
                 }
                 String type = this.mime == null ? holder.findMimeType() : this.mime;
                 if (type == null) {
-                    throw raise(RuntimeException.class, new MissingMIMETypeException());
+                    throw new IllegalStateException("Unknown mime type for " + origin);
                 }
                 if (content != null) {
                     holder.code = content;
                 }
                 SourceImpl ret = new SourceImpl(holder, type, name, internal);
-                if (ret.getName() == null) {
-                    throw raise(RuntimeException.class, new MissingNameException());
-                }
-                return ret;
+                return (R) ret;
             } catch (IOException ex) {
                 throw raise(RuntimeException.class, ex);
             }
