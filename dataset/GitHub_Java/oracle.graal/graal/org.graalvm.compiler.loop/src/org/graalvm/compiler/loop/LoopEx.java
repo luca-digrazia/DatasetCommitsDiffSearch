@@ -23,18 +23,18 @@
 package org.graalvm.compiler.loop;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Queue;
 
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
-import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.graph.NodeCollectionsFactory;
 import org.graalvm.compiler.graph.NodeBitMap;
 import org.graalvm.compiler.graph.iterators.NodePredicate;
 import org.graalvm.compiler.loop.InductionVariable.Direction;
@@ -82,7 +82,7 @@ public class LoopEx {
     private LoopFragmentWhole whole;
     private CountedLoopInfo counted;
     private LoopsData data;
-    private EconomicMap<Node, InductionVariable> ivs;
+    private Map<Node, InductionVariable> ivs;
 
     LoopEx(Loop<Block> loop, LoopsData data) {
         this.loop = loop;
@@ -319,7 +319,7 @@ public class LoopEx {
         LoopFragment.computeNodes(branchNodes, branch.graph(), blocks, exits);
     }
 
-    public EconomicMap<Node, InductionVariable> getInductionVariables() {
+    public Map<Node, InductionVariable> getInductionVariables() {
         if (ivs == null) {
             ivs = findInductionVariables(this);
         }
@@ -333,13 +333,13 @@ public class LoopEx {
      * @param loop
      * @return a map from node to induction variable
      */
-    private static EconomicMap<Node, InductionVariable> findInductionVariables(LoopEx loop) {
-        EconomicMap<Node, InductionVariable> ivs = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+    private static Map<Node, InductionVariable> findInductionVariables(LoopEx loop) {
+        Map<Node, InductionVariable> ivs = NodeCollectionsFactory.newIdentityMap();
 
         Queue<InductionVariable> scanQueue = new LinkedList<>();
         LoopBeginNode loopBegin = loop.loopBegin();
         AbstractEndNode forwardEnd = loopBegin.forwardEnd();
-        for (PhiNode phi : loopBegin.valuePhis()) {
+        for (PhiNode phi : loopBegin.phis().filter(ValuePhiNode.class)) {
             ValueNode backValue = phi.singleBackValue();
             if (backValue == PhiNode.MULTIPLE_VALUES) {
                 continue;
@@ -393,7 +393,7 @@ public class LoopEx {
                 }
             }
         }
-        return ivs;
+        return Collections.unmodifiableMap(ivs);
     }
 
     private static ValueNode addSub(LoopEx loop, ValueNode op, ValueNode base) {
@@ -431,7 +431,7 @@ public class LoopEx {
      */
     public void deleteUnusedNodes() {
         if (ivs != null) {
-            for (InductionVariable iv : ivs.getValues()) {
+            for (InductionVariable iv : ivs.values()) {
                 iv.deleteUnusedNodes();
             }
         }
