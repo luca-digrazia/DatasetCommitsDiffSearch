@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -36,6 +36,7 @@ import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -78,18 +79,10 @@ public abstract class LLVMNode extends Node {
     }
 
     public final LLVMLanguage getLLVMLanguage() {
-        LLVMLanguage ret = null;
-
-        final RootNode rootNode = getRootNode();
-        if (rootNode != null) {
-            // for the debugger nodes, a RootNode is not available
-            ret = rootNode.getLanguage(LLVMLanguage.class);
-        }
-
+        LLVMLanguage ret = getRootNode().getLanguage(LLVMLanguage.class);
         if (ret == null) {
             ret = LLVMLanguage.getLanguage();
         }
-
         return ret;
     }
 
@@ -161,5 +154,20 @@ public abstract class LLVMNode extends Node {
     protected static boolean isSameObject(Object a, Object b) {
         // used as a workaround for a DSL bug
         return a == b;
+    }
+
+    protected static Node createIsNull() {
+        CompilerAsserts.neverPartOfCompilation();
+        return Message.IS_NULL.createNode();
+    }
+
+    protected static Node createIsBoxed() {
+        CompilerAsserts.neverPartOfCompilation();
+        return Message.IS_BOXED.createNode();
+    }
+
+    protected static Node createUnbox() {
+        CompilerAsserts.neverPartOfCompilation();
+        return Message.UNBOX.createNode();
     }
 }
