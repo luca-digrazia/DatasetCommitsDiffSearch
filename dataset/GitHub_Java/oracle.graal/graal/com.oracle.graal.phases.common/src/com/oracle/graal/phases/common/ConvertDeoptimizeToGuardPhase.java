@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.util.*;
@@ -57,10 +56,10 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         if (graph.getNodes(DeoptimizeNode.class).isEmpty()) {
             return;
         }
-        SimplifierTool simplifierTool = GraphUtil.getDefaultSimplifier(null, null, null, false);
+
         for (DeoptimizeNode d : graph.getNodes(DeoptimizeNode.class)) {
             assert d.isAlive();
-            visitDeoptBegin(BeginNode.prevBegin(d), d.action(), d.reason(), graph, simplifierTool);
+            visitDeoptBegin(BeginNode.prevBegin(d), d.action(), d.reason(), graph);
         }
 
         for (FixedGuardNode fixedGuard : graph.getNodes(FixedGuardNode.class)) {
@@ -72,11 +71,11 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
                     CompareNode compare = (CompareNode) fixedGuard.condition();
                     List<AbstractEndNode> mergePredecessors = merge.cfgPredecessors().snapshot();
 
-                    Constant[] xs = IfNode.constantValues(compare.getX(), merge, true);
+                    Constant[] xs = IfNode.constantValues(compare.x(), merge, true);
                     if (xs == null) {
                         continue;
                     }
-                    Constant[] ys = IfNode.constantValues(compare.getY(), merge, true);
+                    Constant[] ys = IfNode.constantValues(compare.y(), merge, true);
                     if (ys == null) {
                         continue;
                     }
@@ -93,7 +92,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
                         }
                         if (xs[i].getKind() != Kind.Object && ys[i].getKind() != Kind.Object &&
                                         compare.condition().foldCondition(xs[i], ys[i], null, compare.unorderedIsTrue()) == fixedGuard.isNegated()) {
-                            visitDeoptBegin(BeginNode.prevBegin(mergePredecessor), fixedGuard.getAction(), fixedGuard.getReason(), graph, simplifierTool);
+                            visitDeoptBegin(BeginNode.prevBegin(mergePredecessor), fixedGuard.getAction(), fixedGuard.getReason(), graph);
                         }
                     }
                 }
@@ -103,19 +102,21 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         new DeadCodeEliminationPhase().apply(graph);
     }
 
-    private void visitDeoptBegin(BeginNode deoptBegin, DeoptimizationAction deoptAction, DeoptimizationReason deoptReason, StructuredGraph graph, SimplifierTool simplifierTool) {
+    private void visitDeoptBegin(BeginNode deoptBegin, DeoptimizationAction deoptAction, DeoptimizationReason deoptReason, StructuredGraph graph) {
         if (deoptBegin instanceof MergeNode) {
             MergeNode mergeNode = (MergeNode) deoptBegin;
             Debug.log("Visiting %s", mergeNode);
-            FixedNode next = mergeNode.next();
-            while (mergeNode.isAlive()) {
-                AbstractEndNode end = mergeNode.forwardEnds().first();
+            List<BeginNode> begins = new ArrayList<>();
+            for (AbstractEndNode end : mergeNode.forwardEnds()) {
                 BeginNode newBeginNode = findBeginNode(end);
-                visitDeoptBegin(newBeginNode, deoptAction, deoptReason, graph, simplifierTool);
+                assert !begins.contains(newBeginNode);
+                begins.add(newBeginNode);
             }
-            assert next.isAlive();
-            BeginNode newBeginNode = findBeginNode(next);
-            visitDeoptBegin(newBeginNode, deoptAction, deoptReason, graph, simplifierTool);
+            for (BeginNode begin : begins) {
+                assert !begin.isDeleted();
+                visitDeoptBegin(begin, deoptAction, deoptReason, graph);
+            }
+            assert mergeNode.isDeleted();
             return;
         } else if (deoptBegin.predecessor() instanceof IfNode) {
             IfNode ifNode = (IfNode) deoptBegin.predecessor();
@@ -146,7 +147,6 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
                     }
                 }
             }
-            survivingSuccessor.simplify(simplifierTool);
             Debug.log("Converting deopt on %-5s branch of %s to guard for remaining branch %s.", deoptBegin == ifNode.trueSuccessor() ? "true" : "false", ifNode, otherBegin);
             FixedNode next = pred.next();
             pred.setNext(guard);
