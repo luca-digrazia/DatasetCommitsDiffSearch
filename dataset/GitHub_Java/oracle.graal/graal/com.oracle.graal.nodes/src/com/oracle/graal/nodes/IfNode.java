@@ -750,7 +750,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         MergeNode falseMerge = null;
         assert merge.stateAfter() == null;
 
-        for (EndNode end : merge.forwardEnds().snapshot()) {
+        for (AbstractEndNode end : merge.forwardEnds().snapshot()) {
             Node value = phi.valueAt(end);
             Node result = null;
             if (condition() instanceof Canonicalizable.Binary<?>) {
@@ -906,7 +906,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             }
         }
 
-        List<EndNode> mergePredecessors = merge.cfgPredecessors().snapshot();
+        List<AbstractEndNode> mergePredecessors = merge.cfgPredecessors().snapshot();
         assert phi.valueCount() == merge.forwardEndCount();
 
         Constant[] xs = constantValues(compare.getX(), merge, false);
@@ -920,8 +920,8 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             return false;
         }
 
-        List<EndNode> falseEnds = new ArrayList<>(mergePredecessors.size());
-        List<EndNode> trueEnds = new ArrayList<>(mergePredecessors.size());
+        List<AbstractEndNode> falseEnds = new ArrayList<>(mergePredecessors.size());
+        List<AbstractEndNode> trueEnds = new ArrayList<>(mergePredecessors.size());
         Map<AbstractEndNode, ValueNode> phiValues = CollectionsFactory.newMap(mergePredecessors.size());
 
         AbstractBeginNode oldFalseSuccessor = falseSuccessor();
@@ -930,9 +930,9 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         setFalseSuccessor(null);
         setTrueSuccessor(null);
 
-        Iterator<EndNode> ends = mergePredecessors.iterator();
+        Iterator<AbstractEndNode> ends = mergePredecessors.iterator();
         for (int i = 0; i < xs.length; i++) {
-            EndNode end = ends.next();
+            AbstractEndNode end = ends.next();
             phiValues.put(end, phi.valueAt(end));
             if (compare.condition().foldCondition(xs[i], ys[i], tool.getConstantReflection(), compare.unorderedIsTrue())) {
                 trueEnds.add(end);
@@ -1062,7 +1062,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      * @param oldMerge the merge being removed
      * @param phiValues the values of the phi at the merge, keyed by the merge ends
      */
-    private void connectEnds(List<EndNode> ends, Map<AbstractEndNode, ValueNode> phiValues, AbstractBeginNode successor, AbstractMergeNode oldMerge, SimplifierTool tool) {
+    private void connectEnds(List<AbstractEndNode> ends, Map<AbstractEndNode, ValueNode> phiValues, AbstractBeginNode successor, AbstractMergeNode oldMerge, SimplifierTool tool) {
         if (!ends.isEmpty()) {
             if (ends.size() == 1) {
                 AbstractEndNode end = ends.get(0);
@@ -1076,7 +1076,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 PhiNode oldPhi = (PhiNode) oldMerge.usages().first();
                 PhiNode newPhi = graph().addWithoutUnique(new ValuePhiNode(oldPhi.stamp(), newMerge));
 
-                for (EndNode end : ends) {
+                for (AbstractEndNode end : ends) {
                     newPhi.addInput(phiValues.get(end));
                     newMerge.addForwardEnd(end);
                 }
