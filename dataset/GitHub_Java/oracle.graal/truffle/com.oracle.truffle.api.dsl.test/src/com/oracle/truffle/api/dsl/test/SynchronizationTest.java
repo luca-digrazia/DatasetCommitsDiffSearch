@@ -42,7 +42,7 @@ public class SynchronizationTest {
 
     @TypeSystemReference(ExampleTypes.class)
     @NodeChildren({@NodeChild("monitor"), @NodeChild("latch")})
-    abstract static class WaitNode extends ValueNode {
+    static abstract class WaitNode extends ValueNode {
 
         public abstract Object executeEvaluated(Object monitor, CountDownLatch latch);
 
@@ -68,7 +68,7 @@ public class SynchronizationTest {
 
     @TypeSystemReference(ExampleTypes.class)
     @NodeChildren({@NodeChild("monitor")})
-    abstract static class NotifyNode extends ValueNode {
+    static abstract class NotifyNode extends ValueNode {
 
         public abstract Object executeEvaluated(Object monitor);
 
