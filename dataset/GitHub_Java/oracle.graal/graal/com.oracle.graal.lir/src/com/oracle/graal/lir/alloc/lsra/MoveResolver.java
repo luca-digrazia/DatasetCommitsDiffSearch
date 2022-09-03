@@ -350,8 +350,7 @@ final class MoveResolver {
         }
 
         assert !fromInterval.operand.equals(toInterval.operand) : "from and to interval equal: " + fromInterval;
-        assert fromInterval.kind().equals(toInterval.kind()) || (fromInterval.kind().getPlatformKind().equals(toInterval.kind().getPlatformKind()) && toInterval.kind().isDerivedReference()) : String.format(
-                        "Kind mismatch: %s vs. %s, from=%s, to=%s", fromInterval.kind(), toInterval.kind(), fromInterval, toInterval);
+        assert fromInterval.kind().equals(toInterval.kind());
         mappingFrom.add(fromInterval);
         mappingFromOpr.add(Value.ILLEGAL);
         mappingTo.add(toInterval);

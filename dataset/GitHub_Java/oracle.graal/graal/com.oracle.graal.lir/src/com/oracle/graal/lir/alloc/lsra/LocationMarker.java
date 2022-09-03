@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -103,56 +102,12 @@ public final class LocationMarker extends AllocationPhase {
         }
     }
 
-    private static final class LiveValueSet implements Iterable<Value> {
-        private static final Object MARKER = new Object();
-
-        private final HashMap<Value, Object> map;
-
-        public LiveValueSet() {
-            map = new HashMap<>();
-        }
-
-        public LiveValueSet(LiveValueSet s) {
-            map = new HashMap<>(s.map);
-        }
-
-        public void put(Value v) {
-            map.put(v, MARKER);
-        }
-
-        public void putAll(LiveValueSet v) {
-            map.putAll(v.map);
-        }
-
-        public void remove(Value v) {
-            map.remove(v);
-        }
-
-        public Iterator<Value> iterator() {
-            return map.keySet().iterator();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj instanceof LiveValueSet) {
-                return map.equals(((LiveValueSet) obj).map);
-            } else {
-                return false;
-            }
-        }
-
-        @Override
-        public int hashCode() {
-            return map.hashCode();
-        }
-    }
-
     private static final class Marker<T extends AbstractBlockBase<T>> {
         private final LIR lir;
         private final FrameMap frameMap;
         private final RegisterAttributes[] registerAttributes;
-        private final BlockMap<LiveValueSet> liveInMap;
-        private final BlockMap<LiveValueSet> liveOutMap;
+        private final BlockMap<ReferenceMap> liveInMap;
+        private final BlockMap<ReferenceMap> liveOutMap;
 
         private Marker(LIR lir, FrameMap frameMap) {
             this.lir = lir;
@@ -169,7 +124,7 @@ public final class LocationMarker extends AllocationPhase {
                 worklist.add((T) lir.getControlFlowGraph().getBlocks().get(i));
             }
             for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
-                liveInMap.put(block, new LiveValueSet());
+                liveInMap.put(block, frameMap.initReferenceMap(true));
             }
             while (!worklist.isEmpty()) {
                 AbstractBlockBase<T> block = worklist.poll();
@@ -181,9 +136,9 @@ public final class LocationMarker extends AllocationPhase {
          * Merge outSet with in-set of successors.
          */
         private boolean updateOutBlock(AbstractBlockBase<?> block) {
-            LiveValueSet union = new LiveValueSet();
-            block.getSuccessors().forEach(succ -> union.putAll(liveInMap.get(succ)));
-            LiveValueSet outSet = liveOutMap.get(block);
+            ReferenceMap union = frameMap.initReferenceMap(true);
+            block.getSuccessors().forEach(succ -> union.updateUnion(liveInMap.get(succ)));
+            ReferenceMap outSet = liveOutMap.get(block);
             // check if changed
             if (outSet == null || !union.equals(outSet)) {
                 liveOutMap.put(block, union);
@@ -195,7 +150,7 @@ public final class LocationMarker extends AllocationPhase {
         private void processBlock(AbstractBlockBase<T> block, UniqueWorkList<T> worklist) {
             if (updateOutBlock(block)) {
                 try (Indent indent = Debug.logAndIndent("handle block %s", block)) {
-                    BlockClosure closure = new BlockClosure(new LiveValueSet(liveOutMap.get(block)));
+                    BlockClosure closure = new BlockClosure(liveOutMap.get(block).clone());
                     List<LIRInstruction> instructions = lir.getLIRforBlock(block);
                     for (int i = instructions.size() - 1; i >= 0; i--) {
                         LIRInstruction inst = instructions.get(i);
@@ -211,13 +166,13 @@ public final class LocationMarker extends AllocationPhase {
         private static final LIRKind REFERENCE_KIND = LIRKind.reference(Kind.Object);
 
         private final class BlockClosure {
-            private final LiveValueSet currentSet;
+            private final ReferenceMap currentSet;
 
-            private BlockClosure(LiveValueSet set) {
+            private BlockClosure(ReferenceMap set) {
                 currentSet = set;
             }
 
-            private LiveValueSet getCurrentSet() {
+            private ReferenceMap getCurrentSet() {
                 return currentSet;
             }
 
@@ -255,12 +210,13 @@ public final class LocationMarker extends AllocationPhase {
 
             ValueConsumer useConsumer = new ValueConsumer() {
                 public void visitValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
-                    if (shouldProcessValue(operand)) {
+                    LIRKind kind = operand.getLIRKind();
+                    if (shouldProcessValue(operand) && !kind.isValue() && !kind.isDerivedReference()) {
                         // no need to insert values and derived reference
                         if (Debug.isLogEnabled()) {
                             Debug.log("set operand: %s", operand);
                         }
-                        currentSet.put(operand);
+                        frameMap.setReference(operand, currentSet);
                     }
                 }
             };
@@ -271,7 +227,7 @@ public final class LocationMarker extends AllocationPhase {
                         if (Debug.isLogEnabled()) {
                             Debug.log("clear operand: %s", operand);
                         }
-                        currentSet.remove(operand);
+                        frameMap.clearReference(operand, currentSet);
                     } else {
                         assert isIllegal(operand) || operand.getPlatformKind() != Kind.Illegal || mode == OperandMode.TEMP : String.format(
                                         "Illegal PlatformKind is only allowed for TEMP mode: %s, %s", operand, mode);
@@ -287,23 +243,11 @@ public final class LocationMarker extends AllocationPhase {
         /**
          * This method does the actual marking.
          */
-        private void markLocation(LIRInstruction op, LIRFrameState info, LiveValueSet values) {
+        private void markLocation(LIRInstruction op, LIRFrameState info, ReferenceMap refMap) {
             if (!info.hasDebugInfo()) {
                 info.initDebugInfo(frameMap, !op.destroysCallerSavedRegisters() || !frameMap.getRegisterConfig().areAllAllocatableRegistersCallerSaved());
             }
-
-            try (Scope s = Debug.scope("markLocation", op)) {
-                ReferenceMap refMap = info.debugInfo().getReferenceMap();
-                for (Value v : values) {
-                    try (Scope x = Debug.scope("loop", v)) {
-                        frameMap.setReference(v, refMap);
-                    } catch (Throwable e) {
-                        throw Debug.handle(e);
-                    }
-                }
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
+            info.updateUnion(refMap);
         }
 
         /**

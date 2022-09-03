@@ -554,7 +554,9 @@ final class LinearScan {
                             // move target is a stack slot that is always correct, so eliminate
                             // instruction
                             if (Debug.isLogEnabled()) {
-                                Debug.log("eliminating move from interval %d to %d", operandNumber(move.getInput()), operandNumber(move.getResult()));
+                                if (Debug.isLogEnabled()) {
+                                    Debug.log("eliminating move from interval %d to %d", operandNumber(move.getInput()), operandNumber(move.getResult()));
+                                }
                             }
                             // null-instructions are deleted by assignRegNum
                             instructions.set(j, null);
