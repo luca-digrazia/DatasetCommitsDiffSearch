@@ -69,20 +69,4 @@ public final class CallbackConvertTest {
         assertEquals('A', ch);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void callWithNegativeNumberTest() {
-        TruffleObject truffle = JavaInterop.asTruffleObject(this);
-        CallWithInt callback = JavaInterop.asJavaObject(CallWithInt.class, truffle);
-        callback.callback(-32);
-        assertEquals("The call will not get here", 0, ch);
-    }
-
-    @Test
-    public void callWithPositiveNumberTest() {
-        TruffleObject truffle = JavaInterop.asTruffleObject(this);
-        CallWithInt callback = JavaInterop.asJavaObject(CallWithInt.class, truffle);
-        callback.callback(65504);
-        assertEquals(65504, ch);
-    }
-
 }
