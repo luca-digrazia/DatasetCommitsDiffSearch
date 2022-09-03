@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,11 +25,11 @@
 package org.graalvm.compiler.hotspot.replacements.arraycopy;
 
 import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfigBase.INJECTED_METAACCESS;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_SUPER_CHECK_OFFSET_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION;
-import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.arrayBaseOffset;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.arrayClassElementOffset;
-import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.arrayIndexScale;
+import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.getArrayBaseOffset;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.readLayoutHelper;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.superCheckOffsetOffset;
@@ -40,6 +42,7 @@ import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.probabil
 import java.lang.reflect.Method;
 import java.util.EnumMap;
 
+import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.Snippet;
@@ -48,12 +51,14 @@ import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
+import org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
-import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.InvokeNode;
+import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
+import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -67,6 +72,7 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.ReplacementsUtil;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.replacements.SnippetCounter.Group;
+import org.graalvm.compiler.replacements.SnippetIntegerHistogram;
 import org.graalvm.compiler.replacements.SnippetTemplate;
 import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
@@ -74,7 +80,6 @@ import org.graalvm.compiler.replacements.Snippets;
 import org.graalvm.compiler.replacements.nodes.BasicArrayCopyNode;
 import org.graalvm.compiler.replacements.nodes.ExplodeLoopNode;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.util.UnmodifiableEconomicMap;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.WordFactory;
 
@@ -89,11 +94,12 @@ public class ArrayCopySnippets implements Snippets {
 
     private enum ArrayCopyTypeCheck {
         UNDEFINED_ARRAY_TYPE_CHECK,
-        // we know that both objects are arrays and have the same type
+        // either we know that both objects are arrays and have the same type,
+        // or we apply generic array copy snippet, which enforces type check
         NO_ARRAY_TYPE_CHECK,
         // can be used when we know that one of the objects is a primitive array
         HUB_BASED_ARRAY_TYPE_CHECK,
-        // must be used when we don't have sufficient information to use one of the others
+        // can be used when we know that one of the objects is an object array
         LAYOUT_HELPER_BASED_ARRAY_TYPE_CHECK
     }
 
@@ -174,8 +180,8 @@ public class ArrayCopySnippets implements Snippets {
     }
 
     private static void unrolledArraycopyWork(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, JavaKind elementKind) {
-        int scale = arrayIndexScale(elementKind);
-        int arrayBaseOffset = arrayBaseOffset(elementKind);
+        int scale = HotSpotReplacementsUtil.arrayIndexScale(INJECTED_METAACCESS, elementKind);
+        int arrayBaseOffset = getArrayBaseOffset(INJECTED_METAACCESS, elementKind);
         LocationIdentity arrayLocation = getArrayLocation(elementKind);
 
         long sourceOffset = arrayBaseOffset + (long) srcPos * scale;
@@ -231,27 +237,23 @@ public class ArrayCopySnippets implements Snippets {
 
     @Snippet(allowPartialIntrinsicArgumentMismatch = true)
     public static void genericArraycopyWithSlowPathWork(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter Counters counters) {
-        if (probability(FREQUENT_PROBABILITY, length > 0)) {
-            counters.genericArraycopyDifferentTypeCounter.inc();
-            counters.genericArraycopyDifferentTypeCopiedCounter.add(length);
-            int copiedElements = GenericArrayCopyCallNode.genericArraycopy(src, srcPos, dest, destPos, length);
-            if (probability(SLOW_PATH_PROBABILITY, copiedElements != 0)) {
-                /*
-                 * the stub doesn't throw the ArrayStoreException, but returns the number of copied
-                 * elements (xor'd with -1).
-                 */
-                copiedElements ^= -1;
-                System.arraycopy(src, srcPos + copiedElements, dest, destPos + copiedElements, length - copiedElements);
-            }
+        // The length > 0 check should not be placed here because generic array copy stub should
+        // enforce type check. This is fine performance-wise because this snippet is rarely used.
+        counters.genericArraycopyDifferentTypeCounter.inc();
+        counters.genericArraycopyDifferentTypeCopiedCounter.add(length);
+        int copiedElements = GenericArrayCopyCallNode.genericArraycopy(src, srcPos, dest, destPos, length);
+        if (probability(SLOW_PATH_PROBABILITY, copiedElements != 0)) {
+            /*
+             * the stub doesn't throw the ArrayStoreException, but returns the number of copied
+             * elements (xor'd with -1).
+             */
+            copiedElements ^= -1;
+            System.arraycopy(src, srcPos + copiedElements, dest, destPos + copiedElements, length - copiedElements);
         }
     }
 
     private static void incrementLengthCounter(int length, Counters counters) {
-        if (length == 0) {
-            counters.zeroLengthDynamicCounter.inc();
-        } else {
-            counters.nonZeroLengthDynamicCounter.inc();
-        }
+        counters.lengthHistogram.inc(length);
     }
 
     private static void checkLimits(Object src, int srcPos, Object dest, int destPos, int length, Counters counters) {
@@ -278,19 +280,12 @@ public class ArrayCopySnippets implements Snippets {
         } else if (arrayTypeCheck == ArrayCopyTypeCheck.LAYOUT_HELPER_BASED_ARRAY_TYPE_CHECK) {
             KlassPointer srcHub = loadHub(nonNullSrc);
             KlassPointer destHub = loadHub(nonNullDest);
-            checkArrayType(srcHub);
-            checkArrayType(destHub);
+            if (probability(SLOW_PATH_PROBABILITY, readLayoutHelper(srcHub) != readLayoutHelper(destHub))) {
+                DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
+            }
         } else {
             ReplacementsUtil.staticAssert(false, "unknown array type check");
         }
-    }
-
-    private static int checkArrayType(KlassPointer nonNullHub) {
-        int layoutHelper = readLayoutHelper(nonNullHub);
-        if (probability(SLOW_PATH_PROBABILITY, layoutHelper >= 0)) {
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
-        }
-        return layoutHelper;
     }
 
     static class Counters {
@@ -298,8 +293,7 @@ public class ArrayCopySnippets implements Snippets {
         final SnippetCounter checkAIOOBECounter;
 
         final SnippetCounter zeroLengthStaticCounter;
-        final SnippetCounter zeroLengthDynamicCounter;
-        final SnippetCounter nonZeroLengthDynamicCounter;
+        final SnippetIntegerHistogram lengthHistogram;
 
         final SnippetCounter systemArraycopyCounter;
         final SnippetCounter systemArraycopyCopiedCounter;
@@ -325,8 +319,7 @@ public class ArrayCopySnippets implements Snippets {
             checkAIOOBECounter = new SnippetCounter(checkCounters, "checkAIOOBE", "checkAIOOBE");
 
             zeroLengthStaticCounter = new SnippetCounter(lengthCounters, "0-length copy static", "calls where the length is statically 0");
-            zeroLengthDynamicCounter = new SnippetCounter(lengthCounters, "0-length copy dynamically", "calls where the length is dynamically 0");
-            nonZeroLengthDynamicCounter = new SnippetCounter(lengthCounters, "non-0-length copy dynamically", "calls where the length is dynamically greater than zero");
+            lengthHistogram = new SnippetIntegerHistogram(lengthCounters, 2, "length", "length");
 
             systemArraycopyCounter = new SnippetCounter(callCounters, "native System.arraycopy", "JNI-based System.arraycopy call");
             systemArraycopyCopiedCounter = new SnippetCounter(copiedElementsCounters, "native System.arraycopy", "JNI-based System.arraycopy call");
@@ -386,8 +379,8 @@ public class ArrayCopySnippets implements Snippets {
             SnippetInfo snippetInfo;
             ArrayCopyTypeCheck arrayTypeCheck;
 
-            ResolvedJavaType srcType = StampTool.typeOrNull(arraycopy.getSource().stamp());
-            ResolvedJavaType destType = StampTool.typeOrNull(arraycopy.getDestination().stamp());
+            ResolvedJavaType srcType = StampTool.typeOrNull(arraycopy.getSource().stamp(NodeView.DEFAULT));
+            ResolvedJavaType destType = StampTool.typeOrNull(arraycopy.getDestination().stamp(NodeView.DEFAULT));
             if (!canBeArray(srcType) || !canBeArray(destType)) {
                 // at least one of the objects is definitely not an array - use the native call
                 // right away as the copying will fail anyways
@@ -404,7 +397,8 @@ public class ArrayCopySnippets implements Snippets {
                 } else if (srcComponentType == null && destComponentType == null) {
                     // we don't know anything about the types - use the generic copying
                     snippetInfo = arraycopyGenericSnippet;
-                    arrayTypeCheck = ArrayCopyTypeCheck.LAYOUT_HELPER_BASED_ARRAY_TYPE_CHECK;
+                    // no need for additional type check to avoid duplicated work
+                    arrayTypeCheck = ArrayCopyTypeCheck.NO_ARRAY_TYPE_CHECK;
                 } else if (srcComponentType != null && destComponentType != null) {
                     if (!srcComponentType.isPrimitive() && !destComponentType.isPrimitive()) {
                         // it depends on the array content if the copy succeeds - we need
@@ -421,14 +415,14 @@ public class ArrayCopySnippets implements Snippets {
                 } else {
                     ResolvedJavaType nonNullComponentType = srcComponentType != null ? srcComponentType : destComponentType;
                     if (nonNullComponentType.isPrimitive()) {
-                        // one involved object is a primitive array - we can safely assume that we
-                        // are copying primitive arrays
+                        // one involved object is a primitive array - it is sufficient to directly
+                        // compare the hub.
                         snippetInfo = arraycopyExactSnippet;
                         arrayTypeCheck = ArrayCopyTypeCheck.HUB_BASED_ARRAY_TYPE_CHECK;
                         elementKind = nonNullComponentType.getJavaKind();
                     } else {
-                        // one involved object is an object array - we can safely assume that we are
-                        // copying object arrays that might require a store check
+                        // one involved object is an object array - the other array's element type
+                        // may be primitive or object, hence we compare the layout helper.
                         snippetInfo = arraycopyCheckcastSnippet;
                         arrayTypeCheck = ArrayCopyTypeCheck.LAYOUT_HELPER_BASED_ARRAY_TYPE_CHECK;
                     }
@@ -437,7 +431,12 @@ public class ArrayCopySnippets implements Snippets {
 
             // a few special cases that are easier to handle when all other variables already have a
             // value
-            if (arraycopy.getLength().isConstant() && arraycopy.getLength().asJavaConstant().asLong() == 0) {
+            if (snippetInfo != arraycopyNativeSnippet && snippetInfo != arraycopyGenericSnippet && arraycopy.getLength().isConstant() && arraycopy.getLength().asJavaConstant().asLong() == 0) {
+                // Copying 0 element between object arrays with conflicting types will not throw an
+                // exception - once we pass the preliminary element type checks that we are not
+                // mixing arrays of different basic types, ArrayStoreException is only thrown when
+                // an *astore would have thrown it. Therefore, copying null between object arrays
+                // with conflicting types will also succeed (we do not optimize for such case here).
                 snippetInfo = arraycopyZeroLengthSnippet;
             } else if (snippetInfo == arraycopyExactSnippet && shouldUnroll(arraycopy.getLength())) {
                 snippetInfo = arraycopyUnrolledSnippet;
@@ -500,8 +499,8 @@ public class ArrayCopySnippets implements Snippets {
         }
 
         public static JavaKind selectComponentKind(BasicArrayCopyNode arraycopy) {
-            ResolvedJavaType srcType = StampTool.typeOrNull(arraycopy.getSource().stamp());
-            ResolvedJavaType destType = StampTool.typeOrNull(arraycopy.getDestination().stamp());
+            ResolvedJavaType srcType = StampTool.typeOrNull(arraycopy.getSource().stamp(NodeView.DEFAULT));
+            ResolvedJavaType destType = StampTool.typeOrNull(arraycopy.getDestination().stamp(NodeView.DEFAULT));
 
             if (srcType == null || !srcType.isArray() || destType == null || !destType.isArray()) {
                 return null;
@@ -528,11 +527,11 @@ public class ArrayCopySnippets implements Snippets {
          */
         private void instantiate(Arguments args, BasicArrayCopyNode arraycopy) {
             StructuredGraph graph = arraycopy.graph();
-            SnippetTemplate template = template(graph.getDebug(), args);
+            SnippetTemplate template = template(arraycopy, args);
             UnmodifiableEconomicMap<Node, Node> replacements = template.instantiate(providers.getMetaAccess(), arraycopy, SnippetTemplate.DEFAULT_REPLACER, args, false);
             for (Node originalNode : replacements.getKeys()) {
-                if (originalNode instanceof Invoke) {
-                    Invoke invoke = (Invoke) replacements.get(originalNode);
+                if (originalNode instanceof InvokeNode) {
+                    InvokeNode invoke = (InvokeNode) replacements.get(originalNode);
                     assert invoke.asNode().graph() == graph;
                     CallTargetNode call = invoke.callTarget();
 
@@ -540,14 +539,17 @@ public class ArrayCopySnippets implements Snippets {
                         throw new GraalError("unexpected invoke %s in snippet", call.targetMethod());
                     }
                     // Here we need to fix the bci of the invoke
-                    InvokeNode newInvoke = graph.add(new InvokeNode(invoke.callTarget(), arraycopy.getBci()));
+                    InvokeNode newInvoke = invoke.replaceWithNewBci(arraycopy.getBci());
+                    newInvoke.setStateDuring(null);
+                    newInvoke.setStateAfter(null);
                     if (arraycopy.stateDuring() != null) {
                         newInvoke.setStateDuring(arraycopy.stateDuring());
                     } else {
                         assert arraycopy.stateAfter() != null : arraycopy;
                         newInvoke.setStateAfter(arraycopy.stateAfter());
                     }
-                    graph.replaceFixedWithFixed((InvokeNode) invoke.asNode(), newInvoke);
+                } else if (originalNode instanceof InvokeWithExceptionNode) {
+                    throw new GraalError("unexpected invoke with exception %s in snippet", originalNode);
                 } else if (originalNode instanceof ArrayCopyWithSlowPathNode) {
                     ArrayCopyWithSlowPathNode slowPath = (ArrayCopyWithSlowPathNode) replacements.get(originalNode);
                     assert arraycopy.stateAfter() != null : arraycopy;
