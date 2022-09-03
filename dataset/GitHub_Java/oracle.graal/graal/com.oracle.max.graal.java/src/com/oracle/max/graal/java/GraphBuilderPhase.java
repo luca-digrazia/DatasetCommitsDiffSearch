@@ -1199,7 +1199,12 @@ public final class GraphBuilderPhase extends Phase {
     private FixedNode createTarget(double probability, Block block, FrameStateBuilder stateAfter) {
         assert probability >= 0 && probability <= 1;
         if (probability == 0 && config.useBranchPrediction()) {
-            return currentGraph.add(new DeoptimizeNode(DeoptAction.InvalidateReprofile));
+            BeginNode begin = currentGraph.add(new BeginNode());
+            DeoptimizeNode deopt = currentGraph.add(new DeoptimizeNode(DeoptAction.InvalidateReprofile));
+            begin.setNext(deopt);
+            // Note: We are not allowed to set the stateAfter of the begin node, because we have to deoptimize to
+            // a bci _before_ the actual if, so that the interpreter can update the profiling information.
+            return begin;
         } else {
             return createTarget(block, stateAfter);
         }
@@ -1276,9 +1281,6 @@ public final class GraphBuilderPhase extends Phase {
         assert !(target instanceof BeginNode);
         BeginNode begin = currentGraph.add(new BeginNode());
         begin.setNext(target);
-
-        assert !(target instanceof DeoptimizeNode && begin.stateAfter() != null) :
-            "We are not allowed to set the stateAfter of the begin node, because we have to deoptimize to a bci _before_ the actual if, so that the interpreter can update the profiling information.";
         return begin;
     }
 
