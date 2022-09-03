@@ -214,7 +214,7 @@ public class NodeParser extends TemplateParser<NodeData> {
     }
 
     private void createPolymorphicSpecializations(NodeData node) {
-        if (!node.needsRewrites(context) || !node.isPolymorphic()) {
+        if (!node.needsRewrites(context) || node.getPolymorphicDepth() <= 1) {
             node.setPolymorphicSpecializations(Collections.<SpecializationData> emptyList());
             return;
         }
@@ -653,7 +653,6 @@ public class NodeParser extends TemplateParser<NodeData> {
             }
         }
 
-        // initialize polymorphic depth
         if (node.getPolymorphicDepth() < 0) {
             node.setPolymorphicDepth(specializationCount - 1);
         }

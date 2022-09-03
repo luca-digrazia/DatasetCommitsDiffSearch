@@ -94,10 +94,6 @@ public class NodeData extends Template {
         return polymorphicDepth;
     }
 
-    public boolean isPolymorphic() {
-        return polymorphicDepth > 1;
-    }
-
     void setPolymorphicDepth(int polymorphicDepth) {
         this.polymorphicDepth = polymorphicDepth;
     }
