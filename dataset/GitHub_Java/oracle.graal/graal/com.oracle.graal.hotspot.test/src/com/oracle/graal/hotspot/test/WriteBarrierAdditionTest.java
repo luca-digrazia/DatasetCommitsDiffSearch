@@ -34,7 +34,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.phases.*;
@@ -244,53 +243,54 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
     }
 
     private void test(final String snippet, final int expectedBarriers) throws Exception, SecurityException {
-        try (Scope s = Debug.scope("WriteBarrierAdditionTest", new DebugDumpScope(snippet))) {
-            StructuredGraph graph = parse(snippet);
-            HighTierContext highContext = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
-            MidTierContext midContext = new MidTierContext(getProviders(), new Assumptions(false), getCodeCache().getTarget(), OptimisticOptimizations.ALL);
-            new InliningPhase(new InliningPhase.InlineEverythingPolicy(), new CanonicalizerPhase(true)).apply(graph, highContext);
-            new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, highContext);
-            new GuardLoweringPhase().apply(graph, midContext);
-            new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, midContext);
-            new WriteBarrierAdditionPhase().apply(graph);
-            Debug.dump(graph, "After Write Barrier Addition");
+        Debug.scope("WriteBarrierAditionTest", new DebugDumpScope(snippet), new Runnable() {
 
-            int barriers = 0;
-            if (useG1GC()) {
-                barriers = graph.getNodes().filter(G1ReferentFieldReadBarrier.class).count() + graph.getNodes().filter(G1PreWriteBarrier.class).count() +
-                                graph.getNodes().filter(G1PostWriteBarrier.class).count();
-            } else {
-                barriers = graph.getNodes().filter(SerialWriteBarrier.class).count();
-            }
-            Assert.assertEquals(expectedBarriers, barriers);
-            for (WriteNode write : graph.getNodes().filter(WriteNode.class)) {
+            public void run() {
+                StructuredGraph graph = parse(snippet);
+                HighTierContext highContext = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
+                MidTierContext midContext = new MidTierContext(getProviders(), new Assumptions(false), getCodeCache().getTarget(), OptimisticOptimizations.ALL);
+                new InliningPhase(new InliningPhase.InlineEverythingPolicy(), new CanonicalizerPhase(true)).apply(graph, highContext);
+                new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, highContext);
+                new GuardLoweringPhase().apply(graph, midContext);
+                new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, midContext);
+                new WriteBarrierAdditionPhase().apply(graph);
+                Debug.dump(graph, "After Write Barrier Addition");
+
+                int barriers = 0;
                 if (useG1GC()) {
-                    if (write.getBarrierType() != BarrierType.NONE) {
-                        Assert.assertEquals(1, write.successors().count());
-                        Assert.assertTrue(write.next() instanceof G1PostWriteBarrier);
-                        Assert.assertTrue(write.predecessor() instanceof G1PreWriteBarrier);
-                    }
+                    barriers = graph.getNodes().filter(G1ReferentFieldReadBarrier.class).count() + graph.getNodes().filter(G1PreWriteBarrier.class).count() +
+                                    graph.getNodes().filter(G1PostWriteBarrier.class).count();
                 } else {
-                    if (write.getBarrierType() != BarrierType.NONE) {
-                        Assert.assertEquals(1, write.successors().count());
-                        Assert.assertTrue(write.next() instanceof SerialWriteBarrier);
+                    barriers = graph.getNodes().filter(SerialWriteBarrier.class).count();
+                }
+                Assert.assertEquals(expectedBarriers, barriers);
+                for (WriteNode write : graph.getNodes().filter(WriteNode.class)) {
+                    if (useG1GC()) {
+                        if (write.getBarrierType() != BarrierType.NONE) {
+                            Assert.assertEquals(1, write.successors().count());
+                            Assert.assertTrue(write.next() instanceof G1PostWriteBarrier);
+                            Assert.assertTrue(write.predecessor() instanceof G1PreWriteBarrier);
+                        }
+                    } else {
+                        if (write.getBarrierType() != BarrierType.NONE) {
+                            Assert.assertEquals(1, write.successors().count());
+                            Assert.assertTrue(write.next() instanceof SerialWriteBarrier);
+                        }
                     }
                 }
-            }
 
-            for (ReadNode read : graph.getNodes().filter(ReadNode.class)) {
-                if (read.getBarrierType() != BarrierType.NONE) {
-                    if (read.location() instanceof ConstantLocationNode) {
-                        Assert.assertEquals(referentOffset(), ((ConstantLocationNode) (read.location())).getDisplacement());
+                for (ReadNode read : graph.getNodes().filter(ReadNode.class)) {
+                    if (read.getBarrierType() != BarrierType.NONE) {
+                        if (read.location() instanceof ConstantLocationNode) {
+                            Assert.assertEquals(referentOffset(), ((ConstantLocationNode) (read.location())).getDisplacement());
+                        }
+                        Assert.assertTrue(useG1GC());
+                        Assert.assertEquals(BarrierType.PRECISE, read.getBarrierType());
+                        Assert.assertTrue(read.next() instanceof G1ReferentFieldReadBarrier);
                     }
-                    Assert.assertTrue(useG1GC());
-                    Assert.assertEquals(BarrierType.PRECISE, read.getBarrierType());
-                    Assert.assertTrue(read.next() instanceof G1ReferentFieldReadBarrier);
                 }
             }
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
+        });
     }
 
     private void test2(final String snippet, Object a, Object b, Object c) throws Exception {
