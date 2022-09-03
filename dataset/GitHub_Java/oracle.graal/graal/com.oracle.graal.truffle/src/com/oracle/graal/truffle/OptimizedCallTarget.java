@@ -183,12 +183,6 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
     @Override
     public void nodeReplaced() {
         replaceCount++;
-        if (compiledMethod != null) {
-            if (compiledMethod.isValid()) {
-                compiledMethod.invalidate();
-            }
-            compiledMethod = null;
-        }
         compilationPolicy.nodeReplaced();
     }
 
