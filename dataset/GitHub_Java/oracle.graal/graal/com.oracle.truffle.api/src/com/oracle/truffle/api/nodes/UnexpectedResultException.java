@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.api.nodes;
 
-import com.oracle.truffle.api.*;
-
 /**
  * An exception that should be thrown if the return value cannot be represented as a value of the
  * return type. The Truffle optimizer has special knowledge of this exception class and will never
@@ -43,7 +41,6 @@ public final class UnexpectedResultException extends SlowPathException {
      * @param result the alternative result
      */
     public UnexpectedResultException(Object result) {
-        CompilerDirectives.transferToInterpreter();
         this.result = result;
     }
 
