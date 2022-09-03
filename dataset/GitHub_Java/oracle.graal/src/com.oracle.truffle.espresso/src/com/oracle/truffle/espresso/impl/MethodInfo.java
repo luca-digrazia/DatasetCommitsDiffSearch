@@ -163,7 +163,7 @@ public final class MethodInfo implements ModifiersProvider {
 
     private static String buildJniNativeSignature(Meta.Method method) {
         // Prepend JNIEnv*.
-        StringBuilder sb = new StringBuilder("(").append(NativeSimpleType.SINT64);
+        StringBuilder sb = new StringBuilder("(").append(NativeSimpleType.POINTER);
         SignatureDescriptor signature = method.rawMethod().getSignature();
 
         // Receiver for instance methods, class for static methods.
@@ -217,17 +217,16 @@ public final class MethodInfo implements ModifiersProvider {
                     // the native Java library.
                     if (getDeclaringClass().getClassLoader() == null) {
                         // Look in libjava
-                        VM vm = EspressoLanguage.getCurrentContext().getVM();
-                        for (boolean withSignature : new boolean[]{false, true}) {
-                            String mangledName = Mangle.mangleMethod(meta(this), withSignature);
+                        String mangledName = Mangle.mangleMethod(meta(this), false);
 
-                            try {
-                                TruffleObject nativeMethod = bind(vm.getJavaLibrary(), meta(this), mangledName);
-                                callTarget = Truffle.getRuntime().createCallTarget(new JniNativeNode(getContext().getLanguage(), nativeMethod, meta(this)));
-                                return callTarget;
-                            } catch (UnknownIdentifierException e) {
-                                // native method not found in libjava, safe to ignore
-                            }
+                        VM vm = EspressoLanguage.getCurrentContext().getVM();
+
+                        try {
+                            TruffleObject nativeMethod = bind(vm.getJavaLibrary(), meta(this), mangledName);
+                            callTarget = Truffle.getRuntime().createCallTarget(new JniNativeNode(getContext().getLanguage(), nativeMethod, meta(this)));
+                            return callTarget;
+                        } catch (UnknownIdentifierException e) {
+                            // native method not found in libjava, safe to ignore
                         }
                     }
 
