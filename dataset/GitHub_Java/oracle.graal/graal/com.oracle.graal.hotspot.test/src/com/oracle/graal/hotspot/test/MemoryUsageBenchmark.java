@@ -22,17 +22,20 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static jdk.internal.jvmci.debug.internal.MemUseTrackerImpl.*;
-import static jdk.internal.jvmci.hotspot.CompileTheWorld.*;
-import static jdk.internal.jvmci.hotspot.CompileTheWorld.Options.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.internal.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.hotspot.CompileTheWorld.Config;
+import static com.oracle.graal.debug.internal.MemUseTrackerImpl.*;
+import static com.oracle.graal.hotspot.CompileTheWorld.*;
+import static com.oracle.graal.hotspot.CompileTheWorld.Options.*;
+import static com.oracle.graal.nodes.StructuredGraph.*;
 
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.internal.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.CompileTheWorld.Config;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.printer.*;
 
 /**
  * Used to benchmark memory usage during Graal compilation.
@@ -40,13 +43,13 @@ import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
  * To benchmark:
  *
  * <pre>
- *     mx vm -XX:-UseJVMCIClassLoader -cp @com.oracle.graal.hotspot.test com.oracle.graal.hotspot.test.MemoryUsageBenchmark
+ *     mx vm -XX:-UseGraalClassLoader -cp @com.oracle.graal.hotspot.test com.oracle.graal.hotspot.test.MemoryUsageBenchmark
  * </pre>
  *
  * Memory analysis for a {@link CompileTheWorld} execution can also be performed. For example:
  *
  * <pre>
- *     mx --vm server vm -XX:-UseJVMCIClassLoader -G:CompileTheWorldClasspath=$HOME/SPECjvm2008/SPECjvm2008.jar -cp @com.oracle.graal.hotspot.test com.oracle.graal.hotspot.test.MemoryUsageBenchmark
+ *     mx --vm server vm -XX:-UseGraalClassLoader -G:CompileTheWorldClasspath=$HOME/SPECjvm2008/SPECjvm2008.jar -cp @com.oracle.graal.hotspot.test com.oracle.graal.hotspot.test.MemoryUsageBenchmark
  * </pre>
  */
 public class MemoryUsageBenchmark extends HotSpotGraalCompilerTest {
@@ -126,15 +129,16 @@ public class MemoryUsageBenchmark extends HotSpotGraalCompilerTest {
 
     private void doCompilation(String methodName, String label) {
         HotSpotResolvedJavaMethod method = (HotSpotResolvedJavaMethod) getResolvedJavaMethod(methodName);
+        HotSpotBackend backend = runtime().getHostBackend();
 
         // invalidate any existing compiled code
         method.reprofile();
 
-        int id = method.allocateCompileId(jdk.internal.jvmci.compiler.Compiler.INVOCATION_ENTRY_BCI);
+        int id = method.allocateCompileId(INVOCATION_ENTRY_BCI);
         long graalEnv = 0L;
 
         try (MemoryUsageCloseable c = label == null ? null : new MemoryUsageCloseable(label)) {
-            CompilationTask task = new CompilationTask(method, jdk.internal.jvmci.compiler.Compiler.INVOCATION_ENTRY_BCI, graalEnv, id, false);
+            CompilationTask task = new CompilationTask(backend, method, INVOCATION_ENTRY_BCI, graalEnv, id, false);
             task.runCompilation();
         }
     }
@@ -142,14 +146,15 @@ public class MemoryUsageBenchmark extends HotSpotGraalCompilerTest {
     private void allocSpyCompilation(String methodName) {
         if (AllocSpy.isEnabled()) {
             HotSpotResolvedJavaMethod method = (HotSpotResolvedJavaMethod) getResolvedJavaMethod(methodName);
+            HotSpotBackend backend = runtime().getHostBackend();
 
             // invalidate any existing compiled code
             method.reprofile();
 
-            int id = method.allocateCompileId(jdk.internal.jvmci.compiler.Compiler.INVOCATION_ENTRY_BCI);
+            int id = method.allocateCompileId(INVOCATION_ENTRY_BCI);
             long graalEnv = 0L;
             try (AllocSpy as = AllocSpy.open(methodName)) {
-                CompilationTask task = new CompilationTask(method, jdk.internal.jvmci.compiler.Compiler.INVOCATION_ENTRY_BCI, graalEnv, id, false);
+                CompilationTask task = new CompilationTask(backend, method, INVOCATION_ENTRY_BCI, graalEnv, id, false);
                 task.runCompilation();
             }
         }

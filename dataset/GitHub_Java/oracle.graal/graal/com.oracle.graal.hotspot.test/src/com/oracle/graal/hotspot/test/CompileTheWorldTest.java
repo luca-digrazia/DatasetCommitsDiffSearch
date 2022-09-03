@@ -22,16 +22,13 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.graal.compiler.GraalCompilerOptions.ExitVMOnException;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.hotspot.CompileTheWorld;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.CompileTheWorld.Config;
-import com.oracle.graal.hotspot.HotSpotGraalCompiler;
 
 /**
  * Tests {@link CompileTheWorld} functionality.
@@ -42,8 +39,9 @@ public class CompileTheWorldTest extends GraalCompilerTest {
     public void testRtJar() throws Throwable {
         boolean originalSetting = ExitVMOnException.getValue();
         // Compile a couple classes in rt.jar
-        HotSpotJVMCIRuntimeProvider runtime = HotSpotJVMCIRuntime.runtime();
-        new CompileTheWorld(runtime, (HotSpotGraalCompiler) runtime.getCompiler(), CompileTheWorld.SUN_BOOT_CLASS_PATH, new Config(null), 1, 5, null, null, true).compile();
-        assert ExitVMOnException.getValue() == originalSetting;
+        String file = System.getProperty("java.home") + "/lib/rt.jar";
+        new CompileTheWorld(file, new Config(null), 1, 5, null, null, false).compile();
+        ExitVMOnException.setValue(originalSetting);
     }
+
 }

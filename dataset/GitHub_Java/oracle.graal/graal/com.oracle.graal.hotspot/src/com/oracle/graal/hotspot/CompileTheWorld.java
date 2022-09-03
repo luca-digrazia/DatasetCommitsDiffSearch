@@ -377,8 +377,7 @@ public final class CompileTheWorld {
                             }
                         }
                     } catch (Throwable t) {
-                        println("CompileTheWorld (%d) : Skipping %s %s", classFileCounter, className, t.toString());
-                        t.printStackTrace();
+                        println("CompileTheWorld (%d) : Skipping %s", classFileCounter, className);
                     }
                 }
                 jarFile.close();
