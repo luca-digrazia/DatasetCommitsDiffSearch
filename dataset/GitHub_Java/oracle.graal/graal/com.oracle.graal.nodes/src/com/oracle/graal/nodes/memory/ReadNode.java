@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import static com.oracle.graal.nodes.NamedLocationIdentity.*;
 import jdk.internal.jvmci.common.*;
 import jdk.internal.jvmci.meta.*;
 
@@ -40,7 +39,7 @@ import com.oracle.graal.nodes.util.*;
  * Reads an {@linkplain FixedAccessNode accessed} value.
  */
 @NodeInfo(nameTemplate = "Read#{p#location/s}")
-public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, Virtualizable, GuardingNode {
+public final class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, Virtualizable, GuardingNode {
 
     public static final NodeClass<ReadNode> TYPE = NodeClass.create(ReadNode.class);
 
@@ -53,12 +52,7 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
     }
 
     public ReadNode(AddressNode address, LocationIdentity location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
-        this(TYPE, address, location, stamp, guard, barrierType, nullCheck, stateBefore);
-    }
-
-    protected ReadNode(NodeClass<? extends ReadNode> c, AddressNode address, LocationIdentity location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck,
-                    FrameState stateBefore) {
-        super(c, address, location, stamp, guard, barrierType, nullCheck, stateBefore);
+        super(TYPE, address, location, stamp, guard, barrierType, nullCheck, stateBefore);
     }
 
     public ReadNode(AddressNode address, LocationIdentity location, ValueNode guard, BarrierType barrierType) {
@@ -132,7 +126,7 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
                     return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
                 }
             }
-            if (locationIdentity.equals(ARRAY_LENGTH_LOCATION)) {
+            if (locationIdentity.equals(LocationIdentity.ARRAY_LENGTH_LOCATION)) {
                 ValueNode length = GraphUtil.arrayLength(object);
                 if (length != null) {
                     // TODO Does this need a PiCastNode to the positive range?

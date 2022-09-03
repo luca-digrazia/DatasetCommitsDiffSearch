@@ -22,31 +22,21 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
-import jdk.vm.ci.hotspot.HotSpotConstant;
-import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.hotspot.HotSpotLIRGenerator;
-import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
-import com.oracle.graal.hotspot.nodes.type.NarrowOopStamp;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.ConvertNode;
-import com.oracle.graal.nodes.calc.UnaryNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Compress or uncompress an oop or metaspace pointer.
@@ -71,9 +61,8 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
     }
 
     @Override
-    public Stamp foldStamp(Stamp newStamp) {
-        assert newStamp.isCompatible(getValue().stamp());
-        return mkStamp(op, newStamp, encoding);
+    public boolean inferStamp() {
+        return updateStamp(mkStamp(op, getValue().stamp(), encoding));
     }
 
     public static CompressionNode compress(ValueNode input, CompressEncoding encoding) {
@@ -88,19 +77,25 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
         return input.graph().unique(new CompressionNode(CompressionOp.Uncompress, input, encoding));
     }
 
-    private static Constant compress(Constant c) {
+    private static Constant compress(Constant c, CompressEncoding encoding) {
         if (JavaConstant.NULL_POINTER.equals(c)) {
             return HotSpotCompressedNullConstant.COMPRESSED_NULL;
-        } else if (c instanceof HotSpotConstant) {
-            return ((HotSpotConstant) c).compress();
+        } else if (c instanceof HotSpotObjectConstant) {
+            return ((HotSpotObjectConstant) c).compress();
+        } else if (c instanceof HotSpotMetaspaceConstant) {
+            return ((HotSpotMetaspaceConstant) c).compress(encoding);
         } else {
             throw JVMCIError.shouldNotReachHere("invalid constant input for compress op: " + c);
         }
     }
 
-    private static Constant uncompress(Constant c) {
-        if (c instanceof HotSpotConstant) {
-            return ((HotSpotConstant) c).uncompress();
+    private static Constant uncompress(Constant c, CompressEncoding encoding) {
+        if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(c)) {
+            return JavaConstant.NULL_POINTER;
+        } else if (c instanceof HotSpotObjectConstant) {
+            return ((HotSpotObjectConstant) c).uncompress();
+        } else if (c instanceof HotSpotMetaspaceConstant) {
+            return ((HotSpotMetaspaceConstant) c).uncompress(encoding);
         } else {
             throw JVMCIError.shouldNotReachHere("invalid constant input for uncompress op: " + c);
         }
@@ -110,9 +105,9 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
     public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
         switch (op) {
             case Compress:
-                return compress(c);
+                return compress(c, encoding);
             case Uncompress:
-                return uncompress(c);
+                return uncompress(c, encoding);
             default:
                 throw JVMCIError.shouldNotReachHere();
         }
@@ -122,9 +117,9 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
     public Constant reverse(Constant c, ConstantReflectionProvider constantReflection) {
         switch (op) {
             case Compress:
-                return uncompress(c);
+                return uncompress(c, encoding);
             case Uncompress:
-                return compress(c);
+                return compress(c, encoding);
             default:
                 throw JVMCIError.shouldNotReachHere();
         }
