@@ -75,9 +75,6 @@ public class AMD64ControlFlow {
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
             if (crb.isSuccessorEdge(trueDestination)) {
                 jcc(masm, true, falseDestination);
-            } else if (falseDestination.getSourceBlock() == falseDestination.getTargetBlock()) {
-                jcc(masm, true, falseDestination);
-                masm.jmp(trueDestination.label());
             } else {
                 jcc(masm, false, trueDestination);
                 if (!crb.isSuccessorEdge(falseDestination)) {
@@ -135,7 +132,7 @@ public class AMD64ControlFlow {
                     switch (key.getKind()) {
                         case Int:
                             if (crb.codeCache.needsDataPatch(keyConstants[index])) {
-                                crb.recordInlineDataInCode(keyConstants[index]);
+                                crb.recordDataReferenceInCode(keyConstants[index], 0, true);
                             }
                             long lc = keyConstants[index].asLong();
                             assert NumUtil.isInt(lc);
