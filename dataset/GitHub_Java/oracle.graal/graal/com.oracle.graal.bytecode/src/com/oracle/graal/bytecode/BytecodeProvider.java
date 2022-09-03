@@ -24,19 +24,26 @@ package com.oracle.graal.bytecode;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
+/**
+ * Provides a {@link Bytecode} object for interposing on the bytecode of a
+ * {@link ResolvedJavaMethod} (i.e., potentially getting bytecode different than
+ * {@link ResolvedJavaMethod#getCode()}).
+ */
 public interface BytecodeProvider {
 
     /**
      * Gets a {@link Bytecode} object that supplies bytecode properties for {@code method}.
      */
-    default Bytecode getBytecode(ResolvedJavaMethod method) {
-        return new DefaultBytecode(method);
-    }
+    Bytecode getBytecode(ResolvedJavaMethod method);
 
     /**
      * Determines if this provider supports the INVOKEDYNAMIC bytecode.
      */
-    default boolean supportsInvokedynamic() {
-        return true;
-    }
+    boolean supportsInvokedynamic();
+
+    /**
+     * Determines if methods parsed using this provider should be recorded so that method
+     * redefinition can invalidate the resulting code.
+     */
+    boolean shouldRecordMethodDependencies();
 }

@@ -22,21 +22,20 @@
  */
 package com.oracle.graal.replacements.classfile;
 
+import static com.oracle.graal.compiler.common.util.ModuleAPI.getModule;
+import static com.oracle.graal.compiler.common.util.ModuleAPI.getResourceAsStream;
 import static com.oracle.graal.compiler.common.util.Util.JAVA_SPECIFICATION_VERSION;
 
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.bytecode.Bytecode;
 import com.oracle.graal.bytecode.BytecodeProvider;
-import com.oracle.graal.debug.GraalError;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -45,14 +44,14 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
- * A {@link BytecodeProvider} that provide bytecode properties of a {@link ResolvedJavaMethod} as
+ * A {@link BytecodeProvider} that provides bytecode properties of a {@link ResolvedJavaMethod} as
  * parsed from a class file. This avoids all {@linkplain Instrumentation instrumentation} and any
  * bytecode rewriting performed by the VM.
  *
  * This mechanism retrieves class files based on the name and {@link ClassLoader} of existing
  * {@link Class} instances. It bypasses all VM parsing and verification of the class file and
- * assumes the class files are well formed. As such, it should only be used to parse classes from a
- * trusted source such the class path or module path accessible to JVMCI.
+ * assumes the class files are well formed. As such, it should only be used for classes from a
+ * trusted source such as the boot class (or module) path.
  *
  * A combination of {@link Class#forName(String)} and an existing {@link MetaAccessProvider} is used
  * to resolve constant pool references. This opens up the opportunity for linkage errors if the
@@ -87,32 +86,16 @@ public final class ClassfileBytecodeProvider implements BytecodeProvider {
         return false;
     }
 
-    // Use reflection so that this compiles on Java 8
-    private static final Method getModule;
-    private static final Method getResourceAsStream;
-    static {
-        if (JAVA_SPECIFICATION_VERSION >= 9) {
-            try {
-                getModule = Class.class.getMethod("getModule");
-                getResourceAsStream = getModule.getReturnType().getMethod("getResourceAsStream", String.class);
-            } catch (NoSuchMethodException | SecurityException e) {
-                throw new GraalError(e);
-            }
-        } else {
-            getModule = null;
-            getResourceAsStream = null;
-        }
+    @Override
+    public boolean shouldRecordMethodDependencies() {
+        return false;
     }
 
     private static InputStream getClassfileAsStream(Class<?> c) {
         String classfilePath = c.getName().replace('.', '/') + ".class";
         if (JAVA_SPECIFICATION_VERSION >= 9) {
-            try {
-                Object module = getModule.invoke(c);
-                return (InputStream) getResourceAsStream.invoke(module, classfilePath);
-            } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | SecurityException e) {
-                throw new GraalError(e);
-            }
+            Object module = getModule.invoke(c);
+            return getResourceAsStream.invoke(module, classfilePath);
         } else {
             ClassLoader cl = c.getClassLoader();
             if (cl == null) {

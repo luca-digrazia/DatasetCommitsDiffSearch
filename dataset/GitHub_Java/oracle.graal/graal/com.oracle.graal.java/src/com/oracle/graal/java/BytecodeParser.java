@@ -250,7 +250,6 @@ import static jdk.vm.ci.meta.DeoptimizationReason.UnreachedCode;
 import static jdk.vm.ci.meta.DeoptimizationReason.Unresolved;
 import static jdk.vm.ci.runtime.JVMCICompiler.INVOCATION_ENTRY_BCI;
 
-import java.lang.ref.Reference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -307,7 +306,6 @@ import com.oracle.graal.nodes.DeoptimizeNode;
 import com.oracle.graal.nodes.EndNode;
 import com.oracle.graal.nodes.EntryMarkerNode;
 import com.oracle.graal.nodes.EntryProxyNode;
-import com.oracle.graal.nodes.FieldLocationIdentity;
 import com.oracle.graal.nodes.FixedGuardNode;
 import com.oracle.graal.nodes.FixedNode;
 import com.oracle.graal.nodes.FixedWithNextNode;
@@ -368,7 +366,6 @@ import com.oracle.graal.nodes.extended.GuardingNode;
 import com.oracle.graal.nodes.extended.IntegerSwitchNode;
 import com.oracle.graal.nodes.extended.LoadHubNode;
 import com.oracle.graal.nodes.extended.LoadMethodNode;
-import com.oracle.graal.nodes.extended.MembarNode;
 import com.oracle.graal.nodes.extended.ValueAnchorNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
@@ -3267,7 +3264,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 object = appendNullCheck(object);
                 ResolvedJavaType singleType = profile.asSingleType();
                 if (singleType != null && checkedType.getType().isAssignableFrom(singleType)) {
-                    LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object, profile));
+                    LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object));
                     if (typeCheck.isTautology()) {
                         castNode = object;
                     } else {
@@ -3278,7 +3275,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
         if (castNode == null) {
-            LogicNode condition = genUnique(createInstanceOfAllowNull(checkedType, object, null));
+            LogicNode condition = genUnique(createInstanceOfAllowNull(checkedType, object, profile));
             if (condition.isTautology()) {
                 castNode = object;
             } else {
@@ -3326,7 +3323,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 object = appendNullCheck(object);
                 ResolvedJavaType singleType = profile.asSingleType();
                 if (singleType != null) {
-                    LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object, profile));
+                    LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object));
                     if (!typeCheck.isTautology()) {
                         append(new FixedGuardNode(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile));
                     }
@@ -3335,7 +3332,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
         if (instanceOfNode == null) {
-            instanceOfNode = createInstanceOf(resolvedType, object, null);
+            instanceOfNode = createInstanceOf(resolvedType, object, profile);
         }
         frameState.push(JavaKind.Int, append(genConditional(genUnique(instanceOfNode))));
     }
@@ -3469,10 +3466,6 @@ public class BytecodeParser implements GraphBuilderContext {
         }
 
         frameState.push(field.getJavaKind(), append(genLoadField(receiver, resolvedField)));
-        if (resolvedField.getName().equals("referent") && resolvedField.getDeclaringClass().equals(metaAccess.lookupJavaType(Reference.class))) {
-            LocationIdentity referentIdentity = new FieldLocationIdentity(resolvedField);
-            append(new MembarNode(0, referentIdentity));
-        }
     }
 
     /**
