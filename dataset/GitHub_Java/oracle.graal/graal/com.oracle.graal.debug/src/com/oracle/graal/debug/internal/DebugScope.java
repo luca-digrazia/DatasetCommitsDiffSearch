@@ -75,7 +75,7 @@ public final class DebugScope {
         }
 
         @Override
-        public Indent logAndIndent(String msg, Object... args) {
+        public Indent logIndent(String msg, Object... args) {
             log(msg, args);
             return indent();
         }
@@ -87,16 +87,12 @@ public final class DebugScope {
             }
             return lastUsedIndent;
         }
-
-        @Override
-        public void close() {
-            outdent();
-        }
     }
 
     private static ThreadLocal<DebugScope> instanceTL = new ThreadLocal<>();
     private static ThreadLocal<DebugConfig> configTL = new ThreadLocal<>();
     private static ThreadLocal<Throwable> lastExceptionThrownTL = new ThreadLocal<>();
+    private static DebugTimer scopeTime = Debug.timer("ScopeTime");
 
     private final DebugScope parent;
     private IndentImpl lastUsedIndent;
@@ -214,9 +210,6 @@ public final class DebugScope {
             for (DebugDumpHandler dumpHandler : config.dumpHandlers()) {
                 dumpHandler.dump(object, message);
             }
-        } else {
-            PrintStream out = System.out;
-            out.println("Forced dump ignored because debugging is disabled - use -G:Dump=xxx option");
         }
     }
 
@@ -236,6 +229,7 @@ public final class DebugScope {
     public <T> T scope(String newName, Runnable runnable, Callable<T> callable, boolean sandbox, DebugConfig sandboxConfig, Object[] newContext) {
         DebugScope oldContext = getInstance();
         DebugConfig oldConfig = getConfig();
+        boolean oldLogEnabled = oldContext.isLogEnabled();
         DebugScope newChild = null;
         if (sandbox) {
             newChild = new DebugScope(newName, newName, null, newContext);
@@ -244,14 +238,14 @@ public final class DebugScope {
             newChild = oldContext.createChild(newName, newContext);
         }
         instanceTL.set(newChild);
-        newChild.setLogEnabled(oldContext.isLogEnabled());
         newChild.updateFlags();
-        try {
+        try (TimerCloseable a = scopeTime.start()) {
             return executeScope(runnable, callable);
         } finally {
             newChild.context = null;
             instanceTL.set(oldContext);
             setConfig(oldConfig);
+            setLogEnabled(oldLogEnabled);
         }
     }
 
@@ -287,6 +281,7 @@ public final class DebugScope {
             meterEnabled = false;
             timeEnabled = false;
             dumpEnabled = false;
+            setLogEnabled(false);
 
             // Be pragmatic: provide a default log stream to prevent a crash if the stream is not
             // set while logging
@@ -296,9 +291,7 @@ public final class DebugScope {
             timeEnabled = config.isTimeEnabled();
             dumpEnabled = config.isDumpEnabled();
             output = config.output();
-            if (config.isLogEnabled()) {
-                setLogEnabled(true);
-            }
+            setLogEnabled(config.isLogEnabled());
         }
     }
 
