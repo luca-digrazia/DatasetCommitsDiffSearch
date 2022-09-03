@@ -83,6 +83,9 @@ import com.oracle.graal.nodes.java.LoadFieldNode;
 import com.oracle.graal.nodes.java.TypeSwitchNode;
 import com.oracle.graal.nodes.spi.NodeWithState;
 import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.common.LoweringPhase.Frame;
 import com.oracle.graal.phases.schedule.SchedulePhase;
@@ -92,6 +95,15 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.TriState;
 
 public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext> {
+
+    public static class Options {
+
+        // @formatter:off
+        @Option(help = "Try to remove conditions and guards by reading final field values of objects known" +
+                       "to be constant.", type = OptionType.Debug)
+        public static final OptionValue<Boolean> FoldFinalFieldLoads = new OptionValue<>(false);
+        // @formatter:on
+    }
 
     private static final DebugCounter counterStampsRegistered = Debug.counter("StampsRegistered");
     private static final DebugCounter counterStampsFound = Debug.counter("StampsFound");
@@ -405,7 +417,7 @@ public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext
             }
 
             Pair<InfoElement, Stamp> recursiveFoldStamp(Node node, InfoElementProvider info) {
-                if (node instanceof LoadFieldNode && ((LoadFieldNode) node).field().isFinal()) {
+                if (Options.FoldFinalFieldLoads.getValue() && node instanceof LoadFieldNode && ((LoadFieldNode) node).field().isFinal()) {
                     Pair<InfoElement, Stamp> pair = foldFromConstLoadField((LoadFieldNode) node, info);
                     if (pair != null) {
                         return pair;
@@ -445,8 +457,9 @@ public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext
                                 return new Pair<>(foldResult.first, result);
                             }
                         }
-                    } else if ((x instanceof LoadFieldNode && ((LoadFieldNode) x).field().isFinal()) ||
-                                    (y instanceof LoadFieldNode && ((LoadFieldNode) y).field().isFinal())) {
+                    } else if (Options.FoldFinalFieldLoads.getValue() &&
+                                    ((x instanceof LoadFieldNode && ((LoadFieldNode) x).field().isFinal()) ||
+                                                    (y instanceof LoadFieldNode && ((LoadFieldNode) y).field().isFinal()))) {
                         boolean useX = x instanceof LoadFieldNode;
                         Pair<InfoElement, Stamp> foldResult = recursiveFoldStamp(useX ? x : y, info);
                         if (foldResult != null) {
