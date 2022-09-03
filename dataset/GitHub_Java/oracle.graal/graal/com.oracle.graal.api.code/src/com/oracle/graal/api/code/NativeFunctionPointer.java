@@ -22,27 +22,20 @@
  */
 package com.oracle.graal.api.code;
 
+/**
+ * An opaque representation of a native function pointer.
+ * <p>
+ * Use {@code NativeFunctionInterface#getFunctionHandle(NativeFunctionPointer, Class, Class...)} to
+ * get a handle enabling the native function to be {@linkplain NativeFunctionHandle#call(Object...)
+ * called}.
+ */
 public interface NativeFunctionPointer {
-
-    /**
-     * Returns whether the pointer is valid.
-     * 
-     * @return true if the pointer is valid
-     */
-    boolean isValid();
-
-    /**
-     * Returns function pointer as raw value.
-     * 
-     * @return raw value of function pointer
-     */
-    long asRawValue();
 
     /**
      * Returns the name of the function.
      * 
      * @return name of the function
      */
-    String getFunctionName();
+    String getName();
 
 }

@@ -23,12 +23,8 @@
 package com.oracle.graal.compiler.test.nfi;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
-import static java.io.File.*;
-import static java.lang.System.*;
 import static org.junit.Assert.*;
-import static org.junit.Assume.*;
 
-import java.io.*;
 import java.util.*;
 
 import org.junit.*;
@@ -38,15 +34,15 @@ import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.runtime.*;
 
-@Ignore
 public class NativeFunctionInterfaceTest {
 
-    public final NativeFunctionInterface nfi;
+    public final RuntimeProvider runtimeProvider;
+    public final NativeFunctionInterface ffi;
 
     public NativeFunctionInterfaceTest() {
-        RuntimeProvider runtimeProvider = Graal.getRequiredCapability(RuntimeProvider.class);
+        this.runtimeProvider = Graal.getRequiredCapability(RuntimeProvider.class);
         Assume.assumeTrue(runtimeProvider.getHostBackend() instanceof HostBackend);
-        nfi = ((HostBackend) runtimeProvider.getHostBackend()).getNativeFunctionInterface();
+        ffi = ((HostBackend) runtimeProvider.getHostBackend()).getNativeFunctionInterface();
     }
 
     private List<Long> allocations = new ArrayList<>();
@@ -73,10 +69,10 @@ public class NativeFunctionInterfaceTest {
 
     @Test
     public void test1() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
-        NativeFunctionHandle malloc = nfi.getFunctionHandle("malloc", long.class, int.class);
-        NativeFunctionHandle snprintf = nfi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class);
-        NativeFunctionHandle free = nfi.getFunctionHandle("free", void.class, long.class);
+
+        NativeFunctionHandle malloc = ffi.getFunctionHandle("malloc", long.class, int.class);
+        NativeFunctionHandle snprintf = ffi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class);
+        NativeFunctionHandle free = ffi.getFunctionHandle("free", void.class, long.class);
 
         String string = "GRAAL";
         int bufferLength = string.length() + 1;
@@ -94,7 +90,6 @@ public class NativeFunctionInterfaceTest {
 
     @Test
     public void test2() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
         String formatString = "AB %f%f";
         long formatCString = writeCString("AB %f%f", malloc(formatString.length() + 1));
 
@@ -102,7 +97,7 @@ public class NativeFunctionInterfaceTest {
         int bufferLength = referenceString.length() + 1;
         long buffer = malloc(bufferLength);
 
-        NativeFunctionHandle snprintf = nfi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class, double.class, double.class);
+        NativeFunctionHandle snprintf = ffi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class, double.class, double.class);
         int result = (int) snprintf.call(buffer, bufferLength, formatCString, 1.0D, 1.0D);
 
         assertCStringEquals(buffer, referenceString);
@@ -111,7 +106,6 @@ public class NativeFunctionInterfaceTest {
 
     @Test
     public void test3() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
         String format = "%i%i%i%i%i%i%i%i%i%i%i%i";
         long formatCString = writeCString(format, malloc(format.length() + 1));
         String referenceString = "01234567891011";
@@ -119,7 +113,7 @@ public class NativeFunctionInterfaceTest {
         int bufferLength = referenceString.length() + 1;
         long buffer = malloc(bufferLength);
 
-        NativeFunctionHandle snprintf = nfi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class,
+        NativeFunctionHandle snprintf = ffi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class,
                         int.class, int.class, int.class, int.class, int.class);
 
         int result = (int) snprintf.call(buffer, bufferLength, formatCString, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
@@ -129,7 +123,6 @@ public class NativeFunctionInterfaceTest {
 
     @Test
     public void test4() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
         long str = malloc(49);
         int[] val = new int[12];
         for (int i = 0; i < 12; i++) {
@@ -150,7 +143,7 @@ public class NativeFunctionInterfaceTest {
 
         long buffer = malloc(bufferLength);
 
-        NativeFunctionHandle snprintf = nfi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class,
+        NativeFunctionHandle snprintf = ffi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class,
                         int.class, int.class, int.class, int.class, int.class, double.class, double.class, double.class, double.class, double.class, double.class, double.class, double.class,
                         double.class, double.class, double.class, double.class);
 
@@ -162,7 +155,6 @@ public class NativeFunctionInterfaceTest {
 
     @Test
     public void test5() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
         long str = malloc(73);
         int[] val = new int[12];
         for (int i = 0; i < 12; i++) {
@@ -189,7 +181,7 @@ public class NativeFunctionInterfaceTest {
 
         long buffer = malloc(bufferLength);
 
-        NativeFunctionHandle snprintf = nfi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class,
+        NativeFunctionHandle snprintf = ffi.getFunctionHandle("snprintf", int.class, long.class, int.class, long.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class,
                         int.class, int.class, int.class, int.class, int.class, double.class, double.class, double.class, double.class, double.class, double.class, double.class, double.class,
                         double.class, double.class, double.class, double.class, char.class, char.class, char.class, char.class, char.class, char.class, char.class, char.class, char.class, char.class,
                         char.class, char.class);
@@ -203,199 +195,18 @@ public class NativeFunctionInterfaceTest {
 
     @Test
     public void test6() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
-        NativeFunctionHandle handle = nfi.getFunctionHandle("pow", double.class, double.class, double.class);
+        NativeFunctionHandle handle = ffi.getFunctionHandle("pow", double.class, double.class, double.class);
         double result = (double) handle.call(3D, 5.5D);
         assertEquals(Math.pow(3D, 5.5D), result, 0);
     }
 
     @Test
     public void test7() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
         double result = 0;
-        NativeFunctionHandle handle = nfi.getFunctionHandle("pow", double.class, double.class, double.class);
-        for (int i = 0; i < 10; i++) {
+        NativeFunctionHandle handle = ffi.getFunctionHandle("pow", double.class, double.class, double.class);
+        for (int i = 0; i < 100000; i++) {
             result = (double) handle.call(3D, 5.5D);
         }
         assertEquals(Math.pow(3D, 5.5D), result, 0);
     }
-
-    @Test
-    public void test8() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
-        String formatString = "AB %f%f";
-        long formatCString = writeCString("AB %f%f", malloc(formatString.length() + 1));
-
-        String expected = "AB 1.0000001.000000";
-        int bufferLength = expected.length() + 1;
-        byte[] buffer = new byte[bufferLength];
-
-        NativeFunctionHandle snprintf = nfi.getFunctionHandle("snprintf", int.class, byte[].class, int.class, long.class, double.class, double.class);
-        int result = (int) snprintf.call(buffer, bufferLength, formatCString, 1.0D, 1.0D);
-
-        // trim trailing '\0'
-        String actual = new String(buffer, 0, expected.length());
-
-        assertEquals(expected, actual);
-        Assert.assertEquals(expected.length(), result);
-    }
-
-    private static double[] someDoubles = {2454.346D, 98789.22D, Double.MAX_VALUE, Double.MIN_NORMAL, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY};
-
-    @Test
-    public void test9() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
-        double[] src = someDoubles.clone();
-        double[] dst = new double[src.length];
-
-        NativeFunctionHandle memcpy = nfi.getFunctionHandle("memcpy", void.class, double[].class, double[].class, int.class);
-        memcpy.call(dst, src, src.length * (Double.SIZE / Byte.SIZE));
-
-        assertArrayEquals(src, dst, 0.0D);
-    }
-
-    private static String getVMName() {
-        String vmName = System.getProperty("java.vm.name").toLowerCase();
-        String vm = null;
-        if (vmName.contains("server")) {
-            vm = "server";
-        } else if (vmName.contains("graal")) {
-            vm = "graal";
-        } else if (vmName.contains("client")) {
-            vm = "client";
-        }
-
-        Assume.assumeTrue(vm != null);
-        return vm;
-    }
-
-    private static String getVMLibPath() {
-        String vm = getVMName();
-
-        String path = String.format("%s%c%s%c%s", getProperty("sun.boot.library.path"), separatorChar, vm, separatorChar, mapLibraryName("jvm"));
-        // Only continue if the library file exists
-        Assume.assumeTrue(new File(path).exists());
-        return path;
-    }
-
-    @Test
-    public void test10() {
-        NativeLibraryHandle vmLib = nfi.getLibraryHandle(getVMLibPath());
-        NativeFunctionHandle currentTimeMillis = nfi.getFunctionHandle(vmLib, "JVM_CurrentTimeMillis", long.class);
-        long time1 = (long) currentTimeMillis.call();
-        long time2 = System.currentTimeMillis();
-        long delta = time2 - time1;
-
-        // The 2 calls to get the current time should not differ by more than
-        // 100 milliseconds at the very most
-        assertTrue(String.valueOf(delta), delta >= 0);
-        assertTrue(String.valueOf(delta), delta < 100);
-    }
-
-    private static String getJavaLibPath() {
-        String path = String.format("%s%c%s", getProperty("sun.boot.library.path"), separatorChar, mapLibraryName("java"));
-        Assume.assumeTrue(new File(path).exists());
-        return path;
-    }
-
-    private static void testD2L(NativeFunctionHandle d2l) {
-        for (double d : someDoubles) {
-            long expected = Double.doubleToRawLongBits(d);
-            long actual = (long) d2l.call(0L, 0L, d);
-            assertEquals(Double.toString(d), expected, actual);
-        }
-    }
-
-    @Test
-    public void test11() {
-        NativeLibraryHandle javaLib = nfi.getLibraryHandle(getJavaLibPath());
-        NativeFunctionHandle d2l = nfi.getFunctionHandle(javaLib, "Java_java_lang_Double_doubleToRawLongBits", long.class, long.class, long.class, double.class);
-        testD2L(d2l);
-    }
-
-    @Test
-    public void test12() {
-        NativeLibraryHandle[] libs = {nfi.getLibraryHandle(getVMLibPath()), nfi.getLibraryHandle(getJavaLibPath())};
-        NativeFunctionHandle d2l = nfi.getFunctionHandle(libs, "Java_java_lang_Double_doubleToRawLongBits", long.class, long.class, long.class, double.class);
-        testD2L(d2l);
-
-        NativeLibraryHandle[] libsReveresed = {libs[1], libs[0]};
-        d2l = nfi.getFunctionHandle(libsReveresed, "Java_java_lang_Double_doubleToRawLongBits", long.class, long.class, long.class, double.class);
-        testD2L(d2l);
-    }
-
-    @Test
-    public void test13() {
-        NativeLibraryHandle[] libs = {nfi.getLibraryHandle(getVMLibPath()), nfi.getLibraryHandle(getJavaLibPath())};
-        NativeFunctionPointer functionPointer = nfi.getFunctionPointer(libs, "Java_java_lang_Double_doubleToRawLongBits");
-        NativeFunctionHandle d2l = nfi.getFunctionHandle(functionPointer, long.class, long.class, long.class, double.class);
-        testD2L(d2l);
-
-        NativeLibraryHandle[] libsReveresed = {libs[1], libs[0]};
-        functionPointer = nfi.getFunctionPointer(libsReveresed, "Java_java_lang_Double_doubleToRawLongBits");
-        d2l = nfi.getFunctionHandle(functionPointer, long.class, long.class, long.class, double.class);
-        testD2L(d2l);
-    }
-
-    @Test
-    public void test14() {
-        if (!nfi.isDefaultLibrarySearchSupported()) {
-            try {
-                nfi.getFunctionHandle("snprintf", int.class);
-                fail();
-            } catch (UnsatisfiedLinkError e) {
-            }
-        }
-    }
-
-    @Test
-    public void test15() {
-        assumeTrue(nfi.isDefaultLibrarySearchSupported());
-        try {
-            nfi.getFunctionHandle("an invalid function name", int.class);
-            fail();
-        } catch (UnsatisfiedLinkError e) {
-        }
-    }
-
-    @Test
-    public void test16() {
-        NativeLibraryHandle javaLib = nfi.getLibraryHandle(getJavaLibPath());
-        try {
-
-            nfi.getFunctionHandle(javaLib, "an invalid function name", int.class);
-            fail();
-        } catch (UnsatisfiedLinkError e) {
-        }
-    }
-
-    @Test
-    public void test17() {
-        NativeLibraryHandle[] libs = {nfi.getLibraryHandle(getVMLibPath()), nfi.getLibraryHandle(getJavaLibPath())};
-        try {
-            nfi.getFunctionPointer(libs, "an invalid function name");
-            fail();
-        } catch (UnsatisfiedLinkError e) {
-        }
-    }
-
-    @Test
-    public void test18() {
-        NativeLibraryHandle[] libs = {nfi.getLibraryHandle(getVMLibPath()), nfi.getLibraryHandle(getJavaLibPath())};
-        try {
-            nfi.getFunctionHandle(libs, "an invalid function name", int.class);
-            fail();
-        } catch (UnsatisfiedLinkError e) {
-        }
-    }
-
-    @Test
-    public void test19() {
-        try {
-            nfi.getLibraryHandle("an invalid library name");
-            fail();
-        } catch (UnsatisfiedLinkError e) {
-        }
-    }
-
 }

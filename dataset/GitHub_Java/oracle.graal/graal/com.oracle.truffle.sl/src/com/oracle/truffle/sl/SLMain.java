@@ -30,7 +30,6 @@ import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.sl.builtins.*;
-import com.oracle.truffle.sl.factory.*;
 import com.oracle.truffle.sl.nodes.*;
 import com.oracle.truffle.sl.nodes.call.*;
 import com.oracle.truffle.sl.nodes.controlflow.*;
@@ -49,7 +48,7 @@ import com.oracle.truffle.sl.runtime.*;
  * available for the types encountered at run time, a type error is reported and execution is
  * stopped. For example, {@code 4 - "2"} results in a type error because subtraction is only defined
  * for numbers.
- *
+ * 
  * <p>
  * <b>Types:</b>
  * <ul>
@@ -65,7 +64,7 @@ import com.oracle.truffle.sl.runtime.*;
  * </ul>
  * The class {@link SLTypes} lists these types for the Truffle DSL, i.e., for type-specialized
  * operations that are specified using Truffle DSL annotations.
- *
+ * 
  * <p>
  * <b>Language concepts:</b>
  * <ul>
@@ -73,8 +72,8 @@ import com.oracle.truffle.sl.runtime.*;
  * and {@link SLFunctionLiteralNode functions}.
  * <li>Basic arithmetic, logical, and comparison operations: {@link SLAddNode +}, {@link SLSubNode
  * -}, {@link SLMulNode *}, {@link SLDivNode /}, {@link SLLogicalAndNode logical and},
- * {@link SLLogicalOrNode logical or}, {@link SLEqualNode ==}, !=, {@link SLLessThanNode &lt;},
- * {@link SLLessOrEqualNode &le;}, &gt;, &ge;.
+ * {@link SLLogicalOrNode logical or}, {@link SLEqualNode ==}, !=, {@link SLLessThanNode <},
+ * {@link SLLessOrEqualNode <=}, >, >=.
  * <li>Local variables: local variables must be defined (via a {@link SLWriteLocalVariableNode
  * write}) before they can be used (by a {@link SLReadLocalVariableNode read}). Local variables are
  * not visible outside of the block where they were first defined.
@@ -84,7 +83,7 @@ import com.oracle.truffle.sl.runtime.*;
  * <li>Function calls: {@link SLInvokeNode invocations} are efficiently implemented with
  * {@link SLAbstractDispatchNode polymorphic inline caches}.
  * </ul>
- *
+ * 
  * <p>
  * <b>Syntax and parsing:</b><br>
  * The syntax is described as an attributed grammar. The {@link Parser} and {@link Scanner} are
@@ -94,7 +93,7 @@ import com.oracle.truffle.sl.runtime.*;
  * calls to the {@link SLNodeFactory} that performs the actual node creation. All functions found in
  * the SL source are added to the {@link SLFunctionRegistry}, which is accessible from the
  * {@link SLContext}.
- *
+ * 
  * <p>
  * <b>Builtin functions:</b><br>
  * Library functions that are available to every SL source without prior definition are called
@@ -118,14 +117,13 @@ public class SLMain {
      * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
      */
     public static void main(String[] args) throws IOException {
-
-        SLContext context = SLContextFactory.create(new BufferedReader(new InputStreamReader(System.in)), System.out);
+        SourceManager sourceManager = new SourceManager();
 
         Source source;
         if (args.length == 0) {
-            source = Source.fromReader(new InputStreamReader(System.in), "stdin");
+            source = sourceManager.get("stdin", System.in);
         } else {
-            source = Source.fromFileName(args[0]);
+            source = sourceManager.get(args[0]);
         }
 
         int repeats = 1;
@@ -133,6 +131,7 @@ public class SLMain {
             repeats = Integer.parseInt(args[1]);
         }
 
+        SLContext context = new SLContext(sourceManager, new BufferedReader(new InputStreamReader(System.in)), System.out);
         run(context, source, System.out, repeats);
     }
 
@@ -143,12 +142,10 @@ public class SLMain {
     public static void run(SLContext context, Source source, PrintStream logOutput, int repeats) {
         if (logOutput != null) {
             logOutput.println("== running on " + Truffle.getRuntime().getName());
-            // logOutput.println("Source = " + source.getCode());
         }
 
         /* Parse the SL source file. */
         Parser.parseSL(context, source);
-
         /* Lookup our main entry point, which is per definition always named "main". */
         SLFunction main = context.getFunctionRegistry().lookup("main");
         if (main.getCallTarget() == null) {
@@ -157,18 +154,16 @@ public class SLMain {
 
         /* Change to true if you want to see the AST on the console. */
         boolean printASTToLog = false;
-        /* Change to true if you want to see source attribution for the AST to the console */
-        boolean printSourceAttributionToLog = false;
         /* Change to dump the AST to IGV over the network. */
         boolean dumpASTToIGV = false;
 
-        printScript("before execution", context, logOutput, printASTToLog, printSourceAttributionToLog, dumpASTToIGV);
+        printScript("before execution", context, logOutput, printASTToLog, dumpASTToIGV);
         try {
             for (int i = 0; i < repeats; i++) {
                 long start = System.nanoTime();
                 /* Call the main entry point, without any arguments. */
                 try {
-                    Object result = main.getCallTarget().call();
+                    Object result = main.getCallTarget().call(null, new SLArguments(new Object[0]));
                     if (result != SLNull.SINGLETON) {
                         context.getOutput().println(result);
                     }
@@ -183,9 +178,8 @@ public class SLMain {
             }
 
         } finally {
-            printScript("after execution", context, logOutput, printASTToLog, printSourceAttributionToLog, dumpASTToIGV);
+            printScript("after execution", context, logOutput, printASTToLog, dumpASTToIGV);
         }
-        return;
     }
 
     /**
@@ -194,7 +188,7 @@ public class SLMain {
      * <p>
      * When printASTToLog is true: prints the ASTs to the console.
      */
-    private static void printScript(String groupName, SLContext context, PrintStream logOutput, boolean printASTToLog, boolean printSourceAttributionToLog, boolean dumpASTToIGV) {
+    private static void printScript(String groupName, SLContext context, PrintStream logOutput, boolean printASTToLog, boolean dumpASTToIGV) {
         if (dumpASTToIGV) {
             GraphPrintVisitor graphPrinter = new GraphPrintVisitor();
             graphPrinter.beginGroup(groupName);
@@ -215,15 +209,6 @@ public class SLMain {
                 }
             }
         }
-        if (printSourceAttributionToLog && logOutput != null) {
-            for (SLFunction function : context.getFunctionRegistry().getFunctions()) {
-                RootCallTarget callTarget = function.getCallTarget();
-                if (callTarget != null) {
-                    logOutput.println("=== " + function);
-                    NodeUtil.printSourceAttributionTree(logOutput, callTarget.getRootNode());
-                }
-            }
-        }
     }
 
     /**
@@ -239,16 +224,11 @@ public class SLMain {
         result.append("Type error");
         if (ex.getNode() != null && ex.getNode().getSourceSection() != null) {
             SourceSection ss = ex.getNode().getSourceSection();
-            if (ss != null && !(ss instanceof NullSourceSection)) {
-                result.append(" at ").append(ss.getSource().getName()).append(" line ").append(ss.getStartLine()).append(" col ").append(ss.getStartColumn());
-            }
+            result.append(" at ").append(ss.getSource().getName()).append(" line ").append(ss.getStartLine()).append(" col ").append(ss.getStartColumn());
         }
         result.append(": operation");
-        if (ex.getNode() != null) {
-            NodeInfo nodeInfo = SLContext.lookupNodeInfo(ex.getNode().getClass());
-            if (nodeInfo != null) {
-                result.append(" \"").append(nodeInfo.shortName()).append("\"");
-            }
+        if (ex.getNode() != null && ex.getNode().getClass().getAnnotation(NodeInfo.class) != null) {
+            result.append(" \"").append(ex.getNode().getClass().getAnnotation(NodeInfo.class).shortName()).append("\"");
         }
         result.append(" not defined for");
 

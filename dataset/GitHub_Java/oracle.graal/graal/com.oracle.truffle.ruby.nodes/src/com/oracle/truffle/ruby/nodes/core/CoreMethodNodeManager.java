@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved. This
+ * Copyright (c) 2013, 2014 Oracle and/or its affiliates. All rights reserved. This
  * code is released under a tri EPL/GPL/LGPL license. You can use it,
  * redistribute it and/or modify it under the terms of the:
  *
@@ -32,9 +32,7 @@ public abstract class CoreMethodNodeManager {
      */
     public static void addMethods(RubyClass rubyObjectClass) {
         for (MethodDetails methodDetails : getMethods()) {
-            if (Arrays.asList(methodDetails.getMethodAnnotation().versions()).contains(rubyObjectClass.getContext().getConfiguration().getRubyVersion())) {
-                addMethod(rubyObjectClass, methodDetails);
-            }
+            addMethod(rubyObjectClass, methodDetails);
         }
     }
 
@@ -50,7 +48,6 @@ public abstract class CoreMethodNodeManager {
         getMethods(methods, ClassNodesFactory.getFactories());
         getMethods(methods, ContinuationNodesFactory.getFactories());
         getMethods(methods, ComparableNodesFactory.getFactories());
-        getMethods(methods, DebugNodesFactory.getFactories());
         getMethods(methods, DirNodesFactory.getFactories());
         getMethods(methods, ExceptionNodesFactory.getFactories());
         getMethods(methods, FalseClassNodesFactory.getFactories());
@@ -78,6 +75,7 @@ public abstract class CoreMethodNodeManager {
         getMethods(methods, ThreadNodesFactory.getFactories());
         getMethods(methods, TimeNodesFactory.getFactories());
         getMethods(methods, TrueClassNodesFactory.getFactories());
+        getMethods(methods, DebugNodesFactory.getFactories());
         return methods;
     }
 
@@ -178,7 +176,7 @@ public abstract class CoreMethodNodeManager {
         final CheckArityNode checkArity = new CheckArityNode(context, sourceSection, arity);
         final SequenceNode block = new SequenceNode(context, sourceSection, checkArity, methodNode);
 
-        return new RubyRootNode(sourceSection, methodDetails.getClassAnnotation().name() + "#" + methodDetails.getMethodAnnotation().names()[0] + "(core)", block);
+        return new RubyRootNode(sourceSection, null, methodDetails.getClassAnnotation().name() + "#" + methodDetails.getMethodAnnotation().names()[0] + "(core)", block);
     }
 
     public static class MethodDetails {

@@ -23,20 +23,25 @@
 package com.oracle.graal.api.code;
 
 /**
- * The function handle of a native foreign function.
- * 
+ * A handle that can be used to {@linkplain #call(Object[]) call} a native function.
  */
 public interface NativeFunctionHandle {
 
     /**
-     * Calls the native foreign function.
+     * Calls the native function.
+     * <p>
+     * The caller is responsible for ensuring {@code args} comply with the platform ABI (e.g. <a
+     * href="http://www.uclibc.org/docs/psABI-x86_64.pdf"> Unix AMD64 ABI</a>). If the library
+     * function has struct parameters, the fields of the struct must be passed as individual
+     * arguments.
      * 
-     * @param args the arguments that will be passed to the native foreign function
+     * @param args the arguments that will be passed to the native function
+     * @return boxed return value of the function call
      */
-    Object call(Object[] args);
+    Object call(Object... args);
 
     /**
-     * Returns the installed code of the call stub for the native foreign function call.
+     * Returns the installed code of the call stub for the native function call.
      * 
      * @return the installed code of the native call stub
      */

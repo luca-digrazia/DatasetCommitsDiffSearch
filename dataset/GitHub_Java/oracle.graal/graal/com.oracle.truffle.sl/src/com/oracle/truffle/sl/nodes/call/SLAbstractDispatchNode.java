@@ -44,10 +44,10 @@ import com.oracle.truffle.sl.runtime.*;
  * <li>After execution of function {@code f2}: {@code I->D(f1)->D(f2)->U}
  * <li>After execution of function {@code f3}: {@code I->G}
  * </ol>
- */
+ * */
 public abstract class SLAbstractDispatchNode extends Node {
 
     protected static final int INLINE_CACHE_SIZE = 2;
 
-    protected abstract Object executeDispatch(VirtualFrame frame, SLFunction function, Object[] arguments);
+    protected abstract Object executeDispatch(VirtualFrame frame, SLFunction function, SLArguments arguments);
 }
