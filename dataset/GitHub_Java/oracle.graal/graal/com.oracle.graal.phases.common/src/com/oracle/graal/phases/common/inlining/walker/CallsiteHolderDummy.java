@@ -33,10 +33,7 @@ import com.oracle.graal.phases.common.inlining.info.elem.InlineableMacroNode;
  */
 public final class CallsiteHolderDummy extends CallsiteHolder {
 
-    public static final CallsiteHolderDummy DUMMY_CALLSITE_HOLDER = new CallsiteHolderDummy();
-
-    private CallsiteHolderDummy() {
-        // no instances other than the singleton
+    public CallsiteHolderDummy() {
     }
 
     @Override
