@@ -22,14 +22,19 @@
  */
 package com.oracle.graal.truffle;
 
+import com.oracle.truffle.api.CompilerOptions;
+
 public class CounterBasedCompilationPolicy implements CompilationPolicy {
 
-    private boolean compilationFailed;
+    private volatile boolean compilationFailed;
 
-    public boolean shouldCompile(CompilationProfile profile) {
-        return !compilationFailed && profile.getCallCount() >= profile.getCompilationCallThreshold() && profile.getCallAndLoopCount() >= profile.getCompilationCallAndLoopThreshold();
+    @Override
+    public boolean shouldCompile(CompilationProfile profile, CompilerOptions options) {
+        return !compilationFailed && profile.getInterpreterCallCount() >= profile.getCompilationCallThreshold() &&
+                        profile.getInterpreterCallAndLoopCount() >= profile.getCompilationCallAndLoopThreshold();
     }
 
+    @Override
     public void recordCompilationFailure(Throwable t) {
         compilationFailed = true;
     }
