@@ -23,9 +23,6 @@
 
 package com.oracle.graal.replacements.aarch64;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
-
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graph.NodeClass;
@@ -137,7 +134,7 @@ public class AArch64FloatArithmeticSnippets extends SnippetTemplate.AbstractTemp
     private interface SafeNode {
     }
 
-    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    @NodeInfo
     // static class SafeFloatRemNode extends FloatRemNode implements SafeNode {
     static class SafeFloatRemNode extends RemNode implements SafeNode {
         public static final NodeClass<SafeFloatRemNode> TYPE = NodeClass.create(SafeFloatRemNode.class);
