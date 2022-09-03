@@ -371,7 +371,7 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
-    public static int logOfHeapRegionGrainBytes() {
+    public static int logOfHRGrainBytes() {
         return config().logOfHRGrainBytes;
     }
 
