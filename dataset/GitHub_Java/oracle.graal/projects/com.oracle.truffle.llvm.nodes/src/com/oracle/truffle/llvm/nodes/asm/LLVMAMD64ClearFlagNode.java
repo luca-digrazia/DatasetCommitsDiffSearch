@@ -29,43 +29,20 @@
  */
 package com.oracle.truffle.llvm.nodes.asm;
 
-import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteValueNode;
-import com.oracle.truffle.llvm.nodes.memory.store.LLVMI8StoreNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.store.LLVMStoreNode;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteBooleanNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeChildren({@NodeChild(value = "rax", type = LLVMExpressionNode.class), @NodeChild(value = "rdi", type = LLVMExpressionNode.class), @NodeChild(value = "df", type = LLVMExpressionNode.class)})
-public abstract class LLVMAMD64StosNode extends LLVMExpressionNode {
-    @Child protected LLVMStoreNode store;
-    @Child protected LLVMAMD64WriteValueNode writeRDI;
+public class LLVMAMD64ClearFlagNode extends LLVMExpressionNode {
+    @Child private LLVMAMD64WriteBooleanNode flag;
 
-    public LLVMAMD64StosNode(LLVMAMD64WriteValueNode writeRDI) {
-        this.writeRDI = writeRDI;
+    public LLVMAMD64ClearFlagNode(LLVMAMD64WriteBooleanNode flag) {
+        this.flag = flag;
     }
 
-    public abstract static class LLVMAMD64StosbNode extends LLVMAMD64StosNode {
-        public LLVMAMD64StosbNode(LLVMAMD64WriteValueNode writeRDI) {
-            super(writeRDI);
-            store = LLVMI8StoreNodeGen.create();
-        }
-
-        @Specialization
-        protected Object executeI8(VirtualFrame frame, byte al, long rdi, boolean df) {
-            store.executeWithTarget(frame, LLVMAddress.fromLong(rdi), al);
-            writeRDI.execute(frame, rdi + (df ? -1 : 1));
-            return null;
-        }
-
-        @Specialization
-        protected Object executeI8(VirtualFrame frame, byte al, LLVMAddress rdi, boolean df) {
-            store.executeWithTarget(frame, rdi, al);
-            writeRDI.execute(frame, rdi.increment(df ? -1 : 1));
-            return null;
-        }
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
+        flag.execute(frame, false);
+        return null;
     }
 }
