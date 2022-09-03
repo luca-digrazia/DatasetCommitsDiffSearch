@@ -59,12 +59,12 @@ public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGeneratio
     private static final DebugCounter instructionCounter = Debug.counter("GeneratedLIRInstructions");
 
     @Override
-    protected final void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
+    protected final <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
                     LIRGenerationPhase.LIRGenerationContext context) {
         NodeLIRBuilderTool nodeLirBuilder = context.nodeLirBuilder;
         StructuredGraph graph = context.graph;
         ScheduleResult schedule = context.schedule;
-        for (AbstractBlockBase<?> b : linearScanOrder) {
+        for (B b : linearScanOrder) {
             emitBlock(nodeLirBuilder, lirGenRes, (Block) b, graph, schedule.getBlockToNodesMap());
         }
         context.lirGen.beforeRegisterAllocation();
