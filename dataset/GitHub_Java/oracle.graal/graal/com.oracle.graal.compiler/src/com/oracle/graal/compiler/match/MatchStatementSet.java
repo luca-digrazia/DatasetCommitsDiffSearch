@@ -24,18 +24,17 @@ package com.oracle.graal.compiler.match;
 
 import java.util.*;
 
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.gen.*;
 
-public interface MatchStatementSet extends Service {
+public interface MatchStatementSet {
     /**
      * @return the {@link NodeLIRBuilder} subclass which defined this set of {@link MatchStatement}
      *         instances.
      */
-    Class<? extends NodeLIRBuilder> forClass();
+    public Class<? extends NodeLIRBuilder> forClass();
 
     /**
      * @return the {@link MatchStatement}s available for this {@link NodeLIRBuilder} subclass.
      */
-    List<MatchStatement> statements();
+    public List<MatchStatement> statements(MatchRuleRegistry.NodeClassLookup lookup);
 }
