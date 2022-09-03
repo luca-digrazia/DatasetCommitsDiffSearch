@@ -27,6 +27,7 @@ import static com.sun.cri.bytecode.Bytecodes.MemoryBarriers.*;
 import static com.sun.cri.ci.CiCallingConvention.Type.*;
 import static com.sun.cri.ci.CiValue.*;
 
+import java.lang.reflect.*;
 import java.util.*;
 
 import com.sun.c1x.*;
@@ -42,6 +43,7 @@ import com.sun.c1x.opt.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 import com.sun.c1x.value.FrameState.PhiProcedure;
+import com.sun.cri.bytecode.*;
 import com.sun.cri.bytecode.Bytecodes.MemoryBarriers;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -266,10 +268,6 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitBase(Base x) {
-        // emit phi-instruction move after safepoint since this simplifies
-        // describing the state at the safepoint.
-        //moveToPhi();
-
         // all blocks with a successor must end with an unconditional jump
         // to the successor even if they are consecutive
         lir.jump(x.defaultSuccessor());
@@ -445,25 +443,29 @@ public abstract class LIRGenerator extends ValueVisitor {
         lir.cmove(i.condition(), tVal, fVal, reg);
     }
 
-    protected FrameState stateBeforeInvoke(Invoke invoke) {
+    /*protected FrameState stateBeforeInvoke(Invoke invoke) {
         FrameState stateAfter = invoke.stateAfter();
         FrameStateBuilder builder = new FrameStateBuilder(compilation.method, invoke.graph());
+        System.out.println("stateBeforeInvoke(" + invoke + "); maxStack=" + compilation.method.maxStackSize());
+        System.out.println("stateAfter=" + stateAfter);
         builder.initializeFrom(stateAfter);
         if (invoke.kind != CiKind.Void) {
-            builder.pop(invoke.kind);
+            Value pop = builder.pop(invoke.kind);
+            System.out.println("pop " + pop);
         }
         int argumentCount = invoke.argumentCount(); // invoke.arguments() iterable?
         for (int i = 0; i < argumentCount; i++) {
             Value arg = invoke.argument(i);
+            System.out.println("push " + arg);
             builder.push(arg.kind, arg);
         }
         return builder.create(invoke.bci());
-    }
+    }*/
 
     @Override
     public void visitInvoke(Invoke x) {
         RiMethod target = x.target();
-        LIRDebugInfo info = stateFor(x, stateBeforeInvoke(x));
+        LIRDebugInfo info = stateFor(x);
 
         XirSnippet snippet = null;
 
@@ -999,18 +1001,14 @@ public abstract class LIRGenerator extends ValueVisitor {
         return operand;
     }
 
-    private FrameState stateBeforeRegisterFinalizer(RegisterFinalizer rf) {
-        Value object = rf.object();
-        FrameStateBuilder builder = new FrameStateBuilder(compilation.method, rf.graph());
-        builder.initializeFrom(rf.stateAfter());
-        builder.push(object.kind, object);
-        return builder.create(rf.bci());
-    }
-
     @Override
     public void visitRegisterFinalizer(RegisterFinalizer x) {
-        CiValue receiver = load(x.object());
-        LIRDebugInfo info = stateFor(x, stateBeforeRegisterFinalizer(x));
+        Value object = x.object();
+        CiValue receiver = load(object);
+        FrameStateBuilder builder = new FrameStateBuilder(compilation.method, x.graph());
+        builder.initializeFrom(x.stateAfter());
+        builder.push(object.kind, object);
+        LIRDebugInfo info = stateFor(x, builder.create(x.bci()));
         callRuntime(CiRuntimeCall.RegisterFinalizer, info, receiver);
         setNoResult(x);
     }
@@ -1465,10 +1463,10 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     protected LIRDebugInfo maybeStateFor(Instruction x) {
-        if (x.stateAfter() == null) {
+        if (lastState == null) {
             return null;
         }
-        return stateFor(x, x.stateAfter());
+        return stateFor(x, lastState);
     }
 
     protected LIRDebugInfo stateFor(Instruction x) {
@@ -1584,10 +1582,6 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     protected abstract void genCmpRegMem(Condition condition, CiValue reg, CiValue base, int disp, CiKind kind, LIRDebugInfo info);
 
-    protected abstract void genGetObjectUnsafe(CiValue dest, CiValue src, CiValue offset, CiKind kind, boolean isVolatile);
-
-    protected abstract void genPutObjectUnsafe(CiValue src, CiValue offset, CiValue data, CiKind kind, boolean isVolatile);
-
     /**
      * Implements site-specific information for the XIR interface.
      */
@@ -1648,5 +1642,18 @@ public abstract class LIRGenerator extends ValueVisitor {
             return "XirSupport<" + current + ">";
         }
 
+    }
+
+    private CiValue emitInvokeKnown(RiMethod method, FrameState stateBefore, Value... args) {
+        boolean isStatic = Modifier.isStatic(method.accessFlags());
+        Invoke invoke = new Invoke(isStatic ? Bytecodes.INVOKESTATIC : Bytecodes.INVOKESPECIAL, method.signature().returnKind(), args, method, null, stateBefore, null);
+        visitInvoke(invoke);
+        return invoke.operand();
+    }
+
+
+    @Override
+    public void visitFrameState(FrameState i) {
+        // nothing to do for now
     }
 }
