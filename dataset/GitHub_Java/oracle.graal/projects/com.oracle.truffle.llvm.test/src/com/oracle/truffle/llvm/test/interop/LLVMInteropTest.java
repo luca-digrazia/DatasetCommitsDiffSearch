@@ -678,7 +678,6 @@ public final class LLVMInteropTest {
         Assert.assertEquals(102, a[1]);
     }
 
-    @Ignore
     @Test
     public void test059() {
         Runner runner = new Runner("interop059");
@@ -898,14 +897,6 @@ public final class LLVMInteropTest {
         final String testString = "this is a test";
         runner.export((ProxyExecutable) (Value... t) -> testString, "getstring");
         Assert.assertEquals(testString.length(), runner.run());
-    }
-
-    @Test
-    public void testIsHandle() {
-        Runner runner = new Runner("isHandle");
-        Object a = new Object();
-        runner.export(a, "object");
-        Assert.assertEquals(0, runner.run());
     }
 
     @Test
