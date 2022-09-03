@@ -84,7 +84,8 @@ public class NodeSourcePosition extends BytecodePosition {
         }
         this.receiver = receiver;
         this.marker = marker;
-        assert receiver == null || marker != None || BytecodeFrame.isPlaceholderBci(bci) || method.getDeclaringClass().isInstance(receiver) : this;
+        assert receiver == null || marker != None || method.getDeclaringClass().isInstance(receiver) : this;
+        // assert bci >= -1 : this;
     }
 
     public static NodeSourcePosition placeholder(ResolvedJavaMethod method) {

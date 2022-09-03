@@ -55,6 +55,7 @@ import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
 import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.hotspot.HotSpotCompiledCode.Comment;
 import jdk.vm.ci.hotspot.HotSpotCompiledNmethod;
+import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
 import jdk.vm.ci.meta.Assumptions.Assumption;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -221,6 +222,7 @@ public class HotSpotCompiledCodeBuilder {
                 assert sourcePosition.verify();
                 sourcePosition = sourcePosition.trim();
                 sites.add(new Infopoint(source.getEndOffset(), new DebugInfo(sourcePosition), InfopointReason.BYTECODE_POSITION));
+                assert verifySourcePositionReceivers(sourcePosition);
             }
         }
 
@@ -246,5 +248,19 @@ public class HotSpotCompiledCodeBuilder {
             sites = copy;
         }
         return sites.toArray(new Site[sites.size()]);
+    }
+
+    /**
+     * Verifies that the captured receiver type agrees with the declared type of the method.
+     */
+    private static boolean verifySourcePositionReceivers(NodeSourcePosition start) {
+        NodeSourcePosition pos = start;
+        while (pos != null) {
+            if (pos.getReceiver() != null) {
+                assert ((HotSpotObjectConstant) pos.getReceiver()).asObject(pos.getMethod().getDeclaringClass()) != null;
+            }
+            pos = pos.getCaller();
+        }
+        return true;
     }
 }
