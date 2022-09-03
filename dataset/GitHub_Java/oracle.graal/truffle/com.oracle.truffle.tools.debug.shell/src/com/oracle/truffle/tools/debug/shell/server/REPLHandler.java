@@ -37,6 +37,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
+import com.oracle.truffle.tools.debug.shell.REPLMessage;
 import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.ASTPrinter;
 import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.LocationPrinter;
 import com.oracle.truffle.tools.debug.shell.server.REPLServer.BreakpointInfo;
@@ -44,8 +45,7 @@ import com.oracle.truffle.tools.debug.shell.server.REPLServer.Context;
 import com.oracle.truffle.tools.debug.shell.server.REPLServer.REPLVisualizer;
 
 /**
- * Server-side REPL implementation of an
- * {@linkplain com.oracle.truffle.tools.debug.shell.REPLMessage "op"}.
+ * Server-side REPL implementation of an {@linkplain REPLMessage "op"}.
  * <p>
  * The language-agnostic handlers are implemented here.
  */
@@ -71,64 +71,62 @@ public abstract class REPLHandler {
     /**
      * Passes a request to this handler.
      */
-    abstract com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer);
+    abstract REPLMessage[] receive(REPLMessage request, REPLServer replServer);
 
     /**
      * Creates skeleton for a reply message that identifies the operation currently being handled.
      */
-    com.oracle.truffle.tools.debug.shell.REPLMessage createReply() {
-        return new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, op);
+    REPLMessage createReply() {
+        return new REPLMessage(REPLMessage.OP, op);
     }
 
     /**
      * Completes a reply, reporting and explaining successful handling.
      */
-    protected static final com.oracle.truffle.tools.debug.shell.REPLMessage[] finishReplySucceeded(com.oracle.truffle.tools.debug.shell.REPLMessage reply, String explanation) {
-        reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED);
-        reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG, explanation);
-        final com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = new com.oracle.truffle.tools.debug.shell.REPLMessage[]{reply};
+    protected static final REPLMessage[] finishReplySucceeded(REPLMessage reply, String explanation) {
+        reply.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
+        reply.put(REPLMessage.DISPLAY_MSG, explanation);
+        final REPLMessage[] replies = new REPLMessage[]{reply};
         return replies;
     }
 
     /**
      * Completes a reply, reporting and explaining failed handling.
      */
-    protected static final com.oracle.truffle.tools.debug.shell.REPLMessage[] finishReplyFailed(com.oracle.truffle.tools.debug.shell.REPLMessage reply, String explanation) {
-        reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED);
-        reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG, explanation);
-        final com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = new com.oracle.truffle.tools.debug.shell.REPLMessage[]{reply};
+    protected static final REPLMessage[] finishReplyFailed(REPLMessage reply, String explanation) {
+        reply.put(REPLMessage.STATUS, REPLMessage.FAILED);
+        reply.put(REPLMessage.DISPLAY_MSG, explanation);
+        final REPLMessage[] replies = new REPLMessage[]{reply};
         return replies;
     }
 
-    protected static final com.oracle.truffle.tools.debug.shell.REPLMessage[] finishReplyFailed(com.oracle.truffle.tools.debug.shell.REPLMessage reply, Exception ex) {
-        reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED);
+    protected static final REPLMessage[] finishReplyFailed(REPLMessage reply, Exception ex) {
+        reply.put(REPLMessage.STATUS, REPLMessage.FAILED);
         String message = ex.getMessage();
-        reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG, message == null ? ex.getClass().getSimpleName() : message);
-        final com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = new com.oracle.truffle.tools.debug.shell.REPLMessage[]{reply};
+        reply.put(REPLMessage.DISPLAY_MSG, message == null ? ex.getClass().getSimpleName() : message);
+        final REPLMessage[] replies = new REPLMessage[]{reply};
         return replies;
     }
 
-    protected static final com.oracle.truffle.tools.debug.shell.REPLMessage createBreakpointInfoMessage(BreakpointInfo info) {
-        final com.oracle.truffle.tools.debug.shell.REPLMessage infoMessage = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                        com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_INFO);
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID, Integer.toString(info.getID()));
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_STATE, info.describeState());
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_HIT_COUNT, Integer.toString(info.getHitCount()));
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_IGNORE_COUNT, Integer.toString(info.getIgnoreCount()));
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_VALUE, info.describeLocation());
+    protected static final REPLMessage createBreakpointInfoMessage(BreakpointInfo info) {
+        final REPLMessage infoMessage = new REPLMessage(REPLMessage.OP, REPLMessage.BREAKPOINT_INFO);
+        infoMessage.put(REPLMessage.BREAKPOINT_ID, Integer.toString(info.getID()));
+        infoMessage.put(REPLMessage.BREAKPOINT_STATE, info.describeState());
+        infoMessage.put(REPLMessage.BREAKPOINT_HIT_COUNT, Integer.toString(info.getHitCount()));
+        infoMessage.put(REPLMessage.BREAKPOINT_IGNORE_COUNT, Integer.toString(info.getIgnoreCount()));
+        infoMessage.put(REPLMessage.INFO_VALUE, info.describeLocation());
         if (info.getCondition() != null) {
-            infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_CONDITION, info.getCondition());
+            infoMessage.put(REPLMessage.BREAKPOINT_CONDITION, info.getCondition());
         }
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED);
+        infoMessage.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
         return infoMessage;
     }
 
-    protected static final com.oracle.truffle.tools.debug.shell.REPLMessage createFrameInfoMessage(final REPLServer replServer, int number, Node node) {
-        final com.oracle.truffle.tools.debug.shell.REPLMessage infoMessage = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                        com.oracle.truffle.tools.debug.shell.REPLMessage.FRAME_INFO);
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FRAME_NUMBER, Integer.toString(number));
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_LOCATION, replServer.getLocationPrinter().displaySourceLocation(node));
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.METHOD_NAME, replServer.getCurrentContext().getVisualizer().displayMethodName(node));
+    protected static final REPLMessage createFrameInfoMessage(final REPLServer replServer, int number, Node node) {
+        final REPLMessage infoMessage = new REPLMessage(REPLMessage.OP, REPLMessage.FRAME_INFO);
+        infoMessage.put(REPLMessage.FRAME_NUMBER, Integer.toString(number));
+        infoMessage.put(REPLMessage.SOURCE_LOCATION, replServer.getLocationPrinter().displaySourceLocation(node));
+        infoMessage.put(REPLMessage.METHOD_NAME, replServer.getCurrentContext().getVisualizer().displayMethodName(node));
 
         if (node != null) {
             SourceSection section = node.getSourceSection();
@@ -136,21 +134,21 @@ public abstract class REPLHandler {
                 section = node.getEncapsulatingSourceSection();
             }
             if (section != null && section.getSource() != null) {
-                infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, section.getSource().getPath());
-                infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER, Integer.toString(section.getStartLine()));
-                infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_LINE_TEXT, section.getSource().getCode(section.getStartLine()));
+                infoMessage.put(REPLMessage.FILE_PATH, section.getSource().getPath());
+                infoMessage.put(REPLMessage.LINE_NUMBER, Integer.toString(section.getStartLine()));
+                infoMessage.put(REPLMessage.SOURCE_LINE_TEXT, section.getSource().getCode(section.getStartLine()));
             }
         }
-        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED);
+        infoMessage.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
         return infoMessage;
     }
 
-    public static final REPLHandler BACKTRACE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.BACKTRACE) {
+    public static final REPLHandler BACKTRACE_HANDLER = new REPLHandler(REPLMessage.BACKTRACE) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
             final REPLVisualizer visualizer = replServer.getCurrentContext().getVisualizer();
-            final ArrayList<com.oracle.truffle.tools.debug.shell.REPLMessage> replies = new ArrayList<>();
+            final ArrayList<REPLMessage> replies = new ArrayList<>();
             final Context currentContext = replServer.getCurrentContext();
             final List<FrameInstance> stack = currentContext.getStack();
             int frameIndex = 0; // Index into list of displayed frames
@@ -162,41 +160,39 @@ public abstract class REPLHandler {
                 }
             }
             if (replies.size() > 0) {
-                return replies.toArray(new com.oracle.truffle.tools.debug.shell.REPLMessage[0]);
+                return replies.toArray(new REPLMessage[0]);
             }
-            return finishReplyFailed(new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                            com.oracle.truffle.tools.debug.shell.REPLMessage.BACKTRACE), "No stack");
+            return finishReplyFailed(new REPLMessage(REPLMessage.OP, REPLMessage.BACKTRACE), "No stack");
         }
     };
 
-    private static com.oracle.truffle.tools.debug.shell.REPLMessage btMessage(int index, Node node, REPLVisualizer visualizer, LocationPrinter locationPrinter) {
-        final com.oracle.truffle.tools.debug.shell.REPLMessage btMessage = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                        com.oracle.truffle.tools.debug.shell.REPLMessage.BACKTRACE);
-        btMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FRAME_NUMBER, Integer.toString(index));
+    private static REPLMessage btMessage(int index, Node node, REPLVisualizer visualizer, LocationPrinter locationPrinter) {
+        final REPLMessage btMessage = new REPLMessage(REPLMessage.OP, REPLMessage.BACKTRACE);
+        btMessage.put(REPLMessage.FRAME_NUMBER, Integer.toString(index));
         if (node != null) {
-            btMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_LOCATION, locationPrinter.displaySourceLocation(node));
-            btMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.METHOD_NAME, visualizer.displayMethodName(node));
+            btMessage.put(REPLMessage.SOURCE_LOCATION, locationPrinter.displaySourceLocation(node));
+            btMessage.put(REPLMessage.METHOD_NAME, visualizer.displayMethodName(node));
             SourceSection section = node.getSourceSection();
             if (section == null) {
                 section = node.getEncapsulatingSourceSection();
             }
             if (section != null && section.getSource() != null) {
-                btMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, section.getSource().getPath());
-                btMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER, Integer.toString(section.getStartLine()));
-                btMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_LINE_TEXT, section.getSource().getCode(section.getStartLine()));
+                btMessage.put(REPLMessage.FILE_PATH, section.getSource().getPath());
+                btMessage.put(REPLMessage.LINE_NUMBER, Integer.toString(section.getStartLine()));
+                btMessage.put(REPLMessage.SOURCE_LINE_TEXT, section.getSource().getCode(section.getStartLine()));
             }
-            btMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED);
+            btMessage.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
         }
         return btMessage;
     }
 
-    public static final REPLHandler BREAK_AT_LINE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAK_AT_LINE) {
+    public static final REPLHandler BREAK_AT_LINE_HANDLER = new REPLHandler(REPLMessage.BREAK_AT_LINE) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            final String path = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH);
-            final String fileName = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            final String path = request.get(REPLMessage.FILE_PATH);
+            final String fileName = request.get(REPLMessage.SOURCE_NAME);
             final String lookupFile = (path == null || path.isEmpty()) ? fileName : path;
             Source source = null;
             try {
@@ -207,11 +203,11 @@ public abstract class REPLHandler {
             if (source == null) {
                 return finishReplyFailed(reply, fileName + " not found");
             }
-            final Integer lineNumber = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER);
+            final Integer lineNumber = request.getIntValue(REPLMessage.LINE_NUMBER);
             if (lineNumber == null) {
                 return finishReplyFailed(reply, "missing line number");
             }
-            Integer ignoreCount = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_IGNORE_COUNT);
+            Integer ignoreCount = request.getIntValue(REPLMessage.BREAKPOINT_IGNORE_COUNT);
             if (ignoreCount == null) {
                 ignoreCount = 0;
             }
@@ -221,22 +217,22 @@ public abstract class REPLHandler {
             } catch (IOException ex) {
                 return finishReplyFailed(reply, ex.getMessage());
             }
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, fileName);
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, source.getPath());
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointInfo.getID()));
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER, Integer.toString(lineNumber));
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_IGNORE_COUNT, ignoreCount.toString());
+            reply.put(REPLMessage.SOURCE_NAME, fileName);
+            reply.put(REPLMessage.FILE_PATH, source.getPath());
+            reply.put(REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointInfo.getID()));
+            reply.put(REPLMessage.LINE_NUMBER, Integer.toString(lineNumber));
+            reply.put(REPLMessage.BREAKPOINT_IGNORE_COUNT, ignoreCount.toString());
             return finishReplySucceeded(reply, "Breakpoint set");
         }
     };
 
-    public static final REPLHandler BREAK_AT_LINE_ONCE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAK_AT_LINE_ONCE) {
+    public static final REPLHandler BREAK_AT_LINE_ONCE_HANDLER = new REPLHandler(REPLMessage.BREAK_AT_LINE_ONCE) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            final String path = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH);
-            final String fileName = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            final String path = request.get(REPLMessage.FILE_PATH);
+            final String fileName = request.get(REPLMessage.SOURCE_NAME);
             final String lookupFile = (path == null || path.isEmpty()) ? fileName : path;
             Source source = null;
             try {
@@ -247,7 +243,7 @@ public abstract class REPLHandler {
             if (source == null) {
                 return finishReplyFailed(reply, fileName + " not found");
             }
-            final Integer lineNumber = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER);
+            final Integer lineNumber = request.getIntValue(REPLMessage.LINE_NUMBER);
             if (lineNumber == null) {
                 return finishReplyFailed(reply, "missing line number");
             }
@@ -257,52 +253,51 @@ public abstract class REPLHandler {
             } catch (IOException ex) {
                 return finishReplyFailed(reply, ex.getMessage());
             }
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, fileName);
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, source.getPath());
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointInfo.getID()));
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER, Integer.toString(lineNumber));
+            reply.put(REPLMessage.SOURCE_NAME, fileName);
+            reply.put(REPLMessage.FILE_PATH, source.getPath());
+            reply.put(REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointInfo.getID()));
+            reply.put(REPLMessage.LINE_NUMBER, Integer.toString(lineNumber));
             return finishReplySucceeded(reply, "One-shot line breakpoint set");
         }
     };
 
-    public static final REPLHandler BREAKPOINT_INFO_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_INFO) {
+    public static final REPLHandler BREAKPOINT_INFO_HANDLER = new REPLHandler(REPLMessage.BREAKPOINT_INFO) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            final ArrayList<com.oracle.truffle.tools.debug.shell.REPLMessage> infoMessages = new ArrayList<>();
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            final ArrayList<REPLMessage> infoMessages = new ArrayList<>();
             for (BreakpointInfo breakpointInfo : replServer.getBreakpoints()) {
                 infoMessages.add(createBreakpointInfoMessage(breakpointInfo));
             }
             if (infoMessages.size() > 0) {
-                return infoMessages.toArray(new com.oracle.truffle.tools.debug.shell.REPLMessage[0]);
+                return infoMessages.toArray(new REPLMessage[0]);
             }
             return finishReplyFailed(reply, "No breakpoints");
         }
     };
 
-    public static final REPLHandler CALL_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.CALL) {
+    public static final REPLHandler CALL_HANDLER = new REPLHandler(REPLMessage.CALL) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                            com.oracle.truffle.tools.debug.shell.REPLMessage.CALL);
-            final String callName = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.CALL_NAME);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = new REPLMessage(REPLMessage.OP, REPLMessage.CALL);
+            final String callName = request.get(REPLMessage.CALL_NAME);
             if (callName == null) {
                 return finishReplyFailed(reply, "no name specified");
             }
             final ArrayList<String> argList = new ArrayList<>();
-            for (int argCount = 0; argCount < com.oracle.truffle.tools.debug.shell.REPLMessage.ARG_NAMES.length; argCount++) {
-                final String arg = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.ARG_NAMES[argCount]);
+            for (int argCount = 0; argCount < REPLMessage.ARG_NAMES.length; argCount++) {
+                final String arg = request.get(REPLMessage.ARG_NAMES[argCount]);
                 if (arg == null) {
                     break;
                 }
                 argList.add(arg);
             }
-            final boolean stepInto = com.oracle.truffle.tools.debug.shell.REPLMessage.TRUE.equals(request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.STEP_INTO));
+            final boolean stepInto = REPLMessage.TRUE.equals(request.get(REPLMessage.STEP_INTO));
             try {
                 final Object result = replServer.getCurrentContext().call(callName, stepInto, argList);
-                reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.VALUE, result == null ? "<void>" : result.toString());
+                reply.put(REPLMessage.VALUE, result == null ? "<void>" : result.toString());
             } catch (Exception ex) {
                 return finishReplyFailed(reply, ex);
             }
@@ -310,12 +305,12 @@ public abstract class REPLHandler {
         }
     };
 
-    public static final REPLHandler CLEAR_BREAK_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.CLEAR_BREAK) {
+    public static final REPLHandler CLEAR_BREAK_HANDLER = new REPLHandler(REPLMessage.CLEAR_BREAK) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            final Integer breakpointNumber = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            final Integer breakpointNumber = request.getIntValue(REPLMessage.BREAKPOINT_ID);
             if (breakpointNumber == null) {
                 return finishReplyFailed(reply, "missing breakpoint number");
             }
@@ -324,26 +319,26 @@ public abstract class REPLHandler {
                 return finishReplyFailed(reply, "no breakpoint number " + breakpointNumber);
             }
             breakpointInfo.dispose();
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
+            reply.put(REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
             return finishReplySucceeded(reply, "Breakpoint " + breakpointNumber + " cleared");
         }
     };
 
-    public static final REPLHandler CONTINUE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.CONTINUE) {
+    public static final REPLHandler CONTINUE_HANDLER = new REPLHandler(REPLMessage.CONTINUE) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
             replServer.getCurrentContext().prepareContinue();
             return finishReplySucceeded(reply, "Continue mode entered");
         }
     };
 
-    public static final REPLHandler DELETE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.DELETE_BREAK) {
+    public static final REPLHandler DELETE_HANDLER = new REPLHandler(REPLMessage.DELETE_BREAK) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
             final Collection<BreakpointInfo> breakpoints = replServer.getBreakpoints();
             if (breakpoints.isEmpty()) {
                 return finishReplyFailed(reply, "no breakpoints to delete");
@@ -355,12 +350,12 @@ public abstract class REPLHandler {
         }
     };
 
-    public static final REPLHandler DISABLE_BREAK_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.DISABLE_BREAK) {
+    public static final REPLHandler DISABLE_BREAK_HANDLER = new REPLHandler(REPLMessage.DISABLE_BREAK) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            Integer breakpointNumber = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            Integer breakpointNumber = request.getIntValue(REPLMessage.BREAKPOINT_ID);
             if (breakpointNumber == null) {
                 return finishReplyFailed(reply, "missing breakpoint number");
             }
@@ -369,17 +364,17 @@ public abstract class REPLHandler {
                 return finishReplyFailed(reply, "no breakpoint number " + breakpointNumber);
             }
             breakpointInfo.setEnabled(false);
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
+            reply.put(REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
             return finishReplySucceeded(reply, "Breakpoint " + breakpointNumber + " disabled");
         }
     };
 
-    public static final REPLHandler ENABLE_BREAK_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.ENABLE_BREAK) {
+    public static final REPLHandler ENABLE_BREAK_HANDLER = new REPLHandler(REPLMessage.ENABLE_BREAK) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            Integer breakpointNumber = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            Integer breakpointNumber = request.getIntValue(REPLMessage.BREAKPOINT_ID);
             if (breakpointNumber == null) {
                 return finishReplyFailed(reply, "missing breakpoint number");
             }
@@ -388,23 +383,23 @@ public abstract class REPLHandler {
                 return finishReplyFailed(reply, "no breakpoint number " + breakpointNumber);
             }
             breakpointInfo.setEnabled(true);
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
+            reply.put(REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
             return finishReplySucceeded(reply, "Breakpoint " + breakpointNumber + " enabled");
         }
     };
-    public static final REPLHandler EVAL_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.EVAL) {
+    public static final REPLHandler EVAL_HANDLER = new REPLHandler(REPLMessage.EVAL) {
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            final String sourceName = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME);
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, sourceName);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            final String sourceName = request.get(REPLMessage.SOURCE_NAME);
+            reply.put(REPLMessage.SOURCE_NAME, sourceName);
             final Context serverContext = replServer.getCurrentContext();
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DEBUG_LEVEL, Integer.toString(serverContext.getLevel()));
+            reply.put(REPLMessage.DEBUG_LEVEL, Integer.toString(serverContext.getLevel()));
 
-            final String source = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.CODE);
+            final String source = request.get(REPLMessage.CODE);
             final REPLVisualizer visualizer = replServer.getCurrentContext().getVisualizer();
-            final Integer frameNumber = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.FRAME_NUMBER);
-            final boolean stepInto = com.oracle.truffle.tools.debug.shell.REPLMessage.TRUE.equals(request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.STEP_INTO));
+            final Integer frameNumber = request.getIntValue(REPLMessage.FRAME_NUMBER);
+            final boolean stepInto = REPLMessage.TRUE.equals(request.get(REPLMessage.STEP_INTO));
             try {
                 Object returnValue = serverContext.eval(source, frameNumber, stepInto);
                 return finishReplySucceeded(reply, visualizer.displayValue(returnValue, 0));
@@ -413,22 +408,22 @@ public abstract class REPLHandler {
             }
         }
     };
-    public static final REPLHandler FILE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE) {
+    public static final REPLHandler FILE_HANDLER = new REPLHandler(REPLMessage.FILE) {
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            final String fileName = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            final String fileName = request.get(REPLMessage.SOURCE_NAME);
             if (fileName == null) {
                 return finishReplyFailed(reply, "no file specified");
             }
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, fileName);
+            reply.put(REPLMessage.SOURCE_NAME, fileName);
             try {
                 Source source = Source.fromFileName(fileName);
                 if (source == null) {
                     return finishReplyFailed(reply, "file \"" + fileName + "\" not found");
                 } else {
-                    reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, source.getPath());
-                    reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.CODE, source.getCode());
+                    reply.put(REPLMessage.FILE_PATH, source.getPath());
+                    reply.put(REPLMessage.CODE, source.getCode());
                     return finishReplySucceeded(reply, "file found");
                 }
             } catch (IOException ex) {
@@ -444,11 +439,11 @@ public abstract class REPLHandler {
      * Returns a general description of the frame, plus a textual summary of the slot values: one
      * per line.
      */
-    public static final REPLHandler FRAME_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.FRAME) {
+    public static final REPLHandler FRAME_HANDLER = new REPLHandler(REPLMessage.FRAME) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final Integer frameNumber = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.FRAME_NUMBER);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final Integer frameNumber = request.getIntValue(REPLMessage.FRAME_NUMBER);
             if (frameNumber == null) {
                 return finishReplyFailed(createReply(), "no frame number specified");
             }
@@ -471,80 +466,74 @@ public abstract class REPLHandler {
             }
             List<? extends FrameSlot> slots = frame.getFrameDescriptor().getSlots();
             if (slots.size() == 0) {
-                final com.oracle.truffle.tools.debug.shell.REPLMessage emptyFrameMessage = createFrameInfoMessage(replServer, frameNumber, node);
+                final REPLMessage emptyFrameMessage = createFrameInfoMessage(replServer, frameNumber, node);
                 return finishReplySucceeded(emptyFrameMessage, "empty frame");
             }
-            final ArrayList<com.oracle.truffle.tools.debug.shell.REPLMessage> replies = new ArrayList<>();
+            final ArrayList<REPLMessage> replies = new ArrayList<>();
 
             for (FrameSlot slot : slots) {
-                final com.oracle.truffle.tools.debug.shell.REPLMessage slotMessage = createFrameInfoMessage(replServer, frameNumber, node);
-                slotMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SLOT_INDEX, Integer.toString(slot.getIndex()));
-                slotMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SLOT_ID, visualizer.displayIdentifier(slot));
-                slotMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SLOT_VALUE, visualizer.displayValue(frame.getValue(slot), 0));
-                slotMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED);
+                final REPLMessage slotMessage = createFrameInfoMessage(replServer, frameNumber, node);
+                slotMessage.put(REPLMessage.SLOT_INDEX, Integer.toString(slot.getIndex()));
+                slotMessage.put(REPLMessage.SLOT_ID, visualizer.displayIdentifier(slot));
+                slotMessage.put(REPLMessage.SLOT_VALUE, visualizer.displayValue(frame.getValue(slot), 0));
+                slotMessage.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
                 replies.add(slotMessage);
             }
-            return replies.toArray(new com.oracle.truffle.tools.debug.shell.REPLMessage[0]);
+            return replies.toArray(new REPLMessage[0]);
         }
     };
 
-    public static final REPLHandler INFO_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.INFO) {
+    public static final REPLHandler INFO_HANDLER = new REPLHandler(REPLMessage.INFO) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final String topic = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final String topic = request.get(REPLMessage.TOPIC);
 
             if (topic == null || topic.isEmpty()) {
-                final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                                com.oracle.truffle.tools.debug.shell.REPLMessage.INFO);
+                final REPLMessage message = new REPLMessage(REPLMessage.OP, REPLMessage.INFO);
                 return finishReplyFailed(message, "No info topic specified");
             }
 
             switch (topic) {
 
-                case com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_SUPPORTED_LANGUAGES:
-                    final ArrayList<com.oracle.truffle.tools.debug.shell.REPLMessage> langMessages = new ArrayList<>();
+                case REPLMessage.INFO_SUPPORTED_LANGUAGES:
+                    final ArrayList<REPLMessage> langMessages = new ArrayList<>();
 
                     for (Language language : replServer.getLanguages()) {
-                        final com.oracle.truffle.tools.debug.shell.REPLMessage infoMessage = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                                        com.oracle.truffle.tools.debug.shell.REPLMessage.INFO);
-                        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_SUPPORTED_LANGUAGES);
-                        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME, language.getName());
-                        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_VER, language.getVersion());
-                        infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED);
+                        final REPLMessage infoMessage = new REPLMessage(REPLMessage.OP, REPLMessage.INFO);
+                        infoMessage.put(REPLMessage.TOPIC, REPLMessage.INFO_SUPPORTED_LANGUAGES);
+                        infoMessage.put(REPLMessage.LANG_NAME, language.getName());
+                        infoMessage.put(REPLMessage.LANG_VER, language.getVersion());
+                        infoMessage.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
                         langMessages.add(infoMessage);
                     }
-                    return langMessages.toArray(new com.oracle.truffle.tools.debug.shell.REPLMessage[0]);
+                    return langMessages.toArray(new REPLMessage[0]);
 
-                case com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_CURRENT_LANGUAGE:
-                    final com.oracle.truffle.tools.debug.shell.REPLMessage reply = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                                    com.oracle.truffle.tools.debug.shell.REPLMessage.INFO);
-                    reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_CURRENT_LANGUAGE);
+                case REPLMessage.INFO_CURRENT_LANGUAGE:
+                    final REPLMessage reply = new REPLMessage(REPLMessage.OP, REPLMessage.INFO);
+                    reply.put(REPLMessage.TOPIC, REPLMessage.INFO_CURRENT_LANGUAGE);
                     final String languageName = replServer.getCurrentContext().getLanguageName();
-                    reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME, languageName);
+                    reply.put(REPLMessage.LANG_NAME, languageName);
                     return finishReplySucceeded(reply, languageName);
 
-                case com.oracle.truffle.tools.debug.shell.REPLMessage.WELCOME_MESSAGE:
-                    final com.oracle.truffle.tools.debug.shell.REPLMessage infoMessage = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                                    com.oracle.truffle.tools.debug.shell.REPLMessage.INFO);
-                    infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, com.oracle.truffle.tools.debug.shell.REPLMessage.WELCOME_MESSAGE);
-                    infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.INFO_VALUE, replServer.getWelcome());
-                    infoMessage.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED);
+                case REPLMessage.WELCOME_MESSAGE:
+                    final REPLMessage infoMessage = new REPLMessage(REPLMessage.OP, REPLMessage.INFO);
+                    infoMessage.put(REPLMessage.TOPIC, REPLMessage.WELCOME_MESSAGE);
+                    infoMessage.put(REPLMessage.INFO_VALUE, replServer.getWelcome());
+                    infoMessage.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
                     return finishReplySucceeded(infoMessage, "welcome");
 
                 default:
-                    final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                                    com.oracle.truffle.tools.debug.shell.REPLMessage.INFO);
+                    final REPLMessage message = new REPLMessage(REPLMessage.OP, REPLMessage.INFO);
                     return finishReplyFailed(message, "No info about topic \"" + topic + "\"");
             }
         }
     };
-    public static final REPLHandler KILL_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.KILL) {
+    public static final REPLHandler KILL_HANDLER = new REPLHandler(REPLMessage.KILL) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                            com.oracle.truffle.tools.debug.shell.REPLMessage.KILL);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = new REPLMessage(REPLMessage.OP, REPLMessage.KILL);
             if (replServer.getCurrentContext().getLevel() == 0) {
                 return finishReplyFailed(reply, "nothing to kill");
             }
@@ -554,18 +543,17 @@ public abstract class REPLHandler {
         }
     };
 
-    public static final REPLHandler LOAD_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.LOAD_SOURCE) {
+    public static final REPLHandler LOAD_HANDLER = new REPLHandler(REPLMessage.LOAD_SOURCE) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                            com.oracle.truffle.tools.debug.shell.REPLMessage.LOAD_SOURCE);
-            final String fileName = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME);
-            final boolean stepInto = com.oracle.truffle.tools.debug.shell.REPLMessage.TRUE.equals(request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.STEP_INTO));
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = new REPLMessage(REPLMessage.OP, REPLMessage.LOAD_SOURCE);
+            final String fileName = request.get(REPLMessage.SOURCE_NAME);
+            final boolean stepInto = REPLMessage.TRUE.equals(request.get(REPLMessage.STEP_INTO));
             try {
                 final Source fileSource = Source.fromFileName(fileName);
                 replServer.getCurrentContext().eval(fileSource, stepInto);
-                reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, fileName);
+                reply.put(REPLMessage.FILE_PATH, fileName);
                 return finishReplySucceeded(reply, fileName + "  loaded");
             } catch (Exception ex) {
                 return finishReplyFailed(reply, ex);
@@ -573,19 +561,18 @@ public abstract class REPLHandler {
         }
     };
 
-    public static final REPLHandler SET_LANGUAGE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.SET_LANGUAGE) {
+    public static final REPLHandler SET_LANGUAGE_HANDLER = new REPLHandler(REPLMessage.SET_LANGUAGE) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                            com.oracle.truffle.tools.debug.shell.REPLMessage.SET_LANGUAGE);
-            String languageName = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = new REPLMessage(REPLMessage.OP, REPLMessage.SET_LANGUAGE);
+            String languageName = request.get(REPLMessage.LANG_NAME);
             if (languageName == null) {
                 final String oldLanguageName = replServer.getCurrentContext().getLanguageName();
-                reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME, reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME, oldLanguageName));
+                reply.put(REPLMessage.LANG_NAME, reply.put(REPLMessage.LANG_NAME, oldLanguageName));
                 return finishReplySucceeded(reply, "Language set to " + oldLanguageName);
             }
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME, languageName);
+            reply.put(REPLMessage.LANG_NAME, languageName);
             try {
                 final String newLanguageName = replServer.getCurrentContext().setLanguage(languageName);
                 if (newLanguageName != null) {
@@ -598,22 +585,21 @@ public abstract class REPLHandler {
         }
     };
 
-    public static final REPLHandler SET_BREAK_CONDITION_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.SET_BREAK_CONDITION) {
+    public static final REPLHandler SET_BREAK_CONDITION_HANDLER = new REPLHandler(REPLMessage.SET_BREAK_CONDITION) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                            com.oracle.truffle.tools.debug.shell.REPLMessage.SET_BREAK_CONDITION);
-            Integer breakpointNumber = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage message = new REPLMessage(REPLMessage.OP, REPLMessage.SET_BREAK_CONDITION);
+            Integer breakpointNumber = request.getIntValue(REPLMessage.BREAKPOINT_ID);
             if (breakpointNumber == null) {
                 return finishReplyFailed(message, "missing breakpoint number");
             }
-            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
+            message.put(REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
             final BreakpointInfo breakpointInfo = replServer.findBreakpoint(breakpointNumber);
             if (breakpointInfo == null) {
                 return finishReplyFailed(message, "no breakpoint number " + breakpointNumber);
             }
-            final String expr = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_CONDITION);
+            final String expr = request.get(REPLMessage.BREAKPOINT_CONDITION);
             if (expr == null || expr.isEmpty()) {
                 return finishReplyFailed(message, "missing condition for " + breakpointNumber);
             }
@@ -626,17 +612,17 @@ public abstract class REPLHandler {
             } catch (Exception ex) {
                 return finishReplyFailed(message, ex);
             }
-            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_CONDITION, expr);
+            message.put(REPLMessage.BREAKPOINT_CONDITION, expr);
             return finishReplySucceeded(message, "Breakpoint " + breakpointNumber + " condition=\"" + expr + "\"");
         }
     };
 
-    public static final REPLHandler STEP_INTO_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.STEP_INTO) {
+    public static final REPLHandler STEP_INTO_HANDLER = new REPLHandler(REPLMessage.STEP_INTO) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            Integer repeat = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.REPEAT);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            Integer repeat = request.getIntValue(REPLMessage.REPEAT);
             if (repeat == null) {
                 repeat = 1;
             }
@@ -646,22 +632,22 @@ public abstract class REPLHandler {
         }
     };
 
-    public static final REPLHandler STEP_OUT_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.STEP_OUT) {
+    public static final REPLHandler STEP_OUT_HANDLER = new REPLHandler(REPLMessage.STEP_OUT) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
             replServer.getCurrentContext().prepareStepOut();
             return finishReplySucceeded(reply, "StepOut enabled");
         }
     };
 
-    public static final REPLHandler STEP_OVER_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.STEP_OVER) {
+    public static final REPLHandler STEP_OVER_HANDLER = new REPLHandler(REPLMessage.STEP_OVER) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
-            Integer repeat = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.REPEAT);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
+            Integer repeat = request.getIntValue(REPLMessage.REPEAT);
             if (repeat == null) {
                 repeat = 1;
             }
@@ -671,36 +657,36 @@ public abstract class REPLHandler {
         }
     };
 
-    public static final REPLHandler TRUFFLE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE) {
+    public static final REPLHandler TRUFFLE_HANDLER = new REPLHandler(REPLMessage.TRUFFLE) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
             final ASTPrinter astPrinter = replServer.getASTPrinter();
-            final String topic = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC);
-            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, topic);
+            final String topic = request.get(REPLMessage.TOPIC);
+            reply.put(REPLMessage.TOPIC, topic);
             Node node = replServer.getCurrentContext().getNodeAtHalt();
             if (node == null) {
                 return finishReplyFailed(reply, "no current AST node");
             }
-            final Integer depth = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.AST_DEPTH);
+            final Integer depth = request.getIntValue(REPLMessage.AST_DEPTH);
             if (depth == null) {
                 return finishReplyFailed(reply, "missing AST depth");
             }
             try {
                 switch (topic) {
-                    case com.oracle.truffle.tools.debug.shell.REPLMessage.AST:
+                    case REPLMessage.AST:
                         while (node.getParent() != null) {
                             node = node.getParent();
                         }
                         final String astText = astPrinter.displayAST(node, depth, replServer.getCurrentContext().getNodeAtHalt());
                         return finishReplySucceeded(reply, astText);
-                    case com.oracle.truffle.tools.debug.shell.REPLMessage.SUBTREE:
-                    case com.oracle.truffle.tools.debug.shell.REPLMessage.SUB:
+                    case REPLMessage.SUBTREE:
+                    case REPLMessage.SUB:
                         final String subTreeText = astPrinter.displayAST(node, depth);
                         return finishReplySucceeded(reply, subTreeText);
                     default:
-                        return finishReplyFailed(reply, "Unknown \"" + com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE.toString() + "\" topic");
+                        return finishReplyFailed(reply, "Unknown \"" + REPLMessage.TRUFFLE.toString() + "\" topic");
                 }
 
             } catch (Exception ex) {
@@ -709,17 +695,16 @@ public abstract class REPLHandler {
         }
     };
 
-    public static final REPLHandler UNSET_BREAK_CONDITION_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.UNSET_BREAK_CONDITION) {
+    public static final REPLHandler UNSET_BREAK_CONDITION_HANDLER = new REPLHandler(REPLMessage.UNSET_BREAK_CONDITION) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP,
-                            com.oracle.truffle.tools.debug.shell.REPLMessage.UNSET_BREAK_CONDITION);
-            Integer breakpointNumber = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID);
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage message = new REPLMessage(REPLMessage.OP, REPLMessage.UNSET_BREAK_CONDITION);
+            Integer breakpointNumber = request.getIntValue(REPLMessage.BREAKPOINT_ID);
             if (breakpointNumber == null) {
                 return finishReplyFailed(message, "missing breakpoint number");
             }
-            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
+            message.put(REPLMessage.BREAKPOINT_ID, Integer.toString(breakpointNumber));
             final BreakpointInfo breakpointInfo = replServer.findBreakpoint(breakpointNumber);
             if (breakpointInfo == null) {
                 return finishReplyFailed(message, "no breakpoint number " + breakpointNumber);
@@ -733,11 +718,11 @@ public abstract class REPLHandler {
         }
     };
 
-    public static final REPLHandler TRUFFLE_NODE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE_NODE) {
+    public static final REPLHandler TRUFFLE_NODE_HANDLER = new REPLHandler(REPLMessage.TRUFFLE_NODE) {
 
         @Override
-        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
+        public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
+            final REPLMessage reply = createReply();
             final Node node = replServer.getCurrentContext().getNodeAtHalt();
             if (node == null) {
                 return finishReplyFailed(reply, "no current AST node");

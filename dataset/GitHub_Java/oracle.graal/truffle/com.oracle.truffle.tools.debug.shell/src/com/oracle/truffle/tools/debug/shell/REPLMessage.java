@@ -36,6 +36,7 @@ import com.oracle.truffle.tools.debug.shell.server.REPLServer;
  * A message for communication between a Read-Eval-Print-Loop server associated with a language
  * implementation and a possibly remote client.
  *
+ * @see REPLClient
  * @see REPLServer
  * @since 0.8 or earlier
  */

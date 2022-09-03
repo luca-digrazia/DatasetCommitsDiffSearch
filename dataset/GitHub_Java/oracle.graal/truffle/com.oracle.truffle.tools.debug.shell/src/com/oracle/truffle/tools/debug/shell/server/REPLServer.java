@@ -55,6 +55,7 @@ import com.oracle.truffle.api.vm.EventConsumer;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
+import com.oracle.truffle.tools.debug.shell.REPLMessage;
 import com.oracle.truffle.tools.debug.shell.client.SimpleREPLClient;
 import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.ASTPrinter;
 import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.LocationPrinter;
@@ -218,18 +219,18 @@ public final class REPLServer {
 
     void haltedAt(SuspendedEvent event) {
         // Message the client that execution is halted and is in a new debugging context
-        final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage();
-        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.STOPPED);
+        final REPLMessage message = new REPLMessage();
+        message.put(REPLMessage.OP, REPLMessage.STOPPED);
 
         // Identify language execution where halted; default to previous context
         Language haltedLanguage = currentServerContext.currentLanguage;
         final String mimeType = findMime(event.getNode());
         if (mimeType == null) {
-            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.WARNINGS, "unable to detect language at halt");
+            message.put(REPLMessage.WARNINGS, "unable to detect language at halt");
         } else {
             final Language language = engine.getLanguages().get(mimeType);
             if (language == null) {
-                message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.WARNINGS, "no language installed for MIME type \"" + mimeType + "\"");
+                message.put(REPLMessage.WARNINGS, "no language installed for MIME type \"" + mimeType + "\"");
             } else {
                 haltedLanguage = language;
             }
@@ -238,27 +239,27 @@ public final class REPLServer {
         // Create and push a new debug context where execution is halted
         currentServerContext = new Context(currentServerContext, event, haltedLanguage);
 
-        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME, haltedLanguage.getName());
+        message.put(REPLMessage.LANG_NAME, haltedLanguage.getName());
         final SourceSection src = event.getNode().getSourceSection();
         final Source source = src.getSource();
-        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, source.getName());
+        message.put(REPLMessage.SOURCE_NAME, source.getName());
         final String path = source.getPath();
         if (path == null) {
-            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_TEXT, source.getCode());
+            message.put(REPLMessage.SOURCE_TEXT, source.getCode());
         } else {
-            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, path);
+            message.put(REPLMessage.FILE_PATH, path);
         }
-        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER, Integer.toString(src.getStartLine()));
+        message.put(REPLMessage.LINE_NUMBER, Integer.toString(src.getStartLine()));
 
-        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED);
-        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DEBUG_LEVEL, Integer.toString(currentServerContext.getLevel()));
+        message.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
+        message.put(REPLMessage.DEBUG_LEVEL, Integer.toString(currentServerContext.getLevel()));
         List<String> warnings = event.getRecentWarnings();
         if (!warnings.isEmpty()) {
             final StringBuilder sb = new StringBuilder();
             for (String warning : warnings) {
                 sb.append(warning + "\n");
             }
-            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.WARNINGS, sb.toString());
+            message.put(REPLMessage.WARNINGS, sb.toString());
         }
         try {
             // Cheat with synchrony: call client directly about entering a nested debugging
@@ -406,16 +407,16 @@ public final class REPLServer {
         /**
          * Dispatches a REPL request to the appropriate handler.
          */
-        com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request) {
-            final String command = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.OP);
+        REPLMessage[] receive(REPLMessage request) {
+            final String command = request.get(REPLMessage.OP);
             final REPLHandler handler = handlerMap.get(command);
 
             if (handler == null) {
-                final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage();
-                message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, command);
-                message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED);
-                message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG, statusPrefix + " op \"" + command + "\" not supported");
-                final com.oracle.truffle.tools.debug.shell.REPLMessage[] reply = new com.oracle.truffle.tools.debug.shell.REPLMessage[]{message};
+                final REPLMessage message = new REPLMessage();
+                message.put(REPLMessage.OP, command);
+                message.put(REPLMessage.STATUS, REPLMessage.FAILED);
+                message.put(REPLMessage.DISPLAY_MSG, statusPrefix + " op \"" + command + "\" not supported");
+                final REPLMessage[] reply = new REPLMessage[]{message};
                 return reply;
             }
             return handler.receive(request, REPLServer.this);
@@ -496,12 +497,12 @@ public final class REPLServer {
      * operation where the protocol has possibly multiple messages being returned asynchronously in
      * response to each request.
      */
-    public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request) {
+    public REPLMessage[] receive(REPLMessage request) {
         if (currentServerContext == null) {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage();
-            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED);
-            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG, "server not started");
-            final com.oracle.truffle.tools.debug.shell.REPLMessage[] reply = new com.oracle.truffle.tools.debug.shell.REPLMessage[]{message};
+            final REPLMessage message = new REPLMessage();
+            message.put(REPLMessage.STATUS, REPLMessage.FAILED);
+            message.put(REPLMessage.DISPLAY_MSG, "server not started");
+            final REPLMessage[] reply = new REPLMessage[]{message};
             return reply;
         }
         return currentServerContext.receive(request);

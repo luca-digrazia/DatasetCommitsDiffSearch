@@ -24,10 +24,12 @@
  */
 package com.oracle.truffle.tools.debug.shell.client;
 
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.tools.debug.shell.REPLMessage;
+
 import java.io.IOException;
 
-import com.oracle.truffle.api.source.Source;
-
+@SuppressWarnings("deprecation")
 final class REPLineLocation {
 
     private final Source source;
@@ -101,12 +103,11 @@ final class REPLineLocation {
      *
      * @param op the operation to be performed on this location
      */
-    @SuppressWarnings("deprecation")
-    public com.oracle.truffle.tools.debug.shell.REPLMessage createMessage(String op) {
-        final com.oracle.truffle.tools.debug.shell.REPLMessage msg = new com.oracle.truffle.tools.debug.shell.REPLMessage(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, op);
-        msg.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, source.getShortName());
-        msg.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, source.getPath());
-        msg.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER, Integer.toString(lineNumber));
+    public REPLMessage createMessage(String op) {
+        final REPLMessage msg = new REPLMessage(REPLMessage.OP, op);
+        msg.put(REPLMessage.SOURCE_NAME, source.getShortName());
+        msg.put(REPLMessage.FILE_PATH, source.getPath());
+        msg.put(REPLMessage.LINE_NUMBER, Integer.toString(lineNumber));
         return msg;
     }
 
