@@ -28,6 +28,7 @@ import com.oracle.graal.nodes.type.GenericStamp.GenericStampType;
 
 
 public class StampFactory {
+
     private static final Stamp[] stampCache = new Stamp[Kind.values().length];
     private static final Stamp objectStamp = new ObjectStamp(null, false, false);
     private static final Stamp objectNonNullStamp = new ObjectStamp(null, false, true);
