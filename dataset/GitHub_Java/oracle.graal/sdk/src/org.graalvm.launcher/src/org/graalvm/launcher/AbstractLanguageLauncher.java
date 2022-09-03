@@ -40,8 +40,23 @@
  */
 package org.graalvm.launcher;
 
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.CREATE_NEW;
+import static java.nio.file.StandardOpenOption.WRITE;
+
+import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.channels.FileChannel;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -57,13 +72,13 @@ public abstract class AbstractLanguageLauncher extends Launcher {
 
     /**
      * This starts the launcher. it should be called from the main method:
-     *
+     * 
      * <pre>
      * public static void main(String[] args) {
      *     new MyLauncher().launch(args);
      * }
      * </pre>
-     *
+     * 
      * @param args the command line arguments.
      */
     protected final void launch(String[] args) {
@@ -120,8 +135,6 @@ public abstract class AbstractLanguageLauncher extends Launcher {
             builder = Context.newBuilder(getDefaultLanguages()).options(polyglotOptions);
         }
         builder.allowAllAccess(true);
-        builder.allowExperimentalOptions(allowExperimentalOptions());
-
         final Path logFile = getLogFile();
         if (logFile != null) {
             try {
@@ -137,7 +150,7 @@ public abstract class AbstractLanguageLauncher extends Launcher {
     /**
      * This is called to abort execution when an argument can neither be recognized by the launcher
      * or as an option for the polyglot engine.
-     *
+     * 
      * @param argument the argument that was not recognized.
      */
     protected AbortException abortUnrecognizedArgument(String argument) {
@@ -151,12 +164,7 @@ public abstract class AbstractLanguageLauncher extends Launcher {
      *
      * Arguments that are translated to polyglot options should be removed from the list. Other
      * arguments should not be removed.
-     *
-     * The {@code preprocessArguments} implementations can use {@link Engine} to inspect the the
-     * installed {@link Engine#getLanguages() guest languages} and {@link Engine#getInstruments()
-     * instruments}. But creating a {@link Context} or inspecting {@link Engine#getOptions() engine
-     * options} is forbidden.
-     *
+     * 
      * @param arguments the command line arguments that were passed to the launcher.
      * @param polyglotOptions a map where polyglot options can be set. These will be uses when
      *            creating the {@link org.graalvm.polyglot.Engine Engine}.
@@ -166,7 +174,7 @@ public abstract class AbstractLanguageLauncher extends Launcher {
 
     /**
      * Validates arguments after all arguments have been parsed.
-     *
+     * 
      * @param polyglotOptions the options that will be used to create engine.
      */
     protected void validateArguments(Map<String, String> polyglotOptions) {
@@ -176,7 +184,7 @@ public abstract class AbstractLanguageLauncher extends Launcher {
     /**
      * Launch the scripts as required by the arguments received during the previous call to
      * {@link #preprocessArguments(List, Map)}.
-     *
+     * 
      * @param contextBuilder a {@linkplain Context.Builder context builder} configured with the
      *            proper language and polyglot options.
      */
@@ -233,5 +241,146 @@ public abstract class AbstractLanguageLauncher extends Launcher {
      */
     protected String[] getDefaultLanguages() {
         return new String[]{getLanguageId()};
+    }
+
+    private static OutputStream newLogStream(Path path) throws IOException {
+        Path usedPath = path;
+        Path lockFile = null;
+        FileChannel lockFileChannel = null;
+        for (int unique = 0;; unique++) {
+            StringBuilder lockFileNameBuilder = new StringBuilder();
+            lockFileNameBuilder.append(path.toString());
+            if (unique > 0) {
+                lockFileNameBuilder.append(unique);
+                usedPath = Paths.get(lockFileNameBuilder.toString());
+            }
+            lockFileNameBuilder.append(".lck");
+            lockFile = Paths.get(lockFileNameBuilder.toString());
+            Map.Entry<FileChannel, Boolean> openResult = openChannel(lockFile);
+            if (openResult != null) {
+                lockFileChannel = openResult.getKey();
+                if (lock(lockFileChannel, openResult.getValue())) {
+                    break;
+                } else {
+                    // Close and try next name
+                    lockFileChannel.close();
+                }
+            }
+        }
+        assert lockFile != null && lockFileChannel != null;
+        boolean success = false;
+        try {
+            OutputStream stream = new LockableOutputStream(
+                            new BufferedOutputStream(Files.newOutputStream(usedPath, WRITE, CREATE, APPEND)),
+                            lockFile,
+                            lockFileChannel);
+            success = true;
+            return stream;
+        } finally {
+            if (!success) {
+                LockableOutputStream.unlock(lockFile, lockFileChannel);
+            }
+        }
+    }
+
+    private static Map.Entry<FileChannel, Boolean> openChannel(Path path) throws IOException {
+        FileChannel channel = null;
+        for (int retries = 0; channel == null && retries < 2; retries++) {
+            try {
+                channel = FileChannel.open(path, CREATE_NEW, WRITE);
+                return new AbstractMap.SimpleImmutableEntry<>(channel, true);
+            } catch (FileAlreadyExistsException faee) {
+                // Maybe a FS race showing a zombie file, try to reuse it
+                if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) && isParentWritable(path)) {
+                    try {
+                        channel = FileChannel.open(path, WRITE, APPEND);
+                        return new AbstractMap.SimpleImmutableEntry<>(channel, false);
+                    } catch (NoSuchFileException x) {
+                        // FS Race, next try we should be able to create with CREATE_NEW
+                    } catch (IOException x) {
+                        return null;
+                    }
+                } else {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean isParentWritable(Path path) {
+        Path parentPath = path.getParent();
+        if (parentPath == null && !path.isAbsolute()) {
+            parentPath = path.toAbsolutePath().getParent();
+        }
+        return parentPath != null && Files.isWritable(parentPath);
+    }
+
+    private static boolean lock(FileChannel lockFileChannel, boolean newFile) {
+        boolean available = false;
+        try {
+            available = lockFileChannel.tryLock() != null;
+        } catch (OverlappingFileLockException ofle) {
+            // VM already holds lock continue with available set to false
+        } catch (IOException ioe) {
+            // Locking not supported by OS
+            available = newFile;
+        }
+        return available;
+    }
+
+    private static final class LockableOutputStream extends OutputStream {
+
+        private final OutputStream delegate;
+        private final Path lockFile;
+        private final FileChannel lockFileChannel;
+
+        LockableOutputStream(OutputStream delegate, Path lockFile, FileChannel lockFileChannel) {
+            this.delegate = delegate;
+            this.lockFile = lockFile;
+            this.lockFileChannel = lockFileChannel;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            delegate.write(b);
+        }
+
+        @Override
+        public void write(byte[] b) throws IOException {
+            delegate.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            delegate.write(b, off, len);
+        }
+
+        @Override
+        public void flush() throws IOException {
+            delegate.flush();
+        }
+
+        @Override
+        public void close() throws IOException {
+            try {
+                delegate.close();
+            } finally {
+                unlock(lockFile, lockFileChannel);
+            }
+        }
+
+        private static void unlock(Path lockFile, FileChannel lockFileChannel) {
+            try {
+                lockFileChannel.close();
+            } catch (IOException ioe) {
+                // Error while closing the channel, ignore.
+            }
+            try {
+                Files.delete(lockFile);
+            } catch (IOException ioe) {
+                // Error while deleting the lock file, ignore.
+            }
+        }
     }
 }
