@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,39 +22,22 @@
  */
 package com.oracle.truffle.api.vm;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 
-import org.junit.Test;
+import org.junit.After;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.debug.Breakpoint;
-import com.oracle.truffle.api.debug.Debugger;
-import com.oracle.truffle.api.debug.ExecutionEvent;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.ASTProber;
-import com.oracle.truffle.api.instrument.EventHandlerNode;
-import com.oracle.truffle.api.instrument.Instrumenter;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.StandardSyntaxTag;
-import com.oracle.truffle.api.instrument.Visualizer;
-import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.api.vm.EventConsumer;
-import com.oracle.truffle.api.vm.PolyglotEngine;
 
 /**
  * Bug report validating test.
@@ -68,48 +51,13 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  */
 public class InitializationTest {
 
-    @Test
-    public void accessProbeForAbstractLanguage() throws IOException, NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
-        final Debugger[] arr = {null};
-        PolyglotEngine vm = PolyglotEngine.newBuilder().onEvent(new EventConsumer<ExecutionEvent>(ExecutionEvent.class) {
-            @Override
-            protected void on(ExecutionEvent event) {
-                arr[0] = event.getDebugger();
-            }
-        }).build();
+    private PolyglotEngine vm;
 
-        final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
-        field.setAccessible(true);
-        final Instrumenter instrumenter = (Instrumenter) field.get(vm);
-        instrumenter.registerASTProber(new ASTProber() {
-
-            public void probeAST(final Instrumenter inst, RootNode startNode) {
-                startNode.accept(new NodeVisitor() {
-
-                    public boolean visit(Node node) {
-
-                        if (node instanceof ANode) {
-                            inst.probe(node).tagAs(StandardSyntaxTag.STATEMENT, null);
-                        }
-                        return true;
-                    }
-                });
-            }
-        });
-
-        Source source = Source.fromText("accessProbeForAbstractLanguage text", "accessProbeForAbstractLanguage").withMimeType("application/x-abstrlang");
-
-        assertEquals(vm.eval(source).get(), 1);
-
-        assertNotNull("Debugger found", arr[0]);
-
-        Debugger d = arr[0];
-        Breakpoint b = d.setLineBreakpoint(0, source.createLineLocation(1), true);
-        assertTrue(b.isEnabled());
-        b.setCondition("true");
-
-        assertEquals(vm.eval(source).get(), 1);
-        vm.dispose();
+    @After
+    public void dispose() {
+        if (vm != null) {
+            vm.dispose();
+        }
     }
 
     private static final class MMRootNode extends RootNode {
@@ -130,7 +78,7 @@ public class InitializationTest {
     private static class ANode extends Node {
         private final int constant;
 
-        public ANode(int constant) {
+        ANode(int constant) {
             this.constant = constant;
         }
 
@@ -141,36 +89,6 @@ public class InitializationTest {
 
         Object constant() {
             return constant;
-        }
-    }
-
-    private static class ANodeWrapper extends ANode implements WrapperNode {
-        @Child ANode child;
-        @Child private EventHandlerNode eventHandlerNode;
-
-        ANodeWrapper(ANode node) {
-            super(1);  // dummy
-            this.child = node;
-        }
-
-        @Override
-        public Node getChild() {
-            return child;
-        }
-
-        @Override
-        public Probe getProbe() {
-            return eventHandlerNode.getProbe();
-        }
-
-        @Override
-        public void insertEventHandlerNode(EventHandlerNode eventHandler) {
-            this.eventHandlerNode = eventHandler;
-        }
-
-        @Override
-        public String instrumentationInfo() {
-            throw new UnsupportedOperationException();
         }
     }
 
@@ -189,7 +107,7 @@ public class InitializationTest {
 
         @Override
         protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
-            return Truffle.getRuntime().createCallTarget(new MMRootNode(code.createSection("1st line", 1)));
+            return Truffle.getRuntime().createCallTarget(new MMRootNode(code.createSection(1)));
         }
 
         @Override
@@ -212,19 +130,5 @@ public class InitializationTest {
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public Visualizer getVisualizer() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        protected boolean isInstrumentable(Node node) {
-            return node instanceof ANode;
-        }
-
-        @Override
-        protected WrapperNode createWrapperNode(Node node) {
-            return node instanceof ANode ? new ANodeWrapper((ANode) node) : null;
-        }
     }
 }
