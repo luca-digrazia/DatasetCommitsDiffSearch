@@ -35,7 +35,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.truffle.llvm.parser.base.model.TextToBCConverter;
 import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
 import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
 import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
@@ -51,12 +50,12 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.context.nativeint.NativeLookup;
+import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.context.LLVMContext;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMFreeFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
@@ -66,12 +65,28 @@ import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMI32
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMAccessGlobalVariableStorageNodeGen;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
+import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.LLVMType;
+import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.Instruction;
+import com.oracle.truffle.llvm.parser.base.model.target.TargetDataLayout;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserAsserts;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserResultImpl;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
+import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
-import com.oracle.truffle.llvm.parser.base.model.Model;
-import com.oracle.truffle.llvm.parser.base.model.ModelModule;
-import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
+import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMConstantGenerator;
+import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
+import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
+import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
+import com.oracle.truffle.llvm.types.memory.LLVMHeap;
+
+import com.oracle.truffle.llvm.parser.bc.impl.parser.ir.LLVMParser;
 import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.base.model.functions.FunctionParameter;
@@ -79,27 +94,13 @@ import com.oracle.truffle.llvm.parser.base.model.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.base.model.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
-import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.Instruction;
-import com.oracle.truffle.llvm.parser.base.model.target.TargetDataLayout;
+import com.oracle.truffle.llvm.parser.base.model.LLVMToBitcodeAdapter;
+import com.oracle.truffle.llvm.parser.base.model.Model;
+import com.oracle.truffle.llvm.parser.base.model.ModelModule;
 import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
-import com.oracle.truffle.llvm.parser.base.util.LLVMParserAsserts;
-import com.oracle.truffle.llvm.parser.base.util.LLVMParserResultImpl;
-import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
-import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelper;
-import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMConstantGenerator;
-import com.oracle.truffle.llvm.parser.bc.impl.parser.ir.LLVMParser;
+import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
 import com.oracle.truffle.llvm.parser.bc.impl.parser.listeners.ModuleVersion;
-import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
-import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 
 public class LLVMBitcodeVisitor implements ModelVisitor {
 
@@ -134,7 +135,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         public static BitcodeParserResult getFromFile(String sourcePath) {
             final Model model = new Model();
-            new LLVMParser(model).parse(ModuleVersion.getModuleVersion(LLVMOptions.ENGINE.llvmVersion()), sourcePath);
+            new LLVMParser(model).parse(ModuleVersion.getModuleVersion(LLVMBaseOptionFacade.getLLVMVersion()), sourcePath);
 
             final LLVMPhiManager phis = LLVMPhiManager.generate(model);
             final StackAllocation stackAllocation = StackAllocation.generate(model);
@@ -497,7 +498,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         final SourceSection sourceSection = source.createSection(1);
         LLVMFunctionStartNode rootNode = new LLVMFunctionStartNode(body, beforeFunction, afterFunction, sourceSection, frame, method.getName(), getInitNullers(frame, method));
-        if (LLVMOptions.DEBUG.printFunctionASTs()) {
+        if (LLVMBaseOptionFacade.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
             System.out.flush();
         }
@@ -562,7 +563,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         @Override
         public LLVMExpressionNode allocateFunctionLifetime(ResolvedType type, int size, int alignment) {
-            return factoryFacade.createAlloc(TextToBCConverter.convert(type), size, alignment, null, null);
+            return factoryFacade.createAlloc(LLVMToBitcodeAdapter.resolveType(type), size, alignment, null, null);
         }
 
         @Override
