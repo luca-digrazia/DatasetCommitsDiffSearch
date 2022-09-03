@@ -37,6 +37,7 @@ public final class NewInstanceNode extends FixedWithNextNode implements Node.Ite
 
     private final ResolvedJavaType instanceClass;
     private final boolean fillContents;
+    private final boolean locked;
 
     /**
      * Constructs a NewInstanceNode.
@@ -44,11 +45,13 @@ public final class NewInstanceNode extends FixedWithNextNode implements Node.Ite
      * @param type the class being allocated
      * @param fillContents determines whether the new object's fields should be initialized to
      *            zero/null.
+     * @param locked determines whether the new object should be locked immediately.
      */
-    public NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
+    public NewInstanceNode(ResolvedJavaType type, boolean fillContents, boolean locked) {
         super(StampFactory.exactNonNull(type));
         this.instanceClass = type;
         this.fillContents = fillContents;
+        this.locked = locked;
     }
 
     /**
@@ -65,6 +68,13 @@ public final class NewInstanceNode extends FixedWithNextNode implements Node.Ite
      */
     public boolean fillContents() {
         return fillContents;
+    }
+
+    /**
+     * @return <code>true</code> if the new object will be locked immediately.
+     */
+    public boolean locked() {
+        return locked;
     }
 
     @Override
@@ -93,7 +103,7 @@ public final class NewInstanceNode extends FixedWithNextNode implements Node.Ite
             for (int i = 0; i < state.length; i++) {
                 state[i] = ConstantNode.defaultForKind(fields[i].getType().getKind(), graph());
             }
-            tool.createVirtualObject(virtualObject, state, null);
+            tool.createVirtualObject(virtualObject, state, 0);
             tool.replaceWithVirtual(virtualObject);
         }
     }
