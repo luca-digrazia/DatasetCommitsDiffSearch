@@ -40,7 +40,7 @@ public interface CompilerToVM {
      * @param metaspaceMethod the metaspace Method object
      * @return a new byte array containing the original bytecode
      */
-    byte[] getBytecode(long metaspaceMethod);
+    byte[] initializeBytecode(long metaspaceMethod);
 
     int exceptionTableLength(long metaspaceMethod);
 

@@ -56,7 +56,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     private final HotSpotSignature signature;
     private HotSpotMethodData methodData;
     private byte[] code;
-    private Member toJavaCache;
 
     /**
      * Gets the holder of a HotSpot metaspace method native object.
@@ -196,7 +195,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
             return null;
         }
         if (code == null && holder.isLinked()) {
-            code = runtime().getCompilerToVM().initializeBytecode(metaspaceMethod, new byte[getCodeSize()]);
+            code = runtime().getCompilerToVM().initializeBytecode(metaspaceMethod);
             assert code.length == getCodeSize() : "expected: " + getCodeSize() + ", actual: " + code.length;
         }
         return code;
@@ -506,26 +505,16 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     private Method toJava() {
-        if (toJavaCache != null) {
-            return (Method) toJavaCache;
-        }
         try {
-            Method result = holder.mirror().getDeclaredMethod(name, signatureToTypes());
-            toJavaCache = result;
-            return result;
+            return holder.mirror().getDeclaredMethod(name, signatureToTypes());
         } catch (NoSuchMethodException e) {
             return null;
         }
     }
 
     private Constructor<?> toJavaConstructor() {
-        if (toJavaCache != null) {
-            return (Constructor<?>) toJavaCache;
-        }
         try {
-            Constructor<?> result = holder.mirror().getDeclaredConstructor(signatureToTypes());
-            toJavaCache = result;
-            return result;
+            return holder.mirror().getDeclaredConstructor(signatureToTypes());
         } catch (NoSuchMethodException e) {
             return null;
         }
