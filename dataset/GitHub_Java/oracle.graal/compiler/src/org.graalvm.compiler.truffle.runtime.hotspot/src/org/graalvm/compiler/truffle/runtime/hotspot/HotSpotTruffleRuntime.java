@@ -243,23 +243,16 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime implements 
         String compilerConfig;
         if (compiler != null) {
             compilerConfig = compiler.getCompilerConfigurationName();
-            assert compilerConfig.equals(getLazyCompilerConfigurationName());
         } else {
-            compilerConfig = getLazyCompilerConfigurationName();
-        }
-        return compilerConfig;
-    }
-
-    private String getLazyCompilerConfigurationName() {
-        String compilerConfig;
-        compilerConfig = this.lazyConfigurationName;
-        if (compilerConfig == null) {
-            synchronized (this) {
-                compilerConfig = this.lazyConfigurationName;
-                if (compilerConfig == null) {
-                    OptionValues values = getInitialOptions();
-                    CompilerConfigurationFactory factory = CompilerConfigurationFactory.selectFactory(Options.TruffleCompilerConfiguration.getValue(values), values);
-                    this.lazyConfigurationName = compilerConfig = factory.getName();
+            compilerConfig = this.lazyConfigurationName;
+            if (compilerConfig == null) {
+                synchronized (this) {
+                    compilerConfig = this.lazyConfigurationName;
+                    if (compilerConfig == null) {
+                        OptionValues values = getInitialOptions();
+                        CompilerConfigurationFactory factory = CompilerConfigurationFactory.selectFactory(Options.TruffleCompilerConfiguration.getValue(values), values);
+                        this.lazyConfigurationName = compilerConfig = factory.getName();
+                    }
                 }
             }
         }
