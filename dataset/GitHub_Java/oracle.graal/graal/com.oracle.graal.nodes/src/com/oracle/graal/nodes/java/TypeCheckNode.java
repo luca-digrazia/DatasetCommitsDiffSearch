@@ -22,18 +22,18 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
 
 /**
- * The {@code TypeCheckNode} represents a test equivalent to {@code o.getClass() == type}. The node
- * may only be used if {@code o != null} is known to be true as indicated by the object's stamp.
+ * The {@code TypeCheckNode} represents a test equivalent to (o != null && o.getClass() == type).
  */
 @NodeInfo
 public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, Virtualizable {
@@ -41,7 +41,7 @@ public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, 
 
     protected final ResolvedJavaType type;
 
-    protected TypeCheckNode(ResolvedJavaType type, ValueNode object) {
+    public TypeCheckNode(ResolvedJavaType type, ValueNode object) {
         super(TYPE, object);
         this.type = type;
         assert type != null;
@@ -50,8 +50,7 @@ public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, 
 
     public static LogicNode create(ResolvedJavaType type, ValueNode object) {
         ObjectStamp objectStamp = (ObjectStamp) object.stamp();
-        assert objectStamp.nonNull() : object;
-        LogicNode constantValue = findSynonym(type, objectStamp.type(), true, objectStamp.isExactType());
+        LogicNode constantValue = findSynonym(type, objectStamp.type(), objectStamp.nonNull(), objectStamp.isExactType());
         if (constantValue != null) {
             return constantValue;
         } else {
@@ -70,11 +69,13 @@ public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, 
             return this;
         }
         ObjectStamp objectStamp = (ObjectStamp) forValue.stamp();
-        assert objectStamp.nonNull();
+        if (objectStamp.alwaysNull()) {
+            return LogicConstantNode.contradiction();
+        }
 
         ResolvedJavaType stampType = objectStamp.type();
         if (stampType != null) {
-            ValueNode result = findSynonym(type(), stampType, true, objectStamp.isExactType());
+            ValueNode result = check(forValue, stampType, objectStamp.nonNull(), objectStamp.isExactType());
             if (result != null) {
                 return result;
             }
@@ -82,7 +83,7 @@ public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, 
             if (assumptions != null) {
                 AssumptionResult<ResolvedJavaType> leafConcreteSubtype = stampType.findLeafConcreteSubtype();
                 if (leafConcreteSubtype != null) {
-                    result = findSynonym(type(), leafConcreteSubtype.getResult(), true, true);
+                    result = check(forValue, leafConcreteSubtype.getResult(), objectStamp.nonNull(), true);
                     if (result != null) {
                         assumptions.record(leafConcreteSubtype);
                         return result;
@@ -91,6 +92,22 @@ public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, 
             }
         }
         return this;
+    }
+
+    private ValueNode check(ValueNode forValue, ResolvedJavaType inputType, boolean nonNull, boolean exactType) {
+        ValueNode result = findSynonym(type(), inputType, nonNull, exactType);
+        if (result != null) {
+            return result;
+        }
+        if (type().equals(inputType)) {
+            boolean mightBeNull = !nonNull;
+            if (exactType && mightBeNull) {
+                // the instanceof matches if the object is non-null, so return true
+                // depending on the null-ness.
+                return LogicNegationNode.create(new IsNullNode(forValue));
+            }
+        }
+        return null;
     }
 
     public static LogicNode findSynonym(ResolvedJavaType type, ResolvedJavaType inputType, boolean nonNull, boolean exactType) {
