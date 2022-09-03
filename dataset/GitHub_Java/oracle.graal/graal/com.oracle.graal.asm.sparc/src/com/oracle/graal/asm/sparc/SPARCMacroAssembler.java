@@ -202,9 +202,10 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         }
     }
 
+    @SuppressWarnings("unused")
     public static class Jmp extends Jmpl {
 
-        public Jmp(SPARCAddress address) {
+        public Jmp(SPARCAssembler asm, SPARCAddress address) {
             super(address.getBase(), address.getDisplacement(), g0);
         }
     }
