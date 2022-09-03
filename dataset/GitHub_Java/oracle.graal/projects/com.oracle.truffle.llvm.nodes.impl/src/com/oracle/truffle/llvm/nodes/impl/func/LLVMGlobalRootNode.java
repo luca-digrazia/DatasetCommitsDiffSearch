@@ -47,8 +47,7 @@ import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFrameUtil;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMExitException;
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
+import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
@@ -61,12 +60,9 @@ public class LLVMGlobalRootNode extends RootNode {
     @CompilationFinal private final Object[] arguments;
     private final LLVMContext context;
     // FIXME instead make the option system "PE safe"
-    private final boolean printNativeStats = LLVMBaseOptionFacade.printNativeCallStats();
-    private final int executionCount = LLVMBaseOptionFacade.getExecutionCount();
-    private final boolean printExecutionTime = LLVMBaseOptionFacade.printExecutionTime();
+    private final boolean printNativeStats = LLVMOptions.printNativeCallStats();
+    private final int executionCount = LLVMOptions.getExecutionCount();
     private final FrameSlot stackPointerSlot;
-    private long startExecutionTime;
-    private long endExecutionTime;
 
     public LLVMGlobalRootNode(FrameSlot stackSlot, FrameDescriptor descriptor, LLVMContext context, CallTarget main, Object... arguments) {
         super(LLVMLanguage.class, null, descriptor);
@@ -87,14 +83,7 @@ public class LLVMGlobalRootNode extends RootNode {
                 Object[] realArgs = new Object[arguments.length + LLVMCallNode.ARG_START_INDEX];
                 realArgs[0] = LLVMFrameUtil.getAddress(frame, stackPointerSlot);
                 System.arraycopy(arguments, 0, realArgs, LLVMCallNode.ARG_START_INDEX, arguments.length);
-                if (printExecutionTime) {
-                    startExecutionTime = System.currentTimeMillis();
-                }
                 result = main.call(frame, realArgs);
-                if (printExecutionTime) {
-                    endExecutionTime = System.currentTimeMillis();
-                    printExecutionTime();
-                }
                 if (i != executionCount - 1) {
                     executeStaticInits();
                 }
@@ -107,12 +96,6 @@ public class LLVMGlobalRootNode extends RootNode {
                 printNativeCallStats(context);
             }
         }
-    }
-
-    @TruffleBoundary
-    private void printExecutionTime() {
-        long executionTime = endExecutionTime - startExecutionTime;
-        LLVMLogger.unconditionalInfo("execution time: " + executionTime + " ms");
     }
 
     @TruffleBoundary
