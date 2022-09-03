@@ -44,11 +44,11 @@ import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 public class HotSpotConstantReflectionProvider implements ConstantReflectionProvider {
     private static final String SystemClassName = "Ljava/lang/System;";
 
-    protected final HotSpotGraalRuntimeProvider runtime;
+    protected final HotSpotGraalRuntime runtime;
     protected final HotSpotMethodHandleAccessProvider methodHandleAccess;
     protected final HotSpotMemoryAccessProviderImpl memoryAccess;
 
-    public HotSpotConstantReflectionProvider(HotSpotGraalRuntimeProvider runtime) {
+    public HotSpotConstantReflectionProvider(HotSpotGraalRuntime runtime) {
         this.runtime = runtime;
         this.methodHandleAccess = new HotSpotMethodHandleAccessProvider(this);
         this.memoryAccess = new HotSpotMemoryAccessProviderImpl(runtime);
