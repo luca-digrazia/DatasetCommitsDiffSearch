@@ -37,22 +37,13 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleNull;
 
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToFunctionNode extends LLVMExpressionNode {
-
-    @Child private ToLLVMNode toInt = ToLLVMNode.createNode(int.class);
-
-    @Specialization
-    public LLVMFunction executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-        return new LLVMFunctionHandle((int) toInt.executeWithTarget(from.getValue()));
-    }
 
     @Specialization
     public LLVMFunction executeI64(long from) {
@@ -78,11 +69,6 @@ public abstract class LLVMToFunctionNode extends LLVMExpressionNode {
         }
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Not a function");
-    }
-
-    @Specialization
-    public LLVMFunction executeLLVMFunction(LLVMFunction from) {
-        return from;
     }
 
 }

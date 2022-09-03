@@ -29,55 +29,19 @@
  */
 package com.oracle.truffle.llvm.nodes.cast;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
-    @Child private ForeignToLLVM toDouble = ForeignToLLVM.create(ForeignToLLVMType.DOUBLE);
-
-    @Specialization
-    public double executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-        return (double) toDouble.executeWithTarget(from.getValue());
-    }
-
-    @Child private Node isNull = Message.IS_NULL.createNode();
-    @Child private Node isBoxed = Message.IS_BOXED.createNode();
-    @Child private Node unbox = Message.UNBOX.createNode();
-
-    @Specialization(guards = "notLLVM(from)")
-    public double executeTruffleObject(TruffleObject from) {
-        if (ForeignAccess.sendIsNull(isNull, from)) {
-            return 0.0;
-        } else if (ForeignAccess.sendIsBoxed(isBoxed, from)) {
-            try {
-                return (double) toDouble.executeWithTarget(ForeignAccess.sendUnbox(unbox, from));
-            } catch (UnsupportedMessageException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
-            }
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw new IllegalStateException("Not convertable");
-    }
-
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToDoubleNoZeroExtNode extends LLVMToDoubleNode {
 
         @Specialization
         public double executeDouble(boolean from) {
-            return from ? 1.0 : 0.0;
+            return from ? 1 : 0;
         }
 
         @Specialization
@@ -106,16 +70,12 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
         }
 
         @Specialization
-        public double executeDouble(double from) {
-            return from;
-        }
-
-        @Specialization
         public double executeDouble(LLVM80BitFloat from) {
             return from.getDoubleValue();
         }
     }
 
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToDoubleZeroExtNode extends LLVMToDoubleNode {
 
         @Specialization
@@ -143,13 +103,9 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
             return from;
         }
 
-        @Specialization
-        public double executeDouble(double from) {
-            return from;
-        }
-
     }
 
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToDoubleUnsignedNode extends LLVMToDoubleNode {
 
         private static final double LEADING_BIT = 0x1.0p63;
@@ -167,23 +123,14 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
             }
             return val;
         }
-
-        @Specialization
-        public double executeDouble(double from) {
-            return from;
-        }
     }
 
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToDoubleBitNode extends LLVMToDoubleNode {
 
         @Specialization
         public double executeDouble(long from) {
             return Double.longBitsToDouble(from);
-        }
-
-        @Specialization
-        public double executeDouble(double from) {
-            return from;
         }
     }
 

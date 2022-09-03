@@ -64,18 +64,13 @@ public final class DataLayoutConverter {
                  */
                 DataTypeSpecification integerLayout = dataLayout.stream().filter(d -> d.getType() == DataLayoutType.INTEGER_WIDTHS).findFirst().orElseThrow(IllegalStateException::new);
                 int minPossibleSize = Arrays.stream(integerLayout.getValues()).max().orElseThrow(IllegalStateException::new);
-                int size = baseType.getBitSize();
+                int size = ((VariableBitWidthType) baseType).getBitSize();
                 for (int value : integerLayout.getValues()) {
                     if (size < value && minPossibleSize > value) {
                         minPossibleSize = value;
                     }
                 }
-                if (minPossibleSize >= size) {
-                    return minPossibleSize;
-                } else {
-                    // is that correct?
-                    return ((size + 7) / 8) * 8;
-                }
+                return minPossibleSize;
             } else {
                 return getDataTypeSpecification(baseType).getValues()[1];
             }

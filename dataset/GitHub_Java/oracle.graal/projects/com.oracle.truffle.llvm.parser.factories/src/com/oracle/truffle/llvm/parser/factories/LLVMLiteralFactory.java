@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.parser.factories;
 import java.math.BigInteger;
 import java.util.List;
 
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.literals.LLVMFunctionLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.literals.LLVMSimpleLiteralNode.LLVM80BitFloatLiteralNode;
 import com.oracle.truffle.llvm.nodes.literals.LLVMSimpleLiteralNode.LLVMAddressLiteralNode;
@@ -65,10 +66,10 @@ import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -82,9 +83,10 @@ final class LLVMLiteralFactory {
     private LLVMLiteralFactory() {
     }
 
-    static LLVMExpressionNode createSimpleConstantNoArray(LLVMContext context, Object constant, Type type) {
+    static LLVMExpressionNode createSimpleConstantNoArray(Object constant, Type type) {
         if (Type.isFunctionOrFunctionPointer(type)) {
             if (constant == null) {
+                LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
                 LLVMFunctionDescriptor functionDescriptor = context.getZeroFunctionDescriptor();
                 return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
             } else {
@@ -247,8 +249,8 @@ final class LLVMLiteralFactory {
         } else if (type instanceof PointerType) {
             if (value instanceof LLVMAddress) {
                 return new LLVMAddressLiteralNode((LLVMAddress) value);
-            } else if (value instanceof LLVMGlobalVariable) {
-                return new LLVMAccessGlobalVariableStorageNode((LLVMGlobalVariable) value);
+            } else if (value instanceof LLVMGlobalVariableDescriptor) {
+                return new LLVMAccessGlobalVariableStorageNode((LLVMGlobalVariableDescriptor) value);
             } else {
                 throw new AssertionError(value.getClass());
             }
@@ -280,7 +282,8 @@ final class LLVMLiteralFactory {
         Type elementType = arrayType.getElementType();
         int baseTypeSize = runtime.getByteSize(elementType);
         int size = nrElements * baseTypeSize;
-        LLVMExpressionNode arrayAlloc = runtime.allocateFunctionLifetime(arrayType, size, runtime.getByteAlignment(arrayType));
+        LLVMExpressionNode arrayAlloc = runtime.allocateFunctionLifetime(arrayType, size,
+                        runtime.getByteAlignment(arrayType));
         int byteLength = runtime.getByteSize(elementType);
         if (size == 0) {
             throw new AssertionError(elementType + " has size of 0!");
@@ -309,7 +312,7 @@ final class LLVMLiteralFactory {
         } else if (elementType instanceof PointerType) {
             return LLVMAddressArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMExpressionNode[nrElements]), baseTypeSize, arrayAlloc);
         } else if (elementType instanceof ArrayType || elementType instanceof StructureType) {
-            return LLVMAddressArrayCopyNodeGen.create(arrayValues.toArray(new LLVMExpressionNode[nrElements]), baseTypeSize, arrayAlloc);
+            return LLVMAddressArrayCopyNodeGen.create(runtime.getHeapFunctions(), arrayValues.toArray(new LLVMExpressionNode[nrElements]), baseTypeSize, arrayAlloc);
         }
         throw new AssertionError(elementType);
     }

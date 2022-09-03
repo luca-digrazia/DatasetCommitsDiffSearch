@@ -30,34 +30,34 @@
 package com.oracle.truffle.llvm.parser.factories;
 
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
 import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNodeFactory.LLVMDoubleProfiledValueNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNodeFactory.LLVMFloatProfiledValueNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNodeFactory.LLVMI32ProfiledValueNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNodeFactory.LLVMI64ProfiledValueNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNodeFactory.LLVMI8ProfiledValueNodeGen;
-import com.oracle.truffle.llvm.parser.api.LLVMBaseType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
-public class LLVMValueProfileFactory {
+final class LLVMValueProfileFactory {
 
-    public static LLVMExpressionNode createValueProfiledNode(LLVMExpressionNode argNode, LLVMBaseType paramType) {
-        switch (paramType) {
-            case I8:
-                return LLVMI8ProfiledValueNodeGen.create((LLVMI8Node) argNode);
-            case I32:
-                return LLVMI32ProfiledValueNodeGen.create((LLVMI32Node) argNode);
-            case I64:
-                return LLVMI64ProfiledValueNodeGen.create((LLVMI64Node) argNode);
-            case FLOAT:
-                return LLVMFloatProfiledValueNodeGen.create((LLVMFloatNode) argNode);
-            case DOUBLE:
-                return LLVMDoubleProfiledValueNodeGen.create((LLVMDoubleNode) argNode);
-            default:
-                return argNode;
+    static LLVMExpressionNode createValueProfiledNode(LLVMExpressionNode argNode, Type paramType) {
+        if (paramType instanceof PrimitiveType) {
+            switch (((PrimitiveType) paramType).getPrimitiveKind()) {
+                case I8:
+                    return LLVMI8ProfiledValueNodeGen.create(argNode);
+                case I32:
+                    return LLVMI32ProfiledValueNodeGen.create(argNode);
+                case I64:
+                    return LLVMI64ProfiledValueNodeGen.create(argNode);
+                case FLOAT:
+                    return LLVMFloatProfiledValueNodeGen.create(argNode);
+                case DOUBLE:
+                    return LLVMDoubleProfiledValueNodeGen.create(argNode);
+                default:
+                    return argNode;
+            }
+        } else {
+            return argNode;
         }
     }
 

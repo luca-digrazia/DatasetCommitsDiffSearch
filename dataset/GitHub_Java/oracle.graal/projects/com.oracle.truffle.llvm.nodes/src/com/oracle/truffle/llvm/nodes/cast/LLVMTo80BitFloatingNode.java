@@ -31,8 +31,8 @@ package com.oracle.truffle.llvm.nodes.cast;
 
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class LLVMTo80BitFloatingNode extends LLVMExpressionNode {
 
@@ -61,17 +61,13 @@ public abstract class LLVMTo80BitFloatingNode extends LLVMExpressionNode {
 
         @Specialization
         public LLVM80BitFloat executeLLVM80BitFloatNode(float from) {
-            return LLVM80BitFloat.fromFloat(from);
+            // TODO implement
+            throw new AssertionError(from);
         }
 
         @Specialization
         public LLVM80BitFloat executeLLVM80BitFloatNode(double from) {
             return LLVM80BitFloat.fromDouble(from);
-        }
-
-        @Specialization
-        public LLVM80BitFloat executeLLVM80BitFloatNode(LLVM80BitFloat from) {
-            return from;
         }
     }
 
@@ -95,17 +91,13 @@ public abstract class LLVMTo80BitFloatingNode extends LLVMExpressionNode {
 
         @Specialization
         public LLVM80BitFloat executeLLVM80BitFloatNode(float from) {
-            return LLVM80BitFloat.fromFloat(from);
+            // TODO implement
+            throw new AssertionError(from);
         }
 
         @Specialization
         public LLVM80BitFloat executeLLVM80BitFloatNode(double from) {
             return LLVM80BitFloat.fromDouble(from);
-        }
-
-        @Specialization
-        public LLVM80BitFloat executeLLVM80BitFloatNode(LLVM80BitFloat from) {
-            return from;
         }
     }
 

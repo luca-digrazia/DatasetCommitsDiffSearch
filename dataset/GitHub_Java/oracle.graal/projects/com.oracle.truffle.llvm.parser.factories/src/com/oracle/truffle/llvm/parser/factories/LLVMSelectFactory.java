@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVM80BitFloatSelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMAddressSelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMDoubleSelectNodeGen;
@@ -39,15 +40,7 @@ import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMI1SelectNo
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMI32SelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMI64SelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMI8SelectNodeGen;
-import com.oracle.truffle.llvm.nodes.others.LLVMVectorSelectNodeFactory.LLVMDoubleVectorSelectNodeGen;
-import com.oracle.truffle.llvm.nodes.others.LLVMVectorSelectNodeFactory.LLVMFloatVectorSelectNodeGen;
-import com.oracle.truffle.llvm.nodes.others.LLVMVectorSelectNodeFactory.LLVMI16VectorSelectNodeGen;
-import com.oracle.truffle.llvm.nodes.others.LLVMVectorSelectNodeFactory.LLVMI1VectorSelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMVectorSelectNodeFactory.LLVMI32VectorSelectNodeGen;
-import com.oracle.truffle.llvm.nodes.others.LLVMVectorSelectNodeFactory.LLVMI64VectorSelectNodeGen;
-import com.oracle.truffle.llvm.nodes.others.LLVMVectorSelectNodeFactory.LLVMI8VectorSelectNodeGen;
-import com.oracle.truffle.llvm.nodes.others.LLVMVectorSelectNodeFactory.LLVMAddressVectorSelectNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.Type;
@@ -91,27 +84,11 @@ final class LLVMSelectFactory {
     }
 
     static LLVMExpressionNode createSelectVector(Type llvmType, LLVMExpressionNode condition, LLVMExpressionNode trueValue, LLVMExpressionNode falseValue) {
-        if (llvmType instanceof VectorType) {
-            final Type elementType = ((VectorType) llvmType).getElementType();
-            if (elementType == PrimitiveType.I1) {
-                return LLVMI1VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.I8) {
-                return LLVMI8VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.I16) {
-                return LLVMI16VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.I32) {
-                return LLVMI32VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.I64) {
-                return LLVMI64VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.FLOAT) {
-                return LLVMFloatVectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.DOUBLE) {
-                return LLVMDoubleVectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType instanceof PointerType) {
-                return LLVMAddressVectorSelectNodeGen.create(condition, trueValue, falseValue);
-            }
+        if (llvmType instanceof VectorType && ((VectorType) llvmType).getElementType() == PrimitiveType.I32) {
+            return LLVMI32VectorSelectNodeGen.create(condition, trueValue, falseValue);
+        } else {
+            throw new AssertionError(llvmType);
         }
-        throw new AssertionError("Cannot create vector select for type: " + llvmType);
     }
 
 }

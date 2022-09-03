@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.nodes.cast;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -38,67 +37,19 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleNull;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToI8Node extends LLVMExpressionNode {
 
-    @Specialization
-    public byte executeI8(LLVMFunctionDescriptor from) {
-        return (byte) from.getFunctionPointer();
-    }
-
-    @Specialization
-    public byte executeI8(LLVMFunctionHandle from) {
-        return (byte) from.getFunctionPointer();
-    }
-
-    @Specialization
-    public byte executeLLVMAddress(LLVMGlobalVariable from, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        return (byte) globalAccess.getNativeLocation(from).getVal();
-    }
-
-    @Specialization
-    public byte executeLLVMTruffleObject(LLVMTruffleObject from) {
-        return (byte) (executeTruffleObject(from.getObject()) + from.getOffset());
-    }
-
-    @Child private Node isNull = Message.IS_NULL.createNode();
-    @Child private Node isBoxed = Message.IS_BOXED.createNode();
-    @Child private Node unbox = Message.UNBOX.createNode();
-    @Child private ToLLVMNode convert = ToLLVMNode.createNode(byte.class);
-
-    @Specialization(guards = "notLLVM(from)")
-    public byte executeTruffleObject(TruffleObject from) {
-        if (ForeignAccess.sendIsNull(isNull, from)) {
-            return 0;
-        } else if (ForeignAccess.sendIsBoxed(isBoxed, from)) {
-            try {
-                return (byte) convert.executeWithTarget(ForeignAccess.sendUnbox(unbox, from));
-            } catch (UnsupportedMessageException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
-            }
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw new IllegalStateException("Not convertable");
-    }
-
-    @Specialization
-    public byte executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-        return (byte) convert.executeWithTarget(from.getValue());
-    }
-
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToI8NoZeroExtNode extends LLVMToI8Node {
 
         @Specialization
@@ -147,22 +98,58 @@ public abstract class LLVMToI8Node extends LLVMExpressionNode {
         }
 
         @Specialization
-        public byte executeI8(byte from) {
-            return from;
+        public byte executeI8(LLVMFunctionDescriptor from) {
+            return (byte) from.getFunctionIndex();
         }
 
+        @Specialization
+        public byte executeI8(LLVMFunctionHandle from) {
+            return (byte) from.getFunctionIndex();
+        }
+
+        @Specialization
+        public byte executeLLVMTruffleNull(@SuppressWarnings("unused") LLVMTruffleNull from) {
+            return 0;
+        }
+
+        @Child private Node isNull = Message.IS_NULL.createNode();
+        @Child private Node isBoxed = Message.IS_BOXED.createNode();
+        @Child private Node unbox = Message.UNBOX.createNode();
+        @Child private ToLLVMNode convert = ToLLVMNode.createNode(byte.class);
+
+        @Specialization(guards = "notLLVM(from)")
+        public byte executeTruffleObject(TruffleObject from) {
+            if (ForeignAccess.sendIsNull(isNull, from)) {
+                return 0;
+            } else if (ForeignAccess.sendIsBoxed(isBoxed, from)) {
+                try {
+                    return (byte) convert.executeWithTarget(ForeignAccess.sendUnbox(unbox, from));
+                } catch (UnsupportedMessageException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalStateException(e);
+                }
+            }
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Not convertable");
+        }
+
+        @Specialization
+        public byte executeUnbox(LLVMTruffleObject from) {
+            try {
+                byte head = (byte) convert.executeWithTarget(ForeignAccess.sendUnbox(unbox, from.getObject()));
+                return (byte) (head + from.getOffset());
+            } catch (UnsupportedMessageException e) {
+                throw new UnsupportedOperationException(e);
+            }
+        }
     }
 
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToI8ZeroExtNode extends LLVMToI8Node {
 
         @Specialization
         public byte executeI8(boolean from) {
             return (byte) (from ? 1 : 0);
-        }
-
-        @Specialization
-        public byte executeI8(byte from) {
-            return from;
         }
     }
 

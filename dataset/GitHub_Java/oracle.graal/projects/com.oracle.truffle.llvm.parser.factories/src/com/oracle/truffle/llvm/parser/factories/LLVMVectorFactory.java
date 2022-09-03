@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMDoubleExtractElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMFloatExtractElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMI16ExtractElementNodeGen;
@@ -45,7 +46,6 @@ import com.oracle.truffle.llvm.nodes.vector.LLVMInsertElementNodeFactory.LLVMI64
 import com.oracle.truffle.llvm.nodes.vector.LLVMInsertElementNodeFactory.LLVMI8InsertElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleI32VectorNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleI8VectorNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
 
@@ -56,9 +56,7 @@ final class LLVMVectorFactory {
 
     static LLVMExpressionNode createInsertElement(VectorType resultType, LLVMExpressionNode vector, LLVMExpressionNode element,
                     LLVMExpressionNode index) {
-        if (!(resultType.getElementType() instanceof PrimitiveType))
-            throw new AssertionError(resultType);
-        switch (((PrimitiveType) resultType.getElementType()).getPrimitiveKind()) {
+        switch (resultType.getElementType().getPrimitiveKind()) {
             case I1:
                 return LLVMI1InsertElementNodeGen.create(vector, element, index);
             case I8:
@@ -100,9 +98,7 @@ final class LLVMVectorFactory {
     }
 
     static LLVMExpressionNode createShuffleVector(VectorType resultType, LLVMExpressionNode vector1, LLVMExpressionNode vector2, LLVMExpressionNode mask) {
-        if (!(resultType.getElementType() instanceof PrimitiveType))
-            throw new AssertionError(resultType);
-        switch (((PrimitiveType) resultType.getElementType()).getPrimitiveKind()) {
+        switch (resultType.getElementType().getPrimitiveKind()) {
             case I8:
                 return LLVMShuffleI8VectorNodeGen.create(vector1, vector2, mask);
             case I32:

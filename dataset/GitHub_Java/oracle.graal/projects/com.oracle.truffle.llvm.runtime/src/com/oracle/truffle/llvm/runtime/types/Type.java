@@ -29,56 +29,21 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.nodes.InvalidAssumptionException;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType.PrimitiveKind;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
-public abstract class Type {
+public interface Type {
 
-    @CompilationFinal private Assumption assumption = Truffle.getRuntime().createAssumption();
-    @CompilationFinal private LLVMSourceType sourceType = null;
+    int getBitSize();
 
-    public abstract int getBitSize();
+    void accept(TypeVisitor visitor);
 
-    public abstract void accept(TypeVisitor visitor);
+    int getAlignment(DataSpecConverter targetDataLayout);
 
-    public abstract int getAlignment(DataSpecConverter targetDataLayout);
+    int getSize(DataSpecConverter targetDataLayout);
 
-    public abstract int getSize(DataSpecConverter targetDataLayout);
-
-    public abstract Type shallowCopy();
-
-    @Override
-    public abstract boolean equals(Object obj);
-
-    @Override
-    public abstract int hashCode();
-
-    public LLVMSourceType getSourceType() {
-        try {
-            assumption.check();
-        } catch (InvalidAssumptionException ex) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-        }
-        return sourceType;
-    }
-
-    public void setSourceType(LLVMSourceType sourceType) {
-        if (!this.assumption.isValid() || this.sourceType != sourceType) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.sourceType = sourceType;
-            this.assumption.invalidate();
-            this.assumption = Truffle.getRuntime().createAssumption();
-        }
-    }
-
-    public static Type getIntegerType(int size) {
+    static Type getIntegerType(int size) {
         switch (size) {
             case 1:
                 return PrimitiveType.I1;
@@ -95,11 +60,11 @@ public abstract class Type {
         }
     }
 
-    public static boolean isFunctionOrFunctionPointer(Type type) {
+    static boolean isFunctionOrFunctionPointer(Type type) {
         return type instanceof FunctionType || (type instanceof PointerType && ((PointerType) type).getPointeeType() instanceof FunctionType);
     }
 
-    public static Type createConstantForType(Type type, Object value) {
+    static Type createConstantForType(Type type, Object value) {
         if (type instanceof PrimitiveType) {
             return new PrimitiveType(((PrimitiveType) type).getPrimitiveKind(), value);
         } else {
@@ -107,7 +72,7 @@ public abstract class Type {
         }
     }
 
-    public static boolean isIntegerType(Type type) {
+    static boolean isIntegerType(Type type) {
         if (type instanceof PrimitiveType) {
             PrimitiveType primitive = (PrimitiveType) type;
             PrimitiveKind kind = primitive.getPrimitiveKind();
@@ -116,7 +81,7 @@ public abstract class Type {
         return type instanceof VariableBitWidthType;
     }
 
-    public static boolean isFloatingpointType(Type type) {
+    static boolean isFloatingpointType(Type type) {
         if (type instanceof PrimitiveType) {
             PrimitiveType primitive = (PrimitiveType) type;
             PrimitiveKind kind = primitive.getPrimitiveKind();
@@ -126,7 +91,7 @@ public abstract class Type {
         return false;
     }
 
-    public static FrameSlotKind getFrameSlotKind(Type type) {
+    static FrameSlotKind getFrameSlotKind(Type type) {
         if (type instanceof PrimitiveType) {
             PrimitiveType primitive = (PrimitiveType) type;
             PrimitiveKind kind = primitive.getPrimitiveKind();
@@ -166,11 +131,11 @@ public abstract class Type {
         return FrameSlotKind.Object;
     }
 
-    public static int getPadding(int offset, int alignment) {
+    static int getPadding(int offset, int alignment) {
         return alignment == 0 ? 0 : (alignment - (offset % alignment)) % alignment;
     }
 
-    public static int getPadding(int offset, Type type, DataSpecConverter targetDataLayout) {
+    static int getPadding(int offset, Type type, DataSpecConverter targetDataLayout) {
         final int alignment = type.getAlignment(targetDataLayout);
         return getPadding(offset, alignment);
     }

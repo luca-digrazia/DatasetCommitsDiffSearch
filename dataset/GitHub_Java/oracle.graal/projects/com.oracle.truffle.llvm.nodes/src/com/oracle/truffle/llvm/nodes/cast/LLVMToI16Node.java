@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.nodes.cast;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -38,24 +37,16 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleNull;
 
 public abstract class LLVMToI16Node extends LLVMExpressionNode {
 
     @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToI16NoZeroExtNode extends LLVMToI16Node {
-
-        @Specialization
-        public short executeLLVMFunction(short from) {
-            return from;
-        }
 
         @Specialization
         public short executeI16(boolean from) {
@@ -98,13 +89,8 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
         }
 
         @Specialization
-        public short executeLLVMAddress(LLVMGlobalVariable from, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            return (short) globalAccess.getNativeLocation(from).getVal();
-        }
-
-        @Specialization
-        public short executeLLVMTruffleObject(LLVMTruffleObject from) {
-            return (short) (executeTruffleObject(from.getObject()) + from.getOffset());
+        public short executeLLVMTruffleNull(@SuppressWarnings("unused") LLVMTruffleNull from) {
+            return 0;
         }
 
         @Child private Node isNull = Message.IS_NULL.createNode();
@@ -127,11 +113,6 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Not convertable");
         }
-
-        @Specialization
-        public short executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-            return (short) toShort.executeWithTarget(from.getValue());
-        }
     }
 
     @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
@@ -145,11 +126,6 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
         @Specialization
         public short executeI16(byte from) {
             return (short) (from & LLVMExpressionNode.I8_MASK);
-        }
-
-        @Specialization
-        public short executeLLVMFunction(short from) {
-            return from;
         }
     }
 }

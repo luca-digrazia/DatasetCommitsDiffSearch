@@ -37,69 +37,19 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleNull;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToI32Node extends LLVMExpressionNode {
 
-    @Specialization
-    public int executeI32(LLVMFunctionDescriptor from) {
-        return from.getFunctionIndex();
-    }
-
-    @Specialization
-    public int executeI32(LLVMFunctionHandle from) {
-        return from.getFunctionIndex();
-    }
-
-    @Specialization
-    public int executeLLVMAddress(LLVMGlobalVariable from) {
-        return (int) from.getNativeLocation().getVal();
-    }
-
-    @Specialization
-    public int executeLLVMTruffleObject(LLVMTruffleObject from) {
-        return (int) (executeTruffleObject(from.getObject()) + from.getOffset());
-    }
-
-    @Child private Node isNull = Message.IS_NULL.createNode();
-    @Child private Node isBoxed = Message.IS_BOXED.createNode();
-    @Child private Node unbox = Message.UNBOX.createNode();
-    @Child private Node asPointer = Message.AS_POINTER.createNode();
-    @Child private Node toNative = Message.TO_NATIVE.createNode();
-    @Child private ToLLVMNode convert = ToLLVMNode.createNode(int.class);
-
-    @Specialization(guards = "notLLVM(from)")
-    public int executeTruffleObject(TruffleObject from) {
-        try {
-            if (ForeignAccess.sendIsNull(isNull, from)) {
-                return 0;
-            } else if (ForeignAccess.sendIsBoxed(isBoxed, from)) {
-                return (int) convert.executeWithTarget(ForeignAccess.sendUnbox(unbox, from));
-            } else {
-                TruffleObject n = (TruffleObject) ForeignAccess.sendToNative(toNative, from);
-                return (int) (ForeignAccess.sendAsPointer(asPointer, n));
-            }
-        } catch (UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException(e);
-        }
-    }
-
-    @Specialization
-    public int executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-        return (int) convert.executeWithTarget(from.getValue());
-    }
-
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToI32NoZeroExtNode extends LLVMToI32Node {
 
         @Specialization
@@ -148,12 +98,54 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
         }
 
         @Specialization
-        public int executeI32(int from) {
-            return from;
+        public int executeI32(LLVMFunctionDescriptor from) {
+            return from.getFunctionIndex();
+        }
+
+        @Specialization
+        public int executeI32(LLVMFunctionHandle from) {
+            return from.getFunctionIndex();
+        }
+
+        @Specialization
+        public int executeLLVMTruffleNull(@SuppressWarnings("unused") LLVMTruffleNull from) {
+            return 0;
+        }
+
+        @Child private Node isNull = Message.IS_NULL.createNode();
+        @Child private Node isBoxed = Message.IS_BOXED.createNode();
+        @Child private Node unbox = Message.UNBOX.createNode();
+        @Child private ToLLVMNode convert = ToLLVMNode.createNode(int.class);
+
+        @Specialization(guards = "notLLVM(from)")
+        public int executeTruffleObject(TruffleObject from) {
+            if (ForeignAccess.sendIsNull(isNull, from)) {
+                return 0;
+            } else if (ForeignAccess.sendIsBoxed(isBoxed, from)) {
+                try {
+                    return (int) convert.executeWithTarget(ForeignAccess.sendUnbox(unbox, from));
+                } catch (UnsupportedMessageException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalStateException(e);
+                }
+            }
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Not convertable");
+        }
+
+        @Specialization
+        public int executeUnbox(LLVMTruffleObject from) {
+            try {
+                int head = (int) convert.executeWithTarget(ForeignAccess.sendUnbox(unbox, from.getObject()));
+                return (int) (head + from.getOffset());
+            } catch (UnsupportedMessageException e) {
+                throw new UnsupportedOperationException(e);
+            }
         }
 
     }
 
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToI32ZeroExtNode extends LLVMToI32Node {
 
         @Specialization
@@ -175,26 +167,18 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
         public int executeI32(LLVMIVarBit from) {
             return from.getZeroExtendedIntValue();
         }
-
-        @Specialization
-        public int executeI32(int from) {
-            return from;
-        }
     }
 
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToI32BitNode extends LLVMToI32Node {
 
         @Specialization
         public int executeI32(float from) {
             return Float.floatToIntBits(from);
         }
-
-        @Specialization
-        public int executeI32(int from) {
-            return from;
-        }
     }
 
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMToUnsignedI32Node extends LLVMToI32Node {
 
         @Specialization
@@ -203,11 +187,6 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
                 return (int) (from + Integer.MIN_VALUE) - Integer.MIN_VALUE;
             }
             return (int) from;
-        }
-
-        @Specialization
-        public int executeI32(int from) {
-            return from;
         }
     }
 }

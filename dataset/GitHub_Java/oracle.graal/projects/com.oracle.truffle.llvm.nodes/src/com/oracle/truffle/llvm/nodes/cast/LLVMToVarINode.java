@@ -32,9 +32,8 @@ package com.oracle.truffle.llvm.nodes.cast;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class LLVMToVarINode extends LLVMExpressionNode {
 
@@ -68,11 +67,6 @@ public abstract class LLVMToVarINode extends LLVMExpressionNode {
         public LLVMIVarBit executeI8(LLVMIVarBit from) {
             return LLVMIVarBit.create(getBits(), from.getSignExtendedBytes());
         }
-
-        @Specialization
-        public LLVMIVarBit executeI8(LLVM80BitFloat from) {
-            return LLVMIVarBit.create(getBits(), from.getBytes());
-        }
     }
 
     @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
@@ -82,38 +76,13 @@ public abstract class LLVMToVarINode extends LLVMExpressionNode {
         public abstract int getBits();
 
         @Specialization
-        public LLVMIVarBit executeI8(byte from) {
-            return LLVMIVarBit.createZeroExt(getBits(), from);
-        }
-
-        @Specialization
-        public LLVMIVarBit executeI16(short from) {
-            return LLVMIVarBit.createZeroExt(getBits(), from);
-        }
-
-        @Specialization
         public LLVMIVarBit executeI32(int from) {
             return LLVMIVarBit.createZeroExt(getBits(), from);
         }
 
         @Specialization
-        public LLVMIVarBit executeI64(long from) {
+        public LLVMIVarBit executeI32(long from) {
             return LLVMIVarBit.createZeroExt(getBits(), from);
         }
-
-        @Specialization
-        public LLVMIVarBit executeVarI(LLVMIVarBit from) {
-            return LLVMIVarBit.create(getBits(), from.getBytes());
-        }
     }
-
-    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
-    public abstract static class LLVM80BitFloatToIVarBitwidthNode extends LLVMToVarINode {
-
-        @Specialization
-        public LLVMIVarBit execute80BitFloat(LLVM80BitFloat from) {
-            return LLVMIVarBit.create(80, from.getBytes());
-        }
-    }
-
 }
