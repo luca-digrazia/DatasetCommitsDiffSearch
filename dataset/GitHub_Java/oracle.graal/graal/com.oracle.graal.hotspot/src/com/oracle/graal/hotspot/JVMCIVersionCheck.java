@@ -37,21 +37,23 @@ import java.util.Formatter;
 class JVMCIVersionCheck {
 
     private static final int JVMCI8_MIN_MAJOR_VERSION = 0;
-    private static final int JVMCI8_MIN_MINOR_VERSION = 10;
+    private static final int JVMCI8_MIN_MINOR_VERSION = 23;
 
-    // An educated guess that may have to be refined
-    private static final int JVMCI9_MIN_EA_BUILD = 123;
+    // Will be updated once an ea build with the required JVMCI API is available.
+    private static final int JVMCI9_MIN_EA_BUILD = 143;
 
     private static void failVersionCheck(boolean exit, String reason, Object... args) {
         Formatter errorMessage = new Formatter().format(reason, args);
         String javaHome = System.getProperty("java.home");
         String vmName = System.getProperty("java.vm.name");
+        errorMessage.format("Set the JVMCI_VERSION_CHECK environment variable to \"ignore\" to suppress ");
+        errorMessage.format("this error or to \"warn\" to emit a warning and continue execution.%n");
         errorMessage.format("Currently used Java home directory is %s.%n", javaHome);
         errorMessage.format("Currently used VM configuration is: %s%n", vmName);
         if (System.getProperty("java.specification.version").compareTo("1.9") < 0) {
-            errorMessage.format("Download the latest JVMCI JDK8 from http://www.oracle.com/technetwork/oracle-labs/program-languages/downloads/index.html");
+            errorMessage.format("Download the latest JVMCI JDK 8 from http://www.oracle.com/technetwork/oracle-labs/program-languages/downloads/index.html");
         } else {
-            errorMessage.format("Download the latest JDK9 EA from https://jdk9.java.net/download/");
+            errorMessage.format("Download the latest JDK 9 EA from https://jdk9.java.net/download/");
         }
         String value = System.getenv("JVMCI_VERSION_CHECK");
         if ("warn".equals(value)) {
@@ -93,6 +95,14 @@ class JVMCIVersionCheck {
             failVersionCheck(exitOnFailure, "The VM does not support the minimum JVMCI API version required by Graal.%n" +
                             "Cannot read JVMCI version from java.vm.version property: %s.%n", vmVersion);
         } else {
+            if (vmVersion.contains("SNAPSHOT")) {
+                // The snapshot of http://hg.openjdk.java.net/jdk9/hs tip is expected to work
+                return;
+            }
+            if (vmVersion.contains("internal")) {
+                // Allow local builds
+                return;
+            }
             // http://openjdk.java.net/jeps/223
             // Only support EA builds until GA is available
             if (vmVersion.startsWith("9-ea+")) {
@@ -106,7 +116,7 @@ class JVMCIVersionCheck {
                 if (build >= JVMCI9_MIN_EA_BUILD) {
                     return;
                 }
-                failVersionCheck(exitOnFailure, "The VM is an insufficiently recent EA JDK9 build for Graal: %d < %d.%n", build < JVMCI9_MIN_EA_BUILD);
+                failVersionCheck(exitOnFailure, "The VM is an insufficiently recent EA JDK9 build for Graal: %d < %d.%n", build, JVMCI9_MIN_EA_BUILD);
                 return;
             }
             failVersionCheck(exitOnFailure, "The VM does not support the minimum JVMCI API version required by Graal.%n" +
