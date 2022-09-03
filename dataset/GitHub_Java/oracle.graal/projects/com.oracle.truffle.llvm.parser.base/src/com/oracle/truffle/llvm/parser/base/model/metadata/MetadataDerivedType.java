@@ -31,11 +31,11 @@ package com.oracle.truffle.llvm.parser.base.model.metadata;
 
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock.MetadataReference;
-import com.oracle.truffle.llvm.parser.base.model.metadata.subtypes.MSTName;
-import com.oracle.truffle.llvm.parser.base.model.metadata.subtypes.MSTSizeAlignOffset;
+import com.oracle.truffle.llvm.parser.base.model.metadata.subtypes.MetadataSubtypeName;
+import com.oracle.truffle.llvm.parser.base.model.metadata.subtypes.MetadataSubytypeSizeAlignOffset;
 import com.oracle.truffle.llvm.parser.base.model.visitors.MetadataVisitor;
 
-public class MetadataDerivedType implements MetadataBaseNode, MSTName, MSTSizeAlignOffset {
+public class MetadataDerivedType implements MetadataBaseNode, MetadataSubtypeName, MetadataSubytypeSizeAlignOffset {
 
     private MetadataReference name = MetadataBlock.voidRef;
     private MetadataReference file = MetadataBlock.voidRef;
@@ -146,20 +146,8 @@ public class MetadataDerivedType implements MetadataBaseNode, MSTName, MSTSizeAl
         return builder.toString();
     }
 
-    public boolean isOnlyReference() {
-        if (size != 0) {
-            return false;
-        }
-        if (align != 0) {
-            return false;
-        }
-        if (offset != 0) {
-            return false;
-        }
-        if (flags != 0) {
-            return false;
-        }
-        return true;
+    private boolean isOnlyReference() {
+        return size == 0 && align == 0 && offset == 0 && flags == 0;
     }
 
     public MetadataReference getTrueBaseType() {

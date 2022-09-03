@@ -29,37 +29,22 @@
  */
 package com.oracle.truffle.llvm.parser.base.model.functions;
 
-import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
 import com.oracle.truffle.llvm.parser.base.model.symbols.constants.Constant;
 import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
-import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
 
-public final class FunctionDeclaration extends FunctionType implements Constant, ValueSymbol {
-
-    private String name = ValueSymbol.UNKNOWN;
+public final class FunctionDeclaration extends FunctionType implements Constant {
 
     public FunctionDeclaration(FunctionType type) {
         super(type.getReturnType(), type.getArgumentTypes(), type.isVarArg());
     }
 
     @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public Type getType() {
-        return new PointerType(super.getType());
-    }
-
-    @Override
-    public void setName(String name) {
-        this.name = "@" + name;
+    public boolean equals(Object obj) {
+        return obj instanceof FunctionDeclaration && super.equals(obj);
     }
 
     @Override
     public String toString() {
-        return "FunctionDeclaration [name=" + name + ", types=" + super.toString() + "]";
+        return "FunctionDeclaration [name=" + getName() + ", types=" + super.toString() + "]";
     }
 }

@@ -33,6 +33,9 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.Objects;
 
 import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock;
@@ -56,13 +59,12 @@ import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ValueInstr
 import com.oracle.truffle.llvm.parser.base.model.types.FloatingPointType;
 import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
 import com.oracle.truffle.llvm.parser.base.model.types.IntegerType;
-import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.llvm.parser.base.model.generators.FunctionGenerator;
 import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionGenerator;
 import com.oracle.truffle.llvm.parser.base.model.visitors.FunctionVisitor;
 
-public final class FunctionDefinition extends FunctionType implements Constant, FunctionGenerator, ValueSymbol {
+public final class FunctionDefinition extends FunctionType implements Constant, FunctionGenerator {
 
     private final Symbols symbols = new Symbols();
 
@@ -71,8 +73,6 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     private InstructionBlock[] blocks = new InstructionBlock[0];
 
     private int currentBlock = 0;
-
-    private String name = ValueSymbol.UNKNOWN;
 
     private MetadataBlock metadata;
 
@@ -96,7 +96,6 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
         for (int i = 0; i < count; i++) {
             blocks[i] = new InstructionBlock(this, i);
         }
-        blocks[0].setName("0");
     }
 
     @Override
@@ -108,28 +107,29 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     @Override
     public void exitFunction() {
-        int valueSymbolIdentifier = 0;
-        int blockIdentifier = 1; // Zero clashes with entry block in sulong
+        int symbolIndex = 0;
 
         // in K&R style function declarations the parameters are not assigned names
         for (final FunctionParameter parameter : parameters) {
             if (ValueSymbol.UNKNOWN.equals(parameter.getName())) {
-                parameter.setName(String.valueOf(valueSymbolIdentifier++));
+                parameter.setName(String.valueOf(symbolIndex++));
             }
         }
 
+        final Set<String> explicitBlockNames = Arrays.stream(blocks).map(InstructionBlock::getName).filter(blockName -> !ValueSymbol.UNKNOWN.equals(blockName)).collect(Collectors.toSet());
         for (final InstructionBlock block : blocks) {
             if (block.getName().equals(ValueSymbol.UNKNOWN)) {
-                // compilers like to assign numbers as blocknames, we name unnamed blocks this way
-                // to prevent name clashes
-                block.setName(String.format("%s\"%d\"", ValueSymbol.UNKNOWN, blockIdentifier++));
+                do {
+                    block.setName(String.valueOf(symbolIndex++));
+                    // avoid name clashes
+                } while (explicitBlockNames.contains(block.getName()));
             }
             for (int i = 0; i < block.getInstructionCount(); i++) {
                 final Instruction instruction = block.getInstruction(i);
                 if (instruction instanceof ValueInstruction) {
                     final ValueInstruction value = (ValueInstruction) instruction;
                     if (value.getName().equals(ValueSymbol.UNKNOWN)) {
-                        value.setName(String.valueOf(valueSymbolIdentifier++));
+                        value.setName(String.valueOf(symbolIndex++));
                     }
                 }
             }
@@ -153,16 +153,6 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
         return Arrays.asList(blocks);
     }
 
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public Type getType() {
-        return new PointerType(super.getType());
-    }
-
     public List<FunctionParameter> getParameters() {
         return parameters;
     }
@@ -184,11 +174,6 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     @Override
     public void nameFunction(int index, int offset, String argName) {
         symbols.setSymbolName(index, argName);
-    }
-
-    @Override
-    public void setName(String name) {
-        this.name = "@" + name;
     }
 
     @Override
@@ -237,8 +222,8 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     }
 
     @Override
-    public void createInlineASM(Type type, long[] args) {
-        symbols.addSymbol(InlineAsmConstant.generate(type, args));
+    public void createInlineASM(Type type, long[] asm) {
+        symbols.addSymbol(InlineAsmConstant.generate(type, asm));
     }
 
     @Override
@@ -267,7 +252,25 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     }
 
     @Override
+    public int hashCode() {
+        int hash = super.hashCode();
+        hash = 43 * hash + ((parameters == null) ? 0 : parameters.hashCode());
+        hash = 43 * hash + ((symbols == null) ? 0 : symbols.hashCode());
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof FunctionDefinition) {
+            FunctionDefinition other = (FunctionDefinition) obj;
+            return super.equals(other) && Objects.equals(parameters, other.parameters) && Objects.equals(symbols, other.symbols) && Arrays.equals(blocks, other.blocks) &&
+                            currentBlock == other.currentBlock;
+        }
+        return false;
+    }
+
+    @Override
     public String toString() {
-        return "FunctionDefinition [symbolCount=" + symbols.getSize() + ", parameters=" + parameters + ", blocks=" + blocks.length + ", currentBlock=" + currentBlock + ", name=" + name + "]";
+        return "FunctionDefinition [symbolCount=" + symbols.getSize() + ", parameters=" + parameters + ", blocks=" + blocks.length + ", currentBlock=" + currentBlock + ", name=" + getName() + "]";
     }
 }

@@ -214,8 +214,12 @@ public final class LLVMBitcodeVisitor implements ModelVisitor {
         this.factoryFacade = factoryFacade;
         this.parserRuntime = new LLVMBitcodeVisitorParserRuntime();
         this.factoryFacade.setUpFacade(this.parserRuntime);
-        this.symbolResolver = new LLVMSymbolResolver(labels, parserRuntime);
+        this.symbolResolver = new LLVMSymbolResolver(this::getGlobalVariable, labels, parserRuntime);
         nativeLookup = new NativeLookup(factoryFacade);
+    }
+
+    public LLVMLabelList getLabels() {
+        return labels;
     }
 
     private LLVMExpressionNode createFunction(FunctionDefinition method, LLVMLifetimeAnalysis lifetimes) {
@@ -272,18 +276,12 @@ public final class LLVMBitcodeVisitor implements ModelVisitor {
         return factoryFacade.createFrameNuller(identifier, type, slot);
     }
 
-    boolean needsStackPointerArgument() {
-        Optional<Boolean> hasStackPointerArgument = factoryFacade.hasStackPointerArgument();
-        return hasStackPointerArgument.isPresent() && hasStackPointerArgument.get();
-    }
-
     private List<LLVMNode> createParameters(FrameDescriptor frame, FunctionDefinition method) {
         final List<FunctionParameter> parameters = method.getParameters();
         final List<LLVMNode> formalParamInits = new ArrayList<>();
-        if (needsStackPointerArgument()) {
-            final LLVMExpressionNode stackPointerNode = factoryFacade.createFunctionArgNode(0, LLVMBaseType.ADDRESS);
-            formalParamInits.add(factoryFacade.createFrameWrite(LLVMBaseType.ADDRESS, stackPointerNode, frame.findFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID)));
-        }
+
+        final LLVMExpressionNode stackPointerNode = factoryFacade.createFunctionArgNode(0, LLVMBaseType.ADDRESS);
+        formalParamInits.add(factoryFacade.createFrameWrite(LLVMBaseType.ADDRESS, stackPointerNode, frame.findFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID)));
 
         final Optional<Integer> argStartIndex = factoryFacade.getArgStartIndex();
         if (!argStartIndex.isPresent()) {
@@ -359,7 +357,7 @@ public final class LLVMBitcodeVisitor implements ModelVisitor {
         return functions;
     }
 
-    private LLVMExpressionNode getGlobalVariable(GlobalValueSymbol global) {
+    LLVMExpressionNode getGlobalVariable(GlobalValueSymbol global) {
         Symbol g = global;
         while (g instanceof GlobalAlias) {
             g = aliases.get(g);
@@ -564,19 +562,24 @@ public final class LLVMBitcodeVisitor implements ModelVisitor {
         @Override
         public LLVMExpressionNode allocateVectorResult(Object type) {
             final Type vectorType = (Type) type;
-            final int size = getByteSize(vectorType);
-            final int alignment = getByteAlignment(vectorType);
+            final int size = ((Type) type).getSize(targetDataLayout);
+            final int alignment = vectorType.getAlignment(targetDataLayout);
             return factoryFacade.createAlloc(vectorType, size, alignment, null, null);
         }
 
         @Override
-        public Object getGlobalAddress(GlobalValueSymbol var) {
-            return getGlobalVariable(var);
+        public Object getGlobalAddress(GlobalVariable var) {
+            throw new UnsupportedOperationException("Not implemented!");
         }
 
         @Override
         public FrameSlot getStackPointerSlot() {
             return functionVisitor != null ? functionVisitor.getStackSlot() : stack.getRootStackSlot();
+        }
+
+        @Override
+        public int getBitAlignment(LLVMBaseType type) {
+            return targetDataLayout.getBitAlignment(type);
         }
 
         @Override
