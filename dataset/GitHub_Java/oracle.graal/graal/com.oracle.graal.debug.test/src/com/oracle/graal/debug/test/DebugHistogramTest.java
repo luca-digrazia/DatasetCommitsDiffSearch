@@ -27,7 +27,6 @@ import java.io.*;
 import org.junit.*;
 
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.internal.*;
 
 public class DebugHistogramTest {
 
@@ -35,7 +34,7 @@ public class DebugHistogramTest {
     public void testEmptyHistogram() {
         DebugHistogram histogram = Debug.createHistogram("TestHistogram");
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        new DebugHistogramAsciiPrinter(new PrintStream(outputStream)).print(histogram);
+        histogram.print(new PrintStream(outputStream));
         Assert.assertEquals("TestHistogram is empty.\n", outputStream.toString());
     }
 
@@ -45,7 +44,7 @@ public class DebugHistogramTest {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         histogram.add(new Integer(1));
         histogram.add(new Integer(1));
-        new DebugHistogramAsciiPrinter(new PrintStream(outputStream)).print(histogram);
+        histogram.print(new PrintStream(outputStream));
         String[] lines = outputStream.toString().split("\n");
         Assert.assertEquals(4, lines.length);
         Assert.assertEquals("TestHistogram has 1 unique elements and 2 total elements:", lines[0]);
@@ -67,7 +66,7 @@ public class DebugHistogramTest {
         histogram.add(new Integer(1));
         histogram.add(new Integer(2));
         histogram.add(new Integer(2));
-        new DebugHistogramAsciiPrinter(new PrintStream(outputStream)).print(histogram);
+        histogram.print(new PrintStream(outputStream));
         String[] lines = outputStream.toString().split("\n");
         Assert.assertEquals(5, lines.length);
         Assert.assertEquals("TestHistogram has 2 unique elements and 3 total elements:", lines[0]);
@@ -90,7 +89,7 @@ public class DebugHistogramTest {
         DebugHistogram histogram = Debug.createHistogram("TestHistogram");
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         histogram.add("MyCustomValue");
-        new DebugHistogramAsciiPrinter(new PrintStream(outputStream), Integer.MAX_VALUE, 10, 10).print(histogram);
+        histogram.print(new PrintStream(outputStream), Integer.MAX_VALUE, 10, 10);
         String[] lines = outputStream.toString().split("\n");
         Assert.assertEquals(4, lines.length);
         Assert.assertEquals("TestHistogram has 1 unique elements and 1 total elements:", lines[0]);
