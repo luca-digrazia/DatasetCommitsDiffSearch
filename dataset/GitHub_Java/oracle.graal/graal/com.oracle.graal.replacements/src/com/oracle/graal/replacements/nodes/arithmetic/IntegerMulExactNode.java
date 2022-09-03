@@ -22,27 +22,20 @@
  */
 package com.oracle.graal.replacements.nodes.arithmetic;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_4;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
-
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.MulNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
-
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Node representing an exact integer multiplication that will throw an {@link ArithmeticException}
  * in case the addition would overflow the 32 bit range.
  */
-@NodeInfo(cycles = CYCLES_4, cyclesRationale = "mul+cmp", size = SIZE_2)
+@NodeInfo
 public final class IntegerMulExactNode extends MulNode implements IntegerExactArithmeticNode {
     public static final NodeClass<IntegerMulExactNode> TYPE = NodeClass.create(IntegerMulExactNode.class);
 
@@ -79,12 +72,12 @@ public final class IntegerMulExactNode extends MulNode implements IntegerExactAr
     private ValueNode canonicalXconstant(ValueNode forX, ValueNode forY) {
         JavaConstant xConst = forX.asJavaConstant();
         JavaConstant yConst = forY.asJavaConstant();
-        assert xConst.getJavaKind() == yConst.getJavaKind();
+        assert xConst.getKind() == yConst.getKind();
         try {
-            if (xConst.getJavaKind() == JavaKind.Int) {
+            if (xConst.getKind() == Kind.Int) {
                 return ConstantNode.forInt(Math.multiplyExact(xConst.asInt(), yConst.asInt()));
             } else {
-                assert xConst.getJavaKind() == JavaKind.Long;
+                assert xConst.getKind() == Kind.Long;
                 return ConstantNode.forLong(Math.multiplyExact(xConst.asLong(), yConst.asLong()));
             }
         } catch (ArithmeticException ex) {
