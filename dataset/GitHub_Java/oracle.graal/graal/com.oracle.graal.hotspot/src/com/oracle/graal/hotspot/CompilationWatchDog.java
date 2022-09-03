@@ -251,7 +251,7 @@ class CompilationWatchDog extends Thread implements AutoCloseable {
     private static final ThreadLocal<CompilationWatchDog> WATCH_DOGS = ENABLED ? new ThreadLocal<>() : null;
 
     /**
-     * Opens a scope for watching the compilation of a given method.
+     * Opens a scope in which a given method is about to be compiled.
      *
      * @param method a method about to be compiled
      * @return {@code null} if the compilation watch dog is disabled otherwise this object. The
@@ -259,7 +259,7 @@ class CompilationWatchDog extends Thread implements AutoCloseable {
      *         is the whole compilation so that leaving the scope will cause {@link #close()} to be
      *         called.
      */
-    static CompilationWatchDog watch(ResolvedJavaMethod method) {
+    static CompilationWatchDog startingCompilation(ResolvedJavaMethod method) {
         if (ENABLED) {
             // Lazily get a watch dog thread for the current compiler thread
             CompilationWatchDog watchDog = WATCH_DOGS.get();
