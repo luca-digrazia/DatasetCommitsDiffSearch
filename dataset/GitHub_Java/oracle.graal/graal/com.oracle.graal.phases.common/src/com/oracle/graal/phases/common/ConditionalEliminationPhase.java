@@ -505,15 +505,15 @@ public class ConditionalEliminationPhase extends Phase {
                     }
                     ValueAnchorNode anchor = null;
                     if (replacementAnchor == null) {
-                        anchor = graph.add(new ValueAnchorNode(null));
+                        anchor = graph.add(new ValueAnchorNode());
                         replacementAnchor = anchor;
                     }
                     PiNode piNode;
                     if (isNull) {
                         ConstantNode nullObject = ConstantNode.forObject(null, metaAccessProvider, graph);
-                        piNode = graph.unique(new PiNode(nullObject, StampFactory.forConstant(nullObject.value, metaAccessProvider), replacementAnchor.asNode()));
+                        piNode = graph.unique(new PiNode(nullObject, StampFactory.forConstant(nullObject.value, metaAccessProvider), replacementAnchor));
                     } else {
-                        piNode = graph.unique(new PiNode(object, StampFactory.declared(type, nonNull), replacementAnchor.asNode()));
+                        piNode = graph.unique(new PiNode(object, StampFactory.declared(type, nonNull), replacementAnchor));
                     }
                     checkCast.replaceAtUsages(piNode);
                     if (anchor != null) {
@@ -522,23 +522,6 @@ public class ConditionalEliminationPhase extends Phase {
                         graph.removeFixed(checkCast);
                     }
                     metricCheckCastRemoved.increment();
-                }
-            } else if (node instanceof ConditionAnchorNode) {
-                ConditionAnchorNode conditionAnchorNode = (ConditionAnchorNode) node;
-                LogicNode condition = conditionAnchorNode.condition();
-                ValueNode replacementAnchor = null;
-                if (conditionAnchorNode.isNegated()) {
-                    if (state.falseConditions.containsKey(condition)) {
-                        replacementAnchor = state.falseConditions.get(condition);
-                    }
-                } else {
-                    if (state.trueConditions.containsKey(condition)) {
-                        replacementAnchor = state.trueConditions.get(condition);
-                    }
-                }
-                if (replacementAnchor != null) {
-                    conditionAnchorNode.replaceAtUsages(replacementAnchor);
-                    conditionAnchorNode.graph().removeFixed(conditionAnchorNode);
                 }
             } else if (node instanceof IfNode) {
                 IfNode ifNode = (IfNode) node;
