@@ -26,18 +26,16 @@ import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 
 import java.lang.reflect.*;
 
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.word.*;
+
+// JaCoCo Exclude
 
 /**
  * Substitutions for {@link java.lang.Class} methods.
  */
-@ClassSubstitution(java.lang.Class.class)
 public class HotSpotClassSubstitutions {
 
-    @MethodSubstitution(isStatic = false, forced = true)
     public static int getModifiers(final Class<?> thisObj) {
         KlassPointer klass = ClassGetHubNode.readClass(thisObj);
         if (klass.isNull()) {
@@ -48,10 +46,10 @@ public class HotSpotClassSubstitutions {
         }
     }
 
-    @MethodSubstitution(isStatic = false, forced = true)
     public static boolean isInterface(final Class<?> thisObj) {
         KlassPointer klass = ClassGetHubNode.readClass(thisObj);
         if (klass.isNull()) {
+            // Class for primitive type
             return false;
         } else {
             int accessFlags = klass.readInt(klassAccessFlagsOffset(), KLASS_ACCESS_FLAGS_LOCATION);
@@ -59,25 +57,21 @@ public class HotSpotClassSubstitutions {
         }
     }
 
-    @MethodSubstitution(isStatic = false, forced = true)
     public static boolean isArray(final Class<?> thisObj) {
         KlassPointer klass = ClassGetHubNode.readClass(thisObj);
         if (klass.isNull()) {
+            // Class for primitive type
             return false;
         } else {
             return klassIsArray(klass);
         }
     }
 
-    @MethodSubstitution(isStatic = false, forced = true)
     public static boolean isPrimitive(final Class<?> thisObj) {
         KlassPointer klass = ClassGetHubNode.readClass(thisObj);
         return klass.isNull();
     }
 
-    public static native ClassLoader getClassLoader0(Class<?> thisObj);
-
-    @MethodSubstitution(isStatic = false)
     public static Class<?> getSuperclass(final Class<?> thisObj) {
         KlassPointer klass = ClassGetHubNode.readClass(thisObj);
         if (!klass.isNull()) {
@@ -86,29 +80,32 @@ public class HotSpotClassSubstitutions {
                 if (klassIsArray(klass)) {
                     return Object.class;
                 } else {
-                    Word superKlass = klass.readWord(klassSuperKlassOffset(), KLASS_SUPER_KLASS_LOCATION);
-                    if (superKlass.equal(0)) {
+                    KlassPointer superKlass = klass.readKlassPointer(klassSuperKlassOffset(), KLASS_SUPER_KLASS_LOCATION);
+                    if (superKlass.isNull()) {
                         return null;
                     } else {
                         return readJavaMirror(superKlass);
                     }
                 }
             }
+        } else {
+            // Class for primitive type
         }
         return null;
     }
 
-    public static Class<?> readJavaMirror(Word klass) {
-        return PiNode.asNonNullClass(klass.readObject(classMirrorOffset(), CLASS_MIRROR_LOCATION));
+    public static Class<?> readJavaMirror(KlassPointer klass) {
+        return PiNode.asNonNullClass(HubGetClassNode.readClass(klass));
     }
 
-    @MethodSubstitution(isStatic = false)
     public static Class<?> getComponentType(final Class<?> thisObj) {
         KlassPointer klass = ClassGetHubNode.readClass(thisObj);
         if (!klass.isNull()) {
             if (klassIsArray(klass)) {
                 return PiNode.asNonNullClass(klass.readObject(arrayKlassComponentMirrorOffset(), ARRAY_KLASS_COMPONENT_MIRROR));
             }
+        } else {
+            // Class for primitive type
         }
         return null;
     }
