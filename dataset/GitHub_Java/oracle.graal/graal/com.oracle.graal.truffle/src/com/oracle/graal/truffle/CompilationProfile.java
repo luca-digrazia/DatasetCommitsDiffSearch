@@ -28,24 +28,19 @@ import java.util.*;
 
 public class CompilationProfile {
 
-    private static final int TIMESTAMP_THRESHOLD = Math.max(TruffleCompilationThreshold.getValue() / 2, 1);
-
     /**
      * Number of times an installed code for this tree was invalidated.
      */
     private int invalidationCount;
-    private int deferedCount;
 
     private int interpreterCallCount;
     private int interpreterCallAndLoopCount;
     private int compilationCallThreshold;
     private int compilationCallAndLoopThreshold;
 
-    private long timestamp;
-
     public CompilationProfile() {
-        compilationCallThreshold = TruffleMinInvokeThreshold.getValue();
-        compilationCallAndLoopThreshold = TruffleCompilationThreshold.getValue();
+        this.compilationCallThreshold = TruffleMinInvokeThreshold.getValue();
+        this.compilationCallAndLoopThreshold = TruffleCompilationThreshold.getValue();
     }
 
     @Override
@@ -59,8 +54,8 @@ public class CompilationProfile {
         String callsThreshold = String.format("%7d/%5d", getInterpreterCallCount(), getCompilationCallThreshold());
         String loopsThreshold = String.format("%7d/%5d", getInterpreterCallAndLoopCount(), getCompilationCallAndLoopThreshold());
         String invalidations = String.format("%5d", invalidationCount);
-        properties.put("Calls/Thres", callsThreshold);
-        properties.put("CallsAndLoop/Thres", loopsThreshold);
+        properties.put("C/T", callsThreshold);
+        properties.put("L/T", loopsThreshold);
         properties.put("Inval#", invalidations);
         return properties;
     }
@@ -75,10 +70,6 @@ public class CompilationProfile {
 
     public int getInterpreterCallCount() {
         return interpreterCallCount;
-    }
-
-    public int getDeferedCount() {
-        return deferedCount;
     }
 
     public int getCompilationCallAndLoopThreshold() {
@@ -110,11 +101,6 @@ public class CompilationProfile {
     public void reportInterpreterCall() {
         interpreterCallCount++;
         interpreterCallAndLoopCount++;
-
-        int callsMissing = compilationCallAndLoopThreshold - interpreterCallAndLoopCount;
-        if (callsMissing == TIMESTAMP_THRESHOLD) {
-            timestamp = System.nanoTime();
-        }
     }
 
     public void reportDirectCall() {
@@ -129,19 +115,8 @@ public class CompilationProfile {
 
     }
 
-    public void deferCompilation() {
-        ensureProfiling(0, TIMESTAMP_THRESHOLD + 1);
-        timestamp = 0;
-        deferedCount++;
-    }
-
     void reportLoopCount(int count) {
         interpreterCallAndLoopCount += count;
-
-        int callsMissing = compilationCallAndLoopThreshold - interpreterCallAndLoopCount;
-        if (callsMissing <= TIMESTAMP_THRESHOLD && callsMissing + count > TIMESTAMP_THRESHOLD) {
-            timestamp = System.nanoTime();
-        }
     }
 
     void reportNodeReplaced() {
@@ -150,7 +125,4 @@ public class CompilationProfile {
         ensureProfiling(1, replaceBackoff);
     }
 
-    public long getTimestamp() {
-        return timestamp;
-    }
 }
