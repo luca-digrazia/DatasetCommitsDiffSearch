@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,12 +29,15 @@
  */
 package com.oracle.truffle.llvm;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ServiceLoader;
 
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Value;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -57,7 +60,6 @@ import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceScope;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
-import java.util.Collections;
 
 @TruffleLanguage.Registration(id = "llvm", name = "llvm", version = "0.01", mimeType = {Sulong.LLVM_SULONG_TYPE, Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.LLVM_BITCODE_BASE64_MIME_TYPE,
                 Sulong.SULONG_LIBRARY_MIME_TYPE, Sulong.LLVM_ELF_SHARED_MIME_TYPE, Sulong.LLVM_ELF_EXEC_MIME_TYPE}, internal = false, interactive = false)
@@ -114,7 +116,6 @@ public final class Sulong extends LLVMLanguage {
     }
 
     @Override
-    @SuppressWarnings("deprecation") // for compatibility, will be removed in a future release
     protected Object findExportedSymbol(LLVMContext context, String globalName, boolean onlyExplicit) {
         String atname = "@" + globalName; // for interop
         if (context.getGlobalScope().functionExists(atname)) {
@@ -127,9 +128,8 @@ public final class Sulong extends LLVMLanguage {
     }
 
     @Override
-    protected Iterable<Scope> findTopScopes(LLVMContext context) {
-        Scope scope = Scope.newBuilder("llvm-global", context.getGlobalScope()).build();
-        return Collections.singleton(scope);
+    protected Object getLanguageGlobal(LLVMContext context) {
+        return context.getGlobalScope();
     }
 
     @Override
@@ -140,6 +140,31 @@ public final class Sulong extends LLVMLanguage {
     @Override
     public LLVMContext findLLVMContext() {
         return getContextReference().get();
+    }
+
+    public static void main(String[] args) throws Exception {
+        if (args.length == 0) {
+            throw new IllegalArgumentException("please provide a file to execute!");
+        }
+        File file = new File(args[0]);
+        String[] otherArgs = new String[args.length - 1];
+        System.arraycopy(args, 1, otherArgs, 0, otherArgs.length);
+        int status = executeMain(file, otherArgs);
+        System.exit(status);
+    }
+
+    public static int executeMain(File file, String[] args) throws Exception {
+        org.graalvm.polyglot.Source source = org.graalvm.polyglot.Source.newBuilder(LLVMLanguage.NAME, file).build();
+        Context context = Context.newBuilder().arguments(LLVMLanguage.NAME, args).build();
+        try {
+            Value result = context.eval(source);
+            if (result.isNull()) {
+                throw new LinkageError("No main function found.");
+            }
+            return result.asInt();
+        } finally {
+            context.close();
+        }
     }
 
     private List<ContextExtension> getContextExtensions(com.oracle.truffle.api.TruffleLanguage.Env env) {
