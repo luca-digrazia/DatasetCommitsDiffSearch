@@ -56,12 +56,15 @@ public abstract class NodeFieldAccessor {
     private final Class<?> declaringClass;
     private final String name;
     protected final Class<?> type;
+    /* TODO: This field should be moved to UnsafeNodeField. */
+    protected final long offset;
 
-    protected NodeFieldAccessor(NodeFieldKind kind, Class<?> declaringClass, String name, Class<?> type) {
+    protected NodeFieldAccessor(NodeFieldKind kind, Class<?> declaringClass, String name, Class<?> type, long offset) {
         this.kind = kind;
         this.declaringClass = declaringClass;
         this.name = name;
         this.type = type;
+        this.offset = offset;
     }
 
     protected static NodeFieldAccessor create(NodeFieldKind kind, Field field) {
@@ -86,6 +89,14 @@ public abstract class NodeFieldAccessor {
 
     public String getName() {
         return name;
+    }
+
+    /*
+     * TODO: This method should be removed from here. It should be an abstract method in
+     * AbstractUnsafeNodeFieldAccessor, and implemented in UnsafeNodeField.
+     */
+    public long getOffset() {
+        return offset;
     }
 
     public abstract void putObject(Node receiver, Object value);
@@ -131,11 +142,11 @@ public abstract class NodeFieldAccessor {
 
     public abstract static class AbstractUnsafeNodeFieldAccessor extends NodeFieldAccessor {
 
-        protected AbstractUnsafeNodeFieldAccessor(NodeFieldKind kind, Class<?> declaringClass, String name, Class<?> type) {
-            super(kind, declaringClass, name, type);
+        protected AbstractUnsafeNodeFieldAccessor(NodeFieldKind kind, Class<?> declaringClas, String name, Class<?> type, long offset) {
+            super(kind, declaringClas, name, type, offset);
         }
 
-        public abstract long getOffset();
+        /* TODO abstract long getOffset() should be defined here. */
 
         @Override
         public void putObject(Node receiver, Object value) {
@@ -180,16 +191,10 @@ public abstract class NodeFieldAccessor {
     }
 
     private static final class UnsafeNodeField extends AbstractUnsafeNodeFieldAccessor {
-        private final long offset;
+        /* TODO the offset field should be here, not in NodeFieldAccessor. */
 
         protected UnsafeNodeField(NodeFieldKind kind, Field field) {
-            super(kind, field.getDeclaringClass(), field.getName(), field.getType());
-            this.offset = unsafeFieldOffsetProvider.objectFieldOffset(field);
-        }
-
-        @Override
-        public long getOffset() {
-            return offset;
+            super(kind, field.getDeclaringClass(), field.getName(), field.getType(), unsafeFieldOffsetProvider.objectFieldOffset(field));
         }
     }
 
@@ -197,7 +202,7 @@ public abstract class NodeFieldAccessor {
         private final Field field;
 
         protected ReflectionNodeField(NodeFieldKind kind, Field field) {
-            super(kind, field.getDeclaringClass(), field.getName(), field.getType());
+            super(kind, field.getDeclaringClass(), field.getName(), field.getType(), unsafeFieldOffsetProvider.objectFieldOffset(field));
             this.field = field;
             field.setAccessible(true);
         }
