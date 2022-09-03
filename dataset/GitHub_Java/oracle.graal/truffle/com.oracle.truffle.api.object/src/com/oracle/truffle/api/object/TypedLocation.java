@@ -24,9 +24,63 @@
  */
 package com.oracle.truffle.api.object;
 
-public interface TypedLocation extends BaseLocation {
+/**
+ * A location that can store a value of a particular type.
+ *
+ * @since 0.8 or earlier
+ */
+public interface TypedLocation {
+    /**
+     * Get object value as object at this location in store.
+     *
+     * @param shape the current shape of the object, which must contain this location
+     * @since 0.8 or earlier
+     */
+    Object get(DynamicObject store, Shape shape);
+
+    /**
+     * Get object value as object at this location in store. For internal use only and subject to
+     * change, use {@link #get(DynamicObject, Shape)} instead.
+     *
+     * @param condition the result of a shape check or {@code false}
+     * @see #get(DynamicObject, Shape)
+     * @since 0.8 or earlier
+     */
+    Object get(DynamicObject store, boolean condition);
+
+    /**
+     * Set object value at this location in store.
+     *
+     * @throws IncompatibleLocationException for storage type invalidations
+     * @throws FinalLocationException for effectively final fields
+     * @since 0.8 or earlier
+     */
+    void set(DynamicObject store, Object value) throws IncompatibleLocationException, FinalLocationException;
+
+    /**
+     * Set object value at this location in store.
+     *
+     * @param shape the current shape of the storage object
+     * @throws IncompatibleLocationException for storage type invalidations
+     * @throws FinalLocationException for effectively final fields
+     * @since 0.8 or earlier
+     */
+    void set(DynamicObject store, Object value, Shape shape) throws IncompatibleLocationException, FinalLocationException;
+
+    /**
+     * Set object value at this location in store and update shape.
+     *
+     * @param oldShape the shape before the transition
+     * @param newShape new shape after the transition
+     * @throws IncompatibleLocationException if value is of non-assignable type
+     * @since 0.8 or earlier
+     */
+    void set(DynamicObject store, Object value, Shape oldShape, Shape newShape) throws IncompatibleLocationException;
+
     /**
      * The type of this location.
+     *
+     * @since 0.8 or earlier
      */
     Class<?> getType();
 }

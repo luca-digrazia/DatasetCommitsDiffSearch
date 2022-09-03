@@ -24,14 +24,30 @@
  */
 package com.oracle.truffle.api.object;
 
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
 
+/**
+ * An extensible object type descriptor for {@link DynamicObject}s.
+ *
+ * @since 0.8 or earlier
+ */
 public class ObjectType {
     /**
+     * Default constructor.
+     *
+     * @since 0.8 or earlier
+     */
+    public ObjectType() {
+    }
+
+    /**
      * Delegate method for {@link DynamicObject#equals(Object)}.
+     *
+     * @since 0.8 or earlier
      */
     public boolean equals(DynamicObject object, Object other) {
         return object == other;
@@ -39,6 +55,8 @@ public class ObjectType {
 
     /**
      * Delegate method for {@link DynamicObject#hashCode()}.
+     *
+     * @since 0.8 or earlier
      */
     public int hashCode(DynamicObject object) {
         return System.identityHashCode(object);
@@ -46,6 +64,8 @@ public class ObjectType {
 
     /**
      * Delegate method for {@link DynamicObject#toString()}.
+     *
+     * @since 0.8 or earlier
      */
     @TruffleBoundary
     public String toString(DynamicObject object) {
@@ -56,11 +76,14 @@ public class ObjectType {
      * Creates a data object to be associated with a newly created shape.
      *
      * @param shape the shape for which to create the data object
+     * @since 0.8 or earlier
      */
     public Object createShapeData(Shape shape) {
         return null;
     }
 
+    /** @since 0.8 or earlier */
+    @Deprecated
     public ForeignAccess getForeignAccessFactory() {
         return ForeignAccess.create(new com.oracle.truffle.api.interop.ForeignAccess.Factory() {
 
@@ -72,5 +95,15 @@ public class ObjectType {
                 throw new IllegalArgumentException(this.toString() + " cannot be shared; Message not possible: " + tree.toString());
             }
         });
+    }
+
+    /**
+     * Create a {@link ForeignAccess} to access a specific {@link DynamicObject}.
+     *
+     * @param object the object to be accessed
+     * @since 0.8 or earlier
+     */
+    public ForeignAccess getForeignAccessFactory(DynamicObject object) {
+        return getForeignAccessFactory();
     }
 }

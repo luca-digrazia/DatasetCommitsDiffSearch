@@ -24,8 +24,21 @@
  */
 package com.oracle.truffle.api.object;
 
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.SlowPathException;
 
+/**
+ * This exception is thrown on an attempt to assign a value to a final location.
+ *
+ * @since 0.8 or earlier
+ */
 public final class FinalLocationException extends SlowPathException {
     private static final long serialVersionUID = -30188494510914293L;
+
+    /**
+     * Default constructor.
+     *
+     * @since 0.8 or earlier
+     */
+    public FinalLocationException() {
+    }
 }

@@ -24,12 +24,29 @@
  */
 package com.oracle.truffle.api.object;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.TypedObject;
+import com.oracle.truffle.api.interop.TruffleObject;
 
+/**
+ * Represents an object members of which can be dynamically added and removed at run time.
+ *
+ * @see Shape
+ * @since 0.8 or earlier
+ */
 public abstract class DynamicObject implements TypedObject, TruffleObject {
+
+    /**
+     * Constructor for subclasses.
+     *
+     * @since 0.8 or earlier
+     */
+    protected DynamicObject() {
+    }
+
     /**
      * Get the object's current shape.
+     *
+     * @since 0.8 or earlier
      */
     public abstract Shape getShape();
 
@@ -37,8 +54,20 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * Get property value.
      *
      * @param key property identifier
+     * @return property value or {@code null} if object has no such property
+     * @since 0.8 or earlier
+     */
+    public final Object get(Object key) {
+        return get(key, null);
+    }
+
+    /**
+     * Get property value.
+     *
+     * @param key property identifier
      * @param defaultValue return value if property is not found
      * @return property value or defaultValue if object has no such property
+     * @since 0.8 or earlier
      */
     public abstract Object get(Object key, Object defaultValue);
 
@@ -48,11 +77,14 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param key property identifier
      * @param value value to be set
      * @return {@code true} if successful or {@code false} if property not found
+     * @since 0.8 or earlier
      */
     public abstract boolean set(Object key, Object value);
 
     /**
      * Returns {@code true} if this object contains a property with the given key.
+     *
+     * @since 0.8 or earlier
      */
     public final boolean containsKey(Object key) {
         return getShape().getProperty(key) != null;
@@ -63,6 +95,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      *
      * @param key property identifier
      * @param value value to be set
+     * @since 0.8 or earlier
      */
     public final void define(Object key, Object value) {
         define(key, value, 0);
@@ -74,6 +107,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param key property identifier
      * @param value value to be set
      * @param flags flags to be set
+     * @since 0.8 or earlier
      */
     public abstract void define(Object key, Object value, int flags);
 
@@ -84,42 +118,30 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * @param value value to be set
      * @param flags flags to be set
      * @param locationFactory factory function that creates a location for a given shape and value
+     * @since 0.8 or earlier
      */
     public abstract void define(Object key, Object value, int flags, LocationFactory locationFactory);
-
-    /**
-     * Change property flags.
-     *
-     * @param key property identifier
-     * @param newFlags flags to be set
-     * @return {@code true} if successful or {@code false} if property not found
-     */
-    public abstract boolean changeFlags(Object key, int newFlags);
-
-    /**
-     * Change property flags.
-     *
-     * @param key property identifier
-     * @param flagsUpdateFunction function updating old flags to new flags
-     * @return {@code true} if successful or {@code false} if property not found
-     */
-    public abstract boolean changeFlags(Object key, FlagsFunction flagsUpdateFunction);
 
     /**
      * Delete property.
      *
      * @param key property identifier
      * @return {@code true} if successful or {@code false} if property not found
+     * @since 0.8 or earlier
      */
     public abstract boolean delete(Object key);
 
     /**
      * Returns the number of properties in this object.
+     *
+     * @since 0.8 or earlier
      */
     public abstract int size();
 
     /**
      * Returns {@code true} if this object contains no properties.
+     *
+     * @since 0.8 or earlier
      */
     public abstract boolean isEmpty();
 
@@ -128,6 +150,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      *
      * @param oldShape the object's current shape (must equal {@link #getShape()})
      * @param newShape the new shape to be set
+     * @since 0.8 or earlier
      */
     public abstract void setShapeAndGrow(Shape oldShape, Shape newShape);
 
@@ -136,6 +159,7 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      *
      * @param oldShape the object's current shape (must equal {@link #getShape()})
      * @param newShape the new shape to be set
+     * @since 0.8 or earlier
      */
     public abstract void setShapeAndResize(Shape oldShape, Shape newShape);
 
@@ -143,10 +167,15 @@ public abstract class DynamicObject implements TypedObject, TruffleObject {
      * Ensure object shape is up-to-date.
      *
      * @return {@code true} if shape has changed
+     * @since 0.8 or earlier
      */
     public abstract boolean updateShape();
 
-    public interface FlagsFunction {
-        int apply(int t);
-    }
+    /**
+     * Create a shallow copy of this object.
+     *
+     * @param currentShape the object's current shape (must equal {@link #getShape()})
+     * @since 0.8 or earlier
+     */
+    public abstract DynamicObject copy(Shape currentShape);
 }

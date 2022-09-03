@@ -24,8 +24,21 @@
  */
 package com.oracle.truffle.api.object;
 
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.SlowPathException;
 
+/**
+ * This exception is thrown on an attempt to assign an incompatible value to a location.
+ *
+ * @since 0.8 or earlier
+ */
 public final class IncompatibleLocationException extends SlowPathException {
     private static final long serialVersionUID = -7734865392357341789L;
+
+    /**
+     * Default constructor.
+     *
+     * @since 0.8 or earlier
+     */
+    public IncompatibleLocationException() {
+    }
 }
