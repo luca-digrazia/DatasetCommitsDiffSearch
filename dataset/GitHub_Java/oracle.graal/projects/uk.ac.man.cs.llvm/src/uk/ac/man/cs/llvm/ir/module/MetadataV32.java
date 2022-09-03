@@ -49,7 +49,6 @@ import uk.ac.man.cs.llvm.ir.model.metadata.MetadataLocalVariable;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataNode;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataSubprogram;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataSubrange;
-import uk.ac.man.cs.llvm.ir.module.records.DwLangNameRecord;
 import uk.ac.man.cs.llvm.ir.module.records.DwTagRecord;
 import uk.ac.man.cs.llvm.ir.types.IntegerConstantType;
 import uk.ac.man.cs.llvm.ir.types.MetadataConstantType;
@@ -72,6 +71,10 @@ public class MetadataV32 extends Metadata {
 
     protected long asInt64(Type t) {
         return ((IntegerConstantType) t).getValue();
+    }
+
+    protected int asMetadata(Type t) {
+        return (int) ((IntegerConstantType) t).getValue(); // TODO
     }
 
     @Override
@@ -115,11 +118,12 @@ public class MetadataV32 extends Metadata {
              */
             int ident = asInt32(parsedArgs.next());
             DwTagRecord record = DwTagRecord.decode(ident);
+
             /*
              * How the data is stored: http://llvm.org/releases/3.2/docs/SourceLevelDebugging.html
              */
             switch (record) {
-                case DW_TAG_VARIABLE:
+                case DW_TAG_GLOBAL_VARIABLE:
                     createDwTagGlobalVariable(parsedArgs);
                     break;
 
@@ -131,7 +135,7 @@ public class MetadataV32 extends Metadata {
                     createDwTagFileType(parsedArgs);
                     break;
 
-                case DW_TAG_BASE_TYPE:
+                case DW_TAG_BASIC_TYPE:
                     createDwTagBasicType(parsedArgs);
                     break;
 
@@ -152,7 +156,7 @@ public class MetadataV32 extends Metadata {
                 case DW_TAG_TYPEDEF:
                 case DW_TAG_CONST_TYPE:
                 case DW_TAG_VOLATILE_TYPE:
-                case DW_TAG_RESTRICT_TYPE:
+                case DW_TAG_RESTRICTED_TYPE:
                     createDwDerivedType(parsedArgs);
                     break;
 
@@ -177,6 +181,7 @@ public class MetadataV32 extends Metadata {
                 case DW_TAG_LEXICAL_BLOCK:
                     createDwTagLexicalBlock(parsedArgs);
                     break;
+
                 case DW_TAG_UNKNOWN:
                     parsedArgs.rewind();
                     createDwNode(parsedArgs); // TODO: we need to know the type of the node
@@ -184,13 +189,13 @@ public class MetadataV32 extends Metadata {
 
                 default:
                     metadata.add(null);
-                    System.out.println("! - TODO: #" + record + " - " + ident);
+                    System.out.println("! - TODO: #" + record);
                     break;
             }
         } else {
             parsedArgs.rewind();
             metadata.add(null);
-            System.out.println("! - TODO: #" + MetadataRecord.OLD_NODE + ": " + parsedArgs);
+            System.out.println("! - " + MetadataRecord.OLD_NODE + ": " + parsedArgs);
         }
     }
 
@@ -237,7 +242,7 @@ public class MetadataV32 extends Metadata {
         MetadataCompileUnit node = new MetadataCompileUnit();
 
         args.next(); // Unused
-        node.setLanguage(DwLangNameRecord.decode(asInt32(args.next())));
+        node.setLanguage(asInt32(args.next()));
         node.setFile(metadata.getReference(args.next()));
         node.setDirectory(metadata.getReference(args.next()));
         node.setProducer(metadata.getReference(args.next()));
@@ -321,15 +326,15 @@ public class MetadataV32 extends Metadata {
         node.setDefinedInCompileUnit(asInt1(args.next()));
         node.setScopeLine(asInt32(args.next()));
         node.setVirtuallity(asInt32(args.next()));
-        // TODO: structure seems to differ from the documented one
-        // node.setVirtualIndex(asInt32(args.next()));
+        args.next(); // node.setVirtualIndex(asInt32(args.next())); // TODO: MetadataConstantType
         args.next(); // metadata, ;; indicates which base type contains the vtable pointer...
         node.setFlags(metadata.getReference(args.next()));
         node.setOptimized(asInt1(args.next()));
         args.next(); // Function *,;; Pointer to LLVM function
         node.setTemplateParams(metadata.getReference(args.next()));
         node.setDeclaration(metadata.getReference(args.next()));
-        node.setVariables(metadata.getReference(args.next()));
+        args.next(); // node.setVariables(metadata.getReference(args.next())); // TODO: Invalid
+                     // reference type
 
         metadata.add(node);
     }

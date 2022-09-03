@@ -56,7 +56,6 @@ import uk.ac.man.cs.llvm.ir.model.metadata.MetadataNode;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataSubprogram;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataSubrange;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataValue;
-import uk.ac.man.cs.llvm.ir.module.records.DwLangNameRecord;
 import uk.ac.man.cs.llvm.ir.module.records.MetadataRecord;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
@@ -185,7 +184,7 @@ public class Metadata implements ParserListener {
 
             default:
                 metadata.add(null);
-                System.out.println("! - TODO: #" + record + ": " + Arrays.toString(args));
+                System.out.println("! - " + record + ": " + Arrays.toString(args));
                 break;
         }
 
@@ -194,19 +193,13 @@ public class Metadata implements ParserListener {
         }
     }
 
-    private static final long LONG_ARRAY_TO_STRING_BYTE_PART = 0x000000FF;
-
-    private static String longArrayToString(long[] args) {
-        // We use a byte array, so "new String(...)" is able to handle Unicode Characters correctly
-        byte[] bytes = new byte[args.length];
-        for (int i = 0; i < args.length; i++) {
-            bytes[i] = (byte) (args[i] & LONG_ARRAY_TO_STRING_BYTE_PART);
-        }
-        return new String(bytes);
-    }
-
     protected void createString(long[] args) {
-        MetadataString node = new MetadataString(longArrayToString(args));
+        StringBuilder builder = new StringBuilder();
+        for (long character : args) {
+            builder.append((char) character); // TODO: unicode characters?
+        }
+
+        MetadataString node = new MetadataString(builder.toString());
 
         metadata.add(node);
     }
@@ -230,7 +223,12 @@ public class Metadata implements ParserListener {
     }
 
     protected void createName(long[] args) {
-        MetadataName node = new MetadataName(longArrayToString(args));
+        StringBuilder builder = new StringBuilder();
+        for (long character : args) {
+            builder.append((char) character); // TODO: unicode characters?
+        }
+
+        MetadataName node = new MetadataName(builder.toString());
 
         metadata.add(node);
     }
@@ -242,10 +240,13 @@ public class Metadata implements ParserListener {
     }
 
     protected void createKind(long[] args) {
-        long id = args[0];
-        String name = longArrayToString(Arrays.copyOfRange(args, 1, args.length));
+        // symbols.add(MetaType.METADATA); // TODO
+        StringBuilder builder = new StringBuilder();
+        for (int i = 1; i < args.length; i++) {
+            builder.append((char) args[i]); // TODO: unicode characters?
+        }
 
-        MetadataKind node = new MetadataKind(id, name);
+        MetadataKind node = new MetadataKind(args[0], builder.toString());
 
         metadata.add(node);
     }
@@ -482,7 +483,7 @@ public class Metadata implements ParserListener {
 
         int i = 0;
         i++; // distinct, always true
-        node.setLanguage(DwLangNameRecord.decode(args[i++]));
+        node.setLanguage(args[i++]);
         node.setFile(metadata.getReference(args[i++]));
         node.setProducer(metadata.getReference(args[i++]));
         node.setOptimized(args[i++] == 1);

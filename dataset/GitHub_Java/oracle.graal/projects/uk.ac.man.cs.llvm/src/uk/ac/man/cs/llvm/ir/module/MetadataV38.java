@@ -27,25 +27,15 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package uk.ac.man.cs.llvm.ir;
+package uk.ac.man.cs.llvm.ir.module;
 
-import uk.ac.man.cs.llvm.ir.module.TargetDataLayout;
-import uk.ac.man.cs.llvm.ir.types.FunctionType;
+import java.util.List;
+
+import uk.ac.man.cs.llvm.ir.SymbolGenerator;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
-public interface ModuleGenerator extends SymbolGenerator {
-
-    void createAlias(Type type, int aliasedValue);
-
-    void createFunction(FunctionType type, boolean isPrototype);
-
-    void createTargetDataLayout(TargetDataLayout layout);
-
-    void createType(Type type);
-
-    void createGlobal(Type type, boolean isConstant, int initialiser, int align);
-
-    void exitModule();
-
-    FunctionGenerator generateFunction();
+public class MetadataV38 extends Metadata {
+    public MetadataV38(Types types, List<Type> symbols, SymbolGenerator generator) {
+        super(types, symbols, generator);
+    }
 }
