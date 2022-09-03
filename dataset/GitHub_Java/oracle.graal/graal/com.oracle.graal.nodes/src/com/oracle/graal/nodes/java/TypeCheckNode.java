@@ -123,10 +123,9 @@ public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, 
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(getValue());
-        TriState state = tryFold(alias.stamp());
-        if (state != TriState.UNKNOWN) {
-            tool.replaceWithValue(LogicConstantNode.forBoolean(state.isTrue(), graph()));
+        State state = tool.getObjectState(getValue());
+        if (state != null) {
+            tool.replaceWithValue(LogicConstantNode.forBoolean(type().equals(state.getVirtualObject().type()), graph()));
         }
     }
 

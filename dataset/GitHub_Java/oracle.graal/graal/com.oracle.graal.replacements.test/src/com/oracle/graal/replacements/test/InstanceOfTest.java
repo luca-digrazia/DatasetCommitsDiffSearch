@@ -25,10 +25,8 @@ package com.oracle.graal.replacements.test;
 import java.util.*;
 
 import jdk.internal.jvmci.code.CompilationResult.*;
-
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.meta.*;
 
 import org.junit.*;
@@ -485,7 +483,6 @@ public class InstanceOfTest extends TypeCheckTest {
         assertDeepEquals(value, ret.result().asJavaConstant().asBoxedPrimitive());
     }
 
-    @SuppressWarnings("try")
     protected StructuredGraph buildGraph(final String snippet) {
         try (Scope s = Debug.scope("InstanceOfTest", getMetaAccess().lookupJavaMethod(getMethod(snippet)))) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);

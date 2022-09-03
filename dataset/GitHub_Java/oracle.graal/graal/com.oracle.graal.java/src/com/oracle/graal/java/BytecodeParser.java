@@ -38,9 +38,8 @@ import java.util.*;
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
 import jdk.internal.jvmci.compiler.Compiler;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
-
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.Scope;
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.options.*;
 
@@ -191,7 +190,7 @@ public class BytecodeParser implements GraphBuilderContext {
                                  */
                                 Kind returnKind = parser.currentInvokeReturnType.getKind();
                                 ValueNode tos = frameStateBuilder.pop(returnKind);
-                                assert tos.getStackKind() == returnVal.getStackKind();
+                                assert tos.getKind() == returnVal.getKind();
                                 FrameState newFrameState = frameStateBuilder.create(parser.stream.nextBCI(), parser.getNonIntrinsicAncestor(), false, new Kind[]{returnKind},
                                                 new ValueNode[]{returnVal});
                                 frameState.replaceAndDelete(newFrameState);
@@ -1362,7 +1361,7 @@ public class BytecodeParser implements GraphBuilderContext {
             this.args = args;
             this.resultType = resultType;
             this.beforeStackSize = frameState.stackSize();
-            this.needsNullCheck = !targetMethod.isStatic() && args[0].getStackKind() == Kind.Object && !StampTool.isPointerNonNull(args[0].stamp());
+            this.needsNullCheck = !targetMethod.isStatic() && args[0].getKind() == Kind.Object && !StampTool.isPointerNonNull(args[0].stamp());
             this.nodeCount = graph.getNodeCount();
             this.mark = graph.getMark();
         }
@@ -2405,7 +2404,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected void genIf(ValueNode x, Condition cond, ValueNode y) {
-        assert x.getStackKind() == y.getStackKind();
+        assert x.getKind().getStackKind() == y.getKind().getStackKind();
         assert currentBlock.getSuccessorCount() == 2;
         BciBlock trueBlock = currentBlock.getSuccessor(0);
         BciBlock falseBlock = currentBlock.getSuccessor(1);
@@ -2520,15 +2519,15 @@ public class BytecodeParser implements GraphBuilderContext {
 
     private LogicNode createLogicNode(Condition cond, ValueNode a, ValueNode b) {
         LogicNode condition;
-        assert !a.getStackKind().isNumericFloat();
+        assert !a.getKind().isNumericFloat();
         if (cond == Condition.EQ || cond == Condition.NE) {
-            if (a.getStackKind() == Kind.Object) {
+            if (a.getKind() == Kind.Object) {
                 condition = genObjectEquals(a, b);
             } else {
                 condition = genIntegerEquals(a, b);
             }
         } else {
-            assert a.getStackKind() != Kind.Object && !cond.isUnsigned();
+            assert a.getKind() != Kind.Object && !cond.isUnsigned();
             condition = genIntegerLessThan(a, b);
         }
         return condition;
