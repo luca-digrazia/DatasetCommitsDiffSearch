@@ -29,13 +29,11 @@ import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.Truffle
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleReplaceReprofileCount;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleReturnTypeSpeculation;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
-import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.options.OptionValues;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -60,17 +58,6 @@ public class OptimizedCompilationProfile {
 
     private long timestamp;
 
-    /*
-     * Updating profiling information and its Assumption objects is done without synchronization and
-     * atomic operations to keep the overhead as low as possible. This means that there can be races
-     * and we might see imprecise profiles. That is OK. But we must not install and run compiled
-     * code that depends on wrong profiling information, because that leads to crashes. Therefore,
-     * the Assumption objects need to be updated in the correct order: A new valid assumption is
-     * installed *after* installing profile information, but the assumption is invalidated *before*
-     * invalidating profile information. This ensures that the compiler sees an invalidated
-     * assumption in case a race happens. Note that OptimizedAssumption.invalidate() performs
-     * synchronization and is therefore a memory barrier.
-     */
     @CompilationFinal(dimensions = 1) private Class<?>[] profiledArgumentTypes;
     @CompilationFinal private OptimizedAssumption profiledArgumentTypesAssumption;
     @CompilationFinal private Class<?> profiledReturnType;
@@ -101,20 +88,9 @@ public class OptimizedCompilationProfile {
             this.profiledArgumentTypesAssumption.invalidate();
             throw new AssertionError("Argument types already initialized. initializeArgumentTypes must be called before any profile is initialized.");
         } else {
+            this.profiledArgumentTypesAssumption = createAssumption("Custom profiled argument types");
             this.profiledArgumentTypes = argumentTypes;
-            this.profiledArgumentTypesAssumption = createValidAssumption("Custom profiled argument types");
         }
-    }
-
-    List<OptimizedAssumption> getProfiledTypesAssumptions() {
-        List<OptimizedAssumption> result = new ArrayList<>();
-        if (getProfiledArgumentTypes() != null) {
-            result.add(profiledArgumentTypesAssumption);
-        }
-        if (getProfiledReturnType() != null) {
-            result.add(profiledReturnTypeAssumption);
-        }
-        return result;
     }
 
     Class<?>[] getProfiledArgumentTypes() {
@@ -125,7 +101,8 @@ public class OptimizedCompilationProfile {
              * creating an invalid assumption but leaving the type field null.
              */
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            profiledArgumentTypesAssumption = createInvalidAssumption("Profiled Argument Types");
+            profiledArgumentTypesAssumption = createAssumption("Profiled Argument Types");
+            profiledArgumentTypesAssumption.invalidate();
         }
 
         if (profiledArgumentTypesAssumption.isValid()) {
@@ -143,7 +120,8 @@ public class OptimizedCompilationProfile {
              * creating an invalid assumption but leaving the type field null.
              */
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            profiledReturnTypeAssumption = createInvalidAssumption("Profiled Return Type");
+            profiledReturnTypeAssumption = createAssumption("Profiled Return Type");
+            profiledReturnTypeAssumption.invalidate();
         }
 
         if (profiledReturnTypeAssumption.isValid()) {
@@ -203,13 +181,13 @@ public class OptimizedCompilationProfile {
             // for immediate compiles.
             if (TruffleCompilerOptions.getValue(TruffleReturnTypeSpeculation)) {
                 profiledReturnType = classOf(result);
-                profiledReturnTypeAssumption = createValidAssumption("Profiled Return Type");
+                profiledReturnTypeAssumption = createAssumption("Profiled Return Type");
             }
         } else if (profiledReturnType != null) {
             if (result == null || profiledReturnType != result.getClass()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                returnTypeAssumption.invalidate();
                 profiledReturnType = null;
+                returnTypeAssumption.invalidate();
             }
         }
     }
@@ -329,6 +307,7 @@ public class OptimizedCompilationProfile {
 
     private void initializeProfiledArgumentTypes(Object[] args) {
         CompilerAsserts.neverPartOfCompilation();
+        profiledArgumentTypesAssumption = createAssumption("Profiled Argument Types");
         if (TruffleCompilerOptions.getValue(TruffleArgumentTypeSpeculation)) {
             Class<?>[] result = new Class<?>[args.length];
             for (int i = 0; i < args.length; i++) {
@@ -336,7 +315,6 @@ public class OptimizedCompilationProfile {
             }
             profiledArgumentTypes = result;
         }
-        profiledArgumentTypesAssumption = createValidAssumption("Profiled Argument Types");
     }
 
     private void updateProfiledArgumentTypes(Object[] args, Class<?>[] types) {
@@ -345,7 +323,7 @@ public class OptimizedCompilationProfile {
         for (int j = 0; j < types.length; j++) {
             types[j] = joinTypes(types[j], classOf(args[j]));
         }
-        profiledArgumentTypesAssumption = createValidAssumption("Profiled Argument Types");
+        profiledArgumentTypesAssumption = createAssumption("Profiled Argument Types");
     }
 
     private static boolean checkProfiledArgumentTypes(Object[] args, Class<?>[] types) {
@@ -427,14 +405,8 @@ public class OptimizedCompilationProfile {
         return new OptimizedCompilationProfile(options);
     }
 
-    private static OptimizedAssumption createValidAssumption(String name) {
+    private static OptimizedAssumption createAssumption(String name) {
         return (OptimizedAssumption) Truffle.getRuntime().createAssumption(name);
-    }
-
-    private static OptimizedAssumption createInvalidAssumption(String name) {
-        OptimizedAssumption result = createValidAssumption(name);
-        result.invalidate();
-        return result;
     }
 
     public boolean isValidArgumentProfile(Object[] args) {
