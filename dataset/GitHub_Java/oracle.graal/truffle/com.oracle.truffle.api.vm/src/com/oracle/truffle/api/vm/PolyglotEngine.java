@@ -739,6 +739,10 @@ public class PolyglotEngine {
             this.language = language;
         }
 
+        Value(TruffleLanguage<?>[] language, final Object value) {
+            this.language = language;
+        }
+
         abstract boolean isDirect();
         abstract Object value() throws IOException;
 
