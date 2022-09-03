@@ -832,6 +832,7 @@ public abstract class Source {
         private final String path;  // Normalized path description of an actual file
 
         private String code = null;  // A cache of the file's contents
+        private long timeStamp;      // timestamp of the cache in the file system
 
         public FileSource(File file, String name, String path) {
             this.file = file.getAbsoluteFile();
@@ -857,9 +858,10 @@ public abstract class Source {
         @Override
         public String getCode() {
             if (fileCacheEnabled) {
-                if (code == null) {
+                if (code == null || timeStamp != file.lastModified()) {
                     try {
                         code = read(getReader());
+                        timeStamp = file.lastModified();
                     } catch (IOException e) {
                     }
                 }
@@ -884,7 +886,7 @@ public abstract class Source {
 
         @Override
         public Reader getReader() {
-            if (code != null) {
+            if (code != null && timeStamp == file.lastModified()) {
                 return new StringReader(code);
             }
             try {
