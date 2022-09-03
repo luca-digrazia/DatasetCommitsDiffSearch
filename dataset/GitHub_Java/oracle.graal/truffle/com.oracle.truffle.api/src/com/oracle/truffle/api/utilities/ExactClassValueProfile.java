@@ -24,13 +24,13 @@
  */
 package com.oracle.truffle.api.utilities;
 
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 /**
  * Represents a {@link ValueProfile} that speculates on the exact class of a value.
  */
-public final class ExactClassValueProfile extends ValueProfile {
+final class ExactClassValueProfile extends ValueProfile {
 
     @CompilationFinal protected Class<?> cachedClass;
 
@@ -40,12 +40,17 @@ public final class ExactClassValueProfile extends ValueProfile {
     @SuppressWarnings("unchecked")
     @Override
     public <T> T profile(T value) {
-        if (cachedClass != Object.class) {
-            if (cachedClass != null && cachedClass.isInstance(value)) {
-                return (T) cachedClass.cast(value);
+        Class<?> c = cachedClass;
+        if (c != Object.class) {
+            if (c != null && value != null && c == value.getClass()) {
+                if (CompilerDirectives.inInterpreter()) {
+                    return value;
+                } else {
+                    return (T) c.cast(value);
+                }
             } else {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                if (cachedClass == null && value != null) {
+                if (c == null && value != null) {
                     cachedClass = value.getClass();
                 } else {
                     cachedClass = Object.class;
