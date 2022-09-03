@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectTypeImpl.*;
-
 import java.lang.invoke.*;
 
 import com.oracle.graal.api.code.*;
@@ -45,7 +43,7 @@ public final class HotSpotObjectConstantImpl extends AbstractValue implements Ho
         return forObject(object, false);
     }
 
-    static JavaConstant forObject(Object object, boolean compressed) {
+    public static JavaConstant forObject(Object object, boolean compressed) {
         if (object == null) {
             return compressed ? HotSpotCompressedNullConstant.COMPRESSED_NULL : JavaConstant.NULL_POINTER;
         } else {
@@ -53,7 +51,7 @@ public final class HotSpotObjectConstantImpl extends AbstractValue implements Ho
         }
     }
 
-    static JavaConstant forStableArray(Object object, int stableDimension, boolean isDefaultStable) {
+    public static JavaConstant forStableArray(Object object, int stableDimension, boolean isDefaultStable) {
         if (object == null) {
             return JavaConstant.NULL_POINTER;
         } else {
@@ -70,7 +68,7 @@ public final class HotSpotObjectConstantImpl extends AbstractValue implements Ho
         }
     }
 
-    static Object asBoxedValue(Constant constant) {
+    public static Object asBoxedValue(Constant constant) {
         if (JavaConstant.isNull(constant)) {
             return null;
         } else if (constant instanceof HotSpotObjectConstantImpl) {
@@ -135,10 +133,6 @@ public final class HotSpotObjectConstantImpl extends AbstractValue implements Ho
     public JavaConstant uncompress() {
         assert compressed;
         return new HotSpotObjectConstantImpl(object, false, stableDimension, isDefaultStable);
-    }
-
-    public HotSpotResolvedObjectType getType() {
-        return fromObjectClass(object.getClass());
     }
 
     public JavaConstant getClassLoader() {
