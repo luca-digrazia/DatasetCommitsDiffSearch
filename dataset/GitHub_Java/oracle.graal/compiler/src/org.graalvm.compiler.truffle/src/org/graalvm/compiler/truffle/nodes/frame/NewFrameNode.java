@@ -120,6 +120,7 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
          * FrameDescriptor changes.
          */
         final JavaConstant version = constantReflection.readFieldValue(knownFields.fieldFrameDescriptorVersion, frameDescriptor);
+        GraalError.guarantee(knownFields.classFrameDescriptor.equals(metaAccess.lookupJavaType(version)), "Unexpected FrameDescriptor.version");
         graph.getAssumptions().record(new AssumptionValidAssumption(version));
 
         /*
