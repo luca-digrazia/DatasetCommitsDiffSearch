@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.truffle.hotspot;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.api.runtime.GraalRuntime;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.target.Backend;
@@ -104,18 +103,15 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     static class Lazy extends BackgroundCompileQueue {
         private StackIntrospection stackIntrospection;
-        private final HotSpotTruffleRuntime runtime;
 
         Lazy(HotSpotTruffleRuntime runtime) {
             runtime.installDefaultListeners();
-            this.runtime = runtime;
         }
 
         @Override
         public GraalDebugConfig getDebugConfig() {
             if (Debug.isEnabled()) {
-                SnippetReflectionProvider snippetReflection = runtime.getRequiredGraalCapability(SnippetReflectionProvider.class);
-                return DebugEnvironment.initialize(TTY.out().out(), snippetReflection);
+                return DebugEnvironment.initialize(TTY.out().out());
             } else {
                 return null;
             }
