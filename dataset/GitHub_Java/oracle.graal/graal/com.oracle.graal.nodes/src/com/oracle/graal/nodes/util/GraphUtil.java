@@ -27,12 +27,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.code.SourceStackTrace;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.BailoutException;
+import jdk.internal.jvmci.code.BytecodePosition;
+import jdk.internal.jvmci.code.SourceStackTrace;
+import jdk.internal.jvmci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeWorkList;
@@ -223,7 +223,7 @@ public class GraphUtil {
         if (singleValue != PhiNode.MULTIPLE_VALUES) {
             Collection<PhiNode> phiUsages = phiNode.usages().filter(PhiNode.class).snapshot();
             Collection<ProxyNode> proxyUsages = phiNode.usages().filter(ProxyNode.class).snapshot();
-            phiNode.replaceAtUsagesAndDelete(singleValue);
+            phiNode.graph().replaceFloating(phiNode, singleValue);
             for (PhiNode phi : phiUsages) {
                 checkRedundantPhi(phi);
             }
@@ -250,7 +250,7 @@ public class GraphUtil {
                 if (vpnValue == v2) {
                     Collection<PhiNode> phiUsages = vpn.usages().filter(PhiNode.class).snapshot();
                     Collection<ProxyNode> proxyUsages = vpn.usages().filter(ProxyNode.class).snapshot();
-                    vpn.replaceAtUsagesAndDelete(vpnValue);
+                    vpn.graph().replaceFloating(vpn, vpnValue);
                     for (PhiNode phi : phiUsages) {
                         checkRedundantPhi(phi);
                     }
