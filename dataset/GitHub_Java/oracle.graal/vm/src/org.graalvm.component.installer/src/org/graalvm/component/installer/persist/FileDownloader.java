@@ -26,9 +26,7 @@ package org.graalvm.component.installer.persist;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.ConnectException;
-import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URI;
@@ -234,70 +232,62 @@ public class FileDownloader {
             httpProxy = envHttpProxy;
             httpsProxy = envHttpsProxy;
         }
-
-        class Connector implements Runnable {
-            private final String proxySpec;
-            private final boolean directConnect;
-
-            Connector() {
-                directConnect = true;
-                proxySpec = null;
-            }
-
-            Connector(String proxySpec) {
-                this.proxySpec = proxySpec;
-                this.directConnect = false;
-            }
-
+        connectors.submit(new Runnable() {
             @Override
             public void run() {
-                final Proxy proxy;
-                if (directConnect) {
-                    proxy = null;
-                } else {
-                    if (proxySpec == null || proxySpec.isEmpty()) {
-                        return;
+
+                if (httpProxy != null) {
+                    try {
+                        URI uri = new URI(httpProxy);
+                        InetSocketAddress address = InetSocketAddress.createUnresolved(uri.getHost(), uri.getPort());
+                        Proxy proxy = new Proxy(Proxy.Type.HTTP, address);
+                        URLConnection test = url.openConnection(proxy);
+                        test.connect();
+                        test.getHeaderField("bogusHeader");
+                        conn[0] = test;
+                        connected.countDown();
+                    } catch (IOException ex) {
+                        ex2.set(ex);
+                    } catch (URISyntaxException ex) {
                     }
+                }
+            }
+        });
+        connectors.submit(new Runnable() {
+            @Override
+            public void run() {
+                if (httpsProxy != null) {
                     try {
                         URI uri = new URI(httpsProxy);
                         InetSocketAddress address = InetSocketAddress.createUnresolved(uri.getHost(), uri.getPort());
-                        proxy = new Proxy(Proxy.Type.HTTP, address);
-                    } catch (URISyntaxException ex) {
-                        return;
-                    }
-                }
-                try {
-                    URLConnection test = directConnect ? url.openConnection() : url.openConnection(proxy);
-                    test.connect();
-                    if (test instanceof HttpURLConnection) {
-                        HttpURLConnection htest = (HttpURLConnection) test;
-                        int rcode = htest.getResponseCode();
-                        if (rcode >= 400) {
-                            // force the exception, should fail with IOException
-                            InputStream stm = test.getInputStream();
-                            try {
-                                stm.close();
-                            } catch (IOException ex) {
-                                // swallow, we want to report just proxy failed.
-                            }
-                            throw new IOException(feedback.l10n("EXC_ProxyFailed", rcode));
-                        }
-                    }
-                    conn[0] = test;
-                    connected.countDown();
-                } catch (IOException ex) {
-                    if (directConnect) {
-                        ex3.set(ex);
-                    } else {
+                        Proxy proxy = new Proxy(Proxy.Type.HTTP, address);
+                        URLConnection test = url.openConnection(proxy);
+                        test.connect();
+                        test.getHeaderField("bogusHeader");
+                        conn[0] = test;
+                        connected.countDown();
+                    } catch (IOException ex) {
                         ex2.set(ex);
+                    } catch (URISyntaxException ex) {
                     }
                 }
             }
+        });
+        connectors.submit(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    URLConnection test = url.openConnection();
+                    test.connect();
+                    test.getHeaderField("bogusHeader");
+                    conn[0] = test;
+                    connected.countDown();
+                } catch (IOException ex) {
+                    ex3.set(ex);
+                }
 
-        }
-        connectors.submit(new Connector(httpProxy));
-        connectors.submit(new Connector(httpsProxy));
-        connectors.submit(new Connector());
+            }
+        });
         try {
             if (!connected.await(connectDelay, TimeUnit.SECONDS)) {
                 if (ex3.get() != null) {
@@ -321,9 +311,7 @@ public class FileDownloader {
 
     public void download() throws IOException {
         if (fileDescription != null) {
-            if (!feedback.verboseOutput("MSG_DownloadingVerbose", getFileDescription(), getSourceURL())) {
-                feedback.output("MSG_Downloading", getFileDescription());
-            }
+            feedback.output("MSG_Downloading", getFileDescription());
         } else {
             feedback.output("MSG_DownloadingFrom", getSourceURL());
         }
