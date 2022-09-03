@@ -186,11 +186,7 @@ class JavaObjectMessageResolution {
         @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
 
         public Object access(JavaObject object) {
-            if (JavaInterop.isPrimitive(object.obj)) {
-                return object.obj;
-            } else {
-                return UnsupportedMessageException.raise(Message.UNBOX);
-            }
+            return JavaInterop.isPrimitive(object.obj) ? object.obj : JavaObject.NULL;
         }
 
     }
