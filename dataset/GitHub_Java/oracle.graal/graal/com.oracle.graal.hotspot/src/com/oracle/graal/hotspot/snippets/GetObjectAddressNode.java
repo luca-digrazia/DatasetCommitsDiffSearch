@@ -23,40 +23,34 @@
 package com.oracle.graal.hotspot.snippets;
 
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.max.cri.ci.*;
 
 /**
- * A special purpose store node that differs from {@link UnsafeStoreNode} in that
- * it is not a {@link StateSplit} and takes a computed address instead of an object.
+ * Intrinsification for getting the address of an object.
+ * The code path(s) between a call to {@link #get(Object)} and all uses
+ * of the returned value must be atomic. The only exception to this is
+ * if the usage is not an attempt to dereference the value.
  */
-class DirectStoreNode extends FixedWithNextNode implements LIRLowerable {
-    @Input private ValueNode address;
-    @Input private ValueNode value;
+class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
+    @Input private ValueNode object;
 
-    public DirectStoreNode(ValueNode address, ValueNode value) {
-        super(StampFactory.illegal());
-        this.address = address;
-        this.value = value;
+    public GetObjectAddressNode(ValueNode obj) {
+        super(StampFactory.forKind(CiKind.Long));
+        this.object = obj;
     }
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void store(long address, long value) {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(long address, boolean value) {
+    public static long get(Object array) {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        CiValue v = gen.operand(value);
-        gen.emitStore(new CiAddress(v.kind, gen.operand(address)), v, false);
+        CiValue obj = gen.newVariable(gen.target().wordKind);
+        gen.emitMove(gen.operand(object), obj);
+        gen.setResult(this, obj);
     }
 }

@@ -39,7 +39,7 @@ class DirectObjectStoreNode extends FixedWithNextNode implements Lowerable {
     private final int displacement;
 
     public DirectObjectStoreNode(ValueNode object, int displacement, ValueNode offset, ValueNode value) {
-        super(StampFactory.forVoid());
+        super(StampFactory.illegal());
         this.object = object;
         this.value = value;
         this.offset = offset;

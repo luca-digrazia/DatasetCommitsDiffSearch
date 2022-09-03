@@ -29,26 +29,29 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.Compiler;
 import com.oracle.graal.hotspot.counters.*;
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.ri.*;
+import com.oracle.graal.hotspot.server.*;
 import com.oracle.graal.hotspot.snippets.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.snippets.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 
 /**
  * Exits from the HotSpot VM into Java code.
  */
-public class VMToCompilerImpl implements VMToCompiler {
+public class VMToCompilerImpl implements VMToCompiler, Remote {
 
-    private final HotSpotGraalRuntime compiler;
+    private final Compiler compiler;
     private IntrinsifyArrayCopyPhase intrinsifyArrayCopy;
 
     public final HotSpotTypePrimitive typeBoolean;
@@ -67,18 +70,18 @@ public class VMToCompilerImpl implements VMToCompiler {
 
     private PrintStream log = System.out;
 
-    public VMToCompilerImpl(HotSpotGraalRuntime compiler) {
+    public VMToCompilerImpl(Compiler compiler) {
         this.compiler = compiler;
 
-        typeBoolean = new HotSpotTypePrimitive(Kind.Boolean);
-        typeChar = new HotSpotTypePrimitive(Kind.Char);
-        typeFloat = new HotSpotTypePrimitive(Kind.Float);
-        typeDouble = new HotSpotTypePrimitive(Kind.Double);
-        typeByte = new HotSpotTypePrimitive(Kind.Byte);
-        typeShort = new HotSpotTypePrimitive(Kind.Short);
-        typeInt = new HotSpotTypePrimitive(Kind.Int);
-        typeLong = new HotSpotTypePrimitive(Kind.Long);
-        typeVoid = new HotSpotTypePrimitive(Kind.Void);
+        typeBoolean = new HotSpotTypePrimitive(compiler, CiKind.Boolean);
+        typeChar = new HotSpotTypePrimitive(compiler, CiKind.Char);
+        typeFloat = new HotSpotTypePrimitive(compiler, CiKind.Float);
+        typeDouble = new HotSpotTypePrimitive(compiler, CiKind.Double);
+        typeByte = new HotSpotTypePrimitive(compiler, CiKind.Byte);
+        typeShort = new HotSpotTypePrimitive(compiler, CiKind.Short);
+        typeInt = new HotSpotTypePrimitive(compiler, CiKind.Int);
+        typeLong = new HotSpotTypePrimitive(compiler, CiKind.Long);
+        typeVoid = new HotSpotTypePrimitive(compiler, CiKind.Void);
     }
 
     public void startCompiler() throws Throwable {
@@ -112,9 +115,8 @@ public class VMToCompilerImpl implements VMToCompiler {
                 @Override
                 public void run() {
                     VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
-                    SnippetInstaller installer = new SnippetInstaller(runtime, runtime.getCompiler().getTarget());
-                    GraalIntrinsics.installIntrinsics(installer);
-                    runtime.installSnippets(installer);
+                    GraalIntrinsics.installIntrinsics(runtime, runtime.getCompiler().getTarget());
+                    runtime.installSnippets();
                 }
             });
 
@@ -211,21 +213,21 @@ public class VMToCompilerImpl implements VMToCompiler {
                 }
             }
         } while ((System.currentTimeMillis() - startTime) <= GraalOptions.TimedBootstrap);
-        CompilationStatistics.clear("bootstrap");
+        CiCompilationStatistics.clear("bootstrap");
 
         TTY.println(" in %d ms", System.currentTimeMillis() - startTime);
         if (compiler.getCache() != null) {
             compiler.getCache().clear();
         }
         System.gc();
-        CompilationStatistics.clear("bootstrap2");
+        CiCompilationStatistics.clear("bootstrap2");
         MethodEntryCounters.printCounters(compiler);
     }
 
     private void enqueue(Method m) throws Throwable {
-        JavaMethod riMethod = compiler.getRuntime().getResolvedJavaMethod(m);
-        assert !Modifier.isAbstract(((HotSpotResolvedJavaMethod) riMethod).accessFlags()) && !Modifier.isNative(((HotSpotResolvedJavaMethod) riMethod).accessFlags()) : riMethod;
-        compileMethod((HotSpotResolvedJavaMethod) riMethod, 0, false, 10);
+        RiMethod riMethod = compiler.getRuntime().getRiMethod(m);
+        assert !Modifier.isAbstract(((HotSpotMethodResolved) riMethod).accessFlags()) && !Modifier.isNative(((HotSpotMethodResolved) riMethod).accessFlags()) : riMethod;
+        compileMethod((HotSpotMethodResolved) riMethod, 0, false, 10);
     }
 
     private static void shutdownCompileQueue(ThreadPoolExecutor queue) throws InterruptedException {
@@ -284,7 +286,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                 }
             }
         }
-        CompilationStatistics.clear("final");
+        CiCompilationStatistics.clear("final");
         MethodEntryCounters.printCounters(compiler);
         HotSpotXirGenerator.printCounters(TTY.out().out());
         CheckCastSnippets.printCounters(TTY.out().out());
@@ -350,7 +352,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public boolean compileMethod(final HotSpotResolvedJavaMethod method, final int entryBCI, boolean blocking, int priority) throws Throwable {
+    public boolean compileMethod(final HotSpotMethodResolved method, final int entryBCI, boolean blocking, int priority) throws Throwable {
         if (CompilationTask.withinEnqueue.get()) {
             // This is required to avoid deadlocking a compiler thread. The issue is that a
             // java.util.concurrent.BlockingQueue is used to implement the compilation worker
@@ -397,26 +399,31 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public JavaMethod createJavaMethod(String name, String signature, JavaType holder) {
-        return new HotSpotMethodUnresolved(name, signature, holder);
+    public RiMethod createRiMethodUnresolved(String name, String signature, RiType holder) {
+        return new HotSpotMethodUnresolved(compiler, name, signature, holder);
     }
 
     @Override
-    public Signature createSignature(String signature) {
-        return new HotSpotSignature(signature);
+    public RiSignature createRiSignature(String signature) {
+        return new HotSpotSignature(compiler, signature);
     }
 
     @Override
-    public JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags) {
+    public RiField createRiField(RiType holder, String name, RiType type, int offset, int flags) {
         if (offset != -1) {
-            HotSpotResolvedJavaType resolved = (HotSpotResolvedJavaType) holder;
+            HotSpotTypeResolved resolved = (HotSpotTypeResolved) holder;
             return resolved.createRiField(name, type, offset, flags);
         }
         return new BaseUnresolvedField(holder, name, type);
     }
 
     @Override
-    public ResolvedJavaType createPrimitiveJavaType(int basicType) {
+    public RiType createRiType(HotSpotConstantPool pool, String name) {
+        throw new RuntimeException("not implemented");
+    }
+
+    @Override
+    public RiType createRiTypePrimitive(int basicType) {
         switch (basicType) {
             case 4:
                 return typeBoolean;
@@ -442,42 +449,42 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public JavaType createJavaType(String name) {
-        return new HotSpotTypeUnresolved(name);
+    public RiType createRiTypeUnresolved(String name) {
+        return new HotSpotTypeUnresolved(compiler, name);
     }
 
     @Override
-    public Constant createConstant(Kind kind, long value) {
-        if (kind == Kind.Long) {
-            return Constant.forLong(value);
-        } else if (kind == Kind.Int) {
-            return Constant.forInt((int) value);
-        } else if (kind == Kind.Short) {
-            return Constant.forShort((short) value);
-        } else if (kind == Kind.Char) {
-            return Constant.forChar((char) value);
-        } else if (kind == Kind.Byte) {
-            return Constant.forByte((byte) value);
-        } else if (kind == Kind.Boolean) {
-            return (value == 0) ? Constant.FALSE : Constant.TRUE;
+    public CiConstant createCiConstant(CiKind kind, long value) {
+        if (kind == CiKind.Long) {
+            return CiConstant.forLong(value);
+        } else if (kind == CiKind.Int) {
+            return CiConstant.forInt((int) value);
+        } else if (kind == CiKind.Short) {
+            return CiConstant.forShort((short) value);
+        } else if (kind == CiKind.Char) {
+            return CiConstant.forChar((char) value);
+        } else if (kind == CiKind.Byte) {
+            return CiConstant.forByte((byte) value);
+        } else if (kind == CiKind.Boolean) {
+            return (value == 0) ? CiConstant.FALSE : CiConstant.TRUE;
         } else {
             throw new IllegalArgumentException();
         }
     }
 
     @Override
-    public Constant createConstantFloat(float value) {
-        return Constant.forFloat(value);
+    public CiConstant createCiConstantFloat(float value) {
+        return CiConstant.forFloat(value);
     }
 
     @Override
-    public Constant createConstantDouble(double value) {
-        return Constant.forDouble(value);
+    public CiConstant createCiConstantDouble(double value) {
+        return CiConstant.forDouble(value);
     }
 
     @Override
-    public Constant createConstantObject(Object object) {
-        return Constant.forObject(object);
+    public CiConstant createCiConstantObject(Object object) {
+        return CiConstant.forObject(object);
     }
 
 
