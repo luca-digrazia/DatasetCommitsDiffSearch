@@ -37,7 +37,6 @@ import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.common.inlining.info.InlineInfo;
 import com.oracle.graal.phases.common.inlining.policy.InliningPolicy;
-import com.oracle.graal.phases.graph.FixedNodeProbabilityCache;
 import com.oracle.graal.phases.tiers.HighTierContext;
 import com.oracle.graal.phases.util.Providers;
 
@@ -64,7 +63,6 @@ public class InliningData {
      */
     private final ArrayDeque<CallsiteHolder> graphQueue = new ArrayDeque<>();
     private final ArrayDeque<MethodInvocation> invocationQueue = new ArrayDeque<>();
-    private final ToDoubleFunction<FixedNode> probabilities = new FixedNodeProbabilityCache();
 
     private final HighTierContext context;
     private final int maxMethodPerInlining;
@@ -126,7 +124,7 @@ public class InliningData {
     /**
      * @return true iff inlining was actually performed
      */
-    private boolean tryToInline(CallsiteHolder callerCallsiteHolder, MethodInvocation calleeInfo, MethodInvocation parentInvocation, int inliningDepth) {
+    private boolean tryToInline(ToDoubleFunction<FixedNode> probabilities, CallsiteHolder callerCallsiteHolder, MethodInvocation calleeInfo, MethodInvocation parentInvocation, int inliningDepth) {
         InlineInfo callee = calleeInfo.callee();
         Assumptions callerAssumptions = parentInvocation.assumptions();
         metricInliningConsidered.increment();
@@ -290,7 +288,7 @@ public class InliningData {
     /**
      * @return true iff inlining was actually performed
      */
-    public boolean moveForward() {
+    public boolean moveForward(ToDoubleFunction<FixedNode> probabilities) {
 
         final MethodInvocation currentInvocation = currentInvocation();
 
@@ -322,7 +320,7 @@ public class InliningData {
             popInvocation();
             final MethodInvocation parentInvoke = currentInvocation();
             try (Debug.Scope s = Debug.scope("Inlining", inliningContext())) {
-                return tryToInline(currentGraph(), currentInvocation, parentInvoke, inliningDepth() + 1);
+                return tryToInline(probabilities, currentGraph(), currentInvocation, parentInvoke, inliningDepth() + 1);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
