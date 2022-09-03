@@ -238,12 +238,10 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         @Override
         protected void run(StructuredGraph graph) {
             int argCount = 0;
-            Stamp nonNull = StampFactory.objectNonNull();
             for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
                 argCount++;
                 if (argCount < numArgs && param.stamp() instanceof ObjectStamp) {
-                    ObjectStamp paramStamp = (ObjectStamp) param.stamp();
-                    param.setStamp(paramStamp.join(nonNull));
+                    param.setStamp(StampFactory.declaredNonNull(((ObjectStamp) param.stamp()).type()));
                 }
             }
         }
@@ -381,13 +379,22 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
             throw new GraalInternalError("Cannot execute GPU kernel if device is not initialized");
         }
         int[] oopMapArray = ((HSAILHotSpotNmethod) kernel).getOopMapArray();
-
+        Object[] oopsSaveArea;
+        if (getRuntime().getConfig().useHSAILDeoptimization) {
+            int saveAreaCounts = OopMapArrayBuilder.getSaveAreaCounts(oopMapArray);
+            int numDRegs = (saveAreaCounts >> 8) & 0xff;
+            int numStackSlots = (saveAreaCounts >> 16);
+            // pessimistically assume that any of the DRegs or stackslots could be oops
+            oopsSaveArea = new Object[maxDeoptIndex * (numDRegs + numStackSlots)];
+        } else {
+            oopsSaveArea = null;
+        }
         // Pass donorThreadPoolArray if this kernel uses allocation, otherwise null
         Thread[] donorThreadArray = ((HSAILHotSpotNmethod) kernel).getUsesAllocationFlag() ? donorThreadPool.get().getThreads() : null;
-        return executeKernel0(kernel, jobSize, args, donorThreadArray, HsailAllocBytesPerWorkitem.getValue(), oopMapArray);
+        return executeKernel0(kernel, jobSize, args, oopsSaveArea, donorThreadArray, HsailAllocBytesPerWorkitem.getValue(), oopMapArray);
     }
 
-    private static native boolean executeKernel0(HotSpotInstalledCode kernel, int jobSize, Object[] args, Thread[] donorThreads, int allocBytesPerWorkitem, int[] oopMapArray)
+    private static native boolean executeKernel0(HotSpotInstalledCode kernel, int jobSize, Object[] args, Object[] oopsSave, Thread[] donorThreads, int allocBytesPerWorkitem, int[] oopMapArray)
                     throws InvalidInstalledCodeException;
 
     /**
@@ -1061,6 +1068,10 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         private int getOopMapBitsAsInt(int infoIndex, int intIndex) {
             int arrIndex = HEADERSIZE + infoIndex * intsPerInfopoint + 1 + intIndex;
             return array[arrIndex];
+        }
+
+        public static int getSaveAreaCounts(int[] array) {
+            return array[SAVEAREACOUNTS_OFST];
         }
     }
 
