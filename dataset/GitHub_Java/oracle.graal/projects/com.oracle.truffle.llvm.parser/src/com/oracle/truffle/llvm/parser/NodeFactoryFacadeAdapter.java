@@ -282,6 +282,11 @@ public abstract class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
+    public LLVMNode createPhiNode() {
+        return null;
+    }
+
+    @Override
     public LLVMNode createBasicBlockNode(LLVMNode[] statementNodes, LLVMNode terminatorNode) {
         return null;
     }
