@@ -129,18 +129,16 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
     private void emit8ByteCompare(SPARCMacroAssembler masm, Register result, Register array1, Register array2, Register length, Label trueLabel, Label falseLabel) {
         Label loop = new Label();
         Label compareTail = new Label();
-        Label compareTailCorrectVectorEnd = new Label();
-
+        // new Ldx(new SPARCAddress(o6, 3), g0).emit(masm);
         Register tempReg1 = asRegister(temp4);
         Register tempReg2 = asRegister(temp5);
-
-        boolean hasCBcond = masm.hasFeature(CPUFeature.CBCOND);
-
         new And(result, VECTOR_SIZE - 1, result).emit(masm); // tail count (in bytes)
         new Andcc(length, ~(VECTOR_SIZE - 1), length).emit(masm);  // vector count (in bytes)
         new Bpe(CC.Xcc, compareTail).emit(masm);
+        new Nop().emit(masm);
 
-        new Sub(length, VECTOR_SIZE, length).emit(masm); // Delay slot
+        Label compareTailCorrectVectorEnd = new Label();
+        new Sub(length, VECTOR_SIZE, length).emit(masm);
         new Add(array1, length, array1).emit(masm);
         new Add(array2, length, array2).emit(masm);
         new Sub(g0, length, length).emit(masm);
@@ -148,18 +146,11 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         // Compare the last element first
         new Ldx(new SPARCAddress(array1, 0), tempReg1).emit(masm);
         new Ldx(new SPARCAddress(array2, 0), tempReg2).emit(masm);
-        if (hasCBcond) {
-            new CBcondx(ConditionFlag.NotEqual, tempReg1, tempReg2, falseLabel).emit(masm);
-            new Nop().emit(masm); // for optimal performance (see manual)
-            new CBcondx(ConditionFlag.Equal, length, 0, compareTailCorrectVectorEnd).emit(masm);
-            new Nop().emit(masm); // for optimal performance (see manual)
-        } else {
-            new Cmp(tempReg1, tempReg2).emit(masm);
-            new Bpne(Xcc, true, false, falseLabel).emit(masm);
-            new Nop().emit(masm);
-            new Bpr(RCondition.Rc_z, false, false, length, compareTailCorrectVectorEnd).emit(masm);
-            new Nop().emit(masm);
-        }
+        new Cmp(tempReg1, tempReg2).emit(masm);
+        new Bpne(Xcc, true, false, falseLabel).emit(masm);
+        new Nop().emit(masm);
+        new Bpr(RCondition.Rc_z, false, false, length, compareTailCorrectVectorEnd).emit(masm);
+        new Nop().emit(masm);
 
         // Load the first value from array 1 (Later done in back branch delay-slot)
         new Ldx(new SPARCAddress(array1, length), tempReg1).emit(masm);
@@ -173,12 +164,8 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         new Ldx(new SPARCAddress(array1, length), tempReg1).emit(masm); // Load in delay slot
 
         // Tail count zero, therefore we can go to the end
-        if (hasCBcond) {
-            new CBcondx(ConditionFlag.Equal, result, 0, trueLabel).emit(masm);
-        } else {
-            new Bpr(RCondition.Rc_z, true, true, result, trueLabel).emit(masm);
-            new Nop().emit(masm);
-        }
+        new Bpr(RCondition.Rc_z, true, true, result, trueLabel).emit(masm);
+        new Nop().emit(masm);
 
         masm.bind(compareTailCorrectVectorEnd);
         // Correct the array pointers
@@ -197,28 +184,18 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
 
         Register tempReg1 = asRegister(temp3);
         Register tempReg2 = asRegister(temp4);
-        boolean hasCBcond = masm.hasFeature(CPUFeature.CBCOND);
 
         if (kind.getByteCount() <= 4) {
             // Compare trailing 4 bytes, if any.
-            if (hasCBcond) {
-                new CBcondx(ConditionFlag.Less, result, 4, compare2Bytes).emit(masm);
-            } else {
-                new Cmp(result, 4).emit(masm);
-                new Bpl(Xcc, false, false, compare2Bytes).emit(masm);
-                new Nop().emit(masm);
-            }
-
+            new Cmp(result, 4).emit(masm);
+            new Bpl(Xcc, false, false, compare2Bytes).emit(masm);
+            new Nop().emit(masm);
             new Lduw(new SPARCAddress(array1, 0), tempReg1).emit(masm);
             new Lduw(new SPARCAddress(array2, 0), tempReg2).emit(masm);
+            new Cmp(tempReg1, tempReg2).emit(masm);
 
-            if (hasCBcond) {
-                new CBcondx(ConditionFlag.NotEqual, tempReg1, tempReg2, falseLabel).emit(masm);
-            } else {
-                new Cmp(tempReg1, tempReg2).emit(masm);
-                new Bpne(Xcc, false, false, falseLabel).emit(masm);
-                new Nop().emit(masm);
-            }
+            new Bpne(Xcc, false, false, falseLabel).emit(masm);
+            new Nop().emit(masm);
 
             if (kind.getByteCount() <= 2) {
                 // Move array pointers forward.
@@ -229,24 +206,14 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                 // Compare trailing 2 bytes, if any.
                 masm.bind(compare2Bytes);
 
-                if (hasCBcond) {
-                    new CBcondx(ConditionFlag.Less, result, 2, compare1Byte).emit(masm);
-                } else {
-                    new Cmp(result, 2).emit(masm);
-                    new Bpl(Xcc, false, true, compare1Byte).emit(masm);
-                    new Nop().emit(masm);
-                }
-
+                new Cmp(result, 2).emit(masm);
+                new Bpl(Xcc, false, true, compare1Byte).emit(masm);
+                new Nop().emit(masm);
                 new Lduh(new SPARCAddress(array1, 0), tempReg1).emit(masm);
                 new Lduh(new SPARCAddress(array2, 0), tempReg2).emit(masm);
-
-                if (hasCBcond) {
-                    new CBcondx(ConditionFlag.NotEqual, tempReg1, tempReg2, falseLabel).emit(masm);
-                } else {
-                    new Cmp(tempReg1, tempReg2).emit(masm);
-                    new Bpne(Xcc, false, true, falseLabel).emit(masm);
-                    new Nop().emit(masm);
-                }
+                new Cmp(tempReg1, tempReg2).emit(masm);
+                new Bpne(Xcc, false, true, falseLabel).emit(masm);
+                new Nop().emit(masm);
 
                 // The one-byte tail compare is only required for boolean and byte arrays.
                 if (kind.getByteCount() <= 1) {
@@ -257,23 +224,14 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
 
                     // Compare trailing byte, if any.
                     masm.bind(compare1Byte);
-                    if (hasCBcond) {
-                        new CBcondx(ConditionFlag.NotEqual, result, 1, trueLabel).emit(masm);
-                    } else {
-                        new Cmp(result, 1).emit(masm);
-                        new Bpne(Xcc, trueLabel).emit(masm);
-                        new Nop().emit(masm);
-                    }
+                    new Cmp(result, 1).emit(masm);
+                    new Bpne(Xcc, trueLabel).emit(masm);
+                    new Nop().emit(masm);
                     new Ldub(new SPARCAddress(array1, 0), tempReg1).emit(masm);
                     new Ldub(new SPARCAddress(array2, 0), tempReg2).emit(masm);
-                    if (hasCBcond) {
-                        // new SPARCAssembler.Ldx(new SPARCAddress(o7, 1), g3).emit(masm);
-                        new CBcondx(ConditionFlag.NotEqual, tempReg1, tempReg2, falseLabel).emit(masm);
-                    } else {
-                        new Cmp(tempReg1, tempReg2).emit(masm);
-                        new Bpne(Xcc, falseLabel).emit(masm);
-                        new Nop().emit(masm);
-                    }
+                    new Cmp(tempReg1, tempReg2).emit(masm);
+                    new Bpne(Xcc, falseLabel).emit(masm);
+                    new Nop().emit(masm);
                 } else {
                     masm.bind(compare1Byte);
                 }
