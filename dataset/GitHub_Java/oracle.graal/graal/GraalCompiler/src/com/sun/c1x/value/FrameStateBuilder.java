@@ -187,7 +187,6 @@ public class FrameStateBuilder implements FrameStateAccess {
      * @return the instruction on the top of the stack
      */
     public Value pop(CiKind kind) {
-        assert kind != CiKind.Void;
         if (kind.sizeInSlots() == 2) {
             xpop();
         }
