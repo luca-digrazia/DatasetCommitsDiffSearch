@@ -40,8 +40,6 @@ public interface TruffleRuntimeAccess {
 
     /**
      * Allows disambiguation if more than one {@link TruffleRuntime} implementation is available.
-     *
-     * @since 0.28
      */
     int getPriority();
 }

@@ -70,6 +70,9 @@ public class Truffle {
                 }
             }
         }
+        if (selectedAccess == null) {
+            throw new InternalError(String.format("No provider for %s found", TruffleRuntimeAccess.class.getName()));
+        }
         return selectedAccess;
     }
 
@@ -115,9 +118,7 @@ public class Truffle {
                             servicesClass = Class.forName(serviceClassName);
                             if (servicesClass != null) {
                                 access = selectTruffleRuntimeAccess(reflectiveServiceLoaderLoad(servicesClass));
-                                if (access != null) {
-                                    break;
-                                }
+                                break;
                             }
                         } catch (ClassNotFoundException e) {
                             continue;
