@@ -91,12 +91,11 @@ class VirtualizerToolImpl implements VirtualizerTool {
         if (valueState == null) {
             obj.setEntry(index, getReplacedValue(value));
         } else {
-            ValueNode newValue = value;
-            if (valueState.getState() != EscapeState.Virtual) {
-                newValue = valueState.getMaterializedValue();
+            if (valueState.getState() == EscapeState.Virtual) {
+                obj.setEntry(index, value);
+            } else {
+                obj.setEntry(index, valueState.getMaterializedValue());
             }
-            assert obj.getEntry(index) == null || obj.getEntry(index).kind() == newValue.kind();
-            obj.setEntry(index, newValue);
         }
     }
 

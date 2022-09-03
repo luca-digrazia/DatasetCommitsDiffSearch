@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
+import static com.oracle.graal.virtual.phases.ea.PartialEscapeAnalysisPhase.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
@@ -30,11 +32,11 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.virtual.*;
 
-public class BlockState {
+class BlockState {
 
-    protected final IdentityHashMap<VirtualObjectNode, ObjectState> objectStates = new IdentityHashMap<>();
-    protected final IdentityHashMap<ValueNode, VirtualObjectNode> objectAliases;
-    protected final IdentityHashMap<ValueNode, ValueNode> scalarAliases;
+    private final IdentityHashMap<VirtualObjectNode, ObjectState> objectStates = new IdentityHashMap<>();
+    private final IdentityHashMap<ValueNode, VirtualObjectNode> objectAliases;
+    private final IdentityHashMap<ValueNode, ValueNode> scalarAliases;
     final HashMap<ReadCacheEntry, ValueNode> readCache;
 
     static class ReadCacheEntry {
@@ -144,10 +146,6 @@ public class BlockState {
         return new BlockState(this);
     }
 
-    public BlockState cloneEmptyState() {
-        return new BlockState();
-    }
-
     public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, EscapeState state, GraphEffectList materializeEffects) {
         PartialEscapeClosure.METRIC_MATERIALIZATIONS.increment();
         List<AllocatedObjectNode> objects = new ArrayList<>(2);
@@ -161,7 +159,7 @@ public class BlockState {
 
     private void materializeWithCommit(FixedNode fixed, VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<int[]> locks, List<ValueNode> values, List<ValueNode> otherAllocations,
                     EscapeState state) {
-        VirtualUtil.trace("materializing %s", virtual);
+        trace("materializing %s", virtual);
         ObjectState obj = getObjectState(virtual);
 
         ValueNode[] entries = obj.getEntries();
@@ -243,14 +241,34 @@ public class BlockState {
         return objectStates + " " + readCache;
     }
 
-    public void meetAliases(List<? extends BlockState> states) {
-        objectAliases.putAll(states.get(0).objectAliases);
-        scalarAliases.putAll(states.get(0).scalarAliases);
+    public static BlockState meetAliases(List<BlockState> states) {
+        BlockState newState = new BlockState();
+
+        newState.objectAliases.putAll(states.get(0).objectAliases);
         for (int i = 1; i < states.size(); i++) {
             BlockState state = states.get(i);
-            meetMaps(objectAliases, state.objectAliases);
-            meetMaps(scalarAliases, state.scalarAliases);
+            for (Map.Entry<ValueNode, VirtualObjectNode> entry : states.get(0).objectAliases.entrySet()) {
+                if (state.objectAliases.containsKey(entry.getKey())) {
+                    assert state.objectAliases.get(entry.getKey()) == entry.getValue();
+                } else {
+                    newState.objectAliases.remove(entry.getKey());
+                }
+            }
         }
+
+        newState.scalarAliases.putAll(states.get(0).scalarAliases);
+        for (int i = 1; i < states.size(); i++) {
+            BlockState state = states.get(i);
+            for (Map.Entry<ValueNode, ValueNode> entry : states.get(0).scalarAliases.entrySet()) {
+                if (state.scalarAliases.containsKey(entry.getKey())) {
+                    assert state.scalarAliases.get(entry.getKey()) == entry.getValue();
+                } else {
+                    newState.scalarAliases.remove(entry.getKey());
+                }
+            }
+        }
+
+        return newState;
     }
 
     public Map<ReadCacheEntry, ValueNode> getReadCache() {
@@ -268,14 +286,14 @@ public class BlockState {
         return objectAliasesEqual && objectStatesEqual && readCacheEqual && scalarAliasesEqual;
     }
 
-    protected static <K, V> boolean compareMaps(Map<K, V> left, Map<K, V> right) {
+    private static <K, V> boolean compareMaps(Map<K, V> left, Map<K, V> right) {
         if (left.size() != right.size()) {
             return false;
         }
         return compareMapsNoSize(left, right);
     }
 
-    protected static <K, V> boolean compareMapsNoSize(Map<K, V> left, Map<K, V> right) {
+    private static <K, V> boolean compareMapsNoSize(Map<K, V> left, Map<K, V> right) {
         if (left == right) {
             return true;
         }
@@ -289,18 +307,6 @@ public class BlockState {
             }
         }
         return true;
-    }
-
-    protected static <U, V> void meetMaps(Map<U, V> target, Map<U, V> source) {
-        Iterator<Map.Entry<U, V>> iter = target.entrySet().iterator();
-        while (iter.hasNext()) {
-            Map.Entry<U, V> entry = iter.next();
-            if (source.containsKey(entry.getKey())) {
-                assert source.get(entry.getKey()) == entry.getValue();
-            } else {
-                iter.remove();
-            }
-        }
     }
 
 }

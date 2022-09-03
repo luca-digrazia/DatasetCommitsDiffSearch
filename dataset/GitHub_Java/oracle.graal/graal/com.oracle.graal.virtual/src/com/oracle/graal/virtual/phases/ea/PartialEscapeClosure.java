@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.virtual.phases.ea.PartialEscapeAnalysisPhase.*;
 
 import java.util.*;
@@ -35,6 +34,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -161,7 +161,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                     for (LocationIdentity identity : checkpoint.getLocationIdentities()) {
                         if (identity instanceof ResolvedJavaField) {
                             state.killReadCache((ResolvedJavaField) identity);
-                        } else if (identity == ANY_LOCATION) {
+                        } else if (identity == LocationNode.ANY_LOCATION) {
                             state.killReadCache();
                         }
                     }
@@ -521,13 +521,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                             for (int i = 1; i < states.size(); i++) {
                                 ValueNode[] fields = objStates[i].getEntries();
                                 if (phis[index] == null && values[index] != fields[index]) {
-                                    Kind kind = values[index].kind();
-                                    if (kind == Kind.Illegal) {
-                                        // Can happen if one of the values is virtual and is only
-                                        // materialized in the following loop.
-                                        kind = Kind.Object;
-                                    }
-                                    phis[index] = new PhiNode(kind, merge);
+                                    phis[index] = new PhiNode(values[index].kind(), merge);
                                 }
                             }
                         }
