@@ -24,7 +24,6 @@
  */
 package com.oracle.graalvm.locator;
 
-import com.oracle.truffle.api.impl.HomeFinder;
 import com.oracle.truffle.api.TruffleOptions;
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -38,11 +37,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import org.graalvm.nativeimage.ImageInfo;
 
-public final class DefaultHomeFinder extends HomeFinder {
-
-    private static final boolean STATIC_VERBOSE = Boolean.getBoolean("com.oracle.graalvm.locator.verbose");
+final class DefaultHomeFinder implements HomeFinder {
 
     private static final Path FORCE_GRAAL_HOME;
     private static final Path GRAAL_HOME_RELATIVE_PATH;
@@ -86,13 +82,14 @@ public final class DefaultHomeFinder extends HomeFinder {
         }
     }
 
-    private volatile Boolean verbose;
+    static final HomeFinder INSTANCE = new DefaultHomeFinder();
+
     private volatile Path graalHome;
     private volatile String version;
     private volatile Map<String, Path> languageHomes;
     private volatile Map<String, Path> toolHomes;
 
-    public DefaultHomeFinder() {
+    private DefaultHomeFinder() {
     }
 
     @Override
@@ -100,9 +97,6 @@ public final class DefaultHomeFinder extends HomeFinder {
         Path res = graalHome;
         if (res == null) {
             if (FORCE_GRAAL_HOME != null) {
-                if (isVerbose()) {
-                    System.err.println("GraalVM home forced to: " + FORCE_GRAAL_HOME);
-                }
                 res = FORCE_GRAAL_HOME;
             } else {
                 boolean aot = TruffleOptions.AOT;
@@ -112,15 +106,9 @@ public final class DefaultHomeFinder extends HomeFinder {
                         graalvmHomeValue = System.getProperty("org.graalvm.home");
                     }
                     if (graalvmHomeValue != null) {
-                        if (isVerbose()) {
-                            System.err.println("GraalVM home already set to: " + graalvmHomeValue);
-                        }
                         res = Paths.get(graalvmHomeValue);
                     } else {
                         res = getGraalVmHome();
-                        if (isVerbose()) {
-                            System.err.println("Found GraalVM home: " + res);
-                        }
                         if (res == null) {
                             return null;
                         }
@@ -139,14 +127,15 @@ public final class DefaultHomeFinder extends HomeFinder {
                     } else {
                         res = javaHome.getParent();
                     }
-                    if (isVerbose()) {
-                        System.err.println("GraalVM home found by java.home property as: " + res);
-                    }
                 }
             }
-            if (!ImageInfo.inImageBuildtimeCode()) {
-                graalHome = res;
+            if (System.getProperty("graalvm.home") == null) {
+                System.setProperty("graalvm.home", res.toAbsolutePath().toString());
             }
+            if (System.getProperty("org.graalvm.home") == null) {
+                System.setProperty("org.graalvm.home", res.toAbsolutePath().toString());
+            }
+            graalHome = res;
         }
         return res;
     }
@@ -182,9 +171,7 @@ public final class DefaultHomeFinder extends HomeFinder {
                     }
                 }
             }
-            if (!ImageInfo.inImageBuildtimeCode()) {
-                version = res;
-            }
+            version = res;
         }
         return res;
     }
@@ -199,9 +186,7 @@ public final class DefaultHomeFinder extends HomeFinder {
             } else {
                 res = Collections.unmodifiableMap(collectHomes(home.resolve(Paths.get("jre", "languages"))));
             }
-            if (!ImageInfo.inImageBuildtimeCode()) {
-                languageHomes = res;
-            }
+            languageHomes = res;
         }
         return res;
     }
@@ -216,9 +201,7 @@ public final class DefaultHomeFinder extends HomeFinder {
             } else {
                 res = Collections.unmodifiableMap(collectHomes(home.resolve(Paths.get("jre", "tools"))));
             }
-            if (!ImageInfo.inImageBuildtimeCode()) {
-                toolHomes = res;
-            }
+            toolHomes = res;
         }
         return res;
     }
@@ -242,7 +225,7 @@ public final class DefaultHomeFinder extends HomeFinder {
         return res;
     }
 
-    private Path getGraalVmHome() {
+    private static Path getGraalVmHome() {
         assert TruffleOptions.AOT;
         Path executable = getCurrentExecutablePath();
         if (executable != null) {
@@ -251,9 +234,6 @@ public final class DefaultHomeFinder extends HomeFinder {
                 result = getGraalVmHomeFallBack(executable);
             }
             if (result != null) {
-                if (isVerbose()) {
-                    System.err.println("GraalVM home found by executable as: " + result);
-                }
                 return result;
             }
         }
@@ -261,9 +241,6 @@ public final class DefaultHomeFinder extends HomeFinder {
         Path result = objectFile != null ? getGraalVmHome(objectFile) : null;
         if (result == null) {
             result = getGraalVmHomeLibPolyglotFallBack(objectFile);
-        }
-        if (isVerbose() && result != null) {
-            System.err.println("GraalVM home found by object file as: " + result);
         }
         return result;
     }
@@ -351,7 +328,7 @@ public final class DefaultHomeFinder extends HomeFinder {
     }
 
     /**
-     * Fallback for the GraalVM home using location of libpolyglot in jdk/jre layout.
+     * Fallback for the GraalVM home using lacation of libpolyglot in jdk/jre layout.
      *
      * @param objectFile the path to libpolyglot
      * @return the path to GraalVM home or null
@@ -404,7 +381,6 @@ public final class DefaultHomeFinder extends HomeFinder {
         return result;
     }
 
-    @SuppressWarnings("deprecation")
     private static Path getCurrentObjectFilePath() {
         return Paths.get((String) Compiler.command(new Object[]{
                         "com.oracle.svm.core.posix.GetObjectFile",
@@ -412,23 +388,9 @@ public final class DefaultHomeFinder extends HomeFinder {
         }));
     }
 
-    @SuppressWarnings("deprecation")
     private static Path getCurrentExecutablePath() {
         return Paths.get((String) Compiler.command(new String[]{
                         "com.oracle.svm.core.posix.GetExecutableName"
         }));
-    }
-
-    private boolean isVerbose() {
-        if (ImageInfo.inImageBuildtimeCode()) {
-            return STATIC_VERBOSE;
-        } else {
-            Boolean res = verbose;
-            if (res == null) {
-                res = STATIC_VERBOSE || Boolean.valueOf(System.getenv("VERBOSE_GRAALVM_LOCATOR"));
-                verbose = res;
-            }
-            return res;
-        }
     }
 }

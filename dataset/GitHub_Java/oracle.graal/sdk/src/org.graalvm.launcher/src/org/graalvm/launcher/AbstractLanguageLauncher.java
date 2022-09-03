@@ -72,10 +72,6 @@ public abstract class AbstractLanguageLauncher extends Launcher {
             polyglotOptions = new HashMap<>();
         }
 
-        if (isAOT() && doNativeSetup) {
-            System.setProperty("org.graalvm.launcher.languageId", getLanguageId());
-        }
-
         List<String> unrecognizedArgs = preprocessArguments(args, polyglotOptions);
 
         if (isAOT() && doNativeSetup && !IS_LIBPOLYGLOT) {
