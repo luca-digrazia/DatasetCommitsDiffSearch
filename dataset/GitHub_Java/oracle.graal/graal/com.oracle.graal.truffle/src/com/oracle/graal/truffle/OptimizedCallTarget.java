@@ -22,55 +22,26 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleArgumentTypeSpeculation;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleBackgroundCompilation;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCallTargetProfiling;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreFatal;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsArePrinted;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleReturnTypeSpeculation;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Spliterators;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
+import java.io.*;
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.concurrent.atomic.*;
+import java.util.stream.*;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.SpeculationLog;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.truffle.debug.AbstractDebugCompilationListener;
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.graal.truffle.debug.*;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerOptions;
-import com.oracle.truffle.api.ExecutionContext;
-import com.oracle.truffle.api.LoopCountReceiver;
-import com.oracle.truffle.api.OptimizationFailedException;
-import com.oracle.truffle.api.ReplaceObserver;
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.impl.DefaultCompilerOptions;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.impl.*;
+import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.nodes.NodeVisitor;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.CyclicAssumption;
-import com.oracle.truffle.api.utilities.ValueProfile;
+import com.oracle.truffle.api.utilities.*;
 
 /**
  * Call target that is optimized by Graal upon surpassing a specific invocation threshold.
@@ -199,7 +170,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             Object result = doInvoke(args);
             Class<?> klass = profiledReturnType;
             if (klass != null && CompilerDirectives.inCompiledCode() && profiledReturnTypeAssumption.isValid()) {
-                result = unsafeCast(result, klass, true, true);
+                result = FrameWithoutBoxing.unsafeCast(result, klass, true, true);
             }
             return result;
         } catch (Throwable t) {
@@ -300,7 +271,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     public final Object callRoot(Object[] originalArguments) {
         Object[] args = originalArguments;
         if (this.profiledArgumentTypesAssumption != null && CompilerDirectives.inCompiledCode() && profiledArgumentTypesAssumption.isValid()) {
-            args = unsafeCast(castArrayFixedLength(args, profiledArgumentTypes.length), Object[].class, true, true);
+            args = FrameWithoutBoxing.unsafeCast(castArrayFixedLength(args, profiledArgumentTypes.length), Object[].class, true, true);
             if (TruffleArgumentTypeSpeculation.getValue()) {
                 args = castArguments(args);
             }
@@ -464,7 +435,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private Object[] castArguments(Object[] originalArguments) {
         Object[] castArguments = new Object[profiledArgumentTypes.length];
         for (int i = 0; i < profiledArgumentTypes.length; i++) {
-            castArguments[i] = profiledArgumentTypes[i] != null ? unsafeCast(originalArguments[i], profiledArgumentTypes[i], true, true) : originalArguments[i];
+            castArguments[i] = profiledArgumentTypes[i] != null ? FrameWithoutBoxing.unsafeCast(originalArguments[i], profiledArgumentTypes[i], true, true) : originalArguments[i];
         }
         return castArguments;
     }
@@ -581,12 +552,8 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return context.getCompilerOptions();
     }
 
-    @SuppressWarnings({"unchecked", "unused"})
-    private static <T> T unsafeCast(Object value, Class<T> type, boolean condition, boolean nonNull) {
-        return (T) value;
-    }
-
     private static final class NonTrivialNodeCountVisitor implements NodeVisitor {
+
         public int nodeCount;
 
         public boolean visit(Node node) {
@@ -595,5 +562,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             }
             return true;
         }
+
     }
+
 }
