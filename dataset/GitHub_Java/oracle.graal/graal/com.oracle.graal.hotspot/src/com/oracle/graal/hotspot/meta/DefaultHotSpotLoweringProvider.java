@@ -475,7 +475,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     private WriteNode createWriteHub(StructuredGraph graph, ValueNode object, ValueNode value) {
         HotSpotVMConfig config = runtime.getConfig();
         LocationNode location = graph.unique(new ConstantLocationNode(HUB_WRITE_LOCATION, config.hubOffset));
-        assert !object.isConstant() || object.asConstant().isDefaultForKind();
+        assert !object.isConstant() || object.isNullConstant();
 
         ValueNode writeValue = value;
         if (config.useCompressedClassPointers) {

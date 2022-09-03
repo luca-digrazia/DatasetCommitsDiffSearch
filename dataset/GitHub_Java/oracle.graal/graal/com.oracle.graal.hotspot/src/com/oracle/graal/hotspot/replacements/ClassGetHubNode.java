@@ -57,7 +57,7 @@ public final class ClassGetHubNode extends FloatingGuardedNode implements Lowera
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
+        if (hasNoUsages()) {
             return null;
         } else {
             if (clazz.isConstant()) {
@@ -75,7 +75,7 @@ public final class ClassGetHubNode extends FloatingGuardedNode implements Lowera
             }
             if (clazz instanceof GetClassNode) {
                 GetClassNode getClass = (GetClassNode) clazz;
-                return new LoadHubNode(KlassPointerStamp.klassNonNull(), getClass.getObject(), null);
+                return new LoadHubNode(KlassPointerStamp.klass(), getClass.getObject(), null);
             }
             if (clazz instanceof HubGetClassNode) {
                 // replace _klass._java_mirror._klass -> _klass

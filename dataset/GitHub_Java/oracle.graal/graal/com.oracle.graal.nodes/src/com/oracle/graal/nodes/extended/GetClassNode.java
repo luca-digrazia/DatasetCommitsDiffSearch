@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -29,8 +31,6 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Loads an object's class (i.e., this node can be created for {@code object.getClass()}).
@@ -48,7 +48,6 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
     public GetClassNode(Stamp stamp, ValueNode object) {
         super(TYPE, stamp);
         this.object = object;
-        assert ((ObjectStamp) object.stamp()).nonNull();
     }
 
     @Override
