@@ -22,58 +22,32 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.graph.Graph.*;
-
-import com.oracle.graal.graph.Node.*;
+import com.oracle.graal.graph.iterators.*;
 
 /**
- * An iterator over the references to a given {@link Node}'s {@linkplain Input inputs} or
- * {@linkplain Successor successors}.
+ * The iterator returned by this iterable can be used to access {@link Position Positions} during
+ * iteration using {@link NodeRefIterator#nextPosition()}.
  */
-public class NodeRefIterable implements NodeClassIterable {
-
-    protected final Node node;
+public interface NodeRefIterable extends NodeIterable<Node> {
+    /**
+     * Returns an iterator that produces all non-null values.
+     */
+    @Override
+    NodeRefIterator iterator();
 
     /**
-     * Specifies if {@link #iterator()} and {@link #withNullIterator()} iterate over
-     * {@linkplain Input inputs} or {@linkplain Successor successors}.
+     * Returns an iterator that produces all values, including null values.
      */
-    protected final boolean isInputs;
+    NodeRefIterator withNullIterator();
 
-    public NodeRefIterable(Node node, boolean isInputs) {
-        this.isInputs = isInputs;
-        this.node = node;
-    }
+    NodeRefIterable Empty = new NodeRefIterable() {
 
-    @Override
-    public NodePosIterator iterator() {
-        int count = isInputs ? node.getInputsCount() : node.getSuccessorsCount();
-        if (count == 0) {
+        public NodeRefIterator withNullIterator() {
             return NodeRefIterator.Empty;
         }
-        int nodeFields = count & 0xFFFF;
-        int nodeListFields = (count >> 16) & 0xFFFF;
-        if (MODIFICATION_COUNTS_ENABLED) {
-            return new NodeRefWithModCountIterator(node, nodeFields, nodeListFields, isInputs);
-        } else {
-            NodeRefIterator iter = new NodeRefIterator(node, nodeFields, nodeListFields, isInputs);
-            iter.forward();
-            return iter;
-        }
-    }
 
-    public NodePosIterator withNullIterator() {
-        int count = isInputs ? node.getInputsCount() : node.getSuccessorsCount();
-        if (count == 0) {
+        public NodeRefIterator iterator() {
             return NodeRefIterator.Empty;
         }
-        int nodeFields = count & 0xFFFF;
-        int nodeListFields = (count >> 16) & 0xFFFF;
-        return new NodeAllRefsIterator(node, nodeFields, nodeListFields, isInputs);
-    }
-
-    @Override
-    public boolean contains(Node other) {
-        return isInputs ? node.inputsContains(other) : node.successorsContains(other);
-    }
+    };
 }

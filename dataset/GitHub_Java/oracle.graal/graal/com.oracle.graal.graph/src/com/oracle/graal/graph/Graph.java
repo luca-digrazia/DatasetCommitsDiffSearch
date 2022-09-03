@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.graph.Node.*;
-
 import java.util.*;
 
 import com.oracle.graal.compiler.common.*;
@@ -651,14 +649,14 @@ public class Graph {
     @com.oracle.graal.nodeinfo.NodeInfo
     static class PlaceHolderNode extends Node {
         public static PlaceHolderNode create() {
-            return new PlaceHolderNode();
+            return new Graph_PlaceHolderNodeGen();
         }
 
         PlaceHolderNode() {
         }
     }
 
-    private static final Node PLACE_HOLDER = USE_GENERATED_NODES ? new Graph_PlaceHolderNodeGen() : new PlaceHolderNode();
+    private static final Node PLACE_HOLDER = new Graph_PlaceHolderNodeGen();
 
     /**
      * When the percent of live nodes in {@link #nodes} fall below this number, a call to

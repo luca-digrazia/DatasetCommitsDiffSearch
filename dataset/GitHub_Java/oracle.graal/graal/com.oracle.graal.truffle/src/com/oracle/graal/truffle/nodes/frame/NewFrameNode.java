@@ -52,7 +52,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
     @Input ValueNode arguments;
 
     public static NewFrameNode create(Stamp stamp, ValueNode descriptor, ValueNode arguments) {
-        return USE_GENERATED_NODES ? new NewFrameNodeGen(stamp, descriptor, arguments) : new NewFrameNode(stamp, descriptor, arguments);
+        return new NewFrameNodeGen(stamp, descriptor, arguments);
     }
 
     protected NewFrameNode(Stamp stamp, ValueNode descriptor, ValueNode arguments) {
@@ -62,7 +62,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
     }
 
     public static NewFrameNode create(ResolvedJavaType frameType, ValueNode descriptor, ValueNode arguments) {
-        return USE_GENERATED_NODES ? new NewFrameNodeGen(frameType, descriptor, arguments) : new NewFrameNode(frameType, descriptor, arguments);
+        return new NewFrameNodeGen(frameType, descriptor, arguments);
     }
 
     protected NewFrameNode(ResolvedJavaType frameType, ValueNode descriptor, ValueNode arguments) {
@@ -103,16 +103,11 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
         throw new RuntimeException("Frame field not found: " + fieldName);
     }
 
-    @NodeInfo
     public static class VirtualOnlyInstanceNode extends VirtualInstanceNode {
 
         private boolean allowMaterialization;
 
-        public static VirtualOnlyInstanceNode create(ResolvedJavaType type, ResolvedJavaField[] fields) {
-            return USE_GENERATED_NODES ? new NewFrameNode_VirtualOnlyInstanceNodeGen(type, fields) : new VirtualOnlyInstanceNode(type, fields);
-        }
-
-        VirtualOnlyInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
+        public VirtualOnlyInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
             super(type, fields, false);
         }
 
@@ -130,7 +125,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
     }
 
     public static ValueNode getMaterializedRepresentationHelper(VirtualObjectNode virtualNode, FixedNode fixed) {
-        if (fixed instanceof MaterializeFrameNode || fixed instanceof AbstractEndNode || fixed instanceof ForceMaterializeNode) {
+        if (fixed instanceof MaterializeFrameNode || fixed instanceof AbstractEndNode) {
             // We need to conservatively assume that a materialization of a virtual frame can also
             // happen at a merge point.
             return AllocatedObjectNode.create(virtualNode);
@@ -166,7 +161,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
         ResolvedJavaField primitiveLocalsField = findField(frameFields, "primitiveLocals");
         ResolvedJavaField tagsField = findField(frameFields, "tags");
 
-        VirtualObjectNode virtualFrame = VirtualOnlyInstanceNode.create(frameType, frameFields);
+        VirtualObjectNode virtualFrame = VirtualInstanceNode.create(frameType, frameFields, false);
         VirtualObjectNode virtualFrameObjectArray = VirtualArrayNode.create((ResolvedJavaType) localsField.getType().getComponentType(), frameSize);
         VirtualObjectNode virtualFramePrimitiveArray = VirtualArrayNode.create((ResolvedJavaType) primitiveLocalsField.getType().getComponentType(), frameSize);
         VirtualObjectNode virtualFrameTagArray = VirtualArrayNode.create((ResolvedJavaType) tagsField.getType().getComponentType(), frameSize);

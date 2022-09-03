@@ -34,11 +34,11 @@ import com.oracle.graal.nodes.spi.*;
 public class FloatAddNode extends FloatArithmeticNode {
 
     public static FloatAddNode create(ValueNode x, ValueNode y, boolean isStrictFP) {
-        return USE_GENERATED_NODES ? new FloatAddNodeGen(x, y, isStrictFP) : new FloatAddNode(x, y, isStrictFP);
+        return new FloatAddNodeGen(x, y, isStrictFP);
     }
 
     public static Class<? extends FloatAddNode> getGenClass() {
-        return USE_GENERATED_NODES ? FloatAddNodeGen.class : FloatAddNode.class;
+        return FloatAddNodeGen.class;
     }
 
     protected FloatAddNode(ValueNode x, ValueNode y, boolean isStrictFP) {

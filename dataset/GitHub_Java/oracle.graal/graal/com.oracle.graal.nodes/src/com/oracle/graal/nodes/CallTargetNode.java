@@ -33,33 +33,19 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(allowedUsageTypes = {InputType.Extension})
 public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
     public enum InvokeKind {
-        Interface(false),
-        Special(true),
-        Static(true),
-        Virtual(false);
-
-        private InvokeKind(boolean direct) {
-            this.direct = direct;
-        }
-
-        private boolean direct;
+        Interface,
+        Special,
+        Static,
+        Virtual;
 
         public boolean hasReceiver() {
             return this != Static;
         }
-
-        public boolean isDirect() {
-            return direct;
-        }
-
-        public boolean isIndirect() {
-            return !direct;
-        }
     }
 
     @Input protected NodeInputList<ValueNode> arguments;
-    protected ResolvedJavaMethod targetMethod;
-    protected InvokeKind invokeKind;
+    private ResolvedJavaMethod targetMethod;
+    private InvokeKind invokeKind;
 
     public CallTargetNode(ValueNode[] arguments, ResolvedJavaMethod targetMethod, InvokeKind invokeKind) {
         super(StampFactory.forVoid());

@@ -44,7 +44,7 @@ public class ReturnNode extends ControlSinkNode implements LIRLowerable, Iterabl
      *            void return
      */
     public static ReturnNode create(ValueNode result) {
-        return USE_GENERATED_NODES ? new ReturnNodeGen(result) : new ReturnNode(result);
+        return new ReturnNodeGen(result);
     }
 
     protected ReturnNode(ValueNode result) {
@@ -52,7 +52,7 @@ public class ReturnNode extends ControlSinkNode implements LIRLowerable, Iterabl
     }
 
     public static ReturnNode create(ValueNode result, MemoryMapNode memoryMap) {
-        return USE_GENERATED_NODES ? new ReturnNodeGen(result, memoryMap) : new ReturnNode(result, memoryMap);
+        return new ReturnNodeGen(result, memoryMap);
     }
 
     protected ReturnNode(ValueNode result, MemoryMapNode memoryMap) {

@@ -22,19 +22,17 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
 @NodeInfo
 public abstract class ArrayRangeWriteBarrier extends WriteBarrier {
 
-    public static final NodeClass TYPE = NodeClass.get(ArrayRangeWriteBarrier.class);
     @Input ValueNode startIndex;
     @Input ValueNode length;
 
     public ArrayRangeWriteBarrier(ValueNode object, ValueNode startIndex, ValueNode length) {
-        super(TYPE, object, null, null, true);
+        super(object, null, null, true);
         this.startIndex = startIndex;
         this.length = length;
     }

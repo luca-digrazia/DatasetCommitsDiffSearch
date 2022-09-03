@@ -36,7 +36,7 @@ public class ConditionAnchorNode extends FixedWithNextNode implements Canonicali
     private boolean negated;
 
     public static ConditionAnchorNode create(LogicNode condition) {
-        return USE_GENERATED_NODES ? new ConditionAnchorNodeGen(condition) : new ConditionAnchorNode(condition);
+        return new ConditionAnchorNodeGen(condition);
     }
 
     protected ConditionAnchorNode(LogicNode condition) {
@@ -44,7 +44,7 @@ public class ConditionAnchorNode extends FixedWithNextNode implements Canonicali
     }
 
     public static ConditionAnchorNode create(LogicNode condition, boolean negated) {
-        return USE_GENERATED_NODES ? new ConditionAnchorNodeGen(condition, negated) : new ConditionAnchorNode(condition, negated);
+        return new ConditionAnchorNodeGen(condition, negated);
     }
 
     protected ConditionAnchorNode(LogicNode condition, boolean negated) {

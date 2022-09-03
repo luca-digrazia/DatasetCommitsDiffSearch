@@ -37,7 +37,7 @@ public class FlowUtil {
     }
 
     public static boolean lacksUsages(Node n) {
-        return n.usages().isEmpty();
+        return n.recordsUsages() && n.usages().isEmpty();
     }
 
     public static ResolvedJavaType widen(ResolvedJavaType a, ResolvedJavaType b) {
@@ -229,7 +229,7 @@ public class FlowUtil {
     @SuppressWarnings("unchecked")
     public static List<ValueNode> distinctValueAndConditionInputs(Node n) {
         ArrayList<ValueNode> result = null;
-        NodePosIterator iter = n.inputs().iterator();
+        NodeClass.NodeClassIterator iter = n.inputs().iterator();
         while (iter.hasNext()) {
             Position pos = iter.nextPosition();
             InputType inputType = pos.getInputType(n);

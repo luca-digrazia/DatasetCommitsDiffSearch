@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
@@ -30,15 +29,13 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public abstract class UnaryOpLogicNode extends LogicNode implements LIRLowerable, Canonicalizable.Unary<ValueNode> {
 
-    public static final NodeClass TYPE = NodeClass.get(UnaryOpLogicNode.class);
     @Input protected ValueNode value;
 
     public ValueNode getValue() {
         return value;
     }
 
-    public UnaryOpLogicNode(NodeClass c, ValueNode value) {
-        super(c);
+    public UnaryOpLogicNode(ValueNode value) {
         assert value != null;
         this.value = value;
     }

@@ -54,9 +54,7 @@ public final class NodeClass extends FieldIntrospection {
      */
     @SuppressWarnings("unchecked")
     public static NodeClass get(Class<?> c) {
-        GeneratedNode gen = c.getAnnotation(GeneratedNode.class);
-        Class<? extends Node> key = gen == null ? (Class<? extends Node>) c : (Class<? extends Node>) gen.value();
-
+        Class<? extends Node> key = (Class<? extends Node>) c;
         NodeClass value = (NodeClass) allClasses.get(key);
         // The fact that {@link ConcurrentHashMap#put} and {@link ConcurrentHashMap#get}
         // are used makes the double-checked locking idiom work.
@@ -164,8 +162,6 @@ public final class NodeClass extends FieldIntrospection {
             if (!info.nameTemplate().isEmpty()) {
                 newNameTemplate = info.nameTemplate();
             }
-        } else {
-            System.out.println("No NodeInfo for " + clazz);
         }
         EnumSet<InputType> newAllowedUsageTypes = EnumSet.noneOf(InputType.class);
         Class<?> current = clazz;
@@ -231,12 +227,6 @@ public final class NodeClass extends FieldIntrospection {
         fieldNames.putAll(scanner.fieldNames);
         fieldTypes.clear();
         fieldTypes.putAll(scanner.fieldTypes);
-    }
-
-    private boolean isNodeClassFor(Node n) {
-        GeneratedNode gen = n.getClass().getAnnotation(GeneratedNode.class);
-        assert gen != null;
-        return gen.value() == getClazz();
     }
 
     public String shortName() {
@@ -1209,7 +1199,7 @@ public final class NodeClass extends FieldIntrospection {
      * @param newNode the node to which the inputs should be copied.
      */
     public void copyInputs(Node node, Node newNode) {
-        assert isNodeClassFor(node) && isNodeClassFor(newNode);
+        assert node.getClass() == getClazz() && newNode.getClass() == getClazz();
 
         int index = 0;
         while (index < directInputCount) {
@@ -1231,7 +1221,7 @@ public final class NodeClass extends FieldIntrospection {
      * @param newNode the node to which the successors should be copied.
      */
     public void copySuccessors(Node node, Node newNode) {
-        assert isNodeClassFor(node) && isNodeClassFor(newNode);
+        assert node.getClass() == getClazz() && newNode.getClass() == getClazz();
 
         int index = 0;
         while (index < directSuccessorCount) {
@@ -1250,7 +1240,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     public boolean inputsEqual(Node node, Node other) {
-        assert isNodeClassFor(node) && isNodeClassFor(other);
+        assert node.getClass() == getClazz() && other.getClass() == getClazz();
         int index = 0;
         while (index < directInputCount) {
             if (getNode(other, inputOffsets[index]) != getNode(node, inputOffsets[index])) {
@@ -1269,7 +1259,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     public boolean successorsEqual(Node node, Node other) {
-        assert isNodeClassFor(node) && isNodeClassFor(other);
+        assert node.getClass() == getClazz() && other.getClass() == getClazz();
         int index = 0;
         while (index < directSuccessorCount) {
             if (getNode(other, successorOffsets[index]) != getNode(node, successorOffsets[index])) {
@@ -1288,7 +1278,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     public boolean inputContains(Node node, Node other) {
-        assert isNodeClassFor(node);
+        assert node.getClass() == getClazz();
 
         int index = 0;
         while (index < directInputCount) {
@@ -1308,7 +1298,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     public boolean successorContains(Node node, Node other) {
-        assert isNodeClassFor(node);
+        assert node.getClass() == getClazz();
 
         int index = 0;
         while (index < directSuccessorCount) {

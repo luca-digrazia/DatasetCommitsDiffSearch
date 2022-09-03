@@ -23,21 +23,19 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 
 @NodeInfo
 public abstract class DeoptimizingFixedWithNextNode extends FixedWithNextNode implements DeoptimizingNode.DeoptBefore {
 
-    public static final NodeClass TYPE = NodeClass.get(DeoptimizingFixedWithNextNode.class);
     @OptionalInput(InputType.State) protected FrameState stateBefore;
 
-    protected DeoptimizingFixedWithNextNode(NodeClass c, Stamp stamp) {
-        super(c, stamp);
+    public DeoptimizingFixedWithNextNode(Stamp stamp) {
+        super(stamp);
     }
 
-    protected DeoptimizingFixedWithNextNode(NodeClass c, Stamp stamp, FrameState stateBefore) {
-        super(c, stamp);
+    public DeoptimizingFixedWithNextNode(Stamp stamp, FrameState stateBefore) {
+        super(stamp);
         this.stateBefore = stateBefore;
     }
 

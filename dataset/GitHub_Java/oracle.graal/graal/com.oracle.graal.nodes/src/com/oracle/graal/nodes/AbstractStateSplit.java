@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 
 /**
@@ -32,7 +31,6 @@ import com.oracle.graal.nodeinfo.*;
 @NodeInfo
 public abstract class AbstractStateSplit extends FixedWithNextNode implements StateSplit {
 
-    public static final NodeClass TYPE = NodeClass.get(AbstractStateSplit.class);
     @OptionalInput(InputType.State) protected FrameState stateAfter;
 
     public FrameState stateAfter() {
@@ -49,12 +47,12 @@ public abstract class AbstractStateSplit extends FixedWithNextNode implements St
         return true;
     }
 
-    protected AbstractStateSplit(NodeClass c, Stamp stamp) {
-        this(c, stamp, null);
+    public AbstractStateSplit(Stamp stamp) {
+        super(stamp);
     }
 
-    protected AbstractStateSplit(NodeClass c, Stamp stamp, FrameState stateAfter) {
-        super(c, stamp);
+    public AbstractStateSplit(Stamp stamp, FrameState stateAfter) {
+        super(stamp);
         this.stateAfter = stateAfter;
     }
 }

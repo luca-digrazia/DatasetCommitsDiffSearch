@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
@@ -33,13 +32,12 @@ import com.oracle.graal.nodes.*;
  */
 @NodeInfo
 public abstract class FixedAccessNode extends DeoptimizingFixedWithNextNode implements Access {
-    public static final NodeClass TYPE = NodeClass.get(FixedAccessNode.class);
 
     @OptionalInput(InputType.Guard) protected GuardingNode guard;
     @Input protected ValueNode object;
     @Input(InputType.Association) protected ValueNode location;
-    protected boolean nullCheck;
-    protected BarrierType barrierType;
+    private boolean nullCheck;
+    private BarrierType barrierType;
 
     public ValueNode object() {
         return object;
@@ -66,16 +64,16 @@ public abstract class FixedAccessNode extends DeoptimizingFixedWithNextNode impl
         this.nullCheck = check;
     }
 
-    protected FixedAccessNode(NodeClass c, ValueNode object, ValueNode location, Stamp stamp) {
-        this(c, object, location, stamp, BarrierType.NONE);
+    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp) {
+        this(object, location, stamp, BarrierType.NONE);
     }
 
-    protected FixedAccessNode(NodeClass c, ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
-        this(c, object, location, stamp, null, barrierType, false, null);
+    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
+        this(object, location, stamp, null, barrierType, false, null);
     }
 
-    protected FixedAccessNode(NodeClass c, ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
-        super(c, stamp, stateBefore);
+    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
+        super(stamp, stateBefore);
         this.object = object;
         this.location = location;
         this.guard = guard;
