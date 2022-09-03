@@ -208,7 +208,7 @@ public class NodeIntrinsificationPhase extends Phase {
         return result;
     }
 
-    protected Node createNodeInstance(StructuredGraph graph, ResolvedJavaType nodeClass, ResolvedJavaType[] parameterTypes, Stamp invokeStamp, boolean setStampFromReturnType,
+    private Node createNodeInstance(StructuredGraph graph, ResolvedJavaType nodeClass, ResolvedJavaType[] parameterTypes, Stamp invokeStamp, boolean setStampFromReturnType,
                     Constant[] nodeFactoryArguments) {
         ResolvedJavaMethod factory = null;
         Constant[] arguments = null;
@@ -233,7 +233,7 @@ public class NodeIntrinsificationPhase extends Phase {
         }
 
         try {
-            ValueNode intrinsicNode = (ValueNode) snippetReflection.asObject(invokeFactory(factory, arguments));
+            ValueNode intrinsicNode = (ValueNode) snippetReflection.asObject(factory.invoke(null, arguments));
 
             if (setStampFromReturnType) {
                 intrinsicNode.setStamp(invokeStamp);
@@ -242,10 +242,6 @@ public class NodeIntrinsificationPhase extends Phase {
         } catch (Exception e) {
             throw new RuntimeException(factory + Arrays.toString(nodeFactoryArguments), e);
         }
-    }
-
-    protected Constant invokeFactory(ResolvedJavaMethod factory, Constant[] arguments) {
-        return factory.invoke(null, arguments);
     }
 
     private static String sigString(ResolvedJavaType[] types) {

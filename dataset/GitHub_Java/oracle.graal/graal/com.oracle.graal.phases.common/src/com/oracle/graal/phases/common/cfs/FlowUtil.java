@@ -30,14 +30,14 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
-public final class FlowUtil {
+public class FlowUtil {
 
     private FlowUtil() {
         // no instances of this class
     }
 
     public static boolean lacksUsages(Node n) {
-        return n.hasNoUsages();
+        return n.usages().isEmpty();
     }
 
     public static ResolvedJavaType widen(ResolvedJavaType a, ResolvedJavaType b) {
@@ -155,15 +155,15 @@ public final class FlowUtil {
      * @return whether the first argument is strictly more precise than the second.
      */
     public static boolean isMorePrecise(ObjectStamp a, ObjectStamp b) {
-        int d0 = minus(a.alwaysNull(), b.alwaysNull());
+        int d0 = MINUS(a.alwaysNull(), b.alwaysNull());
         if (d0 == -1) {
             return false;
         }
-        int d1 = minus(a.nonNull(), b.nonNull());
+        int d1 = MINUS(a.nonNull(), b.nonNull());
         if (d1 == -1) {
             return false;
         }
-        int d2 = minus(a.isExactType(), b.isExactType());
+        int d2 = MINUS(a.isExactType(), b.isExactType());
         if (d2 == -1) {
             return false;
         }
@@ -188,7 +188,7 @@ public final class FlowUtil {
         return maxScore > 0;
     }
 
-    private static int minus(boolean a, boolean b) {
+    private static int MINUS(boolean a, boolean b) {
         int aa = a ? 1 : 0;
         int bb = b ? 1 : 0;
         return aa - bb;
@@ -232,7 +232,7 @@ public final class FlowUtil {
         NodePosIterator iter = n.inputs().iterator();
         while (iter.hasNext()) {
             Position pos = iter.nextPosition();
-            InputType inputType = pos.getInputType();
+            InputType inputType = pos.getInputType(n);
             boolean isReducibleInput = (inputType == InputType.Value || inputType == InputType.Condition);
             if (isReducibleInput) {
                 ValueNode i = (ValueNode) pos.get(n);

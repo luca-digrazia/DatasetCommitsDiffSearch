@@ -245,7 +245,7 @@ public class GraphUtil {
                 while (state != null) {
                     ResolvedJavaMethod method = state.method();
                     if (method != null) {
-                        elements.add(method.asStackTraceElement(state.bci() - 1));
+                        elements.add(method.asStackTraceElement(state.bci - 1));
                     }
                     state = state.outerFrameState();
                 }
@@ -335,8 +335,8 @@ public class GraphUtil {
     public static ValueNode originalValue(ValueNode proxy) {
         ValueNode v = proxy;
         do {
-            if (v instanceof LimitedValueProxy) {
-                v = ((LimitedValueProxy) v).getOriginalNode();
+            if (v instanceof ValueProxy) {
+                v = ((ValueProxy) v).getOriginalNode();
             } else if (v instanceof PhiNode) {
                 v = ((PhiNode) v).singleValue();
                 if (v == PhiNode.MULTIPLE_VALUES) {
@@ -372,8 +372,8 @@ public class GraphUtil {
             NodeWorkList worklist = proxy.graph().createNodeWorkList();
             worklist.add(proxy);
             for (Node node : worklist) {
-                if (node instanceof LimitedValueProxy) {
-                    ValueNode originalValue = ((LimitedValueProxy) node).getOriginalNode();
+                if (node instanceof ValueProxy) {
+                    ValueNode originalValue = ((ValueProxy) node).getOriginalNode();
                     if (!process(originalValue, worklist)) {
                         return;
                     }
