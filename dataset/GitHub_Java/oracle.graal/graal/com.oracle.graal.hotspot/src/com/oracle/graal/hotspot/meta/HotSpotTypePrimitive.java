@@ -102,11 +102,6 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
     }
 
     @Override
-    public boolean isPrimitive() {
-        return true;
-    }
-
-    @Override
     public boolean isInitialized() {
         return true;
     }
@@ -128,7 +123,10 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
 
     @Override
     public boolean isAssignableTo(ResolvedJavaType other) {
-        return other == this;
+        if (other instanceof HotSpotTypePrimitive) {
+            return other == this;
+        }
+        return false;
     }
 
     @Override
@@ -164,6 +162,11 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
         return javaMirror.getAnnotation(annotationClass);
+    }
+
+    @Override
+    public Class< ? > toJava() {
+        return javaMirror;
     }
 
     @Override

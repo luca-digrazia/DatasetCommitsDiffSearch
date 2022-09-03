@@ -34,7 +34,8 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     private final ResolvedJavaField[] fields;
     private final HashMap<ResolvedJavaField, Integer> fieldMap = new HashMap<>();
 
-    public VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
+    public VirtualInstanceNode(long virtualId, ResolvedJavaType type, ResolvedJavaField[] fields) {
+        super(virtualId);
         this.type = type;
         this.fields = fields;
         for (int i = 0; i < fields.length; i++) {
@@ -76,13 +77,7 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     }
 
     @Override
-    public int entryIndexForOffset(long constantOffset) {
+    public int fieldIndexForOffset(long constantOffset) {
         return fieldIndex(type.findInstanceFieldWithOffset(constantOffset));
-    }
-
-    @Override
-    public Kind entryKind(int index) {
-        assert index >= 0 && index < fields.length;
-        return fields[index].getKind();
     }
 }
