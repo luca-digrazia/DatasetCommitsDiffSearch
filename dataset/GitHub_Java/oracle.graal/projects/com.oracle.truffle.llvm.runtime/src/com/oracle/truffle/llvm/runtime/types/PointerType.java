@@ -40,15 +40,15 @@ import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 public final class PointerType extends AggregateType {
 
     @CompilationFinal private Type pointeeType;
-    @CompilationFinal private Assumption pointeeTypeAssumption;
+    @CompilationFinal private Assumption assumption;
 
     public PointerType(Type pointeeType) {
-        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption();
+        this.assumption = Truffle.getRuntime().createAssumption();
         this.pointeeType = pointeeType;
     }
 
     public Type getPointeeType() {
-        if (!pointeeTypeAssumption.isValid()) {
+        if (!assumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
         }
         return pointeeType;
@@ -56,9 +56,9 @@ public final class PointerType extends AggregateType {
 
     public void setPointeeType(Type type) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        this.pointeeTypeAssumption.invalidate();
+        this.assumption.invalidate();
+        this.assumption = Truffle.getRuntime().createAssumption();
         this.pointeeType = type;
-        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption();
     }
 
     @Override

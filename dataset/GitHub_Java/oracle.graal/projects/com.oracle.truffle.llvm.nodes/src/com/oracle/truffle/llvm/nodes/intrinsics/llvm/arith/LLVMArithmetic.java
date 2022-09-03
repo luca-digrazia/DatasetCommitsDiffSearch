@@ -38,6 +38,7 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMBuiltin;
 import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNode.LLVMIncrementPointerNode;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
 public abstract class LLVMArithmetic extends LLVMBuiltin {
 
@@ -469,7 +470,7 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                         @Cached("createStoreI8()") LLVMStoreNode store,
                         @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
             final boolean overflow = arithmetic.evalI8(frame, left, right, addr, store);
-            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset), overflow);
+            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset, PrimitiveType.I1), overflow);
             return addr;
         }
 
@@ -478,7 +479,7 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                         @Cached("createStoreI16()") LLVMStoreNode store,
                         @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
             final boolean overflow = arithmetic.evalI16(frame, left, right, addr, store);
-            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset), overflow);
+            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset, PrimitiveType.I1), overflow);
             return addr;
         }
 
@@ -487,7 +488,7 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                         @Cached("createStoreI32()") LLVMStoreNode store,
                         @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
             final boolean overflow = arithmetic.evalI32(frame, left, right, addr, store);
-            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset), overflow);
+            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset, PrimitiveType.I1), overflow);
             return addr;
         }
 
@@ -496,7 +497,7 @@ public abstract class LLVMArithmetic extends LLVMBuiltin {
                         @Cached("createStoreI64()") LLVMStoreNode store,
                         @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
             final boolean overflow = arithmetic.evalI64(frame, left, right, addr, store);
-            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset), overflow);
+            storeI8.executeWithTarget(frame, incrementPointer.executeWithTarget(frame, addr, secondValueOffset, PrimitiveType.I1), overflow);
             return addr;
         }
     }

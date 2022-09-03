@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime.types;
 
 import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -38,24 +39,21 @@ import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class VectorType extends AggregateType {
 
-    @CompilationFinal private Assumption elementTypeAssumption;
+    @CompilationFinal private Assumption assumption;
     @CompilationFinal private Type elementType;
     private final int length;
 
     public VectorType(Type elementType, int length) {
         if (elementType != null && !(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CompilerDirectives.transferToInterpreter();
             throw new AssertionError("Invalid ElementType of Vector: " + elementType);
         }
-        this.elementTypeAssumption = Truffle.getRuntime().createAssumption();
+        this.assumption = Truffle.getRuntime().createAssumption();
         this.elementType = elementType;
         this.length = length;
     }
 
     public Type getElementType() {
-        if (!elementTypeAssumption.isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-        }
         return elementType;
     }
 
@@ -70,13 +68,13 @@ public final class VectorType extends AggregateType {
     }
 
     public void setElementType(Type elementType) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
+        CompilerAsserts.neverPartOfCompilation();
         if (elementType == null || !(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
             throw new AssertionError("Invalid ElementType of Vector: " + elementType);
         }
-        this.elementTypeAssumption.invalidate();
+        this.assumption.invalidate();
+        this.assumption = Truffle.getRuntime().createAssumption();
         this.elementType = elementType;
-        this.elementTypeAssumption = Truffle.getRuntime().createAssumption();
     }
 
     @Override
