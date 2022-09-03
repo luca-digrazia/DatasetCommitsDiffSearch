@@ -130,14 +130,19 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     }
 
     private void processNodeWithState(NodeWithState nodeWithState, final BlockT state, final GraphEffectList effects) {
-        FrameState frameState = nodeWithState.getState();
-        if (frameState != null) {
-            if (frameState.usages().count() > 1) {
-                nodeWithState.asNode().replaceFirstInput(frameState, frameState.copyWithInputs());
-                frameState = nodeWithState.getState();
+        FrameState stateAfter = nodeWithState.getState();
+        if (stateAfter != null) {
+            if (stateAfter.usages().count() > 1) {
+                if (nodeWithState instanceof StateSplit) {
+                    StateSplit split = (StateSplit) nodeWithState;
+                    stateAfter = (FrameState) stateAfter.copyWithInputs();
+                    split.setStateAfter(stateAfter);
+                } else {
+                    throw GraalInternalError.shouldNotReachHere();
+                }
             }
             final HashSet<ObjectState> virtual = new HashSet<>();
-            frameState.applyToNonVirtual(new NodeClosure<ValueNode>() {
+            stateAfter.applyToNonVirtual(new NodeClosure<ValueNode>() {
 
                 @Override
                 public void apply(Node usage, ValueNode value) {
@@ -198,7 +203,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 } else {
                     v = new MaterializedObjectState(obj.virtual, obj.getMaterializedValue());
                 }
-                effects.addVirtualMapping(frameState, v);
+                effects.addVirtualMapping(stateAfter, v);
             }
         }
     }

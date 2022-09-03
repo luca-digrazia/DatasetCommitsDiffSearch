@@ -33,7 +33,6 @@ import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.virtual.phases.ea.ReadEliminationBlockState.CacheEntry;
@@ -197,10 +196,10 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
             super(mergeBlock);
         }
 
-        protected <T> PhiNode getCachedPhi(T virtual, Stamp stamp) {
+        protected <T> PhiNode getCachedPhi(T virtual, Kind kind) {
             PhiNode result = materializedPhis.get(virtual);
             if (result == null) {
-                result = new PhiNode(stamp, merge);
+                result = new PhiNode(kind, merge);
                 materializedPhis.put(virtual, result);
             }
             return result;
@@ -230,7 +229,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                     }
                 }
                 if (phi) {
-                    PhiNode phiNode = getCachedPhi(entry, value.stamp().unrestricted());
+                    PhiNode phiNode = getCachedPhi(entry, value.kind());
                     mergeEffects.addFloatingNode(phiNode, "mergeReadCache");
                     for (int i = 0; i < states.size(); i++) {
                         afterMergeEffects.addPhiInput(phiNode, states.get(i).getCacheEntry(key));
@@ -263,7 +262,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
             }
 
             CacheEntry<?> newIdentifier = identifier.duplicateWithObject(phi);
-            PhiNode phiNode = getCachedPhi(newIdentifier, values[0].stamp().unrestricted());
+            PhiNode phiNode = getCachedPhi(newIdentifier, values[0].kind());
             mergeEffects.addFloatingNode(phiNode, "mergeReadCachePhi");
             for (int i = 0; i < values.length; i++) {
                 afterMergeEffects.addPhiInput(phiNode, values[i]);

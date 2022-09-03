@@ -42,7 +42,7 @@ public class FloatingReadPhase extends Phase {
 
     public static class MemoryMapImpl extends MemoryMapNode {
 
-        private IdentityHashMap<LocationIdentity, MemoryNode> lastMemorySnapshot;
+        private IdentityHashMap<LocationIdentity, ValueNode> lastMemorySnapshot;
 
         public MemoryMapImpl(MemoryMapImpl memoryMap) {
             lastMemorySnapshot = new IdentityHashMap<>(memoryMap.lastMemorySnapshot);
@@ -58,8 +58,8 @@ public class FloatingReadPhase extends Phase {
         }
 
         @Override
-        public MemoryNode getLastLocationAccess(LocationIdentity locationIdentity) {
-            MemoryNode lastLocationAccess;
+        public ValueNode getLastLocationAccess(LocationIdentity locationIdentity) {
+            ValueNode lastLocationAccess;
             if (locationIdentity == FINAL_LOCATION) {
                 return null;
             } else {
@@ -197,7 +197,7 @@ public class FloatingReadPhase extends Phase {
         private static void processAccess(MemoryAccess access, MemoryMapImpl state) {
             LocationIdentity locationIdentity = access.getLocationIdentity();
             if (locationIdentity != LocationIdentity.ANY_LOCATION) {
-                MemoryNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
+                ValueNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
                 access.setLastLocationAccess(lastLocationAccess);
             }
         }
@@ -216,7 +216,7 @@ public class FloatingReadPhase extends Phase {
             if (identity == ANY_LOCATION) {
                 state.lastMemorySnapshot.clear();
             }
-            state.lastMemorySnapshot.put(identity, checkpoint);
+            state.lastMemorySnapshot.put(identity, (ValueNode) checkpoint);
         }
 
         private static void processFloatable(FloatableAccessNode accessNode, MemoryMapImpl state) {
@@ -224,7 +224,7 @@ public class FloatingReadPhase extends Phase {
             assert accessNode.getNullCheck() == false;
             LocationIdentity locationIdentity = accessNode.location().getLocationIdentity();
             if (accessNode.canFloat()) {
-                MemoryNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
+                ValueNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
                 FloatingAccessNode floatingNode = accessNode.asFloatingNode(lastLocationAccess);
                 floatingNode.setNullCheck(accessNode.getNullCheck());
                 ValueAnchorNode anchor = null;
@@ -250,11 +250,11 @@ public class FloatingReadPhase extends Phase {
             for (LocationIdentity key : keys) {
                 int mergedStatesCount = 0;
                 boolean isPhi = false;
-                MemoryNode merged = null;
+                ValueNode merged = null;
                 for (MemoryMapImpl state : states) {
-                    MemoryNode last = state.getLastLocationAccess(key);
+                    ValueNode last = state.getLastLocationAccess(key);
                     if (isPhi) {
-                        merged.asMemoryPhi().addInput(ValueNodeUtil.asNode(last));
+                        ((PhiNode) merged).addInput(last);
                     } else {
                         if (merged == last) {
                             // nothing to do
@@ -263,9 +263,9 @@ public class FloatingReadPhase extends Phase {
                         } else {
                             MemoryPhiNode phi = merge.graph().addWithoutUnique(new MemoryPhiNode(merge, key));
                             for (int j = 0; j < mergedStatesCount; j++) {
-                                phi.addInput(ValueNodeUtil.asNode(merged));
+                                phi.addInput(merged);
                             }
-                            phi.addInput(ValueNodeUtil.asNode(last));
+                            phi.addInput(last);
                             merged = phi;
                             isPhi = true;
                         }
@@ -289,7 +289,7 @@ public class FloatingReadPhase extends Phase {
                  * side it needs to choose by putting in the location identity on both successors.
                  */
                 InvokeWithExceptionNode invoke = (InvokeWithExceptionNode) node.predecessor();
-                result.lastMemorySnapshot.put(invoke.getLocationIdentity(), (MemoryCheckpoint) node);
+                result.lastMemorySnapshot.put(invoke.getLocationIdentity(), node);
             }
             return result;
         }
@@ -306,7 +306,7 @@ public class FloatingReadPhase extends Phase {
             Map<LocationIdentity, PhiNode> phis = new HashMap<>();
             for (LocationIdentity location : modifiedLocations) {
                 MemoryPhiNode phi = loop.graph().addWithoutUnique(new MemoryPhiNode(loop, location));
-                phi.addInput(ValueNodeUtil.asNode(initialState.getLastLocationAccess(location)));
+                phi.addInput(initialState.getLastLocationAccess(location));
                 phis.put(location, phi);
                 initialState.lastMemorySnapshot.put(location, phi);
             }
@@ -318,14 +318,14 @@ public class FloatingReadPhase extends Phase {
                 for (Map.Entry<LocationIdentity, PhiNode> phiEntry : phis.entrySet()) {
                     LocationIdentity key = phiEntry.getKey();
                     PhiNode phi = phiEntry.getValue();
-                    phi.initializeValueAt(endIndex, ValueNodeUtil.asNode(entry.getValue().getLastLocationAccess(key)));
+                    phi.initializeValueAt(endIndex, entry.getValue().getLastLocationAccess(key));
                 }
             }
             for (Map.Entry<LoopExitNode, MemoryMapImpl> entry : loopInfo.exitStates.entrySet()) {
                 LoopExitNode exit = entry.getKey();
                 MemoryMapImpl state = entry.getValue();
                 for (LocationIdentity location : modifiedLocations) {
-                    MemoryNode lastAccessAtExit = state.lastMemorySnapshot.get(location);
+                    ValueNode lastAccessAtExit = state.lastMemorySnapshot.get(location);
                     if (lastAccessAtExit != null) {
                         state.lastMemorySnapshot.put(location, MemoryProxyNode.forMemory(lastAccessAtExit, exit, location, loop.graph()));
                     }
