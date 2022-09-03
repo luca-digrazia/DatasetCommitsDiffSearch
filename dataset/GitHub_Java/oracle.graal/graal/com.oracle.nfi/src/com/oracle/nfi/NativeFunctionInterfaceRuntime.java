@@ -22,12 +22,9 @@
  */
 package com.oracle.nfi;
 
-import java.lang.reflect.Method;
-import java.util.Iterator;
-import java.util.ServiceLoader;
+import java.lang.reflect.*;
 
-import com.oracle.nfi.api.NativeFunctionInterface;
-import com.oracle.nfi.api.NativeFunctionInterfaceAccess;
+import com.oracle.nfi.api.*;
 
 /**
  * Class for obtaining the {@link NativeFunctionInterface} (if any) provided by the VM.
@@ -50,30 +47,14 @@ public final class NativeFunctionInterfaceRuntime {
 
         NativeFunctionInterfaceAccess access = null;
         Class<?> servicesClass = null;
-        boolean java8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
-        if (!java8OrEarlier) {
-            Iterator<NativeFunctionInterfaceAccess> providers = ServiceLoader.load(NativeFunctionInterfaceAccess.class).iterator();
-            if (providers.hasNext()) {
-                access = providers.next();
-                if (providers.hasNext()) {
-                    throw new InternalError(String.format("Multiple %s providers found", NativeFunctionInterfaceAccess.class.getName()));
-                }
-            }
-        } else {
-
+        try {
+            servicesClass = Class.forName("jdk.internal.jvmci.service.Services");
+        } catch (ClassNotFoundException e) {
             try {
-                servicesClass = Class.forName("jdk.vm.ci.services.Services");
-            } catch (ClassNotFoundException e) {
-                try {
-                    servicesClass = Class.forName("jdk.vm.ci.service.Services");
-                } catch (ClassNotFoundException e2) {
-                    try {
-                        // Legacy support
-                        servicesClass = Class.forName("com.oracle.jvmci.service.Services");
-                    } catch (ClassNotFoundException e3) {
-                        // JVMCI is unavailable
-                    }
-                }
+                // Legacy support
+                servicesClass = Class.forName("com.oracle.jvmci.service.Services");
+            } catch (ClassNotFoundException e2) {
+                // JVMCI is unavailable
             }
         }
         if (servicesClass != null) {
