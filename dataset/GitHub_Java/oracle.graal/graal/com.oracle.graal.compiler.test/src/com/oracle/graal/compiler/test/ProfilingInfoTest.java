@@ -30,19 +30,9 @@ import org.junit.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 
-/**
- * Tests profiling information provided by the runtime.
- * <p>
- * NOTE: These tests are actually not very robust. The problem is that only partial profiling
- * information may be gathered for any given method. For example, HotSpot's advanced compilation
- * policy can decide to only gather partial profiles in a first level compilation (see
- * AdvancedThresholdPolicy::common(...) in advancedThresholdPolicy.cpp). Because of this,
- * occasionally tests for {@link ProfilingInfo#getNullSeen(int)} can fail since HotSpot only set's
- * the null_seen bit when doing full profiling.
- */
 public class ProfilingInfoTest extends GraalCompilerTest {
 
-    private static final int N = 10;
+    private static final int N = 100;
     private static final double DELTA = 1d / Integer.MAX_VALUE;
 
     @Test
@@ -155,8 +145,8 @@ public class ProfilingInfoTest extends GraalCompilerTest {
     }
 
     private void testTypeProfile(String testSnippet, int bci) {
-        ResolvedJavaType stringType = getMetaAccess().lookupJavaType(String.class);
-        ResolvedJavaType stringBuilderType = getMetaAccess().lookupJavaType(StringBuilder.class);
+        ResolvedJavaType stringType = runtime.lookupJavaType(String.class);
+        ResolvedJavaType stringBuilderType = runtime.lookupJavaType(StringBuilder.class);
 
         ProfilingInfo info = profile(testSnippet, "ABC");
         JavaTypeProfile typeProfile = info.getTypeProfile(bci);
@@ -278,17 +268,14 @@ public class ProfilingInfoTest extends GraalCompilerTest {
         continueProfiling(snippet, new Object());
         Assert.assertEquals(TriState.FALSE, info.getNullSeen(1));
 
-        if (TriState.TRUE == info.getNullSeen(1)) {
-            // See the javadoc comment for ProfilingInfoTest.
-            continueProfiling(snippet, (Object) null);
-            Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
+        continueProfiling(snippet, (Object) null);
+        Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
 
-            continueProfiling(snippet, 0.0);
-            Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
+        continueProfiling(snippet, 0.0);
+        Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
 
-            continueProfiling(snippet, new Object());
-            Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
-        }
+        continueProfiling(snippet, new Object());
+        Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
 
         resetProfile(snippet);
         Assert.assertEquals(TriState.FALSE, info.getNullSeen(1));
@@ -310,7 +297,7 @@ public class ProfilingInfoTest extends GraalCompilerTest {
         Method method = getMethod(methodName);
         Assert.assertTrue(Modifier.isStatic(method.getModifiers()));
 
-        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
+        ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
         if (resetProfile) {
             javaMethod.reprofile();
         }
@@ -323,14 +310,11 @@ public class ProfilingInfoTest extends GraalCompilerTest {
             }
         }
 
-        ProfilingInfo info = javaMethod.getProfilingInfo();
-        // The execution counts are low so force maturity
-        info.setMature();
-        return info;
+        return javaMethod.getProfilingInfo();
     }
 
     private void resetProfile(String methodName) {
-        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(getMethod(methodName));
+        ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(getMethod(methodName));
         javaMethod.reprofile();
     }
 }
