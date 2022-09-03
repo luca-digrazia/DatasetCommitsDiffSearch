@@ -41,7 +41,7 @@ public final class ReentrantBlockIterator {
 
         protected abstract StateT merge(MergeNode merge, List<StateT> states);
 
-        protected abstract StateT cloneState(StateT oldState);
+        protected abstract StateT afterSplit(FixedNode node, StateT oldState);
 
         protected abstract List<StateT> processLoop(Loop loop, StateT initialState);
     }
@@ -56,31 +56,25 @@ public final class ReentrantBlockIterator {
         LoopInfo<StateT> info = new LoopInfo<>();
         List<Block> predecessors = loop.header.getPredecessors();
         for (int i = 1; i < predecessors.size(); i++) {
-            StateT endState = blockEndStates.get(predecessors.get(i).getEndNode());
-            // make sure all end states are unique objects
-            info.endStates.add(closure.cloneState(endState));
+            info.endStates.add(blockEndStates.get(predecessors.get(i).getEndNode()));
         }
         for (Block loopExit : loop.exits) {
             assert loopExit.getPredecessorCount() == 1;
-            StateT exitState = blockEndStates.get(loopExit.getBeginNode());
+            StateT exitState = blockEndStates.get(loopExit.getFirstPredecessor().getEndNode());
             assert exitState != null;
-            // make sure all exit states are unique objects
-            info.exitStates.add(closure.cloneState(exitState));
+            info.exitStates.add(exitState);
         }
         return info;
     }
 
     public static <StateT> IdentityHashMap<FixedNode, StateT> apply(BlockIteratorClosure<StateT> closure, Block start, StateT initialState, Set<Block> boundary) {
         Deque<Block> blockQueue = new ArrayDeque<>();
-        /*
-         * States are stored on EndNodes before merges, and on BeginNodes after ControlSplitNodes.
-         */
-        IdentityHashMap<FixedNode, StateT> states = new IdentityHashMap<>();
+        IdentityHashMap<FixedNode, StateT> blockEndStates = new IdentityHashMap<>();
 
         StateT state = initialState;
         Block current = start;
 
-        while (true) {
+        do {
             if (boundary == null || boundary.contains(current)) {
                 closure.processBlock(current, state);
 
@@ -92,7 +86,7 @@ public final class ReentrantBlockIterator {
                         if (current.isLoopEnd()) {
                             // nothing to do... loop ends only lead to loop begins we've already
                             // visited
-                            states.put(current.getEndNode(), state);
+                            blockEndStates.put(current.getEndNode(), state);
                         } else {
                             // recurse into the loop
                             Loop loop = successor.getLoop();
@@ -104,14 +98,14 @@ public final class ReentrantBlockIterator {
                             int i = 0;
                             assert loop.exits.size() == exitStates.size();
                             for (Block exit : loop.exits) {
-                                states.put(exit.getBeginNode(), exitStates.get(i++));
+                                blockEndStates.put(exit.getFirstPredecessor().getEndNode(), exitStates.get(i++));
                                 blockQueue.addFirst(exit);
                             }
                         }
                     } else {
                         if (successor.getBeginNode() instanceof LoopExitNode) {
                             assert successor.getPredecessors().size() == 1;
-                            states.put(successor.getBeginNode(), state);
+                            blockEndStates.put(current.getEndNode(), state);
                             current = successor;
                             continue;
                         } else {
@@ -120,12 +114,12 @@ public final class ReentrantBlockIterator {
                                 EndNode end = (EndNode) current.getEndNode();
 
                                 // add the end node and see if the merge is ready for processing
-                                assert !states.containsKey(end);
-                                states.put(end, state);
+                                assert !blockEndStates.containsKey(end);
+                                blockEndStates.put(end, state);
                                 MergeNode merge = end.merge();
                                 boolean endsVisited = true;
                                 for (EndNode forwardEnd : merge.forwardEnds()) {
-                                    if (!states.containsKey(forwardEnd)) {
+                                    if (!blockEndStates.containsKey(forwardEnd)) {
                                         endsVisited = false;
                                         break;
                                     }
@@ -142,34 +136,46 @@ public final class ReentrantBlockIterator {
                     }
                 } else {
                     assert current.getSuccessors().size() > 1;
-                    for (int i = 0; i < current.getSuccessors().size(); i++) {
-                        Block successor = current.getSuccessors().get(i);
-                        blockQueue.addFirst(successor);
-                        states.put(successor.getBeginNode(), i == 0 ? state : closure.cloneState(state));
+                    blockEndStates.put(current.getEndNode(), state);
+                    for (Block block : current.getSuccessors()) {
+                        blockQueue.addFirst(block);
                     }
                 }
             }
 
             // get next queued block
             if (blockQueue.isEmpty()) {
-                return states;
+                current = null;
             } else {
-                current = blockQueue.removeFirst();
-                if (current.getPredecessors().size() == 1) {
-                    state = states.get(current.getBeginNode());
-                } else {
-                    assert current.getPredecessors().size() > 1;
-                    MergeNode merge = (MergeNode) current.getBeginNode();
-                    ArrayList<StateT> mergedStates = new ArrayList<>(merge.forwardEndCount());
-                    for (int i = 0; i < merge.forwardEndCount(); i++) {
-                        StateT other = states.get(merge.forwardEndAt(i));
-                        assert other != null;
-                        mergedStates.add(other);
+                int maxIterations = blockQueue.size();
+                while (maxIterations-- > 0) {
+                    current = blockQueue.removeFirst();
+                    if (current.getPredecessors().size() > 1) {
+                        MergeNode merge = (MergeNode) current.getBeginNode();
+                        ArrayList<StateT> states = new ArrayList<>(merge.forwardEndCount());
+                        for (int i = 0; i < merge.forwardEndCount(); i++) {
+                            StateT other = blockEndStates.get(merge.forwardEndAt(i));
+                            assert other != null;
+                            states.add(other);
+                        }
+                        state = closure.merge(merge, states);
+                        if (state != null) {
+                            break;
+                        } else {
+                            blockQueue.addLast(current);
+                            current = null;
+                        }
+                    } else {
+                        assert current.getPredecessors().size() == 1;
+                        assert current.getBeginNode().predecessor() != null;
+                        if (boundary == null || boundary.contains(current)) {
+                            state = closure.afterSplit(current.getBeginNode(), blockEndStates.get(current.getBeginNode().predecessor()));
+                            break;
+                        }
                     }
-                    state = closure.merge(merge, mergedStates);
                 }
-                assert state != null;
             }
-        }
+        } while (current != null);
+        return blockEndStates;
     }
 }
