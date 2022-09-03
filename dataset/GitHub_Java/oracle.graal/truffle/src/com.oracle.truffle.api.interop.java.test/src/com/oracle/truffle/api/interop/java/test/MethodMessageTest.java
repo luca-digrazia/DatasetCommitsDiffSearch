@@ -38,7 +38,6 @@ import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
 
 public class MethodMessageTest {
-
     public interface MathWrap {
         @MethodMessage(message = "READ")
         IntBinaryOperator max();
