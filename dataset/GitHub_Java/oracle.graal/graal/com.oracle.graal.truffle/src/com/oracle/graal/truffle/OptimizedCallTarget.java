@@ -206,7 +206,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         }
     }
 
-    /** Must only be called by initialize() with the lock. */
     private void ensureCloned() {
         if (sourceCallTarget != null) {
             // sourceCallTarget is initialized before cloning
