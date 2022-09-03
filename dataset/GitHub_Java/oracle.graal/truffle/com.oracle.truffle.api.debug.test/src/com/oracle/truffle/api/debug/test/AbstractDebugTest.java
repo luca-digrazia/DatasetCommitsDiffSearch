@@ -51,62 +51,46 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  */
 public abstract class AbstractDebugTest {
     private Debugger debugger;
+    private final LinkedList<Runnable> eventResponders = new LinkedList<>();
+    private SuspendedEvent suspendedEvent;
     private Throwable ex;
+    private ExecutionEvent executionEvent;
     private PolyglotEngine engine;
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
     private final ByteArrayOutputStream err = new ByteArrayOutputStream();
-    private TestContext context = null;
 
-    private static class TestContext {
-        private final TestContext predecessor;
-        private final LinkedList<Runnable> eventResponders = new LinkedList<>();
-        private ExecutionEvent executionEvent;
-        private SuspendedEvent suspendedEvent;
-
-        TestContext(TestContext predecessor) {
-            this.predecessor = predecessor;
-        }
-    }
-
-    protected AbstractDebugTest() {
+    AbstractDebugTest() {
     }
 
     @Before
     public void before() {
-        pushContext();
+        suspendedEvent = null;
+        executionEvent = null;
         engine = PolyglotEngine.newBuilder().setOut(out).setErr(err).onEvent(new EventConsumer<ExecutionEvent>(ExecutionEvent.class) {
             @Override
             protected void on(ExecutionEvent event) {
-                context.executionEvent = event;
+                executionEvent = event;
                 runNextResponder();
-                context.executionEvent = null;
+                executionEvent = null;
             }
         }).onEvent(new EventConsumer<SuspendedEvent>(SuspendedEvent.class) {
             @Override
             protected void on(SuspendedEvent event) {
-                context.suspendedEvent = event;
+                suspendedEvent = event;
                 runNextResponder();
-                context.suspendedEvent = null;
+                suspendedEvent = null;
             }
         }).build();
         debugger = Debugger.find(engine);
+        eventResponders.clear();
     }
 
     @After
     public void dispose() {
-        context = null;
         if (engine != null) {
             engine.dispose();
             engine = null;
         }
-    }
-
-    protected final void pushContext() {
-        context = new TestContext(context);
-    }
-
-    protected final void popContext() {
-        context = context.predecessor;
     }
 
     protected final String getOut() {
@@ -163,8 +147,8 @@ public abstract class AbstractDebugTest {
             workList.add(new Runnable() {
 
                 public void run() {
-                    assertNull(context.suspendedEvent);
-                    assertNotNull(context.executionEvent);
+                    assertNull(suspendedEvent);
+                    assertNotNull(executionEvent);
                 }
             });
         }
@@ -182,7 +166,7 @@ public abstract class AbstractDebugTest {
             assert !isComplete : "responder has been completed";
             workList.add(new Runnable() {
                 public void run() {
-                    context.executionEvent.prepareStepInto();
+                    executionEvent.prepareStepInto();
                 }
             });
             complete();
@@ -195,7 +179,7 @@ public abstract class AbstractDebugTest {
 
         private void complete() {
             assert !isComplete : "responder has been completed";
-            context.eventResponders.add(new Runnable() {
+            eventResponders.add(new Runnable() {
                 public void run() {
                     for (Runnable work : workList) {
                         work.run();
@@ -215,8 +199,8 @@ public abstract class AbstractDebugTest {
             workList.add(new Runnable() {
 
                 public void run() {
-                    assertNotNull(context.suspendedEvent);
-                    assertNull(context.executionEvent);
+                    assertNotNull(suspendedEvent);
+                    assertNull(executionEvent);
                 }
             });
         }
@@ -226,14 +210,13 @@ public abstract class AbstractDebugTest {
             assert !isComplete : "responder has been completed";
             workList.add(new Runnable() {
                 public void run() {
-                    final SuspendedEvent event = context.suspendedEvent;
-                    final int actualLineNumber = event.getNode().getSourceSection().getLineLocation().getLineNumber();
+                    final int actualLineNumber = suspendedEvent.getNode().getSourceSection().getLineLocation().getLineNumber();
                     Assert.assertEquals(expectedLineNumber, actualLineNumber);
-                    final String actualCode = event.getNode().getSourceSection().getCode();
+                    final String actualCode = suspendedEvent.getNode().getSourceSection().getCode();
                     Assert.assertEquals(expectedCode, actualCode);
-                    final boolean actualIsBefore = event.isHaltedBefore();
+                    final boolean actualIsBefore = suspendedEvent.isHaltedBefore();
                     Assert.assertEquals(expectedIsBefore, actualIsBefore);
-                    final MaterializedFrame frame = event.getFrame();
+                    final MaterializedFrame frame = suspendedEvent.getFrame();
 
                     Assert.assertEquals(expectedFrame.length / 2, frame.getFrameDescriptor().getSize());
 
@@ -263,7 +246,7 @@ public abstract class AbstractDebugTest {
             assert !isComplete : "responder has been completed";
             workList.add(new Runnable() {
                 public void run() {
-                    context.suspendedEvent.prepareStepInto(size);
+                    suspendedEvent.prepareStepInto(size);
                 }
             });
             complete();
@@ -274,7 +257,7 @@ public abstract class AbstractDebugTest {
             assert !isComplete : "responder has been completed";
             workList.add(new Runnable() {
                 public void run() {
-                    context.suspendedEvent.prepareStepOver(size);
+                    suspendedEvent.prepareStepOver(size);
                 }
             });
             complete();
@@ -285,18 +268,7 @@ public abstract class AbstractDebugTest {
             assert !isComplete : "responder has been completed";
             workList.add(new Runnable() {
                 public void run() {
-                    context.suspendedEvent.prepareStepOut();
-                }
-            });
-            complete();
-        }
-
-        /** Return from handling a {@link SuspendedEvent} by killing current execution. */
-        void kill() {
-            assert !isComplete : "responder has been completed";
-            workList.add(new Runnable() {
-                public void run() {
-                    context.suspendedEvent.prepareKill();
+                    suspendedEvent.prepareStepOut();
                 }
             });
             complete();
@@ -309,7 +281,7 @@ public abstract class AbstractDebugTest {
 
         private void complete() {
             assert !isComplete : "responder has been completed";
-            context.eventResponders.add(new Runnable() {
+            eventResponders.add(new Runnable() {
                 public void run() {
                     for (Runnable work : workList) {
                         work.run();
@@ -329,13 +301,13 @@ public abstract class AbstractDebugTest {
                 throw new AssertionError("Error during execution", ex);
             }
         }
-        assertTrue("Assuming all requests processed: " + context.eventResponders, context.eventResponders.isEmpty());
+        assertTrue("Assuming all requests processed: " + eventResponders, eventResponders.isEmpty());
     }
 
     private void runNextResponder() {
         try {
-            if (ex == null && !context.eventResponders.isEmpty()) {
-                Runnable c = context.eventResponders.removeFirst();
+            if (ex == null && !eventResponders.isEmpty()) {
+                Runnable c = eventResponders.removeFirst();
                 c.run();
             }
         } catch (Throwable e) {
