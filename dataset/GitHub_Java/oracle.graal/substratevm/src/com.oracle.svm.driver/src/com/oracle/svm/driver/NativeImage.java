@@ -180,7 +180,6 @@ public class NativeImage {
     private final Map<String, String> propertyFileSubstitutionValues = new HashMap<>();
 
     private boolean verbose = Boolean.valueOf(System.getenv("VERBOSE_GRAALVM_LAUNCHERS"));
-    private boolean jarOptionMode = false;
     private boolean dryRun = false;
     private String queryOption = null;
 
@@ -799,12 +798,12 @@ public class NativeImage {
                 }
             }
 
-            if (!jarOptionMode) {
+            if (buildExecutable) {
                 /* Main-class from customImageBuilderArgs counts as explicitMainClass */
                 boolean explicitMainClass = customImageBuilderArgs.stream().anyMatch(arg -> arg.startsWith(oHClass));
 
                 if (extraImageArgs.isEmpty()) {
-                    if (buildExecutable && (mainClass == null || mainClass.isEmpty())) {
+                    if (mainClass == null || mainClass.isEmpty()) {
                         showError("Please specify class containing the main entry point method. (see --help)");
                     }
                 } else {
@@ -835,11 +834,6 @@ public class NativeImage {
                     /* extraImageArgs library name overrules previous specification */
                     replaceArg(imageBuilderArgs, oHName, extraImageArgs.remove(0));
                 }
-            }
-
-            if (!extraImageArgs.isEmpty()) {
-                String prefix = "Unknown argument" + (extraImageArgs.size() == 1 ? ": " : "s: ");
-                showError(extraImageArgs.stream().collect(Collectors.joining(", ", prefix, "")));
             }
         }
 
@@ -1070,10 +1064,6 @@ public class NativeImage {
 
     void setVerbose(boolean val) {
         verbose = val;
-    }
-
-    void setJarOptionMode(boolean val) {
-        jarOptionMode = val;
     }
 
     boolean isVerbose() {
