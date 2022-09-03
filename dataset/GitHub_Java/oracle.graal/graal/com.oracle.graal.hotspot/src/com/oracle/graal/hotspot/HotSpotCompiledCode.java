@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,33 +22,125 @@
  */
 package com.oracle.graal.hotspot;
 
+import java.nio.*;
 import java.util.*;
+import java.util.stream.*;
+import java.util.stream.Stream.Builder;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CompilationResult.CodeAnnotation;
+import com.oracle.graal.api.code.CompilationResult.CodeComment;
+import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.code.CompilationResult.ExceptionHandler;
+import com.oracle.graal.api.code.CompilationResult.Infopoint;
+import com.oracle.graal.api.code.CompilationResult.JumpTable;
 import com.oracle.graal.api.code.CompilationResult.Mark;
 import com.oracle.graal.api.code.CompilationResult.Site;
+import com.oracle.graal.api.meta.Assumptions.Assumption;
+import com.oracle.graal.api.meta.*;
 
 /**
  * A {@link CompilationResult} with additional HotSpot-specific information required for installing
  * the code in HotSpot's code cache.
  */
-public abstract class HotSpotCompiledCode extends CompilerObject {
-
-    private static final long serialVersionUID = 7807321392203253218L;
-    public final CompilationResult comp;
+public abstract class HotSpotCompiledCode {
 
     public final Site[] sites;
     public final ExceptionHandler[] exceptionHandlers;
+    public final Comment[] comments;
+    public final Assumption[] assumptions;
+
+    public final byte[] targetCode;
+    public final int targetCodeSize;
+
+    public final byte[] dataSection;
+    public final int dataSectionAlignment;
+    public final DataPatch[] dataSectionPatches;
+
+    public final int totalFrameSize;
+    public final int customStackAreaOffset;
+
+    /**
+     * The list of the methods whose bytecodes were used as input to the compilation. If
+     * {@code null}, then the compilation did not record method dependencies. Otherwise, the first
+     * element of this array is the root method of the compilation.
+     */
+    public final ResolvedJavaMethod[] methods;
+
+    public static class Comment {
+
+        public final String text;
+        public final int pcOffset;
+
+        public Comment(int pcOffset, String text) {
+            this.text = text;
+            this.pcOffset = pcOffset;
+        }
+    }
 
     public HotSpotCompiledCode(CompilationResult compResult) {
-        this.comp = compResult;
         sites = getSortedSites(compResult);
         if (compResult.getExceptionHandlers().isEmpty()) {
             exceptionHandlers = null;
         } else {
             exceptionHandlers = compResult.getExceptionHandlers().toArray(new ExceptionHandler[compResult.getExceptionHandlers().size()]);
         }
+        List<CodeAnnotation> annotations = compResult.getAnnotations();
+        comments = new Comment[annotations.size()];
+        if (!annotations.isEmpty()) {
+            for (int i = 0; i < comments.length; i++) {
+                CodeAnnotation annotation = annotations.get(i);
+                String text;
+                if (annotation instanceof CodeComment) {
+                    CodeComment codeComment = (CodeComment) annotation;
+                    text = codeComment.value;
+                } else if (annotation instanceof JumpTable) {
+                    JumpTable jumpTable = (JumpTable) annotation;
+                    text = "JumpTable [" + jumpTable.low + " .. " + jumpTable.high + "]";
+                } else {
+                    text = annotation.toString();
+                }
+                comments[i] = new Comment(annotation.position, text);
+            }
+        }
+        assumptions = compResult.getAssumptions();
+        assert validateFrames();
+
+        targetCode = compResult.getTargetCode();
+        targetCodeSize = compResult.getTargetCodeSize();
+
+        DataSection data = compResult.getDataSection();
+        data.finalizeLayout();
+        dataSection = new byte[data.getSectionSize()];
+
+        ByteBuffer buffer = ByteBuffer.wrap(dataSection).order(ByteOrder.nativeOrder());
+        Builder<DataPatch> patchBuilder = Stream.builder();
+        data.buildDataSection(buffer, patchBuilder);
+
+        dataSectionAlignment = data.getSectionAlignment();
+        dataSectionPatches = patchBuilder.build().toArray(len -> new DataPatch[len]);
+
+        totalFrameSize = compResult.getTotalFrameSize();
+        customStackAreaOffset = compResult.getCustomStackAreaOffset();
+
+        methods = compResult.getMethods();
+    }
+
+    /**
+     * Ensure that all the frames passed into HotSpot are properly formatted with an empty or
+     * illegal slot following double word slots.
+     */
+    private boolean validateFrames() {
+        for (Site site : sites) {
+            if (site instanceof Infopoint) {
+                Infopoint info = (Infopoint) site;
+                if (info.debugInfo != null) {
+                    BytecodeFrame frame = info.debugInfo.frame();
+                    assert frame == null || frame.validateFormat(false);
+                }
+            }
+        }
+        return true;
     }
 
     static class SiteComparator implements Comparator<Site> {
@@ -62,7 +154,7 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
     }
 
     private static Site[] getSortedSites(CompilationResult target) {
-        List<?>[] lists = new List<?>[]{target.getInfopoints(), target.getDataReferences(), target.getMarks()};
+        List<?>[] lists = new List<?>[]{target.getInfopoints(), target.getDataPatches(), target.getMarks()};
         int count = 0;
         for (List<?> list : lists) {
             count += list.size();

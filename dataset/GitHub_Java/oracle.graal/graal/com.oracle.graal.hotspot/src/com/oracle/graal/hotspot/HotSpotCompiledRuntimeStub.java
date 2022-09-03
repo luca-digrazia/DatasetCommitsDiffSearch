@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CompilationResult.Call;
+import com.oracle.graal.api.code.CompilationResult.ConstantReference;
 import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.code.CompilationResult.Infopoint;
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 
 /**
@@ -36,33 +37,52 @@ import com.oracle.graal.hotspot.stubs.*;
  */
 public final class HotSpotCompiledRuntimeStub extends HotSpotCompiledCode {
 
-    private static final long serialVersionUID = -4506206868419153274L;
-
     public final String stubName;
 
     public HotSpotCompiledRuntimeStub(Stub stub, CompilationResult compResult) {
         super(compResult);
-        assert checkStubInvariants(compResult);
         this.stubName = stub.toString();
+        assert checkStubInvariants(compResult);
     }
 
     /**
      * Checks the conditions a compilation must satisfy to be installed as a RuntimeStub.
      */
     private boolean checkStubInvariants(CompilationResult compResult) {
-        assert compResult.getExceptionHandlers().isEmpty();
-        for (DataPatch data : compResult.getDataReferences()) {
-            Constant constant = data.constant;
-            assert constant.getKind() != Kind.Object : this + " cannot have embedded object constant: " + constant;
-            assert constant.getPrimitiveAnnotation() == null : this + " cannot have embedded metadata: " + constant;
+        assert compResult.getExceptionHandlers().isEmpty() : this;
+
+        // Stubs cannot be recompiled so they cannot be compiled with
+        // assumptions and there is no point in recording evol_method dependencies
+        assert compResult.getAssumptions() == null : "stubs should not use assumptions: " + this;
+        assert compResult.getMethods() == null : "stubs should not record evol_method dependencies: " + this;
+
+        for (DataPatch data : compResult.getDataPatches()) {
+            if (data.reference instanceof ConstantReference) {
+                ConstantReference ref = (ConstantReference) data.reference;
+                if (ref.getConstant() instanceof HotSpotMetaspaceConstant) {
+                    HotSpotMetaspaceConstant c = (HotSpotMetaspaceConstant) ref.getConstant();
+                    if (c.asResolvedJavaType() != null && c.asResolvedJavaType().getName().equals("[I")) {
+                        // special handling for NewArrayStub
+                        // embedding the type '[I' is safe, since it is never unloaded
+                        continue;
+                    }
+                }
+            }
+
+            assert !(data.reference instanceof ConstantReference) : this + " cannot have embedded object or metadata constant: " + data.reference;
         }
         for (Infopoint infopoint : compResult.getInfopoints()) {
             assert infopoint instanceof Call : this + " cannot have non-call infopoint: " + infopoint;
             Call call = (Call) infopoint;
-            assert call.target instanceof HotSpotRuntimeCallTarget : this + " cannot have non runtime call: " + call.target;
-            HotSpotRuntimeCallTarget callTarget = (HotSpotRuntimeCallTarget) call.target;
-            assert callTarget.getAddress() == graalRuntime().getConfig().uncommonTrapStub || callTarget.isCRuntimeCall() : this + "must only call C runtime or deoptimization stub, not " + call.target;
+            assert call.target instanceof HotSpotForeignCallLinkage : this + " cannot have non runtime call: " + call.target;
+            HotSpotForeignCallLinkage linkage = (HotSpotForeignCallLinkage) call.target;
+            assert !linkage.isCompiledStub() || linkage.getDescriptor().equals(UNCOMMON_TRAP_HANDLER) : this + " cannot call compiled stub " + linkage;
         }
         return true;
+    }
+
+    @Override
+    public String toString() {
+        return stubName != null ? stubName : super.toString();
     }
 }
