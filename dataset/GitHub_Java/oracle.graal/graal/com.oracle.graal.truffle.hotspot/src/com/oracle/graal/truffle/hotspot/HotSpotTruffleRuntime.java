@@ -306,7 +306,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    public boolean platformEnableInfopoints() {
+    public boolean enableInfopoints() {
         return HotSpotGraalRuntime.runtime().getCompilerToVM().shouldDebugNonSafepoints();
     }
 

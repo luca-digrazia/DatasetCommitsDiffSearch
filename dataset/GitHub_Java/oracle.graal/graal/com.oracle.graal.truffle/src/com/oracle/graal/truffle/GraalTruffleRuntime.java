@@ -281,12 +281,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     public abstract void reinstallStubs();
 
-    public final boolean enableInfopoints() {
-        /* Currently infopoints can change code generation so don't enable them automatically */
-        return platformEnableInfopoints() && TruffleEnableInfopoints.getValue();
-    }
-
-    protected abstract boolean platformEnableInfopoints();
+    public abstract boolean enableInfopoints();
 
     private final class DispatchTruffleCompilationListener implements GraalTruffleCompilationListener {
 
