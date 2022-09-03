@@ -32,7 +32,6 @@ import java.util.*;
 
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.Node.Input;
 import com.oracle.graal.graph.Node.Successor;
@@ -51,8 +50,6 @@ public final class NodeClass extends FieldIntrospection {
 
     private static final Object GetNodeClassLock = new Object();
 
-    private static final DebugTimer NodeClassCreation = Debug.timer("NodeClassCreation");
-
     /**
      * Gets the {@link NodeClass} associated with a given {@link Class}.
      */
@@ -67,25 +64,23 @@ public final class NodeClass extends FieldIntrospection {
             // The creation of a NodeClass must be serialized as the NodeClass constructor accesses
             // both FieldIntrospection.allClasses and NodeClass.nextIterableId.
             synchronized (GetNodeClassLock) {
-                try (TimerCloseable t = NodeClassCreation.start()) {
-                    value = (NodeClass) allClasses.get(key);
-                    if (value == null) {
-                        GeneratedNode gen = c.getAnnotation(GeneratedNode.class);
-                        if (gen != null) {
-                            Class<? extends Node> originalNodeClass = (Class<? extends Node>) gen.value();
-                            value = (NodeClass) allClasses.get(originalNodeClass);
-                            assert value != null;
-                            if (value.genClass == null) {
-                                value.genClass = (Class<? extends Node>) c;
-                            } else {
-                                assert value.genClass == c;
-                            }
+                value = (NodeClass) allClasses.get(key);
+                if (value == null) {
+                    GeneratedNode gen = c.getAnnotation(GeneratedNode.class);
+                    if (gen != null) {
+                        Class<? extends Node> originalNodeClass = (Class<? extends Node>) gen.value();
+                        value = (NodeClass) allClasses.get(originalNodeClass);
+                        assert value != null;
+                        if (value.genClass == null) {
+                            value.genClass = (Class<? extends Node>) c;
                         } else {
-                            value = new NodeClass(key);
+                            assert value.genClass == c;
                         }
-                        Object old = allClasses.putIfAbsent(key, value);
-                        assert old == null : old + "   " + key;
+                    } else {
+                        value = new NodeClass(key);
                     }
+                    Object old = allClasses.putIfAbsent(key, value);
+                    assert old == null : old + "   " + key;
                 }
             }
         }
