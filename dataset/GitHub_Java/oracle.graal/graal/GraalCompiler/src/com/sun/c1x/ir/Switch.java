@@ -25,7 +25,6 @@ package com.sun.c1x.ir;
 import java.util.*;
 
 import com.oracle.graal.graph.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
@@ -63,12 +62,11 @@ public abstract class Switch extends BlockEnd {
      * Constructs a new Switch.
      * @param value the instruction that provides the value to be switched over
      * @param successors the list of successors of this switch
-     * @param stateBefore the state before the switch
-     * @param isSafepoint {@code true} if this switch is a safepoint
+     * @param stateAfter the state after the switch
      * @param graph
      */
-    public Switch(Value value, List<BlockBegin> successors, FrameState stateBefore, boolean isSafepoint, int inputCount, int successorCount, Graph graph) {
-        super(CiKind.Illegal, stateBefore, isSafepoint, successors, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
+    public Switch(Value value, List<? extends Instruction> successors, int inputCount, int successorCount, Graph graph) {
+        super(CiKind.Illegal, successors, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
         setValue(value);
     }
 

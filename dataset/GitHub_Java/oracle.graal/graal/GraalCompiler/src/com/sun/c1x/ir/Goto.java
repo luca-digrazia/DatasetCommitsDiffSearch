@@ -52,6 +52,6 @@ public final class Goto extends BlockEnd {
 
     @Override
     public void print(LogStream out) {
-        out.print("goto ").print(defaultSuccessor());
+        out.print("goto B").print(defaultSuccessor().blockID);
     }
 }

@@ -80,7 +80,7 @@ public final class ExceptionDispatch extends BlockEnd {
      * Gets the block corresponding to the catch block.
      * @return the true successor
      */
-    public Instruction catchSuccessor() {
+    public BlockBegin catchSuccessor() {
         return blockSuccessor(1);
     }
 
@@ -88,7 +88,7 @@ public final class ExceptionDispatch extends BlockEnd {
      * Gets the block corresponding to the rest of the dispatch chain.
      * @return the false successor
      */
-    public Instruction otherSuccessor() {
+    public BlockBegin otherSuccessor() {
         return blockSuccessor(0);
     }
 
@@ -97,7 +97,7 @@ public final class ExceptionDispatch extends BlockEnd {
      * @param istrue {@code true} if the true successor is requested, {@code false} otherwise
      * @return the corresponding successor
      */
-    public Instruction successor(boolean istrue) {
+    public BlockBegin successor(boolean istrue) {
         return blockSuccessor(istrue ? 1 : 0);
     }
 
