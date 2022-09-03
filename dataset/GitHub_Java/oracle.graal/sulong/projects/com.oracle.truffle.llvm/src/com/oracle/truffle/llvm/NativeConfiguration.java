@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm;
 
-import com.oracle.truffle.api.TruffleLanguage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,8 +40,6 @@ import com.oracle.truffle.llvm.parser.factories.BasicSystemContextExtension;
 import com.oracle.truffle.llvm.runtime.Configuration;
 import com.oracle.truffle.llvm.runtime.ContextExtension;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage.Loader;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
@@ -53,13 +50,8 @@ import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 public final class NativeConfiguration implements Configuration {
 
     @Override
-    public boolean isActive(TruffleLanguage.Env env) {
-        return true;
-    }
-
-    @Override
-    public int getPriority() {
-        return 0;
+    public String getConfigurationName() {
+        return "native";
     }
 
     @Override
@@ -73,15 +65,10 @@ public final class NativeConfiguration implements Configuration {
     }
 
     @Override
-    public Loader createLoader() {
-        return new DefaultLoader();
-    }
-
-    @Override
     public List<ContextExtension> createContextExtensions(LLVMContext context) {
         List<ContextExtension> result = new ArrayList<>();
-        result.add(new BasicIntrinsicsProvider(LLVMLanguage.getLanguage()));
-        result.add(new BasicSystemContextExtension(context.getEnv()));
+        result.add(new BasicIntrinsicsProvider(context).collectIntrinsics());
+        result.add(new BasicSystemContextExtension());
         if (context.getEnv().getOptions().get(SulongEngineOption.ENABLE_NFI)) {
             result.add(new NFIContextExtension(context.getEnv()));
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,8 +29,10 @@
  */
 package com.oracle.truffle.llvm.nodes.op.arith.floating;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.llvm.nodes.op.arith.floating.LLVMArithmeticFactoryFactory.CachedAddNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.floating.LLVMArithmeticFactoryFactory.CachedDivNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.floating.LLVMArithmeticFactoryFactory.CachedMulNodeGen;
@@ -69,7 +71,12 @@ public abstract class LLVMArithmeticFactory {
         @Specialization(guards = "impl.canCompute(x, y)")
         public LLVMArithmetic execute(LLVMArithmetic x, LLVMArithmetic y,
                         @Cached("createNode(x, y)") LLVMArithmeticOpNode impl) {
-            return impl.execute(x, y);
+            try {
+                return impl.execute(x, y);
+            } catch (InteropException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw ex.raise();
+            }
         }
 
         LLVMArithmeticOpNode createNode(Object x, Object y) {
@@ -90,7 +97,12 @@ public abstract class LLVMArithmeticFactory {
         @Specialization(guards = "impl.canCompute(x, y)")
         public LLVMArithmetic execute(LLVMArithmetic x, LLVMArithmetic y,
                         @Cached("createNode(x, y)") LLVMArithmeticOpNode impl) {
-            return impl.execute(x, y);
+            try {
+                return impl.execute(x, y);
+            } catch (InteropException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw ex.raise();
+            }
         }
 
         LLVMArithmeticOpNode createNode(Object x, Object y) {
@@ -111,7 +123,12 @@ public abstract class LLVMArithmeticFactory {
         @Specialization(guards = "impl.canCompute(x, y)")
         public LLVMArithmetic execute(LLVMArithmetic x, LLVMArithmetic y,
                         @Cached("createNode(x, y)") LLVMArithmeticOpNode impl) {
-            return impl.execute(x, y);
+            try {
+                return impl.execute(x, y);
+            } catch (InteropException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw ex.raise();
+            }
         }
 
         LLVMArithmeticOpNode createNode(Object x, Object y) {
@@ -132,7 +149,12 @@ public abstract class LLVMArithmeticFactory {
         @Specialization(guards = "impl.canCompute(x, y)")
         public LLVMArithmetic execute(LLVMArithmetic x, LLVMArithmetic y,
                         @Cached("createNode(x, y)") LLVMArithmeticOpNode impl) {
-            return impl.execute(x, y);
+            try {
+                return impl.execute(x, y);
+            } catch (InteropException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw ex.raise();
+            }
         }
 
         LLVMArithmeticOpNode createNode(Object x, Object y) {
@@ -153,7 +175,12 @@ public abstract class LLVMArithmeticFactory {
         @Specialization(guards = "impl.canCompute(x, y)")
         public LLVMArithmetic execute(LLVMArithmetic x, LLVMArithmetic y,
                         @Cached("createNode(x, y)") LLVMArithmeticOpNode impl) {
-            return impl.execute(x, y);
+            try {
+                return impl.execute(x, y);
+            } catch (InteropException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw ex.raise();
+            }
         }
 
         LLVMArithmeticOpNode createNode(Object x, Object y) {

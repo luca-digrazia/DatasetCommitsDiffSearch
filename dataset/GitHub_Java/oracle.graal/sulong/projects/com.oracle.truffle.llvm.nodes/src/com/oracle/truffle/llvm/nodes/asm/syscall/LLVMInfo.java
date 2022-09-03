@@ -46,18 +46,18 @@ public class LLVMInfo {
     // https://github.com/torvalds/linux/blob/master/include/uapi/linux/utsname.h
     private static final int UTS_FIELD_LENGTH = 65;
 
-    public static final String SYSNAME;
-    public static final String RELEASE;
-    public static final String MACHINE;
+    public static final String sysname;
+    public static final String release;
+    public static final String machine;
 
     static {
-        SYSNAME = System.getProperty("os.name");
-        RELEASE = System.getProperty("os.version");
+        sysname = System.getProperty("os.name");
+        release = System.getProperty("os.version");
         String arch = System.getProperty("os.arch");
         if ("amd64".equals(arch)) {
             arch = "x86_64";
         }
-        MACHINE = arch;
+        machine = arch;
     }
 
     private static String readFile(String name, String fallback) {
@@ -97,15 +97,15 @@ public class LLVMInfo {
 
     public static long uname(LLVMMemory memory, LLVMNativePointer name) {
         LLVMNativePointer ptr = name;
-        LLVMString.strcpy(memory, ptr, SYSNAME);
+        LLVMString.strcpy(memory, ptr, sysname);
         ptr = ptr.increment(UTS_FIELD_LENGTH);
         LLVMString.strcpy(memory, ptr, getHostname());
         ptr = ptr.increment(UTS_FIELD_LENGTH);
-        LLVMString.strcpy(memory, ptr, RELEASE);
+        LLVMString.strcpy(memory, ptr, release);
         ptr = ptr.increment(UTS_FIELD_LENGTH);
         LLVMString.strcpy(memory, ptr, getVersion());
         ptr = ptr.increment(UTS_FIELD_LENGTH);
-        LLVMString.strcpy(memory, ptr, MACHINE);
+        LLVMString.strcpy(memory, ptr, machine);
         ptr = ptr.increment(UTS_FIELD_LENGTH);
         LLVMString.strcpy(memory, ptr, getDomainName());
         return 0;
