@@ -111,11 +111,8 @@ public class TruffleCompilerImpl {
     public void compileMethodImpl(final OptimizedCallTarget compilable) {
         final StructuredGraph graph;
 
-        if (TraceTruffleCompilation.getValue() || TraceTruffleCompilationAST.getValue()) {
+        if (TraceTruffleCompilation.getValue()) {
             OptimizedCallTargetLog.logOptimizingStart(compilable);
-            if (TraceTruffleCompilationAST.getValue()) {
-                NodeUtil.printCompactTree(OptimizedCallTarget.OUT, compilable.getRootNode());
-            }
         }
 
         long timeCompilationStarted = System.nanoTime();
@@ -154,7 +151,7 @@ public class TruffleCompilerImpl {
     }
 
     private static String formatSourceSection(SourceSection sourceSection) {
-        return sourceSection != null ? sourceSection.getShortDescription() : "n/a";
+        return sourceSection != null ? sourceSection.toString() : "n/a";
     }
 
     public CompilationResult compileMethodHelper(StructuredGraph graph, Assumptions assumptions, String name, SpeculationLog speculationLog, InstalledCode predefinedInstalledCode) {
