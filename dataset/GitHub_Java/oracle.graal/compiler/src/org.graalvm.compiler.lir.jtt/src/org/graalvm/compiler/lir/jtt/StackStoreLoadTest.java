@@ -79,6 +79,8 @@ public class StackStoreLoadTest extends LIRTest {
         }
     }
 
+    private static final LIRTestSpecification stackCopy = new StackStoreLoadSpec();
+
     /*
      * short
      */

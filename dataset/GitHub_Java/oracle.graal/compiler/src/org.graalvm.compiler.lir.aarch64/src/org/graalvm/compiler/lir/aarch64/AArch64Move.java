@@ -164,12 +164,7 @@ public class AArch64Move {
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
             Register dst = asRegister(result);
-            if (crb.compilationResult.isImmutablePIC()) {
-                crb.recordDataReferenceInCode(data);
-                masm.addressOf(dst);
-            } else {
-                masm.loadAddress(dst, (AArch64Address) crb.recordDataReferenceInCode(data), data.getAlignment());
-            }
+            masm.loadAddress(dst, (AArch64Address) crb.recordDataReferenceInCode(data), data.getAlignment());
         }
     }
 
@@ -199,7 +194,7 @@ public class AArch64Move {
     public static class MembarOp extends AArch64LIRInstruction {
         public static final LIRInstructionClass<MembarOp> TYPE = LIRInstructionClass.create(MembarOp.class);
 
-        private final int barriers;
+        @SuppressWarnings("unused") private final int barriers;
 
         public MembarOp(int barriers) {
             super(TYPE);
@@ -398,7 +393,7 @@ public class AArch64Move {
         }
     }
 
-    private static void emitStore(CompilationResultBuilder crb, AArch64MacroAssembler masm, AArch64Kind kind, AArch64Address dst, Value src) {
+    private static void emitStore(@SuppressWarnings("unused") CompilationResultBuilder crb, AArch64MacroAssembler masm, AArch64Kind kind, AArch64Address dst, Value src) {
         int destSize = kind.getSizeInBytes() * Byte.SIZE;
         if (kind.isInteger()) {
             masm.str(destSize, asRegister(src), dst);
@@ -454,7 +449,7 @@ public class AArch64Move {
         }
     }
 
-    private static void reg2reg(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
+    private static void reg2reg(@SuppressWarnings("unused") CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
         Register dst = asRegister(result);
         Register src = asRegister(input);
         if (src.equals(dst)) {
@@ -469,7 +464,7 @@ public class AArch64Move {
         }
     }
 
-    static void reg2stack(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
+    private static void reg2stack(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
         AArch64Address dest = loadStackSlotAddress(crb, masm, asStackSlot(result), Value.ILLEGAL);
         Register src = asRegister(input);
         // use the slot kind to define the operand size
@@ -482,7 +477,7 @@ public class AArch64Move {
         }
     }
 
-    static void stack2reg(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
+    private static void stack2reg(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
         AArch64Kind kind = (AArch64Kind) input.getPlatformKind();
         // use the slot kind to define the operand size
         final int size = kind.getSizeInBytes() * Byte.SIZE;
@@ -527,12 +522,6 @@ public class AArch64Move {
             case Float:
                 if (AArch64MacroAssembler.isFloatImmediate(input.asFloat())) {
                     masm.fmov(32, dst, input.asFloat());
-                } else if (crb.compilationResult.isImmutablePIC()) {
-                    try (ScratchRegister scr = masm.getScratchRegister()) {
-                        Register scratch = scr.getRegister();
-                        masm.mov(scratch, Float.floatToRawIntBits(input.asFloat()));
-                        masm.fmov(32, dst, scratch);
-                    }
                 } else {
                     masm.fldr(32, dst, (AArch64Address) crb.asFloatConstRef(input));
                 }
@@ -540,12 +529,6 @@ public class AArch64Move {
             case Double:
                 if (AArch64MacroAssembler.isDoubleImmediate(input.asDouble())) {
                     masm.fmov(64, dst, input.asDouble());
-                } else if (crb.compilationResult.isImmutablePIC()) {
-                    try (ScratchRegister scr = masm.getScratchRegister()) {
-                        Register scratch = scr.getRegister();
-                        masm.mov(scratch, Double.doubleToRawLongBits(input.asDouble()));
-                        masm.fmov(64, dst, scratch);
-                    }
                 } else {
                     masm.fldr(64, dst, (AArch64Address) crb.asDoubleConstRef(input));
                 }
