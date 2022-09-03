@@ -40,6 +40,7 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.LoweringPhase.*;
 import com.oracle.graal.phases.schedule.*;
 
 public class DominatorConditionalEliminationPhase extends Phase {
@@ -130,38 +131,42 @@ public class DominatorConditionalEliminationPhase extends Phase {
     private static class Instance {
 
         private final NodeMap<Info> map;
-        private final Stack<LoopExitNode> loopExits;
+        private final Deque<LoopExitNode> loopExits;
         private final Function<Block, Iterable<? extends Node>> blockToNodes;
         private final Function<Node, Block> nodeToBlock;
 
         public Instance(StructuredGraph graph, Function<Block, Iterable<? extends Node>> blockToNodes, Function<Node, Block> nodeToBlock) {
             map = graph.createNodeMap();
-            loopExits = new Stack<>();
+            loopExits = new ArrayDeque<>();
             this.blockToNodes = blockToNodes;
             this.nodeToBlock = nodeToBlock;
         }
 
-        private void processBlock(Block block) {
+        public void processBlock(Block startBlock) {
+            LoweringPhase.processBlock(new InstanceFrame(startBlock, null));
+        }
 
+        public class InstanceFrame extends LoweringPhase.Frame<InstanceFrame> {
             List<Runnable> undoOperations = new ArrayList<>();
 
-            preprocess(block, undoOperations);
-
-            // Process always reached block first.
-            Block postdominator = block.getPostdominator();
-            if (postdominator != null && postdominator.getDominator() == block) {
-                processBlock(postdominator);
+            public InstanceFrame(Block block, InstanceFrame parent) {
+                super(block, parent);
             }
 
-            // Now go for the other dominators.
-            for (Block dominated : block.getDominated()) {
-                if (dominated != postdominator) {
-                    assert dominated.getDominator() == block;
-                    processBlock(dominated);
-                }
+            @Override
+            public Frame<?> enter(Block b) {
+                return new InstanceFrame(b, this);
             }
 
-            postprocess(undoOperations);
+            @Override
+            public void preprocess() {
+                Instance.this.preprocess(block, undoOperations);
+            }
+
+            @Override
+            public void postprocess() {
+                Instance.postprocess(undoOperations);
+            }
         }
 
         private static void postprocess(List<Runnable> undoOperations) {
@@ -248,8 +253,8 @@ public class DominatorConditionalEliminationPhase extends Phase {
                     Stamp newStampY = binaryOpLogicNode.getSucceedingStampForY(negated);
                     registerNewStamp(y, newStampY, guard, undoOperations);
                 }
-                registerCondition(condition, negated, guard, undoOperations);
             }
+            registerCondition(condition, negated, guard, undoOperations);
         }
 
         private void registerCondition(LogicNode condition, boolean negated, ValueNode guard, List<Runnable> undoOperations) {
@@ -282,8 +287,8 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 }
                 Block guardBlock = nodeToBlock.apply(proxiedGuard);
                 assert guardBlock != null;
-                for (int i = 0; i < loopExits.size(); ++i) {
-                    LoopExitNode loopExitNode = loopExits.get(i);
+                for (Iterator<LoopExitNode> iter = loopExits.descendingIterator(); iter.hasNext();) {
+                    LoopExitNode loopExitNode = iter.next();
                     Block loopExitBlock = nodeToBlock.apply(loopExitNode);
                     if (guardBlock != loopExitBlock && AbstractControlFlowGraph.dominates(guardBlock, loopExitBlock)) {
                         Block loopBeginBlock = nodeToBlock.apply(loopExitNode.loopBegin());
@@ -395,8 +400,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
                     node.replaceAndDelete(guard);
                 } else {
                     DeoptimizeNode deopt = node.graph().add(new DeoptimizeNode(node.action(), node.reason()));
-                    Block block = nodeToBlock.apply(node);
-                    AbstractBeginNode beginNode = block.getBeginNode();
+                    AbstractBeginNode beginNode = (AbstractBeginNode) node.getAnchor();
                     FixedNode next = beginNode.next();
                     beginNode.setNext(deopt);
                     GraphUtil.killCFG(next);
