@@ -75,7 +75,6 @@ public final class GraphBuilderPhase extends Phase {
     private final MetaAccessProvider runtime;
     private ConstantPool constantPool;
     private ResolvedJavaMethod method;
-    private int entryBCI;
     private ProfilingInfo profilingInfo;
 
     private BytecodeStream stream;           // the bytecode stream
@@ -120,7 +119,6 @@ public final class GraphBuilderPhase extends Phase {
     @Override
     protected void run(StructuredGraph graph) {
         method = graph.method();
-        entryBCI = graph.getEntryBCI();
         graphId = graph.graphId();
         profilingInfo = method.getProfilingInfo();
         assert method.getCode() != null : "method must contain bytecodes: " + method;
@@ -635,8 +633,9 @@ public final class GraphBuilderPhase extends Phase {
         JavaType type = lookupType(cpi, CHECKCAST);
         boolean initialized = type instanceof ResolvedJavaType;
         if (initialized) {
+            ConstantNode typeInstruction = genTypeOrDeopt(Representation.ObjectHub, type, true);
             ValueNode object = frameState.apop();
-            CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) type, object, getProfileForTypeCheck((ResolvedJavaType) type)));
+            CheckCastNode checkCast = currentGraph.add(new CheckCastNode(typeInstruction, (ResolvedJavaType) type, object, getProfileForTypeCheck((ResolvedJavaType) type)));
             append(checkCast);
             frameState.apush(checkCast);
         } else {
@@ -652,7 +651,8 @@ public final class GraphBuilderPhase extends Phase {
         ValueNode object = frameState.apop();
         if (type instanceof ResolvedJavaType) {
             ResolvedJavaType resolvedType = (ResolvedJavaType) type;
-            InstanceOfNode instanceOfNode = new InstanceOfNode((ResolvedJavaType) type, object, getProfileForTypeCheck(resolvedType));
+            ConstantNode hub = appendConstant(resolvedType.getEncoding(Representation.ObjectHub));
+            InstanceOfNode instanceOfNode = new InstanceOfNode(hub, (ResolvedJavaType) type, object, getProfileForTypeCheck(resolvedType));
             frameState.ipush(append(MaterializeNode.create(currentGraph.unique(instanceOfNode))));
         } else {
             BlockPlaceholderNode successor = currentGraph.add(new BlockPlaceholderNode());
@@ -1188,7 +1188,7 @@ public final class GraphBuilderPhase extends Phase {
                     }
                     lastLoopExit = loopExit;
                     Debug.log("Target %s (%s) Exits %s, scanning framestates...", targetBlock, target, loop);
-                    newState.insertLoopProxies(loopExit, loop.entryState);
+                    newState.insertProxies(loopExit, loop.entryState);
                     loopExit.setStateAfter(newState.create(bci));
                 }
 
@@ -1201,7 +1201,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private FixedNode createTarget(double probability, Block block, FrameStateBuilder stateAfter) {
         assert probability >= 0 && probability <= 1.01 : probability;
-        if (probability == 0 && optimisticOpts.removeNeverExecutedCode() && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI) {
+        if (probability == 0 && optimisticOpts.removeNeverExecutedCode()) {
             return currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.UnreachedCode, graphId));
         } else {
             return createTarget(block, stateAfter);
@@ -1412,10 +1412,11 @@ public final class GraphBuilderPhase extends Phase {
             }
         }
 
-        if (initialized) {
+        ConstantNode typeInstruction = genTypeOrDeopt(Representation.ObjectHub, catchType, initialized);
+        if (typeInstruction != null) {
             Block nextBlock = block.successors.size() == 1 ? unwindBlock(block.deoptBci) : block.successors.get(1);
             ValueNode exception = frameState.stackAt(0);
-            CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) catchType, exception, null));
+            CheckCastNode checkCast = currentGraph.add(new CheckCastNode(typeInstruction, (ResolvedJavaType) catchType, exception));
             frameState.apop();
             frameState.push(Kind.Object, checkCast);
             FixedNode catchSuccessor = createTarget(block.successors.get(0), frameState);
@@ -1423,10 +1424,8 @@ public final class GraphBuilderPhase extends Phase {
             frameState.push(Kind.Object, exception);
             FixedNode nextDispatch = createTarget(nextBlock, frameState);
             checkCast.setNext(catchSuccessor);
-            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new InstanceOfNode((ResolvedJavaType) catchType, exception, null)), checkCast, nextDispatch, 0.5, graphId));
+            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new InstanceOfNode(typeInstruction, (ResolvedJavaType) catchType, exception)), checkCast, nextDispatch, 0.5, graphId));
             append(ifNode);
-        } else {
-            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
         }
     }
 
@@ -1488,12 +1487,6 @@ public final class GraphBuilderPhase extends Phase {
             int opcode = stream.currentBC();
             traceState();
             traceInstruction(bci, opcode, bci == block.startBci);
-            if (bci == entryBCI) {
-                EntryMarkerNode x = currentGraph.add(new EntryMarkerNode());
-                append(x);
-                frameState.insertProxies(x);
-                x.setStateAfter(frameState.create(bci));
-            }
             processBytecode(bci, opcode);
 
             if (lastInstr == null || isBlockEnd(lastInstr) || lastInstr.next() != null) {
