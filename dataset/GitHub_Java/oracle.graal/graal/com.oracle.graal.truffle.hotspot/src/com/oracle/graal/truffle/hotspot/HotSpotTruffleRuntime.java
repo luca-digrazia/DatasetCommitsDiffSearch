@@ -116,8 +116,6 @@ import com.oracle.truffle.api.nodes.RootNode;
  */
 public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
-    private final Map<RootCallTarget, Void> callTargets = Collections.synchronizedMap(new WeakHashMap<RootCallTarget, Void>());
-
     public static TruffleRuntime makeInstance() {
         return new HotSpotTruffleRuntime();
     }
@@ -126,6 +124,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         private Map<OptimizedCallTarget, Future<?>> compilations = Collections.synchronizedMap(new IdentityHashMap<>());
         private final ExecutorService compileQueue;
         private StackIntrospection stackIntrospection;
+        private final Map<RootCallTarget, Void> callTargets = Collections.synchronizedMap(new WeakHashMap<RootCallTarget, Void>());
 
         public Lazy(HotSpotTruffleRuntime runtime) {
             runtime.installDefaultListeners();
@@ -210,7 +209,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         }
         OptimizedCallTarget target = new OptimizedCallTarget(source, rootNode, this, compilationPolicy, new HotSpotSpeculationLog());
         rootNode.setCallTarget(target);
-        callTargets.put(target, null);
+        lazy().callTargets.put(target, null);
 
         return target;
     }
@@ -338,11 +337,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     @Override
     public boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
-        if (lazy == null) {
-            // if truffle wasn't initialized yet, this is a noop
-            return false;
-        }
-
         Lazy l = lazy();
         Future<?> codeTask = l.compilations.get(optimizedCallTarget);
         if (codeTask != null && isCompiling(optimizedCallTarget)) {
@@ -417,7 +411,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     @Override
     public Collection<RootCallTarget> getCallTargets() {
-        return Collections.unmodifiableSet(callTargets.keySet());
+        return Collections.unmodifiableSet(lazy().callTargets.keySet());
     }
 
     @Override
