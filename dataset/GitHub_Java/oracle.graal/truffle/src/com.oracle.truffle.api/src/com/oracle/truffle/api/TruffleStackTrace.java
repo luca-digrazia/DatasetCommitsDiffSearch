@@ -47,45 +47,22 @@ final class TruffleStackTrace extends Exception {
     private List<TruffleStackTraceElement> frames;
     private final int lazyFrames;
 
-    // contains host exception frames
-    private Exception materializedHostException;
+    private StackTraceElement[] superFrames;
 
     private TruffleStackTrace(List<TruffleStackTraceElement> frames, int lazyFrames) {
         this.frames = frames;
         this.lazyFrames = lazyFrames;
-    }
-
-    /*
-     * Called when an exception leaves the guest boundary and is passed to the host language. This
-     * requires us to capture the host stack frames to build a polyglot stack trace. This can be
-     * done lazily because if an exception stays inside a guest language (is thrown and caught in
-     * the guest language) there is no need to pay the price for host frames. If the error is a non
-     * TruffleException internal error then the exception (e.g. NullPointerException) has already
-     * captured the host stack trace and this host exception stack trace is not used.
-     */
-    void materializeHostException() {
-        if (this.materializedHostException == null) {
-            this.materializedHostException = new Exception();
-        }
-    }
-
-    @SuppressWarnings("sync-override")
-    @Override
-    public Throwable fillInStackTrace() {
-        return this;
+        this.superFrames = super.getStackTrace();
+        // clear stack trace so we don't see it anymore for internal errors.
+        setStackTrace(new StackTraceElement[0]);
     }
 
     StackTraceElement[] getInternalStackTrace() {
-        Throwable hostException = this.materializedHostException;
-        if (hostException == null) {
-            hostException = this;
-        }
-        StackTraceElement[] hostFrames = hostException.getStackTrace();
         if (lazyFrames == 0) {
-            return hostFrames;
+            return superFrames;
         } else {
-            StackTraceElement[] extended = new StackTraceElement[hostFrames.length + lazyFrames];
-            System.arraycopy(hostFrames, 0, extended, lazyFrames, hostFrames.length);
+            StackTraceElement[] extended = new StackTraceElement[superFrames.length + lazyFrames];
+            System.arraycopy(superFrames, 0, extended, lazyFrames, superFrames.length);
             return extended;
         }
     }
@@ -102,13 +79,6 @@ final class TruffleStackTrace extends Exception {
             return stack.frames;
         }
         return null;
-    }
-
-    static void materializeHostFrames(Throwable t) {
-        TruffleStackTrace stack = fillIn(t);
-        if (stack != null) {
-            stack.materializeHostException();
-        }
     }
 
     private static LazyStackTrace findImpl(Throwable t) {
@@ -346,5 +316,4 @@ final class TruffleStackTrace extends Exception {
             }
         });
     }
-
 }

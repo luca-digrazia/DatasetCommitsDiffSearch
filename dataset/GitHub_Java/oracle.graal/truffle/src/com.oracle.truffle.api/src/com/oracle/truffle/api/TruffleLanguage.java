@@ -233,13 +233,12 @@ public abstract class TruffleLanguage<C> {
 
         /**
          * Unique string identifying the language version. This name will be exposed to users via
-         * the {@link org.graalvm.polyglot.Language#getVersion()} getter. It inherits from
-         * {@link org.graalvm.polyglot.Engine#getVersion()} by default.
+         * the {@link org.graalvm.polyglot.Language#getVersion()} getter.
          *
          * @return version of your language
          * @since 0.8 or earlier
          */
-        String version() default "inherit";
+        String version();
 
         /**
          * List of MIME types associated with your language.
@@ -1436,11 +1435,17 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Looks up a Java class in the top-most scope the host environmen. Throws an error if no
-         * symbol was found or the symbol was not accessible. Symbols might not be accessible if a
+         * Looks up a Java class in the top-most scope the host environment. Returns
+         * <code>null</code> if no symbol was found or the symbol was not accessible. Symbols might
+         * not be accessible if a
          * {@link org.graalvm.polyglot.Context.Builder#hostClassFilter(java.util.function.Predicate)
-         * class filter} prevents access. The returned object is always a <code>TruffleObject</code>
-         * .
+         * class filter} prevents access.
+         * <p>
+         * The returned object can either be <code>TruffleObject</code> (e.g. a native object from
+         * the other language) to support interoperability between languages, {@link String} or one
+         * of the Java primitive wrappers ( {@link Integer}, {@link Double}, {@link Byte},
+         * {@link Boolean}, etc.).
+         * <p>
          *
          * @param symbolName the name of the symbol in the the host language.
          * @since 0.27
@@ -1478,10 +1483,10 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Converts a existing Java host object to a guest language value. If the value is already
-         * an interop value, then no conversion will be performed. Otherwise, the returned wraps the
-         * host object and provides support for the interop contract to access the java members. The
-         * interpretation of converted objects is described in {@link Context#asValue(Object)}.
+         * Converts a existing java host object to a guest language representation. The returned
+         * objects supports the interop contract to access the java members. The interpretation of
+         * converted objects is described in {@link Context#asValue(Object)}. If the value is
+         * already an interop value, then no conversion will be performed.
          * <p>
          * This method should be used exclusively to convert already allocated Java objects to a
          * guest language representation. To allocate new host objects users should use
@@ -1495,25 +1500,6 @@ public abstract class TruffleLanguage<C> {
          */
         public Object asGuestValue(Object hostObject) {
             return AccessAPI.engineAccess().toGuestValue(hostObject, vmObject);
-        }
-
-        /**
-         * Wraps primitive interop values in a TruffleObject exposing their methods as members. By
-         * default primitive host values are not wrapped in TruffleObjects to expose their members.
-         * This method is intended for compatibility with existing Java interop APIs that expect
-         * such behavior. This method boxes the following primitive interop values: {@link Boolean},
-         * {@link Byte}, {@link Short}, {@link Integer}, {@link Long}, {@link Float}, {@link Double}
-         * , {@link Character}, {@link String}. If the provided value is already boxed then the
-         * current value will be returned. If the provided value is not an interop value then an
-         * {@link IllegalArgumentException} will be thrown.
-         *
-         * @throws IllegalArgumentException if value is an invalid interop value.
-         * @param guestObject the primitive guest value to box
-         * @see #asGuestValue(Object)
-         * @since 1.0
-         */
-        public Object asBoxedGuestValue(Object guestObject) {
-            return AccessAPI.engineAccess().asBoxedGuestValue(guestObject, vmObject);
         }
 
         /**
@@ -2037,11 +2023,6 @@ public abstract class TruffleLanguage<C> {
             } else {
                 return trace.getInternalStackTrace();
             }
-        }
-
-        @Override
-        public void materializeHostFrames(Throwable original) {
-            TruffleStackTrace.materializeHostFrames(original);
         }
 
         @Override

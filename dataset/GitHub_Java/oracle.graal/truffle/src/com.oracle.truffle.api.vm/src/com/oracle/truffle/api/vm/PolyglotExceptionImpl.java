@@ -150,10 +150,6 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
                 this.message = exception.getMessage();
             }
         }
-
-        // late materialization of host frames. only needed if polyglot exceptions cross the
-        // host boundary.
-        VMAccessor.LANGUAGE.materializeHostFrames(original);
     }
 
     @Override
