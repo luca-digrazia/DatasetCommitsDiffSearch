@@ -28,12 +28,10 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
-import java.lang.management.RuntimeMXBean;
 
-import com.oracle.graal.options.OptionValue;
-
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntime;
+import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.internal.jvmci.options.OptionValue;
 
 /**
  * An option that encapsulates and configures a print stream.
@@ -53,17 +51,13 @@ public class PrintStreamOption extends OptionValue<String> {
     private volatile PrintStream ps;
 
     /**
-     * Replaces any instance of %p with an identifying name such as a process ID extracted from
-     * {@link RuntimeMXBean#getName()} and any instance of %t with the value of
-     * {@link System#currentTimeMillis()}.
+     * Replace any instance of %p with a an identifying name. Try to get it from the RuntimeMXBean
+     * name.
      *
      * @return the name of the file to log to
      */
     private String getFilename() {
         String name = getValue();
-        if (name.contains("%t")) {
-            name = name.replaceAll("%t", String.valueOf(System.currentTimeMillis()));
-        }
         if (name.contains("%p")) {
             String runtimeName = ManagementFactory.getRuntimeMXBean().getName();
             try {
@@ -133,9 +127,7 @@ public class PrintStreamOption extends OptionValue<String> {
                         try {
                             final boolean enableAutoflush = true;
                             ps = new PrintStream(new FileOutputStream(getFilename()), enableAutoflush);
-                            /*
-                             * Add the JVM and Java arguments to the log file to help identity it.
-                             */
+                            /* Add the JVM and Java arguments to the log file to help identity it. */
                             String inputArguments = String.join(" ", ManagementFactory.getRuntimeMXBean().getInputArguments());
                             ps.println("VM Arguments: " + inputArguments);
                             String cmd = System.getProperty("sun.java.command");
