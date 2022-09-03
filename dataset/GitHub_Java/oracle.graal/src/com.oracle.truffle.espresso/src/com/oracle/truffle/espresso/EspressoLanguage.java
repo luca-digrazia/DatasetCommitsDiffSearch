@@ -141,7 +141,7 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         assert context.isInitialized();
 
         String className = source.getName();
-        assert context.getAppClassLoader() != null && StaticObject.notNull(context.getAppClassLoader());
+        assert context.getAppClassLoader() != null && context.getAppClassLoader() != StaticObject.NULL;
 
         Klass mainClass = loadMainClass(context, LaunchMode.LM_CLASS, className).getMirror();
 
