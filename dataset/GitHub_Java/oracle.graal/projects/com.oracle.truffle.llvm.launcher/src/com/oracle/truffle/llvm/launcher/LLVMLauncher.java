@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.launcher;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,6 +45,7 @@ import org.graalvm.options.OptionCategory;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
+import org.graalvm.polyglot.Value;
 
 public class LLVMLauncher extends AbstractLanguageLauncher {
 
@@ -54,6 +56,7 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
     boolean printResult = false;
     String[] programArgs;
     File file;
+    private VersionAction versionAction = VersionAction.None;
 
     @Override
     protected void launch(Context.Builder contextBuilder) {
@@ -72,7 +75,7 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
         List<String> libs = new ArrayList<>();
 
         ListIterator<String> iterator = arguments.listIterator();
-        loop: while (iterator.hasNext()) {
+        while (iterator.hasNext()) {
             String option = iterator.next();
             if (option.length() < 2 || !option.startsWith("-")) {
                 iterator.previous();
@@ -85,22 +88,29 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
                 case "--print-result":
                     printResult = true;
                     break;
+                case "--show-version":
+                    versionAction = VersionAction.PrintAndContinue;
+                    break;
+                case "--version":
+                    versionAction = VersionAction.PrintAndExit;
+                    break;
                 default:
                     // options with argument
+                    String optionName = option;
                     String argument;
                     int equalsIndex = option.indexOf('=');
                     if (equalsIndex > 0) {
                         argument = option.substring(equalsIndex + 1);
-                        option = option.substring(0, equalsIndex);
+                        optionName = option.substring(0, equalsIndex);
                     } else if (iterator.hasNext()) {
                         argument = iterator.next();
                     } else {
                         argument = null;
                     }
-                    switch (option) {
+                    switch (optionName) {
                         case "-L":
                             if (argument == null) {
-                                throw abort("Missing argument for " + option);
+                                throw abort("Missing argument for " + optionName);
                             }
                             path.add(argument);
                             iterator.remove();
@@ -111,7 +121,7 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
                             break;
                         case "--lib":
                             if (argument == null) {
-                                throw abort("Missing argument for " + option);
+                                throw abort("Missing argument for " + optionName);
                             }
                             libs.add(argument);
                             iterator.remove();
@@ -126,7 +136,7 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
                             if (equalsIndex < 0 && argument != null) {
                                 iterator.previous();
                             }
-                            continue loop;
+                            break;
                     }
                     break;
             }
@@ -153,8 +163,8 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
 
     @Override
     protected void validateArguments(Map<String, String> polyglotOptions) {
-        if (file == null) {
-            throw abort("Error: no bitcode file provided.", 6);
+        if (file == null && versionAction != VersionAction.PrintAndExit) {
+            throw abort("No bitcode file provided.", 6);
         }
     }
 
@@ -166,16 +176,20 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
         System.out.println("Run LLVM bitcode files on the GraalVM's lli.\n");
         System.out.println("Mandatory arguments to long options are mandatory for short options too.\n");
         System.out.println("Options:");
-        printOption("--print-result",        "print the return value");
-        printOption("-L <path>",        "set path where lli searches for libraries");
-        printOption("--lib <libraries>",        "add library (*.bc or precompiled library *.so/*.dylib)");
+        printOption("--print-result",    "print the return value");
+        printOption("-L <path>",         "set path where lli searches for libraries");
+        printOption("--lib <libraries>", "add library (*.bc or precompiled library *.so/*.dylib)");
+        printOption("--version",         "print the version and exit");
+        printOption("--show-version",    "print the version and continue");
     }
 
     @Override
     protected void collectArguments(Set<String> args) {
         args.addAll(Arrays.asList(
-                        "-L<path>", "--lib<libraries>",
-                        "--print-result"));
+                        "-L", "--lib",
+                        "--print-result",
+                        "--version",
+                        "--show-version"));
     }
 
     protected static void printOption(String option, String description) {
@@ -190,27 +204,49 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
     }
 
     protected int execute(Context.Builder contextBuilder) {
-        int status;
         contextBuilder.arguments(getLanguageId(), programArgs);
         try (Context context = contextBuilder.build()) {
-            status = context.eval(Source.newBuilder(getLanguageId(), file).build()).asInt();
+            runVersionAction(versionAction, context.getEngine());
+            Value library = context.eval(Source.newBuilder(getLanguageId(), file).build());
+            if (!library.canExecute()) {
+                throw abort("no main function found");
+            }
+            int status = library.execute().asInt();
             if (printResult) {
                 System.out.println("Result: " + status);
             }
-        } catch (PolyglotException t) {
-            if (printResult) {
-                t.printStackTrace(System.err);
-            }
-            if (t.isExit()) {
-                status = t.getExitStatus();
-            } else if (t.isGuestException()) {
-                status = 255;
+            return status;
+        } catch (PolyglotException e) {
+            if (e.isExit()) {
+                return e.getExitStatus();
+            } else if (!e.isInternalError()) {
+                printStackTraceSkipTrailingHost(e);
+                return -1;
             } else {
-                status = 255;
+                throw e;
             }
-        } catch (Throwable t) {
-            status = 255;
+        } catch (IOException e) {
+            throw abort(e);
         }
-        return status;
+    }
+
+    private static void printStackTraceSkipTrailingHost(PolyglotException e) {
+        List<PolyglotException.StackFrame> stackTrace = new ArrayList<>();
+        for (PolyglotException.StackFrame s : e.getPolyglotStackTrace()) {
+            stackTrace.add(s);
+        }
+        // remove trailing host frames
+        for (ListIterator<PolyglotException.StackFrame> iterator = stackTrace.listIterator(stackTrace.size()); iterator.hasPrevious();) {
+            PolyglotException.StackFrame s = iterator.previous();
+            if (s.isHostFrame()) {
+                iterator.remove();
+            } else {
+                break;
+            }
+        }
+        System.out.println(e.isHostException() ? e.asHostException().toString() : e.getMessage());
+        for (PolyglotException.StackFrame s : stackTrace) {
+           System.out.println("\tat " + s);
+        }
     }
 }

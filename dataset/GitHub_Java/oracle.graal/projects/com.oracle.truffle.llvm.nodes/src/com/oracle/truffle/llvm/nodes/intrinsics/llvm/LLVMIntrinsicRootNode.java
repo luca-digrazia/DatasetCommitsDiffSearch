@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,58 +29,47 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 /**
  * This class is the entry point for every intrinsified (substituted) function.
  */
 public abstract class LLVMIntrinsicRootNode extends RootNode {
 
-    LLVMIntrinsicRootNode() {
-        super(LLVMLanguage.class, null, new FrameDescriptor());
+    private final String name;
+
+    LLVMIntrinsicRootNode(TruffleLanguage<?> language, String name) {
+        super(language, new FrameDescriptor());
+        this.name = name;
     }
 
-    public abstract LLVMNode getNode();
+    public abstract LLVMExpressionNode getNode();
+
+    @Override
+    public boolean isInternal() {
+        return true;
+    }
 
     @Override
     public String toString() {
-        return getNode().getClass().getSimpleName();
-    }
-
-    public static class LLVMIntrinsicVoidNode extends LLVMIntrinsicRootNode {
-
-        @Child private LLVMNode node;
-
-        public LLVMIntrinsicVoidNode(LLVMNode node) {
-            this.node = node;
-        }
-
-        @Override
-        public Object execute(VirtualFrame frame) {
-            node.executeVoid(frame);
-            return null;
-        }
-
-        @Override
-        public LLVMNode getNode() {
-            return node;
-        }
+        return name;
     }
 
     @NodeChild(type = LLVMExpressionNode.class, value = "node")
     public abstract static class LLVMIntrinsicExpressionNode extends LLVMIntrinsicRootNode {
 
+        public LLVMIntrinsicExpressionNode(TruffleLanguage<?> language, String name) {
+            super(language, name);
+        }
+
         @Specialization
-        public Object execute(Object val) {
+        protected Object doOp(Object val) {
             return val;
         }
     }
-
 }
