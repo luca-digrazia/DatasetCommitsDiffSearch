@@ -28,7 +28,6 @@ import com.oracle.graal.lir.framemap.FrameMapBuilder;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
 import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
-import com.oracle.graal.lir.phases.LIRPhase;
 import com.oracle.graal.lir.phases.LIRSuites;
 import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
 import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
@@ -37,7 +36,6 @@ import com.oracle.graal.microbenchmarks.graal.util.MethodSpec;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
 import com.oracle.graal.nodes.spi.LoweringProvider;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 import com.oracle.graal.options.DerivedOptionValue;
@@ -126,7 +124,7 @@ public abstract class GraalCompilerState {
         return suites.getValue();
     }
 
-    protected LIRSuites getOriginalLIRSuites() {
+    protected LIRSuites getLIRSuites() {
         return lirSuites.getValue();
     }
 
@@ -167,9 +165,8 @@ public abstract class GraalCompilerState {
         return backend.getSuites().getDefaultGraphBuilderSuite().copy();
     }
 
-    private LIRSuites updatedLIRSuites;
-
     private LIRSuites getUpdatedLIRSuites() {
+        LIRSuites updatedLIRSuites = updateLIRSuite(request.lirSuites);
         if (updatedLIRSuites != null) {
             return updatedLIRSuites;
         }
@@ -177,21 +174,10 @@ public abstract class GraalCompilerState {
     }
 
     /**
-     * Gets the {@link LIRSuites} of the {@link #request}. Do not alter the suites directly. Use
-     * {@link #updateLIRSuite(LIRSuites)} instead.
+     * @param originalLIRSuites the original {@link LIRSuites suites} ({@link #getLIRSuites()}).
      */
-    protected final LIRSuites getRequestLIRSuites() {
-        return request.lirSuites;
-    }
-
-    /**
-     * Updates {@link LIRSuites} used in {@link #preAllocationStage()}, {@link #allocationStage()}
-     * and {@link #postAllocationStage()}.
-     *
-     * @see #getRequestLIRSuites()
-     */
-    protected final void updateLIRSuite(LIRSuites newLIRSuites) {
-        this.updatedLIRSuites = newLIRSuites;
+    protected LIRSuites updateLIRSuite(LIRSuites originalLIRSuites) {
+        return null;
     }
 
     private Request<CompilationResult> request;
@@ -203,69 +189,41 @@ public abstract class GraalCompilerState {
     private List<Block> codeEmittingOrder;
     private List<Block> linearScanOrder;
 
-    /**
-     * Copies the {@link #originalGraph original graph} and prepares the {@link #request}.
-     *
-     * The {@link Suites} can be changed by overriding {@link #createSuites()}. {@link LIRSuites}
-     * can be changed by overriding {@link #createLIRSuites()}.
-     */
-    protected final void prepareRequest() {
+    protected void prepareRequest() {
         graph = (StructuredGraph) originalGraph.copy();
         assert !graph.isFrozen();
         ResolvedJavaMethod installedCodeOwner = graph.method();
         request = new Request<>(graph, installedCodeOwner, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
-                        graph.getProfilingInfo(), getSuites(), getOriginalLIRSuites(), new CompilationResult(), CompilationResultBuilderFactory.Default);
+                        graph.getProfilingInfo(), getSuites(), getLIRSuites(), new CompilationResult(), CompilationResultBuilderFactory.Default);
     }
 
-    /**
-     * Executes the high-level (FrontEnd) part of the compiler.
-     */
-    protected final void emitFrontEnd() {
+    protected void emitFrontEnd() {
         GraalCompiler.emitFrontEnd(request.providers, request.backend, request.graph, request.graphBuilderSuite, request.optimisticOpts, request.profilingInfo, request.suites);
-        request.graph.freeze();
     }
 
-    /**
-     * Executes the low-level (BackEnd) part of the compiler.
-     */
-    protected final void emitBackEnd() {
+    protected void emitBackEnd() {
         emitLIR();
         emitCode();
     }
 
-    /**
-     * Generates {@link LIR} and executes the {@link LIR} pipeline.
-     */
-    protected final void emitLIR() {
+    protected void emitLIR() {
+        prepareLIR();
         generateLIR();
         emitLowLevel();
     }
 
-    /**
-     * Generates the initial {@link LIR}.
-     */
-    protected final void generateLIR() {
-        preLIRGeneration();
-        lirGeneration();
-    }
-
-    /**
-     * Sets up {@link LIR} generation.
-     */
-    protected final void preLIRGeneration() {
-        assert request.graph.isFrozen() : "Graph not frozen.";
+    protected void prepareLIR() {
         Object stub = null;
         schedule = request.graph.getLastSchedule();
-        ControlFlowGraph cfg = deepCopy(schedule.getCFG());
-        Block[] blocks = cfg.getBlocks();
-        Block startBlock = cfg.getStartBlock();
+        Block[] blocks = schedule.getCFG().getBlocks();
+        Block startBlock = schedule.getCFG().getStartBlock();
         assert startBlock != null;
         assert startBlock.getPredecessorCount() == 0;
 
         codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
         linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
 
-        LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder);
+        LIR lir = new LIR(schedule.getCFG(), linearScanOrder, codeEmittingOrder);
         FrameMapBuilder frameMapBuilder = request.backend.newFrameMapBuilder(registerConfig);
         String compilationUnitName = null;
         lirGenRes = request.backend.newLIRGenerationResult(compilationUnitName, lir, frameMapBuilder, request.graph, stub);
@@ -273,61 +231,33 @@ public abstract class GraalCompilerState {
         nodeLirGen = request.backend.newNodeLIRBuilder(request.graph, lirGenTool);
     }
 
-    private static ControlFlowGraph deepCopy(ControlFlowGraph cfg) {
-        return ControlFlowGraph.compute(cfg.graph, true, true, true, true);
-    }
-
-    /**
-     * Executes the {@link LIRGenerationPhase}.
-     */
-    protected final void lirGeneration() {
+    protected void generateLIR() {
         LIRGenerationContext context = new LIRGenerationContext(lirGenTool, nodeLirGen, request.graph, schedule);
         new LIRGenerationPhase().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, context);
     }
 
-    /**
-     * Executes the low-level compiler stages.
-     */
-    protected final void emitLowLevel() {
+    protected void emitLowLevel() {
         preAllocationStage();
         allocationStage();
         postAllocationStage();
     }
 
-    /**
-     * Executes the {@link PreAllocationStage}.
-     *
-     * {@link LIRPhase phases} can be changed with {@link #updateLIRSuite(LIRSuites)}.
-     */
-    protected final void preAllocationStage() {
+    protected void preAllocationStage() {
         PreAllocationOptimizationContext preAllocOptContext = new PreAllocationOptimizationContext(lirGenTool);
         getUpdatedLIRSuites().getPreAllocationOptimizationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, preAllocOptContext);
     }
 
-    /**
-     * Executes the {@link AllocationStage}.
-     *
-     * {@link LIRPhase phases} can be changed with {@link #updateLIRSuite(LIRSuites)}.
-     */
-    protected final void allocationStage() {
+    protected void allocationStage() {
         AllocationContext allocContext = new AllocationContext(lirGenTool.getSpillMoveFactory(), request.backend.newRegisterAllocationConfig(registerConfig));
         getUpdatedLIRSuites().getAllocationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, allocContext);
     }
 
-    /**
-     * Executes the {@link PostAllocationStage}.
-     *
-     * {@link LIRPhase phases} can be changed with {@link #updateLIRSuite(LIRSuites)}.
-     */
-    protected final void postAllocationStage() {
+    protected void postAllocationStage() {
         PostAllocationOptimizationContext postAllocOptContext = new PostAllocationOptimizationContext(lirGenTool);
         getUpdatedLIRSuites().getPostAllocationOptimizationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, postAllocOptContext);
     }
 
-    /**
-     * Emits the machine code.
-     */
-    protected final void emitCode() {
+    protected void emitCode() {
         int bytecodeSize = request.graph.method() == null ? 0 : request.graph.getBytecodeSize();
         request.compilationResult.setHasUnsafeAccess(request.graph.hasUnsafeAccess());
         GraalCompiler.emitCode(request.backend, request.graph.getAssumptions(), request.graph.method(), request.graph.getInlinedMethods(), bytecodeSize, lirGenRes, request.compilationResult,
@@ -356,20 +286,16 @@ public abstract class GraalCompilerState {
             prepareRequest();
         }
 
-        public StructuredGraph compile() {
+        public CompilationResult compile() {
             emitFrontEnd();
-            return super.graph;
+            return super.request.compilationResult;
         }
 
     }
 
     public abstract static class BackEndOnly extends GraalCompilerState {
-        /**
-         * Cannot do this {@link Level#Trial only once} since {@link #emitCode()} closes the
-         * {@link CompilationResult}.
-         */
         @Setup(Level.Invocation)
-        public void setupGraph() {
+        public void prepareFrontEnd() {
             prepareRequest();
             emitFrontEnd();
         }
@@ -381,68 +307,50 @@ public abstract class GraalCompilerState {
     }
 
     public abstract static class PreAllocationStage extends GraalCompilerState {
-        /**
-         * No need to rebuild the graph for every invocation since it is not altered by the backend.
-         */
-        @Setup(Level.Trial)
-        public void setupGraph() {
-            prepareRequest();
-            emitFrontEnd();
-        }
-
         @Setup(Level.Invocation)
         public void setup() {
+            prepareRequest();
+            emitFrontEnd();
+            prepareLIR();
             generateLIR();
         }
 
-        public LIRGenerationResult compile() {
+        public CompilationResult compile() {
             preAllocationStage();
-            return super.lirGenRes;
+            return super.request.compilationResult;
         }
     }
 
     public abstract static class AllocationStage extends GraalCompilerState {
-        /**
-         * No need to rebuild the graph for every invocation since it is not altered by the backend.
-         */
-        @Setup(Level.Trial)
-        public void setupGraph() {
-            prepareRequest();
-            emitFrontEnd();
-        }
-
         @Setup(Level.Invocation)
         public void setup() {
+            prepareRequest();
+            emitFrontEnd();
+            prepareLIR();
             generateLIR();
             preAllocationStage();
         }
 
-        public LIRGenerationResult compile() {
+        public CompilationResult compile() {
             allocationStage();
-            return super.lirGenRes;
+            return super.request.compilationResult;
         }
     }
 
     public abstract static class PostAllocationStage extends GraalCompilerState {
-        /**
-         * No need to rebuild the graph for every invocation since it is not altered by the backend.
-         */
-        @Setup(Level.Trial)
-        public void setupGraph() {
-            prepareRequest();
-            emitFrontEnd();
-        }
-
         @Setup(Level.Invocation)
         public void setup() {
+            prepareRequest();
+            emitFrontEnd();
+            prepareLIR();
             generateLIR();
             preAllocationStage();
             allocationStage();
         }
 
-        public LIRGenerationResult compile() {
+        public CompilationResult compile() {
             postAllocationStage();
-            return super.lirGenRes;
+            return super.request.compilationResult;
         }
     }
 }
