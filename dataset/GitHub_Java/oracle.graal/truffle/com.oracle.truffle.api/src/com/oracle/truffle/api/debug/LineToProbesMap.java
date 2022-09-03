@@ -40,10 +40,10 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * An {@linkplain Instrumenter.Tool Instrumentation-based Tool} that builds a map of every
- * {@link Probe} attached to some AST, indexed by {@link Source} and line number.
+ * An {@link InstrumentationTool} that builds a map of every {@link Probe} attached to some AST,
+ * indexed by {@link Source} and line number.
  */
-final class LineToProbesMap extends Instrumenter.Tool {
+final class LineToProbesMap extends Instrumenter.Tool<LineToProbesMap> {
 
     private static final boolean TRACE = false;
     private static final PrintStream OUT = System.out;
@@ -63,7 +63,7 @@ final class LineToProbesMap extends Instrumenter.Tool {
      * Create a map of {@link Probe}s that collects information on all probes added to subsequently
      * created ASTs (once installed).
      */
-    LineToProbesMap() {
+    public LineToProbesMap() {
         this.probeListener = new LineToProbesListener();
     }
 
