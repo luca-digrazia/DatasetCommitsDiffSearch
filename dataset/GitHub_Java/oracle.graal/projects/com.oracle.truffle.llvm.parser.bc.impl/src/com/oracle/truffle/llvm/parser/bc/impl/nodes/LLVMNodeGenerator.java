@@ -211,8 +211,6 @@ public final class LLVMNodeGenerator {
                 return new LLVMUnsupportedInlineAssemblerNode.LLVMAddressUnsupportedInlineAssemblerNode();
             case FUNCTION_ADDRESS:
                 return new LLVMUnsupportedInlineAssemblerNode.LLVMFunctionUnsupportedInlineAssemblerNode();
-            case STRUCT:
-                return LLVMCallUnboxNodeFactory.LLVMStructCallUnboxNodeGen.create(new LLVMCallNode.LLVMResolvedDirectCallNode(callTarget, argNodes));
             default:
                 throw new AssertionError("Unknown Inline Assembly Return Type!");
         }

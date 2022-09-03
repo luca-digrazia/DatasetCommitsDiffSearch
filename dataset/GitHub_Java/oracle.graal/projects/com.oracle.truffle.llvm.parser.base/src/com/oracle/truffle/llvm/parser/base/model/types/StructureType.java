@@ -178,6 +178,15 @@ public final class StructureType implements AggregateType, ValueSymbol {
     }
 
     @Override
+    public String toString() {
+        if (name.equals(ValueSymbol.UNKNOWN)) {
+            return toDeclarationString();
+        } else {
+            return "%" + name;
+        }
+    }
+
+    @Override
     public void setMetadataReference(MetadataReference metadata) {
         this.metadata = metadata;
     }
@@ -185,31 +194,5 @@ public final class StructureType implements AggregateType, ValueSymbol {
     @Override
     public MetadataReference getMetadataReference() {
         return metadata;
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 11;
-        hash = 23 * hash + (isPacked ? 1231 : 1237);
-        hash = 23 * hash + Arrays.hashCode(types);
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof StructureType) {
-            StructureType other = (StructureType) obj;
-            return isPacked == other.isPacked && Arrays.equals(types, other.types);
-        }
-        return false;
-    }
-
-    @Override
-    public String toString() {
-        if (name.equals(ValueSymbol.UNKNOWN)) {
-            return toDeclarationString();
-        } else {
-            return "%" + name;
-        }
     }
 }

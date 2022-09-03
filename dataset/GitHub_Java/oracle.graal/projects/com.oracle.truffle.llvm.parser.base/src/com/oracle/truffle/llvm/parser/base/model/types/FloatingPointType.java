@@ -29,7 +29,10 @@
  */
 package com.oracle.truffle.llvm.parser.base.model.types;
 
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public enum FloatingPointType implements Type {
 
@@ -53,13 +56,36 @@ public enum FloatingPointType implements Type {
     }
 
     @Override
-    public int getAlignment() {
-        return alignment;
+    public LLVMBaseType getLLVMBaseType() {
+        return llvmBaseType;
     }
 
     @Override
-    public LLVMBaseType getLLVMBaseType() {
-        return llvmBaseType;
+    public FrameSlotKind getFrameSlotKind() {
+        switch (this) {
+            case FLOAT:
+                return FrameSlotKind.Float;
+            case DOUBLE:
+                return FrameSlotKind.Double;
+            default:
+                return FrameSlotKind.Object;
+        }
+    }
+
+    @Override
+    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        switch (this) {
+            case HALF:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.HALF;
+            case FLOAT:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.FLOAT;
+            case DOUBLE:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.DOUBLE;
+            case X86_FP80:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.X86_FP80;
+            default:
+                throw new UnsupportedOperationException("Unsupported FloatingPointType: " + this);
+        }
     }
 
     @Override
@@ -68,8 +94,17 @@ public enum FloatingPointType implements Type {
     }
 
     @Override
-    public int sizeof() {
-        return width / Byte.SIZE;
+    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        if (targetDataLayout != null) {
+            return targetDataLayout.getBitAlignment(llvmBaseType) / Byte.SIZE;
+        } else {
+            return alignment;
+        }
+    }
+
+    @Override
+    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return Math.max(1, width / Byte.SIZE);
     }
 
     public int width() {
@@ -80,4 +115,5 @@ public enum FloatingPointType implements Type {
     public String toString() {
         return name().toLowerCase();
     }
+
 }

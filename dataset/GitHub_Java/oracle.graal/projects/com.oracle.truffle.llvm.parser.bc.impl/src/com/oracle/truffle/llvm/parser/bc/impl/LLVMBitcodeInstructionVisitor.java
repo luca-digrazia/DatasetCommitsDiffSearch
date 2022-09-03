@@ -85,7 +85,6 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
 import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
 import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
-import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
 import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.base.model.visitors.InstructionVisitor;
 import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
@@ -134,14 +133,11 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
 
     private final LLVMBitcodeTypeHelper typeHelper;
 
-    private final NodeFactoryFacade factoryFacade;
-
-    public LLVMBitcodeInstructionVisitor(LLVMBitcodeFunctionVisitor method, InstructionBlock block, NodeFactoryFacade factoryFacade) {
+    public LLVMBitcodeInstructionVisitor(LLVMBitcodeFunctionVisitor method, InstructionBlock block) {
         this.method = method;
         this.block = block;
         this.symbols = method.getSymbolResolver();
         this.typeHelper = method.getModule().getTypeHelper();
-        this.factoryFacade = factoryFacade;
     }
 
     private LLVMNode[] getPhiWriteNodes() {
@@ -451,7 +447,20 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
     @Override
     public void visit(LoadInstruction load) {
         LLVMAddressNode source = (LLVMAddressNode) symbols.resolve(load.getSource());
-        LLVMExpressionNode result = factoryFacade.createLoad(load.getType(), source);
+        LLVMBaseType resultType = load.getType().getLLVMBaseType();
+        LLVMExpressionNode result;
+
+        if (load.getType() instanceof VectorType) {
+            VectorType type = (VectorType) load.getType();
+            result = LLVMMemoryReadWriteFactory.createLoadVector(resultType, source, type.getLength());
+        } else {
+            int bits = load.getType() instanceof IntegerType
+                            ? ((IntegerType) load.getType()).getBits()
+                            : 0;
+
+            result = LLVMMemoryReadWriteFactory.createLoad(resultType, source, bits);
+        }
+
         createFrameWrite(result, load);
     }
 

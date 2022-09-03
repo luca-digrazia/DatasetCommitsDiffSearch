@@ -29,29 +29,65 @@
  */
 package com.oracle.truffle.llvm.parser.base.model.types;
 
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public interface Type {
 
-    default int getAlignment() {
-        return Long.BYTES;
-    }
-
     default LLVMBaseType getLLVMBaseType() {
         throw new AssertionError("Cannot resolve to LLVMBaseType: " + this);
+    }
+
+    default int getIndexOffset(@SuppressWarnings("unused") int index, @SuppressWarnings("unused") DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        throw new UnsupportedOperationException("Cannot index Type: " + this);
+    }
+
+    default Type getIndexType(@SuppressWarnings("unused") int index) {
+        throw new UnsupportedOperationException("Cannot index Type: " + this);
+    }
+
+    default FrameSlotKind getFrameSlotKind() {
+        return FrameSlotKind.Object;
+    }
+
+    default LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        throw new UnsupportedOperationException("Cannot resolve to Runtime Type: " + this);
     }
 
     default Type getType() {
         return this;
     }
 
+    /**
+     * This returns the bitlength of atomic types like integers or floats without consideration for
+     * alignment. To get the actual in-memory size of a type use
+     * {@link #getSize(DataLayoutConverter.DataSpecConverter)}.
+     *
+     * @return The bitwidth of this atomic type
+     */
     default int getBits() {
-        return sizeof() * Byte.SIZE;
+        throw new UnsupportedOperationException("Not implemented for this Type: " + this);
     }
 
-    int sizeof();
+    default int getAlignment(@SuppressWarnings("unused") DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        throw new UnsupportedOperationException("Not implemented!");
+    }
 
-    default int sizeof(@SuppressWarnings("unused") int alignment) {
-        return sizeof();
+    default int getSize(@SuppressWarnings("unused") DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        throw new UnsupportedOperationException("Not implemented!");
+    }
+
+    static int getPadding(int offset, int alignment) {
+        if (alignment == 0) {
+            throw new AssertionError();
+        }
+        return (alignment - (offset % alignment)) % alignment;
+    }
+
+    static int getPadding(int offset, Type type, DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        final int alignment = type.getAlignment(targetDataLayout);
+        return alignment == 0 ? 0 : getPadding(offset, alignment);
     }
 }

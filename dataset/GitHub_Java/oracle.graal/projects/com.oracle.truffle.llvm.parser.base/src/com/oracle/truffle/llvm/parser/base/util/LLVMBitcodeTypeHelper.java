@@ -33,11 +33,18 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.base.model.enums.BinaryOperator;
 import com.oracle.truffle.llvm.parser.base.model.enums.CastOperator;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
 
 public class LLVMBitcodeTypeHelper {
+
+    private final DataLayoutConverter.DataSpecConverter targetDataLayout;
+
+    public LLVMBitcodeTypeHelper(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        this.targetDataLayout = targetDataLayout;
+    }
 
     public static LLVMArithmeticInstructionType toArithmeticInstructionType(BinaryOperator operator) {
         switch (operator) {
@@ -115,6 +122,10 @@ public class LLVMBitcodeTypeHelper {
             llvmtypes[i] = types[i].getType().getRuntimeType();
         }
         return llvmtypes;
+    }
+
+    public DataLayoutConverter.DataSpecConverter getTargetDataLayout() {
+        return targetDataLayout;
     }
 
 }
