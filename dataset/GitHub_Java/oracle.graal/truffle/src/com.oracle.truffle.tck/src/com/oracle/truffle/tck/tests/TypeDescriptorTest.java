@@ -101,8 +101,7 @@ public class TypeDescriptorTest {
         final TypeDescriptor objOrArrayNum = TypeDescriptor.union(
                         TypeDescriptor.OBJECT,
                         numArray);
-        Assert.assertFalse(numArray.isAssignable(objOrArrayNum));
-        Assert.assertTrue(objOrArrayNum.isAssignable(numArray));
+        Assert.assertTrue(TypeDescriptor.ARRAY.isAssignable(objOrArrayNum));
     }
 
     @Test
@@ -116,17 +115,17 @@ public class TypeDescriptorTest {
 
         Assert.assertTrue(numOrBool.isAssignable(TypeDescriptor.BOOLEAN));
         Assert.assertTrue(numOrBoolOrStr.isAssignable(TypeDescriptor.BOOLEAN));
-        Assert.assertFalse(TypeDescriptor.BOOLEAN.isAssignable(numOrBool));
-        Assert.assertFalse(TypeDescriptor.BOOLEAN.isAssignable(numOrBoolOrStr));
+        Assert.assertTrue(TypeDescriptor.BOOLEAN.isAssignable(numOrBool));
+        Assert.assertTrue(TypeDescriptor.BOOLEAN.isAssignable(numOrBoolOrStr));
         Assert.assertTrue(numOrBool.isAssignable(TypeDescriptor.NUMBER));
         Assert.assertTrue(numOrBoolOrStr.isAssignable(TypeDescriptor.NUMBER));
-        Assert.assertFalse(TypeDescriptor.NUMBER.isAssignable(numOrBool));
-        Assert.assertFalse(TypeDescriptor.NUMBER.isAssignable(numOrBoolOrStr));
+        Assert.assertTrue(TypeDescriptor.NUMBER.isAssignable(numOrBool));
+        Assert.assertTrue(TypeDescriptor.NUMBER.isAssignable(numOrBoolOrStr));
         Assert.assertTrue(numOrBoolOrStr.isAssignable(TypeDescriptor.STRING));
-        Assert.assertFalse(TypeDescriptor.STRING.isAssignable(numOrBoolOrStr));
+        Assert.assertTrue(TypeDescriptor.STRING.isAssignable(numOrBoolOrStr));
 
         Assert.assertTrue(numOrBoolOrStr.isAssignable(numOrBool));
-        Assert.assertFalse(numOrBool.isAssignable(numOrBoolOrStr));
+        Assert.assertTrue(numOrBool.isAssignable(numOrBoolOrStr));
 
         final TypeDescriptor arrNumberOrBool = TypeDescriptor.union(
                         TypeDescriptor.array(TypeDescriptor.NUMBER),
@@ -137,22 +136,15 @@ public class TypeDescriptorTest {
         final TypeDescriptor arrBoolOrString = TypeDescriptor.union(
                         TypeDescriptor.array(TypeDescriptor.BOOLEAN),
                         TypeDescriptor.STRING);
-        final TypeDescriptor arrNumberOrBoolOrStr = TypeDescriptor.union(
-                        TypeDescriptor.array(TypeDescriptor.NUMBER),
-                        TypeDescriptor.BOOLEAN,
-                        TypeDescriptor.STRING);
-        Assert.assertFalse(arrNumberOrBool.isAssignable(arrNumberOrString));
+        Assert.assertTrue(arrNumberOrBool.isAssignable(arrNumberOrString));
         Assert.assertFalse(arrNumberOrBool.isAssignable(arrBoolOrString));
-        Assert.assertTrue(arrNumberOrBoolOrStr.isAssignable(arrNumberOrString));
 
         final TypeDescriptor arrNumBool = TypeDescriptor.array(numOrBool);
         final TypeDescriptor arrNum = TypeDescriptor.array(TypeDescriptor.NUMBER);
         final TypeDescriptor numOrBoolOrArrNumBool = TypeDescriptor.union(numOrBool, arrNumBool);
         Assert.assertTrue(numOrBoolOrArrNumBool.isAssignable(arrNum));
         final TypeDescriptor objOrArrNum = TypeDescriptor.union(TypeDescriptor.OBJECT, arrNum);
-        final TypeDescriptor boolOrArrNum = TypeDescriptor.union(TypeDescriptor.BOOLEAN, arrNum);
-        Assert.assertFalse(numOrBoolOrArrNumBool.isAssignable(objOrArrNum));
-        Assert.assertTrue(numOrBoolOrArrNumBool.isAssignable(boolOrArrNum));
+        Assert.assertTrue(numOrBoolOrArrNumBool.isAssignable(objOrArrNum));
     }
 
     @Test
@@ -215,10 +207,10 @@ public class TypeDescriptorTest {
         Assert.assertFalse(exeStrStr.isAssignable(exeAnyUnionUnion));
         Assert.assertTrue(exeAnyUnionUnion.isAssignable(exeAnyAny));
         Assert.assertTrue(exeAnyUnionUnion.isAssignable(exeAnyNoArgs));
-        Assert.assertFalse(exeAnyUnionUnion.isAssignable(exeAnyStr));
-        Assert.assertFalse(exeAnyUnionUnion.isAssignable(exeAnyStrNum));
+        Assert.assertTrue(exeAnyUnionUnion.isAssignable(exeAnyStr));
+        Assert.assertTrue(exeAnyUnionUnion.isAssignable(exeAnyStrNum));
         Assert.assertTrue(exeAnyUnionUnion.isAssignable(exeStrNoArgs));
-        Assert.assertFalse(exeAnyUnionUnion.isAssignable(exeStrStr));
+        Assert.assertTrue(exeAnyUnionUnion.isAssignable(exeStrStr));
         // Arrays
         final TypeDescriptor ae1 = TypeDescriptor.array(TypeDescriptor.EXECUTABLE);
         final TypeDescriptor ae2 = TypeDescriptor.array(TypeDescriptor.executable(null, TypeDescriptor.BOOLEAN));
@@ -230,28 +222,19 @@ public class TypeDescriptorTest {
         // Unions
         final TypeDescriptor ue1 = TypeDescriptor.union(TypeDescriptor.EXECUTABLE, TypeDescriptor.OBJECT);
         final TypeDescriptor ue2 = TypeDescriptor.union(TypeDescriptor.executable(null, TypeDescriptor.BOOLEAN), TypeDescriptor.STRING);
-        final TypeDescriptor ue3 = TypeDescriptor.union(TypeDescriptor.executable(null, TypeDescriptor.BOOLEAN), TypeDescriptor.STRING, TypeDescriptor.OBJECT);
         final TypeDescriptor up = TypeDescriptor.union(TypeDescriptor.BOOLEAN, TypeDescriptor.NUMBER);
         Assert.assertFalse(ue1.isAssignable(ue2));
-        Assert.assertFalse(ue1.isAssignable(ue3));
         Assert.assertFalse(ue1.isAssignable(up));
-        Assert.assertFalse(ue2.isAssignable(ue1));
-        Assert.assertFalse(ue2.isAssignable(ue3));
+        Assert.assertTrue(ue2.isAssignable(ue1));
         Assert.assertFalse(ue2.isAssignable(up));
-        Assert.assertTrue(ue3.isAssignable(ue1));
-        Assert.assertTrue(ue3.isAssignable(ue2));
-        Assert.assertFalse(ue3.isAssignable(up));
     }
 
     @Test
     public void testAny() {
         Assert.assertTrue(TypeDescriptor.ARRAY.isAssignable(TypeDescriptor.array(TypeDescriptor.ANY)));
         Assert.assertTrue(TypeDescriptor.array(TypeDescriptor.ANY).isAssignable(TypeDescriptor.ARRAY));
-        Assert.assertFalse(TypeDescriptor.EXECUTABLE.isAssignable(TypeDescriptor.ANY));
-        Assert.assertTrue(TypeDescriptor.ANY.isAssignable(TypeDescriptor.EXECUTABLE));
-        Assert.assertFalse(TypeDescriptor.executable(TypeDescriptor.ANY).isAssignable(TypeDescriptor.ANY));
-        Assert.assertTrue(TypeDescriptor.ANY.isAssignable(TypeDescriptor.executable(TypeDescriptor.ANY)));
-        Assert.assertFalse(TypeDescriptor.ANY.isAssignable(TypeDescriptor.executable(TypeDescriptor.ANY, TypeDescriptor.STRING, TypeDescriptor.NUMBER)));
+        Assert.assertTrue(TypeDescriptor.EXECUTABLE.isAssignable(TypeDescriptor.ANY));
+        Assert.assertTrue(TypeDescriptor.executable(TypeDescriptor.ANY).isAssignable(TypeDescriptor.ANY));
         Assert.assertTrue(TypeDescriptor.EXECUTABLE.isAssignable(TypeDescriptor.executable(TypeDescriptor.ANY)));
         Assert.assertTrue(TypeDescriptor.executable(TypeDescriptor.ANY).isAssignable(TypeDescriptor.EXECUTABLE));
     }
