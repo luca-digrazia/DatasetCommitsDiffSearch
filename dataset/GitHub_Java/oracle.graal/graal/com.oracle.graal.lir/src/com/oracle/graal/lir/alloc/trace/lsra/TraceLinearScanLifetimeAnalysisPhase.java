@@ -304,6 +304,7 @@ final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocati
                  * Dead value - make vacuous interval also add register priority for dead intervals
                  */
                 interval.addRange(defPos, defPos + 1);
+                interval.addUsePos(defPos, registerPriority);
                 if (Debug.isLogEnabled()) {
                     Debug.log("Warning: def of operand %s at %d occurs without use", operand, defPos);
                 }
@@ -313,9 +314,6 @@ final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocati
                  * the beginning of the current block until a def is encountered).
                  */
                 interval.setFrom(defPos);
-            }
-            if (!(op instanceof LabelOp)) {
-                // no use positions for labels
                 interval.addUsePos(defPos, registerPriority);
             }
 
