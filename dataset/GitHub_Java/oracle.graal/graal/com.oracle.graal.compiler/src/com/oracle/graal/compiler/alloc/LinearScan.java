@@ -923,9 +923,13 @@ public final class LinearScan {
                                 try (Indent indent3 = Debug.logAndIndent("used in block B%d", block.getId())) {
                                     for (LIRInstruction ins : ir.getLIRforBlock(block)) {
                                         try (Indent indent4 = Debug.logAndIndent("%d: %s", ins.id(), ins)) {
-                                            ins.forEachState((liveStateOperand, mode, flags) -> {
-                                                Debug.log("operand=%s", liveStateOperand);
-                                                return liveStateOperand;
+                                            ins.forEachState(new ValueProcedure() {
+
+                                                @Override
+                                                public Value doValue(Value liveStateOperand, OperandMode mode, EnumSet<OperandFlag> flags) {
+                                                    Debug.log("operand=%s", liveStateOperand);
+                                                    return liveStateOperand;
+                                                }
                                             });
                                         }
                                     }
@@ -1120,22 +1124,26 @@ public final class LinearScan {
     void addRegisterHint(final LIRInstruction op, final Value targetValue, OperandMode mode, EnumSet<OperandFlag> flags, final boolean hintAtDef) {
         if (flags.contains(OperandFlag.HINT) && isVariableOrRegister(targetValue)) {
 
-            op.forEachRegisterHint(targetValue, mode, (registerHint, valueMode, valueFlags) -> {
-                if (isVariableOrRegister(registerHint)) {
-                    Interval from = getOrCreateInterval((AllocatableValue) registerHint);
-                    Interval to = getOrCreateInterval((AllocatableValue) targetValue);
+            op.forEachRegisterHint(targetValue, mode, new ValueProcedure() {
 
-                    /* hints always point from def to use */
-                    if (hintAtDef) {
-                        to.setLocationHint(from);
-                    } else {
-                        from.setLocationHint(to);
+                @Override
+                public Value doValue(Value registerHint, OperandMode valueMode, EnumSet<OperandFlag> valueFlags) {
+                    if (isVariableOrRegister(registerHint)) {
+                        Interval from = getOrCreateInterval((AllocatableValue) registerHint);
+                        Interval to = getOrCreateInterval((AllocatableValue) targetValue);
+
+                        // hints always point from def to use
+                        if (hintAtDef) {
+                            to.setLocationHint(from);
+                        } else {
+                            from.setLocationHint(to);
+                        }
+                        Debug.log("operation at opId %d: added hint from interval %d to %d", op.id(), from.operandNumber, to.operandNumber);
+
+                        return registerHint;
                     }
-                    Debug.log("operation at opId %d: added hint from interval %d to %d", op.id(), from.operandNumber, to.operandNumber);
-
-                    return registerHint;
+                    return null;
                 }
-                return null;
             });
         }
     }
