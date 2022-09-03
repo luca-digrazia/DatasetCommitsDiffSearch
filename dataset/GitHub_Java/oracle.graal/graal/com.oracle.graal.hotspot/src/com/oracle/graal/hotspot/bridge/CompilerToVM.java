@@ -79,12 +79,13 @@ public interface CompilerToVM {
     long findUniqueConcreteMethod(long metaspaceMethod);
 
     /**
-     * Returns the implementor for the given interface class.
+     * Used to determine if an interface has exactly one implementor.
      * 
-     * @param metaspaceKlass the metaspace klass to get the implementor for
-     * @return the implementor as metaspace klass pointer or null if there is no implementor
+     * @param interfaceType interface for which the implementor should be returned
+     * @return the unique implementor of the interface or null if the interface has 0 or more than 1
+     *         implementor
      */
-    long getKlassImplementor(long metaspaceKlass);
+    ResolvedJavaType getUniqueImplementor(HotSpotResolvedObjectType interfaceType);
 
     /**
      * Initializes a {@link HotSpotResolvedJavaMethod} object from a metaspace Method object.
