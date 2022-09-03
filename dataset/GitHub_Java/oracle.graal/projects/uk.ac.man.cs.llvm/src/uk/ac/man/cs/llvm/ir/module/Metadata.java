@@ -195,12 +195,12 @@ public class Metadata implements ParserListener {
     }
 
     protected void createString(long[] args) {
-        StringBuilder builder = new StringBuilder();
-        for (long character : args) {
-            builder.append((char) character); // TODO: unicode characters?
+        String s = "";
+        for (long lc : args) {
+            s += (char) (lc); // TODO: unicode characters?
         }
 
-        MetadataString node = new MetadataString(builder.toString());
+        MetadataString node = new MetadataString(s);
 
         metadata.add(node);
     }
@@ -224,12 +224,12 @@ public class Metadata implements ParserListener {
     }
 
     protected void createName(long[] args) {
-        StringBuilder builder = new StringBuilder();
-        for (long character : args) {
-            builder.append((char) character); // TODO: unicode characters?
+        String name = "";
+        for (long lc : args) {
+            name += (char) (lc); // TODO: unicode characters?
         }
 
-        MetadataName node = new MetadataName(builder.toString());
+        MetadataName node = new MetadataName(name);
 
         metadata.add(node);
     }
@@ -241,12 +241,12 @@ public class Metadata implements ParserListener {
     }
 
     protected void createKind(long[] args) {
-        StringBuilder builder = new StringBuilder();
+        String name = "";
         for (int i = 1; i < args.length; i++) {
-            builder.append((char) args[i]); // TODO: unicode characters?
+            name += (char) (args[i]); // TODO: unicode characters?
         }
 
-        MetadataKind node = new MetadataKind(args[0], builder.toString());
+        MetadataKind node = new MetadataKind(args[0], name);
 
         metadata.add(node);
     }
