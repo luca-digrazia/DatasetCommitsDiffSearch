@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,23 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
-public final class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
-    public static final LIRInstructionClass<SPARCMathIntrinsicOp> TYPE = LIRInstructionClass.create(SPARCMathIntrinsicOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(1);
+public class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
 
     public enum IntrinsicOpcode {
         SQRT,
+        SIN,
+        COS,
+        TAN,
+        LOG,
+        LOG10,
         ABS
     }
 
@@ -44,7 +47,6 @@ public final class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements S
     @Use protected Value input;
 
     public SPARCMathIntrinsicOp(IntrinsicOpcode opcode, Value result, Value input) {
-        super(TYPE, SIZE);
         this.opcode = opcode;
         this.result = result;
         this.input = input;
@@ -64,7 +66,7 @@ public final class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements S
                         masm.fsqrtd(asDoubleReg(input), asDoubleReg(result));
                         break;
                     default:
-                        JVMCIError.shouldNotReachHere();
+                        GraalInternalError.shouldNotReachHere();
                 }
                 break;
             case ABS:
@@ -76,11 +78,16 @@ public final class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements S
                         masm.fabsd(asDoubleReg(input), asDoubleReg(result));
                         break;
                     default:
-                        JVMCIError.shouldNotReachHere();
+                        GraalInternalError.shouldNotReachHere();
                 }
                 break;
+            case LOG:
+            case LOG10:
+            case SIN:
+            case COS:
+            case TAN:
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
