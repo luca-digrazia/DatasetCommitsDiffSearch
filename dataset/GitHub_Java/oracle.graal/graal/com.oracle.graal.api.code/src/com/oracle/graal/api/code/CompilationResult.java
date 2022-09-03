@@ -460,7 +460,7 @@ public class CompilationResult implements Serializable {
     private final List<ExceptionHandler> exceptionHandlers = new ArrayList<>();
     private final List<Mark> marks = new ArrayList<>();
 
-    private int totalFrameSize = -1;
+    private int frameSize = -1;
     private int customStackAreaOffset = -1;
     private int registerRestoreEpilogueOffset = -1;
 
@@ -525,24 +525,23 @@ public class CompilationResult implements Serializable {
     }
 
     /**
-     * The total frame size of the method in bytes. This includes the return address pushed onto the
+     * The frame size of the method in bytes. This includes the return address pushed onto the
      * stack, if any.
      *
      * @return the frame size
      */
-    public int getTotalFrameSize() {
-        assert totalFrameSize != -1 : "frame size not yet initialized!";
-        return totalFrameSize;
+    public int getFrameSize() {
+        assert frameSize != -1 : "frame size not yet initialized!";
+        return frameSize;
     }
 
     /**
-     * Sets the total frame size in bytes. This includes the return address pushed onto the stack,
-     * if any.
+     * Sets the frame size in bytes. This includes the return address pushed onto the stack, if any.
      *
      * @param size the size of the frame in bytes
      */
-    public void setTotalFrameSize(int size) {
-        totalFrameSize = size;
+    public void setFrameSize(int size) {
+        frameSize = size;
     }
 
     /**
