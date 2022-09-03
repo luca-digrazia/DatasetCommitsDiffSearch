@@ -31,30 +31,18 @@ package com.oracle.truffle.llvm.parser.base.model.enums;
 
 public enum Visibility {
 
-    DEFAULT("default", 0L),
-    HIDDEN("hidden", 1L),
-    PROTECTED("protected", 2L);
+    DEFAULT("default"),
+    HIDDEN("hidden"),
+    PROTECTED("protected");
 
     private final String irString;
 
-    Visibility(String irString, long encodedValue) {
+    Visibility(String irString) {
         this.irString = irString;
-        this.encodedValue = encodedValue;
-    }
-
-    private final long encodedValue;
-
-    public long getEncodedValue() {
-        return encodedValue;
     }
 
     public static Visibility decode(long value) {
-        for (Visibility visibility : values()) {
-            if (visibility.getEncodedValue() == value) {
-                return visibility;
-            }
-        }
-        return DEFAULT;
+        return values()[(int) value];
     }
 
     public String getIrString() {
