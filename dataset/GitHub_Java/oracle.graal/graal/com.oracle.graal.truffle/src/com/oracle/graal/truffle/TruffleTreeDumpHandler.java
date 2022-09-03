@@ -22,22 +22,108 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.graal.debug.*;
-import com.oracle.truffle.api.impl.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.graal.debug.DebugDumpHandler;
+import com.oracle.graal.debug.GraalDebugConfig.Options;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.GraphPrintVisitor;
+import com.oracle.truffle.api.nodes.GraphPrintVisitor.GraphPrintAdapter;
+import com.oracle.truffle.api.nodes.GraphPrintVisitor.GraphPrintHandler;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.source.SourceSection;
 
 public class TruffleTreeDumpHandler implements DebugDumpHandler {
 
+    /**
+     * The {@link OptimizedCallTarget} is dumped multiple times during Graal compilation, because it
+     * is also a subclass of InstalledCode. To disambiguate dumping, we wrap the call target into
+     * this class when we want to dump the truffle tree.
+     */
+    public static class TruffleTreeDump {
+        final RootCallTarget callTarget;
+
+        public TruffleTreeDump(RootCallTarget callTarget) {
+            this.callTarget = callTarget;
+        }
+    }
+
     @Override
     public void dump(Object object, final String message) {
-        if (object instanceof DefaultCallTarget) {
-            DefaultCallTarget callTarget = (DefaultCallTarget) object;
-            if (callTarget.getRootNode() != null) {
-                new GraphPrintVisitor().beginGroup(callTarget.toString()).beginGraph(message).visit(callTarget.getRootNode()).printToNetwork();
+        if (object instanceof TruffleTreeDump && Options.PrintIdealGraph.getValue() && Options.PrintTruffleTrees.getValue()) {
+            dumpRootCallTarget(message, ((TruffleTreeDump) object).callTarget);
+        }
+    }
+
+    private static void dumpRootCallTarget(final String message, RootCallTarget callTarget) {
+        if (callTarget.getRootNode() != null) {
+            final GraphPrintVisitor printer = new GraphPrintVisitor();
+
+            printer.beginGroup(callTarget.toString());
+            printer.beginGraph(message).visit(callTarget.getRootNode()).endGraph();
+            if (callTarget instanceof OptimizedCallTarget) {
+                TruffleInlining inlining = new TruffleInlining((OptimizedCallTarget) callTarget, new DefaultInliningPolicy());
+                if (inlining.countInlinedCalls() > 0) {
+                    dumpInlinedTrees(printer, (OptimizedCallTarget) callTarget, inlining);
+                    dumpInlinedCallGraph(printer, (OptimizedCallTarget) callTarget, inlining);
+                }
+            }
+            printer.endGroup();
+
+            printer.printToNetwork(false);
+        }
+    }
+
+    private static void dumpInlinedTrees(final GraphPrintVisitor printer, final OptimizedCallTarget callTarget, TruffleInlining inlining) {
+        for (DirectCallNode callNode : NodeUtil.findAllNodeInstances(callTarget.getRootNode(), DirectCallNode.class)) {
+            CallTarget inlinedCallTarget = callNode.getCurrentCallTarget();
+            if (inlinedCallTarget instanceof OptimizedCallTarget && callNode instanceof OptimizedDirectCallNode) {
+                TruffleInliningDecision decision = inlining.findByCall((OptimizedDirectCallNode) callNode);
+                if (decision != null && decision.isInline()) {
+                    printer.beginGroup(inlinedCallTarget.toString());
+                    printer.beginGraph(inlinedCallTarget.toString()).visit(((RootCallTarget) inlinedCallTarget).getRootNode()).endGraph();
+                    dumpInlinedTrees(printer, (OptimizedCallTarget) inlinedCallTarget, decision);
+                    printer.endGroup();
+                }
             }
         }
     }
 
+    private static void dumpInlinedCallGraph(final GraphPrintVisitor printer, final OptimizedCallTarget rootCallTarget, TruffleInlining inlining) {
+        class InliningGraphPrintHandler implements GraphPrintHandler {
+            private final TruffleInlining inlining;
+
+            InliningGraphPrintHandler(TruffleInlining inlining) {
+                this.inlining = inlining;
+            }
+
+            @Override
+            public void visit(Object node, GraphPrintAdapter g) {
+                if (g.visited(node)) {
+                    return;
+                }
+                g.createElementForNode(node);
+                g.setNodeProperty(node, "name", node.toString());
+                for (DirectCallNode callNode : NodeUtil.findAllNodeInstances(((RootCallTarget) node).getRootNode(), DirectCallNode.class)) {
+                    CallTarget inlinedCallTarget = callNode.getCurrentCallTarget();
+                    if (inlinedCallTarget instanceof OptimizedCallTarget && callNode instanceof OptimizedDirectCallNode) {
+                        TruffleInliningDecision decision = inlining.findByCall((OptimizedDirectCallNode) callNode);
+                        if (decision != null && decision.isInline()) {
+                            g.visit(inlinedCallTarget, new InliningGraphPrintHandler(decision));
+                            SourceSection sourceSection = callNode.getEncapsulatingSourceSection();
+                            g.connectNodes(node, inlinedCallTarget, sourceSection != null ? sourceSection.toString() : null);
+                        }
+                    }
+                }
+            }
+        }
+
+        printer.beginGraph("inlined call graph");
+        printer.visit(rootCallTarget, new InliningGraphPrintHandler(inlining));
+        printer.endGraph();
+    }
+
+    @Override
     public void close() {
         // nothing to do
     }
