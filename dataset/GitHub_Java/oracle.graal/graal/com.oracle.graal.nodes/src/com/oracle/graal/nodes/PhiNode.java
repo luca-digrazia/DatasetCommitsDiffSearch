@@ -209,13 +209,8 @@ public abstract class PhiNode extends FloatingNode implements Simplifiable {
                     graph().replaceFloating((FloatingNode) node, singleValue);
                 }
             }
-            for (Node usage : usages().snapshot()) {
-                if (usage != this) {
-                    usage.replaceFirstInput(this, singleValue);
-                }
-            }
-            clearInputs();
-            safeDelete();
+            graph().replaceFloating(this, singleValue);
+            usages().forEach(tool::addToWorkList);
         }
     }
 
