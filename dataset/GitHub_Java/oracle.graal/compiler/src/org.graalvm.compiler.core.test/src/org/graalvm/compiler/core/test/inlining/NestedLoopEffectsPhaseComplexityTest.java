@@ -24,7 +24,6 @@ package org.graalvm.compiler.core.test.inlining;
 
 import static org.graalvm.compiler.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
-import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.TTY;
@@ -44,6 +43,7 @@ import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.virtual.phases.ea.EarlyReadEliminationPhase;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
+import org.graalvm.util.EconomicSet;
 import org.junit.Test;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -137,8 +137,7 @@ public class NestedLoopEffectsPhaseComplexityTest extends GraalCompilerTest {
         ResolvedJavaMethod calleeMethod = next.callTarget().targetMethod();
         for (int i = 0; i < inliningCount; i++) {
             next = callerGraph.getNodes(MethodCallTargetNode.TYPE).first().invoke();
-            EconomicSet<Node> canonicalizeNodes = InliningUtil.inlineForCanonicalization(next, calleeGraph, false, calleeMethod, null,
-                            "Called explicitly from a unit test.", "Test case");
+            EconomicSet<Node> canonicalizeNodes = InliningUtil.inlineForCanonicalization(next, calleeGraph, false, calleeMethod);
             canonicalizer.applyIncremental(callerGraph, context, canonicalizeNodes);
             callerGraph.getDebug().dump(DebugContext.DETAILED_LEVEL, callerGraph, "After inlining %s into %s iteration %d", calleeMethod, callerMethod, i);
         }
