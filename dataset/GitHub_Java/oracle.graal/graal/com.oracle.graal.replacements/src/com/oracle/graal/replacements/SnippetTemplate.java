@@ -365,7 +365,7 @@ public class SnippetTemplate {
         }
 
         public ValueNode length() {
-            return ConstantNode.forInt(varargs.length);
+            return ConstantNode.forInt(varargs.length, graph());
         }
     }
 
@@ -687,23 +687,24 @@ public class SnippetTemplate {
         List<ReturnNode> returnNodes = snippet.getNodes(ReturnNode.class).snapshot();
         if (returnNodes.isEmpty()) {
             this.returnNode = null;
+            this.memoryMap = null;
         } else if (returnNodes.size() == 1) {
             this.returnNode = returnNodes.get(0);
+            this.memoryMap = returnNode.getMemoryMap();
         } else {
             MergeNode merge = snippet.add(new MergeNode());
             List<MemoryMapNode> memMaps = returnNodes.stream().map(n -> n.getMemoryMap()).collect(Collectors.toList());
             ValueNode returnValue = InliningUtil.mergeReturns(merge, returnNodes, null);
             this.returnNode = snippet.add(new ReturnNode(returnValue));
             MemoryMapImpl mmap = FloatingReadPhase.mergeMemoryMaps(merge, memMaps);
-            MemoryMapNode memoryMap = snippet.unique(new MemoryMapNode(mmap.getMap()));
-            this.returnNode.setMemoryMap(memoryMap);
+            this.memoryMap = snippet.unique(new MemoryMapNode(mmap.getMap()));
+            merge.setNext(this.returnNode);
+
             for (MemoryMapNode mm : memMaps) {
-                if (mm != memoryMap && mm.isAlive()) {
-                    assert mm.usages().isEmpty();
-                    GraphUtil.killWithUnusedFloatingInputs(mm);
+                if (mm.isAlive()) {
+                    mm.safeDelete();
                 }
             }
-            merge.setNext(this.returnNode);
         }
 
         this.sideEffectNodes = curSideEffectNodes;
@@ -791,6 +792,11 @@ public class SnippetTemplate {
      * The nodes to be inlined when this specialization is instantiated.
      */
     private final ArrayList<Node> nodes;
+
+    /**
+     * Map of killing locations to memory checkpoints (nodes).
+     */
+    private final MemoryMapNode memoryMap;
 
     /**
      * Times instantiations of this template.
@@ -951,7 +957,6 @@ public class SnippetTemplate {
             // no floating reads yet, ignore locations created while lowering
             return true;
         }
-        MemoryMapNode memoryMap = returnNode.getMemoryMap();
         if (memoryMap == null || memoryMap.isEmpty()) {
             // there are no kills in the snippet graph
             return true;
@@ -1013,7 +1018,6 @@ public class SnippetTemplate {
 
         @Override
         public MemoryNode getLastLocationAccess(LocationIdentity locationIdentity) {
-            MemoryMapNode memoryMap = returnNode.getMemoryMap();
             assert memoryMap != null : "no memory map stored for this snippet graph (snippet doesn't have a ReturnNode?)";
             MemoryNode lastLocationAccess = memoryMap.getLastLocationAccess(locationIdentity);
             assert lastLocationAccess != null;
@@ -1026,7 +1030,7 @@ public class SnippetTemplate {
 
         @Override
         public Collection<LocationIdentity> getLocations() {
-            return returnNode.getMemoryMap().getLocations();
+            return memoryMap.getLocations();
         }
     }
 
