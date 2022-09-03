@@ -22,70 +22,76 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import java.lang.reflect.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
+
+import edu.umd.cs.findbugs.annotations.*;
 
 /**
  * Implementation of {@link InstalledCode} for HotSpot.
- * Stores a reference to the nmethod which contains the compiled code.
- * The nmethod also stores a weak reference to the HotSpotCompiledMethod
- * instance which is necessary to keep the nmethod from being unloaded.
  */
-public class HotSpotInstalledCode extends CompilerObject implements InstalledCode {
+public abstract class HotSpotInstalledCode extends InstalledCode {
 
-    private static final long serialVersionUID = 156632908220561612L;
+    /**
+     * Total size of the code blob.
+     */
+    @SuppressFBWarnings(value = "UWF_UNWRITTEN_FIELD", justification = "field is set by the native part") private int size;
 
-    private final HotSpotResolvedJavaMethod method;
-    private long nmethod;
+    /**
+     * Start address of the code.
+     */
+    @SuppressFBWarnings(value = "UWF_UNWRITTEN_FIELD", justification = "field is set by the native part") private long codeStart;
 
-    public HotSpotInstalledCode(HotSpotResolvedJavaMethod method) {
-        this.method = method;
+    /**
+     * Size of the code.
+     */
+    @SuppressFBWarnings(value = "UWF_UNWRITTEN_FIELD", justification = "field is set by the native part") private int codeSize;
+
+    public HotSpotInstalledCode(String name) {
+        super(name);
     }
 
-    @Override
-    public ResolvedJavaMethod getMethod() {
-        return method;
+    /**
+     * @return the total size of this code blob
+     */
+    public int getSize() {
+        return size;
     }
 
-    @Override
-    public boolean isValid() {
-        return nmethod != 0;
-    }
-
-    @Override
-    public String toString() {
-        return "compiled method " + method + " @" + nmethod;
-    }
-
-    @Override
-    public Object execute(Object arg1, Object arg2, Object arg3) {
-        assert method.getSignature().getParameterCount(!Modifier.isStatic(method.getModifiers())) == 3;
-        assert method.getSignature().getParameterKind(0) == Kind.Object;
-        assert method.getSignature().getParameterKind(1) == Kind.Object;
-        assert !Modifier.isStatic(method.getModifiers()) || method.getSignature().getParameterKind(2) == Kind.Object;
-        return HotSpotGraalRuntime.getInstance().getCompilerToVM().executeCompiledMethod(method.metaspaceMethod, nmethod, arg1, arg2, arg3);
-    }
-
-    private boolean checkArgs(Object... args) {
-        Kind[] sig = MetaUtil.signatureToKinds(method);
-        assert args.length == sig.length : MetaUtil.format("%H.%n(%p): expected ", method) + sig.length + " args, got " + args.length;
-        for (int i = 0; i < sig.length; i++) {
-            Object arg = args[i];
-            if (arg == null) {
-                assert sig[i].isObject() : MetaUtil.format("%H.%n(%p): expected arg ", method) + i + " to be Object, not " + sig[i];
-            } else if (!sig[i].isObject()) {
-                assert sig[i].toBoxedJavaClass() == arg.getClass() : MetaUtil.format("%H.%n(%p): expected arg ", method) + i + " to be " + sig[i] + ", not " + arg.getClass();
-            }
+    /**
+     * @return a copy of this code blob if it is {@linkplain #isValid() valid}, null otherwise.
+     */
+    public byte[] getBlob() {
+        if (!isValid()) {
+            return null;
         }
-        return true;
+        byte[] blob = new byte[size];
+        unsafe.copyMemory(null, getAddress(), blob, Unsafe.ARRAY_BYTE_BASE_OFFSET, size);
+        return blob;
     }
 
     @Override
-    public Object executeVarargs(Object... args) {
-        assert checkArgs(args);
-        return HotSpotGraalRuntime.getInstance().getCompilerToVM().executeCompiledMethodVarargs(method.metaspaceMethod, nmethod, args);
+    public abstract String toString();
+
+    @Override
+    public long getStart() {
+        return codeStart;
+    }
+
+    @Override
+    public long getCodeSize() {
+        return codeSize;
+    }
+
+    @Override
+    public byte[] getCode() {
+        if (!isValid()) {
+            return null;
+        }
+        byte[] code = new byte[codeSize];
+        unsafe.copyMemory(null, codeStart, code, Unsafe.ARRAY_BYTE_BASE_OFFSET, codeSize);
+        return code;
     }
 }

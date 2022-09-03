@@ -22,30 +22,93 @@
  */
 package com.oracle.graal.api.code;
 
-import com.oracle.graal.api.meta.*;
-
 /**
- * Represents a compiled instance of a method. It may have been invalidated or removed in the meantime.
+ * Represents a compiled instance of a method. It may have been invalidated or removed in the
+ * meantime.
  */
-public interface InstalledCode {
+public class InstalledCode {
 
-    public abstract class MethodInvalidatedException extends RuntimeException {
+    /**
+     * Raw address of this code blob.
+     */
+    private long address;
 
-        private static final long serialVersionUID = -3540232440794244844L;
+    /**
+     * Counts how often the address field was reassigned.
+     */
+    private long version;
+
+    protected final String name;
+
+    public InstalledCode(String name) {
+        this.name = name;
+    }
+
+    public final void setAddress(long address) {
+        this.address = address;
+        version++;
     }
 
     /**
-     * Returns the method to which the compiled code belongs.
-     * @return the method to which the compiled code belongs.
+     * @return the address of this code blob
      */
-    ResolvedJavaMethod method();
+    public final long getAddress() {
+        return address;
+    }
 
     /**
-     * @return true if the code represented by this object is still valid, false otherwise (may happen due to deopt, etc.)
+     * @return the address of this code blob
      */
-    boolean isValid();
+    public final long getVersion() {
+        return version;
+    }
 
-    Object execute(Object arg1, Object arg2, Object arg3);
+    /**
+     * Returns the start address of this installed code if it is {@linkplain #isValid() valid}, 0
+     * otherwise.
+     */
+    public long getStart() {
+        return 0;
+    }
 
-    Object executeVarargs(Object... args);
+    /**
+     * Returns the number of instruction bytes for this code.
+     */
+    public long getCodeSize() {
+        return 0;
+    }
+
+    /**
+     * Returns a copy of this installed code if it is {@linkplain #isValid() valid}, null otherwise.
+     */
+    public byte[] getCode() {
+        return null;
+    }
+
+    /**
+     * @return true if the code represented by this object is still valid, false otherwise (may
+     *         happen due to deopt, etc.)
+     */
+    public boolean isValid() {
+        return address != 0;
+    }
+
+    /**
+     * Invalidates this installed code such that any subsequent invocation will throw an
+     * {@link InvalidInstalledCodeException}.
+     */
+    public void invalidate() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Executes the installed code with a variable number of arguments.
+     *
+     * @param args the array of object arguments
+     * @return the value returned by the executed code
+     */
+    @SuppressWarnings("unused")
+    public Object executeVarargs(Object... args) throws InvalidInstalledCodeException {
+        throw new UnsupportedOperationException();
+    }
 }
