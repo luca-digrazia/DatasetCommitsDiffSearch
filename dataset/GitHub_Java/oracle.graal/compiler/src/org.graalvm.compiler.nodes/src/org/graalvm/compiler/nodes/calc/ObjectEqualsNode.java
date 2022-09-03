@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -37,7 +35,6 @@ import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.LogicConstantNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
-import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.extended.GetClassNode;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
@@ -126,37 +123,39 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         }
     }
 
-    private static LogicNode virtualizeNonVirtualComparison(VirtualObjectNode virtual, ValueNode other, StructuredGraph graph, VirtualizerTool tool) {
+    private void virtualizeNonVirtualComparison(VirtualObjectNode virtual, ValueNode other, VirtualizerTool tool) {
         if (virtual instanceof VirtualBoxingNode && other.isConstant()) {
             VirtualBoxingNode virtualBoxingNode = (VirtualBoxingNode) virtual;
             if (virtualBoxingNode.getBoxingKind() == JavaKind.Boolean) {
-                JavaConstant otherUnboxed = tool.getConstantReflection().unboxPrimitive(other.asJavaConstant());
+                JavaConstant otherUnboxed = tool.getConstantReflectionProvider().unboxPrimitive(other.asJavaConstant());
                 if (otherUnboxed != null && otherUnboxed.getJavaKind() == JavaKind.Boolean) {
                     int expectedValue = otherUnboxed.asBoolean() ? 1 : 0;
-                    return new IntegerEqualsNode(virtualBoxingNode.getBoxedValue(tool), ConstantNode.forInt(expectedValue, graph));
+                    IntegerEqualsNode equals = new IntegerEqualsNode(virtualBoxingNode.getBoxedValue(tool), ConstantNode.forInt(expectedValue, graph()));
+                    tool.addNode(equals);
+                    tool.replaceWithValue(equals);
                 } else {
-                    return LogicConstantNode.contradiction(graph);
+                    tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
                 }
             }
         }
         if (virtual.hasIdentity()) {
             // one of them is virtual: they can never be the same objects
-            return LogicConstantNode.contradiction(graph);
+            tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
         }
-        return null;
     }
 
-    public static LogicNode virtualizeComparison(ValueNode x, ValueNode y, StructuredGraph graph, VirtualizerTool tool) {
-        ValueNode xAlias = tool.getAlias(x);
-        ValueNode yAlias = tool.getAlias(y);
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode xAlias = tool.getAlias(getX());
+        ValueNode yAlias = tool.getAlias(getY());
 
         VirtualObjectNode xVirtual = xAlias instanceof VirtualObjectNode ? (VirtualObjectNode) xAlias : null;
         VirtualObjectNode yVirtual = yAlias instanceof VirtualObjectNode ? (VirtualObjectNode) yAlias : null;
 
         if (xVirtual != null && yVirtual == null) {
-            return virtualizeNonVirtualComparison(xVirtual, yAlias, graph, tool);
+            virtualizeNonVirtualComparison(xVirtual, yAlias, tool);
         } else if (xVirtual == null && yVirtual != null) {
-            return virtualizeNonVirtualComparison(yVirtual, xAlias, graph, tool);
+            virtualizeNonVirtualComparison(yVirtual, xAlias, tool);
         } else if (xVirtual != null && yVirtual != null) {
             if (xVirtual.hasIdentity() ^ yVirtual.hasIdentity()) {
                 /*
@@ -166,35 +165,24 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                  * In other words: an object created via valueOf can never be equal to one created
                  * by new in the same compilation unit.
                  */
-                return LogicConstantNode.contradiction(graph);
+                tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
             } else if (!xVirtual.hasIdentity() && !yVirtual.hasIdentity()) {
                 ResolvedJavaType type = xVirtual.type();
                 if (type.equals(yVirtual.type())) {
-                    MetaAccessProvider metaAccess = tool.getMetaAccess();
+                    MetaAccessProvider metaAccess = tool.getMetaAccessProvider();
                     if (type.equals(metaAccess.lookupJavaType(Integer.class)) || type.equals(metaAccess.lookupJavaType(Long.class))) {
                         // both are virtual without identity: check contents
                         assert xVirtual.entryCount() == 1 && yVirtual.entryCount() == 1;
                         assert xVirtual.entryKind(0).getStackKind() == JavaKind.Int || xVirtual.entryKind(0) == JavaKind.Long;
-                        return new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
+                        IntegerEqualsNode equals = new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
+                        tool.addNode(equals);
+                        tool.replaceWithValue(equals);
                     }
                 }
             } else {
                 // both are virtual with identity: check if they refer to the same object
-                return LogicConstantNode.forBoolean(xVirtual == yVirtual, graph);
+                tool.replaceWithValue(LogicConstantNode.forBoolean(xVirtual == yVirtual, graph()));
             }
         }
-        return null;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        ValueNode node = virtualizeComparison(getX(), getY(), graph(), tool);
-        if (node == null) {
-            return;
-        }
-        if (!node.isAlive()) {
-            tool.addNode(node);
-        }
-        tool.replaceWithValue(node);
     }
 }
