@@ -95,7 +95,7 @@ public class NewObjectSnippets implements SnippetsInterface {
     }
 
     @Snippet
-    public static Object initializeArray(
+    public static Object initializeObjectArray(
                     @Parameter("memory") Word memory,
                     @Parameter("hub") Word hub,
                     @Parameter("length") int length,
@@ -105,19 +105,44 @@ public class NewObjectSnippets implements SnippetsInterface {
                     @ConstantParameter("fillContents") boolean fillContents,
                     @ConstantParameter("locked") boolean locked) {
         if (locked) {
-            return initializeArray(memory, hub, length, size, thread().or(biasedLockPattern()), headerSize, fillContents);
+            return initializeArray(memory, hub, length, size, thread().or(biasedLockPattern()), headerSize, true, fillContents);
         } else {
-            return initializeArray(memory, hub, length, size, prototypeMarkWord, headerSize, fillContents);
+            return initializeArray(memory, hub, length, size, prototypeMarkWord, headerSize, true, fillContents);
         }
     }
 
-    private static Object initializeArray(Word memory, Word hub, int length, int size, Word prototypeMarkWord, int headerSize, boolean fillContents) {
+    @Snippet
+    public static Object initializePrimitiveArray(
+                    @Parameter("memory") Word memory,
+                    @Parameter("hub") Word hub,
+                    @Parameter("length") int length,
+                    @Parameter("size") int size,
+                    @Parameter("prototypeMarkWord") Word prototypeMarkWord,
+                    @ConstantParameter("headerSize") int headerSize,
+                    @ConstantParameter("fillContents") boolean fillContents,
+                    @ConstantParameter("locked") boolean locked) {
+        if (locked) {
+            return initializeArray(memory, hub, length, size, thread().or(biasedLockPattern()), headerSize, false, fillContents);
+        } else {
+            return initializeArray(memory, hub, length, size, prototypeMarkWord, headerSize, false, fillContents);
+        }
+    }
+
+    private static Object initializeArray(Word memory, Word hub, int length, int size, Word prototypeMarkWord, int headerSize, boolean isObjectArray, boolean fillContents) {
         Object result;
         if (memory == Word.zero()) {
-            newarray_stub.inc();
-            result = NewArrayStubCall.call(hub, length);
+            if (isObjectArray) {
+                anewarray_stub.inc();
+            } else {
+                newarray_stub.inc();
+            }
+            result = NewArrayStubCall.call(isObjectArray, hub, length);
         } else {
-            newarray_loopInit.inc();
+            if (isObjectArray) {
+                anewarray_loopInit.inc();
+            } else {
+                newarray_loopInit.inc();
+            }
             formatArray(hub, size, length, headerSize, memory, prototypeMarkWord, fillContents);
             result = memory.toObject();
         }
@@ -200,11 +225,10 @@ public class NewObjectSnippets implements SnippetsInterface {
     /**
      * Formats some allocated memory with an object header zeroes out the rest.
      */
-    public static void formatArray(Word hub, int size, int length, int headerSize, Word memory, Word prototypeMarkWord, boolean fillContents) {
+    private static void formatArray(Word hub, int size, int length, int headerSize, Word memory, Word prototypeMarkWord, boolean fillContents) {
         storeWord(memory, 0, markOffset(), prototypeMarkWord);
-        storeInt(memory, 0, arrayLengthOffset(), length);
-        // store hub last as the concurrent garbage collectors assume length is valid if hub field is not null
         storeWord(memory, 0, hubOffset(), hub);
+        storeInt(memory, 0, arrayLengthOffset(), length);
         if (fillContents) {
             for (int offset = headerSize; offset < size; offset += wordSize()) {
                 storeWord(memory, 0, offset, Word.zero());
@@ -216,7 +240,8 @@ public class NewObjectSnippets implements SnippetsInterface {
 
         private final ResolvedJavaMethod allocate;
         private final ResolvedJavaMethod initializeObject;
-        private final ResolvedJavaMethod initializeArray;
+        private final ResolvedJavaMethod initializeObjectArray;
+        private final ResolvedJavaMethod initializePrimitiveArray;
         private final ResolvedJavaMethod allocateArrayAndInitialize;
         private final ResolvedJavaMethod newmultiarray;
         private final TargetDescription target;
@@ -228,7 +253,8 @@ public class NewObjectSnippets implements SnippetsInterface {
             this.useTLAB = useTLAB;
             allocate = snippet("allocate", int.class);
             initializeObject = snippet("initializeObject", Word.class, Word.class, Word.class, int.class, boolean.class, boolean.class);
-            initializeArray = snippet("initializeArray", Word.class, Word.class, int.class, int.class, Word.class, int.class, boolean.class, boolean.class);
+            initializeObjectArray = snippet("initializeObjectArray", Word.class, Word.class, int.class, int.class, Word.class, int.class, boolean.class, boolean.class);
+            initializePrimitiveArray = snippet("initializePrimitiveArray", Word.class, Word.class, int.class, int.class, Word.class, int.class, boolean.class, boolean.class);
             allocateArrayAndInitialize = snippet("allocateArrayAndInitialize", int.class, int.class, int.class, int.class, ResolvedJavaType.class);
             newmultiarray = snippet("newmultiarray", Word.class, int.class, int[].class);
         }
@@ -338,11 +364,11 @@ public class NewObjectSnippets implements SnippetsInterface {
             ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
             Kind elementKind = elementType.getKind();
             final int headerSize = HotSpotRuntime.getArrayBaseOffset(elementKind);
-            Key key = new Key(initializeArray).add("headerSize", headerSize).add("fillContents", initializeNode.fillContents()).add("locked", initializeNode.locked());
+            Key key = new Key(elementKind == Kind.Object ? initializeObjectArray : initializePrimitiveArray).add("headerSize", headerSize).add("fillContents", initializeNode.fillContents()).add("locked", initializeNode.locked());
             ValueNode memory = initializeNode.memory();
             Arguments arguments = arguments("memory", memory).add("hub", hub).add("prototypeMarkWord", type.prototypeMarkWord()).add("size", initializeNode.size()).add("length", initializeNode.length());
             SnippetTemplate template = cache.get(key, assumptions);
-            Debug.log("Lowering initializeArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
+            Debug.log("Lowering initializeObjectArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, DEFAULT_REPLACER, arguments);
         }
 
@@ -368,7 +394,11 @@ public class NewObjectSnippets implements SnippetsInterface {
     private static final SnippetCounter new_loopInit = new SnippetCounter(countersNew, "tlabLoopInit", "TLAB alloc with zeroing in a loop");
     private static final SnippetCounter new_stub = new SnippetCounter(countersNew, "stub", "alloc and zeroing via stub");
 
-    private static final SnippetCounter.Group countersNewArray = GraalOptions.SnippetCounters ? new SnippetCounter.Group("NewArray") : null;
-    private static final SnippetCounter newarray_loopInit = new SnippetCounter(countersNewArray, "tlabLoopInit", "TLAB alloc with zeroing in a loop");
-    private static final SnippetCounter newarray_stub = new SnippetCounter(countersNewArray, "stub", "alloc and zeroing via stub");
+    private static final SnippetCounter.Group countersNewPrimitiveArray = GraalOptions.SnippetCounters ? new SnippetCounter.Group("NewPrimitiveArray") : null;
+    private static final SnippetCounter newarray_loopInit = new SnippetCounter(countersNewPrimitiveArray, "tlabLoopInit", "TLAB alloc with zeroing in a loop");
+    private static final SnippetCounter newarray_stub = new SnippetCounter(countersNewPrimitiveArray, "stub", "alloc and zeroing via stub");
+
+    private static final SnippetCounter.Group countersNewObjectArray = GraalOptions.SnippetCounters ? new SnippetCounter.Group("NewObjectArray") : null;
+    private static final SnippetCounter anewarray_loopInit = new SnippetCounter(countersNewObjectArray, "tlabLoopInit", "TLAB alloc with zeroing in a loop");
+    private static final SnippetCounter anewarray_stub = new SnippetCounter(countersNewObjectArray, "stub", "alloc and zeroing via stub");
 }

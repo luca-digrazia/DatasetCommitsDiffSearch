@@ -26,7 +26,7 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-import org.junit.*;
+import junit.framework.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -162,37 +162,8 @@ public abstract class GraalCompilerTest {
 
     private static int compilationId = 0;
 
-    /**
-     * Compares two given objects for {@linkplain Assert#assertEquals(Object, Object) equality}.
-     * Does a deep copy equality comparison if {@code expected} is an array.
-     */
     protected void assertEquals(Object expected, Object actual) {
-        if (expected != null && expected.getClass().isArray()) {
-            Assert.assertTrue(expected != null);
-            Assert.assertTrue(actual != null);
-            Assert.assertEquals(expected.getClass(), actual.getClass());
-            if (expected instanceof int[]) {
-                Assert.assertArrayEquals((int[]) expected, (int[]) actual);
-            } else if (expected instanceof byte[]) {
-                Assert.assertArrayEquals((byte[]) expected, (byte[]) actual);
-            } else if (expected instanceof char[]) {
-                Assert.assertArrayEquals((char[]) expected, (char[]) actual);
-            } else if (expected instanceof short[]) {
-                Assert.assertArrayEquals((short[]) expected, (short[]) actual);
-            } else if (expected instanceof float[]) {
-                Assert.assertArrayEquals((float[]) expected, (float[]) actual, 0.0f);
-            } else if (expected instanceof long[]) {
-                Assert.assertArrayEquals((long[]) expected, (long[]) actual);
-            } else if (expected instanceof double[]) {
-                Assert.assertArrayEquals((double[]) expected, (double[]) actual, 0.0d);
-            } else if (expected instanceof Object[]) {
-                Assert.assertArrayEquals((Object[]) expected, (Object[]) actual);
-            } else {
-                Assert.fail("non-array value encountered: " + expected);
-            }
-        } else {
-            Assert.assertEquals(expected, actual);
-        }
+        Assert.assertEquals(expected, actual);
     }
 
     protected void testN(int n, final String name, final Object... args) {
@@ -327,29 +298,16 @@ public abstract class GraalCompilerTest {
 
             }
         }
-
-        final int id = compilationId++;
-
-        InstalledCode installedCode = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true), new Callable<InstalledCode>() {
+        InstalledCode installedCode = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(compilationId++), true), new Callable<InstalledCode>() {
             public InstalledCode call() throws Exception {
-                final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
-                if (printCompilation) {
-                    TTY.println(String.format("@%-6d Graal %-70s %-45s %-50s ...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature()));
-                }
-                long start = System.currentTimeMillis();
                 PhasePlan phasePlan = new PhasePlan();
                 GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
                 phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
                 editPhasePlan(method, graph, phasePlan);
                 CompilationResult compResult = graalCompiler.compileMethod(method, graph, null, phasePlan, OptimisticOptimizations.ALL);
-                if (printCompilation) {
-                    TTY.println(String.format("@%-6d Graal %-70s %-45s %-50s | %4dms %5dB", id, "", "", "", System.currentTimeMillis() - start, compResult.getTargetCodeSize()));
-                }
                 return addMethod(method, compResult);
             }
         });
-
-
         cache.put(method, installedCode);
         return installedCode;
     }

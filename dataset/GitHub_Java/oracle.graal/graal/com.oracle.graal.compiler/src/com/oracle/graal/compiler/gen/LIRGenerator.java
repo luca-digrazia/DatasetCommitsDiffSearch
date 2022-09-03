@@ -173,7 +173,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                (isConstant(operand) && x.kind() == operand.getKind().getStackKind()) : operand.getKind() + " for node " + x;
         assert operand(x) == null : "operand cannot be set twice";
         assert operand != null && isLegal(operand) : "operand must be legal";
-        assert operand.getKind().getStackKind() == x.kind() : operand.getKind().getStackKind() + " must match " + x.kind();
+        assert operand.getKind().getStackKind() == x.kind();
         assert !(x instanceof VirtualObjectNode);
         nodeOperands.set(x, operand);
         return operand;
@@ -216,20 +216,13 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return LabelRef.forSuccessor(lir, currentBlock, suxIndex);
     }
 
-    /**
-     * Determines if only oop maps are required for the code generated from the LIR.
-     */
-    protected boolean needOnlyOopMaps() {
-        return false;
-    }
-
     public LIRFrameState state() {
-        assert lastState != null || needOnlyOopMaps() : "must have state before instruction";
+        assert lastState != null : "must have state before instruction";
         return stateFor(lastState, StructuredGraph.INVALID_GRAPH_ID);
     }
 
     public LIRFrameState state(long leafGraphId) {
-        assert lastState != null || needOnlyOopMaps() : "must have state before instruction";
+        assert lastState != null : "must have state before instruction";
         return stateFor(lastState, leafGraphId);
     }
 
@@ -238,9 +231,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     public LIRFrameState stateFor(FrameState state, List<StackSlot> pointerSlots, LabelRef exceptionEdge, long leafGraphId) {
-        if (needOnlyOopMaps()) {
-            return new LIRFrameState(null, null, null, null);
-        }
         return debugInfoBuilder.build(state, lockDataSlots.subList(0, currentLockCount), pointerSlots, exceptionEdge, leafGraphId);
     }
 
@@ -741,7 +731,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     protected abstract void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState);
 
-    protected abstract void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, Value targetAddress, LIRFrameState info);
+    protected abstract void emitCall(Object targetMethod, Value result, Value[] arguments, Value[] temps, Value targetAddress, LIRFrameState info);
 
     private static Value toStackKind(Value value) {
         if (value.getKind().getStackKind() != value.getKind()) {
@@ -778,7 +768,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     protected abstract LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info, Object deoptInfo);
 
     @Override
-    public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention cc, boolean canTrap, Value... args) {
+    public Variable emitCall(@SuppressWarnings("hiding") Object target, CallingConvention cc, boolean canTrap, Value... args) {
         LIRFrameState info = canTrap ? state() : null;
 
         // move the arguments into the correct location
@@ -791,7 +781,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             emitMove(arg, loc);
             argLocations[i] = loc;
         }
-        emitCall(callTarget, cc.getReturn(), argLocations, cc.getTemporaries(), Constant.forLong(0), info);
+        emitCall(target, cc.getReturn(), argLocations, cc.getTemporaries(), Constant.forLong(0), info);
 
         if (isLegal(cc.getReturn())) {
             return emitMove(cc.getReturn());
@@ -802,7 +792,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void visitRuntimeCall(RuntimeCallNode x) {
-        RuntimeCallTarget call = runtime.lookupRuntimeCall(x.getDescriptor());
+        RuntimeCall call = runtime.lookupRuntimeCall(x.getDescriptor());
         CallingConvention cc = call.getCallingConvention();
         frameMap.callsMethod(cc);
         Value resultOperand = cc.getReturn();
