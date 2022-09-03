@@ -84,7 +84,7 @@ public final class GraalOptions {
     public static final OptionKey<String> EscapeAnalyzeOnly = new OptionKey<>(null);
 
     @Option(help = "", type = OptionType.Expert)
-    public static final OptionKey<Integer> MaximumEscapeAnalysisArrayLength = new OptionKey<>(128);
+    public static final OptionKey<Integer> MaximumEscapeAnalysisArrayLength = new OptionKey<>(32);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> PEAInliningHints = new OptionKey<>(false);
@@ -195,6 +195,9 @@ public final class GraalOptions {
 
     @Option(help = "", type = OptionType.Expert)
     public static final OptionKey<Boolean> AlwaysInlineVTableStubs = new OptionKey<>(false);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionKey<Boolean> ResolveClassBeforeStaticInvoke = new OptionKey<>(false);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> CanOmitFrame = new OptionKey<>(true);

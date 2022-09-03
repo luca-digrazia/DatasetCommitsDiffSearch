@@ -36,7 +36,6 @@ import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -46,8 +45,6 @@ import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Pattern;
 
-import com.oracle.graal.pointsto.api.PointstoOptions;
-import jdk.vm.ci.meta.MetaAccessProvider;
 import org.graalvm.compiler.core.common.SuppressSVMWarnings;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.options.OptionValues;
@@ -107,38 +104,6 @@ public class Inflation extends BigBang {
         genericInterfacesMap = new HashMap<>();
         annotatedInterfacesMap = new HashMap<>();
         interfacesEncodings = new HashMap<>();
-
-        setupForbiddenTypes();
-    }
-
-    private void setupForbiddenTypes() {
-        String[] forbiddenTypesOptionValues = PointstoOptions.ReportAnalysisForbiddenType.getValue(universe.getHostVM().options());
-        Map<ResolvedJavaType, EnumSet<AnalysisType.UsageKind>> forbiddenTypes = new HashMap<>();
-        MetaAccessProvider wrappedMetaAccess = metaAccess.getWrapped();
-        for (String forbiddenTypesOptionValue : forbiddenTypesOptionValues) {
-            String[] splitted = forbiddenTypesOptionValue.split(":", 2);
-            ResolvedJavaType forbiddenType = null;
-            try {
-                forbiddenType = wrappedMetaAccess.lookupJavaType(Class.forName(splitted[0]));
-            } catch (ClassNotFoundException e) {
-                JVMCIError.shouldNotReachHere("Unknown type specified in option ReportAnalysisForbiddenType");
-            }
-            EnumSet<AnalysisType.UsageKind> usageKinds;
-            if (splitted.length == 1) {
-                usageKinds = EnumSet.allOf(AnalysisType.UsageKind.class);
-            } else {
-                usageKinds = EnumSet.noneOf( AnalysisType.UsageKind.class);
-                String[] usageKindValues = splitted[1].split("\\|");
-                for (String usageKindValue : usageKindValues) {
-                    usageKinds.add(AnalysisType.UsageKind.valueOf(usageKindValue));
-                }
-
-            }
-            forbiddenTypes.put(forbiddenType, usageKinds);
-        }
-        if (!forbiddenTypes.isEmpty()) {
-            AnalysisType.setForbiddenTypes(forbiddenTypes);
-        }
     }
 
     public SVMAnalysisPolicy svmAnalysisPolicy() {
