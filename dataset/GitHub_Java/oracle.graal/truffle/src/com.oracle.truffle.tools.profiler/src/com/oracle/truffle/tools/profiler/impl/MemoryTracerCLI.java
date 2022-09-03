@@ -24,25 +24,28 @@
  */
 package com.oracle.truffle.tools.profiler.impl;
 
+import com.oracle.truffle.api.Option;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.tools.profiler.CallTreeNode;
 import com.oracle.truffle.tools.profiler.MemoryTracer;
-import org.graalvm.options.OptionDescriptor;
-import org.graalvm.options.OptionDescriptors;
+import com.oracle.truffle.tools.profiler.ProfilerNode;
+import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionType;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-public class MemoryTracerCLI extends ProfilerCLI {
+@Option.Group(MemoryTracerInstrument.ID)
+class MemoryTracerCLI extends ProfilerCLI {
 
     enum Output {
         TYPE_HISTOGRAM,
@@ -51,59 +54,63 @@ public class MemoryTracerCLI extends ProfilerCLI {
     }
 
     static final OptionType<Output> CLI_OUTPUT_TYPE = new OptionType<>("Format",
-            Output.LOCATION_HISTOGRAM,
-            new Function<String, Output>() {
-                @Override
-                public Output apply(String s) {
-                    switch (s) {
-                        case "typehistogram":
-                            return Output.TYPE_HISTOGRAM;
-                        case "histogram":
-                            return Output.LOCATION_HISTOGRAM;
-                        case "calltree":
-                            return Output.CALLTREE;
-                        default:
-                            return null;
-                    }
-                }
-            },
-            new Consumer<Output>() {
-                @Override
-                public void accept(Output output) {
-                    if (output == null) {
-                        throw new IllegalArgumentException();
-                    }
-                }
-            });
+                    Output.LOCATION_HISTOGRAM,
+                    new Function<String, Output>() {
+                        @Override
+                        public Output apply(String s) {
+                            switch (s) {
+                                case "typehistogram":
+                                    return Output.TYPE_HISTOGRAM;
+                                case "histogram":
+                                    return Output.LOCATION_HISTOGRAM;
+                                case "calltree":
+                                    return Output.CALLTREE;
+                                default:
+                                    return null;
+                            }
+                        }
+                    },
+                    new Consumer<Output>() {
+                        @Override
+                        public void accept(Output output) {
+                            if (output == null) {
+                                throw new IllegalArgumentException();
+                            }
+                        }
+                    });
 
-    static final OptionKey<Boolean> ENABLED = new OptionKey<>(false);
-    static final OptionKey<Output> OUTPUT = new OptionKey<>(Output.LOCATION_HISTOGRAM, CLI_OUTPUT_TYPE);
-    static final OptionKey<Integer> STACK_LIMIT = new OptionKey<>(10000);
-    static final OptionKey<Boolean> TRACE_ROOTS = new OptionKey<>(true);
-    static final OptionKey<Boolean> TRACE_STATEMENTS = new OptionKey<>(false);
-    static final OptionKey<Boolean> TRACE_CALLS = new OptionKey<>(false);
-    static final OptionKey<Boolean> TRACE_INTERNAL = new OptionKey<>(false);
-    static final OptionKey<Object[]> FILTER_ROOT = new OptionKey<>(new Object[0], WILDCARD_FILTER_TYPE);
-    static final OptionKey<Object[]> FILTER_FILE = new OptionKey<>(new Object[0], WILDCARD_FILTER_TYPE);
-    static final OptionKey<String> FILTER_LANGUAGE = new OptionKey<>("");
+    @Option(name = "", help = "Enable the Memory Tracer (default:false).", category = OptionCategory.USER) static final OptionKey<Boolean> ENABLED = new OptionKey<>(false);
 
-    static void handleOutput(TruffleInstrument.Env env, MemoryTracer tracer, OptionDescriptors descriptors) {
+    @Option(name = "Output", help = "Print a 'typehistogram', 'histogram' or 'calltree' as output (default:histogram).", category = OptionCategory.USER) static final OptionKey<Output> OUTPUT = new OptionKey<>(
+                    Output.LOCATION_HISTOGRAM, CLI_OUTPUT_TYPE);
+
+    @Option(name = "StackLimit", help = "Maximum number of maximum stack elements.", category = OptionCategory.USER) static final OptionKey<Integer> STACK_LIMIT = new OptionKey<>(10000);
+
+    @Option(name = "TraceRoots", help = "Capture roots when tracing (default:true).", category = OptionCategory.USER) static final OptionKey<Boolean> TRACE_ROOTS = new OptionKey<>(true);
+
+    @Option(name = "TraceStatements", help = "Capture statements when tracing (default:false).", category = OptionCategory.USER) static final OptionKey<Boolean> TRACE_STATEMENTS = new OptionKey<>(
+                    false);
+
+    @Option(name = "TraceCalls", help = "Capture calls when tracing (default:false).", category = OptionCategory.USER) static final OptionKey<Boolean> TRACE_CALLS = new OptionKey<>(false);
+
+    @Option(name = "TraceInternal", help = "Capture internal elements (default:false).", category = OptionCategory.USER) static final OptionKey<Boolean> TRACE_INTERNAL = new OptionKey<>(false);
+
+    @Option(name = "FilterRootName", help = "Wildcard filter for program roots. (eg. Math.*, default:*).", category = OptionCategory.USER) static final OptionKey<Object[]> FILTER_ROOT = new OptionKey<>(
+                    new Object[0], WILDCARD_FILTER_TYPE);
+
+    @Option(name = "FilterFile", help = "Wildcard filter for source file paths. (eg. *program*.sl, default:*).", category = OptionCategory.USER) static final OptionKey<Object[]> FILTER_FILE = new OptionKey<>(
+                    new Object[0], WILDCARD_FILTER_TYPE);
+
+    @Option(name = "FilterLanguage", help = "Only profile languages with mime-type. (eg. +, default:no filter).", category = OptionCategory.USER) static final OptionKey<String> FILTER_LANGUAGE = new OptionKey<>(
+                    "");
+
+    static void handleOutput(TruffleInstrument.Env env, MemoryTracer tracer) {
         PrintStream out = new PrintStream(env.out());
         if (tracer.hasStackOverflowed()) {
             out.println("-------------------------------------------------------------------------------- ");
             out.println("ERROR: Shadow stack has overflowed its capacity of " + env.getOptions().get(STACK_LIMIT) + " during execution!");
             out.println("The gathered data is incomplete and incorrect!");
-            String name = "";
-            Iterator<OptionDescriptor> iterator = descriptors.iterator();
-            while (iterator.hasNext()) {
-                OptionDescriptor descriptor = iterator.next();
-                if (descriptor.getKey().equals(STACK_LIMIT)) {
-                    name = descriptor.getName();
-                    break;
-                }
-            }
-            assert !name.equals("");
-            out.println("Use --" + name + "=<" + STACK_LIMIT.getType().getName() + "> to set stack capacity.");
+            out.println("Use --" + MemoryTracerInstrument.ID + ".StackLimit=<" + STACK_LIMIT.getType().getName() + "> to set stack capacity.");
             out.println("-------------------------------------------------------------------------------- ");
             return;
         }
@@ -120,8 +127,29 @@ public class MemoryTracerCLI extends ProfilerCLI {
         }
     }
 
+    private static Map<String, List<MemoryTracer.AllocationEventInfo>> computeMetaObjectHistogram(MemoryTracer tracer) {
+        Map<String, List<MemoryTracer.AllocationEventInfo>> histogram = new HashMap<>();
+        computeMetaObjectHistogramImpl(tracer.getRootNodes(), histogram);
+        return histogram;
+    }
+
+    private static void computeMetaObjectHistogramImpl(Collection<ProfilerNode<MemoryTracer.Payload>> children, Map<String, List<MemoryTracer.AllocationEventInfo>> histogram) {
+        for (ProfilerNode<MemoryTracer.Payload> treeNode : children) {
+            for (MemoryTracer.AllocationEventInfo info : treeNode.getPayload().getEvents()) {
+                List<MemoryTracer.AllocationEventInfo> nodes = histogram.computeIfAbsent(info.getMetaObjectString(), new Function<String, List<MemoryTracer.AllocationEventInfo>>() {
+                    @Override
+                    public List<MemoryTracer.AllocationEventInfo> apply(String s) {
+                        return new ArrayList<>();
+                    }
+                });
+                nodes.add(info);
+            }
+            computeMetaObjectHistogramImpl(treeNode.getChildren(), histogram);
+        }
+    }
+
     private static void printMetaObjectHistogram(PrintStream out, MemoryTracer tracer) {
-        final Map<String, List<MemoryTracer.AllocationEventInfo>> histogram = tracer.computeMetaObjectHistogram();
+        final Map<String, List<MemoryTracer.AllocationEventInfo>> histogram = computeMetaObjectHistogram(tracer);
         final List<String> keys = new ArrayList<>(histogram.keySet());
         keys.sort(new Comparator<String>() {
             @Override
@@ -152,14 +180,34 @@ public class MemoryTracerCLI extends ProfilerCLI {
         out.println(sep);
     }
 
+    private static Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> computeSourceLocationHistogram(MemoryTracer tracer) {
+        Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> histogram = new HashMap<>();
+        computeSourceLocationHistogramImpl(tracer.getRootNodes(), histogram);
+        return histogram;
+    }
+
+    private static void computeSourceLocationHistogramImpl(Collection<ProfilerNode<MemoryTracer.Payload>> children, Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> histogram) {
+        for (ProfilerNode<MemoryTracer.Payload> treeNode : children) {
+            List<ProfilerNode<MemoryTracer.Payload>> nodes = histogram.computeIfAbsent(new SourceLocation(treeNode.getSourceSection(), treeNode.getRootName()),
+                            new Function<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>>() {
+                                @Override
+                                public List<ProfilerNode<MemoryTracer.Payload>> apply(SourceLocation sourceLocation) {
+                                    return new ArrayList<>();
+                                }
+                            });
+            nodes.add(treeNode);
+            computeSourceLocationHistogramImpl(treeNode.getChildren(), histogram);
+        }
+    }
+
     private static void printLocationHistogram(PrintStream out, MemoryTracer tracer) {
-        final Map<SourceLocation, List<CallTreeNode<MemoryTracer.AllocationPayload>>> histogram = tracer.computeSourceLocationHistogram();
+        final Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> histogram = computeSourceLocationHistogram(tracer);
         final List<SourceLocation> keys = getSortedSourceLocations(histogram);
         int nameMax = 1;
-        Iterator<List<CallTreeNode<MemoryTracer.AllocationPayload>>> iterator = histogram.values().iterator();
+        Iterator<List<ProfilerNode<MemoryTracer.Payload>>> iterator = histogram.values().iterator();
         while (iterator.hasNext()) {
-            List<CallTreeNode<MemoryTracer.AllocationPayload>> callTreeNodes = iterator.next();
-            nameMax = Math.max(nameMax, callTreeNodes.get(0).getRootName().length());
+            List<ProfilerNode<MemoryTracer.Payload>> profilerNodes = iterator.next();
+            nameMax = Math.max(nameMax, profilerNodes.get(0).getRootName().length());
         }
         final long totalAllocations = getTotalAllocationCount(tracer);
 
@@ -175,17 +223,17 @@ public class MemoryTracerCLI extends ProfilerCLI {
         out.println(sep);
 
         for (SourceLocation location : keys) {
-            List<CallTreeNode<MemoryTracer.AllocationPayload>> callTreeNodes = histogram.get(location);
+            List<ProfilerNode<MemoryTracer.Payload>> profilerNodes = histogram.get(location);
             long self = 0;
             long total = 0;
-            for (CallTreeNode<MemoryTracer.AllocationPayload> node : callTreeNodes) {
-                MemoryTracer.AllocationPayload payload = node.getPayload();
+            for (ProfilerNode<MemoryTracer.Payload> node : profilerNodes) {
+                MemoryTracer.Payload payload = node.getPayload();
                 self += payload.getEvents().size();
                 total += node.isRecursive() ? 0 : payload.getTotalAllocations();
             }
             String selfCount = String.format("%d %5.1f%%", self, (double) self * 100 / totalAllocations);
             String totalCount = String.format("%d %5.1f%%", total, (double) total * 100 / totalAllocations);
-            String output = String.format(format, callTreeNodes.get(0).getRootName(), selfCount, totalCount, getShortDescription(location.getSourceSection()));
+            String output = String.format(format, profilerNodes.get(0).getRootName(), selfCount, totalCount, getShortDescription(location.getSourceSection()));
             out.println(output);
         }
         out.println(sep);
@@ -205,39 +253,39 @@ public class MemoryTracerCLI extends ProfilerCLI {
         out.println(sep);
         out.println(title);
         out.println(sep);
-        for (CallTreeNode<MemoryTracer.AllocationPayload> node : tracer.getRootNodes()) {
+        for (ProfilerNode<MemoryTracer.Payload> node : tracer.getRootNodes()) {
             printCallTree(node, format, 0, totalAllocations, out);
         }
         out.println(sep);
     }
 
-    private static void printCallTree(CallTreeNode<MemoryTracer.AllocationPayload> node, String format, int depth, long totalAllocations, PrintStream out) {
+    private static void printCallTree(ProfilerNode<MemoryTracer.Payload> node, String format, int depth, long totalAllocations, PrintStream out) {
         String padding = repeat("  ", depth);
-        MemoryTracer.AllocationPayload payload = node.getPayload();
+        MemoryTracer.Payload payload = node.getPayload();
         String selfCount = String.format("%d %5.1f%%", payload.getEvents().size(), (double) payload.getEvents().size() * 100 / totalAllocations);
         String count = String.format("%d %5.1f%%", payload.getTotalAllocations(), (double) payload.getTotalAllocations() * 100 / totalAllocations);
         String output = String.format(format, padding + node.getRootName(), count, selfCount, getShortDescription(node.getSourceSection()));
         out.println(output);
-        for (CallTreeNode<MemoryTracer.AllocationPayload> child : node.getChildren()) {
+        for (ProfilerNode<MemoryTracer.Payload> child : node.getChildren()) {
             printCallTree(child, format, depth + 1, totalAllocations, out);
         }
     }
 
-    private static List<SourceLocation> getSortedSourceLocations(Map<SourceLocation, List<CallTreeNode<MemoryTracer.AllocationPayload>>> histogram) {
+    private static List<SourceLocation> getSortedSourceLocations(Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> histogram) {
         List<SourceLocation> keys = new ArrayList<>(histogram.keySet());
         Collections.sort(keys, new Comparator<SourceLocation>() {
             @Override
             public int compare(SourceLocation sl1, SourceLocation sl2) {
                 int sl1Self = 0;
                 int sl1Total = 0;
-                for (CallTreeNode<MemoryTracer.AllocationPayload> node : histogram.get(sl1)) {
+                for (ProfilerNode<MemoryTracer.Payload> node : histogram.get(sl1)) {
                     sl1Self += node.getPayload().getEvents().size();
                     sl1Total += node.isRecursive() ? 0 : node.getPayload().getTotalAllocations();
                 }
 
                 int sl2Self = 0;
                 int sl2Total = 0;
-                for (CallTreeNode<MemoryTracer.AllocationPayload> node : histogram.get(sl2)) {
+                for (ProfilerNode<MemoryTracer.Payload> node : histogram.get(sl2)) {
                     sl2Self += node.getPayload().getEvents().size();
                     sl2Total += node.isRecursive() ? 0 : node.getPayload().getTotalAllocations();
                 }
@@ -254,15 +302,15 @@ public class MemoryTracerCLI extends ProfilerCLI {
 
     private static int getFirstFieldOfTitleMax(MemoryTracer tracer) {
         int titleMax = 10;
-        for (CallTreeNode<MemoryTracer.AllocationPayload> node : tracer.getRootNodes()) {
+        for (ProfilerNode<MemoryTracer.Payload> node : tracer.getRootNodes()) {
             titleMax = Math.max(titleMax, getFirstFieldOfTitleMaxRec(node, 0, titleMax));
         }
         return titleMax;
     }
 
-    private static int getFirstFieldOfTitleMaxRec(CallTreeNode<MemoryTracer.AllocationPayload> node, int depth, int max) {
+    private static int getFirstFieldOfTitleMaxRec(ProfilerNode<MemoryTracer.Payload> node, int depth, int max) {
         int newMax = Math.max(max, node.getRootName().length() + 2 * depth);
-        for (CallTreeNode<MemoryTracer.AllocationPayload> child : node.getChildren()) {
+        for (ProfilerNode<MemoryTracer.Payload> child : node.getChildren()) {
             newMax = Math.max(newMax, getFirstFieldOfTitleMaxRec(child, depth + 1, newMax));
         }
         return newMax;
@@ -270,7 +318,7 @@ public class MemoryTracerCLI extends ProfilerCLI {
 
     private static long getTotalAllocationCount(MemoryTracer tracer) {
         long sum = 0;
-        for (CallTreeNode<MemoryTracer.AllocationPayload> node : tracer.getRootNodes()) {
+        for (ProfilerNode<MemoryTracer.Payload> node : tracer.getRootNodes()) {
             sum += node.getPayload().getTotalAllocations();
         }
         return sum;
