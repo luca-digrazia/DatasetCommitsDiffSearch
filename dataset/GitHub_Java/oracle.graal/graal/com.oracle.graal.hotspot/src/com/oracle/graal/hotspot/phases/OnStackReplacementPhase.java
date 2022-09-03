@@ -22,39 +22,26 @@
  */
 package com.oracle.graal.hotspot.phases;
 
-import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Required;
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.runtime.JVMCICompiler;
+import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.loop.LoopEx;
-import com.oracle.graal.loop.LoopsData;
-import com.oracle.graal.loop.phases.LoopTransformations;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.EntryMarkerNode;
-import com.oracle.graal.nodes.EntryProxyNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StartNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.OSRLocalNode;
-import com.oracle.graal.nodes.extended.OSRStartNode;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.Phase;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.loop.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
 
 public class OnStackReplacementPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        if (graph.getEntryBCI() == JVMCICompiler.INVOCATION_ENTRY_BCI) {
+        if (graph.getEntryBCI() == StructuredGraph.INVOCATION_ENTRY_BCI) {
             // This happens during inlining in a OSR method, because the same phase plan will be
             // used.
             return;
@@ -68,7 +55,7 @@ public class OnStackReplacementPhase extends Phase {
                 throw new BailoutException("No OnStackReplacementNode generated");
             }
             if (osrNodes.count() > 1) {
-                throw new JVMCIError("Multiple OnStackReplacementNodes generated");
+                throw new GraalInternalError("Multiple OnStackReplacementNodes generated");
             }
             if (osr.stateAfter().locksSize() != 0) {
                 throw new BailoutException("OSR with locks not supported");
@@ -91,7 +78,7 @@ public class OnStackReplacementPhase extends Phase {
             LoopTransformations.peel(osrLoop);
             osr.replaceAtUsages(InputType.Guard, AbstractBeginNode.prevBegin((FixedNode) osr.predecessor()));
             for (Node usage : osr.usages().snapshot()) {
-                EntryProxyNode proxy = (EntryProxyNode) usage;
+                ProxyNode proxy = (ProxyNode) usage;
                 proxy.replaceAndDelete(proxy.value());
             }
             GraphUtil.removeFixedWithUnusedInputs(osr);
