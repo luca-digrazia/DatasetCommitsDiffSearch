@@ -34,6 +34,7 @@ import java.io.StringReader;
 import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -299,29 +300,22 @@ public class SourceTest {
     }
 
     @Test
-    public void subSourceHashAndEquals() {
-        Source src = Source.fromText("One Two Three", "counting.en");
-        Source one = Source.subSource(src, 0, 3);
-        Source two = Source.subSource(src, 4, 3);
-        Source three = Source.subSource(src, 8);
+    public void normalSourceIsntInternal() throws IOException {
+        Source source = Source.newWithText("anything")
+            .mimeType("text/plain")
+            .build();
 
-        Source oneSnd = Source.subSource(src, 0, 3);
-        Source twoSnd = Source.subSource(src, 4, 3);
-        Source threeSnd = Source.subSource(src, 8);
+        assertFalse("Not internal", source.isInternal());
+    }
 
-        assertNotEquals("One: " + one.getCode() + " two: " + two.getCode(), one, two);
-        assertNotEquals(three, two);
-        assertNotEquals(one, three);
+    @Test
+    public void markSourceAsInternal() throws IOException {
+        Source source = Source.newWithText("anything internal")
+            .mimeType("text/plain")
+            .internal(true)
+            .build();
 
-        assertNotEquals(oneSnd, twoSnd);
-
-        assertEquals(one, oneSnd);
-        assertEquals(two, twoSnd);
-        assertEquals(three, threeSnd);
-
-        assertEquals(one.hashCode(), oneSnd.hashCode());
-        assertEquals(two.hashCode(), twoSnd.hashCode());
-        assertEquals(three.hashCode(), threeSnd.hashCode());
+        assertTrue("This source is internal", source.isInternal());
     }
 
     private static void assertGC(String msg, WeakReference<?> ref) {
