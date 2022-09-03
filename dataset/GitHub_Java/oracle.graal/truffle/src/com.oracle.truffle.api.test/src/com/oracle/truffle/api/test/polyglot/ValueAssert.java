@@ -41,7 +41,6 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -54,6 +53,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.Proxy;
@@ -80,25 +80,32 @@ public class ValueAssert {
     };
     private static final TypeLiteral<Map<Double, Object>> DOUBLE_OBJECT_MAP = new TypeLiteral<Map<Double, Object>>() {
     };
+    private static final TypeLiteral<Map<CharSequence, Object>> CHAR_SEQUENCE_OBJECT_MAP = new TypeLiteral<Map<CharSequence, Object>>() {
+    };
     private static final TypeLiteral<Function<Object, Object>> FUNCTION = new TypeLiteral<Function<Object, Object>>() {
     };
 
     public static void assertValue(Context context, Value value) {
-        assertValue(context, value, detectSupportedTypes(value));
+        assertValue(context, value, null, detectSupportedTypes(value));
     }
 
     public static void assertValue(Context context, Value value, Trait... expectedTypes) {
+        assertValue(context, value, null, expectedTypes);
+    }
+
+    public static void assertValue(Context context, Value value, Object[] arguments, Trait... expectedTypes) {
         try {
-            assertValueImpl(context, value, expectedTypes);
+            assertValueImpl(context, value, arguments, expectedTypes);
         } catch (AssertionError e) {
             throw new AssertionError(String.format("assertValue: %s traits: %s", value, Arrays.asList(expectedTypes)), e);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static void assertValueImpl(Context context, Value value, Trait... expectedTypes) {
+    private static void assertValueImpl(Context context, Value value, Object[] arguments, Trait... expectedTypes) {
         assertNotNull(value.toString());
         assertNotNull(value.getMetaObject());
+        assertHostObject(context, value.as(Object.class));
 
         assertSame(value, value.as(Value.class));
 
@@ -132,37 +139,30 @@ public class ValueAssert {
                     break;
                 case EXECUTABLE:
                     assertTrue(msg, value.canExecute());
-                    assertFunctionalInterfaceMapping(value);
+                    assertFunctionalInterfaceMapping(context, value, arguments);
+                    if (arguments != null) {
+                        Value result = value.execute(arguments);
+                        assertValue(context, result);
+                    }
                     break;
                 case INSTANTIABLE:
                     assertTrue(msg, value.canInstantiate());
                     value.as(Function.class);
+                    if (arguments != null) {
+                        Value result = value.newInstance(arguments);
+                        assertValue(context, result);
+                    }
                     // otherwise its ambiguous with the executable semantics.
                     if (!value.canExecute()) {
-                        assertFunctionalInterfaceMapping(value);
+                        assertFunctionalInterfaceMapping(context, value, arguments);
                     }
                     break;
+
                 case HOST_OBJECT:
                     assertTrue(msg, value.isHostObject());
                     Object hostObject = value.asHostObject();
                     assertTrue(!(hostObject instanceof Proxy));
-
-                    if (hostObject != null && !java.lang.reflect.Proxy.isProxyClass(hostObject.getClass())) {
-                        if (hostObject instanceof Class) {
-                            for (java.lang.reflect.Method m : ((Class<?>) hostObject).getMethods()) {
-                                if (Modifier.isPublic(m.getModifiers()) && Modifier.isStatic(m.getModifiers())) {
-                                    assertTrue(m.getName(), value.hasMember(m.getName()));
-                                }
-                            }
-                        } else {
-                            for (java.lang.reflect.Method m : hostObject.getClass().getMethods()) {
-                                if (Modifier.isPublic(m.getModifiers()) && !Modifier.isStatic(m.getModifiers())) {
-                                    assertTrue(m.getName(), value.hasMember(m.getName()));
-                                }
-                            }
-                        }
-                    }
-
+                    // TODO assert mapping to interfaces
                     break;
                 case PROXY_OBJECT:
                     assertTrue(msg, value.isProxyObject());
@@ -377,7 +377,7 @@ public class ValueAssert {
         List<Object> receivedObjects = new ArrayList<>();
         Map<Long, Object> receivedObjectsLongMap = new HashMap<>();
         Map<Integer, Object> receivedObjectsIntMap = new HashMap<>();
-        for (long i = 0L; i < value.getArraySize(); i++) {
+        for (long i = 0l; i < value.getArraySize(); i++) {
             Value arrayElement = value.getArrayElement(i);
             receivedObjects.add(arrayElement.as(Object.class));
             receivedObjectsLongMap.put(i, arrayElement.as(Object.class));
@@ -397,6 +397,8 @@ public class ValueAssert {
         } else {
             assertFails(() -> value.as(OBJECT_OBJECT_MAP), ClassCastException.class);
         }
+
+        // TODO assert mappings with other key types than Long and Integer
 
         Map<Long, Object> objectMap2 = value.as(LONG_OBJECT_MAP);
         Map<Integer, Object> objectMap3 = value.as(INTEGER_OBJECT_MAP);
@@ -419,7 +421,7 @@ public class ValueAssert {
         }
 
         // write them all
-        for (long i = 0L; i < value.getArraySize(); i++) {
+        for (long i = 0l; i < value.getArraySize(); i++) {
             value.setArrayElement(i, value.getArrayElement(i));
         }
 
@@ -536,15 +538,16 @@ public class ValueAssert {
     }
 
     @SuppressWarnings({"unchecked", "cast"})
-    private static void assertFunctionalInterfaceMapping(Value value) {
+    private static void assertFunctionalInterfaceMapping(Context context, Value value, Object[] arguments) {
+        Function<Object, Object> f1;
         if (value.isHostObject()) {
-            assertNotNull(value.as(Function.class));
+            f1 = value.as(Function.class);
         } else {
-            assertNotNull((Function<Object, Object>) value.as(Object.class));
+            f1 = (Function<Object, Object>) value.as(Object.class);
         }
 
-        assertNotNull(value.as(Function.class));
-        assertNotNull(value.as(IsFunctionalInterfaceVarArgs.class));
+        Function<Object[], Object> f2 = value.as(Function.class);
+        IsFunctionalInterfaceVarArgs f3 = value.as(IsFunctionalInterfaceVarArgs.class);
 
         // mapping an empty interface works with any value.
         if (value.isNull()) {
@@ -561,6 +564,15 @@ public class ValueAssert {
             assertFails(() -> value.as(NonFunctionalInterface.class).foobarbaz(), UnsupportedOperationException.class);
         }
 
+        if (arguments != null) {
+            assertHostObject(context, f1.apply(arguments));
+            assertHostObject(context, f2.apply(arguments));
+            assertHostObject(context, f3.foobarbaz(arguments));
+        }
+    }
+
+    private static void assertHostObject(Context context, Object value) {
+        // TODO
     }
 
     private static Trait[] detectSupportedTypes(Value value) {
