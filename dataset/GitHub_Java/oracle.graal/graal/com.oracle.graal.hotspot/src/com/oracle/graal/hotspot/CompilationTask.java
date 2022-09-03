@@ -134,8 +134,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                         if (graph == null || entryBCI != INVOCATION_ENTRY_BCI) {
                             graph = new StructuredGraph(method, entryBCI);
                         } else {
-                            // Compiling an intrinsic graph - must clone the graph
-                            graph = graph.copy();
+                            // Compiling an intrinsic graph
                         }
                         return graalRuntime.getCompiler().compileMethod(method, graph, graalRuntime.getCache(), plan, optimisticOpts);
                     }
