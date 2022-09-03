@@ -36,9 +36,12 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Spliterators;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.debug.GraalError;
@@ -473,19 +476,14 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         }
     }
 
-    public Iterable<Node> nodeIterable(TruffleInlining inliningDecision) {
-        Iterator<Node> iterator = nodeIterator(inliningDecision);
-        return () -> iterator;
-    }
-
-    public Iterator<Node> nodeIterator(TruffleInlining inliningDecision) {
+    public Stream<Node> nodeStream(TruffleInlining inliningDecision) {
         Iterator<Node> iterator;
         if (inliningDecision != null) {
             iterator = inliningDecision.makeNodeIterator(this);
         } else {
             iterator = NodeUtil.makeRecursiveIterator(this.getRootNode());
         }
-        return iterator;
+        return StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, 0), false);
     }
 
     public final int getNonTrivialNodeCount() {
