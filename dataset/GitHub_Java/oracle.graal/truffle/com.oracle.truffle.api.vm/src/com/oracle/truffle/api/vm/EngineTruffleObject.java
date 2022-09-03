@@ -24,25 +24,35 @@
  */
 package com.oracle.truffle.api.vm;
 
+import java.util.Objects;
+
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
-import java.io.IOException;
-import java.util.Objects;
 
 final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory {
     private final PolyglotEngine engine;
     private final TruffleObject delegate;
 
-    EngineTruffleObject(PolyglotEngine engine, TruffleObject obj) {
+    private EngineTruffleObject(PolyglotEngine engine, TruffleObject obj) {
         this.engine = engine;
         this.delegate = obj;
+    }
+
+    static Object wrap(PolyglotEngine engine, Object value) {
+        Object obj = ConvertedObject.value(value);
+        if (obj instanceof TruffleObject) {
+            return new EngineTruffleObject(engine, (TruffleObject) obj);
+        } else {
+            return obj;
+        }
     }
 
     @Override
@@ -54,14 +64,29 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
         return delegate;
     }
 
-    @Override
-    public boolean canHandle(TruffleObject obj) {
-        return true;
+    PolyglotEngine engine() {
+        return engine;
+    }
+
+    void assertEngine(PolyglotEngine other) {
+        if (this.engine != other) {
+            throwEngine(other);
+        }
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private void throwEngine(PolyglotEngine other) throws IllegalArgumentException {
+        throw new IllegalArgumentException("This object comes from " + this.engine + " and cannot be sent to " + other);
     }
 
     @Override
-    public CallTarget accessMessage(Message tree) {
-        return Truffle.getRuntime().createCallTarget(new WrappingRoot(TruffleLanguage.class, tree.createNode()));
+    public boolean canHandle(TruffleObject obj) {
+        return obj instanceof EngineTruffleObject;
+    }
+
+    @Override
+    public CallTarget accessMessage(Message message) {
+        return Truffle.getRuntime().createCallTarget(new WrappingRoot(engine, message));
     }
 
     @Override
@@ -89,24 +114,51 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
         return delegate.toString();
     }
 
+    /*
+     * This wrapper is responsible for unwrapping the receiver, potentially executing on the
+     * executor and wrapping again the return value.
+     */
     static class WrappingRoot extends RootNode {
-        @Child private Node foreignAccess;
 
-        @SuppressWarnings("rawtypes")
-        WrappingRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess) {
-            super(lang, null, null);
-            this.foreignAccess = foreignAccess;
+        private final PolyglotEngine engine;
+        @Child private DirectCallNode messageCallNode;
+
+        WrappingRoot(PolyglotEngine engine, Message foreignMessage) {
+            super(null);
+            this.engine = engine;
+            this.messageCallNode = DirectCallNode.create(PolyglotRootNode.createSend(engine, foreignMessage));
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
             EngineTruffleObject engineTruffleObject = (EngineTruffleObject) ForeignAccess.getReceiver(frame);
-            try {
-                return engineTruffleObject.engine.invokeForeign(foreignAccess, frame, engineTruffleObject.delegate);
-            } catch (IOException ex) {
-                throw new IllegalArgumentException(ex);
+            Object[] oldArguments = frame.getArguments();
+            final Object[] arguments = new Object[oldArguments.length];
+            TruffleObject delegate = engineTruffleObject.getDelegate();
+            arguments[0] = delegate;
+            System.arraycopy(oldArguments, 1, arguments, 1, oldArguments.length - 1);
+            Object res;
+            if (engine.executor() == null) {
+                res = messageCallNode.call(arguments);
+            } else {
+                res = invokeOnExecutor(arguments);
             }
+            return wrap(engine, res);
         }
+
+        @TruffleBoundary
+        private Object invokeOnExecutor(final Object[] arguments) {
+            ComputeInExecutor<Object> compute = new ComputeInExecutor<Object>(engine.executor()) {
+                @SuppressWarnings("try")
+                @Override
+                protected Object compute() {
+                    return messageCallNode.call(arguments);
+                }
+            };
+            compute.perform();
+            return compute.get();
+        }
+
     }
 
 }
