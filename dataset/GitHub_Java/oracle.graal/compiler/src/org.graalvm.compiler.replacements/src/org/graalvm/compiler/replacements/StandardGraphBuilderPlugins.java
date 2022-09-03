@@ -346,6 +346,7 @@ public class StandardGraphBuilderPlugins {
 
     private static void registerFloatPlugins(InvocationPlugins plugins, BytecodeProvider bytecodeProvider) {
         Registration r = new Registration(plugins, Float.class, bytecodeProvider);
+        r.registerMethodSubstitution(FloatSubstitutions.class, "isNan", float.class);
         r.registerMethodSubstitution(FloatSubstitutions.class, "floatToIntBits", float.class);
         r.register1("floatToRawIntBits", float.class, new InvocationPlugin() {
             @Override
@@ -365,6 +366,7 @@ public class StandardGraphBuilderPlugins {
 
     private static void registerDoublePlugins(InvocationPlugins plugins, BytecodeProvider bytecodeProvider) {
         Registration r = new Registration(plugins, Double.class, bytecodeProvider);
+        r.registerMethodSubstitution(DoubleSubstitutions.class, "isNan", double.class);
         r.registerMethodSubstitution(DoubleSubstitutions.class, "doubleToLongBits", double.class);
         r.register1("doubleToRawLongBits", double.class, new InvocationPlugin() {
             @Override
