@@ -33,6 +33,7 @@ import com.oracle.truffle.codegen.processor.node.NodeFieldData.FieldKind;
 import com.oracle.truffle.codegen.processor.template.*;
 import com.oracle.truffle.codegen.processor.typesystem.*;
 
+
 public class NodeData extends Template {
 
     private NodeData parent;
@@ -107,6 +108,7 @@ public class NodeData extends Template {
 
         return methods;
     }
+
 
     public TemplateMethod[] getSpecializationListeners() {
         return specializationListeners;
@@ -237,7 +239,8 @@ public class NodeData extends Template {
     public boolean needsRewrites(ProcessorContext context) {
         boolean needsRewrites = false;
         for (NodeFieldData field : getFields()) {
-            if (field.getExecutionKind() == ExecutionKind.DEFAULT || field.getExecutionKind() == ExecutionKind.SHORT_CIRCUIT) {
+            if (field.getExecutionKind() == ExecutionKind.DEFAULT
+                            || field.getExecutionKind() == ExecutionKind.SHORT_CIRCUIT) {
                 if (!field.getNodeData().hasUnexpectedExecutableTypes(context)) {
                     continue;
                 }
@@ -325,5 +328,7 @@ public class NodeData extends Template {
         }
         return null;
     }
+
+
 
 }
