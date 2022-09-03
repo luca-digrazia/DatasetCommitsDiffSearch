@@ -266,16 +266,13 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
         public T visitFrame(InspectedFrame frame) {
             if (frame.isMethod(callTargetMethod)) {
-                try {
-                    if (skipFrames == 0) {
-                        return visitor.visitFrame(new GraalFrameInstance(first, frame, callNodeFrame));
-                    } else {
-                        skipFrames--;
-                    }
-                } finally {
-                    callNodeFrame = null;
-                    first = false;
+                if (skipFrames == 0) {
+                    return visitor.visitFrame(new GraalFrameInstance(first, frame, callNodeFrame));
+                } else {
+                    skipFrames--;
                 }
+                first = false;
+                callNodeFrame = null;
             } else if (frame.isMethod(callNodeMethod)) {
                 callNodeFrame = frame;
             }
