@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.DebugCloseable;
@@ -43,7 +44,6 @@ import org.graalvm.compiler.graph.Graph.Mark;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeBitMap;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
@@ -76,7 +76,6 @@ import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
-import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -172,7 +171,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
         @Override
         public GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
-            return createGuard(before, condition, deoptReason, action, JavaConstant.NULL_POINTER, false, null);
+            return createGuard(before, condition, deoptReason, action, JavaConstant.NULL_POINTER, false);
         }
 
         @Override
@@ -181,8 +180,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
 
         @Override
-        public GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation, boolean negated,
-                        NodeSourcePosition noDeoptSucccessorPosition) {
+        public GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation, boolean negated) {
             StructuredGraph graph = before.graph();
             if (OptEliminateGuards.getValue(graph.getOptions())) {
                 for (Node usage : condition.usages()) {
@@ -192,7 +190,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                 }
             }
             if (!condition.graph().getGuardsStage().allowsFloatingGuards()) {
-                FixedGuardNode fixedGuard = graph.add(new FixedGuardNode(condition, deoptReason, action, speculation, negated, noDeoptSucccessorPosition));
+                FixedGuardNode fixedGuard = graph.add(new FixedGuardNode(condition, deoptReason, action, speculation, negated));
                 graph.addBeforeFixed(before, fixedGuard);
                 DummyGuardHandle handle = graph.add(new DummyGuardHandle(fixedGuard));
                 fixedGuard.lower(this);
@@ -200,7 +198,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                 handle.safeDelete();
                 return result;
             } else {
-                GuardNode newGuard = graph.unique(new GuardNode(condition, guardAnchor, deoptReason, action, negated, speculation, noDeoptSucccessorPosition));
+                GuardNode newGuard = graph.unique(new GuardNode(condition, guardAnchor, deoptReason, action, negated, speculation));
                 if (OptEliminateGuards.getValue(graph.getOptions())) {
                     activeGuards.markAndGrow(newGuard);
                 }

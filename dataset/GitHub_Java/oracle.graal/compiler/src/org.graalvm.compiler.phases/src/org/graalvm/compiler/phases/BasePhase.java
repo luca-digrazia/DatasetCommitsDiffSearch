@@ -169,7 +169,7 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         return false;
     }
 
-    protected boolean shouldDumpAfterAtBasicLevel() {
+    protected boolean isInliningPhase() {
         return false;
     }
 
@@ -215,7 +215,7 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     private void dumpAfter(final StructuredGraph graph, boolean isTopLevel, boolean dumpedBefore) {
         boolean dumped = false;
         if (isTopLevel) {
-            if (shouldDumpAfterAtBasicLevel()) {
+            if (isInliningPhase()) {
                 if (Debug.isDumpEnabled(Debug.BASIC_LEVEL)) {
                     Debug.dump(Debug.BASIC_LEVEL, graph, "After phase %s", getName());
                     dumped = true;
