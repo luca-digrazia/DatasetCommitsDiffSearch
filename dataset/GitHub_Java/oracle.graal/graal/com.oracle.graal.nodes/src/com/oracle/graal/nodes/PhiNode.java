@@ -22,10 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.InputType.Association;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
 import java.util.Iterator;
 
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -34,6 +30,7 @@ import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.NodeInputList;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodeinfo.Verbosity;
 import com.oracle.graal.nodes.calc.FloatingNode;
@@ -45,11 +42,11 @@ import com.oracle.graal.nodes.calc.FloatingNode;
  * corresponds to the loop's predecessor, while the rest of the values correspond to the
  * {@link LoopEndNode}s.
  */
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public abstract class PhiNode extends FloatingNode implements Canonicalizable {
 
     public static final NodeClass<PhiNode> TYPE = NodeClass.create(PhiNode.class);
-    @Input(Association) protected AbstractMergeNode merge;
+    @Input(InputType.Association) protected AbstractMergeNode merge;
 
     protected PhiNode(NodeClass<? extends PhiNode> c, Stamp stamp, AbstractMergeNode merge) {
         super(c, stamp);
