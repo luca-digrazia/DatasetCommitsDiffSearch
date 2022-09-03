@@ -22,8 +22,6 @@
  */
 package org.graalvm.compiler.truffle.common;
 
-import jdk.vm.ci.code.InstalledCode;
-
 /**
  * Represents some machine code whose validity depends on an assumption. Valid machine code can
  * still be executed.
@@ -59,13 +57,6 @@ public interface OptimizedAssumptionDependency {
         return true;
     }
 
-    /**
-     * Provides access to a {@link OptimizedAssumptionDependency}.
-     *
-     * Introduced when {@code OptimizedCallTarget} was changed to no longer extend
-     * {@link InstalledCode}. Prior to that change, {@code OptimizedAssumption} dependencies were
-     * {@link InstalledCode} objects.
-     */
     interface Access {
         OptimizedAssumptionDependency getDependency();
     }

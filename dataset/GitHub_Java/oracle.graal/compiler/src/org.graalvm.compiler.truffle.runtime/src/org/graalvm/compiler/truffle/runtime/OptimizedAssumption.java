@@ -111,21 +111,7 @@ public final class OptimizedAssumption extends AbstractAssumption implements For
         }
     }
 
-    /**
-     * Linked list of registered dependencies.
-     */
-    private Entry dependencies;
-
-    /**
-     * Number of entries in {@link #dependencies}.
-     */
-    private int size;
-
-    /**
-     * Number of entries in {@link #dependencies} after most recent call to
-     * {@link #removeInvalidEntries()}.
-     */
-    private int sizeAfterLastRemove;
+    private Entry first;
 
     public OptimizedAssumption(String name) {
         super(name);
@@ -157,7 +143,7 @@ public final class OptimizedAssumption extends AbstractAssumption implements For
         }
 
         boolean invalidatedADependency = false;
-        Entry e = dependencies;
+        Entry e = first;
         while (e != null) {
             OptimizedAssumptionDependency dependency = e.awaitDependency();
             if (dependency != null) {
@@ -172,9 +158,7 @@ public final class OptimizedAssumption extends AbstractAssumption implements For
             }
             e = e.next;
         }
-        dependencies = null;
-        size = 0;
-        sizeAfterLastRemove = 0;
+        first = null;
         isValid = false;
 
         if (TruffleCompilerOptions.getValue(TraceTruffleAssumptions)) {
@@ -186,39 +170,30 @@ public final class OptimizedAssumption extends AbstractAssumption implements For
 
     private void removeInvalidEntries() {
         Entry last = null;
-        Entry e = dependencies;
-        dependencies = null;
+        Entry e = first;
+        first = null;
         while (e != null) {
             if (e.isValid()) {
                 if (last == null) {
-                    dependencies = e;
+                    first = e;
                 } else {
                     last.next = e;
                 }
                 last = e;
-            } else {
-                size--;
             }
             e = e.next;
         }
-        if (last != null) {
-            last.next = null;
-        }
-        sizeAfterLastRemove = size;
-    }
-
-    /**
-     * Removes all {@linkplain OptimizedAssumptionDependency#isValid() invalid} dependencies.
-     */
-    public synchronized void removeInvalidDependencies() {
-        removeInvalidEntries();
     }
 
     /**
      * Gets the number of dependencies registered with this assumption.
      */
     public synchronized int countDependencies() {
-        return size;
+        int count = 0;
+        for (Entry e = first; e != null; e = e.next) {
+            count++;
+        }
+        return count;
     }
 
     /**
@@ -228,13 +203,10 @@ public final class OptimizedAssumption extends AbstractAssumption implements For
      */
     public synchronized Consumer<OptimizedAssumptionDependency> registerDependency() {
         if (isValid) {
-            if (size >= 2 * sizeAfterLastRemove) {
-                removeInvalidEntries();
-            }
+            removeInvalidEntries();
             Entry e = new Entry();
-            e.next = dependencies;
-            dependencies = e;
-            size++;
+            e.next = first;
+            first = e;
             return e;
         } else {
             return new Consumer<OptimizedAssumptionDependency>() {
