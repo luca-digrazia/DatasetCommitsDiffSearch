@@ -23,31 +23,35 @@
 
 package com.oracle.graal.compiler.hsail.test.lambda;
 
-import org.junit.*;
+public abstract class DoubleMathBase extends MathTestBase {
 
-/**
- * Tests call to {@link Math#IEEEremainder(double, double)}.
- */
-public class DoubleIeeeRemainderTest extends DoubleTwoInputMathBase {
+    static final int size = 256;
+    @Result double[] outArray = new double[size];
+    double[] inArray = new double[size];
 
     @Override
-    public void runTest() {
-        setupArrays();
-        // for debugging
-        inArray1[0] = inArray1[258];
-        inArray2[0] = inArray2[258];
+    String getInputString(int idx) {
+        return Double.toString(inArray[idx]);
+    }
 
-        dispatchLambdaKernel(size * size, (gid) -> {
-            bigOutArray[gid] = Math.IEEEremainder(inArray1[gid], inArray2[gid]);
-        });
+    double largestValue() {
+        return Math.PI;
+    }
 
-        for (int i = 0; i < 300; i++) {
-            System.out.println(i + "| " + inArray1[i] + ", " + inArray2[i] + " -> " + bigOutArray[i]);
+    /**
+     * Initializes the input and output arrays
+     */
+    void setupArrays() {
+        for (int i = 0; i < size / 2; i++) {
+            // Include positive and negative values as well as corner cases.
+            double val = (largestValue() / (size / 2)) * i;
+            inArray[i] = val;
+            inArray[i + size / 2] = -val;
         }
+        // special values filled at end
+        inArray[size - 1] = Double.NaN;
+        inArray[size - 2] = Double.NEGATIVE_INFINITY;
+        inArray[size - 3] = Double.POSITIVE_INFINITY;
     }
 
-    @Test
-    public void testUsingLambdaMethod() {
-        testGeneratedHsailUsingLambdaMethod();
-    }
 }

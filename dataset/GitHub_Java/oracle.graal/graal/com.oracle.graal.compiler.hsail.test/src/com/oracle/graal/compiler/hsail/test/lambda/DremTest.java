@@ -26,26 +26,22 @@ package com.oracle.graal.compiler.hsail.test.lambda;
 import org.junit.*;
 
 /**
- * Tests call to {@link Math#IEEEremainder(double, double)}.
+ * Tests the DREM bytecode instruction
  */
-public class DoubleIeeeRemainderTest extends DoubleTwoInputMathBase {
+public class DremTest extends DoubleTwoInputMathBase {
 
     @Override
     public void runTest() {
         setupArrays();
-        // for debugging
-        inArray1[0] = inArray1[258];
-        inArray2[0] = inArray2[258];
-
         dispatchLambdaKernel(size * size, (gid) -> {
-            bigOutArray[gid] = Math.IEEEremainder(inArray1[gid], inArray2[gid]);
+            double f1 = inArray1[gid];
+            double f2 = inArray2[gid];
+            bigOutArray[gid] = f1 % f2;
         });
-
-        for (int i = 0; i < 300; i++) {
-            System.out.println(i + "| " + inArray1[i] + ", " + inArray2[i] + " -> " + bigOutArray[i]);
-        }
     }
 
+    // ignoring until we implement support for DREM bytecode
+    @Ignore
     @Test
     public void testUsingLambdaMethod() {
         testGeneratedHsailUsingLambdaMethod();

@@ -22,14 +22,13 @@
  */
 package com.oracle.graal.test;
 
-import static org.junit.Assert.*;
-
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 
 import org.junit.*;
 import org.junit.internal.*;
+import static org.junit.Assert.*;
 
 /**
  * Base class for Graal tests.

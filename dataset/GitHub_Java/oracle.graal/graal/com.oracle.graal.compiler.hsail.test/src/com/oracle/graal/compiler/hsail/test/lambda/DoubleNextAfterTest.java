@@ -26,24 +26,17 @@ package com.oracle.graal.compiler.hsail.test.lambda;
 import org.junit.*;
 
 /**
- * Tests call to {@link Math#IEEEremainder(double, double)}.
+ * Tests call to {@link Math#nextAfter(double, double)}.
  */
-public class DoubleIeeeRemainderTest extends DoubleTwoInputMathBase {
+public class DoubleNextAfterTest extends DoubleMathLargeBase {
 
     @Override
     public void runTest() {
         setupArrays();
-        // for debugging
-        inArray1[0] = inArray1[258];
-        inArray2[0] = inArray2[258];
-
-        dispatchLambdaKernel(size * size, (gid) -> {
-            bigOutArray[gid] = Math.IEEEremainder(inArray1[gid], inArray2[gid]);
+        dispatchLambdaKernel(size, (gid) -> {
+            double direction = (gid & 1) == 0 ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY;
+            outArray[gid] = Math.nextAfter(inArray[gid], direction);
         });
-
-        for (int i = 0; i < 300; i++) {
-            System.out.println(i + "| " + inArray1[i] + ", " + inArray2[i] + " -> " + bigOutArray[i]);
-        }
     }
 
     @Test

@@ -23,31 +23,32 @@
 
 package com.oracle.graal.compiler.hsail.test.lambda;
 
-import org.junit.*;
+public abstract class DoubleTwoInputMathBase extends DoubleMathBase {
 
-/**
- * Tests call to {@link Math#IEEEremainder(double, double)}.
- */
-public class DoubleIeeeRemainderTest extends DoubleTwoInputMathBase {
+    double[] inArray1 = new double[size * size];
+    double[] inArray2 = new double[size * size];
+    @Result double[] bigOutArray = new double[size * size];
 
     @Override
-    public void runTest() {
-        setupArrays();
-        // for debugging
-        inArray1[0] = inArray1[258];
-        inArray2[0] = inArray2[258];
+    String getInputString(int idx) {
+        return "(" + inArray1[idx] + ", " + inArray2[idx] + ")";
+    }
 
-        dispatchLambdaKernel(size * size, (gid) -> {
-            bigOutArray[gid] = Math.IEEEremainder(inArray1[gid], inArray2[gid]);
-        });
-
-        for (int i = 0; i < 300; i++) {
-            System.out.println(i + "| " + inArray1[i] + ", " + inArray2[i] + " -> " + bigOutArray[i]);
+    /**
+     * Initializes the input and output arrays
+     */
+    @Override
+    void setupArrays() {
+        super.setupArrays();
+        // make combinations of the input array
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                int idx = i * size + j;
+                inArray1[idx] = inArray[i];
+                inArray2[idx] = inArray[j];
+                bigOutArray[idx] = 0;
+            }
         }
     }
 
-    @Test
-    public void testUsingLambdaMethod() {
-        testGeneratedHsailUsingLambdaMethod();
-    }
 }

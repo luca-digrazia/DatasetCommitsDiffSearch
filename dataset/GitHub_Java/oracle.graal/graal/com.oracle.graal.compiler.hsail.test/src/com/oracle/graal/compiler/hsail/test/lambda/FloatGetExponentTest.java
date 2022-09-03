@@ -26,24 +26,18 @@ package com.oracle.graal.compiler.hsail.test.lambda;
 import org.junit.*;
 
 /**
- * Tests call to {@link Math#IEEEremainder(double, double)}.
+ * Tests call to {@link Math#getExponent(double)} with float arg.
  */
-public class DoubleIeeeRemainderTest extends DoubleTwoInputMathBase {
+public class FloatGetExponentTest extends FloatMathLargeBase {
+
+    @Result int[] outIntArray = new int[size];
 
     @Override
     public void runTest() {
         setupArrays();
-        // for debugging
-        inArray1[0] = inArray1[258];
-        inArray2[0] = inArray2[258];
-
-        dispatchLambdaKernel(size * size, (gid) -> {
-            bigOutArray[gid] = Math.IEEEremainder(inArray1[gid], inArray2[gid]);
+        dispatchLambdaKernel(size, (gid) -> {
+            outIntArray[gid] = Math.getExponent(inArray[gid]);
         });
-
-        for (int i = 0; i < 300; i++) {
-            System.out.println(i + "| " + inArray1[i] + ", " + inArray2[i] + " -> " + bigOutArray[i]);
-        }
     }
 
     @Test

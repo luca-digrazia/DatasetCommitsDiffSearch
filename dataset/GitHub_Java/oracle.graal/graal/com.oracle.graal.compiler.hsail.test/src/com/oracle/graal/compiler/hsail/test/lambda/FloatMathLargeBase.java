@@ -23,31 +23,19 @@
 
 package com.oracle.graal.compiler.hsail.test.lambda;
 
-import org.junit.*;
-
-/**
- * Tests call to {@link Math#IEEEremainder(double, double)}.
- */
-public class DoubleIeeeRemainderTest extends DoubleTwoInputMathBase {
+public abstract class FloatMathLargeBase extends FloatMathBase {
 
     @Override
-    public void runTest() {
-        setupArrays();
-        // for debugging
-        inArray1[0] = inArray1[258];
-        inArray2[0] = inArray2[258];
-
-        dispatchLambdaKernel(size * size, (gid) -> {
-            bigOutArray[gid] = Math.IEEEremainder(inArray1[gid], inArray2[gid]);
-        });
-
-        for (int i = 0; i < 300; i++) {
-            System.out.println(i + "| " + inArray1[i] + ", " + inArray2[i] + " -> " + bigOutArray[i]);
+    void setupArrays() {
+        for (int i = 0; i < size / 2; i++) {
+            // Include positive and negative values as well as corner cases.
+            float val = (float) (i == 0 ? 0 : Math.pow(1.99, (i % 100)));
+            inArray[i] = val;
+            inArray[i + size / 2] = -val;
         }
-    }
-
-    @Test
-    public void testUsingLambdaMethod() {
-        testGeneratedHsailUsingLambdaMethod();
+        // special values filled at end
+        inArray[size - 1] = Float.NaN;
+        inArray[size - 2] = Float.NEGATIVE_INFINITY;
+        inArray[size - 3] = Float.POSITIVE_INFINITY;
     }
 }

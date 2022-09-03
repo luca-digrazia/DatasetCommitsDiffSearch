@@ -26,24 +26,20 @@ package com.oracle.graal.compiler.hsail.test.lambda;
 import org.junit.*;
 
 /**
- * Tests call to {@link Math#IEEEremainder(double, double)}.
+ * Tests call to {@link Math#round(double)}.
  */
-public class DoubleIeeeRemainderTest extends DoubleTwoInputMathBase {
+public class DoubleRoundTest extends DoubleMathLargeBase {
+
+    @Result long[] outLongArray = new long[size];
 
     @Override
     public void runTest() {
         setupArrays();
-        // for debugging
-        inArray1[0] = inArray1[258];
-        inArray2[0] = inArray2[258];
-
-        dispatchLambdaKernel(size * size, (gid) -> {
-            bigOutArray[gid] = Math.IEEEremainder(inArray1[gid], inArray2[gid]);
+        // for testing
+        inArray[0] = inArray[66];
+        dispatchLambdaKernel(size, (gid) -> {
+            outLongArray[gid] = Math.round(inArray[gid]);
         });
-
-        for (int i = 0; i < 300; i++) {
-            System.out.println(i + "| " + inArray1[i] + ", " + inArray2[i] + " -> " + bigOutArray[i]);
-        }
     }
 
     @Test

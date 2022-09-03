@@ -26,26 +26,25 @@ package com.oracle.graal.compiler.hsail.test.lambda;
 import org.junit.*;
 
 /**
- * Tests call to {@link Math#IEEEremainder(double, double)}.
+ * Tests call to {@link Math#cbrt(double)}.
  */
-public class DoubleIeeeRemainderTest extends DoubleTwoInputMathBase {
+public class DoubleCbrtTest extends DoubleMathBase {
 
+    /**
+     * Dispatches the HSAIL kernel for this test case.
+     */
     @Override
     public void runTest() {
         setupArrays();
-        // for debugging
-        inArray1[0] = inArray1[258];
-        inArray2[0] = inArray2[258];
-
-        dispatchLambdaKernel(size * size, (gid) -> {
-            bigOutArray[gid] = Math.IEEEremainder(inArray1[gid], inArray2[gid]);
+        dispatchLambdaKernel(size, (gid) -> {
+            outArray[gid] = Math.cbrt(inArray[gid]);
         });
-
-        for (int i = 0; i < 300; i++) {
-            System.out.println(i + "| " + inArray1[i] + ", " + inArray2[i] + " -> " + bigOutArray[i]);
-        }
     }
 
+    /**
+     * Tests the HSAIL code generated for this unit test by comparing the result of executing this
+     * code with the result of executing a sequential Java version of this unit test.
+     */
     @Test
     public void testUsingLambdaMethod() {
         testGeneratedHsailUsingLambdaMethod();
