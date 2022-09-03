@@ -1912,8 +1912,8 @@ public class PolyglotEngine {
         }
 
         @Override
-        public RuntimeException wrapHostException(Object languageContext, Throwable exception) {
-            return PolyglotImpl.wrapHostException(null, exception);
+        public RuntimeException wrapHostException(Throwable exception) {
+            return PolyglotImpl.wrapHostException(exception);
         }
 
         @Override
@@ -1985,12 +1985,6 @@ public class PolyglotEngine {
         public String getValueInfo(Object languageContext, Object value) {
             return Objects.toString(value);
         }
-
-        @Override
-        public Class<? extends TruffleLanguage<?>> getLanguageClass(LanguageInfo language) {
-            return ((LanguageShared) NODES.getEngineObject(language)).cache.getLanguageClass();
-        }
-
     }
 
 }

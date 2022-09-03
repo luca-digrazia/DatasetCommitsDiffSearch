@@ -188,10 +188,6 @@ public abstract class TVMCI {
         return Accessor.nodesAccess().cloneUninitialized(root);
     }
 
-    protected int adoptChildrenAndCount(RootNode root) {
-        return Accessor.nodesAccess().adoptChildrenAndCount(root);
-    }
-
     /**
      * Returns the compiler options specified available from the runtime.
      *
