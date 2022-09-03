@@ -278,8 +278,7 @@ public final class SchedulePhase extends Phase {
 
     private static void sortNodesLatestWithinBlock(Block b, BlockMap<List<Node>> earliestBlockToNodesMap, BlockMap<List<Node>> latestBlockToNodesMap, NodeMap<Block> nodeMap,
                     BlockMap<ArrayList<FloatingReadNode>> watchListMap, NodeBitMap unprocessed) {
-        List<Node> earliestSorting = earliestBlockToNodesMap.get(b);
-        ArrayList<Node> result = new ArrayList<>(earliestSorting.size());
+        ArrayList<Node> result = new ArrayList<>();
         ArrayList<FloatingReadNode> watchList = null;
         if (watchListMap != null) {
             watchList = watchListMap.get(b);
@@ -297,7 +296,7 @@ public final class SchedulePhase extends Phase {
             }
         }
         FixedNode endNode = b.getEndNode();
-        for (Node n : earliestSorting) {
+        for (Node n : earliestBlockToNodesMap.get(b)) {
             if (n != endNode) {
                 if (n instanceof FixedNode) {
                     assert nodeMap.get(n) == b;
@@ -449,7 +448,7 @@ public final class SchedulePhase extends Phase {
 
     private static void scheduleEarliestIterative(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, StructuredGraph graph) {
 
-        BitSet floatingReads = new BitSet(cfg.getBlocks().size());
+        BlockMap<Boolean> floatingReads = new BlockMap<>(cfg);
 
         // Add begin nodes as the first entry and set the block for phi nodes.
         for (Block b : cfg.getBlocks()) {
@@ -530,11 +529,9 @@ public final class SchedulePhase extends Phase {
             }
         }
 
-        if (!floatingReads.isEmpty()) {
-            for (Block b : cfg.getBlocks()) {
-                if (floatingReads.get(b.getId())) {
-                    resortEarliestWithinBlock(b, blockToNodes, nodeToBlock, visited);
-                }
+        for (Block b : cfg.getBlocks()) {
+            if (floatingReads.get(b) == Boolean.TRUE) {
+                resortEarliestWithinBlock(b, blockToNodes, nodeToBlock, visited);
             }
         }
     }
@@ -605,7 +602,7 @@ public final class SchedulePhase extends Phase {
         blockToNodes.get(b).add(endNode);
     }
 
-    private static void processStack(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, BitSet floatingReads, NodeStack stack) {
+    private static void processStack(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, BlockMap<Boolean> floatingReads, NodeStack stack) {
         Block startBlock = cfg.getStartBlock();
         while (!stack.isEmpty()) {
             Node current = stack.peek();
@@ -668,7 +665,7 @@ public final class SchedulePhase extends Phase {
                     if (current instanceof FloatingReadNode) {
                         FloatingReadNode floatingReadNode = (FloatingReadNode) current;
                         if (curBlock.canKill(floatingReadNode.getLocationIdentity())) {
-                            floatingReads.set(curBlock.getId());
+                            floatingReads.put(curBlock, Boolean.TRUE);
                         }
                     }
                 }
