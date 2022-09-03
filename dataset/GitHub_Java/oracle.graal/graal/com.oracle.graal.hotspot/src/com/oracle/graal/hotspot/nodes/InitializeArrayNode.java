@@ -28,50 +28,58 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Initializes the header and body of an uninitialized array cell.
- * This node calls out to a stub to do both the allocation and formatting
- * if the memory address it is given is zero/null (e.g. due to
+ * Initializes the header and body of an uninitialized array cell. This node calls out to a stub to
+ * do both the allocation and formatting if the memory address it is given is zero/null (e.g. due to
  * {@linkplain TLABAllocateNode TLAB allocation} failing).
  */
-public final class InitializeArrayNode extends FixedWithNextNode implements Lowerable {
+public final class InitializeArrayNode extends FixedWithNextNode implements Lowerable, ArrayLengthProvider {
 
     @Input private final ValueNode memory;
     @Input private final ValueNode length;
-    @Input private final ValueNode size;
+    @Input private final ValueNode allocationSize;
     private final ResolvedJavaType type;
+    private final boolean fillContents;
 
-    public InitializeArrayNode(ValueNode memory, ValueNode length, ValueNode size, ResolvedJavaType type) {
+    public InitializeArrayNode(ValueNode memory, ValueNode length, ValueNode allocationSize, ResolvedJavaType type, boolean fillContents) {
         super(StampFactory.exactNonNull(type));
         this.memory = memory;
         this.type = type;
         this.length = length;
-        this.size = size;
+        this.allocationSize = allocationSize;
+        this.fillContents = fillContents;
     }
 
     public ValueNode memory() {
         return memory;
     }
 
+    @Override
     public ValueNode length() {
         return length;
     }
 
-    public ValueNode size() {
-        return size;
+    /**
+     * Gets the size (in bytes) of the memory chunk allocated for the array.
+     */
+    public ValueNode allocationSize() {
+        return allocationSize;
     }
 
     public ResolvedJavaType type() {
         return type;
     }
 
+    public boolean fillContents() {
+        // We fill contents when G1 GC is used since we want to record
+        // the original field values prior to stores
+        return fillContents;
+    }
+
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         tool.getRuntime().lower(this, tool);
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Object initialize(Object memory, int length, int size, @ConstantNodeParameter ResolvedJavaType type) {
-        throw new UnsupportedOperationException();
-    }
+    public static native Object initialize(Object memory, int length, int allocationSize, @ConstantNodeParameter ResolvedJavaType type, @ConstantNodeParameter boolean fillContents);
 }

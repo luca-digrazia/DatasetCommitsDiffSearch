@@ -721,8 +721,8 @@ public class GraphBuilderPhase extends Phase {
         }
         condition = currentGraph.unique(condition);
 
-        BeginNode trueSuccessor = createBlockTarget(probability, trueBlock, frameState);
-        BeginNode falseSuccessor = createBlockTarget(1 - probability, falseBlock, frameState);
+        AbstractBeginNode trueSuccessor = createBlockTarget(probability, trueBlock, frameState);
+        AbstractBeginNode falseSuccessor = createBlockTarget(1 - probability, falseBlock, frameState);
 
         IfNode ifNode = negate ? new IfNode(condition, falseSuccessor, trueSuccessor, 1 - probability) : new IfNode(condition, trueSuccessor, falseSuccessor, probability);
         append(currentGraph.add(ifNode));
@@ -803,7 +803,7 @@ public class GraphBuilderPhase extends Phase {
         ValueNode object = frameState.apop();
         if (type instanceof ResolvedJavaType) {
             JavaTypeProfile profileForTypeCheck = getProfileForTypeCheck((ResolvedJavaType) type);
-            CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) type, object, profileForTypeCheck));
+            CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) type, object, profileForTypeCheck, false));
             append(checkCast);
             frameState.apush(checkCast);
         } else {
@@ -828,7 +828,7 @@ public class GraphBuilderPhase extends Phase {
     void genNewInstance(int cpi) {
         JavaType type = lookupType(cpi, NEW);
         if (type instanceof ResolvedJavaType && ((ResolvedJavaType) type).isInitialized()) {
-            NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type, true, false));
+            NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type, true));
             frameState.apush(append(n));
         } else {
             handleUnresolvedNewInstance(type);
@@ -870,7 +870,7 @@ public class GraphBuilderPhase extends Phase {
     private void genNewPrimitiveArray(int typeCode) {
         Class<?> clazz = arrayTypeCodeToClass(typeCode);
         ResolvedJavaType elementType = runtime.lookupJavaType(clazz);
-        NewArrayNode nta = currentGraph.add(new NewArrayNode(elementType, frameState.ipop(), true, false));
+        NewArrayNode nta = currentGraph.add(new NewArrayNode(elementType, frameState.ipop(), true));
         frameState.apush(append(nta));
     }
 
@@ -878,7 +878,7 @@ public class GraphBuilderPhase extends Phase {
         JavaType type = lookupType(cpi, ANEWARRAY);
         ValueNode length = frameState.ipop();
         if (type instanceof ResolvedJavaType) {
-            NewArrayNode n = currentGraph.add(new NewArrayNode((ResolvedJavaType) type, length, true, false));
+            NewArrayNode n = currentGraph.add(new NewArrayNode((ResolvedJavaType) type, length, true));
             frameState.apush(append(n));
         } else {
             handleUnresolvedNewObjectArray(type, length);
@@ -1489,7 +1489,7 @@ public class GraphBuilderPhase extends Phase {
             BlockPlaceholderNode placeholder = (BlockPlaceholderNode) block.firstInstruction;
 
             // The EndNode for the already existing edge.
-            EndNode end = currentGraph.add(new EndNode());
+            AbstractEndNode end = currentGraph.add(new EndNode());
             // The MergeNode that replaces the placeholder.
             MergeNode mergeNode = currentGraph.add(new MergeNode());
             FixedNode next = placeholder.next();
@@ -1504,7 +1504,7 @@ public class GraphBuilderPhase extends Phase {
         MergeNode mergeNode = (MergeNode) block.firstInstruction;
 
         // The EndNode for the newly merged edge.
-        EndNode newEnd = currentGraph.add(new EndNode());
+        AbstractEndNode newEnd = currentGraph.add(new EndNode());
         Target target = checkLoopExit(newEnd, block, state);
         FixedNode result = target.fixed;
         block.entryState.merge(mergeNode, target.state);
@@ -1518,9 +1518,9 @@ public class GraphBuilderPhase extends Phase {
      * Returns a block begin node with the specified state. If the specified probability is 0, the
      * block deoptimizes immediately.
      */
-    private BeginNode createBlockTarget(double probability, Block block, FrameStateBuilder stateAfter) {
+    private AbstractBeginNode createBlockTarget(double probability, Block block, FrameStateBuilder stateAfter) {
         FixedNode target = createTarget(probability, block, stateAfter);
-        BeginNode begin = BeginNode.begin(target);
+        AbstractBeginNode begin = AbstractBeginNode.begin(target);
 
         assert !(target instanceof DeoptimizeNode && begin.stateAfter() != null) : "We are not allowed to set the stateAfter of the begin node, because we have to deoptimize "
                         + "to a bci _before_ the actual if, so that the interpreter can update the profiling information.";
@@ -1661,7 +1661,7 @@ public class GraphBuilderPhase extends Phase {
         if (typeInstruction != null) {
             Block nextBlock = block.successors.size() == 1 ? unwindBlock(block.deoptBci) : block.successors.get(1);
             ValueNode exception = frameState.stackAt(0);
-            CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) catchType, exception, null));
+            CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) catchType, exception, null, false));
             frameState.apop();
             frameState.push(Kind.Object, checkCast);
             FixedNode catchSuccessor = createTarget(block.successors.get(0), frameState);
@@ -1701,7 +1701,7 @@ public class GraphBuilderPhase extends Phase {
         if (block.isLoopHeader) {
             // Create the loop header block, which later will merge the backward branches of the
             // loop.
-            EndNode preLoopEnd = currentGraph.add(new EndNode());
+            AbstractEndNode preLoopEnd = currentGraph.add(new EndNode());
             LoopBeginNode loopBegin = currentGraph.add(new LoopBeginNode());
             lastInstr.setNext(preLoopEnd);
             // Add the single non-loop predecessor of the loop header.
@@ -1769,7 +1769,7 @@ public class GraphBuilderPhase extends Phase {
                 frameState.clearNonLiveLocals(currentBlock.localsLiveOut);
             }
             if (lastInstr instanceof StateSplit) {
-                if (lastInstr.getClass() == BeginNode.class) {
+                if (lastInstr.getClass() == AbstractBeginNode.class) {
                     // BeginNodes do not need a frame state
                 } else {
                     StateSplit stateSplit = (StateSplit) lastInstr;

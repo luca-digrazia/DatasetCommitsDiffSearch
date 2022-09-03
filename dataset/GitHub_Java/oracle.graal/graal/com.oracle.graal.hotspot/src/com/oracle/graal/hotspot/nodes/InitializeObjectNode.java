@@ -28,9 +28,8 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Initializes the header and body of an uninitialized object cell.
- * This node calls out to a stub to do both the allocation and formatting
- * if the memory address it is given is zero/null (e.g. due to
+ * Initializes the header and body of an uninitialized object cell. This node calls out to a stub to
+ * do both the allocation and formatting if the memory address it is given is zero/null (e.g. due to
  * {@linkplain TLABAllocateNode TLAB allocation} failing).
  */
 public final class InitializeObjectNode extends FixedWithNextNode implements Lowerable {
@@ -38,14 +37,12 @@ public final class InitializeObjectNode extends FixedWithNextNode implements Low
     @Input private final ValueNode memory;
     private final ResolvedJavaType type;
     private final boolean fillContents;
-    private final boolean locked;
 
-    public InitializeObjectNode(ValueNode memory, ResolvedJavaType type, boolean fillContents, boolean locked) {
+    public InitializeObjectNode(ValueNode memory, ResolvedJavaType type, boolean fillContents) {
         super(StampFactory.exactNonNull(type));
         this.memory = memory;
         this.type = type;
         this.fillContents = fillContents;
-        this.locked = locked;
     }
 
     public ValueNode memory() {
@@ -60,12 +57,8 @@ public final class InitializeObjectNode extends FixedWithNextNode implements Low
         return fillContents;
     }
 
-    public boolean locked() {
-        return locked;
-    }
-
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         tool.getRuntime().lower(this, tool);
     }
 }

@@ -28,7 +28,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.spi.Virtualizable.State;
 import com.oracle.graal.nodes.spi.*;
@@ -49,9 +48,9 @@ class VirtualizerToolImpl implements VirtualizerTool {
     }
 
     private boolean deleted;
+    private boolean customAction;
     private BlockState state;
     private ValueNode current;
-    private FixedNode position;
 
     @Override
     public MetaAccessProvider getMetaAccessProvider() {
@@ -67,15 +66,19 @@ class VirtualizerToolImpl implements VirtualizerTool {
         this.effects = effects;
     }
 
-    public void reset(BlockState newState, ValueNode newCurrent, FixedNode newPosition) {
+    public void reset(BlockState newState, ValueNode newCurrent) {
         deleted = false;
-        state = newState;
-        current = newCurrent;
-        position = newPosition;
+        customAction = false;
+        this.state = newState;
+        this.current = newCurrent;
     }
 
     public boolean isDeleted() {
         return deleted;
+    }
+
+    public boolean isCustomAction() {
+        return customAction;
     }
 
     @Override
@@ -139,12 +142,9 @@ class VirtualizerToolImpl implements VirtualizerTool {
     }
 
     @Override
-    public void addNode(ValueNode node) {
-        if (node instanceof FloatingNode) {
-            effects.addFloatingNode(node, "VirtualizerTool");
-        } else {
-            effects.addFixedNodeBefore((FixedWithNextNode) node, position);
-        }
+    public void customAction(Runnable action) {
+        effects.customAction(action);
+        customAction = true;
     }
 
     @Override
@@ -179,28 +179,6 @@ class VirtualizerToolImpl implements VirtualizerTool {
             } else {
                 replaceWithValue(resultState.getMaterializedValue());
             }
-        }
-    }
-
-    @Override
-    public void addReadCache(ValueNode object, ResolvedJavaField identity, ValueNode value) {
-        if (GraalOptions.OptEarlyReadElimination) {
-            state.addReadCache(object, identity, value);
-        }
-    }
-
-    @Override
-    public ValueNode getReadCache(ValueNode object, ResolvedJavaField identity) {
-        if (GraalOptions.OptEarlyReadElimination) {
-            return state.getReadCache(object, identity);
-        }
-        return null;
-    }
-
-    @Override
-    public void killReadCache(ResolvedJavaField identity) {
-        if (GraalOptions.OptEarlyReadElimination) {
-            state.killReadCache(identity);
         }
     }
 }

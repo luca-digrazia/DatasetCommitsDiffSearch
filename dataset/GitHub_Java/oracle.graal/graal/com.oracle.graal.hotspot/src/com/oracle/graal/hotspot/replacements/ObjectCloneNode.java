@@ -125,11 +125,12 @@ public class ObjectCloneNode extends MacroNode implements VirtualizableAllocatio
                         state[i] = loads[i] = new LoadFieldNode(obj, fields[i]);
                     }
 
+                    final StructuredGraph structuredGraph = (StructuredGraph) graph();
                     tool.customAction(new Runnable() {
 
                         public void run() {
                             for (LoadFieldNode load : loads) {
-                                graph().addBeforeFixed(ObjectCloneNode.this, graph().add(load));
+                                structuredGraph.addBeforeFixed(ObjectCloneNode.this, structuredGraph.add(load));
                             }
                         }
                     });

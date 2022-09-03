@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 
 /**
- * Node implementing a call to {@code GraalRuntime::monitorexit}.
+ * Node implementing a call to HotSpot's {@code graal_monitorexit} stub.
  */
 public class MonitorExitStubCall extends DeoptimizingStubCall implements LIRGenLowerable {
 
@@ -56,5 +56,5 @@ public class MonitorExitStubCall extends DeoptimizingStubCall implements LIRGenL
     }
 
     @NodeIntrinsic
-    public static native void call(Object object, @ConstantNodeParameter int lockDepth);
+    public static native void call(Object hub, @ConstantNodeParameter int lockDepth);
 }

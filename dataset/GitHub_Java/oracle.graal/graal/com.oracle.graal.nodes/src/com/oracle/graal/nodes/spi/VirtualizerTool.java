@@ -138,12 +138,12 @@ public interface VirtualizerTool {
     void replaceFirstInput(Node oldInput, Node replacement);
 
     /**
-     * Adds the given node to the graph.This action will only be performed when, and if, the changes
-     * are committed.
+     * Performs a custom action on the current node. This action will only be performed when, and
+     * if, the changes are committed. Custom actions must not modify inputs of nodes.
      * 
-     * @param node the node to add.
+     * @param action the custom action.
      */
-    void addNode(ValueNode node);
+    void customAction(Runnable action);
 
     /**
      * This method performs either {@link #replaceWithValue(ValueNode)} or
@@ -152,11 +152,4 @@ public interface VirtualizerTool {
      * @param value the replacement value
      */
     void replaceWith(ValueNode value);
-
-    void addReadCache(ValueNode object, ResolvedJavaField identity, ValueNode value);
-
-    ValueNode getReadCache(ValueNode object, ResolvedJavaField identity);
-
-    void killReadCache(ResolvedJavaField identity);
-
 }

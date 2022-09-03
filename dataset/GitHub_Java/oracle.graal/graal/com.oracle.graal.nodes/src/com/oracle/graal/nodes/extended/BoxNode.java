@@ -22,14 +22,8 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import java.util.*;
-
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
@@ -38,7 +32,7 @@ import com.oracle.graal.nodes.virtual.*;
  * This node represents the boxing of a primitive value. This corresponds to a call to the valueOf
  * methods in Integer, Long, etc.
  */
-public class BoxNode extends FloatingNode implements VirtualizableAllocation, Lowerable, Canonicalizable {
+public class BoxNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Canonicalizable {
 
     @Input private ValueNode value;
     private final Kind boxingKind;
@@ -58,12 +52,12 @@ public class BoxNode extends FloatingNode implements VirtualizableAllocation, Lo
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+    public void lower(LoweringTool tool, LoweringType loweringType) {
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         /*
          * Constant values are not canonicalized into their constant boxing objects because this
          * would mean that the information that they came from a valueOf is lost.
@@ -77,12 +71,12 @@ public class BoxNode extends FloatingNode implements VirtualizableAllocation, Lo
     @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode v = tool.getReplacedValue(getValue());
-        ResolvedJavaType type = ObjectStamp.typeOrNull(stamp());
+        ResolvedJavaType type = objectStamp().type();
 
         VirtualBoxingNode newVirtual = new VirtualBoxingNode(type, boxingKind);
         assert newVirtual.getFields().length == 1;
 
-        tool.createVirtualObject(newVirtual, new ValueNode[]{v}, Collections.<MonitorIdNode> emptyList());
+        tool.createVirtualObject(newVirtual, new ValueNode[]{v}, null);
         tool.replaceWithVirtual(newVirtual);
     }
 
