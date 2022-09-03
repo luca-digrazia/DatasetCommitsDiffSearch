@@ -61,7 +61,6 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     private boolean canBeInlined;
     private CiGenericCallback callback;
     private int compilationComplexity;
-    private int vtableEntryOffset;
 
     private HotSpotMethodResolvedImpl() {
         super(null);
@@ -353,10 +352,5 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     }
     public void setCallback(CiGenericCallback callback) {
         this.callback = callback;
-    }
-
-    @Override
-    public int vtableEntryOffset() {
-        return vtableEntryOffset;
     }
 }
