@@ -25,9 +25,10 @@
 package org.graalvm.compiler.phases.common.jmx;
 
 import java.util.Collection;
+import javax.management.MBeanOperationInfo;
 
 public interface HotSpotMBeanOperationProvider {
-    <T> void registerOperations(Class<T> clazz, Collection<? super T> ops);
+    void registerOperations(Collection<? super MBeanOperationInfo> ops);
 
     Object invoke(String actionName, Object[] params, String[] signature);
 }
