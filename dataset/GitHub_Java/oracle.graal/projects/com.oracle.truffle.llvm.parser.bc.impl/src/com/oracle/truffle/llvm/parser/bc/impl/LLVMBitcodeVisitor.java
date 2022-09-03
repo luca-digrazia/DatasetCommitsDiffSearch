@@ -122,9 +122,9 @@ public final class LLVMBitcodeVisitor implements ModelVisitor {
             return labels;
         }
 
-        public static BitcodeParserResult getFromSource(Source source) {
+        public static BitcodeParserResult getFromFile(String sourcePath) {
             final Model model = new Model();
-            new LLVMParser(model).parse(ModuleVersion.getModuleVersion(LLVMOptions.ENGINE.llvmVersion()), source);
+            new LLVMParser(model).parse(ModuleVersion.getModuleVersion(LLVMOptions.ENGINE.llvmVersion()), sourcePath);
 
             final LLVMPhiManager phis = LLVMPhiManager.generate(model);
             final StackAllocation stackAllocation = StackAllocation.generate(model);
@@ -139,7 +139,7 @@ public final class LLVMBitcodeVisitor implements ModelVisitor {
     }
 
     public static LLVMParserResult getMain(Source source, LLVMContext context, NodeFactoryFacade factoryFacade) {
-        final BitcodeParserResult parserResult = BitcodeParserResult.getFromSource(source);
+        final BitcodeParserResult parserResult = BitcodeParserResult.getFromFile(source.getPath());
         final Model model = parserResult.getModel();
         final StackAllocation stackAllocation = parserResult.getStackAllocation();
         final TargetDataLayout layout = ((ModelModule) model.createModule()).getTargetDataLayout();
