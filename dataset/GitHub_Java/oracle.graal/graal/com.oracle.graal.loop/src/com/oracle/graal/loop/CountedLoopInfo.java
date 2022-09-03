@@ -22,26 +22,15 @@
  */
 package com.oracle.graal.loop;
 
-import static com.oracle.graal.loop.MathUtil.add;
-import static com.oracle.graal.loop.MathUtil.divBefore;
-import static com.oracle.graal.loop.MathUtil.sub;
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
+import static com.oracle.graal.loop.MathUtil.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.loop.InductionVariable.Direction;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.GuardNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.CompareNode;
-import com.oracle.graal.nodes.calc.ConditionalNode;
-import com.oracle.graal.nodes.calc.IntegerLessThanNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
 
 public class CountedLoopInfo {
 
@@ -175,7 +164,6 @@ public class CountedLoopInfo {
             }
             cond = graph.unique(new IntegerLessThanNode(end, v1));
         }
-        assert graph.getGuardsStage().allowsFloatingGuards();
         overflowGuard = graph.unique(new GuardNode(cond, AbstractBeginNode.prevBegin(loop.entryPoint()), DeoptimizationReason.LoopLimitCheck, DeoptimizationAction.InvalidateRecompile, true,
                         JavaConstant.NULL_POINTER)); // TODO gd: use speculation
         loop.loopBegin().setOverflowGuard(overflowGuard);

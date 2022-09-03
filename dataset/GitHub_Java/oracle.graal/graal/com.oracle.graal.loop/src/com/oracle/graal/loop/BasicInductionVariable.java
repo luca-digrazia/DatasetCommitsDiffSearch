@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,35 @@
  */
 package com.oracle.graal.loop;
 
-import com.oracle.graal.graph.*;
+import static com.oracle.graal.loop.MathUtil.*;
+import jdk.internal.jvmci.common.*;
+
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.type.*;
-
 
 public class BasicInductionVariable extends InductionVariable {
-    private PhiNode phi;
-    private ValueNode init;
-    private ValueNode rawStride;
-    private IntegerArithmeticNode op;
 
-    public BasicInductionVariable(LoopEx loop, PhiNode phi, ValueNode init, ValueNode rawStride, IntegerArithmeticNode op) {
+    private final ValuePhiNode phi;
+    private final ValueNode init;
+    private final ValueNode rawStride;
+    private final BinaryArithmeticNode<?> op;
+
+    public BasicInductionVariable(LoopEx loop, ValuePhiNode phi, ValueNode init, ValueNode rawStride, BinaryArithmeticNode<?> op) {
         super(loop);
         this.phi = phi;
         this.init = init;
         this.rawStride = rawStride;
         this.op = op;
+    }
+
+    @Override
+    public StructuredGraph graph() {
+        return phi.graph();
+    }
+
+    public BinaryArithmeticNode<?> getOp() {
+        return op;
     }
 
     @Override
@@ -51,13 +62,13 @@ public class BasicInductionVariable extends InductionVariable {
             if (integerStamp.isStrictlyPositive()) {
                 dir = Direction.Up;
             } else if (integerStamp.isStrictlyNegative()) {
-                dir =  Direction.Down;
+                dir = Direction.Down;
             }
             if (dir != null) {
-                if (op instanceof IntegerAddNode) {
+                if (op instanceof AddNode) {
                     return dir;
                 } else {
-                    assert op instanceof IntegerSubNode;
+                    assert op instanceof SubNode;
                     return dir.opposite();
                 }
             }
@@ -66,7 +77,7 @@ public class BasicInductionVariable extends InductionVariable {
     }
 
     @Override
-    public PhiNode valueNode() {
+    public ValuePhiNode valueNode() {
         return phi;
     }
 
@@ -77,13 +88,13 @@ public class BasicInductionVariable extends InductionVariable {
 
     @Override
     public ValueNode strideNode() {
-        if (op instanceof IntegerAddNode) {
+        if (op instanceof AddNode) {
             return rawStride;
         }
-        if (op instanceof IntegerSubNode) {
-            return rawStride.graph().unique(new NegateNode(rawStride));
+        if (op instanceof SubNode) {
+            return graph().unique(new NegateNode(rawStride));
         }
-        throw GraalInternalError.shouldNotReachHere();
+        throw JVMCIError.shouldNotReachHere();
     }
 
     @Override
@@ -98,23 +109,45 @@ public class BasicInductionVariable extends InductionVariable {
 
     @Override
     public long constantInit() {
-        return init.asConstant().asLong();
+        return init.asJavaConstant().asLong();
     }
 
     @Override
     public long constantStride() {
-        if (op instanceof IntegerAddNode) {
-            return rawStride.asConstant().asLong();
+        if (op instanceof AddNode) {
+            return rawStride.asJavaConstant().asLong();
         }
-        if (op instanceof IntegerSubNode) {
-            return -rawStride.asConstant().asLong();
+        if (op instanceof SubNode) {
+            return -rawStride.asJavaConstant().asLong();
         }
-        throw GraalInternalError.shouldNotReachHere();
+        throw JVMCIError.shouldNotReachHere();
     }
 
     @Override
-    public ValueNode extremumNode() {
-        return IntegerArithmeticNode.add(IntegerArithmeticNode.mul(strideNode(), loop.counted().maxTripCountNode()), init);
+    public ValueNode extremumNode(boolean assumePositiveTripCount, Stamp stamp) {
+        Stamp fromStamp = phi.stamp();
+        StructuredGraph graph = graph();
+        ValueNode stride = strideNode();
+        ValueNode initNode = this.initNode();
+        if (!fromStamp.isCompatible(stamp)) {
+            stride = IntegerConvertNode.convert(stride, stamp, graph());
+            initNode = IntegerConvertNode.convert(initNode, stamp, graph());
+        }
+        ValueNode maxTripCount = loop.counted().maxTripCountNode(assumePositiveTripCount);
+        if (!maxTripCount.stamp().isCompatible(stamp)) {
+            maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp, graph());
+        }
+        return add(graph, mul(graph, stride, sub(graph, maxTripCount, ConstantNode.forIntegerStamp(stamp, 1, graph))), initNode);
+    }
+
+    @Override
+    public ValueNode exitValueNode() {
+        Stamp stamp = phi.stamp();
+        ValueNode maxTripCount = loop.counted().maxTripCountNode(false);
+        if (!maxTripCount.stamp().isCompatible(stamp)) {
+            maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp, graph());
+        }
+        return add(graph(), mul(graph(), strideNode(), maxTripCount), initNode());
     }
 
     @Override
@@ -124,6 +157,15 @@ public class BasicInductionVariable extends InductionVariable {
 
     @Override
     public long constantExtremum() {
-        return constantStride() * loop.counted().constantMaxTripCount() + constantInit();
+        return constantStride() * (loop.counted().constantMaxTripCount() - 1) + constantInit();
+    }
+
+    @Override
+    public void deleteUnusedNodes() {
+    }
+
+    @Override
+    public String toString() {
+        return String.format("BasicInductionVariable %s %s %s %s", initNode(), phi, op.getNodeClass().shortName(), strideNode());
     }
 }
