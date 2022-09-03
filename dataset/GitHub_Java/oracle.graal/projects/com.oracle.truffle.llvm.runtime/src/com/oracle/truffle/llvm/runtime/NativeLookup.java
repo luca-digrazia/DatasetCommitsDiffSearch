@@ -116,10 +116,10 @@ public final class NativeLookup {
 
     private static String getNativeType(Type type) {
         if (type instanceof FunctionType) {
-            return prepareSignature((FunctionType) type);
+            return prepareSignature((FunctionType) type, 0);
         } else if (type instanceof PointerType && ((PointerType) type).getPointeeType() instanceof FunctionType) {
             FunctionType functionType = (FunctionType) ((PointerType) type).getPointeeType();
-            return prepareSignature(functionType);
+            return prepareSignature(functionType, 0);
         } else if (type instanceof PointerType) {
             return "POINTER";
         } else if (type instanceof PrimitiveType) {
@@ -157,18 +157,7 @@ public final class NativeLookup {
         return types;
     }
 
-    /**
-     * On Darwin, some native symbols are given a prefix supposedly to prevent mangling, e.g. glob,
-     * chmod.
-     */
-    private static final String NO_MANGLE_PREFIX = "\"\\01_";
-
-    private static TruffleObject getNativeFunction(List<TruffleObject> libraryHandles, TruffleObject defaultLibrary, String nameIn) {
-        String name = nameIn;
-        if (name.contains(NO_MANGLE_PREFIX)) {
-            name = name.replace(NO_MANGLE_PREFIX, "");
-            name = name.substring(0, name.length() - 1);
-        }
+    private static TruffleObject getNativeFunction(List<TruffleObject> libraryHandles, TruffleObject defaultLibrary, String name) {
         for (TruffleObject libraryHandle : libraryHandles) {
             TruffleObject symbol = getNativeFunction(libraryHandle, name);
             if (symbol != null) {
@@ -177,7 +166,7 @@ public final class NativeLookup {
         }
         TruffleObject symbol = getNativeFunction(defaultLibrary, name);
         if (symbol == null) {
-            LLVMLogger.info("external symbol " + nameIn + " could not be resolved!");
+            LLVMLogger.info("external symbol " + name + " could not be resolved!");
         }
         return symbol;
     }
@@ -234,7 +223,7 @@ public final class NativeLookup {
         }
     }
 
-    public TruffleObject getNativeFunction(String name, String signature) {
+    TruffleObject getNativeFunction(String name, String signature) {
         CompilerAsserts.neverPartOfCompilation();
         TruffleObject nativeSymbol = getNativeFunction(name);
         if (nativeSymbol != null) {
@@ -244,11 +233,11 @@ public final class NativeLookup {
         }
     }
 
-    static String prepareSignature(FunctionType type) {
+    static String prepareSignature(FunctionType type, int skipArguments) {
         // TODO varargs
         CompilerAsserts.neverPartOfCompilation();
         String nativeRet = getNativeType(type.getReturnType());
-        String[] argTypes = getNativeTypes(type.getArgumentTypes(), 0);
+        String[] argTypes = getNativeTypes(type.getArgumentTypes(), skipArguments);
         StringBuilder sb = new StringBuilder();
         sb.append("(");
         for (String a : argTypes) {

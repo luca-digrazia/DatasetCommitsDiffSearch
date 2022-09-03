@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.nodes.cast;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -46,7 +45,6 @@ import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -55,17 +53,17 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
 
     @Specialization
     public int executeI32(LLVMFunctionDescriptor from) {
-        return (int) from.getFunctionPointer();
+        return from.getFunctionIndex();
     }
 
     @Specialization
     public int executeI32(LLVMFunctionHandle from) {
-        return (int) from.getFunctionPointer();
+        return from.getFunctionIndex();
     }
 
     @Specialization
-    public int executeLLVMAddress(LLVMGlobalVariable from, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        return (int) globalAccess.getNativeLocation(from).getVal();
+    public int executeLLVMAddress(LLVMGlobalVariable from) {
+        return (int) from.getNativeLocation().getVal();
     }
 
     @Specialization
