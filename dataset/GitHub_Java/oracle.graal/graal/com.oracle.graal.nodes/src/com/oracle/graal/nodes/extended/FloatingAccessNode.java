@@ -70,6 +70,11 @@ public abstract class FloatingAccessNode extends FloatingGuardedNode implements 
     }
 
     @Override
+    public FloatingAccessNode asNode() {
+        return this;
+    }
+
+    @Override
     public boolean canDeoptimize() {
         return nullCheck;
     }
@@ -93,10 +98,6 @@ public abstract class FloatingAccessNode extends FloatingGuardedNode implements 
     @Override
     public BarrierType getBarrierType() {
         return barrierType;
-    }
-
-    public FrameState getState() {
-        return deoptState;
     }
 
     @Override

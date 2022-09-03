@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -77,8 +78,18 @@ public abstract class AccessNode extends DeoptimizingFixedWithNextNode implement
     }
 
     @Override
+    public AccessNode asNode() {
+        return this;
+    }
+
+    @Override
     public boolean canDeoptimize() {
         return nullCheck;
+    }
+
+    @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return DeoptimizationReason.NullCheckException;
     }
 
     @Override
