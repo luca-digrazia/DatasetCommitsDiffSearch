@@ -181,10 +181,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         }
     }
 
-    public final void resetCompilationProfile() {
-        this.compilationProfile = createCompilationProfile();
-    }
-
     protected List<OptimizedAssumption> getProfiledTypesAssumptions() {
         return getCompilationProfile().getProfiledTypesAssumptions();
     }
@@ -232,15 +228,12 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     @TruffleCallBoundary
     protected final Object callBoundary(Object[] args) {
-        if (CompilerDirectives.inInterpreterOrLowTier()) {
+        if (CompilerDirectives.inInterpreter()) {
             // We are called and we are still in Truffle interpreter mode.
-            if (CompilerDirectives.inInterpreter() && isValid()) {
-                // Native entry stubs were deoptimized => reinstall.
+            getCompilationProfile().interpreterCall(this);
+            if (isValid()) {
+                // Stubs were deoptimized => reinstall.
                 runtime().bypassedInstalledCode();
-            }
-            if (getCompilationProfile().interpreterOrLowTierCall(this)) {
-                // synchronous compile -> call again to take us to the compiled code
-                return doInvoke(args);
             }
         } else {
             // We come here from compiled code
@@ -310,32 +303,22 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return OptimizedCompilationProfile.create(PolyglotCompilerOptions.getPolyglotValues(rootNode));
     }
 
-    /**
-     * Returns <code>true</code> if the call target was already compiled or was compiled
-     * synchronously. Returns <code>false</code> if compilation was not scheduled or is happening in
-     * the background. Use {@link #isCompiling()} to find out whether it is actually compiling.
-     */
-    public final boolean compile() {
-        if (isValid()) {
-            return true;
-        }
+    public final void compile() {
         if (!isCompiling()) {
+            if (compilationProfile == null) {
+                initialize();
+            }
+
             if (!runtime().acceptForCompilation(getRootNode())) {
-                return false;
+                return;
             }
 
             CancellableCompileTask task = null;
             // Do not try to compile this target concurrently,
             // but do not block other threads if compilation is not asynchronous.
             synchronized (this) {
-                if (isValid()) {
-                    return true;
-                }
-                if (this.compilationProfile == null) {
-                    initialize();
-                }
                 if (!isCompiling()) {
-                    this.compilationTask = task = runtime().submitForCompilation(this);
+                    compilationTask = task = runtime().submitForCompilation(this);
                 }
             }
             if (task != null) {
@@ -345,11 +328,9 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                                     !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown);
                     boolean mayBeAsynchronous = TruffleCompilerOptions.getValue(TruffleBackgroundCompilation) && allowBackgroundCompilation;
                     runtime().finishCompilation(this, submitted, mayBeAsynchronous);
-                    return !mayBeAsynchronous;
                 }
             }
         }
-        return false;
     }
 
     public final boolean isCompiling() {
