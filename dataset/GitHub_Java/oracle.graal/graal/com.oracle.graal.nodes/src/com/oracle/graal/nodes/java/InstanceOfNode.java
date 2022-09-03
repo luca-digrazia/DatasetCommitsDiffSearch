@@ -28,29 +28,35 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
  */
-public final class InstanceOfNode extends BooleanNode implements Canonicalizable, Lowerable, LIRLowerable, Virtualizable {
+public final class InstanceOfNode extends BooleanNode implements Canonicalizable, Lowerable, LIRLowerable {
 
     @Input private ValueNode object;
-    private final ResolvedJavaType type;
+    @Input private ValueNode targetClassInstruction;
+    private final ResolvedJavaType targetClass;
     private final JavaTypeProfile profile;
 
     /**
      * Constructs a new InstanceOfNode.
      *
-     * @param type the target type of the instanceof check
-     * @param object the object being tested by the instanceof
+     * @param targetClassInstruction the instruction which produces the target class of the instanceof check
+     * @param targetClass the class which is the target of the instanceof check
+     * @param object the instruction producing the object input to this instruction
      */
-    public InstanceOfNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
+    public InstanceOfNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object) {
+        this(targetClassInstruction, targetClass, object, null);
+    }
+
+    public InstanceOfNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object, JavaTypeProfile profile) {
         super(StampFactory.condition());
-        this.type = type;
+        this.targetClassInstruction = targetClassInstruction;
+        this.targetClass = targetClass;
         this.object = object;
         this.profile = profile;
-        assert type != null;
+        assert targetClass != null;
     }
 
     @Override
@@ -67,10 +73,10 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
         assert object() != null : this;
 
         ObjectStamp stamp = object().objectStamp();
-        ResolvedJavaType stampType = stamp.type();
+        ResolvedJavaType type = stamp.type();
 
         if (stamp.isExactType()) {
-            boolean subType = stampType.isSubtypeOf(type());
+            boolean subType = type.isSubtypeOf(targetClass());
 
             if (subType) {
                 if (stamp.nonNull()) {
@@ -86,8 +92,8 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
                 // we also don't care about null values, since they will also make the check fail.
                 return ConstantNode.forBoolean(false, graph());
             }
-        } else if (stampType != null) {
-            boolean subType = stampType.isSubtypeOf(type());
+        } else if (type != null) {
+            boolean subType = type.isSubtypeOf(targetClass());
 
             if (subType) {
                 if (stamp.nonNull()) {
@@ -112,11 +118,16 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
         return object;
     }
 
+    public ValueNode targetClassInstruction() {
+        return targetClassInstruction;
+    }
+
     /**
-     * Gets the type being tested.
+     * Gets the target class, i.e. the class being cast to, or the class being tested against.
+     * @return the target class
      */
-    public ResolvedJavaType type() {
-        return type;
+    public ResolvedJavaType targetClass() {
+        return targetClass;
     }
 
     public JavaTypeProfile profile() {
@@ -129,13 +140,5 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
             assertTrue(usage instanceof IfNode || usage instanceof ConditionalNode, "unsupported usage: ", usage);
         }
         return super.verify();
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        VirtualObjectNode virtual = tool.getVirtualState(object());
-        if (virtual != null) {
-            tool.replaceWithValue(ConstantNode.forBoolean(virtual.type().isSubtypeOf(type()), graph()));
-        }
     }
 }
