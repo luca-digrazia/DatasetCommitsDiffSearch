@@ -39,7 +39,7 @@ class DirectObjectStoreNode extends FixedWithNextNode implements Lowerable {
     private final int displacement;
 
     public DirectObjectStoreNode(ValueNode object, int displacement, ValueNode offset, ValueNode value) {
-        super(StampFactory.illegal());
+        super(StampFactory.forVoid());
         this.object = object;
         this.value = value;
         this.offset = offset;
@@ -59,7 +59,7 @@ class DirectObjectStoreNode extends FixedWithNextNode implements Lowerable {
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
+    public void lower(LoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) this.graph();
         IndexedLocationNode location = IndexedLocationNode.create(LocationNode.ANY_LOCATION, value.kind(), displacement, offset, graph, false);
         WriteNode write = graph.add(new WriteNode(object, value, location));

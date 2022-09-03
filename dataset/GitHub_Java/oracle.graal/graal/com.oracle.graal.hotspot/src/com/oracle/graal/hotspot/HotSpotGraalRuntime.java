@@ -25,15 +25,13 @@ package com.oracle.graal.hotspot;
 import java.lang.reflect.*;
 import com.oracle.graal.api.*;
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.interpreter.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.target.amd64.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.cri.xir.*;
 
@@ -54,7 +52,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime {
     private HotSpotRuntime runtime;
     private GraalCompiler compiler;
     private TargetDescription target;
-    private HotSpotRuntimeInterpreterInterface runtimeInterpreterInterface;
     private volatile HotSpotGraphCache cache;
 
     private final HotSpotVMConfig config;
@@ -83,8 +80,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime {
         // set the final fields
         compilerToVm = toVM;
         vmToCompiler = toCompiler;
-        config = new HotSpotVMConfig();
-        compilerToVm.initializeConfiguration(config);
+        config = compilerToVm.getConfiguration();
         config.check();
 
         if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {
@@ -118,9 +114,9 @@ public final class HotSpotGraalRuntime implements GraalRuntime {
             // these options are important - graal will not generate correct code without them
             GraalOptions.StackShadowPages = config.stackShadowPages;
 
-            XirGenerator generator = new HotSpotXirGenerator(config, getTarget(), getRuntime().getGlobalStubRegisterConfig(), this);
+            RiXirGenerator generator = new HotSpotXirGenerator(config, getTarget(), getRuntime().getGlobalStubRegisterConfig(), this);
             if (Logger.ENABLED) {
-                generator = LoggingProxy.getProxy(XirGenerator.class, generator);
+                generator = LoggingProxy.getProxy(RiXirGenerator.class, generator);
             }
 
             Backend backend = Backend.create(runtime, target);
@@ -180,13 +176,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime {
         return compilerToVm.Signature_lookupType(returnType, accessingClass, eagerResolve);
     }
 
-    public HotSpotRuntimeInterpreterInterface getRuntimeInterpreterInterface() {
-        if (runtimeInterpreterInterface == null) {
-            runtimeInterpreterInterface = new HotSpotRuntimeInterpreterInterface(getRuntime());
-        }
-        return runtimeInterpreterInterface;
-    }
-
     public HotSpotRuntime getRuntime() {
         if (runtime == null) {
             runtime = new HotSpotRuntime(config, this);
@@ -220,12 +209,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime {
         }
         if (clazz == GraalCompiler.class) {
             return (T) getCompiler();
-        }
-        if (clazz == MetaAccessProvider.class) {
-            return (T) getRuntime();
-        }
-        if (clazz == RuntimeInterpreterInterface.class) {
-            return (T) getRuntimeInterpreterInterface();
         }
         return null;
     }

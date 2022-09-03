@@ -25,10 +25,9 @@ package com.oracle.graal.compiler.phases;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.schedule.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -39,11 +38,16 @@ import com.oracle.graal.nodes.spi.*;
  */
 public class LoweringPhase extends Phase {
 
-    private abstract class LoweringToolBase implements LoweringTool {
+    private class LoweringToolBase implements LoweringTool {
 
         @Override
         public GraalCodeCacheProvider getRuntime() {
             return runtime;
+        }
+
+        @Override
+        public ValueNode getGuardAnchor() {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -54,6 +58,12 @@ public class LoweringPhase extends Phase {
         @Override
         public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, long leafGraphId) {
             return createGuard(condition, deoptReason, action, false, leafGraphId);
+        }
+
+        @Override
+        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId) {
+            // TODO (thomaswue): Document why this must not be called on floating nodes.
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -70,56 +80,56 @@ public class LoweringPhase extends Phase {
         this.assumptions = assumptions;
     }
 
-    private static boolean containsLowerable(NodeIterable<Node> nodes) {
-        for (Node n : nodes) {
-            if (n instanceof Lowerable) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     @Override
     protected void run(final StructuredGraph graph) {
-        int  i = 0;
+        // Step 1: repeatedly lower fixed nodes until no new ones are created
         NodeBitMap processed = graph.createNodeBitMap();
+        int  i = 0;
         while (true) {
             int mark = graph.getMark();
-            final SchedulePhase schedule = new SchedulePhase();
-            schedule.apply(graph);
-
-            processBlock(schedule.getCFG().getStartBlock(), graph.createNodeBitMap(), null, schedule, processed);
+            ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, false, true, true);
+            processBlock(cfg.getStartBlock(), graph.createNodeBitMap(), processed, null);
             Debug.dump(graph, "Lowering iteration %d", i++);
             new CanonicalizerPhase(null, runtime, assumptions, mark, null).apply(graph);
 
-            if (!containsLowerable(graph.getNewNodes(mark))) {
-                // No new lowerable nodes - done!
+            if (graph.getNewNodes(mark).filter(FixedNode.class).isEmpty()) {
                 break;
             }
             assert graph.verify();
             processed.grow();
         }
+
+        // Step 2: lower the floating nodes
+        processed.negate();
+        final LoweringTool loweringTool = new LoweringToolBase();
+        for (Node node : processed) {
+            if (node instanceof Lowerable) {
+                assert !(node instanceof FixedNode) || node.predecessor() == null : node;
+                ((Lowerable) node).lower(loweringTool);
+            }
+        }
     }
 
-    private void processBlock(Block block, NodeBitMap activeGuards, FixedNode parentAnchor, SchedulePhase schedule, NodeBitMap processed) {
+    private void processBlock(Block block, NodeBitMap activeGuards, NodeBitMap processed, FixedNode parentAnchor) {
 
         FixedNode anchor = parentAnchor;
         if (anchor == null) {
             anchor = block.getBeginNode();
         }
-        process(block, activeGuards, anchor, schedule, processed);
+        process(block, activeGuards, processed, anchor);
 
         // Process always reached block first.
         Block alwaysReachedBlock = block.getPostdominator();
         if (alwaysReachedBlock != null && alwaysReachedBlock.getDominator() == block) {
-            processBlock(alwaysReachedBlock, activeGuards, anchor, schedule, processed);
+            assert alwaysReachedBlock.getDominator() == block;
+            processBlock(alwaysReachedBlock, activeGuards, processed, anchor);
         }
 
         // Now go for the other dominators.
         for (Block dominated : block.getDominated()) {
             if (dominated != alwaysReachedBlock) {
                 assert dominated.getDominator() == block;
-                processBlock(dominated, activeGuards, null, schedule, processed);
+                processBlock(dominated, activeGuards, processed, null);
             }
         }
 
@@ -130,7 +140,7 @@ public class LoweringPhase extends Phase {
         }
     }
 
-    private void process(final Block b, final NodeBitMap activeGuards, final ValueNode anchor, SchedulePhase schedule, NodeBitMap processed) {
+    private void process(final Block b, final NodeBitMap activeGuards, NodeBitMap processed, final ValueNode anchor) {
 
         final LoweringTool loweringTool = new LoweringToolBase() {
 
@@ -159,7 +169,7 @@ public class LoweringPhase extends Phase {
         };
 
         // Lower the instructions of this block.
-        for (Node node : schedule.nodesFor(b)) {
+        for (Node node : b.getNodes()) {
             if (!processed.isMarked(node)) {
                 processed.mark(node);
                 if (node instanceof Lowerable) {

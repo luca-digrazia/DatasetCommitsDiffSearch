@@ -36,12 +36,12 @@ import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.compiler.types.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.max.cri.xir.*;
 
 public class GraalCompiler {
@@ -149,7 +149,7 @@ public class GraalCompiler {
             }
         }
 
-        //new ConvertUnreachedToGuardPhase(optimisticOpts).apply(graph);
+        new ConvertUnreachedToGuardPhase(optimisticOpts).apply(graph);
 
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
 
@@ -188,17 +188,18 @@ public class GraalCompiler {
         if (GraalOptions.CheckCastElimination) {
             new CheckCastEliminationPhase().apply(graph);
         }
-        if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-        }
-        if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-        }
 
         if (GraalOptions.OptLoopTransform) {
             new LoopTransformLowPhase().apply(graph);
         }
         new RemoveValueProxyPhase().apply(graph);
+        if (GraalOptions.OptCanonicalizer) {
+            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
+        }
+        if (GraalOptions.CheckCastElimination) {
+            new CheckCastEliminationPhase().apply(graph);
+        }
+
 
         plan.runPhases(PhasePosition.MID_LEVEL, graph);
 

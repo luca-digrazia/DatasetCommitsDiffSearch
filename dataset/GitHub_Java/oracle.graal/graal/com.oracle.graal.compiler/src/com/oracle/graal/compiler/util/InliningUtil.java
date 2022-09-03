@@ -28,24 +28,22 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
+import com.oracle.graal.api.meta.JavaTypeProfile.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.FrameState.InliningIdentifier;
+import com.oracle.graal.nodes.FrameState.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 public class InliningUtil {
-
-    private static final DebugMetric metricInliningTailDuplication = Debug.metric("InliningTailDuplication");
 
     public interface InliningCallback {
         StructuredGraph buildGraph(ResolvedJavaMethod method);
@@ -58,9 +56,9 @@ public class InliningUtil {
         if (!Debug.isLogEnabled()) {
             return null;
         } else if (invoke != null && invoke.stateAfter() != null) {
-            return methodName(invoke.stateAfter(), invoke.bci()) + ": " + MetaUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
+            return methodName(invoke.stateAfter(), invoke.bci()) + ": " + CodeUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
         } else {
-            return MetaUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
+            return CodeUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
         }
     }
 
@@ -80,7 +78,7 @@ public class InliningUtil {
             sb.append(methodName(frameState.outerFrameState(), frameState.outerFrameState().bci));
             sb.append("->");
         }
-        sb.append(MetaUtil.format("%h.%n", frameState.method()));
+        sb.append(CodeUtil.format("%h.%n", frameState.method()));
         sb.append("@").append(bci);
         return sb.toString();
     }
@@ -157,7 +155,7 @@ public class InliningUtil {
 
         @Override
         public String toString() {
-            return "exact " + MetaUtil.format("%H.%n(%p):%r", concrete);
+            return "exact " + CodeUtil.format("%H.%n(%p):%r", concrete);
         }
 
         @Override
@@ -211,7 +209,7 @@ public class InliningUtil {
 
         @Override
         public String toString() {
-            return "type-checked " + MetaUtil.format("%H.%n(%p):%r", concrete);
+            return "type-checked " + CodeUtil.format("%H.%n(%p):%r", concrete);
         }
 
         @Override
@@ -272,7 +270,6 @@ public class InliningUtil {
         private void inlineMultipleMethods(StructuredGraph graph, GraalCodeCacheProvider runtime, InliningCallback callback, int numberOfMethods, boolean hasReturnValue) {
             FixedNode continuation = invoke.next();
 
-            ValueNode originalReceiver = invoke.callTarget().receiver();
             // setup merge and phi nodes for results and exceptions
             MergeNode returnMerge = graph.add(new MergeNode());
             returnMerge.setProbability(invoke.probability());
@@ -332,7 +329,7 @@ public class InliningUtil {
                 GraphUtil.killCFG(invokeWithExceptionNode.exceptionEdge());
             }
 
-            // replace the invoke with a switch on the type of the actual receiver
+            // replace the invoke with a cascade of if nodes
             ReadHubNode objectClassNode = graph.add(new ReadHubNode(invoke.callTarget().receiver()));
             graph.addBeforeFixed(invoke.node(), objectClassNode);
             FixedNode dispatchOnType = createDispatchOnType(graph, objectClassNode, calleeEntryNodes, unknownTypeNode);
@@ -343,8 +340,6 @@ public class InliningUtil {
             invoke.node().replaceAtUsages(returnValuePhi);
             invoke.node().replaceAndDelete(dispatchOnType);
 
-            ArrayList<PiNode> replacements = new ArrayList<>();
-
             // do the actual inlining for every invoke
             for (int i = 0; i < calleeEntryNodes.length; i++) {
                 BeginNode node = calleeEntryNodes[i];
@@ -352,7 +347,7 @@ public class InliningUtil {
 
                 ResolvedJavaType commonType = getLeastCommonType(i);
                 ValueNode receiver = invokeForInlining.callTarget().receiver();
-                PiNode anchoredReceiver = createAnchoredReceiver(graph, node, commonType, receiver);
+                ValueNode anchoredReceiver = createAnchoredReceiver(graph, node, commonType, receiver);
                 invokeForInlining.callTarget().replaceFirstInput(receiver, anchoredReceiver);
 
                 ResolvedJavaMethod concrete = concretes.get(i);
@@ -360,31 +355,6 @@ public class InliningUtil {
                 callback.recordMethodContentsAssumption(concrete);
                 assert !IntrinsificationPhase.canIntrinsify(invokeForInlining, concrete, runtime);
                 InliningUtil.inline(invokeForInlining, calleeGraph, false);
-                replacements.add(anchoredReceiver);
-            }
-            if (shouldFallbackToInvoke()) {
-                replacements.add(null);
-            }
-            if (GraalOptions.OptTailDuplication) {
-                /*
-                 * We might want to perform tail duplication at the merge after a type switch, is there are invokes that would
-                 * benefit from the improvement in type information.
-                 */
-                FixedNode current = returnMerge;
-                int opportunities = 0;
-                while (current instanceof FixedWithNextNode) {
-                    current = ((FixedWithNextNode) current).next();
-                    if (current instanceof InvokeNode && ((InvokeNode) current).callTarget().receiver() == originalReceiver) {
-                        opportunities++;
-                    } else if (current.inputs().contains(originalReceiver)) {
-                        opportunities++;
-                    }
-                }
-                if (opportunities > 0) {
-                    metricInliningTailDuplication.increment();
-                    Debug.log("MultiTypeGuardInlineInfo starting tail duplication (%d opportunities)", opportunities);
-                    TailDuplicationPhase.tailDuplicate(returnMerge, TailDuplicationPhase.TRUE_DECISION, replacements);
-                }
             }
         }
 
@@ -517,7 +487,7 @@ public class InliningUtil {
             StringBuilder builder = new StringBuilder(shouldFallbackToInvoke() ? "megamorphic" : "polymorphic");
             builder.append(String.format(", %d methods with %d type checks:", concretes.size(), ptypes.length));
             for (int i = 0; i < concretes.size(); i++) {
-                builder.append(MetaUtil.format("  %H.%n(%p):%r", concretes.get(i)));
+                builder.append(CodeUtil.format("  %H.%n(%p):%r", concretes.get(i)));
             }
             return builder.toString();
         }
@@ -544,8 +514,8 @@ public class InliningUtil {
         @Override
         public void inline(StructuredGraph graph, GraalCodeCacheProvider runtime, InliningCallback callback) {
             if (Debug.isLogEnabled()) {
-                String targetName = MetaUtil.format("%H.%n(%p):%r", invoke.callTarget().targetMethod());
-                String concreteName = MetaUtil.format("%H.%n(%p):%r", concrete);
+                String targetName = CodeUtil.format("%H.%n(%p):%r", invoke.callTarget().targetMethod());
+                String concreteName = CodeUtil.format("%H.%n(%p):%r", concrete);
                 Debug.log("recording concrete method assumption: %s on receiver type %s -> %s", targetName, context, concreteName);
             }
             callback.recordConcreteMethodAssumption(invoke.callTarget().targetMethod(), context, concrete);
@@ -555,7 +525,7 @@ public class InliningUtil {
 
         @Override
         public String toString() {
-            return "assumption " + MetaUtil.format("%H.%n(%p):%r", concrete);
+            return "assumption " + CodeUtil.format("%H.%n(%p):%r", concrete);
         }
 
         @Override
@@ -709,7 +679,7 @@ public class InliningUtil {
         }
     }
 
-    private static PiNode createAnchoredReceiver(StructuredGraph graph, FixedNode anchor, ResolvedJavaType commonType, ValueNode receiver) {
+    private static ValueNode createAnchoredReceiver(StructuredGraph graph, FixedNode anchor, ResolvedJavaType commonType, ValueNode receiver) {
         // to avoid that floating reads on receiver fields float above the type check
         return graph.unique(new PiNode(receiver, anchor, StampFactory.declaredNonNull(commonType)));
     }

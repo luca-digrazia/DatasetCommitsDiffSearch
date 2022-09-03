@@ -28,6 +28,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.graph.*;
 import com.oracle.graal.compiler.util.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -169,7 +170,7 @@ public class EscapeAnalysisPhase extends Phase {
 
             if (virtual.fieldsCount() > 0) {
                 final BlockExitState startState = new BlockExitState(escapeFields, virtual);
-                new PostOrderNodeIterator<BlockExitState>(next, startState) {
+                final PostOrderNodeIterator<?> iterator = new PostOrderNodeIterator<BlockExitState>(next, startState) {
                     @Override
                     protected void node(FixedNode curNode) {
                         op.updateState(virtual, curNode, fields, state.fieldState);
@@ -183,7 +184,8 @@ public class EscapeAnalysisPhase extends Phase {
                             ((StateSplit) curNode).stateAfter().addVirtualObjectMapping(v);
                         }
                     }
-                }.apply();
+                };
+                iterator.apply();
             }
         }
     }

@@ -22,21 +22,19 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.max.criutils.MemoryBarriers.*;
+import static com.oracle.max.cri.util.MemoryBarriers.*;
 
 import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CodeUtil.RefMapFormatter;
-import com.oracle.graal.api.code.CompilationResult.Call;
-import com.oracle.graal.api.code.CompilationResult.DataPatch;
-import com.oracle.graal.api.code.CompilationResult.Mark;
-import com.oracle.graal.api.code.CompilationResult.Safepoint;
+import com.oracle.graal.api.code.CompilationResult.*;
+import com.oracle.graal.api.code.CodeUtil.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaType.Representation;
+import com.oracle.graal.api.meta.JavaType.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -46,7 +44,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.max.criutils.*;
@@ -60,7 +57,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
     private final HotSpotRegisterConfig globalStubRegConfig;
     private final HotSpotGraalRuntime compiler;
     private CheckCastSnippets.Templates checkcastSnippets;
-    private NewObjectSnippets.Templates newObjectSnippets;
+    private NewInstanceSnippets.Templates newInstanceSnippets;
 
     public HotSpotRuntime(HotSpotVMConfig config, HotSpotGraalRuntime compiler) {
         this.config = config;
@@ -76,9 +73,9 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
         installer.install(UnsafeSnippets.class);
         installer.install(ArrayCopySnippets.class);
         installer.install(CheckCastSnippets.class);
-        installer.install(NewObjectSnippets.class);
+        installer.install(NewInstanceSnippets.class);
         checkcastSnippets = new CheckCastSnippets.Templates(this);
-        newObjectSnippets = new NewObjectSnippets.Templates(this, compiler.getTarget(), config.useTLAB);
+        newInstanceSnippets = new NewInstanceSnippets.Templates(this, config.useTLAB);
     }
 
 
@@ -376,18 +373,12 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
             }
         } else if (n instanceof NewInstanceNode) {
             if (shouldLower(graph, GraalOptions.HIRLowerNewInstance)) {
-                newObjectSnippets.lower((NewInstanceNode) n, tool);
-            }
-        } else if (n instanceof NewArrayNode) {
-            if (shouldLower(graph, GraalOptions.HIRLowerNewArray)) {
-                newObjectSnippets.lower((NewArrayNode) n, tool);
+                newInstanceSnippets.lower((NewInstanceNode) n, tool);
             }
         } else if (n instanceof TLABAllocateNode) {
-            newObjectSnippets.lower((TLABAllocateNode) n, tool);
-        } else if (n instanceof InitializeObjectNode) {
-            newObjectSnippets.lower((InitializeObjectNode) n, tool);
-        } else if (n instanceof InitializeArrayNode) {
-            newObjectSnippets.lower((InitializeArrayNode) n, tool);
+            newInstanceSnippets.lower((TLABAllocateNode) n, tool);
+        } else if (n instanceof InitializeNode) {
+            newInstanceSnippets.lower((InitializeNode) n, tool);
         } else {
             assert false : "Node implementing Lowerable not handled: " + n;
         }
@@ -399,13 +390,13 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
                 return true;
             }
             ResolvedJavaMethod method = graph.method();
-            return method != null && MetaUtil.format("%H.%n", method).contains(option);
+            return method != null && CodeUtil.format("%H.%n", method).contains(option);
         }
         return false;
     }
 
-    private static IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index) {
-        return IndexedLocationNode.create(LocationNode.getArrayLocation(elementKind), elementKind, elementKind.arrayBaseOffset(), index, graph, true);
+    private IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index) {
+        return IndexedLocationNode.create(LocationNode.getArrayLocation(elementKind), elementKind, config.getArrayOffset(elementKind), index, graph, true);
     }
 
     private SafeReadNode safeReadArrayLength(ValueNode array, long leafGraphId) {
@@ -537,7 +528,6 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public int convertDeoptAction(DeoptimizationAction action) {
-        // This must be kept in sync with the DeoptAction enum defined in deoptimization.hpp
         switch(action) {
             case None: return 0;
             case RecompileIfTooManyDeopts: return 1;
@@ -550,7 +540,6 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public int convertDeoptReason(DeoptimizationReason reason) {
-        // This must be kept in sync with the DeoptReason enum defined in deoptimization.hpp
         switch(reason) {
             case None: return 0;
             case NullCheckException: return 1;

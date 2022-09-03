@@ -22,10 +22,9 @@
  */
 package com.oracle.graal.hotspot.snippets;
 
+import static com.oracle.graal.hotspot.nodes.CastFromHub.*;
 import static com.oracle.graal.hotspot.nodes.RegisterNode.*;
 import static com.oracle.graal.hotspot.snippets.DirectObjectStoreNode.*;
-import static com.oracle.graal.nodes.calc.Condition.*;
-import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 import static com.oracle.graal.nodes.extended.UnsafeLoadNode.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
 import static com.oracle.graal.snippets.nodes.ExplodeLoopNode.*;
@@ -33,7 +32,6 @@ import static com.oracle.max.asm.target.amd64.AMD64.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -55,64 +53,78 @@ import com.oracle.graal.snippets.SnippetTemplate.Key;
  */
 public class NewInstanceSnippets implements SnippetsInterface {
 
-    /**
-     * Type test used when the type being tested against is a final type.
-     */
     @Snippet
-    public static Object newInstance(@Parameter("hub") Object hub, @ConstantParameter("size") int size, @ConstantParameter("checkInit") boolean checkInit) {
-        if (checkInit) {
-            int klassState = load(hub, 0, klassStateOffset(), Kind.Int);
-            if (klassState != klassStateFullyInitialized()) {
-                Object instance = NewInstanceStubCall.call(hub);
-                return formatInstance(hub, size, instance);
-            }
-        }
-
+    public static Word allocate(@ConstantParameter("size") int size) {
         Word thread = asWord(register(r15, wordKind()));
         Word top = loadWord(thread, threadTlabTopOffset());
         Word end = loadWord(thread, threadTlabEndOffset());
         Word newTop = top.plus(size);
-        Object instance;
-        if (newTop.cmp(BE, end)) {
-            instance = cast(top, Object.class);
+        if (newTop.belowOrEqual(end)) {
             store(thread, 0, threadTlabTopOffset(), newTop);
-        } else {
-            instance = NewInstanceStubCall.call(hub);
+            return top;
         }
+        return Word.zero();
+    }
 
-        return formatInstance(hub, size, instance);
+    @Snippet
+    public static Object initialize(
+                    @Parameter("memory") Word memory,
+                    @Parameter("hub") Object hub,
+                    @Parameter("prototypeHeader") Word headerPrototype,
+                    @ConstantParameter("size") int size) {
+
+        if (memory == Word.zero()) {
+            return NewInstanceStubCall.call(hub);
+        }
+        formatObject(hub, size, memory, headerPrototype);
+        Object instance = memory.toObject();
+        return castFromHub(verifyOop(instance), hub);
+    }
+
+    private static Object verifyOop(Object object) {
+        if (verifyOops()) {
+            VerifyOopStubCall.call(object);
+        }
+        return object;
     }
 
     private static Word asWord(Object object) {
-        return cast(object, Word.class);
+        return Word.fromObject(object);
     }
 
-    private static Word loadWord(Object object, int offset) {
-        return cast(load(object, 0, offset, wordKind()), Word.class);
+    private static Word loadWord(Word address, int offset) {
+        Object value = loadObject(address, 0, offset, true);
+        return asWord(value);
     }
 
     /**
-     * Formats the header of a created instance and zeroes out its body.
+     * Maximum size of an object whose body is initialized by a sequence of
+     * zero-stores to its fields. Larger objects have their bodies initialized
+     * in a loop.
      */
-    private static Object formatInstance(Object hub, int size, Object instance) {
-        Word headerPrototype = cast(load(hub, 0, instanceHeaderPrototypeOffset(), wordKind()), Word.class);
-        store(instance, 0, 0, headerPrototype);
-        store(instance, 0, hubOffset(), hub);
-        explodeLoop();
-        for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
-            store(instance, 0, offset, 0);
+    private static final int MAX_UNROLLED_OBJECT_INITIALIZATION_SIZE = 10 * wordSize();
+
+    /**
+     * Formats some allocated memory with an object header zeroes out the rest.
+     */
+    private static void formatObject(Object hub, int size, Word memory, Word headerPrototype) {
+        store(memory, 0, 0, headerPrototype);
+        store(memory, 0, hubOffset(), hub);
+        if (size <= MAX_UNROLLED_OBJECT_INITIALIZATION_SIZE) {
+            explodeLoop();
+            for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
+                store(memory, 0, offset, 0);
+            }
+        } else {
+            for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
+                store(memory, 0, offset, 0);
+            }
         }
-        return instance;
     }
 
     @Fold
-    private static int klassStateOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().klassStateOffset;
-    }
-
-    @Fold
-    private static int klassStateFullyInitialized() {
-        return HotSpotGraalRuntime.getInstance().getConfig().klassStateFullyInitialized;
+    private static boolean verifyOops() {
+        return HotSpotGraalRuntime.getInstance().getConfig().verifyOops;
     }
 
     @Fold
@@ -136,11 +148,6 @@ public class NewInstanceSnippets implements SnippetsInterface {
     }
 
     @Fold
-    private static int instanceHeaderPrototypeOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().instanceHeaderPrototypeOffset;
-    }
-
-    @Fold
     private static int hubOffset() {
         return HotSpotGraalRuntime.getInstance().getConfig().hubOffset;
     }
@@ -148,14 +155,18 @@ public class NewInstanceSnippets implements SnippetsInterface {
     public static class Templates {
 
         private final Cache cache;
-        private final ResolvedJavaMethod newInstance;
+        private final ResolvedJavaMethod allocate;
+        private final ResolvedJavaMethod initialize;
         private final CodeCacheProvider runtime;
+        private final boolean useTLAB;
 
-        public Templates(CodeCacheProvider runtime) {
+        public Templates(CodeCacheProvider runtime, boolean useTLAB) {
             this.runtime = runtime;
             this.cache = new Cache(runtime);
+            this.useTLAB = useTLAB;
             try {
-                newInstance = runtime.getResolvedJavaMethod(NewInstanceSnippets.class.getDeclaredMethod("newInstance", Object.class, int.class, boolean.class));
+                allocate = runtime.getResolvedJavaMethod(NewInstanceSnippets.class.getDeclaredMethod("allocate", int.class));
+                initialize = runtime.getResolvedJavaMethod(NewInstanceSnippets.class.getDeclaredMethod("initialize", Word.class, Object.class, Word.class, int.class));
             } catch (NoSuchMethodException e) {
                 throw new GraalInternalError(e);
             }
@@ -165,17 +176,54 @@ public class NewInstanceSnippets implements SnippetsInterface {
          * Lowers a {@link NewInstanceNode}.
          */
         @SuppressWarnings("unused")
-        public void lower(NewInstanceNode newInstanceNode, CiLoweringTool tool) {
+        public void lower(NewInstanceNode newInstanceNode, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) newInstanceNode.graph();
             HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) newInstanceNode.instanceClass();
             HotSpotKlassOop hub = type.klassOop();
-            int instanceSize = type.instanceSize();
-            Key key = new Key(newInstance).add("size", instanceSize).add("checkInit", !type.isInitialized());
-            Arguments arguments = arguments("hub", hub);
+            int size = type.instanceSize();
+            assert (size % wordSize()) == 0;
+            assert size >= 0;
+
+            ValueNode memory;
+            if (!useTLAB) {
+                memory = ConstantNode.forObject(null, runtime, graph);
+            } else {
+                TLABAllocateNode tlabAllocateNode = graph.add(new TLABAllocateNode(size, wordKind()));
+                graph.addBeforeFixed(newInstanceNode, tlabAllocateNode);
+                memory = tlabAllocateNode;
+            }
+            InitializeNode initializeNode = graph.add(new InitializeNode(memory, type));
+            graph.replaceFixedWithFixed(newInstanceNode, initializeNode);
+        }
+
+        @SuppressWarnings("unused")
+        public void lower(TLABAllocateNode tlabAllocateNode, LoweringTool tool) {
+            StructuredGraph graph = (StructuredGraph) tlabAllocateNode.graph();
+            int size = tlabAllocateNode.size();
+            assert (size % wordSize()) == 0;
+            assert size >= 0;
+            Key key = new Key(allocate).add("size", size);
+            Arguments arguments = new Arguments();
             SnippetTemplate template = cache.get(key);
-            Debug.log("Lowering newInstance in %s: node=%s, template=%s, arguments=%s", graph, newInstanceNode, template, arguments);
-            template.instantiate(runtime, newInstanceNode, newInstanceNode, arguments);
-            new DeadCodeEliminationPhase().apply(graph);
+            Debug.log("Lowering fastAllocate in %s: node=%s, template=%s, arguments=%s", graph, tlabAllocateNode, template, arguments);
+            template.instantiate(runtime, tlabAllocateNode, tlabAllocateNode, arguments);
+        }
+
+        @SuppressWarnings("unused")
+        public void lower(InitializeNode initializeNode, LoweringTool tool) {
+            StructuredGraph graph = (StructuredGraph) initializeNode.graph();
+            HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) initializeNode.type();
+            HotSpotKlassOop hub = type.klassOop();
+            int size = type.instanceSize();
+            assert (size % wordSize()) == 0;
+            assert size >= 0;
+            Key key = new Key(initialize).add("size", size);
+            ValueNode memory = initializeNode.memory();
+            //assert memory instanceof AllocateNode || memory instanceof ConstantNode : memory;
+            Arguments arguments = arguments("memory", memory).add("hub", hub).add("prototypeHeader", type.prototypeHeader());
+            SnippetTemplate template = cache.get(key);
+            Debug.log("Lowering initialize in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
+            template.instantiate(runtime, initializeNode, initializeNode, arguments);
         }
     }
 }
