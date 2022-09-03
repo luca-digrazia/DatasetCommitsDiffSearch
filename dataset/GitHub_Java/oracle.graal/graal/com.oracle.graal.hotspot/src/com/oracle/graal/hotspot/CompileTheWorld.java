@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.compiler.GraalCompilerOptions.ExitVMOnException;
-import static com.oracle.graal.compiler.GraalCompilerOptions.PrintBailout;
-import static com.oracle.graal.compiler.GraalCompilerOptions.PrintStackTraceOnException;
 import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldClasspath;
 import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldConfig;
 import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldExcludeMethodFilter;
@@ -32,6 +29,9 @@ import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldMet
 import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldStartAt;
 import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldStopAt;
 import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldVerbose;
+import static jdk.vm.ci.compiler.Compiler.ExitVMOnException;
+import static jdk.vm.ci.compiler.Compiler.PrintBailout;
+import static jdk.vm.ci.compiler.Compiler.PrintStackTraceOnException;
 import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 
 import java.io.Closeable;
@@ -63,7 +63,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 
-import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.compiler.Compiler;
 import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
@@ -78,7 +78,6 @@ import jdk.vm.ci.options.OptionValue.OverrideScope;
 import jdk.vm.ci.options.OptionsParser;
 import jdk.vm.ci.options.OptionsParser.OptionConsumer;
 import jdk.vm.ci.runtime.JVMCI;
-import jdk.vm.ci.runtime.JVMCICompiler;
 
 import com.oracle.graal.bytecode.Bytecodes;
 import com.oracle.graal.compiler.CompilerThreadFactory;
@@ -477,14 +476,11 @@ public final class CompileTheWorld {
         });
 
         try {
-            // Temporary workaround until JDK-8142511 is integrated
-            BytecodeFrame.isPlaceholderBci(0);
-
             // compile dummy method to get compiler initialized outside of the
             // config debug override.
             HotSpotResolvedJavaMethod dummyMethod = (HotSpotResolvedJavaMethod) JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess().lookupJavaMethod(
                             CompileTheWorld.class.getDeclaredMethod("dummy"));
-            int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
+            int entryBCI = Compiler.INVOCATION_ENTRY_BCI;
             CompilationTask task = new CompilationTask(jvmciRuntime, compiler, new HotSpotCompilationRequest(dummyMethod, entryBCI, 0L), false);
             task.runCompilation();
         } catch (NoSuchMethodException | SecurityException e1) {
@@ -678,7 +674,7 @@ public final class CompileTheWorld {
         try {
             long start = System.currentTimeMillis();
             long allocatedAtStart = MemUseTrackerImpl.getCurrentThreadAllocatedBytes();
-            int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
+            int entryBCI = Compiler.INVOCATION_ENTRY_BCI;
             HotSpotCompilationRequest request = new HotSpotCompilationRequest(method, entryBCI, 0L);
             CompilationTask task = new CompilationTask(jvmciRuntime, compiler, request, false);
             task.runCompilation();
