@@ -347,14 +347,14 @@ public final class NodeUtil {
         return nodes;
     }
 
-    public static boolean replaceChild(Node parent, Node oldChild, Node newChild) {
+    public static void replaceChild(Node parent, Node oldChild, Node newChild) {
         NodeClass nodeClass = NodeClass.get(parent.getClass());
 
         for (long fieldOffset : nodeClass.getChildOffsets()) {
             if (unsafe.getObject(parent, fieldOffset) == oldChild) {
                 assert assertAssignable(nodeClass, fieldOffset, newChild);
                 unsafe.putObject(parent, fieldOffset, newChild);
-                return true;
+                return;
             }
         }
 
@@ -367,12 +367,11 @@ public final class NodeUtil {
                     if (array[i] == oldChild) {
                         assert assertAssignable(nodeClass, fieldOffset, newChild);
                         array[i] = newChild;
-                        return true;
+                        return;
                     }
                 }
             }
         }
-        return false;
     }
 
     private static boolean assertAssignable(NodeClass clazz, long fieldOffset, Object newValue) {
@@ -451,44 +450,31 @@ public final class NodeUtil {
         return null;
     }
 
-    public static <T> T findParent(Node start, Class<T> clazz) {
-        Node parent = start.getParent();
-        if (parent == null) {
-            return null;
-        } else if (clazz.isInstance(parent)) {
-            return clazz.cast(parent);
+    @SuppressWarnings("unchecked")
+    public static <T extends Node> T findParent(final Node start, final Class<T> clazz) {
+        assert start != null;
+        if (clazz.isInstance(start.getParent())) {
+            return (T) start.getParent();
         } else {
-            return findParent(parent, clazz);
+            return start.getParent() != null ? findParent(start.getParent(), clazz) : null;
         }
     }
 
-    public static <T> List<T> findAllParents(Node start, Class<T> clazz) {
-        List<T> parents = new ArrayList<>();
-        T parent = findParent(start, clazz);
-        while (parent != null) {
-            parents.add(parent);
-            parent = findParent((Node) parent, clazz);
+    @SuppressWarnings("unchecked")
+    public static <I> I findParentInterface(final Node start, final Class<I> clazz) {
+        assert start != null;
+        if (clazz.isInstance(start.getParent())) {
+            return (I) start.getParent();
+        } else {
+            return (start.getParent() != null ? findParentInterface(start.getParent(), clazz) : null);
         }
-        return parents;
     }
 
-    public static List<Node> collectNodes(Node parent, Node child) {
-        List<Node> nodes = new ArrayList<>();
-        Node current = child;
-        while (current != null) {
-            nodes.add(current);
-            if (current == parent) {
-                return nodes;
-            }
-            current = current.getParent();
-        }
-        throw new IllegalArgumentException("Node " + parent + " is not a parent of " + child + ".");
-    }
-
+    @SuppressWarnings("unchecked")
     public static <T> T findFirstNodeInstance(Node root, Class<T> clazz) {
         for (Node childNode : findNodeChildren(root)) {
             if (clazz.isInstance(childNode)) {
-                return clazz.cast(childNode);
+                return (T) childNode;
             } else {
                 T node = findFirstNodeInstance(childNode, clazz);
                 if (node != null) {
@@ -811,22 +797,5 @@ public final class NodeUtil {
             return sb.toString();
         }
         return "";
-    }
-
-    public static boolean verify(Node root) {
-        Iterable<Node> children = root.getChildren();
-        for (Node child : children) {
-            if (child != null) {
-                if (child.getParent() != root) {
-                    throw new AssertionError(toStringWithClass(child) + ": actual parent=" + toStringWithClass(child.getParent()) + " expected parent=" + toStringWithClass(root));
-                }
-                verify(child);
-            }
-        }
-        return true;
-    }
-
-    private static String toStringWithClass(Object obj) {
-        return obj == null ? "null" : obj + "(" + obj.getClass().getName() + ")";
     }
 }
