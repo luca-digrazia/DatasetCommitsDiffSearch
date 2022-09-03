@@ -26,8 +26,10 @@ package org.graalvm.compiler.truffle.test;
 
 import java.util.function.Consumer;
 
+import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.management.ExecutionEvent;
 import org.graalvm.polyglot.management.ExecutionListener;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -47,8 +49,9 @@ import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
 
-    static final SourceSection DUMMY_SECTION = com.oracle.truffle.api.source.Source.newBuilder(ProxyLanguage.ID, "", "").name("").build().createSection(0, 0);
+    static final SourceSection DUMMY_SECTION = com.oracle.truffle.api.source.Source.newBuilder("").name("").language(ProxyLanguage.ID).build().createSection(0, 0);
 
+    Context context;
     ProxyLanguage langauge;
 
     static int counter;
@@ -171,7 +174,7 @@ public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
     private void testListener(ExecutionListener.Builder builder, String expectedMethodName, BaseNode baseNode) {
         ExecutionListener listener = null;
         if (builder != null) {
-            listener = builder.attach(getContext().getEngine());
+            listener = builder.attach(context.getEngine());
         }
         assertPartialEvalEquals(expectedMethodName, createRoot(baseNode));
         if (listener != null) {
@@ -187,10 +190,17 @@ public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
                 return super.parse(request);
             }
         });
-        setupContext();
-        getContext().initialize(ProxyLanguage.ID);
+        context = Context.create();
+        context.initialize(ProxyLanguage.ID);
+        context.enter();
         langauge = ProxyLanguage.getCurrentLanguage();
         counter = 0;
+    }
+
+    @After
+    public void tearDown() {
+        context.leave();
+        context.close();
     }
 
     private RootNode createRoot(BaseNode node) {
