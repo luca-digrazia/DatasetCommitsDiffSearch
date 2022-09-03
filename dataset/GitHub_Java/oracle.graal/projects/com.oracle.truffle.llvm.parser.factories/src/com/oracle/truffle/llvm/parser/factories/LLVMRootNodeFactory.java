@@ -38,10 +38,11 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.nodes.func.LLVMGlobalRootNode;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 class LLVMRootNodeFactory {
 
@@ -50,9 +51,9 @@ class LLVMRootNodeFactory {
                     RootCallTarget mainCallTarget,
                     Object[] args,
                     Source sourceFile,
-                    Type[] mainTypes) {
+                    LLVMRuntimeType[] mainTypes) {
         return createGlobalRootNode(
-                        runtime.getLanguage(),
+                        LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0()),
                         runtime.getStackPointerSlot(),
                         runtime.getGlobalFrameDescriptor(),
                         mainCallTarget,
@@ -62,18 +63,18 @@ class LLVMRootNodeFactory {
     }
 
     private static LLVMGlobalRootNode createGlobalRootNode(
-                    LLVMLanguage language,
+                    LLVMContext context,
                     FrameSlot stack,
                     FrameDescriptor frame,
                     RootCallTarget mainCallTarget,
                     Object[] args,
                     Source sourceFile,
-                    Type[] mainTypes) {
+                    LLVMRuntimeType[] mainTypes) {
         Object[] arguments = createArgs(sourceFile, args, mainTypes);
-        return new LLVMGlobalRootNode(language, stack, frame, mainCallTarget, arguments);
+        return new LLVMGlobalRootNode(stack, frame, context, mainCallTarget, arguments);
     }
 
-    private static Object[] createArgs(Source sourceFile, Object[] mainArgs, Type[] llvmRuntimeTypes) {
+    private static Object[] createArgs(Source sourceFile, Object[] mainArgs, LLVMRuntimeType[] llvmRuntimeTypes) {
         int mainArgsCount = mainArgs == null ? 0 : mainArgs.length;
         int argsCount = mainArgsCount + 1;
         if (llvmRuntimeTypes.length == 0) {
@@ -91,7 +92,7 @@ class LLVMRootNodeFactory {
             if (llvmRuntimeTypes.length == 2) {
                 return new Object[]{argsCount, allocatedArgsStartAddress};
             } else if (llvmRuntimeTypes.length == 3) {
-                LLVMAddress posixEnvPointer = LLVMAddress.nullPointer();
+                LLVMAddress posixEnvPointer = LLVMAddress.NULL_POINTER;
                 return new Object[]{argsCount, allocatedArgsStartAddress, posixEnvPointer};
             } else {
                 throw new AssertionError(sourceFile + " " + Arrays.toString(mainArgs) + " " + Arrays.toString(llvmRuntimeTypes));
