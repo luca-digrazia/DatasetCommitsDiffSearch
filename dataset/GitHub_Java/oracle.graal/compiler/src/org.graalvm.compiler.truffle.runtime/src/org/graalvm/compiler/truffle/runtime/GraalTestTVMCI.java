@@ -24,18 +24,20 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Map;
-
-import org.graalvm.compiler.truffle.common.TruffleDebugContext;
+import org.graalvm.compiler.core.common.CompilationIdentifier;
+import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugContext.Scope;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
-import org.graalvm.compiler.truffle.runtime.GraalTestTVMCI.GraalTestContext;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.graphio.GraphOutput;
-import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.impl.TVMCI;
 import com.oracle.truffle.api.nodes.RootNode;
+import java.io.Closeable;
+import java.io.IOException;
+import org.graalvm.compiler.debug.DebugHandlersFactory;
+import org.graalvm.compiler.truffle.runtime.GraalTestTVMCI.GraalTestContext;
 
 final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTarget> {
 
@@ -43,15 +45,15 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
 
     static final class GraalTestContext implements Closeable {
 
-        private final TruffleDebugContext debug;
+        private final DebugContext debug;
         private final GraphOutput<Void, ?> output;
 
-        private static GraphOutput<Void, ?> beginGroup(TruffleDebugContext debug, String testName) {
+        private static GraphOutput<Void, ?> beginGroup(DebugContext debug, String testName) {
             GraphOutput<Void, ?> output = null;
             try {
-                if (debug.isDumpEnabled()) {
+                if (debug.isDumpEnabled(DebugContext.BASIC_LEVEL)) {
                     output = debug.buildOutput(GraphOutput.newBuilder(VoidGraphStructure.INSTANCE).protocolVersion(6, 0));
-                    output.beginGroup(null, testName, testName, null, 0, debug.getVersionProperties());
+                    output.beginGroup(null, testName, testName, null, 0, DebugContext.addVersionProperties(null));
                     return output;
                 }
             } catch (IOException e) {
@@ -62,8 +64,8 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
             return null;
         }
 
-        private GraalTestContext(String testName, TruffleDebugContext debug) {
-            this.debug = debug;
+        private GraalTestContext(String testName) {
+            this.debug = DebugContext.create(TruffleCompilerOptions.getOptions(), DebugHandlersFactory.LOADER);
             /*
              * Open a dump group around all compilations happening during the execution of a unit
              * test. This group will contain one sub-group for every compiled CallTarget of the unit
@@ -94,9 +96,7 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
 
     @Override
     protected GraalTestContext createTestContext(String testName) {
-        final Map<String, Object> optionsMap = TruffleRuntimeOptions.asMap(TruffleRuntimeOptions.getOptions());
-        TruffleDebugContext debugContext = truffleRuntime.getTruffleCompiler().openDebugContext(optionsMap, null, null);
-        return new GraalTestContext(testName, debugContext);
+        return new GraalTestContext(testName);
     }
 
     @Override
@@ -108,12 +108,10 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
     @Override
     public void finishWarmup(GraalTestContext testContext, OptimizedCallTarget callTarget) {
         TruffleCompiler compiler = truffleRuntime.getTruffleCompiler();
-        OptionValues options = TruffleRuntimeOptions.getOptions();
-        String compilationId = compiler.getCompilationIdentifier(callTarget);
-        try (AutoCloseable s = testContext.debug.scope("UnitTest")) {
+        OptionValues options = TruffleCompilerOptions.getOptions();
+        CompilationIdentifier compilationId = compiler.getCompilationIdentifier(callTarget);
+        try (Scope s = testContext.debug.scope("UnitTest")) {
             truffleRuntime.doCompile(testContext.debug, compilationId, options, callTarget, null);
-        } catch (Throwable e) {
-            throw new InternalError(e);
         }
     }
 }
