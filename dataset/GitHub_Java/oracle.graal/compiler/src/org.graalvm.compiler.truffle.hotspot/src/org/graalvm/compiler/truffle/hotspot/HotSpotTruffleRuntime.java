@@ -100,7 +100,10 @@ import org.graalvm.compiler.truffle.TruffleCallBoundary;
 import org.graalvm.compiler.truffle.TruffleCompiler;
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.TruffleTreeDebugHandlersFactory;
+import org.graalvm.compiler.truffle.hotspot.nfi.HotSpotNativeFunctionInterface;
+import org.graalvm.compiler.truffle.hotspot.nfi.RawNativeCallNodeFactory;
 
+import com.oracle.nfi.api.NativeFunctionInterface;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.RootCallTarget;
@@ -310,8 +313,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         PhaseSuite<HighTierContext> graphBuilderSuite = getGraphBuilderSuite(codeCache, suitesProvider);
         Backend backend = getHotSpotBackend();
         CompilationResultBuilderFactory factory = getOptimizedCallTargetInstrumentationFactory(backend.getTarget().arch.getName());
-        return compileGraph(graph, javaMethod, providers, backend, graphBuilderSuite, OptimisticOptimizations.ALL, graph.getProfilingInfo(), suites, lirSuites, new CompilationResult(compilationId),
-                        factory);
+        return compileGraph(graph, javaMethod, providers, backend, graphBuilderSuite, OptimisticOptimizations.ALL, graph.getProfilingInfo(), suites, lirSuites, new CompilationResult(), factory);
     }
 
     private HotSpotBackend getHotSpotBackend() {
@@ -393,6 +395,27 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         if (TruffleCompilerOptions.getValue(TraceTruffleTransferToInterpreter)) {
             TraceTransferToInterpreterHelper.traceTransferToInterpreter(this, getVMConfig());
         }
+    }
+
+    private static RawNativeCallNodeFactory getRawNativeCallNodeFactory(String arch) {
+        for (RawNativeCallNodeFactory factory : GraalServices.load(RawNativeCallNodeFactory.class)) {
+            if (factory.getArchitecture().equals(arch)) {
+                return factory;
+            }
+        }
+        // No RawNativeCallNodeFactory on this platform.
+        return null;
+    }
+
+    NativeFunctionInterface createNativeFunctionInterface() {
+        GraalHotSpotVMConfig config = getVMConfig();
+        Backend backend = getHotSpotBackend();
+        RawNativeCallNodeFactory factory = getRawNativeCallNodeFactory(backend.getTarget().arch.getName());
+        if (factory == null) {
+            return null;
+        }
+
+        return new HotSpotNativeFunctionInterface(getOptions(), getHotSpotProviders(), factory, backend, config.dllLoad, config.dllLookup, config.rtldDefault);
     }
 
     private static class TraceTransferToInterpreterHelper {

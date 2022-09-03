@@ -82,6 +82,26 @@ public abstract class CompilationWrapper<T> {
          */
         ExitVM;
 
+        static ValueHelp HELP = new ValueHelp();
+
+        static class ValueHelp implements EnumOptionKey.ValueHelp<ExceptionAction> {
+            @Override
+            public String getHelp(Object value) {
+                ExceptionAction action = (ExceptionAction) value;
+                switch (action) {
+                    case Silent:
+                        return action + ": Print nothing to the console.";
+                    case Print:
+                        return action + ": Print a stack trace to the console.";
+                    case Diagnose:
+                        return action + ": Retry the compilation with extra diagnostics.";
+                    case ExitVM:
+                        return action + ": Same as " + Diagnose + " except that the VM process exits after retrying.";
+                }
+                return null;
+            }
+        }
+
         /**
          * Gets the action that is one level less verbose than this action, bottoming out at the
          * least verbose action.
@@ -122,10 +142,8 @@ public abstract class CompilationWrapper<T> {
      *
      * Subclasses can override this to choose a different action based on factors such as whether
      * {@code actionKey} has been explicitly set in {@code options} for example.
-     *
-     * @param cause the cause of the bailout or failure
      */
-    protected ExceptionAction lookupAction(OptionValues options, EnumOptionKey<ExceptionAction> actionKey, Throwable cause) {
+    protected ExceptionAction lookupAction(OptionValues options, EnumOptionKey<ExceptionAction> actionKey) {
         if (actionKey == CompilationFailureAction) {
             if (ExitVMOnException.getValue(options)) {
                 assert CompilationFailureAction.getDefaultValue() != ExceptionAction.ExitVM;
@@ -177,7 +195,7 @@ public abstract class CompilationWrapper<T> {
                 actionKey = CompilationFailureAction;
                 causeType = "failure";
             }
-            ExceptionAction action = lookupAction(initialOptions, actionKey, cause);
+            ExceptionAction action = lookupAction(initialOptions, actionKey);
 
             action = adjustAction(initialOptions, actionKey, action);
 
@@ -271,12 +289,6 @@ public abstract class CompilationWrapper<T> {
                 } finally {
                     if (action == ExitVM) {
                         synchronized (ExceptionAction.class) {
-                            try {
-                                // Give other compiler threads a chance to flush
-                                // error handling output.
-                                Thread.sleep(2000);
-                            } catch (InterruptedException e) {
-                            }
                             TTY.println("Exiting VM after retry compilation of " + this);
                             System.exit(-1);
                         }

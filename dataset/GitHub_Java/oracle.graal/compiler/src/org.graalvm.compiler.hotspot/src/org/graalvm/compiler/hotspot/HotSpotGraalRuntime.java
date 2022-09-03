@@ -123,7 +123,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         CompilerConfiguration compilerConfiguration = compilerConfigurationFactory.createCompilerConfiguration();
 
         HotSpotGraalCompiler compiler = new HotSpotGraalCompiler(jvmciRuntime, this, initialOptions);
-        this.mBean = createHotSpotGraalMBean(compiler);
+        this.mBean = HotSpotGraalMBean.create(compiler);
 
         BackendMap backendMap = compilerConfigurationFactory.createBackendMap();
 
@@ -172,14 +172,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         bootstrapJVMCI = config.getFlag("BootstrapJVMCI", Boolean.class);
     }
 
-    private static HotSpotGraalMBean createHotSpotGraalMBean(HotSpotGraalCompiler compiler) {
-        try {
-            return HotSpotGraalMBean.create(compiler);
-        } catch (LinkageError ex) {
-            return null;
-        }
-    }
-
     private HotSpotBackend registerBackend(HotSpotBackend backend) {
         Class<? extends Architecture> arch = backend.getTarget().arch.getClass();
         HotSpotBackend oldValue = backends.put(arch, backend);
@@ -205,12 +197,12 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     @Override
     public OptionValues getOptions() {
-        return mBean == null ? options : mBean.optionsFor(options, null);
+        return mBean.optionsFor(options, null);
     }
 
     @Override
     public OptionValues getOptions(ResolvedJavaMethod forMethod) {
-        return mBean == null ? options : mBean.optionsFor(options, forMethod);
+        return mBean.optionsFor(options, forMethod);
     }
 
     @Override
@@ -315,9 +307,5 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     @Override
     public Map<ExceptionAction, Integer> getCompilationProblemsPerAction() {
         return compilationProblemsPerAction;
-    }
-
-    Object getMBean() {
-        return mBean;
     }
 }
