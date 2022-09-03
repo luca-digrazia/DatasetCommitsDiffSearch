@@ -114,7 +114,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
 
     @Override
     protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
-        SourceSection outer = code.createSection(0, code.getLength());
+        SourceSection outer = code.createSection(null, 0, code.getLength());
         BaseNode node;
         try {
             node = parse(code);
@@ -204,7 +204,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
                     throw new LanguageError("parameter required for " + tag);
                 }
             }
-            SourceSection sourceSection = source.createSection(startIndex, current - startIndex);
+            SourceSection sourceSection = source.createSection(null, startIndex, current - startIndex);
             BaseNode[] childArray = children.toArray(new BaseNode[children.size()]);
             BaseNode node = createNode(tag, firstParameterIdent, sourceSection, childArray);
             node.setSourceSection(sourceSection);
@@ -513,6 +513,20 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
     @Override
     protected boolean isObjectOfLanguage(Object object) {
         return false;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    @Override
+    protected boolean isInstrumentable(Node node) {
+        throw new UnsupportedOperationException();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    @Override
+    protected com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(Node node) {
+        throw new UnsupportedOperationException();
     }
 
 }
