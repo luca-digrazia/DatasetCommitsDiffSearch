@@ -30,8 +30,8 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaType.Representation;
-import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
+import com.oracle.graal.api.meta.JavaType.*;
+import com.oracle.graal.api.meta.JavaTypeProfile.*;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
@@ -130,13 +130,13 @@ public final class GraphBuilderPhase extends Phase {
 
     @Override
     protected String getDetailedName() {
-        return getName() + " " + MetaUtil.format("%H.%n(%p):%r", method);
+        return getName() + " " + CodeUtil.format("%H.%n(%p):%r", method);
     }
 
     private BciBlockMapping createBlockMap() {
         BciBlockMapping map = new BciBlockMapping(method);
         map.build();
-        Debug.dump(map, MetaUtil.format("After block building %f %R %H.%n(%P)", method));
+        Debug.dump(map, CodeUtil.format("After block building %f %R %H.%n(%P)", method));
 
         return map;
     }
@@ -149,7 +149,7 @@ public final class GraphBuilderPhase extends Phase {
 
         if (GraalOptions.PrintProfilingInformation) {
             TTY.println("Profiling info for " + method);
-            TTY.println(MetaUtil.indent(MetaUtil.profileToString(profilingInfo, method, CodeUtil.NEW_LINE), "  "));
+            TTY.println(CodeUtil.indent(CodeUtil.profileToString(profilingInfo, method, CodeUtil.NEW_LINE), "  "));
         }
 
         // compute the block map, setup exception handlers and get the entrypoint(s)
@@ -283,9 +283,9 @@ public final class GraphBuilderPhase extends Phase {
 
         if (con instanceof JavaType) {
             // this is a load of class constant which might be unresolved
-            JavaType type = (JavaType) con;
-            if (type instanceof ResolvedJavaType) {
-                frameState.push(Kind.Object, append(ConstantNode.forConstant(((ResolvedJavaType) type).getEncoding(Representation.JavaClass), runtime, currentGraph)));
+            JavaType riType = (JavaType) con;
+            if (riType instanceof ResolvedJavaType) {
+                frameState.push(Kind.Object, append(ConstantNode.forConstant(((ResolvedJavaType) riType).getEncoding(Representation.JavaClass), runtime, currentGraph)));
             } else {
                 append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
                 frameState.push(Kind.Object, append(ConstantNode.forObject(null, runtime, currentGraph)));
@@ -541,7 +541,7 @@ public final class GraphBuilderPhase extends Phase {
         BeginNode trueSuccessor = createBlockTarget(probability, trueBlock, frameState);
         BeginNode falseSuccessor = createBlockTarget(1 - probability, falseBlock, frameState);
 
-        IfNode ifNode = negate ? new IfNode(condition, falseSuccessor, trueSuccessor, 1 - probability, graphId) : new IfNode(condition, trueSuccessor, falseSuccessor, probability, graphId);
+        IfNode ifNode = negate ? new IfNode(condition, falseSuccessor, trueSuccessor, 1 - probability) : new IfNode(condition, trueSuccessor, falseSuccessor, probability);
         append(currentGraph.add(ifNode));
     }
 
@@ -649,11 +649,11 @@ public final class GraphBuilderPhase extends Phase {
             ResolvedJavaType resolvedType = (ResolvedJavaType) type;
             ConstantNode hub = appendConstant(resolvedType.getEncoding(JavaType.Representation.ObjectHub));
             InstanceOfNode instanceOfNode = new InstanceOfNode(hub, (ResolvedJavaType) type, object, getProfileForTypeCheck(resolvedType));
-            frameState.ipush(append(MaterializeNode.create(currentGraph.unique(instanceOfNode))));
+            frameState.ipush(append(MaterializeNode.create(currentGraph.unique(instanceOfNode), currentGraph)));
         } else {
             BlockPlaceholderNode successor = currentGraph.add(new BlockPlaceholderNode());
             DeoptimizeNode deopt = currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId));
-            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(object)), successor, deopt, 1, graphId));
+            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(object)), successor, deopt, 0));
             append(ifNode);
             lastInstr = successor;
             frameState.ipush(appendConstant(Constant.INT_0));
@@ -693,10 +693,10 @@ public final class GraphBuilderPhase extends Phase {
         // Checkstyle: resume
     }
 
-    private void genNewPrimitiveArray(int typeCode) {
+    private void genNewTypeArray(int typeCode) {
         Kind kind = arrayTypeCodeToKind(typeCode);
         ResolvedJavaType elementType = runtime.getResolvedJavaType(kind);
-        NewPrimitiveArrayNode nta = currentGraph.add(new NewPrimitiveArrayNode(frameState.ipop(), elementType));
+        NewTypeArrayNode nta = currentGraph.add(new NewTypeArrayNode(frameState.ipop(), elementType));
         frameState.apush(append(nta));
     }
 
@@ -757,7 +757,7 @@ public final class GraphBuilderPhase extends Phase {
     private void emitNullCheck(ValueNode receiver) {
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 0.5, graphId));
+        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 1));
 
         append(ifNode);
         lastInstr = falseSucc;
@@ -776,7 +776,7 @@ public final class GraphBuilderPhase extends Phase {
     private void emitBoundsCheck(ValueNode index, ValueNode length) {
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 0.5, graphId));
+        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 1));
 
         append(ifNode);
         lastInstr = trueSucc;
@@ -965,7 +965,11 @@ public final class GraphBuilderPhase extends Phase {
             return;
         }
 
-        MethodCallTargetNode callTarget = currentGraph.add(new MethodCallTargetNode(invokeKind, targetMethod, args, targetMethod.signature().returnType(method.holder())));
+        JavaType returnType = targetMethod.signature().returnType(method.holder());
+        if (graphBuilderConfig.eagerResolvingForSnippets()) {
+            returnType = returnType.resolve(targetMethod.holder());
+        }
+        MethodCallTargetNode callTarget = currentGraph.add(new MethodCallTargetNode(invokeKind, targetMethod, args, returnType));
         // be conservative if information was not recorded (could result in endless recompiles otherwise)
         if (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE) {
             ValueNode result = appendWithBCI(currentGraph.add(new InvokeNode(callTarget, bci(), graphId)));
@@ -1037,6 +1041,22 @@ public final class GraphBuilderPhase extends Phase {
         appendGoto(createTarget(successor, frameState));
     }
 
+    private void genTableswitch() {
+        int bci = bci();
+        ValueNode value = frameState.ipop();
+        BytecodeTableSwitch ts = new BytecodeTableSwitch(stream(), bci);
+
+        int nofCases = ts.numberOfCases() + 1; // including default case
+        assert currentBlock.numNormalSuccessors() == nofCases;
+
+        double[] probabilities = switchProbability(nofCases, bci);
+        TableSwitchNode tableSwitch = currentGraph.add(new TableSwitchNode(value, ts.lowKey(), probabilities));
+        for (int i = 0; i < nofCases; ++i) {
+            tableSwitch.setBlockSuccessor(i, createBlockTarget(probabilities[i], currentBlock.successors.get(i), frameState));
+        }
+        append(tableSwitch);
+    }
+
     private double[] switchProbability(int numberOfCases, int bci) {
         double[] prob = profilingInfo.getSwitchProbabilities(bci);
         if (prob != null) {
@@ -1061,35 +1081,22 @@ public final class GraphBuilderPhase extends Phase {
         return true;
     }
 
-    private void genSwitch(BytecodeSwitch bs) {
+    private void genLookupswitch() {
         int bci = bci();
         ValueNode value = frameState.ipop();
+        BytecodeLookupSwitch ls = new BytecodeLookupSwitch(stream(), bci);
 
-        int nofCases = bs.numberOfCases();
+        int nofCases = ls.numberOfCases() + 1; // including default case
+        assert currentBlock.numNormalSuccessors() == nofCases;
 
-        Map<Integer, Integer> bciToSuccessorIndex = new HashMap<>();
-        int successorCount = currentBlock.successors.size();
-        for (int i = 0; i < successorCount; i++) {
-            assert !bciToSuccessorIndex.containsKey(currentBlock.successors.get(i).startBci);
-            if (!bciToSuccessorIndex.containsKey(currentBlock.successors.get(i).startBci)) {
-                bciToSuccessorIndex.put(currentBlock.successors.get(i).startBci, i);
-            }
+        int[] keys = new int[nofCases - 1];
+        for (int i = 0; i < nofCases - 1; ++i) {
+            keys[i] = ls.keyAt(i);
         }
-
-        double[] keyProbabilities = switchProbability(nofCases + 1, bci);
-
-        int[] keys = new int[nofCases];
-        int[] keySuccessors = new int[nofCases + 1];
-        for (int i = 0; i < nofCases; i++) {
-            keys[i] = bs.keyAt(i);
-            keySuccessors[i] = bciToSuccessorIndex.get(bs.targetAt(i));
-        }
-        keySuccessors[nofCases] = bciToSuccessorIndex.get(bs.defaultTarget());
-
-        double[] successorProbabilities = IntegerSwitchNode.successorProbabilites(successorCount, keySuccessors, keyProbabilities);
-        IntegerSwitchNode lookupSwitch = currentGraph.add(new IntegerSwitchNode(value, successorCount, keys, keyProbabilities, keySuccessors));
-        for (int i = 0; i < successorCount; i++) {
-            lookupSwitch.setBlockSuccessor(i, createBlockTarget(successorProbabilities[i], currentBlock.successors.get(i), frameState));
+        double[] probabilities = switchProbability(nofCases, bci);
+        LookupSwitchNode lookupSwitch = currentGraph.add(new LookupSwitchNode(value, keys, probabilities));
+        for (int i = 0; i < nofCases; ++i) {
+            lookupSwitch.setBlockSuccessor(i, createBlockTarget(probabilities[i], currentBlock.successors.get(i), frameState));
         }
         append(lookupSwitch);
     }
@@ -1402,7 +1409,7 @@ public final class GraphBuilderPhase extends Phase {
             frameState.push(Kind.Object, exception);
             FixedNode nextDispatch = createTarget(nextBlock, frameState);
             checkCast.setNext(catchSuccessor);
-            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new InstanceOfNode(typeInstruction, (ResolvedJavaType) catchType, exception)), checkCast, nextDispatch, 0.5, graphId));
+            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new InstanceOfNode(typeInstruction, (ResolvedJavaType) catchType, exception)), checkCast, nextDispatch, 0.5));
             append(ifNode);
         }
     }
@@ -1688,8 +1695,8 @@ public final class GraphBuilderPhase extends Phase {
             case GOTO           : genGoto(); break;
             case JSR            : genJsr(stream.readBranchDest()); break;
             case RET            : genRet(stream.readLocalIndex()); break;
-            case TABLESWITCH    : genSwitch(new BytecodeTableSwitch(stream(), bci())); break;
-            case LOOKUPSWITCH   : genSwitch(new BytecodeLookupSwitch(stream(), bci())); break;
+            case TABLESWITCH    : genTableswitch(); break;
+            case LOOKUPSWITCH   : genLookupswitch(); break;
             case IRETURN        : genReturn(frameState.ipop()); break;
             case LRETURN        : genReturn(frameState.lpop()); break;
             case FRETURN        : genReturn(frameState.fpop()); break;
@@ -1705,7 +1712,7 @@ public final class GraphBuilderPhase extends Phase {
             case INVOKESTATIC   : cpi = stream.readCPI(); genInvokeStatic(lookupMethod(cpi, opcode)); break;
             case INVOKEINTERFACE: cpi = stream.readCPI(); genInvokeInterface(lookupMethod(cpi, opcode)); break;
             case NEW            : genNewInstance(stream.readCPI()); break;
-            case NEWARRAY       : genNewPrimitiveArray(stream.readLocalIndex()); break;
+            case NEWARRAY       : genNewTypeArray(stream.readLocalIndex()); break;
             case ANEWARRAY      : genNewObjectArray(stream.readCPI()); break;
             case ARRAYLENGTH    : genArrayLength(); break;
             case ATHROW         : genThrow(); break;
