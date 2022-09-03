@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.impl.memory;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.NodeField;
@@ -209,13 +208,6 @@ public abstract class LLVMStoreNode extends LLVMNode {
         @Specialization
         public void execute(LLVMAddress address, LLVMAddress value) {
             LLVMMemory.putAddress(address, value);
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization
-        public void execute(LLVMAddress address, TruffleObject value) {
-            CompilerDirectives.bailout("unsupported operation");
-            throw new UnsupportedOperationException("Sulong can't store a Truffle object in a native memory address");
         }
 
     }
