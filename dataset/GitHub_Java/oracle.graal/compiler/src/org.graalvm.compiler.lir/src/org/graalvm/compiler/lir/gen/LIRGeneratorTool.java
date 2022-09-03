@@ -22,7 +22,6 @@
  */
 package org.graalvm.compiler.lir.gen;
 
-import jdk.vm.ci.code.RegisterConfig;
 import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.calc.Condition;
@@ -109,8 +108,6 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
     AbstractBlockBase<?> getCurrentBlock();
 
     LIRGenerationResult getResult();
-
-    RegisterConfig getRegisterConfig();
 
     boolean hasBlockEnd(AbstractBlockBase<?> block);
 

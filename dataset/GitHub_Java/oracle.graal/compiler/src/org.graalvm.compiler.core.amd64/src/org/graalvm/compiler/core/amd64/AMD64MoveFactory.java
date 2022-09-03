@@ -28,7 +28,6 @@ import static org.graalvm.compiler.lir.LIRValueUtil.isConstantValue;
 import static org.graalvm.compiler.lir.LIRValueUtil.isStackSlotValue;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import jdk.vm.ci.meta.JavaKind;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.type.DataPointerConstant;
 import org.graalvm.compiler.debug.GraalError;
@@ -73,13 +72,7 @@ public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
 
     @Override
     public boolean allowConstantToStackMove(Constant constant) {
-        if (constant instanceof DataPointerConstant) {
-            return false;
-        }
-        if (constant instanceof JavaConstant && ((JavaConstant) constant).getJavaKind().getStackKind() == JavaKind.Object && !constant.isDefaultForKind()) {
-            return false;
-        }
-        return true;
+        return !(constant instanceof DataPointerConstant);
     }
 
     @Override
