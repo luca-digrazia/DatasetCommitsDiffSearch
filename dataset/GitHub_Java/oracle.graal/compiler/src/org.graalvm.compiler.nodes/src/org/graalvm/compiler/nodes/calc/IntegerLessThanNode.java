@@ -40,7 +40,6 @@ import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.LogicConstantNode;
 import org.graalvm.compiler.nodes.LogicNegationNode;
 import org.graalvm.compiler.nodes.LogicNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 
 import jdk.vm.ci.code.CodeUtil;
@@ -100,10 +99,10 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
     public static class LessThanOp extends LowerOp {
         @Override
         protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue) {
-            if (newX.stamp(NodeView.DEFAULT) instanceof FloatStamp && newY.stamp(NodeView.DEFAULT) instanceof FloatStamp) {
+            if (newX.stamp() instanceof FloatStamp && newY.stamp() instanceof FloatStamp) {
                 return new FloatLessThanNode(newX, newY, unorderedIsTrue); // TODO: Is the last arg
                                                                            // supposed to be true?
-            } else if (newX.stamp(NodeView.DEFAULT) instanceof IntegerStamp && newY.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
+            } else if (newX.stamp() instanceof IntegerStamp && newY.stamp() instanceof IntegerStamp) {
                 return new IntegerLessThanNode(newX, newY);
             }
             throw GraalError.shouldNotReachHere();
@@ -167,8 +166,8 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
             if (result != null) {
                 return result;
             }
-            if (forX.stamp(NodeView.DEFAULT) instanceof IntegerStamp && forY.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
-                if (IntegerStamp.sameSign((IntegerStamp) forX.stamp(NodeView.DEFAULT), (IntegerStamp) forY.stamp(NodeView.DEFAULT))) {
+            if (forX.stamp() instanceof IntegerStamp && forY.stamp() instanceof IntegerStamp) {
+                if (IntegerStamp.sameSign((IntegerStamp) forX.stamp(), (IntegerStamp) forY.stamp())) {
                     return new IntegerBelowNode(forX, forY);
                 }
             }
@@ -189,8 +188,8 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
                 }
                 if (xx != null) {
                     assert yy != null;
-                    IntegerStamp xStamp = (IntegerStamp) sub.getX().stamp(NodeView.DEFAULT);
-                    IntegerStamp yStamp = (IntegerStamp) sub.getY().stamp(NodeView.DEFAULT);
+                    IntegerStamp xStamp = (IntegerStamp) sub.getX().stamp();
+                    IntegerStamp yStamp = (IntegerStamp) sub.getY().stamp();
                     long minValue = CodeUtil.minValue(xStamp.getBits());
                     long maxValue = CodeUtil.maxValue(xStamp.getBits());
 
@@ -204,10 +203,10 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
                 }
             }
 
-            if (forX.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
-                assert forY.stamp(NodeView.DEFAULT) instanceof IntegerStamp;
-                int bits = ((IntegerStamp) forX.stamp(NodeView.DEFAULT)).getBits();
-                assert ((IntegerStamp) forY.stamp(NodeView.DEFAULT)).getBits() == bits;
+            if (forX.stamp() instanceof IntegerStamp) {
+                assert forY.stamp() instanceof IntegerStamp;
+                int bits = ((IntegerStamp) forX.stamp()).getBits();
+                assert ((IntegerStamp) forY.stamp()).getBits() == bits;
                 long min = OP.minValue(bits);
                 long xResidue = 0;
                 ValueNode left = null;
