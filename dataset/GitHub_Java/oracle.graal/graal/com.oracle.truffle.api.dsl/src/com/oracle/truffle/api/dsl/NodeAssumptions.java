@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,13 +26,14 @@ package com.oracle.truffle.api.dsl;
 
 import java.lang.annotation.*;
 
+import com.oracle.truffle.api.*;
+
 /**
- * Declares one or multiple assumptions for use inside a source code generation enabled node.
- * Declared assumptions must be passed to the {@link NodeFactory#createNode(Object...)} method as
- * parameters.
+ * @deprecated use {@link NodeField} with type {@link Assumption} instead.
  */
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.TYPE})
+@Deprecated
 public @interface NodeAssumptions {
 
     String[] value();
