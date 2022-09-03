@@ -24,10 +24,8 @@
  */
 package com.oracle.truffle.api.vm;
 
-import java.lang.reflect.Array;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.graalvm.polyglot.proxy.Proxy;
@@ -49,7 +47,7 @@ import com.oracle.truffle.api.vm.HostLanguage.HostContext;
  */
 class HostLanguage extends TruffleLanguage<HostContext> {
 
-    static final class HostContext {
+    static class HostContext {
 
         final Env env;
         final PolyglotLanguageContext internalContext;
@@ -60,64 +58,29 @@ class HostLanguage extends TruffleLanguage<HostContext> {
             this.internalContext = context;
         }
 
-        Class<?> findClass(String className) {
+        private Class<?> findClass(String clazz) {
             if (!internalContext.context.hostAccessAllowed) {
                 throw new HostLanguageException(String.format("Host class access is not allowed."));
             }
-            if (TruffleOptions.AOT) {
-                throw new HostLanguageException(String.format("The host class %s is not accessible in native mode.", className));
-            }
-            Class<?> loadedClass = classCache.computeIfAbsent(className, new Function<String, Class<?>>() {
-                public Class<?> apply(String cn) {
-                    return loadClass(cn);
-                }
-            });
-            assert loadedClass != null;
-            return loadedClass;
-        }
-
-        Class<?> loadClass(String className) {
             Predicate<String> classFilter = internalContext.context.classFilter;
-            if (classFilter != null && !classFilter.test(className)) {
-                throw new HostLanguageException(String.format("Access to host class %s is not allowed.", className));
+            if (classFilter != null && !classFilter.test(clazz)) {
+                throw new HostLanguageException(String.format("Access to host class %s is not allowed.", clazz));
             }
-            if (className.endsWith("[]")) {
-                Class<?> componentType = loadClass(className.substring(0, className.length() - 2));
-                return Array.newInstance(componentType, 0).getClass();
-            }
-            Class<?> primitiveType = getPrimitiveTypeByName(className);
-            if (primitiveType != null) {
-                return primitiveType;
+            if (TruffleOptions.AOT) {
+                throw new HostLanguageException(String.format("The host class %s is not accessible in native mode.", clazz));
             }
             try {
-                return internalContext.getEngine().contextClassLoader.loadClass(className);
+                Class<?> loadedClass = classCache.get(clazz);
+                if (loadedClass == null) {
+                    loadedClass = internalContext.getEngine().contextClassLoader.loadClass(clazz);
+                    classCache.put(clazz, loadedClass);
+                }
+                return loadedClass;
             } catch (ClassNotFoundException e) {
-                throw new HostLanguageException(String.format("Access to host class %s is not allowed or does not exist.", className));
+                throw new HostLanguageException(String.format("Access to host class %s is not allowed or does not exist.", clazz));
             }
         }
 
-        private static Class<?> getPrimitiveTypeByName(String className) {
-            switch (className) {
-                case "boolean":
-                    return boolean.class;
-                case "byte":
-                    return byte.class;
-                case "char":
-                    return char.class;
-                case "double":
-                    return double.class;
-                case "float":
-                    return float.class;
-                case "int":
-                    return int.class;
-                case "long":
-                    return long.class;
-                case "short":
-                    return short.class;
-                default:
-                    return null;
-            }
-        }
     }
 
     @SuppressWarnings("serial")

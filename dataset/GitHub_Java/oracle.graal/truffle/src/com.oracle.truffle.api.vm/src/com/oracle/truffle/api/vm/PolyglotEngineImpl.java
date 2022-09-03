@@ -395,16 +395,16 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             PolyglotContextImpl[] localContexts = contexts.toArray(new PolyglotContextImpl[0]);
             for (PolyglotContextImpl context : localContexts) {
                 assert !context.closed : "should not be in the contexts list";
-                Thread boundThread = context.boundThread.get();
+                Thread t = context.boundThread.get();
                 try {
                     boolean performClose = true;
-                    if (boundThread != null && boundThread != Thread.currentThread() && context.enteredCount > 0) {
+                    if (t != null && t != Thread.currentThread()) {
                         if (!ignoreCloseFailure) {
                             if (cancelIfExecuting) {
                                 performClose = true;
                             } else {
                                 throw new IllegalStateException(String.format("One of the context instances is currently executing on thread %s. " +
-                                                "Set cancelIfExecuting to true to stop the execution on this thread.", boundThread));
+                                                "Set cancelIfExecuting to true to stop the execution on this thread.", t));
                             }
                         } else {
                             performClose = false;
