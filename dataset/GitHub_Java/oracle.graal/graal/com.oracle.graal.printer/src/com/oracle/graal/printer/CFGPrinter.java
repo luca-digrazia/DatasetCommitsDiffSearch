@@ -719,18 +719,11 @@ class CFGPrinter extends CompilationPrinter {
         end("block");
     }
 
-    private static boolean isLoopBackEdge(AbstractBlockBase<?> src, AbstractBlockBase<?> dst) {
-        return dst.isLoopHeader() && dst.getLoop().equals(src.getLoop());
-    }
-
     private static List<Trace<?>> getSuccessors(Trace<?> trace, TraceBuilderResult<?> traceBuilderResult) {
         BitSet bs = new BitSet(traceBuilderResult.getTraces().size());
         for (AbstractBlockBase<?> block : trace.getBlocks()) {
             for (AbstractBlockBase<?> s : block.getSuccessors()) {
-                int otherTraceId = traceBuilderResult.getTraceForBlock(s);
-                if (trace.getId() != otherTraceId || isLoopBackEdge(block, s)) {
-                    bs.set(otherTraceId);
-                }
+                bs.set(traceBuilderResult.getTraceForBlock(s));
             }
         }
         List<Trace<?>> succ = new ArrayList<>();
@@ -744,10 +737,7 @@ class CFGPrinter extends CompilationPrinter {
         BitSet bs = new BitSet(traceBuilderResult.getTraces().size());
         for (AbstractBlockBase<?> block : trace.getBlocks()) {
             for (AbstractBlockBase<?> p : block.getPredecessors()) {
-                int otherTraceId = traceBuilderResult.getTraceForBlock(p);
-                if (trace.getId() != otherTraceId || isLoopBackEdge(p, block)) {
-                    bs.set(traceBuilderResult.getTraceForBlock(p));
-                }
+                bs.set(traceBuilderResult.getTraceForBlock(p));
             }
         }
         List<Trace<?>> pred = new ArrayList<>();

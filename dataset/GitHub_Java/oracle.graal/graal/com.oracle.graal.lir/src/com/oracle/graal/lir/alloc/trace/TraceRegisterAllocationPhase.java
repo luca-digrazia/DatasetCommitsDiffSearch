@@ -120,27 +120,24 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         deconstructSSIForm(lir);
     }
 
-    @SuppressWarnings("try")
     private static <B extends AbstractBlockBase<B>> TraceBuilderResult<B> builtTraces(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
-        try (Scope s = Debug.scope("TraceBuilding")) {
-            TraceBuilderContext traceBuilderContext = new TraceBuilderPhase.TraceBuilderContext();
-            TRACE_BUILDER_PHASE.apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, traceBuilderContext, false);
+        TraceBuilderContext traceBuilderContext = new TraceBuilderPhase.TraceBuilderContext();
+        TRACE_BUILDER_PHASE.apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, traceBuilderContext, false);
 
-            @SuppressWarnings("unchecked")
-            TraceBuilderResult<B> resultTraces = (TraceBuilderResult<B>) traceBuilderContext.traceBuilderResult;
+        @SuppressWarnings("unchecked")
+        TraceBuilderResult<B> resultTraces = (TraceBuilderResult<B>) traceBuilderContext.traceBuilderResult;
 
-            assert TraceBuilderResult.verify(resultTraces, lirGenRes.getLIR().getControlFlowGraph().getBlocks().size());
-            if (Debug.isLogEnabled(TRACE_LOG_LEVEL)) {
-                List<Trace<B>> traces = resultTraces.getTraces();
-                for (int i = 0; i < traces.size(); i++) {
-                    Trace<B> trace = traces.get(i);
-                    Debug.log(TRACE_LOG_LEVEL, "Trace %5d: %s%s", i, trace, isTrivialTrace(lirGenRes.getLIR(), trace) ? " (trivial)" : "");
-                }
+        assert TraceBuilderResult.verify(resultTraces, lirGenRes.getLIR().getControlFlowGraph().getBlocks().size());
+        if (Debug.isLogEnabled(TRACE_LOG_LEVEL)) {
+            List<Trace<B>> traces = resultTraces.getTraces();
+            for (int i = 0; i < traces.size(); i++) {
+                Trace<B> trace = traces.get(i);
+                Debug.log(TRACE_LOG_LEVEL, "Trace %5d: %s", i, trace);
             }
-            TraceStatisticsPrinter.printTraceStatistics(resultTraces, lirGenRes.getCompilationUnitName());
-            Debug.dump(TRACE_DUMP_LEVEL, resultTraces, "After TraceBuilding");
-            return resultTraces;
         }
+        TraceStatisticsPrinter.printTraceStatistics(resultTraces, lirGenRes.getCompilationUnitName());
+        Debug.dump(TRACE_DUMP_LEVEL, resultTraces, "After TraceBuilding");
+        return resultTraces;
     }
 
     /**
