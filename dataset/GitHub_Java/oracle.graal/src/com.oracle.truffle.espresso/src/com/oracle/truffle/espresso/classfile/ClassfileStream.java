@@ -22,27 +22,23 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
+import com.oracle.truffle.espresso.runtime.ClasspathFile;
+
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 
-import com.oracle.truffle.espresso.descriptors.ByteSequence;
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.runtime.ClasspathFile;
-
 /**
  * Operations for sequentially scanning data items in a class file. Any IO exceptions that occur
  * during scanning are converted to {@link ClassFormatError}s.
  */
-public final class ClassfileStream {
+public class ClassfileStream {
 
-    private final int offset;
     private final int length;
     private final ByteArrayInputStream bstream;
     private final DataInputStream stream;
     private final ClasspathFile classfile;
-    private final byte[] bytes;
 
     public ClassfileStream(byte[] bytes, ClasspathFile classfile) {
         this(bytes, 0, bytes.length, classfile);
@@ -53,9 +49,7 @@ public final class ClassfileStream {
     }
 
     public ClassfileStream(byte[] bytes, int offset, int length, ClasspathFile classfile) {
-        this.offset = offset;
         this.length = length;
-        this.bytes = bytes;
         this.bstream = new ByteArrayInputStream(bytes, offset, length);
         this.stream = new DataInputStream(bstream);
         this.classfile = classfile;
@@ -163,26 +157,9 @@ public final class ClassfileStream {
         }
     }
 
-//    public Symbol readUTF() {
-//        try {
-//            int utflen = stream.readUnsignedShort();
-//            byte[] bytes = new byte[utflen];
-//            stream.readFully(bytes);
-//            return new Symbol(bytes);
-//        } catch (EOFException eofException) {
-//            throw eofError();
-//        } catch (IOException ioException) {
-//            throw ioError(ioException);
-//        }
-//    }
-
-    public ByteSequence readByteSequenceUTF() {
+    public String readString() {
         try {
-            int utflen = stream.readUnsignedShort();
-            int start = getPosition();
-            // TODO(peterssen): .skipBytes is NOT O(1).
-            stream.skipBytes(utflen);
-            return ByteSequence.wrap(bytes, start + offset, utflen);
+            return stream.readUTF();
         } catch (EOFException eofException) {
             throw eofError();
         } catch (IOException ioException) {

@@ -50,7 +50,7 @@ public final class ArrayKlass extends Klass {
     }
 
     @Override
-    public StaticObject tryInitializeAndGetStatics() {
+    public StaticObject getStatics() {
         throw EspressoError.shouldNotReachHere("Arrays do not have static fields");
     }
 

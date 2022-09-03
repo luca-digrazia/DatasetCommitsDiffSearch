@@ -48,7 +48,7 @@ public class StaticObjectImpl extends StaticObject {
     }
 
     public boolean isStatic() {
-        return this == getKlass().tryInitializeAndGetStatics();
+        return this == getKlass().getStatics();
     }
 
     // Shallow copy.

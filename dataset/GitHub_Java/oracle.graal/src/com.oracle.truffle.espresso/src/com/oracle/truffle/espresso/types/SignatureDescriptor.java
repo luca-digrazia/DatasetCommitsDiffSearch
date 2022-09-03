@@ -22,11 +22,11 @@
  */
 package com.oracle.truffle.espresso.types;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.meta.JavaKind;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Represents a method signature provided by the runtime.
@@ -49,8 +49,7 @@ public final class SignatureDescriptor extends Descriptor {
     /**
      * The parameter types in this signature followed by the return type.
      */
-    @CompilerDirectives.CompilationFinal(dimensions = 1)
-    private final TypeDescriptor[] components;
+    @CompilerDirectives.CompilationFinal(dimensions = 1) private final TypeDescriptor[] components;
     private final int numberOfSlots;
 
     /**

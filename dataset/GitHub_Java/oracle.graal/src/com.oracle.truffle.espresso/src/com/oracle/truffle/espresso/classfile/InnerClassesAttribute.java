@@ -23,18 +23,12 @@
 
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.espresso.runtime.AttributeInfo;
 
 import java.util.Arrays;
 import java.util.List;
 
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.runtime.Attribute;
-
-public final class InnerClassesAttribute extends Attribute {
-
-    public static final Symbol<Name> NAME = Name.InnerClasses;
+public class InnerClassesAttribute extends AttributeInfo {
 
     public static class Entry {
         public final int innerClassIndex;
@@ -50,15 +44,14 @@ public final class InnerClassesAttribute extends Attribute {
         }
     }
 
-    @CompilationFinal(dimensions = 1) private final Entry[] entries;
+    private final Entry[] entries;
 
     public List<Entry> entries() {
         return Arrays.asList(entries);
     }
 
-    InnerClassesAttribute(Symbol<Name> name, Entry[] entries) {
+    public InnerClassesAttribute(String name, Entry[] entries) {
         super(name, null);
-        assert NAME.equals(name);
         this.entries = entries;
     }
 }

@@ -23,101 +23,50 @@
 package com.oracle.truffle.espresso.classfile;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
-import com.oracle.truffle.espresso.descriptors.Symbol;
+
+import java.util.Objects;
 
 public final class Utf8Constant implements PoolConstant {
-
-    private static final int VALID_CLASS_NAME = 0x01;
-    private static final int VALID_METHOD_NAME = 0x02;
-    private static final int VALID_FIELD_NAME = 0x04;
-    private static final int VALID_SIGNATURE = 0x04;
-    private static final int VALID_UTF8 = 0x08;
-    private static final int VALID_TYPE = 0x1;
-
-    private byte validationCache;
 
     @Override
     public final Tag tag() {
         return Tag.UTF8;
     }
 
-    private final Symbol<?> value;
+    private final String value;
 
-    public Utf8Constant(Symbol<?> value) {
+    public Utf8Constant(String value) {
         this.value = value;
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> Symbol<T> value() {
-        // TODO(peterssen): Maybe assert signature/type is valid.
-        return (Symbol<T>) value;
-    }
-
-    @Override
-    public void validate(ConstantPool pool) {
-        validateUTF8();
-    }
-
-    public void validateUTF8() {
-        if ((validationCache & VALID_UTF8) == 0) {
-            // TODO(peterssen): Validate well-formed modified UTF8 constant, throws guest ClassFormatError otherwise.
-
-            validationCache |= VALID_UTF8;
-        }
-    }
-
-    public void validateClassName() {
-        validateUTF8();
-        if ((validationCache & VALID_CLASS_NAME) == 0) {
-            // TODO(peterssen): Validate class name, throws guest ClassFormatError otherwise.
-
-            validationCache |= VALID_CLASS_NAME;
-        }
-    }
-
-    public void validateType() {
-        validateUTF8();
-        if ((validationCache & VALID_TYPE) == 0) {
-            // TODO(peterssen): Validate type in internal form, throws guest ClassFormatError otherwise.
-
-            validationCache |= VALID_TYPE;
-        }
-    }
-
-    public void validateMethodName() {
-        validateUTF8();
-        if ((validationCache & VALID_METHOD_NAME) == 0) {
-            // TODO(peterssen): Validate method name, throws guest ClassFormatError otherwise.
-
-            validationCache |= VALID_METHOD_NAME;
-        }
-    }
-
-    public void validateFieldName() {
-        validateUTF8();
-        if ((validationCache & VALID_FIELD_NAME) == 0) {
-            // TODO(peterssen): Validate field name, throws guest ClassFormatError otherwise.
-
-            validationCache |= VALID_FIELD_NAME;
-        }
-    }
-
-    public void validateSignature() {
-        validateUTF8();
-        if ((validationCache & VALID_SIGNATURE) == 0) {
-            // TODO(peterssen): Validate signature, throws guest ClassFormatError otherwise.
-
-            validationCache |= VALID_SIGNATURE;
-        }
+    public String getValue() {
+        return value;
     }
 
     @Override
     public final String toString() {
-        return value.toString();
+        return value;
     }
 
     @Override
-    public String toString(ConstantPool pool) {
-        return value.toString();
+    public String toString(ConstantPool pool, int thisIndex) {
+        return value;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        Utf8Constant that = (Utf8Constant) o;
+        return Objects.equals(value, that.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(value);
     }
 }

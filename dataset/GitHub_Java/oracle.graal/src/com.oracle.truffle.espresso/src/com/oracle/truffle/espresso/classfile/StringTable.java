@@ -22,16 +22,12 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import java.lang.ref.WeakReference;
-
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.Utils;
 import org.graalvm.collections.EconomicMap;
 
-import com.oracle.truffle.api.object.DynamicObject;
-import com.oracle.truffle.espresso.meta.EspressoError;
+import java.lang.ref.WeakReference;
 
 /**
  * Used to implement String interning.
@@ -61,7 +57,7 @@ public final class StringTable {
     }
 
     public synchronized StaticObject intern(StaticObject stringObject) {
-        String s = Meta.toHost(stringObject);
+        String s = Meta.toHostString(stringObject);
         return intern(s);
     }
 }

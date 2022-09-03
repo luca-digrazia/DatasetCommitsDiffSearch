@@ -35,7 +35,6 @@ import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 public class ClassRegistries {
 
@@ -83,12 +82,7 @@ public class ClassRegistries {
         if (StaticObject.isNull(classLoader)) {
             return bootClassRegistry.resolve(type);
         } else {
-            ClassRegistry registry = registries.computeIfAbsent(classLoader, new Function<StaticObject, ClassRegistry>() {
-                @Override
-                public ClassRegistry apply(StaticObject cl) {
-                    return new GuestClassRegistry(context, cl);
-                }
-            });
+            ClassRegistry registry = registries.computeIfAbsent(classLoader, cl -> new GuestClassRegistry(context, cl));
             return registry.resolve(type);
         }
     }

@@ -23,14 +23,14 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
-import java.nio.ByteBuffer;
-
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.Utils;
-
+import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import sun.misc.Perf;
+
+import java.nio.ByteBuffer;
 
 @EspressoIntrinsics
 public class Target_sun_misc_Perf {
@@ -53,20 +53,21 @@ public class Target_sun_misc_Perf {
     private final static Perf hostPerf = Perf.getPerf();
 
     @Intrinsic(hasReceiver = true)
-    public static long highResCounter(Object self) {
-        return Perf.getPerf().highResCounter();
+    public static long highResCounter(@SuppressWarnings("unused") Object self) {
+        return hostPerf.highResCounter();
     }
 
     @Intrinsic(hasReceiver = true)
-    public static long highResFrequency(Object self) {
-        return Perf.getPerf().highResFrequency();
+    public static long highResFrequency(@SuppressWarnings("unused") Object self) {
+        return hostPerf.highResFrequency();
     }
 
+    @SuppressWarnings("unused")
     @Intrinsic(hasReceiver = true)
     public static @Type(ByteBuffer.class) StaticObject createLong(Object self, @Type(String.class) StaticObject var1, int var2, int var3, long var4) {
-        EspressoContext context = Utils.getContext();
-        MethodInfo wrap = context.getRegistries().resolve(context.getTypeDescriptors().make("Ljava/nio/ByteBuffer;"), null).findDeclaredMethod("wrap", ByteBuffer.class, byte[].class);
-        return (StaticObject) wrap.getCallTarget().call((Object) ByteUtils.longToBytes(var4));
+        EspressoContext context = EspressoLanguage.getCurrentContext();
+        MethodInfo wrap = context.getRegistries().resolveWithBootClassLoader(context.getTypeDescriptors().make("Ljava/nio/ByteBuffer;")).findDeclaredMethod("wrap", ByteBuffer.class, byte[].class);
+        return (StaticObject) wrap.getCallTarget().call(StaticObjectArray.wrap(ByteUtils.longToBytes(var4)));
     }
 
     @Intrinsic

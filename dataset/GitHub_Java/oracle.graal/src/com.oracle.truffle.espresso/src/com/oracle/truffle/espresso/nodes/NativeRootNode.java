@@ -22,6 +22,8 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -30,42 +32,49 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.descriptors.Signatures;
-import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.object.DebugCounter;
 
-public abstract class NativeRootNode extends EspressoRootNode {
+public abstract class NativeRootNode extends RootNode implements LinkedNode {
 
     private final TruffleObject boundNative;
 
-    @Child Node execute = Message.EXECUTE.createNode();
+    @CompilerDirectives.CompilationFinal //
+    private Meta.Method originalMethod;
 
-    @Child Node isNullNode = Message.IS_NULL.createNode();
+    @Node.Child Node execute = Message.EXECUTE.createNode();
+
+    @Node.Child Node isNullNode = Message.IS_NULL.createNode();
 
     public final static DebugCounter nativeCalls = DebugCounter.create("Native calls");
 
-    public NativeRootNode(TruffleObject boundNative, Method method) {
-        super(method);
+    public NativeRootNode(TruffleLanguage<?> language, TruffleObject boundNative) {
+        this(language, boundNative, null);
+    }
+
+    public NativeRootNode(TruffleLanguage<?> language, TruffleObject boundNative, Meta.Method originalMethod) {
+        super(language);
         this.boundNative = boundNative;
+        this.originalMethod = originalMethod;
     }
 
     public Object[] preprocessArgs(Object[] args) {
-        int paramCount = Signatures.parameterCount(getMethod().getParsedSignature(), false);
-        // Meta.Klass[] params = getOriginalMethod().getParameterTypes();
+        Meta.Klass[] params = getOriginalMethod().getParameterTypes();
         // TODO(peterssen): Static method does not get the clazz in the arguments,
-        int argIndex = getMethod().isStatic() ? 0 : 1;
-        for (int i = 0; i < paramCount; ++i) {
+        int argIndex = getOriginalMethod().isStatic() ? 0 : 1;
+        for (int i = 0; i < params.length; ++i) {
             if (args[argIndex] == null) {
                 args[argIndex] = StaticObject.NULL;
             }
             if (args[argIndex] instanceof Boolean) {
-                if (Signatures.parameterKind(getMethod().getParsedSignature(), i) == JavaKind.Boolean) {
+                if (params[i].kind() == JavaKind.Boolean) {
                     args[argIndex] = (boolean) args[argIndex] ? (byte) 1 : (byte) 0;
                 }
             }
@@ -76,6 +85,10 @@ public abstract class NativeRootNode extends EspressoRootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
+        if (originalMethod == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw EspressoError.shouldNotReachHere();
+        }
         try {
             nativeCalls.inc();
             // TODO(peterssen): Inject JNIEnv properly, without copying.
@@ -105,7 +118,7 @@ public abstract class NativeRootNode extends EspressoRootNode {
             throw new EspressoException(ex);
         }
 
-        switch (getMethod().getReturnKind()) {
+        switch (getOriginalMethod().getReturnType().kind()) {
             case Boolean:
                 return ((byte) result != 0);
             case Byte:
@@ -122,7 +135,6 @@ public abstract class NativeRootNode extends EspressoRootNode {
                 }
                 return result;
         }
-
         // System.err.println("Return native " + originalMethod.getName() + " -> " + result);
         return result;
     }
@@ -140,6 +152,15 @@ public abstract class NativeRootNode extends EspressoRootNode {
         newArgs[0] = first;
         newArgs[1] = second;
         return newArgs;
+    }
+
+    @Override
+    public Meta.Method getOriginalMethod() {
+        return originalMethod;
+    }
+
+    public void setOriginalMethod(Meta.Method originalMethod) {
+        this.originalMethod = originalMethod;
     }
 
     public TruffleObject getBoundNative() {

@@ -23,26 +23,32 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.impl.MethodInfo;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.runtime.EspressoException;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+
 import java.security.AccessControlContext;
 import java.security.PrivilegedAction;
+import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 
-import com.oracle.truffle.espresso.impl.MethodInfo;
-import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.Utils;
+import static com.oracle.truffle.espresso.meta.Meta.meta;
 
 @EspressoIntrinsics
 public class Target_java_security_AccessController {
     @Intrinsic
     public static Object doPrivileged(@Type(PrivilegedAction.class) StaticObject action) {
-        MethodInfo runMethod = action.getKlass().findDeclaredConcreteMethod("run", Utils.getContext().getSignatureDescriptors().make("()Ljava/lang/Object;"));
+        MethodInfo runMethod = action.getKlass().findDeclaredConcreteMethod("run", EspressoLanguage.getCurrentContext().getSignatureDescriptors().make("()Ljava/lang/Object;"));
         Object result = runMethod.getCallTarget().call(action);
         return result;
     }
 
     @Intrinsic(methodName = "doPrivileged")
     public static Object doPrivileged2(@Type(PrivilegedExceptionAction.class) StaticObject action) {
-        return doPrivileged(action);
+        return doPrivileged3(action, StaticObject.NULL);
     }
 
     @Intrinsic
@@ -51,12 +57,21 @@ public class Target_java_security_AccessController {
     }
 
     @Intrinsic(methodName = "doPrivileged")
-    public static Object doPrivileged3(@Type(PrivilegedExceptionAction.class) StaticObject action, @Type(AccessControlContext.class) StaticObject context) {
-        return doPrivileged(action);
+    public static Object doPrivileged3(@Type(PrivilegedExceptionAction.class) StaticObject action, @SuppressWarnings("unused") @Type(AccessControlContext.class) StaticObject context) {
+        try {
+            return doPrivileged(action);
+        } catch (EspressoException e) {
+            Meta.Klass exKlass = meta(action).getMeta().knownKlass(PrivilegedActionException.class);
+            StaticObject ex = exKlass.allocateInstance();
+            meta(ex).method("<init>", void.class, Exception.class).invoke(e.getException());
+            throw new EspressoException(ex);
+        } catch (Exception e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
     }
 
     @Intrinsic(methodName = "doPrivileged")
-    public static Object doPrivileged4(@Type(PrivilegedAction.class) StaticObject action, @Type(AccessControlContext.class) StaticObject context) {
+    public static Object doPrivileged4(@Type(PrivilegedAction.class) StaticObject action, @SuppressWarnings("unused") @Type(AccessControlContext.class) StaticObject context) {
         return doPrivileged(action);
     }
 }

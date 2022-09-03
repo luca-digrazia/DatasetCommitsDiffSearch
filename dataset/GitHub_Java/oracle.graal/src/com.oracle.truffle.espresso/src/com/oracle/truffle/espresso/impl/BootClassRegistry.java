@@ -23,69 +23,108 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Host;
-import com.oracle.truffle.object.DebugCounter;
+import com.oracle.truffle.espresso.types.TypeDescriptor;
+
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A {@link BootClassRegistry} maps type names to resolved {@link Klass} instances loaded by the
- * boot class loader.
+ * A {@link GuestClassRegistry} maps class names to resolved {@link Klass} instances. Each class
+ * loader is associated with a {@link GuestClassRegistry} and vice versa.
+ *
+ * This class is analogous to the ClassLoaderData C++ class in HotSpot.
  */
-public final class BootClassRegistry extends ClassRegistry {
+public class BootClassRegistry implements ClassRegistry {
 
-    static final DebugCounter loadKlassCount = DebugCounter.create("BCL loadKlassCount");
-    static final DebugCounter loadKlassCacheHits = DebugCounter.create("BCL loadKlassCacheHits");
+    private final EspressoContext context;
+
+    /**
+     * The map from symbol to classes for the classes defined by the class loader associated with
+     * this registry. Use of {@link ConcurrentHashMap} allows for atomic insertion while still
+     * supporting fast, non-blocking lookup. There's no need for deletion as class unloading removes
+     * a whole class registry and all its contained classes.
+     */
+    private final ConcurrentHashMap<TypeDescriptor, Klass> classes = new ConcurrentHashMap<>();
 
     public BootClassRegistry(EspressoContext context) {
-        super(context);
+        this.context = context;
         // Primitive classes do not have a .class definition, inject them directly in the BCL.
         for (JavaKind kind : JavaKind.values()) {
             if (kind.isPrimitive()) {
-                classes.put(kind.getType(), new PrimitiveKlass(context, kind));
+                classes.put(context.getTypeDescriptors().make(kind.getTypeChar() + ""), new PrimitiveKlass(context, kind));
             }
         }
     }
 
     @Override
-    public Klass loadKlass(Symbol<Type> type) {
-        if (Types.isArray(type)) {
-            Symbol<Type> elemental = getTypes().getElementalType(type);
-            Klass elementalKlass = loadKlass(elemental);
-            if (elementalKlass == null) {
+    public Klass resolve(TypeDescriptor type) {
+        if (type.isArray()) {
+            Klass k = resolve(type.getComponentType());
+            if (k == null) {
                 return null;
             }
-            return elementalKlass.getArrayClass(Types.getArrayDimensions(type));
+            return k.getArrayClass();
         }
 
-        loadKlassCount.inc();
-
+        // TODO(peterssen): Make boot class registry thread-safe. Class loading is not a
+        // trivial operation, it loads super classes as well, which discards computeIfAbsent.
         Klass klass = classes.get(type);
-        if (klass != null) {
-            loadKlassCacheHits.inc();
-            return klass;
+
+        if (klass == null) {
+            Klass hostClass = null;
+            String className = TypeDescriptor.slashified(type.toJavaName());
+
+            if (type.isPrimitive()) {
+                throw EspressoError.shouldNotReachHere("Primitives must be in the registry");
+            }
+
+            if (type.isArray()) {
+                int dim = type.getArrayDimensions();
+                Klass arrType = resolve(type.getElementalType());
+                for (int i = 0; i < dim; ++i) {
+                    arrType = arrType.getArrayClass();
+                }
+                return arrType;
+            }
+            ClasspathFile classpathFile = context.getBootClasspath().readClassFile(className);
+            if (classpathFile == null) {
+                return null;
+            }
+            ClassfileParser parser = new ClassfileParser(StaticObject.NULL, classpathFile, className, hostClass, context);
+            klass = parser.parseClass();
+            Klass loadedFirst = classes.putIfAbsent(type, klass);
+            if (loadedFirst != null) {
+                klass = loadedFirst;
+            }
         }
 
-        EspressoError.guarantee(!Types.isPrimitive(type), "Primitives must be in the registry");
-
-        ClasspathFile classpathFile = getContext().getBootClasspath().readClassFile(type);
-        if (classpathFile == null) {
-            return null;
-        }
-
-        // Defining a class also loads the superclass and the superinterfaces which excludes the
-        // use of computeIfAbsent to insert the class since the map is modified.
-        return defineKlass(type, classpathFile.contents);
+        return klass;
     }
 
     @Override
-    public @Host(ClassLoader.class) StaticObject getClassLoader() {
-        return StaticObject.NULL;
+    public Klass findLoadedClass(TypeDescriptor type) {
+        if (type.isArray()) {
+            Klass klass = findLoadedClass(type.getComponentType());
+            if (klass == null) {
+                return null;
+            }
+            return klass.getArrayClass();
+        }
+        return classes.get(type);
+    }
+
+    @Override
+    public Klass defineKlass(TypeDescriptor type, Klass klass) {
+        assert !classes.containsKey(type);
+        Klass prevKlass = classes.putIfAbsent(type, klass);
+        if (prevKlass != null) {
+            return prevKlass;
+        }
+        return klass;
     }
 }
