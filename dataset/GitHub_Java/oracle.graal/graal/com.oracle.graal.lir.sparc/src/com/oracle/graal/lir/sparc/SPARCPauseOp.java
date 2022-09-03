@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,29 +20,27 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes;
+package com.oracle.graal.lir.sparc;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
-/** A node that results in a platform dependent pause instruction being emitted. */
-@NodeInfo
-public final class PauseNode extends FixedWithNextNode implements LIRLowerable {
+/**
+ * Emits a pause.
+ */
+@Opcode("PAUSE")
+public final class SPARCPauseOp extends SPARCLIRInstruction {
+    public static final LIRInstructionClass<SPARCPauseOp> TYPE = LIRInstructionClass.create(SPARCPauseOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(1);
 
-    public static final NodeClass<PauseNode> TYPE = NodeClass.create(PauseNode.class);
-
-    public PauseNode() {
-        super(TYPE, StampFactory.forVoid());
+    public SPARCPauseOp() {
+        super(TYPE, SIZE);
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        gen.visitPauseNode(this);
+    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+        masm.pause();
     }
-
-    @NodeIntrinsic
-    public static native void pause();
 }
