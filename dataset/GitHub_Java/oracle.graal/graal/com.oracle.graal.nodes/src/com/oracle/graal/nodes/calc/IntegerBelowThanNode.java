@@ -24,8 +24,8 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "|<|")
@@ -54,13 +54,13 @@ public final class IntegerBelowThanNode extends CompareNode {
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public LogicNode canonical(CanonicalizerTool tool) {
         if (x() == y()) {
             return LogicConstantNode.contradiction(graph());
         } else {
             if (x().isConstant() && x().asConstant().asLong() == 0) {
                 // 0 |<| y is the same as 0 != y
-                return graph().unique(new LogicNegationNode(CompareNode.createCompareNode(graph(), Condition.EQ, x(), y())));
+                return graph().unique(new LogicNegationNode(CompareNode.createCompareNode(Condition.EQ, x(), y())));
             }
 
             if (x().stamp() instanceof IntegerStamp && y().stamp() instanceof IntegerStamp) {
