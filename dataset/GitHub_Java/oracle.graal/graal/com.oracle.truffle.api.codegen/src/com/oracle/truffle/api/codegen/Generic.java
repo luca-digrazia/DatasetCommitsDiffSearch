@@ -31,4 +31,6 @@ import java.lang.annotation.*;
 @Target({ElementType.METHOD})
 public @interface Generic {
 
+    boolean useSpecializations() default true;
+
 }

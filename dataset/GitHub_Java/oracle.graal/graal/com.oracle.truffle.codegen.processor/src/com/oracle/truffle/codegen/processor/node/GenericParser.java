@@ -23,15 +23,12 @@
 package com.oracle.truffle.codegen.processor.node;
 
 import java.lang.annotation.*;
-import java.util.*;
 
 import javax.lang.model.element.*;
-import javax.lang.model.type.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
-import com.oracle.truffle.codegen.processor.template.ParameterSpec.*;
 
 public class GenericParser extends MethodParser<SpecializationData> {
 
@@ -41,28 +38,22 @@ public class GenericParser extends MethodParser<SpecializationData> {
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        return createDefaultMethodSpec(method, mirror, null);
+        return createDefaultMethodSpec(null);
     }
 
     @Override
-    protected ParameterSpec createValueParameterSpec(String valueName, NodeData nodeData, boolean optional) {
-        List<ExecutableTypeData> execTypes = nodeData.findGenericExecutableTypes(getContext());
-        List<TypeMirror> types = new ArrayList<>();
-        for (ExecutableTypeData type : execTypes) {
-            types.add(type.getType().getPrimitiveType());
-        }
-        TypeMirror[] array = types.toArray(new TypeMirror[types.size()]);
-        return new ParameterSpec(valueName, array, false, Cardinality.ONE);
+    protected ParameterSpec createValueParameterSpec(String valueName, NodeData nodeData) {
+        return new ParameterSpec(valueName, nodeData.findGenericExecutableType(getContext()).getType().getPrimitiveType(), false);
     }
 
     @Override
     protected ParameterSpec createReturnParameterSpec() {
-        return super.createValueParameterSpec("returnValue", getNode(), false);
+        return super.createValueParameterSpec("returnValue", getNode());
     }
 
     @Override
     public SpecializationData create(TemplateMethod method) {
-        SpecializationData data = new SpecializationData(method, true, false, false);
+        SpecializationData data = new SpecializationData(method, true, false);
         data.setUseSpecializationsForGeneric(Utils.getAnnotationValueBoolean(data.getMarkerAnnotation(), "useSpecializations"));
         return data;
     }
