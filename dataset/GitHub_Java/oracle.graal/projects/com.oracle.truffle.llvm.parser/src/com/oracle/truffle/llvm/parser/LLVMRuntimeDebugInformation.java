@@ -60,7 +60,6 @@ import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMFrameValueAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
@@ -225,7 +224,7 @@ final class LLVMRuntimeDebugInformation {
         }
     }
 
-    LLVMStatementNode createInitializer(SourceVariable variable) {
+    LLVMExpressionNode createInitializer(SourceVariable variable) {
         if (!isEnabled) {
             return null;
         }
@@ -252,7 +251,7 @@ final class LLVMRuntimeDebugInformation {
 
     private static final int[] CLEAR_NONE = new int[0];
 
-    LLVMStatementNode handleDebugIntrinsic(SymbolImpl value, SourceVariable variable, MDExpression expression, long index, boolean isDeclaration) {
+    LLVMExpressionNode handleDebugIntrinsic(SymbolImpl value, SourceVariable variable, MDExpression expression, long index, boolean isDeclaration) {
         if (!isEnabled || variable.hasStaticAllocation()) {
             return null;
         }
