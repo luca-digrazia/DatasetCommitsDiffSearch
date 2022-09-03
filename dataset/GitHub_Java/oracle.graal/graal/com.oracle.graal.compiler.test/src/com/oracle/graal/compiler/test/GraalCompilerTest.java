@@ -46,6 +46,7 @@ import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.java.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
@@ -500,7 +501,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     private CompilationResult compileBaseline(ResolvedJavaMethod javaMethod) {
         try (Scope bds = Debug.scope("compileBaseline")) {
             BaselineCompiler baselineCompiler = new BaselineCompiler(GraphBuilderConfiguration.getDefault(), providers.getMetaAccess());
-            baselineCompiler.generate(javaMethod, -1);
+            LIR lir = baselineCompiler.generate(javaMethod, -1);
             return null;
         } catch (Throwable e) {
             throw Debug.handle(e);

@@ -23,7 +23,7 @@
 package com.oracle.graal.hotspot.nfi;
 
 import static com.oracle.graal.api.code.CodeUtil.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.nfi.NativeCallStubGraphBuilder.*;
 
 import com.oracle.graal.api.code.*;
@@ -40,7 +40,6 @@ import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.nfi.api.*;
 
 public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
 
@@ -87,13 +86,13 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     }
 
     @Override
-    public HotSpotNativeFunctionHandle getFunctionHandle(NativeLibraryHandle library, String name, Class<?> returnType, Class<?>... argumentTypes) {
-        HotSpotNativeFunctionPointer functionPointer = lookupFunctionPointer(name, library, false);
+    public HotSpotNativeFunctionHandle getFunctionHandle(NativeLibraryHandle library, String name, Class returnType, Class... argumentTypes) {
+        HotSpotNativeFunctionPointer functionPointer = lookupFunctionPointer(name, library, true);
         return createHandle(functionPointer, returnType, argumentTypes);
     }
 
     @Override
-    public HotSpotNativeFunctionHandle getFunctionHandle(NativeLibraryHandle[] libraries, String name, Class<?> returnType, Class<?>... argumentTypes) {
+    public HotSpotNativeFunctionHandle getFunctionHandle(NativeLibraryHandle[] libraries, String name, Class returnType, Class... argumentTypes) {
         HotSpotNativeFunctionPointer functionPointer = null;
         for (NativeLibraryHandle libraryHandle : libraries) {
             functionPointer = lookupFunctionPointer(name, libraryHandle, false);
@@ -106,7 +105,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     }
 
     @Override
-    public HotSpotNativeFunctionHandle getFunctionHandle(String name, Class<?> returnType, Class<?>... argumentTypes) {
+    public HotSpotNativeFunctionHandle getFunctionHandle(String name, Class returnType, Class... argumentTypes) {
         if (rtldDefault == null) {
             throw new UnsatisfiedLinkError(name);
         }
@@ -137,14 +136,14 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     }
 
     @Override
-    public HotSpotNativeFunctionHandle getFunctionHandle(NativeFunctionPointer functionPointer, Class<?> returnType, Class<?>... argumentTypes) {
+    public HotSpotNativeFunctionHandle getFunctionHandle(NativeFunctionPointer functionPointer, Class returnType, Class... argumentTypes) {
         if (!(functionPointer instanceof HotSpotNativeFunctionPointer)) {
             throw new UnsatisfiedLinkError(functionPointer.getName());
         }
         return createHandle(functionPointer, returnType, argumentTypes);
     }
 
-    private HotSpotNativeFunctionHandle createHandle(NativeFunctionPointer functionPointer, Class<?> returnType, Class<?>... argumentTypes) {
+    private HotSpotNativeFunctionHandle createHandle(NativeFunctionPointer functionPointer, Class returnType, Class... argumentTypes) {
         HotSpotNativeFunctionPointer hs = (HotSpotNativeFunctionPointer) functionPointer;
         InstalledCode code = installNativeFunctionStub(hs.value, returnType, argumentTypes);
         return new HotSpotNativeFunctionHandle(code, hs.name, argumentTypes);
@@ -153,7 +152,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     /**
      * Creates and installs a stub for calling a native function.
      */
-    private InstalledCode installNativeFunctionStub(long functionPointer, Class<?> returnType, Class<?>... argumentTypes) {
+    private InstalledCode installNativeFunctionStub(long functionPointer, Class returnType, Class... argumentTypes) {
         StructuredGraph g = getGraph(providers, factory, functionPointer, returnType, argumentTypes);
         Suites suites = providers.getSuites().createSuites();
         PhaseSuite<HighTierContext> phaseSuite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
@@ -162,7 +161,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
                         DefaultProfilingInfo.get(TriState.UNKNOWN), null, suites, new CompilationResult(), CompilationResultBuilderFactory.Default);
         InstalledCode installedCode;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache(), g.method())) {
-            installedCode = providers.getCodeCache().addMethod(g.method(), compResult, null, null);
+            installedCode = providers.getCodeCache().addMethod(g.method(), compResult, null);
         }
         return installedCode;
     }
@@ -179,7 +178,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
         if (rtldDefault == null) {
             throw new UnsatisfiedLinkError(name);
         }
-        return lookupFunctionPointer(name, rtldDefault, false);
+        return lookupFunctionPointer(name, rtldDefault, true);
     }
 
     public boolean isDefaultLibrarySearchSupported() {
