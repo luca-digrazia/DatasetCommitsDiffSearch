@@ -23,7 +23,7 @@
 package com.oracle.truffle.api;
 
 /**
- * Represents a contiguous text section within the source code of a guest language program.
+ * Represents a section in the source code of a guest language program.
  */
 public class SourceSection {
 
@@ -35,26 +35,13 @@ public class SourceSection {
     private final int charLength;
 
     /**
-     * Creates a new object representing a contiguous text section within the source code of a guest
-     * language program.
-     * <p>
-     * The starting location of the section is specified using two different coordinate:
-     * <ul>
-     * <li><b>(row, column)</b>: rows and columns are 1-based, so the first character in a source
-     * file is at position {@code (1,1)}.</li>
-     * <li><b>character index</b>: 0-based offset of the character from the beginning of the source,
-     * so the first character in a file is at index {@code 0}.</li>
-     * </ul>
-     * The <b>newline</b> that terminates each line counts as a single character for the purpose of
-     * a character index. The (row,column) coordinates of a newline character should never appear in
-     * a text section.
-     * <p>
+     * Creates a new object representing a section in the source code of a guest language program.
      * 
-     * @param source object representing the complete source program that contains this section
+     * @param source object representing the source program this is should be a section of
      * @param identifier an identifier used when printing the section
-     * @param startLine the 1-based number of the start line of the section
-     * @param startColumn the 1-based number of the start column of the section
-     * @param charIndex the 0-based index of the first character of the section
+     * @param startLine the index of the start line of the section
+     * @param startColumn the index of the start column of the section
+     * @param charIndex the index of the first character of the section
      * @param charLength the length of the section in number of characters
      */
     public SourceSection(Source source, String identifier, int startLine, int startColumn, int charIndex, int charLength) {
@@ -67,7 +54,7 @@ public class SourceSection {
     }
 
     /**
-     * Returns the object representing the source program that contains this section.
+     * Returns the source object representing the source program this is a section of.
      * 
      * @return the source object
      */
@@ -76,42 +63,38 @@ public class SourceSection {
     }
 
     /**
-     * Returns 1-based line number of the first character in this source section (inclusive).
+     * Returns the index of the start line of this source section (inclusive).
      * 
-     * @return the starting line number
+     * @return the start line
      */
     public final int getStartLine() {
         return startLine;
     }
 
     /**
-     * Returns the 1-based column number of the first character in this source section (inclusive).
+     * Returns the index of the start column of this source section (inclusive).
      * 
-     * @return the starting column number
+     * @return the start column
      */
     public final int getStartColumn() {
         return startColumn;
     }
 
     /**
-     * Returns the 0-based index of the first character in this source section.
-     * <p>
-     * The complete text of the source that contains this section can be retrieved via
-     * {@link Source#getCode()}.
+     * Returns the index of the first character of this section. All characters of the source can be
+     * retrieved via the {@link Source#getCode()} method.
      * 
-     * @return the starting character index
+     * @return the character index
      */
     public final int getCharIndex() {
         return charIndex;
     }
 
     /**
-     * Returns the length of this source section in characters.
-     * <p>
-     * The complete text of the source that contains this section can be retrieved via
-     * {@link Source#getCode()}.
+     * Returns the length of this section in characters. All characters of the source can be
+     * retrieved via the {@link Source#getCode()} method.
      * 
-     * @return the number of characters in the section
+     * @return the character length
      */
     public final int getCharLength() {
         return charLength;
@@ -127,7 +110,7 @@ public class SourceSection {
     }
 
     /**
-     * Returns text of the code represented by this source section.
+     * Returns the code represented by this code section.
      * 
      * @return the code as a String object
      */
