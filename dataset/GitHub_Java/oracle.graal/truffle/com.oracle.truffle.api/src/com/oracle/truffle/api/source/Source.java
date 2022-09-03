@@ -24,6 +24,8 @@
  */
 package com.oracle.truffle.api.source;
 
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.TruffleLanguage.Registration;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -51,9 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.TruffleLanguage.Registration;
 
 /**
  * Representation of a guest language source code unit and its contents. Sources originate in
@@ -426,7 +425,7 @@ public abstract class Source {
 
     /**
      * The URL if the source is retrieved via URL.
-     *
+     * 
      * @return URL or <code>null</code>
      */
     public abstract URL getURL();
@@ -728,7 +727,7 @@ public abstract class Source {
 
         @Override
         public String getPath() {
-            return null;
+            return description;
         }
 
         @Override
