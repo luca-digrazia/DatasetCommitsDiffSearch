@@ -60,11 +60,14 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
         Value[] nativeABICallerSaveRegisters = createNativeABICallerSaveRegisters(runtime.getConfig(), codeCache.getRegisterConfig());
         HotSpotForeignCallsProvider foreignCalls = new SPARCHotSpotForeignCallsProvider(runtime, metaAccess, codeCache, nativeABICallerSaveRegisters);
         LoweringProvider lowerer = new SPARCHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, target);
+        // Replacements cannot have speculative optimizations since they have
+        // to be valid for the entire run of the VM.
+        Assumptions assumptions = new Assumptions(false);
         Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, new HotSpotStampProvider());
         HotSpotSnippetReflectionProvider snippetReflection = new HotSpotSnippetReflectionProvider(runtime);
-        HotSpotReplacementsImpl replacements = new HotSpotReplacementsImpl(p, snippetReflection, runtime.getConfig(), target);
+        HotSpotReplacementsImpl replacements = new HotSpotReplacementsImpl(p, snippetReflection, runtime.getConfig(), assumptions, target);
         HotSpotDisassemblerProvider disassembler = new HotSpotDisassemblerProvider(runtime);
-        HotSpotSuitesProvider suites = new HotSpotSuitesProvider(runtime, metaAccess, constantReflection, replacements);
+        HotSpotSuitesProvider suites = new HotSpotSuitesProvider(runtime);
         HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, snippetReflection);
 
         return new SPARCHotSpotBackend(runtime, providers);
@@ -93,14 +96,10 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
 
     @SuppressWarnings("unused")
     private static Value[] createNativeABICallerSaveRegisters(HotSpotVMConfig config, RegisterConfig regConfig) {
-        List<Register> callerSaveRegisters = new ArrayList<>();
-        Collections.addAll(callerSaveRegisters, regConfig.getCallerSaveRegisters());
-        // TODO: Saving callee saved registers as well seems unneccessary, however as of now it does
-        // not work without; needs further investigation
-        Collections.addAll(callerSaveRegisters, regConfig.getCalleeSaveLayout().registers);
-        Value[] nativeABICallerSaveRegisters = new Value[callerSaveRegisters.size()];
-        for (int i = 0; i < callerSaveRegisters.size(); i++) {
-            nativeABICallerSaveRegisters[i] = callerSaveRegisters.get(i).asValue();
+        Register[] calleeSaveRegisters = regConfig.getCallerSaveRegisters();
+        Value[] nativeABICallerSaveRegisters = new Value[calleeSaveRegisters.length];
+        for (int i = 0; i < calleeSaveRegisters.length; i++) {
+            nativeABICallerSaveRegisters[i] = calleeSaveRegisters[i].asValue();
         }
         return nativeABICallerSaveRegisters;
     }
