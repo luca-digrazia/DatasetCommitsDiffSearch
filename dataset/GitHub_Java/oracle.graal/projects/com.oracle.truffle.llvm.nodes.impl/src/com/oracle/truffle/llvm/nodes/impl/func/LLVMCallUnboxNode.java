@@ -169,13 +169,13 @@ public abstract class LLVMCallUnboxNode {
     public abstract static class LLVMAddressCallUnboxNode extends LLVMAddressNode {
 
         @Specialization
-        public TruffleObject executeTruffleObject(TruffleObject value) {
+        public TruffleObject executePointee(TruffleObject value) {
             return value;
         }
 
         @Specialization
-        public LLVMAddress executePointee(LLVMAddress value) {
-            return value;
+        public LLVMAddress executePointee(Object value) {
+            return (LLVMAddress) value;
         }
     }
 
