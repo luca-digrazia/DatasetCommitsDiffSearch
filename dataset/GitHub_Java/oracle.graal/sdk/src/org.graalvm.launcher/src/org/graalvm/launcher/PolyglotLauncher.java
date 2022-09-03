@@ -50,10 +50,11 @@ public final class PolyglotLauncher extends Launcher {
 
     private String mainLanguage = null;
 
-    static {
-        // TODO remove temporary hack to initialize engine if not yet initialized.
-        Source.create("js", "");
-    }
+    // Commented out because of GR-6870
+    // static {
+    // // TODO remove temporary hack to initialize engine if not yet initialized.
+    // Source.create("js", "");
+    // }
 
     @Override
     protected void printHelp(OptionCategory maxCategory) {
@@ -219,7 +220,7 @@ public final class PolyglotLauncher extends Launcher {
         try {
             AbstractLanguageLauncher launcher = launcherClass.newInstance();
             launcher.setPolyglot(true);
-            launcher.launch(args, options, false);
+            launcher.launch(args, options);
         } catch (IllegalAccessException | InstantiationException e) {
             throw new RuntimeException("Failed to instanciate launcher class " + launcherName, e);
         }

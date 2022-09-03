@@ -79,28 +79,6 @@ public final class Engine implements AutoCloseable {
 
     private static final class ImplHolder {
         private static final AbstractPolyglotImpl IMPL = initEngineImpl();
-
-        /**
-         * Performs context pre-initialization.
-         *
-         * NOTE: this method is called reflectively by downstream projects
-         * (com.oracle.svm.truffle.TruffleFeature).
-         */
-        @SuppressWarnings("unused")
-        private static void preInitializeEngine() {
-            IMPL.preInitializeEngine();
-        }
-
-        /**
-         * Clears the pre-initialized engine.
-         *
-         * NOTE: this method is called reflectively by downstream projects
-         * (com.oracle.svm.truffle.TruffleFeature).
-         */
-        @SuppressWarnings("unused")
-        private static void resetPreInitializedEngine() {
-            IMPL.resetPreInitializedEngine();
-        }
     }
 
     /**
@@ -400,11 +378,6 @@ public final class Engine implements AutoCloseable {
         }
 
         @Override
-        public AbstractExceptionImpl getImpl(PolyglotException value) {
-            return value.impl;
-        }
-
-        @Override
         public Context newContext(AbstractContextImpl impl) {
             return new Context(impl);
         }
@@ -525,6 +498,7 @@ public final class Engine implements AutoCloseable {
 
                 if (engine != null) {
                     engine.setConstructors(new APIAccessImpl());
+                    engine.preInitializeEngine();
                 }
                 return engine;
             }
@@ -591,10 +565,6 @@ public final class Engine implements AutoCloseable {
 
         @Override
         public void preInitializeEngine() {
-        }
-
-        @Override
-        public void resetPreInitializedEngine() {
         }
 
         static class EmptySource extends AbstractSourceImpl {

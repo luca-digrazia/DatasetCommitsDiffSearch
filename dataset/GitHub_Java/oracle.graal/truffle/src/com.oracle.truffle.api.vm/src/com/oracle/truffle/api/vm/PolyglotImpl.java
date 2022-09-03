@@ -57,13 +57,10 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.impl.Accessor.EngineSupport;
 import com.oracle.truffle.api.impl.DispatchOutputStream;
 import com.oracle.truffle.api.impl.TruffleLocator;
-import com.oracle.truffle.api.instrumentation.ContextsListener;
-import com.oracle.truffle.api.instrumentation.ThreadsListener;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -71,6 +68,7 @@ import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
+import java.util.concurrent.atomic.AtomicReference;
 
 /*
  * This class is exported to the Graal SDK. Keep that in mind when changing its class or package name.
@@ -89,6 +87,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
     private final PolyglotSource sourceImpl = new PolyglotSource(this);
     private final PolyglotSourceSection sourceSectionImpl = new PolyglotSourceSection(this);
+    private final AtomicReference<PolyglotEngineImpl> preInitializedEngineRef = new AtomicReference<>();
 
     private static void ensureInitialized() {
         if (VMAccessor.SPI == null || !(VMAccessor.SPI.engineSupport() instanceof EngineImpl)) {
@@ -141,11 +140,33 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         DispatchOutputStream dispatchOut = INSTRUMENT.createDispatchOutput(resolvedOut);
         DispatchOutputStream dispatchErr = INSTRUMENT.createDispatchOutput(resolvedErr);
         ClassLoader contextClassLoader = TruffleOptions.AOT ? null : Thread.currentThread().getContextClassLoader();
-        PolyglotEngineImpl impl = new PolyglotEngineImpl(this, dispatchOut, dispatchErr, resolvedIn, arguments, timeout, timeoutUnit, sandbox, useSystemProperties,
-                        contextClassLoader, boundEngine);
+
+        PolyglotEngineImpl impl = preInitializedEngineRef.getAndSet(null);
+        if (impl != null) {
+            if (!impl.patch(dispatchErr, dispatchErr, resolvedIn, arguments, timeout, timeoutUnit, sandbox, useSystemProperties, contextClassLoader, boundEngine)) {
+                impl.ensureClosed(false, true);
+                impl = null;
+            }
+        }
+        if (impl == null) {
+            impl = new PolyglotEngineImpl(this, dispatchOut, dispatchErr, resolvedIn, arguments, timeout, timeoutUnit, sandbox, useSystemProperties,
+                            contextClassLoader, boundEngine);
+        }
         Engine engine = getAPIAccess().newEngine(impl);
         impl.api = engine;
         return engine;
+    }
+
+    @Override
+    public void preInitializeEngine() {
+        ensureInitialized();
+        final PolyglotEngineImpl preInitializedEngine = PolyglotEngineImpl.preInitialize(
+                        this,
+                        INSTRUMENT.createDispatchOutput(System.out),
+                        INSTRUMENT.createDispatchOutput(System.err),
+                        System.in,
+                        TruffleOptions.AOT ? null : Thread.currentThread().getContextClassLoader());
+        preInitializedEngineRef.set(preInitializedEngine);
     }
 
     /**
@@ -316,12 +337,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             return (C) LANGUAGE.getContext(env);
         }
 
-        @Override
-        public TruffleContext getPolyglotContext(Object vmObject) {
-            PolyglotLanguageContext languageContext = (PolyglotLanguageContext) vmObject;
-            return languageContext.context.truffleContext;
-        }
-
         @SuppressWarnings("unchecked")
         @Override
         public <T extends TruffleLanguage<?>> T getCurrentLanguage(Class<T> languageClass) {
@@ -351,7 +366,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         public Env getEnvForInstrument(LanguageInfo info) {
             PolyglotLanguage language = (PolyglotLanguage) NODES.getEngineObject(info);
             PolyglotLanguageContext languageContext = PolyglotContextImpl.requireContext().contexts[language.index];
-            languageContext.ensureCreated(null);
+            languageContext.ensureInitialized(null);
             return languageContext.env;
         }
 
@@ -628,26 +643,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public void reportAllLanguageContexts(Object vmObject, Object contextsListener) {
-            ((PolyglotEngineImpl) vmObject).reportAllLanguageContexts((ContextsListener) contextsListener);
-        }
-
-        @Override
-        public void reportAllContextThreads(Object vmObject, Object threadsListener) {
-            ((PolyglotEngineImpl) vmObject).reportAllContextThreads((ThreadsListener) threadsListener);
-        }
-
-        @Override
-        public TruffleContext getParentContext(Object impl) {
-            PolyglotContextImpl parent = ((PolyglotContextImpl) impl).parent;
-            if (parent != null) {
-                return parent.truffleContext;
-            } else {
-                return null;
-            }
-        }
-
-        @Override
         public Object enterInternalContext(Object impl) {
             return ((PolyglotContextImpl) impl).enter();
         }
@@ -668,22 +663,15 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public Object createInternalContext(Object vmObject, Map<String, Object> config, TruffleContext spiContext) {
+        public Object createInternalContext(Object vmObject, Map<String, Object> config) {
             PolyglotLanguageContext creator = ((PolyglotLanguageContext) vmObject);
             PolyglotContextImpl impl;
             synchronized (creator.context) {
-                impl = new PolyglotContextImpl(creator, config, spiContext);
+                impl = new PolyglotContextImpl(creator, config);
                 impl.api = impl.getAPIAccess().newContext(impl);
             }
-            return impl;
-        }
-
-        @Override
-        public void initializeInternalContext(Object vmObject, Object contextImpl) {
-            PolyglotLanguageContext creator = ((PolyglotLanguageContext) vmObject);
-            PolyglotContextImpl impl = (PolyglotContextImpl) contextImpl;
-            impl.notifyContextCreated();
             impl.initializeLanguage(creator.language.getId());
+            return impl;
         }
 
         @Override

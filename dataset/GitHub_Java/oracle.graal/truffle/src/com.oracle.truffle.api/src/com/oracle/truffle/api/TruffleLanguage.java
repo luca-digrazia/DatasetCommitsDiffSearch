@@ -480,6 +480,25 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
+     * Notifies the language with pre-initialized context about {@link Env} change. The language
+     * context pre-initialization can be used to perform expensive builtin creation in the time of
+     * native compilation. The context pre-initialization is enabled by setting the system property
+     * {polyglot.engine.PreinitializeContexts} to a comma separated list of language ids which
+     * should be pre-initialized.
+     * 
+     * @param context the context created by
+     *            {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env)} during
+     *            pre-initialization
+     * @param newEnv the new environment replacing the environment used in pre-initialization phase
+     * @return true in case of successful environment update. When the context cannot be updated to
+     *         a new environment return false to create a new context.
+     * @since 0.30
+     */
+    protected boolean patchContext(C context, Env newEnv) {
+        return false;
+    }
+
+    /**
      * Request for parsing. Contains information of what to parse and in which context.
      *
      * @since 0.22
@@ -1050,6 +1069,7 @@ public abstract class TruffleLanguage<C> {
         @CompilationFinal private volatile Assumption contextUnchangedAssumption = Truffle.getRuntime().createAssumption("Language context unchanged");
         @CompilationFinal private volatile boolean initialized = false;
         @CompilationFinal private volatile Assumption initializedUnchangedAssumption = Truffle.getRuntime().createAssumption("Language context initialized unchanged");
+        @CompilationFinal private volatile boolean valid;
 
         @SuppressWarnings("unchecked")
         private Env(Object vmObject, LanguageInfo language, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config, OptionValues options, String[] applicationArguments) {
@@ -1062,6 +1082,7 @@ public abstract class TruffleLanguage<C> {
             this.config = config;
             this.options = options;
             this.applicationArguments = applicationArguments == null ? new String[0] : applicationArguments;
+            this.valid = true;
         }
 
         Object getVMObject() {
@@ -1075,6 +1096,9 @@ public abstract class TruffleLanguage<C> {
         void checkDisposed() {
             if (AccessAPI.engineAccess().isDisposed(vmObject)) {
                 throw new IllegalStateException("Language environment is already disposed.");
+            }
+            if (!valid) {
+                throw new IllegalStateException("Language environment is already invalidated.");
             }
         }
 
@@ -1975,11 +1999,6 @@ public abstract class TruffleLanguage<C> {
             if (descriptors == null) {
                 return OptionDescriptors.EMPTY;
             }
-            assert verifyDescriptors(language, requiredGroup, descriptors);
-            return descriptors;
-        }
-
-        private static boolean verifyDescriptors(TruffleLanguage<?> language, String requiredGroup, OptionDescriptors descriptors) {
             String groupPlusDot = requiredGroup + ".";
             for (OptionDescriptor descriptor : descriptors) {
                 if (!descriptor.getName().equals(requiredGroup) && !descriptor.getName().startsWith(groupPlusDot)) {
@@ -1988,9 +2007,24 @@ public abstract class TruffleLanguage<C> {
                                     descriptor.getName(), language.getClass().getName(), requiredGroup));
                 }
             }
-            return true;
+            return descriptors;
         }
 
+        @Override
+        public Env patchEnvContext(Env env, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options, String[] applicationArguments) {
+            final Env newEnv = createEnv(
+                            env.vmObject,
+                            env.language,
+                            stdOut,
+                            stdErr,
+                            stdIn,
+                            config,
+                            options,
+                            applicationArguments);
+            newEnv.context = env.context;
+            env.valid = false;
+            return env.spi.patchContext(env.context, newEnv) ? newEnv : null;
+        }
     }
 }
 
