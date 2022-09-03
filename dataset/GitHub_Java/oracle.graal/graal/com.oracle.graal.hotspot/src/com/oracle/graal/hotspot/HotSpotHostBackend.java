@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,13 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.service.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static jdk.internal.jvmci.hotspot.InitTimer.*;
+import static com.oracle.graal.hotspot.InitTimer.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.nodes.spi.*;

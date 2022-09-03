@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.api.code.BytecodeFrame.*;
-
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.*;
@@ -75,7 +74,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
         this.targetMethod = targetMethod;
         this.returnType = returnType;
         this.invokeKind = invokeKind;
-        assert !isPlaceholderBci(bci);
+        assert bci >= 0;
     }
 
     public int getBci() {
@@ -112,7 +111,14 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
     protected StructuredGraph getLoweredSubstitutionGraph(LoweringTool tool) {
         StructuredGraph methodSubstitution = tool.getReplacements().getSubstitution(getTargetMethod(), true, bci);
         if (methodSubstitution != null) {
-            methodSubstitution = (StructuredGraph) methodSubstitution.copy();
+            methodSubstitution = methodSubstitution.copy();
+            if (stateAfter() == null || stateAfter().bci == BytecodeFrame.AFTER_BCI) {
+                /*
+                 * handles the case of a MacroNode inside a snippet used for another MacroNode
+                 * lowering
+                 */
+                new CollapseFrameForSingleSideEffectPhase().apply(methodSubstitution);
+            }
             return lowerReplacement(methodSubstitution, tool);
         }
         return null;
@@ -165,8 +171,8 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
             InliningUtil.inline(invoke, replacementGraph, false, null);
             Debug.dump(graph(), "After inlining replacement %s", replacementGraph);
         } else {
-            if (isPlaceholderBci(invoke.bci())) {
-                throw new GraalInternalError("%s: cannot lower to invoke with placeholder BCI: %s", graph(), this);
+            if (invoke.bci() < 0) {
+                throw new GraalInternalError("%s: cannot lower to invoke with invalid BCI: %s", graph(), this);
             }
 
             if (invoke.stateAfter() == null) {

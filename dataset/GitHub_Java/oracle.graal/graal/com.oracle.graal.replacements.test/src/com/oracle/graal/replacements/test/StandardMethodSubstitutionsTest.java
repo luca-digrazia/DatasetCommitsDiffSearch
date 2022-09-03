@@ -24,11 +24,10 @@ package com.oracle.graal.replacements.test;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
 import org.junit.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -252,7 +251,7 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
         testGraph("isInstance");
         testGraph("isInstance2");
         testGraph("isAssignableFrom");
-        for (Class<?> c : new Class<?>[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
+        for (Class<?> c : new Class[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
             for (Object o : new Object[]{this, new int[5], new String[2][], new Object()}) {
                 test("isInstance", c, o);
                 test("isAssignableFrom", c, o.getClass());

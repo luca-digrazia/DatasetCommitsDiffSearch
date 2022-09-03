@@ -78,6 +78,9 @@ public abstract class AbstractInliningPolicy implements InliningPolicy {
             if (!InliningUtil.canIntrinsify(replacements, info.methodAt(i), info.invoke().bci())) {
                 return false;
             }
+            if (!replacements.isForcedSubstitution(info.methodAt(i))) {
+                return false;
+            }
         }
         return true;
     }

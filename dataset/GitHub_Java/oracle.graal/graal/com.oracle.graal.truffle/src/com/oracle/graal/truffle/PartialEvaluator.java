@@ -29,7 +29,6 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 import java.lang.invoke.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.*;
@@ -72,7 +71,6 @@ public class PartialEvaluator {
     public static final StableOptionValue<Boolean> GraphPE = new StableOptionValue<>(false);
 
     private final Providers providers;
-    private final Architecture architecture;
     private final CanonicalizerPhase canonicalizer;
     private final SnippetReflectionProvider snippetReflection;
     private final ResolvedJavaMethod callDirectMethod;
@@ -81,9 +79,8 @@ public class PartialEvaluator {
     private final ResolvedJavaMethod callRootMethod;
     private final GraphBuilderConfiguration configForRoot;
 
-    public PartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, SnippetReflectionProvider snippetReflection, Architecture architecture) {
+    public PartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, SnippetReflectionProvider snippetReflection) {
         this.providers = providers;
-        this.architecture = architecture;
         this.canonicalizer = new CanonicalizerPhase();
         this.snippetReflection = snippetReflection;
         this.callDirectMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod());
@@ -187,9 +184,7 @@ public class PartialEvaluator {
             if (original.getAnnotation(TruffleBoundary.class) != null) {
                 return null;
             }
-            if (replacements.hasSubstitution(original, builder.bci())) {
-                return null;
-            }
+            assert !replacements.hasSubstitution(original, builder.bci()) : "Replacements must have been processed by now";
             assert !builder.parsingReplacement();
 
             if (TruffleCompilerOptions.TruffleFunctionInlining.getValue()) {
@@ -265,9 +260,7 @@ public class PartialEvaluator {
             if (original.getAnnotation(TruffleBoundary.class) != null) {
                 return null;
             }
-            if (replacements.hasSubstitution(original, builder.bci())) {
-                return null;
-            }
+            assert !replacements.hasSubstitution(original, builder.bci()) : "Replacements must have been processed by now";
 
             if (original.equals(callSiteProxyMethod) || original.equals(callDirectMethod)) {
                 return null;
@@ -340,11 +333,11 @@ public class PartialEvaluator {
         plugins.setInlineInvokePlugin(new ParsingInlineInvokePlugin((ReplacementsImpl) providers.getReplacements(), parsingInvocationPlugins, loopExplosionPlugin,
                         !PrintTruffleExpansionHistogram.getValue()));
 
-        CachingPEGraphDecoder decoder = new CachingPEGraphDecoder(providers, newConfig, AllowAssumptions.from(graph.getAssumptions() != null), architecture);
+        CachingPEGraphDecoder decoder = new CachingPEGraphDecoder(providers, newConfig, AllowAssumptions.from(graph.getAssumptions() != null));
 
         ParameterPlugin parameterPlugin = new InterceptReceiverPlugin(callTarget);
 
-        InvocationPlugins decodingInvocationPlugins = new InvocationPlugins(providers.getMetaAccess());
+        InvocationPlugins decodingInvocationPlugins = new InvocationPlugins(parsingInvocationPlugins.getParent());
         TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), decodingInvocationPlugins, false, snippetReflection);
         InlineInvokePlugin decodingInlinePlugin = new PEInlineInvokePlugin(callTarget.getInlining(), (ReplacementsImpl) providers.getReplacements());
         if (PrintTruffleExpansionHistogram.getValue()) {

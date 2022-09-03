@@ -24,15 +24,12 @@ package com.oracle.graal.replacements.test;
 
 import java.lang.reflect.*;
 
-import jdk.internal.jvmci.code.*;
-
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -47,7 +44,6 @@ import com.oracle.graal.phases.tiers.*;
  */
 public abstract class MethodSubstitutionTest extends GraalCompilerTest {
 
-    @SuppressWarnings("try")
     protected StructuredGraph testGraph(final String snippet) {
         try (Scope s = Debug.scope("MethodSubstitutionTest", getResolvedJavaMethod(snippet))) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);

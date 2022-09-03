@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,41 +22,27 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
-import static jdk.internal.jvmci.hotspot.CompilerToVM.compilerToVM;
-import static jdk.internal.jvmci.hotspot.HotSpotVMConfig.config;
+import static com.oracle.graal.java.IntrinsicContext.*;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.Method;
-import java.security.AlgorithmParameters;
-import java.security.SecureRandom;
+import java.io.*;
+import java.lang.reflect.*;
+import java.security.*;
 
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
+import javax.crypto.*;
 
-import jdk.internal.jvmci.code.CompilationResult;
-import jdk.internal.jvmci.code.InstalledCode;
-import jdk.internal.jvmci.hotspot.HotSpotCompiledNmethod;
-import jdk.internal.jvmci.hotspot.HotSpotNmethod;
-import jdk.internal.jvmci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.graphbuilderconf.IntrinsicContext;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.java.GraphBuilderPhase;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.*;
+import com.oracle.graal.phases.*;
 
 /**
  * Tests the intrinsification of certain crypto methods.
@@ -68,9 +54,8 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
         HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
         HotSpotNmethod installedCode = new HotSpotNmethod(hsMethod, compResult.getName(), true);
         HotSpotCompiledNmethod compiledNmethod = new HotSpotCompiledNmethod(hsMethod, compResult);
-        int result = compilerToVM().installCode(getTarget(), compiledNmethod, installedCode, null);
-        HotSpotVMConfig config = config();
-        Assert.assertEquals("Error installing method " + method + ": " + config.getCodeInstallResultDescription(result), result, config.codeInstallResultOk);
+        CodeInstallResult result = runtime().getCompilerToVM().installCode(compiledNmethod, installedCode, null);
+        Assert.assertEquals("Error installing method " + method + ": " + result, result, CodeInstallResult.OK);
 
         // HotSpotRuntime hsRuntime = (HotSpotRuntime) getCodeCache();
         // TTY.println(hsMethod.toString());
@@ -147,12 +132,12 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
                     StructuredGraph graph = new StructuredGraph(substMethod, AllowAssumptions.YES);
                     Plugins plugins = new Plugins(((HotSpotProviders) getProviders()).getGraphBuilderPlugins());
                     GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
-                    IntrinsicContext initialReplacementContext = new IntrinsicContext(installedCodeOwner, substMethod, ROOT_COMPILATION);
+                    IntrinsicContext initialReplacementContext = new IntrinsicContext(installedCodeOwner, substMethod, null, ROOT_COMPILATION_BCI);
                     new GraphBuilderPhase.Instance(getMetaAccess(), getProviders().getStampProvider(), getConstantReflection(), config, OptimisticOptimizations.NONE, initialReplacementContext).apply(graph);
                     Assert.assertNotNull(getCode(installedCodeOwner, graph, true));
                     atLeastOneCompiled = true;
                 } else {
-                    Assert.assertFalse(config().useAESIntrinsics);
+                    Assert.assertFalse(runtime().getConfig().useAESIntrinsics);
                 }
             }
         }
