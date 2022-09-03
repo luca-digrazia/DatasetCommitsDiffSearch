@@ -31,8 +31,7 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.object.*;
 import com.oracle.truffle.api.utilities.*;
-import com.oracle.truffle.object.LocationImpl.InternalLongLocation;
-import com.oracle.truffle.object.LocationImpl.LocationVisitor;
+import com.oracle.truffle.object.LocationImpl.*;
 import com.oracle.truffle.object.Locations.ConstantLocation;
 import com.oracle.truffle.object.Locations.DeclaredDualLocation;
 import com.oracle.truffle.object.Locations.DeclaredLocation;
@@ -277,7 +276,14 @@ public abstract class ShapeImpl extends Shape {
     @Override
     @TruffleBoundary
     public Property getProperty(Object key) {
-        return propertyMap.get(key);
+        PropertyMap current = this.propertyMap;
+        while (current.getLastProperty() != null) {
+            if (current.getLastProperty().getKey().equals(key)) {
+                return current.getLastProperty();
+            }
+            current = current.getParentMap();
+        }
+        return null;
     }
 
     protected final void addDirectTransition(Transition transition, ShapeImpl next) {
@@ -332,14 +338,9 @@ public abstract class ShapeImpl extends Shape {
     @Override
     public ShapeImpl addProperty(Property property) {
         assert isValid();
-        onPropertyTransition(property);
-        return addPropertyInternal(property);
-    }
-
-    protected final void onPropertyTransition(Property property) {
-        if (sharedData instanceof ShapeListener) {
-            ((ShapeListener) sharedData).onPropertyTransition(property.getKey());
-        }
+        ShapeImpl nextShape = addPropertyInternal(property);
+        objectType.onPropertyAdded(property, this, nextShape);
+        return nextShape;
     }
 
     /**
@@ -632,8 +633,6 @@ public abstract class ShapeImpl extends Shape {
     @TruffleBoundary
     @Override
     public final ShapeImpl removeProperty(Property prop) {
-        onPropertyTransition(prop);
-
         RemovePropertyTransition transition = new RemovePropertyTransition(prop);
         ShapeImpl cachedShape = queryTransition(transition);
         if (cachedShape != null) {
@@ -1114,7 +1113,7 @@ public abstract class ShapeImpl extends Shape {
     protected static final DebugCounter propertyListAllocCount = DebugCounter.create("Property lists allocated");
     protected static final DebugCounter propertyListShareCount = DebugCounter.create("Property lists shared");
 
-    public ForeignAccess getForeignAccessFactory() {
+    public ForeignAccessFactory getForeignAccessFactory() {
         return getObjectType().getForeignAccessFactory();
     }
 }
