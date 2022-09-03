@@ -201,10 +201,6 @@ public final class HIRFrameStateBuilder {
         FrameState outerFrameState = null;
         if (outerFrameStateSupplier != null) {
             outerFrameState = outerFrameStateSupplier.get();
-            if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI) {
-                FrameState newFrameState = outerFrameState.duplicateModified(outerFrameState.bci, true, Kind.Void, this.peek(0));
-                return newFrameState;
-            }
         }
         return graph.add(new FrameState(outerFrameState, method, bci, locals, stack, stackSize, lockedObjects, Arrays.asList(monitorIds), rethrowException, false));
     }
@@ -715,7 +711,7 @@ public final class HIRFrameStateBuilder {
         return stack[--stackSize];
     }
 
-    public ValueNode xpeek() {
+    private ValueNode xpeek() {
         return stack[stackSize - 1];
     }
 
