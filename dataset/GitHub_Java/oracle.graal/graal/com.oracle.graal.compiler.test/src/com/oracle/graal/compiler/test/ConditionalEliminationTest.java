@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static org.junit.Assert.*;
 
 import org.junit.*;
@@ -30,7 +29,7 @@ import org.junit.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.*;
 import com.oracle.graal.phases.common.*;
 
 /**
@@ -164,9 +163,7 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
         new CanonicalizerPhase.Instance(runtime(), null, true).apply(graph);
         IfNode ifNode = (IfNode) graph.start().next();
         InstanceOfNode instanceOf = (InstanceOfNode) ifNode.condition();
-        IsNullNode x = graph.unique(new IsNullNode(graph.getLocal(0)));
-        InstanceOfNode y = instanceOf;
-        ShortCircuitOrNode disjunction = graph.unique(new ShortCircuitOrNode(x, false, y, false, NOT_FREQUENT_PROBABILITY));
+        LogicDisjunctionNode disjunction = graph.unique(new LogicDisjunctionNode(graph.unique(new IsNullNode(graph.getLocal(0))), instanceOf));
         ifNode.setCondition(disjunction);
         ifNode.negate(disjunction);
         new CanonicalizerPhase.Instance(runtime(), null, true).apply(graph);

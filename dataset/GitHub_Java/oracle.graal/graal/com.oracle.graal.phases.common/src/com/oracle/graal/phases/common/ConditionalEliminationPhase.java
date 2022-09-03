@@ -247,15 +247,16 @@ public class ConditionalEliminationPhase extends Phase {
          * to be null, otherwise the value is known to be non-null.
          */
         public void addNullness(boolean isNull, ValueNode value) {
+            ValueNode original = GraphUtil.unproxify(value);
             if (isNull) {
-                if (!isNull(value)) {
+                if (!isNull(original)) {
                     metricNullnessRegistered.increment();
-                    knownNull.add(GraphUtil.unproxify(value));
+                    knownNull.add(original);
                 }
             } else {
-                if (!isNonNull(value)) {
+                if (!isNonNull(original)) {
                     metricNullnessRegistered.increment();
-                    knownNonNull.add(GraphUtil.unproxify(value));
+                    knownNonNull.add(original);
                 }
             }
         }
@@ -318,8 +319,8 @@ public class ConditionalEliminationPhase extends Phase {
         }
 
         private void registerCondition(boolean isTrue, LogicNode condition, ValueNode anchor) {
-            if (!isTrue && condition instanceof ShortCircuitOrNode) {
-                ShortCircuitOrNode disjunction = (ShortCircuitOrNode) condition;
+            if (!isTrue && condition instanceof LogicDisjunctionNode) {
+                LogicDisjunctionNode disjunction = (LogicDisjunctionNode) condition;
                 registerCondition(disjunction.isXNegated(), disjunction.getX(), anchor);
                 registerCondition(disjunction.isYNegated(), disjunction.getY(), anchor);
             } else {
@@ -490,9 +491,6 @@ public class ConditionalEliminationPhase extends Phase {
                 for (GuardNode guard : begin.guards().snapshot()) {
                     registerGuard(guard);
                 }
-            } else if (node instanceof FixedGuardNode) {
-                FixedGuardNode guard = (FixedGuardNode) node;
-                registerCondition(!guard.isNegated(), guard.condition(), guard);
             } else if (node instanceof CheckCastNode) {
                 CheckCastNode checkCast = (CheckCastNode) node;
                 ValueNode object = checkCast.object();
