@@ -46,20 +46,24 @@ import com.oracle.svm.hosted.c.info.ElementInfo;
 import com.oracle.svm.hosted.c.info.EnumConstantInfo;
 import com.oracle.svm.hosted.c.info.EnumInfo;
 import com.oracle.svm.hosted.c.info.EnumValueInfo;
+import com.oracle.svm.hosted.c.info.InfoTreeVisitor;
 import com.oracle.svm.hosted.c.info.NativeCodeInfo;
 import com.oracle.svm.hosted.c.info.SizableInfo;
 import com.oracle.svm.hosted.c.info.StructBitfieldInfo;
 import com.oracle.svm.hosted.c.info.StructFieldInfo;
 import com.oracle.svm.hosted.c.info.SizableInfo.ElementKind;
 
+import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public final class SizeAndSignednessVerifier extends NativeInfoTreeVisitor {
+public final class SizeAndSignednessVerifier extends InfoTreeVisitor {
+
+    private final NativeLibraries nativeLibs;
 
     private SizeAndSignednessVerifier(NativeLibraries nativeLibs) {
-        super(nativeLibs);
+        this.nativeLibs = nativeLibs;
     }
 
     public static void verify(NativeLibraries nativeLibs, NativeCodeInfo nativeCodeInfo) {
@@ -100,9 +104,9 @@ public final class SizeAndSignednessVerifier extends NativeInfoTreeVisitor {
                     firstAccessorInfo = accessorInfo;
                 } else {
                     if (accessorInfo.hasLocationIdentityParameter() != firstAccessorInfo.hasLocationIdentityParameter()) {
-                        addError("All accessors for a field must agree on LocationIdentity parameter", firstAccessorInfo, accessorInfo);
+                        nativeLibs.addError("All accessors for a field must agree on LocationIdentity parameter", firstAccessorInfo, accessorInfo);
                     } else if (accessorInfo.hasUniqueLocationIdentity() != firstAccessorInfo.hasUniqueLocationIdentity()) {
-                        addError("All accessors for a field must agree on @" + UniqueLocationIdentity.class.getSimpleName() + " annotation", firstAccessorInfo, accessorInfo);
+                        nativeLibs.addError("All accessors for a field must agree on @" + UniqueLocationIdentity.class.getSimpleName() + " annotation", firstAccessorInfo, accessorInfo);
                     }
                 }
             }
@@ -171,7 +175,7 @@ public final class SizeAndSignednessVerifier extends NativeInfoTreeVisitor {
 
                 if (enumInfo.getNeedsLookup() && valueInfo.getIncludeInLookup()) {
                     if (cToJava.get(cValue) != null) {
-                        addError("C value is not unique, so reverse lookup from C to Java is not possible: " + cToJava.get(cValue) + " and " + javaValue + " hava same C value " + cValue,
+                        nativeLibs.addError("C value is not unique, so reverse lookup from C to Java is not possible: " + cToJava.get(cValue) + " and " + javaValue + " hava same C value " + cValue,
                                         valueInfo.getAnnotatedElement());
                     }
                     cToJava.put(cValue, javaValue);
@@ -235,12 +239,13 @@ public final class SizeAndSignednessVerifier extends NativeInfoTreeVisitor {
     }
 
     private void checkSizeAndSignedness(SizableInfo sizableInfo, ResolvedJavaType type, ResolvedJavaMethod method, boolean isReturn) {
-        int declaredSize = getSizeInBytes(type);
-        int actualSize = sizableInfo.isObject() ? getSizeInBytes(JavaKind.Object) : sizableInfo.getSizeInfo().getProperty();
+        TargetDescription target = nativeLibs.getTarget();
+        int declaredSize = target.arch.getPlatformKind(type.getJavaKind()).getSizeInBytes();
+        int actualSize = sizableInfo.getSizeInfo().getProperty();
         if (declaredSize != actualSize) {
             Class<? extends Annotation> supressionAnnotation = (declaredSize > actualSize) ^ isReturn ? AllowNarrowingCast.class : AllowWideningCast.class;
             if (method.getAnnotation(supressionAnnotation) == null) {
-                addError("Type " + type.toJavaName(false) + " has a size of " + declaredSize + " bytes, but accessed C value has a size of " + actualSize +
+                nativeLibs.addError("Type " + type.toJavaName(false) + " has a size of " + declaredSize + " bytes, but accessed C value has a size of " + actualSize +
                                 " bytes; to suppress this error, use the annotation @" + supressionAnnotation.getSimpleName(), method);
             }
         }
@@ -249,14 +254,15 @@ public final class SizeAndSignednessVerifier extends NativeInfoTreeVisitor {
     }
 
     private void checkSignedness(boolean isUnsigned, ResolvedJavaType type, ResolvedJavaMethod method) {
-        if (isSigned(type)) {
+
+        if (nativeLibs.isSigned(type)) {
             if (isUnsigned) {
-                addError("Type " + type.toJavaName(false) + " is signed, but accessed C value is unsigned", method);
+                nativeLibs.addError("Type " + type.toJavaName(false) + " is signed, but accessed C value is unsigned", method);
             }
         } else if (nativeLibs.isWordBase(type)) {
             /* every Word type other than Signed is assumed to be unsigned. */
             if (!isUnsigned) {
-                addError("Type " + type.toJavaName(false) + " is unsigned, but accessed C value is signed", method);
+                nativeLibs.addError("Type " + type.toJavaName(false) + " is unsigned, but accessed C value is signed", method);
             }
         }
     }

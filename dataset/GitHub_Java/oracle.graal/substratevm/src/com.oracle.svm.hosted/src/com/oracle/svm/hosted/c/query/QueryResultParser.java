@@ -40,6 +40,7 @@ import com.oracle.svm.hosted.c.info.AccessorInfo;
 import com.oracle.svm.hosted.c.info.ConstantInfo;
 import com.oracle.svm.hosted.c.info.ElementInfo;
 import com.oracle.svm.hosted.c.info.EnumConstantInfo;
+import com.oracle.svm.hosted.c.info.InfoTreeVisitor;
 import com.oracle.svm.hosted.c.info.NativeCodeInfo;
 import com.oracle.svm.hosted.c.info.PointerToInfo;
 import com.oracle.svm.hosted.c.info.PropertyInfo;
@@ -52,17 +53,19 @@ import com.oracle.svm.hosted.c.info.SizableInfo.ElementKind;
 import com.oracle.svm.hosted.c.info.SizableInfo.SignednessValue;
 import com.oracle.svm.hosted.c.util.FileUtils;
 
+import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.JavaKind;
 
 /**
  * Parses query result described in {@link QueryResultFormat}.
  */
-public final class QueryResultParser extends NativeInfoTreeVisitor {
+public final class QueryResultParser extends InfoTreeVisitor {
 
+    private final NativeLibraries nativeLibs;
     private final Map<String, String> idToResult;
 
     private QueryResultParser(NativeLibraries nativeLibs) {
-        super(nativeLibs);
+        this.nativeLibs = nativeLibs;
         this.idToResult = new HashMap<>();
     }
 
@@ -81,6 +84,7 @@ public final class QueryResultParser extends NativeInfoTreeVisitor {
 
     @Override
     protected void visitConstantInfo(ConstantInfo constantInfo) {
+        TargetDescription target = nativeLibs.getTarget();
         switch (constantInfo.getKind()) {
             case INTEGER:
                 parseIntegerProperty(constantInfo.getSizeInfo());
@@ -95,9 +99,9 @@ public final class QueryResultParser extends NativeInfoTreeVisitor {
                  */
                 JavaKind returnKind = AccessorInfo.getReturnType(constantInfo.getAnnotatedElement()).getJavaKind();
                 if (returnKind == JavaKind.Object) {
-                    returnKind = nativeLibs.getTarget().wordJavaKind;
+                    returnKind = target.wordJavaKind;
                 }
-                int declaredSize = getSizeInBytes(returnKind);
+                int declaredSize = target.arch.getPlatformKind(returnKind).getSizeInBytes();
                 int actualSize = constantInfo.getSizeInfo().getProperty();
                 if (declaredSize != actualSize) {
                     long value = (long) constantInfo.getValueInfo().getProperty();
@@ -210,7 +214,7 @@ public final class QueryResultParser extends NativeInfoTreeVisitor {
         if (str.startsWith(QueryResultFormat.STRING_MARKER) && str.endsWith(QueryResultFormat.STRING_MARKER)) {
             return str.substring(QueryResultFormat.STRING_MARKER.length(), str.length() - QueryResultFormat.STRING_MARKER.length());
         } else {
-            addError("String constant not deliminated correctly", info);
+            nativeLibs.addError("String constant not deliminated correctly", info);
             return "";
         }
     }

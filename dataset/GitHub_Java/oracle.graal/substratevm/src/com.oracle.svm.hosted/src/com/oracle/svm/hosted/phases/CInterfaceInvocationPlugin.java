@@ -54,12 +54,9 @@ import org.graalvm.compiler.nodes.calc.OrNode;
 import org.graalvm.compiler.nodes.calc.RightShiftNode;
 import org.graalvm.compiler.nodes.calc.SignExtendNode;
 import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
-import org.graalvm.compiler.nodes.extended.JavaReadNode;
-import org.graalvm.compiler.nodes.extended.JavaWriteNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
-import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
 import org.graalvm.compiler.word.WordTypes;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
@@ -174,16 +171,12 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         SizableInfo sizableInfo = (SizableInfo) accessorInfo.getParent();
         int elementSize = sizableInfo.getSizeInfo().getProperty();
         boolean isUnsigned = sizableInfo.isUnsigned();
-        boolean isPinnedObject = sizableInfo.isObject();
 
         assert args.length == accessorInfo.parameterCount(true);
-
         ValueNode base = args[AccessorInfo.baseParameterNumber(true)];
-        assert base.getStackKind() == FrameAccess.getWordKind();
-
         switch (accessorInfo.getAccessorKind()) {
             case ADDRESS: {
-                ValueNode address = graph.addOrUniqueWithInputs(new AddNode(base, makeOffset(graph, args, accessorInfo, displacement, elementSize)));
+                ValueNode address = makeAddress(graph, args, accessorInfo, base, displacement, elementSize);
                 b.addPush(pushKind(method), address);
                 return true;
             }
@@ -195,9 +188,9 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
                 } else if (readKind.getBitCount() > resultKind.getBitCount() && !readKind.isNumericFloat() && resultKind != JavaKind.Boolean) {
                     readKind = resultKind;
                 }
-                AddressNode offsetAddress = makeOffsetAddress(graph, args, accessorInfo, base, displacement, elementSize);
+                ValueNode address = makeAddress(graph, args, accessorInfo, base, displacement, elementSize);
                 LocationIdentity locationIdentity = makeLocationIdentity(b, method, args, accessorInfo);
-                final Stamp stamp;
+                Stamp stamp;
                 if (readKind == JavaKind.Object) {
                     stamp = b.getInvokeReturnStamp(null).getTrustedStamp();
                 } else if (readKind == JavaKind.Float || readKind == JavaKind.Double) {
@@ -205,28 +198,19 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
                 } else {
                     stamp = StampFactory.forInteger(readKind.getBitCount());
                 }
-                final ValueNode node;
-                if (isPinnedObject) {
-                    node = b.add(new JavaReadNode(stamp, readKind, offsetAddress, locationIdentity, BarrierType.NONE, true));
-                } else {
-                    ValueNode read = readPrimitive(b, offsetAddress, locationIdentity, stamp, accessorInfo);
-                    node = adaptPrimitiveType(graph, read, readKind, resultKind == JavaKind.Boolean ? resultKind : resultKind.getStackKind(), isUnsigned);
-                }
-                b.push(pushKind(method), node);
+                ValueNode read = readOp(b, address, locationIdentity, stamp, accessorInfo);
+                ValueNode adapted = adaptPrimitiveType(graph, read, readKind, resultKind == JavaKind.Boolean ? resultKind : resultKind.getStackKind(), isUnsigned);
+                b.push(pushKind(method), adapted);
                 return true;
             }
             case SETTER: {
                 ValueNode value = args[accessorInfo.valueParameterNumber(true)];
                 JavaKind valueKind = value.getStackKind();
                 JavaKind writeKind = kindFromSize(elementSize, valueKind);
-                AddressNode offsetAddress = makeOffsetAddress(graph, args, accessorInfo, base, displacement, elementSize);
+                ValueNode address = makeAddress(graph, args, accessorInfo, base, displacement, elementSize);
                 LocationIdentity locationIdentity = makeLocationIdentity(b, method, args, accessorInfo);
-                if (isPinnedObject) {
-                    b.add(new JavaWriteNode(writeKind, offsetAddress, locationIdentity, value, BarrierType.NONE, true));
-                } else {
-                    ValueNode adaptedValue = adaptPrimitiveType(graph, value, valueKind, writeKind, isUnsigned);
-                    writePrimitive(b, offsetAddress, locationIdentity, adaptedValue, accessorInfo);
-                }
+                ValueNode adaptedValue = adaptPrimitiveType(graph, value, valueKind, writeKind, isUnsigned);
+                writeOp(b, address, locationIdentity, adaptedValue, accessorInfo);
                 return true;
             }
             default:
@@ -294,10 +278,10 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
          * Read the memory location. This is also necessary for writes, since we need to keep the
          * bits around the written bitfield unchanged.
          */
-        AddressNode address = makeOffsetAddress(graph, args, accessorInfo, base, byteOffset, -1);
+        ValueNode address = makeAddress(graph, args, accessorInfo, base, byteOffset, -1);
         LocationIdentity locationIdentity = makeLocationIdentity(b, method, args, accessorInfo);
         Stamp stamp = StampFactory.forInteger(memoryKind.getBitCount());
-        ValueNode cur = readPrimitive(b, address, locationIdentity, stamp, accessorInfo);
+        ValueNode cur = readOp(b, address, locationIdentity, stamp, accessorInfo);
         cur = adaptPrimitiveType(graph, cur, memoryKind, computeKind, true);
 
         switch (accessorInfo.getAccessorKind()) {
@@ -342,7 +326,7 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
                 /* Narrow value to the number of bits we need to write. */
                 cur = adaptPrimitiveType(graph, cur, computeKind, memoryKind, true);
                 /* Perform the write (bitcount is taken from the stamp of the written value). */
-                writePrimitive(b, address, locationIdentity, cur, accessorInfo);
+                writeOp(b, address, locationIdentity, cur, accessorInfo);
                 return true;
             }
             default:
@@ -350,8 +334,9 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         }
     }
 
-    private static ValueNode readPrimitive(GraphBuilderContext b, AddressNode address, LocationIdentity locationIdentity, Stamp stamp, AccessorInfo accessorInfo) {
-        CInterfaceReadNode read = b.add(new CInterfaceReadNode(address, locationIdentity, stamp, BarrierType.NONE, accessName(accessorInfo)));
+    private static ValueNode readOp(GraphBuilderContext b, ValueNode address, LocationIdentity locationIdentity, Stamp stamp, AccessorInfo accessorInfo) {
+        assert address.getStackKind() == FrameAccess.getWordKind();
+        CInterfaceReadNode read = b.add(new CInterfaceReadNode(b.add(OffsetAddressNode.create(address)), locationIdentity, stamp, BarrierType.NONE, accessName(accessorInfo)));
         /*
          * The read must not float outside its block otherwise it may float above an explicit zero
          * check on its base address.
@@ -360,8 +345,8 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         return read;
     }
 
-    private static void writePrimitive(GraphBuilderContext b, AddressNode address, LocationIdentity locationIdentity, ValueNode value, AccessorInfo accessorInfo) {
-        b.add(new CInterfaceWriteNode(address, locationIdentity, value, BarrierType.NONE, accessName(accessorInfo)));
+    private static void writeOp(GraphBuilderContext b, ValueNode address, LocationIdentity locationIdentity, ValueNode value, AccessorInfo accessorInfo) {
+        b.add(new CInterfaceWriteNode(b.add(OffsetAddressNode.create(address)), locationIdentity, value, BarrierType.NONE, accessName(accessorInfo)));
     }
 
     private static String accessName(AccessorInfo accessorInfo) {
@@ -372,7 +357,7 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         }
     }
 
-    private static ValueNode makeOffset(StructuredGraph graph, ValueNode[] args, AccessorInfo accessorInfo, int displacement, int indexScaling) {
+    private static ValueNode makeAddress(StructuredGraph graph, ValueNode[] args, AccessorInfo accessorInfo, ValueNode base, int displacement, int indexScaling) {
         ValueNode offset = ConstantNode.forIntegerKind(FrameAccess.getWordKind(), displacement, graph);
 
         if (accessorInfo.isIndexed()) {
@@ -384,11 +369,8 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
             offset = graph.unique(new AddNode(scaledIndex, offset));
         }
 
-        return offset;
-    }
-
-    private static AddressNode makeOffsetAddress(StructuredGraph graph, ValueNode[] args, AccessorInfo accessorInfo, ValueNode base, int displacement, int indexScaling) {
-        return graph.addOrUniqueWithInputs(new OffsetAddressNode(base, makeOffset(graph, args, accessorInfo, displacement, indexScaling)));
+        assert base.getStackKind() == FrameAccess.getWordKind();
+        return graph.unique(new AddNode(base, offset));
     }
 
     private static LocationIdentity makeLocationIdentity(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, AccessorInfo accessorInfo) {

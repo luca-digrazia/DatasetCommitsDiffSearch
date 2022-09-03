@@ -131,7 +131,7 @@ public class InfoTreeBuilder {
         }
 
         String constantName = getConstantName(method);
-        ElementKind elementKind = elementKind(returnType, false);
+        ElementKind elementKind = elementKind(returnType);
         ConstantInfo constantInfo = new ConstantInfo(constantName, elementKind, method);
         nativeCodeInfo.adoptChild(constantInfo);
         nativeLibs.registerElementInfo(method, constantInfo);
@@ -326,6 +326,7 @@ public class InfoTreeBuilder {
         AccessorInfo overallKindAccessor = null;
 
         for (AccessorInfo accessorInfo : accessorInfos) {
+            ResolvedJavaMethod method = accessorInfo.getAnnotatedElement();
             final ResolvedJavaType type;
             switch (accessorInfo.getAccessorKind()) {
                 case GETTER:
@@ -338,8 +339,7 @@ public class InfoTreeBuilder {
                     continue;
             }
 
-            ResolvedJavaMethod method = accessorInfo.getAnnotatedElement();
-            ElementKind newKind = elementKind(type, isPinnedObjectFieldAccessor(method));
+            ElementKind newKind = elementKind(type);
             if (overallKind == ElementKind.UNKNOWN) {
                 overallKind = newKind;
                 overallKindAccessor = accessorInfo;
@@ -350,7 +350,7 @@ public class InfoTreeBuilder {
         return overallKind;
     }
 
-    private ElementKind elementKind(ResolvedJavaType type, boolean isPinnedObject) {
+    private ElementKind elementKind(ResolvedJavaType type) {
         switch (type.getJavaKind()) {
             case Boolean:
             case Byte:
@@ -365,8 +365,6 @@ public class InfoTreeBuilder {
             case Object:
                 if (nativeLibs.isSigned(type) || nativeLibs.isUnsigned(type)) {
                     return ElementKind.INTEGER;
-                } else if (isPinnedObject) {
-                    return ElementKind.OBJECT;
                 } else if (nativeLibs.isString(type)) {
                     return ElementKind.STRING;
                 } else if (nativeLibs.isByteArray(type)) {
@@ -377,10 +375,6 @@ public class InfoTreeBuilder {
             default:
                 return ElementKind.UNKNOWN;
         }
-    }
-
-    private static boolean isPinnedObjectFieldAccessor(ResolvedJavaMethod method) {
-        return getMethodAnnotation(method, PinnedObjectField.class) != null;
     }
 
     private boolean accessorValid(AccessorInfo accessorInfo) {
@@ -439,7 +433,7 @@ public class InfoTreeBuilder {
     }
 
     private boolean checkObjectType(ResolvedJavaType returnType, ResolvedJavaMethod method) {
-        if (returnType.getJavaKind() == JavaKind.Object && !nativeLibs.isWordBase(returnType) && !isPinnedObjectFieldAccessor(method)) {
+        if (returnType.getJavaKind() == JavaKind.Object && !nativeLibs.isWordBase(returnType) && getMethodAnnotation(method, PinnedObjectField.class) == null) {
             nativeLibs.addError("Wrong type: expected a primitive type or a Word type; found " + returnType.toJavaName(true) + ". Use the annotation @" + PinnedObjectField.class.getSimpleName() +
                             " if you know what you are doing.", method);
             return false;
@@ -628,7 +622,7 @@ public class InfoTreeBuilder {
             nativeLibs.addError("Method annotated with @" + CEnumValue.class.getSimpleName() + " cannot have parameters", method);
             return;
         }
-        ElementKind elementKind = elementKind(AccessorInfo.getReturnType(method), false);
+        ElementKind elementKind = elementKind(AccessorInfo.getReturnType(method));
         if (elementKind != ElementKind.INTEGER) {
             nativeLibs.addError("Method annotated with @" + CEnumValue.class.getSimpleName() + " must have an integer return type", method);
             return;
@@ -647,7 +641,7 @@ public class InfoTreeBuilder {
             nativeLibs.addError("Method annotated with @" + CEnumLookup.class.getSimpleName() + " must be a static native method", method);
             return;
         }
-        if (getParameterCount(method) != 1 || elementKind(AccessorInfo.getParameterType(method, 0), false) != ElementKind.INTEGER) {
+        if (getParameterCount(method) != 1 || elementKind(AccessorInfo.getParameterType(method, 0)) != ElementKind.INTEGER) {
             nativeLibs.addError("Method annotated with @" + CEnumLookup.class.getSimpleName() + " must have exactly one integer parameter", method);
             return;
         }
