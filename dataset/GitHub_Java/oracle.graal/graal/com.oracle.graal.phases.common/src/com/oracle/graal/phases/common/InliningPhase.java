@@ -28,8 +28,6 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -197,14 +195,8 @@ public class InliningPhase extends Phase implements InliningCallback {
              * also getting queued in the compilation queue concurrently)
              */
 
-            if (GraalOptions.AlwaysInlineIntrinsics) {
-                if (onlyIntrinsics(info)) {
-                    return InliningUtil.logInlinedMethod(info, "intrinsic");
-                }
-            } else {
-                if (onlyForcedIntrinsics(info)) {
-                    return InliningUtil.logInlinedMethod(info, "intrinsic");
-                }
+            if (GraalOptions.AlwaysInlineIntrinsics && onlyIntrinsics(info)) {
+                return InliningUtil.logInlinedMethod(info, "intrinsic");
             }
 
             double bonus = 1;
@@ -345,19 +337,6 @@ public class InliningPhase extends Phase implements InliningCallback {
         private static boolean onlyIntrinsics(InlineInfo info) {
             for (int i = 0; i < info.numberOfMethods(); i++) {
                 if (!InliningUtil.canIntrinsify(info.methodAt(i))) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        private static boolean onlyForcedIntrinsics(InlineInfo info) {
-            for (int i = 0; i < info.numberOfMethods(); i++) {
-                if (!InliningUtil.canIntrinsify(info.methodAt(i))) {
-                    return false;
-                }
-                Replacements replacements = Graal.getRequiredCapability(Replacements.class);
-                if (!replacements.isForcedSubstitution(info.methodAt(i))) {
                     return false;
                 }
             }
