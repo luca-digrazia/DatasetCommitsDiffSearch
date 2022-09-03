@@ -133,7 +133,6 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
             assert isCallTargetCloningAllowed();
             OptimizedCallTarget currentTarget = getCallTarget();
             OptimizedCallTarget splitTarget = getCallTarget().cloneUninitialized();
-            splitTarget.setCallSiteForSplit(this);
 
             if (callCount >= 1) {
                 currentTarget.decrementKnownCallSites();
