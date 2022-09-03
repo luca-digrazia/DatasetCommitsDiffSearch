@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -70,11 +68,6 @@ public final class GraalServices {
      * Determines if the Java runtime is version 8 or earlier.
      */
     public static final boolean Java8OrEarlier = JAVA_SPECIFICATION_VERSION <= 8;
-
-    /**
-     * Determines if the Java runtime is version 8 or earlier.
-     */
-    public static final boolean Java11OrLater = JAVA_SPECIFICATION_VERSION >= 11;
 
     private GraalServices() {
     }
