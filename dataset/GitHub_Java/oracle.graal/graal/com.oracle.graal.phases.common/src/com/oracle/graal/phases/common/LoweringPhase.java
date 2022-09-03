@@ -31,7 +31,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
@@ -78,17 +77,10 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                 // Short cut creation of null check guard if the object is known to be non-null.
                 return null;
             }
-            StructuredGraph graph = object.graph();
-            if (graph.getGuardsStage().ordinal() > GuardsStage.FLOATING_GUARDS.ordinal()) {
-                NullCheckNode nullCheck = graph.add(new NullCheckNode(object));
-                graph.addBeforeFixed((FixedNode) guardedNode, nullCheck);
-                return nullCheck;
-            } else {
-                GuardingNode guard = createGuard(graph.unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true);
-                assert guardedNode.getGuard() == null;
-                guardedNode.setGuard(guard);
-                return guard;
-            }
+            GuardingNode guard = createGuard(object.graph().unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true);
+            assert guardedNode.getGuard() == null;
+            guardedNode.setGuard(guard);
+            return guard;
         }
 
         @Override
@@ -142,55 +134,31 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         this.canonicalizer = canonicalizer;
     }
 
-    /**
-     * Checks that second lowering of a given graph did not introduce any new nodes.
-     * 
-     * @param graph a graph that was just {@linkplain #lower lowered}
-     * @throws AssertionError if the check fails
-     */
-    private boolean checkPostLowering(StructuredGraph graph, PhaseContext context) {
-        int expectedMark = graph.getMark();
-        lower(graph, context, 1);
-        int mark = graph.getMark();
-        assert mark == expectedMark : graph + ": a second round in the current lowering phase introduced these new nodes: " + graph.getNewNodes(mark).snapshot();
-        return true;
+    private static boolean containsLowerable(NodeIterable<Node> nodes) {
+        for (Node n : nodes) {
+            if (n instanceof Lowerable) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     protected void run(final StructuredGraph graph, PhaseContext context) {
-        lower(graph, context, 0);
-        assert checkPostLowering(graph, context);
-    }
+        int i = 0;
+        while (true) {
+            int mark = graph.getMark();
 
-    private void lower(StructuredGraph graph, PhaseContext context, int i) {
-        IncrementalCanonicalizerPhase<PhaseContext> incrementalCanonicalizer = new IncrementalCanonicalizerPhase<>(canonicalizer);
-        incrementalCanonicalizer.appendPhase(new Round(i, context));
-        incrementalCanonicalizer.apply(graph, context);
-        assert graph.verify();
-    }
+            IncrementalCanonicalizerPhase<PhaseContext> incrementalCanonicalizer = new IncrementalCanonicalizerPhase<>(canonicalizer);
+            incrementalCanonicalizer.appendPhase(new Round(i++, context));
+            incrementalCanonicalizer.apply(graph, context);
 
-    /**
-     * Checks that lowering of a given node did not introduce any new {@link Lowerable} nodes that
-     * could be lowered in the current {@link LoweringPhase}. Such nodes must be recursively lowered
-     * as part of lowering {@code node}.
-     * 
-     * @param node a node that was just lowered
-     * @param preLoweringMark the graph mark before {@code node} was lowered
-     * @throws AssertionError if the check fails
-     */
-    private static boolean checkPostNodeLowering(Node node, LoweringToolImpl loweringTool, int preLoweringMark) {
-        StructuredGraph graph = (StructuredGraph) node.graph();
-        int postLoweringMark = graph.getMark();
-        NodeIterable<Node> newNodesAfterLowering = graph.getNewNodes(preLoweringMark);
-        for (Node n : newNodesAfterLowering) {
-            if (n instanceof Lowerable) {
-                ((Lowerable) n).lower(loweringTool);
-                int mark = graph.getMark();
-                assert postLoweringMark == mark : graph + ": lowering of " + node + " produced lowerable " + n + " that should have been recursively lowered as it introduces these new nodes: " +
-                                graph.getNewNodes(postLoweringMark).snapshot();
+            if (!containsLowerable(graph.getNewNodes(mark))) {
+                // No new lowerable nodes - done!
+                break;
             }
+            assert graph.verify();
         }
-        return true;
     }
 
     private final class Round extends Phase {
@@ -234,9 +202,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
             if (parentAnchor == null && OptEliminateGuards.getValue()) {
                 for (GuardNode guard : anchor.asNode().usages().filter(GuardNode.class)) {
-                    if (activeGuards.contains(guard)) {
-                        activeGuards.clear(guard);
-                    }
+                    activeGuards.clear(guard);
                 }
             }
         }
@@ -265,14 +231,12 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
                 if (node instanceof Lowerable) {
                     assert checkUsagesAreScheduled(node);
-                    int preLoweringMark = node.graph().getMark();
                     ((Lowerable) node).lower(loweringTool);
-                    assert checkPostNodeLowering(node, loweringTool, preLoweringMark);
                 }
 
                 if (!nextNode.isAlive()) {
-                    // can happen when the rest of the block is killed by lowering
-                    // (e.g. by an unconditional deopt)
+                    // can happen when the rest of the block is killed by lowering (e.g. by a
+                    // unconditional deopt)
                     break;
                 } else {
                     Node nextLastFixed = nextNode.predecessor();

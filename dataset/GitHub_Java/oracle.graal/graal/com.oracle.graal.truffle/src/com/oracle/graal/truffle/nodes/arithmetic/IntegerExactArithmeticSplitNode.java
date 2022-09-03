@@ -22,22 +22,23 @@
  */
 package com.oracle.graal.truffle.nodes.arithmetic;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-@NodeInfo
-public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode implements LIRLowerable {
+public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode implements LIRGenLowerable {
 
-    @Successor private BeginNode overflowSuccessor;
-    @Successor private BeginNode next;
+    @Successor private AbstractBeginNode overflowSuccessor;
+    @Successor private AbstractBeginNode next;
     @Input private ValueNode x;
     @Input private ValueNode y;
 
-    public IntegerExactArithmeticSplitNode(Stamp stamp, ValueNode x, ValueNode y, BeginNode next, BeginNode overflowSuccessor) {
+    public IntegerExactArithmeticSplitNode(Stamp stamp, ValueNode x, ValueNode y, AbstractBeginNode next, AbstractBeginNode overflowSuccessor) {
         super(stamp);
         this.x = x;
         this.y = y;
@@ -46,15 +47,20 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
     }
 
     @Override
-    public double probability(BeginNode successor) {
+    public double probability(AbstractBeginNode successor) {
         return successor == next ? 1 : 0;
     }
 
-    public BeginNode getNext() {
+    @Override
+    public void setProbability(AbstractBeginNode successor, double value) {
+        assert probability(successor) == value;
+    }
+
+    public AbstractBeginNode getNext() {
         return next;
     }
 
-    public BeginNode getOverflowSuccessor() {
+    public AbstractBeginNode getOverflowSuccessor() {
         return overflowSuccessor;
     }
 
@@ -67,12 +73,12 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool generator) {
+    public void generate(LIRGenerator generator) {
         generator.setResult(this, generateArithmetic(generator));
-        generator.emitOverflowCheckBranch(getOverflowSuccessor(), getNext(), probability(getOverflowSuccessor()));
+        generator.emitOverflowCheckBranch(generator.getLIRBlock(getNext()), generator.getLIRBlock(getOverflowSuccessor()));
     }
 
-    protected abstract Value generateArithmetic(NodeLIRBuilderTool generator);
+    protected abstract Value generateArithmetic(LIRGeneratorTool generator);
 
     static void lower(LoweringTool tool, IntegerExactArithmeticNode node) {
         if (node.asNode().graph().getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS) {

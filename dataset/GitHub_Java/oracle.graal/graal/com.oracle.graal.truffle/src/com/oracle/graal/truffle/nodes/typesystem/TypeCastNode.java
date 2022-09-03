@@ -28,7 +28,7 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public final class TypeCastNode extends FixedWithNextNode implements Lowerable, com.oracle.graal.graph.Node.IterableNodeType {
+public final class TypeCastNode extends FixedWithNextNode implements Lowerable, com.oracle.graal.graph.IterableNodeType, ValueProxy, Virtualizable {
 
     @Input private ValueNode receiver;
     @Input private ValueNode object;
@@ -59,12 +59,24 @@ public final class TypeCastNode extends FixedWithNextNode implements Lowerable, 
         return customType;
     }
 
-    public void lower(LoweringTool tool, LoweringType loweringType) {
-        if (loweringType == LoweringType.BEFORE_GUARDS) {
+    public void lower(LoweringTool tool) {
+        if (graph().getGuardsStage() == StructuredGraph.GuardsStage.FLOATING_GUARDS) {
             ValueAnchorNode valueAnchorNode = graph().add(new ValueAnchorNode());
             UnsafeCastNode unsafeCast = graph().unique(new UnsafeCastNode(object, this.stamp(), (GuardingNode) valueAnchorNode));
             this.replaceAtUsages(unsafeCast);
             graph().replaceFixedWithFixed(this, valueAnchorNode);
+        }
+    }
+
+    public ValueNode getOriginalValue() {
+        return object;
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        State state = tool.getObjectState(object);
+        if (state != null && state.getState() == EscapeState.Virtual) {
+            tool.replaceWithVirtual(state.getVirtualObject());
         }
     }
 }
