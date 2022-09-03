@@ -26,8 +26,8 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.type.GenericStamp.*;
 import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * This class represents a value within the graph, including local variables, phis, and
@@ -41,12 +41,12 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
      */
     private Stamp stamp;
 
-    @Input(notDataflow = true) private NodeInputList<ValueNode> dependencies;
+    @Input(notDataflow = true) private NodeInputList<Node> dependencies;
 
     /**
      * This collection keeps dependencies that should be observed while scheduling (guards, etc.).
      */
-    public NodeInputList<ValueNode> dependencies() {
+    public NodeInputList<Node> dependencies() {
         return dependencies;
     }
 
@@ -56,13 +56,13 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
         assert kind() != null && kind() == kind().stackKind() : kind() + " != " + kind().stackKind();
     }
 
-    public ValueNode(Stamp stamp, ValueNode... dependencies) {
+    public ValueNode(Stamp stamp, Node... dependencies) {
         this.stamp = stamp;
         this.dependencies = new NodeInputList<>(this, dependencies);
         assert kind() != null && kind() == kind().stackKind() : kind() + " != " + kind().stackKind();
     }
 
-    public ValueNode(Stamp stamp, List<ValueNode> dependencies) {
+    public ValueNode(Stamp stamp, List<Node> dependencies) {
         this.stamp = stamp;
         this.dependencies = new NodeInputList<>(this, dependencies);
         assert kind() != null && kind() == kind().stackKind() : kind() + " != " + kind().stackKind();
@@ -108,24 +108,20 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
         return null;
     }
 
-    public final ObjectStamp objectStamp() {
-        return (ObjectStamp) stamp;
+    /**
+     * Computes the exact type of the result of this node, if possible.
+     * @return the exact type of the result of this node, if it is known; {@code null} otherwise
+     */
+    public final RiResolvedType exactType() {
+        return stamp.exactType();
     }
 
-    public final IntegerStamp integerStamp() {
-        return (IntegerStamp) stamp;
-    }
-
-    public final FloatStamp floatStamp() {
-        return (FloatStamp) stamp;
-    }
-
-    @Override
-    public boolean verify() {
-        for (ValueNode v : dependencies().nonNull()) {
-            assertTrue(!(v.stamp() instanceof GenericStamp) || ((GenericStamp) v.stamp()).type() == GenericStampType.Dependency, "cannot depend on node with stamp %s", v.stamp());
-        }
-        return super.verify();
+    /**
+     * Computes the declared type of the result of this node, if possible.
+     * @return the declared type of the result of this node, if it is known; {@code null} otherwise
+     */
+    public final RiResolvedType declaredType() {
+        return stamp.declaredType();
     }
 
     @Override

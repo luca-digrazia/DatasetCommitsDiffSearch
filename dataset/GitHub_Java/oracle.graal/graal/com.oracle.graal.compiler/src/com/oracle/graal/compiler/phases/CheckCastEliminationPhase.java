@@ -22,17 +22,20 @@
  */
 package com.oracle.graal.compiler.phases;
 
+import java.io.*;
 import java.util.*;
 
 import com.oracle.graal.compiler.graph.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.PhiNode.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 
 public class CheckCastEliminationPhase extends Phase {
@@ -47,9 +50,19 @@ public class CheckCastEliminationPhase extends Phase {
 
     private StructuredGraph graph;
 
+    static PrintStream out = System.out;
+
     @Override
     protected void run(StructuredGraph inputGraph) {
         graph = inputGraph;
+//        if (!graph.method().holder().name().contains("DiskIndex")) {
+//            return;
+//        }
+//        if (!graph.method().name().equals("writeCategoryTable")) {
+//            return;
+//        }
+//        out.println("checkcast " + graph.method());
+
         new EliminateCheckCasts(graph.start(), new State()).apply();
     }
 

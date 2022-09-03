@@ -169,8 +169,13 @@ public class GraalCompiler {
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
         }
+        if (GraalOptions.OptGVN) {
+            new GlobalValueNumberingPhase().apply(graph);
+        }
 
-        new LoweringPhase(runtime, assumptions).apply(graph);
+        graph.mark();
+        new LoweringPhase(runtime).apply(graph);
+        new CanonicalizerPhase(target, runtime, assumptions, true, null).apply(graph);
 
         if (GraalOptions.CullFrameStates) {
             new CullFrameStatesPhase().apply(graph);
@@ -195,6 +200,9 @@ public class GraalCompiler {
 
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
+        }
+        if (GraalOptions.OptGVN) {
+            new GlobalValueNumberingPhase().apply(graph);
         }
         new DeadCodeEliminationPhase().apply(graph);
 
