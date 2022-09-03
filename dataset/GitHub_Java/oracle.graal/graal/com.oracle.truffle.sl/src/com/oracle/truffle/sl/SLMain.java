@@ -139,6 +139,11 @@ public class SLMain extends TruffleLanguage {
     private static List<NodeFactory<? extends SLBuiltinNode>> builtins = Collections.emptyList();
     private final SLContext context;
 
+    /* Small tools that can be demonstrated */
+    NodeExecCounter nodeExecCounter = null;
+    NodeExecCounter statementExecCounter = null;
+    CoverageTracker coverageTracker = null;
+
     public SLMain(Env env) {
         super(env);
         context = SLContextFactory.create(new BufferedReader(env().stdIn()), new PrintWriter(env().stdOut(), true));
@@ -148,26 +153,22 @@ public class SLMain extends TruffleLanguage {
         }
     }
 
-    /* Enables demonstration of per-type tabulation of node execution counts */
+    /* Demonstrate per-type tabulation of node execution counts */
     private static boolean nodeExecCounts = false;
-    /* Enables demonstration of per-line tabulation of STATEMENT node execution counts */
+    /* Demonstrate per-line tabulation of STATEMENT node execution counts */
     private static boolean statementCounts = false;
-    /* Enables demonstration of er-line tabulation of STATEMENT coverage */
+    /* Demonstrate per-line tabulation of STATEMENT coverage */
     private static boolean coverage = false;
-
-    /* Small tools that can be installed for demonstration */
-    private static NodeExecCounter nodeExecCounter = null;
-    private static NodeExecCounter statementExecCounter = null;
-    private static CoverageTracker coverageTracker = null;
 
     /**
      * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
+     * <p>
+     * Obsolete: being replaced with new TruffleLanguage API
      */
+    @Deprecated
     public static void main(String[] args) throws IOException {
         TruffleVM vm = TruffleVM.newVM().build();
         assert vm.getLanguages().containsKey("application/x-sl");
-
-        setupToolDemos();
 
         int repeats = 1;
         if (args.length >= 2) {
@@ -186,7 +187,6 @@ public class SLMain extends TruffleLanguage {
         while (repeats-- > 0) {
             main.invoke(null);
         }
-        reportToolDemos();
     }
 
     /**
@@ -359,7 +359,10 @@ public class SLMain extends TruffleLanguage {
 
     @Override
     protected Object eval(Source code) throws IOException {
+
+        setupToolDemos();
         context.executeMain(code);
+        reportToolDemos();
         return null;
     }
 
@@ -383,7 +386,7 @@ public class SLMain extends TruffleLanguage {
         return object instanceof SLFunction;
     }
 
-    private static void setupToolDemos() {
+    private void setupToolDemos() {
         if (statementCounts || coverage) {
             Probe.registerASTProber(new SLStandardASTProber());
         }
@@ -403,7 +406,7 @@ public class SLMain extends TruffleLanguage {
         }
     }
 
-    private static void reportToolDemos() {
+    private void reportToolDemos() {
         if (nodeExecCounter != null) {
             nodeExecCounter.print(System.out);
             nodeExecCounter.dispose();
