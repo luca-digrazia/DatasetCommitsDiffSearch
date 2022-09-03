@@ -273,16 +273,15 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             // Compilation was successful.
         } else {
             compilationPolicy.recordCompilationFailure(t);
-
-            if (TruffleCompilationExceptionsAreThrown.getValue()) {
-                throw new OptimizationFailedException(t, rootNode);
-            }
-            logOptimizingFailed(this, t.getMessage());
             if (t instanceof BailoutException) {
+                logOptimizingFailed(this, t.getMessage());
                 // Bailout => move on.
             } else if (TruffleCompilationExceptionsAreFatal.getValue()) {
+                logOptimizingFailed(this, t.getMessage());
                 t.printStackTrace(OUT);
                 System.exit(-1);
+            } else if (TruffleCompilationExceptionsAreThrown.getValue()) {
+                throw new OptimizationFailedException(t, rootNode);
             }
         }
     }
