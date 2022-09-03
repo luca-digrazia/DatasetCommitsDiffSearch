@@ -28,7 +28,7 @@ import com.oracle.graal.asm.*;
 /**
  * The platform-dependent base class for the HSAIL assembler.
  */
-public abstract class AbstractHSAILAssembler extends Assembler {
+public abstract class AbstractHSAILAssembler extends AbstractAssembler {
 
     public AbstractHSAILAssembler(TargetDescription target) {
         super(target);
@@ -47,11 +47,7 @@ public abstract class AbstractHSAILAssembler extends Assembler {
 
     @Override
     public void jmp(Label l) {
-        emitJumpToLabelName(nameOf(l));
-    }
-
-    public void emitJumpToLabelName(String labelName) {
-        emitString("brn " + labelName + ";");
+        emitString("brn " + nameOf(l) + ";");
     }
 
     @Override
@@ -61,7 +57,6 @@ public abstract class AbstractHSAILAssembler extends Assembler {
 
     @Override
     protected String createLabelName(Label l, int id) {
-        int blockId = l.getBlockId();
-        return "@L" + (blockId == -1 ? id : blockId);
+        return "@L" + id;
     }
 }

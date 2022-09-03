@@ -22,27 +22,30 @@
  */
 package com.oracle.graal.asm;
 
+import java.nio.*;
+import java.util.*;
+
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.Architecture.*;
 
 /**
  * The platform-independent base class for the assembler.
  */
 public abstract class AbstractAssembler {
+
     public final TargetDescription target;
     public final Buffer codeBuffer;
 
     public AbstractAssembler(TargetDescription target) {
         this.target = target;
 
-        if (target.arch.byteOrder == ByteOrder.BigEndian) {
+        if (target.arch.getByteOrder() == ByteOrder.BIG_ENDIAN) {
             this.codeBuffer = new Buffer.BigEndian();
         } else {
             this.codeBuffer = new Buffer.LittleEndian();
         }
     }
 
-    public final void bind(Label l) {
+    public void bind(Label l) {
         assert !l.isBound() : "can bind label only once";
         l.bind(codeBuffer.position());
         l.patchInstructions(this);
@@ -54,13 +57,34 @@ public abstract class AbstractAssembler {
 
     protected abstract void patchJumpTarget(int branch, int jumpTarget);
 
+    private Map<Label, String> nameMap;
+
     /**
-     * Emits instruction(s) that access an address specified by a given displacement from the stack pointer
-     * in the direction that the stack grows (which is down on most architectures).
-     *
-     * @param disp the displacement from the stack pointer at which the stack should be accessed
+     * Creates a name for a label.
+     * 
+     * @param l the label for which a name is being created
+     * @param id a label identifier that is unique with the scope of this assembler
+     * @return a label name in the form of "L123"
      */
-    public abstract void bangStack(int disp);
+    protected String createLabelName(Label l, int id) {
+        return "L" + id;
+    }
+
+    /**
+     * Gets a name for a label, creating it if it does not yet exist. By default, the returned name
+     * is only unique with the scope of this assembler.
+     */
+    public String nameOf(Label l) {
+        if (nameMap == null) {
+            nameMap = new HashMap<>();
+        }
+        String name = nameMap.get(l);
+        if (name == null) {
+            name = createLabelName(l, nameMap.size());
+            nameMap.put(l, name);
+        }
+        return name;
+    }
 
     protected final void emitByte(int x) {
         codeBuffer.emitByte(x);
@@ -77,4 +101,27 @@ public abstract class AbstractAssembler {
     protected final void emitLong(long x) {
         codeBuffer.emitLong(x);
     }
+
+    /**
+     * Some GPU architectures have a text based encoding.
+     */
+    protected final void emitString(String x) {
+        codeBuffer.emitString(x);
+    }
+
+    // XXX for pretty-printing
+    protected final void emitString0(String x) {
+        codeBuffer.emitString0(x);
+    }
+
+    /**
+     * This is used by the TargetMethodAssembler to convert a {@link StackSlot} to an
+     * {@link AbstractAddress}.
+     */
+    public abstract AbstractAddress makeAddress(Register base, int displacement);
+
+    /**
+     * Returns a target specific placeholder address that can be used for code patching.
+     */
+    public abstract AbstractAddress getPlaceholder();
 }
