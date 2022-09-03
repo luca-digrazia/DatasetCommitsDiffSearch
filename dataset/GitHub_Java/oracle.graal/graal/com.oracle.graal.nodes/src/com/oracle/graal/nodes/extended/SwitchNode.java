@@ -47,7 +47,6 @@ public abstract class SwitchNode extends ControlSplitNode {
      */
     public SwitchNode(ValueNode value, AbstractBeginNode[] successors, int[] keySuccessors, double[] keyProbabilities) {
         super(StampFactory.forVoid());
-        assert value.kind() == Kind.Int || value.kind() == Kind.Long || value.kind() == Kind.Object;
         assert keySuccessors.length == keyProbabilities.length;
         this.successors = new NodeSuccessorList<>(this, successors);
         this.value = value;
@@ -62,16 +61,7 @@ public abstract class SwitchNode extends ControlSplitNode {
             total += d;
             assert d >= 0.0 : "Cannot have negative probabilities in switch node: " + d;
         }
-        assert total > 0.999 && total < 1.001 : "Total " + total;
-        return true;
-    }
-
-    protected boolean assertValues() {
-        Kind kind = value.kind();
-        for (int i = 0; i < keyCount(); i++) {
-            Constant key = keyAt(i);
-            assert key.getKind() == kind;
-        }
+        assert total > 0.999 && total < 1.001;
         return true;
     }
 
@@ -116,8 +106,6 @@ public abstract class SwitchNode extends ControlSplitNode {
     public ValueNode value() {
         return value;
     }
-
-    public abstract boolean isSorted();
 
     /**
      * The number of distinct keys in this switch.
@@ -182,9 +170,10 @@ public abstract class SwitchNode extends ControlSplitNode {
     }
 
     @Override
-    public void afterClone(Node other) {
-        SwitchNode oldSwitch = (SwitchNode) other;
-        keyProbabilities = Arrays.copyOf(oldSwitch.keyProbabilities, oldSwitch.keyProbabilities.length);
-        keySuccessors = Arrays.copyOf(oldSwitch.keySuccessors, oldSwitch.keySuccessors.length);
+    public SwitchNode clone(Graph into) {
+        SwitchNode newSwitch = (SwitchNode) super.clone(into);
+        newSwitch.keyProbabilities = Arrays.copyOf(keyProbabilities, keyProbabilities.length);
+        newSwitch.keySuccessors = Arrays.copyOf(keySuccessors, keySuccessors.length);
+        return newSwitch;
     }
 }

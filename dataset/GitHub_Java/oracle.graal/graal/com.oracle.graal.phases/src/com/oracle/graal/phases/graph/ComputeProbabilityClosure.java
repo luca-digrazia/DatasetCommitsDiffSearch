@@ -45,6 +45,7 @@ import com.oracle.graal.nodes.util.*;
  * <li>{@link PropagateLoopFrequency} propagates the loop frequencies and multiplies each
  * {@link FixedNode}'s probability with its loop frequency.</li>
  * </ol>
+ * TODO: add exception probability information to Invokes
  */
 public class ComputeProbabilityClosure {
 
@@ -290,11 +291,19 @@ public class ComputeProbabilityClosure {
         public void afterSplit(AbstractBeginNode node) {
             assert node.predecessor() != null;
             Node pred = node.predecessor();
-            ControlSplitNode x = (ControlSplitNode) pred;
-            double nodeProbability = x.probability(node);
-            assert nodeProbability >= 0.0 : "Node " + x + " provided negative probability for begin " + node + ": " + nodeProbability;
-            probability *= nodeProbability;
-            assert probability >= 0.0;
+            if (pred instanceof Invoke) {
+                Invoke x = (Invoke) pred;
+                if (x.next() != node) {
+                    probability = 0;
+                }
+            } else {
+                assert pred instanceof ControlSplitNode;
+                ControlSplitNode x = (ControlSplitNode) pred;
+                double nodeProbability = x.probability(node);
+                assert nodeProbability >= 0.0 : "Node " + x + " provided negative probability for begin " + node + ": " + nodeProbability;
+                probability *= nodeProbability;
+                assert probability >= 0.0;
+            }
         }
     }
 
