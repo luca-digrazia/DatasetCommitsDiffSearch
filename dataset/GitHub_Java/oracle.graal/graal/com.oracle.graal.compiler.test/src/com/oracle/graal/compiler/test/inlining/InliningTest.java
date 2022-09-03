@@ -36,7 +36,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.test.*;
 
 @SuppressWarnings("unused")
 public class InliningTest extends GraalCompilerTest {
@@ -64,7 +63,7 @@ public class InliningTest extends GraalCompilerTest {
         assertInlined(getGraph("invokeMethodOnFinalClassSnippet", false));
     }
 
-    @LongTest
+    @Test
     public void testStaticBindableInliningIP() {
         assertManyMethodInfopoints(assertInlined(getGraph("invokeConstructorSnippet", true)));
         assertManyMethodInfopoints(assertInlined(getGraph("invokeFinalMethodSnippet", true)));
@@ -100,7 +99,7 @@ public class InliningTest extends GraalCompilerTest {
         assertNotInlined(getGraph("invokeOverriddenInterfaceMethodSnippet", false));
     }
 
-    @LongTest
+    @Test
     public void testClassHierarchyAnalysisIP() {
         assertManyMethodInfopoints(assertInlined(getGraph("invokeLeafClassMethodSnippet", true)));
         assertManyMethodInfopoints(assertInlined(getGraph("invokeConcreteMethodSnippet", true)));

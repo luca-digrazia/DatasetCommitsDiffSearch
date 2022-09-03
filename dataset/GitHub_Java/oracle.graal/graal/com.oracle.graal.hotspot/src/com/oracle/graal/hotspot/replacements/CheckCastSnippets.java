@@ -65,11 +65,13 @@ public class CheckCastSnippets implements Snippets {
      */
     @Snippet
     public static Object checkcastExact(Object object, Word exactHub, @ConstantParameter boolean checkNull) {
-        if (probability(NOT_FREQUENT_PROBABILITY, checkNull && object == null)) {
+        if (checkNull && object == null) {
+            probability(NOT_FREQUENT_PROBABILITY);
             isNull.inc();
         } else {
             Word objectHub = loadHub(object);
             if (objectHub.notEqual(exactHub)) {
+                probability(DEOPT_PATH_PROBABILITY);
                 exactMiss.inc();
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
@@ -90,11 +92,13 @@ public class CheckCastSnippets implements Snippets {
      */
     @Snippet
     public static Object checkcastPrimary(Word hub, Object object, @ConstantParameter int superCheckOffset, @ConstantParameter boolean checkNull) {
-        if (probability(NOT_FREQUENT_PROBABILITY, checkNull && object == null)) {
+        if (checkNull && object == null) {
+            probability(NOT_FREQUENT_PROBABILITY);
             isNull.inc();
         } else {
             Word objectHub = loadHub(object);
             if (objectHub.readWord(superCheckOffset, FINAL_LOCATION).notEqual(hub)) {
+                probability(DEOPT_PATH_PROBABILITY);
                 displayMiss.inc();
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
@@ -109,7 +113,8 @@ public class CheckCastSnippets implements Snippets {
      */
     @Snippet
     public static Object checkcastSecondary(Word hub, Object object, @VarargsParameter Word[] hints, @ConstantParameter boolean checkNull) {
-        if (probability(NOT_FREQUENT_PROBABILITY, checkNull && object == null)) {
+        if (checkNull && object == null) {
+            probability(NOT_FREQUENT_PROBABILITY);
             isNull.inc();
         } else {
             Word objectHub = loadHub(object);
@@ -137,7 +142,8 @@ public class CheckCastSnippets implements Snippets {
      */
     @Snippet
     public static Object checkcastDynamic(Word hub, Object object, @ConstantParameter boolean checkNull) {
-        if (probability(NOT_FREQUENT_PROBABILITY, checkNull && object == null)) {
+        if (checkNull && object == null) {
+            probability(NOT_FREQUENT_PROBABILITY);
             isNull.inc();
         } else {
             Word objectHub = loadHub(object);

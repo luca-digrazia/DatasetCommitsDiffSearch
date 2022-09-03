@@ -28,13 +28,17 @@ import static com.oracle.graal.lir.ptx.PTXArithmetic.*;
 import static com.oracle.graal.lir.ptx.PTXBitManipulationOp.IntrinsicOpcode.*;
 import static com.oracle.graal.lir.ptx.PTXCompare.*;
 
+import com.oracle.graal.api.code.AllocatableValue;
 import com.oracle.graal.api.code.CodeCacheProvider;
 import com.oracle.graal.api.code.DeoptimizationAction;
 import com.oracle.graal.api.code.RuntimeCallTarget;
 import com.oracle.graal.api.code.StackSlot;
 import com.oracle.graal.api.code.TargetDescription;
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.Constant;
+import com.oracle.graal.api.meta.Kind;
+import com.oracle.graal.api.meta.ResolvedJavaMethod;
+import com.oracle.graal.api.meta.Value;
 import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.compiler.gen.LIRGenerator;
 import com.oracle.graal.compiler.target.LIRGenLowerable;
@@ -125,7 +129,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitMove(AllocatableValue dst, Value src) {
+    public void emitMove(Value dst, Value src) {
         if (isRegister(src) || isStackSlot(dst)) {
             append(new MoveFromRegOp(dst, src));
         } else {
@@ -133,23 +137,25 @@ public class PTXLIRGenerator extends LIRGenerator {
         }
     }
 
-    private PTXAddressValue prepareAddress(Value base, long displacement, Value index, int scale) {
+    private PTXAddressValue prepareAddress(Kind kind, Value base, int displacement, Value index, int scale) {
         AllocatableValue baseRegister;
         long finalDisp = displacement;
         if (isConstant(base)) {
             if (asConstant(base).isNull()) {
-                baseRegister = Value.ILLEGAL;
+                baseRegister = AllocatableValue.UNUSED;
             } else if (asConstant(base).getKind() != Kind.Object) {
                 finalDisp += asConstant(base).asLong();
-                baseRegister = Value.ILLEGAL;
+                baseRegister = AllocatableValue.UNUSED;
             } else {
                 baseRegister = load(base);
             }
+        } else if (base == Value.ILLEGAL) {
+            baseRegister = AllocatableValue.UNUSED;
         } else {
             baseRegister = asAllocatable(base);
         }
 
-        if (index != Value.ILLEGAL && scale != 0) {
+        if (index != Value.ILLEGAL) {
             if (isConstant(index)) {
                 finalDisp += asConstant(index).asLong() * scale;
             } else {
@@ -160,37 +166,34 @@ public class PTXLIRGenerator extends LIRGenerator {
                     indexRegister = index;
                 }
 
-                if (baseRegister == Value.ILLEGAL) {
+                if (baseRegister == AllocatableValue.UNUSED) {
                     baseRegister = asAllocatable(indexRegister);
                 } else {
-                    Variable newBase = newVariable(Kind.Int);
-                    emitMove(newBase, baseRegister);
-                    baseRegister = newBase;
                     baseRegister = emitAdd(baseRegister, indexRegister);
                 }
             }
         }
 
-        return new PTXAddressValue(target().wordKind, baseRegister, finalDisp);
+        return new PTXAddressValue(kind, baseRegister, finalDisp);
     }
 
     @Override
-    public Variable emitLoad(Kind kind, Value base, long displacement, Value index, int scale, DeoptimizingNode deopting) {
-        PTXAddressValue loadAddress = prepareAddress(base, displacement, index, scale);
-        Variable result = newVariable(kind);
-        append(new LoadOp(kind, result, loadAddress, deopting != null ? state(deopting) : null));
+    public Variable emitLoad(Kind kind, Value base, int displacement, Value index, int scale, DeoptimizingNode deopting) {
+        PTXAddressValue loadAddress = prepareAddress(kind, base, displacement, index, scale);
+        Variable result = newVariable(loadAddress.getKind());
+        append(new LoadOp(result, loadAddress, deopting != null ? state(deopting) : null));
         return result;
     }
 
     @Override
-    public void emitStore(Kind kind, Value base, long displacement, Value index, int scale, Value inputVal, DeoptimizingNode deopting) {
-        PTXAddressValue storeAddress = prepareAddress(base, displacement, index, scale);
+    public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value inputVal, DeoptimizingNode deopting) {
+        PTXAddressValue storeAddress = prepareAddress(kind, base, displacement, index, scale);
         Variable input = load(inputVal);
-        append(new StoreOp(kind, storeAddress, input, deopting != null ? state(deopting) : null));
+        append(new StoreOp(storeAddress, input, deopting != null ? state(deopting) : null));
     }
 
     @Override
-    public Variable emitLea(Value base, long displacement, Value index, int scale) {
+    public Variable emitLea(Value base, int displacement, Value index, int scale) {
         throw new InternalError("NYI");
     }
 

@@ -59,9 +59,4 @@ public class InfopointNode extends AbstractStateSplit implements LIRLowerable, I
         }
     }
 
-    @Override
-    public boolean verify() {
-        return stateAfter() != null && super.verify();
-    }
-
 }

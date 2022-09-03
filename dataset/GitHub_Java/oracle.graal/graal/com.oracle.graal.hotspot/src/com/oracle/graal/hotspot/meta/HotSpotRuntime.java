@@ -699,7 +699,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         } else if (n instanceof IntegerDivNode || n instanceof IntegerRemNode || n instanceof UnsignedDivNode || n instanceof UnsignedRemNode) {
             // Nothing to do for division nodes. The HotSpot signal handler catches divisions by
             // zero and the MIN_VALUE / -1 cases.
-        } else if (n instanceof UnwindNode || n instanceof DeoptimizeNode) {
+        } else if (n instanceof UnwindNode) {
             // Nothing to do, using direct LIR lowering for these nodes.
         } else if (n instanceof BoxNode) {
             boxingSnippets.lower((BoxNode) n);

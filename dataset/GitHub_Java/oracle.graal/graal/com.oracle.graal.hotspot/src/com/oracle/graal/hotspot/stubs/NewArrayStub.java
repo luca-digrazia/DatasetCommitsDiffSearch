@@ -22,15 +22,11 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.api.code.DeoptimizationAction.*;
-import static com.oracle.graal.api.meta.DeoptimizationReason.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.*;
 import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -46,7 +42,7 @@ import com.oracle.graal.word.*;
  * Stub implementing the fast path for TLAB refill during instance class allocation. This stub is
  * called from the {@linkplain NewObjectSnippets inline} allocation code when TLAB allocation fails.
  * If this stub fails to refill the TLAB or allocate the object, it calls out to the HotSpot C++
- * runtime to complete the allocation.
+ * runtime for to complete the allocation.
  */
 public class NewArrayStub extends Stub {
 
@@ -58,16 +54,10 @@ public class NewArrayStub extends Stub {
     protected Arguments makeArguments(SnippetInfo stub) {
         HotSpotResolvedObjectType intArrayType = (HotSpotResolvedObjectType) runtime.lookupJavaType(int[].class);
 
-        // RuntimeStub cannot (currently) support oops or metadata embedded in the code so we
-        // convert the hub (i.e., Klass*) for int[] to be a naked word. This should be safe since
-        // the int[] class will never be unloaded.
-        Constant intArrayHub = intArrayType.klass();
-        intArrayHub = Constant.forIntegerKind(graalRuntime().getTarget().wordKind, intArrayHub.asLong(), null);
-
         Arguments args = new Arguments(stub);
         args.add("hub", null);
         args.add("length", null);
-        args.addConst("intArrayHub", intArrayHub);
+        args.addConst("intArrayHub", intArrayType.klass());
         args.addConst("log", Boolean.getBoolean("graal.logNewArrayStub"));
         return args;
     }
@@ -102,15 +92,7 @@ public class NewArrayStub extends Stub {
                 return verifyOop(memory.toObject());
             }
         }
-        log(log, "newArray: calling new_array_runtime\n", 0L);
-
-        NewArrayRuntimeCall.call(thread(), hub, length);
-
-        if (clearPendingException(thread())) {
-            log(log, "newArray: deoptimizing to caller\n", 0L);
-            clearObjectResult(thread());
-            DeoptimizeCallerNode.deopt(InvalidateReprofile, RuntimeConstraint);
-        }
-        return verifyOop(clearObjectResult(thread()));
+        log(log, "newArray: calling new_array_slow", 0L);
+        return verifyOop(NewArraySlowStubCall.call(hub, length));
     }
 }
