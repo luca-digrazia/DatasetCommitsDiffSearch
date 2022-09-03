@@ -209,8 +209,7 @@ public class SPARCControlFlow {
                 emitCBCond(masm, actualX, actualY, actualTrueTarget, conditionFlag);
                 new Nop().emit(masm);
             } finally {
-                if (scratch != null) {
-                    // release the scratch if used
+                if (scratch != null) {// release the scratch if used
                     scratch.close();
                 }
             }
@@ -413,7 +412,7 @@ public class SPARCControlFlow {
                 if (actualCondition != null) {
                     emitBranch(masm, actualTarget, actualCondition, cc, false);
                 } else if (actualConditionFlag != null) {
-                    emitBranch(masm, actualTarget, actualConditionFlag, cc);
+                    emitBranch(masm, actualTarget, actualConditionFlag);
                 } else {
                     GraalInternalError.shouldNotReachHere();
                 }
@@ -469,14 +468,14 @@ public class SPARCControlFlow {
             case AT:
             case BT:
             case BE:
-                throw GraalInternalError.unimplemented("Should not be required for float/dobule");
+                GraalInternalError.unimplemented("Should not be required for float/dobule");
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
     }
 
-    private static void emitBranch(SPARCMacroAssembler masm, Label target, ConditionFlag actualCondition, CC cc) {
-        new Fmt00c(0, actualCondition, Op2s.Bp, cc, 0, target).emit(masm);
+    private static void emitBranch(SPARCMacroAssembler masm, Label target, ConditionFlag actualCondition) {
+        new Fmt00b(false, actualCondition, Op2s.Br, target).emit(masm);
     }
 
     private static void emitBranch(SPARCMacroAssembler masm, Label target, Condition actualCondition, CC cc, boolean predictTaken) {
@@ -518,7 +517,7 @@ public class SPARCControlFlow {
     }
 
     public static class StrategySwitchOp extends SPARCLIRInstruction implements BlockEndOp {
-        @Use({CONST}) protected JavaConstant[] keyConstants;
+        @Use({CONST}) protected Constant[] keyConstants;
         private final LabelRef[] keyTargets;
         private LabelRef defaultTarget;
         @Alive({REG}) protected Value key;

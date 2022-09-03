@@ -22,9 +22,7 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
-
-import com.oracle.graal.asm.sparc.SPARCAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Bpa;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Nop;
 import com.oracle.graal.lir.*;
@@ -42,7 +40,7 @@ public class SPARCJumpOp extends JumpOp implements SPARCDelayedControlTransfer {
     public void emitControlTransfer(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         assert !emitDone;
         if (!crb.isSuccessorEdge(destination())) {
-            masm.bicc(ConditionFlag.Always, NOT_ANNUL, destination().label());
+            new Bpa(destination().label()).emit(masm);
             delaySlotPosition = masm.position();
         }
         emitDone = true;
@@ -53,7 +51,7 @@ public class SPARCJumpOp extends JumpOp implements SPARCDelayedControlTransfer {
         if (!crb.isSuccessorEdge(destination())) {
             if (!emitDone) {
                 SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
-                masm.bicc(ConditionFlag.Always, NOT_ANNUL, destination().label());
+                new Bpa(destination().label()).emit(masm);
                 new Nop().emit(masm);
             } else {
                 assert crb.asm.position() - delaySlotPosition == 4;

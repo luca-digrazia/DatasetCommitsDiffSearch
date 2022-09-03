@@ -32,6 +32,7 @@ import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Call;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Jmpl;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Jmp;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Nop;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Sethix;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
@@ -88,7 +89,7 @@ public class SPARCCall {
             } else {
                 int after = masm.position();
                 if (after - before == 4) {
-                    masm.nop();
+                    new Nop().emit(masm);
                 } else if (after - before == 8) {
                     // everything is fine;
                 } else {
@@ -136,7 +137,7 @@ public class SPARCCall {
         }
 
         @Override
-        public void verify() {
+        protected void verify() {
             super.verify();
             assert isRegister(targetAddress) : "The current register allocator cannot handle variables to be used at call sites, it must be in a fixed register for now";
         }
@@ -196,7 +197,7 @@ public class SPARCCall {
         } else {
             new Call(0).emit(masm);
         }
-        masm.nop();  // delay slot
+        new Nop().emit(masm);  // delay slot
         int after = masm.position();
         crb.recordDirectCall(before, after, callTarget, info);
         crb.recordExceptionHandlers(after, info);
@@ -207,7 +208,7 @@ public class SPARCCall {
         int before = masm.position();
         new Sethix(0L, dst, true).emit(masm);
         new Jmp(new SPARCAddress(dst, 0)).emit(masm);
-        masm.nop();  // delay slot
+        new Nop().emit(masm);  // delay slot
         int after = masm.position();
         crb.recordIndirectCall(before, after, target, null);
         masm.ensureUniquePC();
@@ -216,7 +217,7 @@ public class SPARCCall {
     public static void indirectCall(CompilationResultBuilder crb, SPARCMacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
         int before = masm.position();
         new Jmpl(dst, 0, o7).emit(masm);
-        masm.nop();  // delay slot
+        new Nop().emit(masm);  // delay slot
         int after = masm.position();
         crb.recordIndirectCall(before, after, callTarget, info);
         crb.recordExceptionHandlers(after, info);

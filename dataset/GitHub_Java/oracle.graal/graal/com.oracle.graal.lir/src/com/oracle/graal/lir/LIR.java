@@ -146,7 +146,7 @@ public class LIR {
         final LabelRef[] exceptionEdge = {null};
         op.forEachState(new StateProcedure() {
             @Override
-            public void doState(LIRFrameState state) {
+            protected void doState(LIRFrameState state) {
                 if (state.exceptionEdge != null) {
                     assert exceptionEdge[0] == null;
                     exceptionEdge[0] = state.exceptionEdge;
