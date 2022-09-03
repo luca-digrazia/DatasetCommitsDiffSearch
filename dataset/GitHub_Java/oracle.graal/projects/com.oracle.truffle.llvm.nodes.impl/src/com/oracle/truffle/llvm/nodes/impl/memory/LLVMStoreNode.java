@@ -148,7 +148,7 @@ public abstract class LLVMStoreNode extends LLVMNode {
     }
 
     @NodeChild(type = LLVMAddressNode.class, value = "valueNode")
-    public abstract static class LLVMAddressStoreNode extends LLVMStoreNode {
+    public abstract static class LLVMAdressStoreNode extends LLVMStoreNode {
 
         @Specialization
         public void execute(LLVMAddress address, LLVMAddress value) {

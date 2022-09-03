@@ -36,6 +36,7 @@ import java.util.List;
 import org.eclipse.emf.ecore.EObject;
 
 import com.intel.llvm.ireditor.types.ResolvedType;
+import com.intel.llvm.ireditor.types.ResolvedVectorType;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
@@ -77,13 +78,11 @@ import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI16Arr
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI32ArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI64ArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI8ArrayLiteralNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMAccessGlobalVariableStorageNodeGen;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.types.LLVMGlobalVariableStorage;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
@@ -286,8 +285,8 @@ public final class LLVMLiteralFactory {
         return i1ZeroInits;
     }
 
-    public static LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMAddressNode target, LLVMBaseType type) {
-        switch (type) {
+    public static LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMAddressNode target, ResolvedVectorType type) {
+        switch (LLVMTypeHelper.getLLVMType(type)) {
             case I1_VECTOR:
                 LLVMI1Node[] i1Vals = listValues.stream().map(n -> (LLVMI1Node) n).toArray(LLVMI1Node[]::new);
                 return LLVMVectorI1LiteralNodeGen.create(i1Vals, target);
@@ -359,13 +358,7 @@ public final class LLVMLiteralFactory {
             case DOUBLE:
                 return new LLVMDoubleLiteralNode((double) value);
             case ADDRESS:
-                if (value instanceof LLVMAddress) {
-                    return new LLVMAddressLiteralNode((LLVMAddress) value);
-                } else if (value instanceof LLVMGlobalVariableStorage) {
-                    return LLVMAccessGlobalVariableStorageNodeGen.create((LLVMGlobalVariableStorage) value);
-                } else {
-                    throw new AssertionError(value.getClass());
-                }
+                return new LLVMAddressLiteralNode((LLVMAddress) value);
             case FUNCTION_ADDRESS:
                 return LLVMFunctionLiteralNodeGen.create((LLVMFunctionDescriptor) value);
             default:

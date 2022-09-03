@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.parser.factories;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.eclipse.emf.ecore.EObject;
 
@@ -47,13 +46,13 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMTerminatorNode;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
@@ -78,7 +77,8 @@ import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 
 public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
 
@@ -298,8 +298,11 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
 
     @Override
     public LLVMGlobalRootNode createGlobalRootNode(LLVMNode[] staticInits, RootCallTarget mainCallTarget, LLVMAddress[] allocatedGlobalAddresses,
-                    Object[] args, Source sourceFile, LLVMRuntimeType[] mainTypes) {
-        return LLVMRootNodeFactory.createGlobalRootNode(runtime, staticInits, mainCallTarget, allocatedGlobalAddresses, args, sourceFile, mainTypes);
+                    Object... args) {
+        return new LLVMGlobalRootNode(runtime.getStackPointerSlot(), runtime.getGlobalFrameDescriptor(), LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0()),
+                        staticInits,
+                        mainCallTarget, allocatedGlobalAddresses,
+                        args);
     }
 
     @Override
@@ -335,8 +338,8 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public Optional<Integer> getArgStartIndex() {
-        return Optional.of(LLVMCallNode.ARG_START_INDEX);
+    public int getArgStartIndex() {
+        return LLVMCallNode.ARG_START_INDEX;
     }
 
     @Override
@@ -357,6 +360,11 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     @Override
     public RootNode createFunctionSubstitutionRootNode(LLVMNode intrinsicNode) {
         return LLVMFunctionFactory.createFunctionSubstitutionRootNode(intrinsicNode);
+    }
+
+    @Override
+    public LLVMFunctionDescriptor createFunctionDescriptor(String name, LLVMRuntimeType convertType, LLVMRuntimeType[] convertTypes, boolean varArgs) {
+        return LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0()).getFunctionRegistry().createFunctionDescriptor(name, convertType, convertTypes, varArgs);
     }
 
 }

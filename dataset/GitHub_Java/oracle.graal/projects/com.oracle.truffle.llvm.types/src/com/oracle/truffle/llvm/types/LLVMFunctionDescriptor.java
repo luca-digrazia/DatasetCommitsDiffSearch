@@ -127,7 +127,7 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
 
     @Override
     public int hashCode() {
-        return getName().hashCode() + 11 * functionId;
+        return getName().hashCode() + 11 * getReturnType().hashCode();
     }
 
     @Override
@@ -136,8 +136,25 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
             return false;
         } else {
             LLVMFunctionDescriptor other = (LLVMFunctionDescriptor) obj;
-            return getFunctionIndex() == other.getFunctionIndex();
+            if (!getName().equals(other.getName())) {
+                return false;
+            } else if (!getReturnType().equals(other.getReturnType())) {
+                return false;
+            } else if (getParameterTypes().length != other.getParameterTypes().length) {
+                return false;
+            } else {
+                for (int i = 0; i < getParameterTypes().length; i++) {
+                    if (!getParameterTypes()[i].equals(other.getParameterTypes()[i])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
         }
+    }
+
+    public LLVMAddress getFunctionAddress() {
+        return LLVMAddress.fromLong(getFunctionIndex());
     }
 
 }
