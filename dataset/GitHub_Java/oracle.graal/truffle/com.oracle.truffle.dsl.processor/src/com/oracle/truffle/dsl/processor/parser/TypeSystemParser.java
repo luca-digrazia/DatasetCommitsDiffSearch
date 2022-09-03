@@ -65,9 +65,8 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
     /**
      * @see "https://bugs.openjdk.java.net/browse/JDK-8039214"
      */
-    @SuppressWarnings("unused")
     private static List<Element> newElementList(List<? extends Element> src) {
-        List<Element> workaround = new ArrayList<Element>(src);
+        List<Element> workaround = new ArrayList<>(src);
         return workaround;
     }
 
