@@ -452,7 +452,7 @@ public final class Interval {
     /**
      * The stack slot to which all splits of this interval are spilled if necessary.
      */
-    private StackSlotValue spillSlot;
+    private StackSlot spillSlot;
 
     /**
      * The kind of this interval.
@@ -529,10 +529,10 @@ public final class Interval {
      * The value with which a spilled child interval can be re-materialized. Currently this must be
      * a Constant.
      */
-    private JavaConstant materializedValue;
+    private Constant materializedValue;
 
     /**
-     * The number of times {@link #addMaterializationValue(JavaConstant)} is called.
+     * The number of times {@link #addMaterializationValue(Constant)} is called.
      */
     private int numMaterializationValuesAdded;
 
@@ -547,7 +547,7 @@ public final class Interval {
             assert canMaterialize();
         } else {
             assert this.location == null || isRegister(this.location) : "cannot re-assign location for " + this;
-            assert isStackSlotValue(newLocation);
+            assert isStackSlot(newLocation);
             assert !newLocation.getLIRKind().equals(LIRKind.Illegal);
             assert newLocation.getLIRKind().equals(this.kind);
         }
@@ -615,11 +615,11 @@ public final class Interval {
     /**
      * Gets the canonical spill slot for this interval.
      */
-    StackSlotValue spillSlot() {
+    StackSlot spillSlot() {
         return splitParent().spillSlot;
     }
 
-    void setSpillSlot(StackSlotValue slot) {
+    void setSpillSlot(StackSlot slot) {
         assert splitParent().spillSlot == null : "connot overwrite existing spill slot";
         splitParent().spillSlot = slot;
     }
@@ -737,7 +737,7 @@ public final class Interval {
     /**
      * Sets the value which is used for re-materialization.
      */
-    void addMaterializationValue(JavaConstant value) {
+    void addMaterializationValue(Constant value) {
         if (numMaterializationValuesAdded == 0) {
             materializedValue = value;
         } else {
@@ -758,7 +758,7 @@ public final class Interval {
     /**
      * Returns a value which can be moved to a register instead of a restore-move from stack.
      */
-    public JavaConstant getMaterializedValue() {
+    public Constant getMaterializedValue() {
         return splitParent().materializedValue;
     }
 
