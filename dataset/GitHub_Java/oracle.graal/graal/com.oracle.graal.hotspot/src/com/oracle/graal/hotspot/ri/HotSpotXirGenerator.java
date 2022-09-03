@@ -527,15 +527,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             if (hintCount == 0) {
                 assert !exact;
                 if (counters != null) {
-                    CheckcastCounter cc;
-                    if (is(NULL_TYPE, flags)) {
-                        cc = CheckcastCounter.noHints_unknown;
-                    } else if (is(INTERFACE_TYPE, flags)) {
-                        cc = CheckcastCounter.noHints_iface;
-                    } else {
-                        cc = CheckcastCounter.noHints_class;
-                    }
-                    incCounter(asm, counter, counters, cc);
+                    incCounter(asm, counter, counters, is(NULL_TYPE, flags) ? CheckcastCounter.noHints_unknown : is(INTERFACE_TYPE, flags) ? CheckcastCounter.noHints_iface : CheckcastCounter.noHints_class);
                 }
 
                 checkSubtype(asm, objHub, objHub, hub);
