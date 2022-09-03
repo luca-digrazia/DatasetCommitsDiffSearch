@@ -372,7 +372,7 @@ public class EngineTest {
     }
 
     @FunctionalInterface
-    public interface TestInterface {
+    interface TestInterface {
         void foobar();
     }
 
@@ -487,12 +487,8 @@ public class EngineTest {
                                 return boxed;
                             } else if (tree == Message.IS_EXECUTABLE) {
                                 return true;
-                            } else if (tree == Message.IS_INSTANTIABLE) {
-                                return true;
                             } else if (tree == Message.IS_NULL) {
                                 return false;
-                            } else if (tree == Message.HAS_KEYS) {
-                                return true;
                             } else if (tree == Message.HAS_SIZE) {
                                 return true;
                             } else if (tree == Message.GET_SIZE) {
@@ -532,7 +528,7 @@ public class EngineTest {
 
         @Override
         protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
-            final boolean boxed = request.getSource().getCharacters().equals("boxed");
+            final boolean boxed = request.getSource().getCodeSequence().equals("boxed");
             final CachingLanguageChannel channel = getContextReference().get();
             RootNode root = new RootNode(this) {
                 @Override

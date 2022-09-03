@@ -25,7 +25,6 @@ package com.oracle.truffle.api.test.vm;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -67,12 +66,7 @@ public class HashLanguage extends TruffleLanguage<Env> {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            return result();
-        }
-
-        @TruffleBoundary
-        private String result() {
-            return System.identityHashCode(this) + "@" + code.getCharacters() + " @ " + id;
+            return System.identityHashCode(this) + "@" + code.getCodeSequence() + " @ " + id;
         }
     }
 

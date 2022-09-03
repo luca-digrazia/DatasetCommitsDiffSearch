@@ -50,7 +50,7 @@ public final class TckLanguage extends TruffleLanguage<Env> {
     protected CallTarget parse(ParsingRequest request) throws Exception {
         Source code = request.getSource();
         final RootNode root;
-        final String txt = code.getCharacters().toString();
+        final String txt = code.getCodeSequence().toString();
         if (txt.startsWith("TCK42:")) {
             int nextColon = txt.indexOf(":", 6);
             String mimeType = txt.substring(6, nextColon);
@@ -61,6 +61,11 @@ public final class TckLanguage extends TruffleLanguage<Env> {
             root = RootNode.createConstantNode(value);
         }
         return Truffle.getRuntime().createCallTarget(root);
+    }
+
+    @Override
+    protected Object getLanguageGlobal(Env context) {
+        return null;
     }
 
     @Override
@@ -111,7 +116,7 @@ public final class TckLanguage extends TruffleLanguage<Env> {
         public CallTarget accessMessage(Message tree) {
             if (tree == Message.IS_EXECUTABLE) {
                 return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(Boolean.TRUE));
-            } else if (Message.EXECUTE.equals(tree)) {
+            } else if (Message.createExecute(2).equals(tree)) {
                 return Truffle.getRuntime().createCallTarget(this);
             } else {
                 throw UnsupportedMessageException.raise(tree);

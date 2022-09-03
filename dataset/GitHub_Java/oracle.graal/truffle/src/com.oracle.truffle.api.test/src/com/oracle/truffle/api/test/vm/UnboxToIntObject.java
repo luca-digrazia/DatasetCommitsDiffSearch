@@ -91,13 +91,18 @@ public class UnboxToIntObject implements TruffleObject {
 
         @Override
         protected CallTarget parse(ParsingRequest request) throws Exception {
-            int initialValue = Integer.parseInt(request.getSource().getCharacters().toString());
+            int initialValue = Integer.parseInt(request.getSource().getCodeSequence().toString());
             return Truffle.getRuntime().createCallTarget(new RootNode(this) {
                 @Override
                 public Object execute(VirtualFrame frame) {
                     return new UnboxToIntObject(initialValue);
                 }
             });
+        }
+
+        @Override
+        protected Object getLanguageGlobal(Object context) {
+            return null;
         }
 
         @Override

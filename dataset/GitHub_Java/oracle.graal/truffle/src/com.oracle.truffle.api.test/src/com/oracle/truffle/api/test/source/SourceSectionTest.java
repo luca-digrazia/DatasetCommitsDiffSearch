@@ -50,14 +50,14 @@ public class SourceSectionTest {
     public void emptySourceTest0() {
         SourceSection section = emptySource.createSection(0, 0);
         assertNotNull(section);
-        assertEquals(section.getCharacters(), "");
+        assertEquals(section.getCodeSequence(), "");
     }
 
     @Test
     public void emptyLineTest0() {
         SourceSection section = emptyLineSource.createSection(0, 0);
         assertNotNull(section);
-        assertEquals(section.getCharacters(), "");
+        assertEquals(section.getCodeSequence(), "");
         assertEquals(section.getCharIndex(), 0);
         assertEquals(section.getCharLength(), 0);
         assertEquals(section.getStartLine(), 1);
@@ -72,7 +72,7 @@ public class SourceSectionTest {
     public void emptyLineTest1() {
         SourceSection section = emptyLineSource.createSection(0, 1);
         assertNotNull(section);
-        assertEquals(section.getCharacters(), "\n");
+        assertEquals(section.getCodeSequence(), "\n");
         assertEquals(section.getCharIndex(), 0);
         assertEquals(section.getCharLength(), 1);
         assertEquals(section.getStartLine(), 1);
@@ -95,7 +95,7 @@ public class SourceSectionTest {
         assertEquals(section.getEndLine(), 1);
         assertEquals(section.getStartColumn(), 1);
         assertEquals(section.getEndColumn(), 1);
-        assertEquals("", section.getCharacters());
+        assertEquals("", section.getCodeSequence());
 
         SourceSection other = emptySource.createSection(0, 0);
         assertTrue(section.equals(other));
@@ -104,16 +104,16 @@ public class SourceSectionTest {
 
     @Test
     public void emptySourceSectionOnLongSource() {
-        SourceSection section = longSource.createSection(longSource.getCharacters().length() - 1, 0);
+        SourceSection section = longSource.createSection(longSource.getCodeSequence().length() - 1, 0);
         assertNotNull(section);
-        assertEquals(longSource.getCharacters().length() - 1, section.getCharIndex());
+        assertEquals(longSource.getCodeSequence().length() - 1, section.getCharIndex());
         assertEquals(0, section.getCharLength(), 0);
         assertEquals(3, section.getStartLine());
         assertEquals(3, section.getEndLine());
         assertEquals(2, section.getStartColumn());
         assertEquals(2, section.getEndColumn());
 
-        SourceSection other = longSource.createSection(longSource.getCharacters().length() - 1, 0);
+        SourceSection other = longSource.createSection(longSource.getCodeSequence().length() - 1, 0);
         assertTrue(section.equals(other));
         assertEquals(other.hashCode(), section.hashCode());
     }
@@ -122,21 +122,21 @@ public class SourceSectionTest {
     public void emptySectionTest2() {
         SourceSection section = shortSource.createSection(0, 0);
         assertNotNull(section);
-        assertEquals(section.getCharacters(), "");
+        assertEquals(section.getCodeSequence(), "");
     }
 
     @Test
     public void emptySectionTest3() {
         SourceSection section = longSource.createSection(0, 0);
         assertNotNull(section);
-        assertEquals(section.getCharacters(), "");
+        assertEquals(section.getCodeSequence(), "");
     }
 
     @Test
     public void testGetCode() {
-        assertEquals("01234", longSource.createSection(0, 5).getCharacters());
-        assertEquals("67", longSource.createSection(6, 2).getCharacters());
-        assertEquals("9", longSource.createSection(9, 1).getCharacters());
+        assertEquals("01234", longSource.createSection(0, 5).getCodeSequence());
+        assertEquals("67", longSource.createSection(6, 2).getCodeSequence());
+        assertEquals("9", longSource.createSection(9, 1).getCodeSequence());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -157,20 +157,20 @@ public class SourceSectionTest {
     @Test(expected = IllegalArgumentException.class)
     public void testOutOfRange7() {
         // out of range with length
-        longSource.createSection(longSource.getCharacters().length() - 4, 5);
+        longSource.createSection(longSource.getCodeSequence().length() - 4, 5);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testOutOfRange8() {
         // out of range with charIndex
-        longSource.createSection(longSource.getCharacters().length(), 1);
+        longSource.createSection(longSource.getCodeSequence().length(), 1);
 
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testOutOfRange9() {
         // out of range with charIndex
-        longSource.createSection(longSource.getCharacters().length() + 1, 0);
+        longSource.createSection(longSource.getCodeSequence().length() + 1, 0);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -212,7 +212,7 @@ public class SourceSectionTest {
         assertSame(longSource, section.getSource());
         assertFalse(section.isAvailable());
 
-        assertEquals("", section.getCharacters());
+        assertEquals("", section.getCodeSequence());
         assertNotNull(section.toString());
 
         // Unavailable sections must not be equals otherwise builtins
@@ -227,40 +227,6 @@ public class SourceSectionTest {
     }
 
     @Test
-    public void testEOF1() {
-        SourceSection section = shortSource.createSection(shortSource.getLength(), 0);
-        assertNotNull(section);
-        assertEquals(section.getCharIndex(), shortSource.getLength());
-        assertEquals(section.getCharLength(), 0);
-        assertEquals(section.getStartLine(), 1);
-        assertEquals(section.getEndLine(), 1);
-        assertEquals(section.getStartColumn(), 3);
-        assertEquals(section.getEndColumn(), 3);
-        assertEquals("", section.getCharacters());
-
-        SourceSection other = shortSource.createSection(shortSource.getLength(), 0);
-        assertTrue(section.equals(other));
-        assertEquals(other.hashCode(), section.hashCode());
-    }
-
-    @Test
-    public void testEOF2() {
-        SourceSection section = longSource.createSection(longSource.getLength(), 0);
-        assertNotNull(section);
-        assertEquals(section.getCharIndex(), longSource.getLength());
-        assertEquals(section.getCharLength(), 0);
-        assertEquals(section.getStartLine(), 4);
-        assertEquals(section.getEndLine(), 4);
-        assertEquals(section.getStartColumn(), 1);
-        assertEquals(section.getEndColumn(), 1);
-        assertEquals("", section.getCharacters());
-
-        SourceSection other = longSource.createSection(longSource.getLength(), 0);
-        assertTrue(section.equals(other));
-        assertEquals(other.hashCode(), section.hashCode());
-    }
-
-    @Test
     public void onceObtainedAlwaysTheSame() throws Exception {
         File sample = File.createTempFile("hello", ".txt");
         sample.deleteOnExit();
@@ -269,16 +235,16 @@ public class SourceSectionTest {
         }
         Source complexHello = Source.newBuilder(sample).build();
         SourceSection helloTo = complexHello.createSection(6, 5);
-        assertEquals("world", helloTo.getCharacters());
+        assertEquals("world", helloTo.getCodeSequence());
 
         try (FileWriter w = new FileWriter(sample)) {
             w.write("Hi world!");
         }
         Source simpleHi = Source.newBuilder(sample).build();
         SourceSection hiTo = simpleHi.createSection(3, 5);
-        assertEquals("world", hiTo.getCharacters());
+        assertEquals("world", hiTo.getCodeSequence());
 
-        assertEquals("Previously allocated sections remain the same", "world", helloTo.getCharacters());
+        assertEquals("Previously allocated sections remain the same", "world", helloTo.getCodeSequence());
 
         sample.delete();
     }

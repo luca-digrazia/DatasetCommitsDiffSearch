@@ -99,7 +99,7 @@ public class NFILanguage extends TruffleLanguage<NFIContext> {
 
     @Override
     protected CallTarget parse(ParsingRequest request) throws Exception {
-        CharSequence library = request.getSource().getCharacters();
+        String library = request.getSource().getCodeSequence().toString();
         RootNode root;
         NativeLibraryDescriptor descriptor = Parser.parseLibraryDescriptor(library);
         NFIContext ctx = getContextReference().get();

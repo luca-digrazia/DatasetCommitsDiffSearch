@@ -144,7 +144,7 @@ class HostLanguage extends TruffleLanguage<HostContext> {
 
     @Override
     protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
-        Class<?> allTarget = getContextReference().get().findClass(request.getSource().getCharacters().toString());
+        Class<?> allTarget = getContextReference().get().findClass(request.getSource().getCodeSequence().toString());
         return Truffle.getRuntime().createCallTarget(new RootNode(this) {
             @Override
             public Object execute(VirtualFrame frame) {
@@ -166,11 +166,6 @@ class HostLanguage extends TruffleLanguage<HostContext> {
     @Override
     protected Object lookupSymbol(HostContext context, String symbolName) {
         return JavaInterop.asTruffleObject(context.findClass(symbolName));
-    }
-
-    @Override
-    protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
-        return true;
     }
 
     @Override
