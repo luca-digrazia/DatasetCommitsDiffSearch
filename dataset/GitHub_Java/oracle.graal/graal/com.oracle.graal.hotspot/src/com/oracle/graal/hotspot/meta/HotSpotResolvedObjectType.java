@@ -278,7 +278,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     @Override
     public boolean hasFinalizableSubclass() {
         assert !isArray();
-        return runtime().getCompilerToVM().hasFinalizableSubclass(metaspaceKlass());
+        return runtime().getCompilerToVM().hasFinalizableSubclass(this);
     }
 
     @Override
@@ -363,7 +363,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     @Override
     public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method) {
         assert method instanceof HotSpotMethod;
-        final long resolvedMetaspaceMethod = runtime().getCompilerToVM().resolveMethod(metaspaceKlass(), method.getName(), ((HotSpotSignature) method.getSignature()).getMethodDescriptor());
+        final long resolvedMetaspaceMethod = runtime().getCompilerToVM().resolveMethod(this, method.getName(), ((HotSpotSignature) method.getSignature()).getMethodDescriptor());
         if (resolvedMetaspaceMethod == 0) {
             return null;
         }
@@ -736,8 +736,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     public ResolvedJavaMethod getClassInitializer() {
-        System.out.println(this);
-        final long metaspaceMethod = runtime().getCompilerToVM().getClassInitializer(metaspaceKlass());
+        long metaspaceMethod = runtime().getCompilerToVM().getClassInitializer(this);
         if (metaspaceMethod != 0L) {
             return createMethod(metaspaceMethod);
         }

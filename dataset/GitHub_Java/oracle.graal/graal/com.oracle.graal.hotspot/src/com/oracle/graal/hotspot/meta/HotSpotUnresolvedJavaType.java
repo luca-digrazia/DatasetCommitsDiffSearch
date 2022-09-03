@@ -32,28 +32,56 @@ import com.oracle.graal.api.meta.*;
 public class HotSpotUnresolvedJavaType extends HotSpotJavaType {
 
     private static final long serialVersionUID = -2320936267633521314L;
+    public final String simpleName;
+    public final int dimensions;
 
-    public HotSpotUnresolvedJavaType(String name) {
+    public HotSpotUnresolvedJavaType(String name, String simpleName, int dimensions) {
         super(name);
+        assert dimensions >= 0;
+        this.simpleName = simpleName;
+        this.dimensions = dimensions;
     }
 
     /**
      * Creates an unresolved type for a valid {@link JavaType#getName() type name}.
      */
     public static HotSpotUnresolvedJavaType create(String name) {
-        assert name.charAt(name.length() - 1) == ';' : name;
-        return new HotSpotUnresolvedJavaType(name);
+        int dims = 0;
+        int startIndex = 0;
+        while (name.charAt(startIndex) == '[') {
+            startIndex++;
+            dims++;
+        }
+
+        // Decode name if necessary.
+        if (name.charAt(name.length() - 1) == ';') {
+            assert name.charAt(startIndex) == 'L';
+            return new HotSpotUnresolvedJavaType(name, name.substring(startIndex + 1, name.length() - 1), dims);
+        } else {
+            return new HotSpotUnresolvedJavaType(HotSpotUnresolvedJavaType.getFullName(name, dims), name, dims);
+        }
+    }
+
+    public static String getFullName(String name, int dimensions) {
+        StringBuilder str = new StringBuilder(name.length() + dimensions + 2);
+        for (int i = 0; i < dimensions; i++) {
+            str.append('[');
+        }
+        str.append('L').append(name).append(';');
+        return str.toString();
     }
 
     @Override
     public JavaType getComponentType() {
-        assert getName().charAt(0) == '[' : "no array class" + getName();
-        return new HotSpotUnresolvedJavaType(getName().substring(1));
+        assert dimensions > 0 : "no array class" + getName();
+        String name = getFullName(getName(), dimensions - 1);
+        return new HotSpotUnresolvedJavaType(name, simpleName, dimensions - 1);
     }
 
     @Override
     public JavaType getArrayClass() {
-        return new HotSpotUnresolvedJavaType('[' + getName());
+        String name = getFullName(getName(), dimensions + 1);
+        return new HotSpotUnresolvedJavaType(name, simpleName, dimensions + 1);
     }
 
     @Override
@@ -63,7 +91,7 @@ public class HotSpotUnresolvedJavaType extends HotSpotJavaType {
 
     @Override
     public int hashCode() {
-        return getName().hashCode();
+        return simpleName.hashCode();
     }
 
     @Override
@@ -75,12 +103,12 @@ public class HotSpotUnresolvedJavaType extends HotSpotJavaType {
             return false;
         }
         HotSpotUnresolvedJavaType that = (HotSpotUnresolvedJavaType) obj;
-        return this.getName().equals(that.getName());
+        return this.simpleName.equals(that.simpleName) && this.dimensions == that.dimensions;
     }
 
     @Override
     public String toString() {
-        return "HotSpotType<" + getName() + ", unresolved>";
+        return "HotSpotType<" + simpleName + ", unresolved>";
     }
 
     @Override
