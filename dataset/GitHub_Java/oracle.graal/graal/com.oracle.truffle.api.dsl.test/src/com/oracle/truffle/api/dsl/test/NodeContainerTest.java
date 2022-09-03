@@ -96,12 +96,8 @@ public class NodeContainerTest {
         assertSame(context, executeWith(node));
     }
 
-    static class StrBase {
-
-    }
-
     @NodeContainer(BuiltinNode.class)
-    static class Str extends StrBase {
+    static class Str {
 
         private final String internal;
 
