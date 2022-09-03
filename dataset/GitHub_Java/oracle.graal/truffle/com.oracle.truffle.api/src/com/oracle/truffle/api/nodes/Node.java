@@ -58,8 +58,6 @@ public abstract class Node implements NodeInterface, Cloneable {
     /**
      * Marks array fields that are children of this node.
      *
-     * This annotation implies the semantics of @{@link CompilationFinal}(dimensions = 1).
-     *
      * @since 0.8 or earlier
      */
     @Retention(RetentionPolicy.RUNTIME)
@@ -69,8 +67,6 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     /**
      * Marks fields that represent child nodes of this node.
-     *
-     * This annotation implies the semantics of {@link CompilationFinal}.
      *
      * @since 0.8 or earlier
      */
@@ -433,7 +429,11 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     /** @since 0.8 or earlier */
     public final void atomic(Runnable closure) {
-        synchronized (getAtomicLock()) {
+        RootNode rootNode = getRootNode();
+        // Major Assumption: parent is never null after a node got adopted
+        // it is never reset to null, and thus, rootNode is always reachable.
+        // GIL: used for nodes that are replace in ASTs that are not yet adopted
+        synchronized (rootNode != null ? rootNode : GIL) {
             assert enterAtomic();
             try {
                 closure.run();
@@ -446,7 +446,11 @@ public abstract class Node implements NodeInterface, Cloneable {
     /** @since 0.8 or earlier */
     public final <T> T atomic(Callable<T> closure) {
         try {
-            synchronized (getAtomicLock()) {
+            RootNode rootNode = getRootNode();
+            // Major Assumption: parent is never null after a node got adopted
+            // it is never reset to null, and thus, rootNode is always reachable.
+            // GIL: used for nodes that are replace in ASTs that are not yet adopted
+            synchronized (rootNode != null ? rootNode : GIL) {
                 assert enterAtomic();
                 try {
                     return closure.call();
@@ -459,21 +463,6 @@ public abstract class Node implements NodeInterface, Cloneable {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    /**
-     * Returns a lock object that can be used to synchronize modifications to the AST. Only use it
-     * as part of a synchronized block, do not call {@link Object#wait()} or {@link Object#notify()}
-     * manually.
-     *
-     * @since 0.17
-     */
-    protected final Object getAtomicLock() {
-        // Major Assumption: parent is never null after a node got adopted
-        // it is never reset to null, and thus, rootNode is always reachable.
-        // GIL: used for nodes that are replace in ASTs that are not yet adopted
-        RootNode root = getRootNode();
-        return root == null ? GIL : root;
     }
 
     /**
@@ -572,6 +561,12 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     static final class AccessorNodes extends Accessor {
+        void probeAST(RootNode rootNode) {
+            OldInstrumentSupport instrument = oldInstrumentSupport();
+            if (instrument != null) {
+                instrument.probeAST(rootNode);
+            }
+        }
 
         @Override
         protected void onLoopCount(Node source, int iterations) {
