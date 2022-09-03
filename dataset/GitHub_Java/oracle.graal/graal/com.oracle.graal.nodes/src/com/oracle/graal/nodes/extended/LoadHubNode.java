@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,58 +22,103 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaType.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.compiler.common.GraalOptions.GeneratePIC;
+
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.StampProvider;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.type.StampTool;
+
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 /**
- * Loads an object's {@linkplain Representation#ObjectHub hub}, null-checking the object first.
+ * Loads an object's hub. The object is not null-checked by this operation.
  */
-public final class LoadHubNode extends FloatingNode implements Lowerable, Canonicalizable {
-    @Input private ValueNode object;
+@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+public final class LoadHubNode extends FloatingNode implements Lowerable, Canonicalizable, Virtualizable {
 
-    public ValueNode object() {
-        return object;
+    public static final NodeClass<LoadHubNode> TYPE = NodeClass.create(LoadHubNode.class);
+    @Input ValueNode value;
+
+    public ValueNode getValue() {
+        return value;
     }
 
-    public LoadHubNode(ValueNode object) {
-        super(StampFactory.objectNonNull());
-        this.object = object;
+    private static Stamp hubStamp(StampProvider stampProvider, ValueNode value) {
+        assert value.stamp() instanceof ObjectStamp;
+        return stampProvider.createHubStamp(((ObjectStamp) value.stamp()));
+    }
+
+    public static ValueNode create(ValueNode value, StampProvider stampProvider, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+        Stamp stamp = hubStamp(stampProvider, value);
+        ValueNode synonym = findSynonym(value, stamp, metaAccess, constantReflection);
+        if (synonym != null) {
+            return synonym;
+        }
+        return new LoadHubNode(stamp, value);
+    }
+
+    public LoadHubNode(@InjectedNodeParameter StampProvider stampProvider, ValueNode value) {
+        this(hubStamp(stampProvider, value), value);
+    }
+
+    public LoadHubNode(Stamp stamp, ValueNode value) {
+        super(TYPE, stamp);
+        this.value = value;
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+        tool.getLowerer().lower(this, tool);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        MetaAccessProvider runtime = tool.runtime();
-        if (runtime != null) {
-            ObjectStamp stamp = object.objectStamp();
-
-            ResolvedJavaType exactType;
-            if (stamp.isExactType()) {
-                exactType = stamp.type();
-            } else if (stamp.type() != null && tool.assumptions() != null) {
-                exactType = stamp.type().uniqueConcreteSubtype();
-                if (exactType != null) {
-                    tool.assumptions().recordConcreteSubtype(stamp.type(), exactType);
-                }
-            } else {
-                exactType = null;
-            }
-
-            if (exactType != null) {
-                return ConstantNode.forConstant(exactType.getEncoding(Representation.ObjectHub), runtime, graph());
+        if (!GeneratePIC.getValue()) {
+            MetaAccessProvider metaAccess = tool.getMetaAccess();
+            ValueNode curValue = getValue();
+            ValueNode newNode = findSynonym(curValue, stamp(), metaAccess, tool.getConstantReflection());
+            if (newNode != null) {
+                return newNode;
             }
         }
         return this;
     }
 
-    @NodeIntrinsic
-    public static native Object loadHub(Object object);
+    public static ValueNode findSynonym(ValueNode curValue, Stamp stamp, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+        if (!GeneratePIC.getValue()) {
+            TypeReference type = StampTool.typeReferenceOrNull(curValue);
+            if (type != null && type.isExact()) {
+                return ConstantNode.forConstant(stamp, constantReflection.asObjectHub(type.getType()), metaAccess);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        if (!GeneratePIC.getValue()) {
+            ValueNode alias = tool.getAlias(getValue());
+            TypeReference type = StampTool.typeReferenceOrNull(alias);
+            if (type != null && type.isExact()) {
+                tool.replaceWithValue(ConstantNode.forConstant(stamp(), tool.getConstantReflectionProvider().asObjectHub(type.getType()), tool.getMetaAccessProvider(), graph()));
+            }
+        }
+    }
 }
