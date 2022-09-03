@@ -63,12 +63,12 @@ public abstract class DefaultNodeCostProvider implements NodeCostProvider {
 
     @Override
     public final int getEstimatedCodeSize(Node n) {
-        return size(n).estimatedCodeSize;
+        return NodeSize.getEstimatedCodeSize(() -> size(n));
     }
 
     @Override
     public final int getEstimatedCPUCycles(Node n) {
-        return cycles(n).estimatedCPUCycles;
+        return NodeCycles.getEstimatedCPUCycles(() -> cycles(n));
     }
 
     @Override
