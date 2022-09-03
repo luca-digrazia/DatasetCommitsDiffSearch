@@ -23,15 +23,16 @@
 package com.oracle.graal.lir.sparc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.CPUFeature.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.RCondition.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.sparc.SPARC.*;
-import static com.oracle.graal.sparc.SPARC.CPUFeature.*;
 
 import java.lang.reflect.*;
 
@@ -39,16 +40,11 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
-import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldub;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Lduh;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Lduw;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Cmp;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Mov;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.sparc.SPARC.CPUFeature;
 
 /**
  * Emits code which compares two arrays of the same length.
@@ -102,25 +98,25 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         Label done = new Label();
 
         // Load array base addresses.
-        masm.add(asObjectReg(array1Value), arrayBaseOffset, array1);
-        masm.add(asObjectReg(array2Value), arrayBaseOffset, array2);
+        new Add(asObjectReg(array1Value), arrayBaseOffset, array1).emit(masm);
+        new Add(asObjectReg(array2Value), arrayBaseOffset, array2).emit(masm);
 
         // Get array length in bytes.
-        masm.mulx(asIntReg(lengthValue), arrayIndexScale, length);
-        masm.mov(length, result); // copy
+        new Mulx(asIntReg(lengthValue), arrayIndexScale, length).emit(masm);
+        new Mov(length, result).emit(masm); // copy
 
         emit8ByteCompare(masm, result, array1, array2, length, trueLabel, falseLabel);
         emitTailCompares(masm, result, array1, array2, trueLabel, falseLabel);
 
         // Return true
         masm.bind(trueLabel);
-        masm.mov(1, result);
+        new Mov(1, result).emit(masm);
         masm.bicc(Always, ANNUL, done);
         masm.nop();
 
         // Return false
         masm.bind(falseLabel);
-        masm.mov(g0, result);
+        new Mov(g0, result).emit(masm);
 
         // That's it
         masm.bind(done);
@@ -144,14 +140,14 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
 
         boolean hasCBcond = masm.hasFeature(CPUFeature.CBCOND);
 
-        masm.and(result, VECTOR_SIZE - 1, result); // tail count (in bytes)
-        masm.andcc(length, ~(VECTOR_SIZE - 1), length);  // vector count (in bytes)
+        new And(result, VECTOR_SIZE - 1, result).emit(masm); // tail count (in bytes)
+        new Andcc(length, ~(VECTOR_SIZE - 1), length).emit(masm);  // vector count (in bytes)
         masm.bpcc(ConditionFlag.Equal, NOT_ANNUL, compareTail, CC.Xcc, PREDICT_NOT_TAKEN);
 
-        masm.sub(length, VECTOR_SIZE, length); // Delay slot
-        masm.add(array1, length, array1);
-        masm.add(array2, length, array2);
-        masm.sub(g0, length, length);
+        new Sub(length, VECTOR_SIZE, length).emit(masm); // Delay slot
+        new Add(array1, length, array1).emit(masm);
+        new Add(array2, length, array2).emit(masm);
+        new Sub(g0, length, length).emit(masm);
 
         // Compare the last element first
         new Ldx(new SPARCAddress(array1, 0), tempReg1).emit(masm);
@@ -162,7 +158,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
             masm.cbcondx(Equal, length, 0, compareTailCorrectVectorEnd);
             masm.nop(); // for optimal performance (see manual)
         } else {
-            masm.cmp(tempReg1, tempReg2);
+            new Cmp(tempReg1, tempReg2).emit(masm);
             masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
             masm.nop();
             masm.bpr(Rc_z, NOT_ANNUL, compareTailCorrectVectorEnd, PREDICT_NOT_TAKEN, length);
@@ -173,10 +169,10 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         new Ldx(new SPARCAddress(array1, length), tempReg1).emit(masm);
         masm.bind(loop);
         new Ldx(new SPARCAddress(array2, length), tempReg2).emit(masm);
-        masm.cmp(tempReg1, tempReg2);
+        new Cmp(tempReg1, tempReg2).emit(masm);
         masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
         // Delay slot, not annul, add for next iteration
-        masm.addcc(length, VECTOR_SIZE, length);
+        new Addcc(length, VECTOR_SIZE, length).emit(masm);
         // Annul, to prevent access past the array
         masm.bpcc(NotEqual, ANNUL, loop, Xcc, PREDICT_TAKEN);
         new Ldx(new SPARCAddress(array1, length), tempReg1).emit(masm); // Load in delay slot
@@ -191,8 +187,8 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
 
         masm.bind(compareTailCorrectVectorEnd);
         // Correct the array pointers
-        masm.add(array1, VECTOR_SIZE, array1);
-        masm.add(array2, VECTOR_SIZE, array2);
+        new Add(array1, VECTOR_SIZE, array1).emit(masm);
+        new Add(array2, VECTOR_SIZE, array2).emit(masm);
 
         masm.bind(compareTail);
     }
@@ -213,7 +209,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
             if (hasCBcond) {
                 masm.cbcondx(Less, result, 4, compare2Bytes);
             } else {
-                masm.cmp(result, 4);
+                new Cmp(result, 4).emit(masm);
                 masm.bpcc(Less, NOT_ANNUL, compare2Bytes, Xcc, PREDICT_NOT_TAKEN);
                 masm.nop();
             }
@@ -224,16 +220,16 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
             if (hasCBcond) {
                 masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
             } else {
-                masm.cmp(tempReg1, tempReg2);
+                new Cmp(tempReg1, tempReg2).emit(masm);
                 masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
                 masm.nop();
             }
 
             if (kind.getByteCount() <= 2) {
                 // Move array pointers forward.
-                masm.add(array1, 4, array1);
-                masm.add(array2, 4, array2);
-                masm.sub(result, 4, result);
+                new Add(array1, 4, array1).emit(masm);
+                new Add(array2, 4, array2).emit(masm);
+                new Sub(result, 4, result).emit(masm);
 
                 // Compare trailing 2 bytes, if any.
                 masm.bind(compare2Bytes);
@@ -241,7 +237,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                 if (hasCBcond) {
                     masm.cbcondx(Less, result, 2, compare1Byte);
                 } else {
-                    masm.cmp(result, 2);
+                    new Cmp(result, 2).emit(masm);
                     masm.bpcc(Less, NOT_ANNUL, compare1Byte, Xcc, PREDICT_TAKEN);
                     masm.nop();
                 }
@@ -252,7 +248,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                 if (hasCBcond) {
                     masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
                 } else {
-                    masm.cmp(tempReg1, tempReg2);
+                    new Cmp(tempReg1, tempReg2).emit(masm);
                     masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_TAKEN);
                     masm.nop();
                 }
@@ -260,16 +256,16 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                 // The one-byte tail compare is only required for boolean and byte arrays.
                 if (kind.getByteCount() <= 1) {
                     // Move array pointers forward before we compare the last trailing byte.
-                    masm.add(array1, 2, array1);
-                    masm.add(array2, 2, array2);
-                    masm.sub(result, 2, result);
+                    new Add(array1, 2, array1).emit(masm);
+                    new Add(array2, 2, array2).emit(masm);
+                    new Sub(result, 2, result).emit(masm);
 
                     // Compare trailing byte, if any.
                     masm.bind(compare1Byte);
                     if (hasCBcond) {
                         masm.cbcondx(NotEqual, result, 1, trueLabel);
                     } else {
-                        masm.cmp(result, 1);
+                        new Cmp(result, 1).emit(masm);
                         masm.bpcc(NotEqual, NOT_ANNUL, trueLabel, Xcc, PREDICT_TAKEN);
                         masm.nop();
                     }
@@ -278,7 +274,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                     if (hasCBcond) {
                         masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
                     } else {
-                        masm.cmp(tempReg1, tempReg2);
+                        new Cmp(tempReg1, tempReg2).emit(masm);
                         masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_TAKEN);
                         masm.nop();
                     }

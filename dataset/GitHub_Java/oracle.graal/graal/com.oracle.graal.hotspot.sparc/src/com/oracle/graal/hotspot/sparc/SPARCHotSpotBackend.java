@@ -39,7 +39,10 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Save;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Stx;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Cmp;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.RestoreWindow;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.hotspot.*;
@@ -148,12 +151,12 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
             }
 
             if (SPARCAssembler.isSimm13(stackpoinerChange)) {
-                masm.save(sp, stackpoinerChange, sp);
+                new Save(sp, stackpoinerChange, sp).emit(masm);
             } else {
                 try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                     Register scratch = sc.getRegister();
                     new Setx(stackpoinerChange, scratch).emit(masm);
-                    masm.save(sp, scratch, sp);
+                    new Save(sp, scratch, sp).emit(masm);
                 }
             }
 
@@ -169,7 +172,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         @Override
         public void leave(CompilationResultBuilder crb) {
             SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
-            masm.restoreWindow();
+            new RestoreWindow().emit(masm);
         }
     }
 
@@ -235,7 +238,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
                     SPARCAddress src = new SPARCAddress(receiver, config.hubOffset);
 
                     new Ldx(src, scratch).emit(masm);
-                    masm.cmp(scratch, inlineCacheKlass);
+                    new Cmp(scratch, inlineCacheKlass).emit(masm);
                 }
                 masm.bpcc(NotEqual, NOT_ANNUL, unverifiedStub, Xcc, PREDICT_NOT_TAKEN);
                 masm.nop();  // delay slot
