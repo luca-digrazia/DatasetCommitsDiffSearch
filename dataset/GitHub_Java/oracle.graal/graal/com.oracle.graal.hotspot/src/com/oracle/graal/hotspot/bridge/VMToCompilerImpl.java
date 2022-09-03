@@ -128,7 +128,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
         bootstrapRunning = bootstrapEnabled;
 
-        final HotSpotVMConfig config = runtime.getConfig();
+        HotSpotVMConfig config = runtime.getConfig();
         long offset = config.graalMirrorInClassOffset;
         initMirror(typeBoolean, offset);
         initMirror(typeChar, offset);
@@ -180,8 +180,9 @@ public class VMToCompilerImpl implements VMToCompiler {
             }
         }
 
-        final HotSpotProviders hostProviders = runtime.getHostProviders();
-        assert VerifyOptionsPhase.checkOptions(hostProviders.getMetaAccess(), hostProviders.getForeignCalls());
+        final HotSpotProviders providers = runtime.getProviders();
+        final MetaAccessProvider metaAccess = providers.getMetaAccess();
+        assert VerifyOptionsPhase.checkOptions(metaAccess, providers.getForeignCalls());
 
         // Install intrinsics.
         if (Intrinsify.getValue()) {
@@ -189,35 +190,15 @@ public class VMToCompilerImpl implements VMToCompiler {
 
                 @Override
                 public void run() {
-
-                    List<LoweringProvider> initializedLowerers = new ArrayList<>();
-                    List<ForeignCallsProvider> initializedForeignCalls = new ArrayList<>();
-
-                    for (Map.Entry<String, HotSpotBackend> e : runtime.getBackends().entrySet()) {
-                        HotSpotBackend backend = e.getValue();
-                        HotSpotProviders providers = backend.getProviders();
-
-                        HotSpotForeignCallsProvider foreignCalls = providers.getForeignCalls();
-                        if (!initializedForeignCalls.contains(foreignCalls)) {
-                            initializedForeignCalls.add(foreignCalls);
-                            foreignCalls.initialize(providers, config);
-                        }
-                        HotSpotHostLoweringProvider lowerer = (HotSpotHostLoweringProvider) providers.getLowerer();
-                        if (!initializedLowerers.contains(lowerer)) {
-                            initializedLowerers.add(lowerer);
-                            initializeLowerer(providers, lowerer);
-                        }
-                    }
-                }
-
-                private void initializeLowerer(HotSpotProviders providers, HotSpotHostLoweringProvider lowerer) {
                     final Replacements replacements = providers.getReplacements();
-                    ServiceLoader<ReplacementsProvider> sl = ServiceLoader.loadInstalled(ReplacementsProvider.class);
+                    ServiceLoader<ReplacementsProvider> serviceLoader = ServiceLoader.loadInstalled(ReplacementsProvider.class);
                     TargetDescription target = providers.getCodeCache().getTarget();
-                    for (ReplacementsProvider replacementsProvider : sl) {
-                        replacementsProvider.registerReplacements(providers.getMetaAccess(), lowerer, replacements, target);
+                    HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
+                    for (ReplacementsProvider provider : serviceLoader) {
+                        provider.registerReplacements(metaAccess, lowerer, replacements, target);
                     }
-                    lowerer.initialize(providers, config);
+                    providers.getForeignCalls().initialize(providers);
+                    lowerer.initialize();
                     if (BootstrapReplacements.getValue()) {
                         for (ResolvedJavaMethod method : replacements.getAllReplacements()) {
                             replacements.getMacroSubstitution(method);
@@ -345,14 +326,6 @@ public class VMToCompilerImpl implements VMToCompiler {
                     TTY.print(".");
                     TTY.flush();
                 }
-
-                // Are we out of time?
-                final int timedBootstrap = TimedBootstrap.getValue();
-                if (timedBootstrap != -1) {
-                    if ((System.currentTimeMillis() - startTime) > timedBootstrap) {
-                        break;
-                    }
-                }
             }
         } while ((System.currentTimeMillis() - startTime) <= TimedBootstrap.getValue());
 
@@ -377,7 +350,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     private MetricRateInPhase inlinedBytecodesPerSecond;
 
     private void enqueue(Method m) throws Throwable {
-        JavaMethod javaMethod = runtime.getHostProviders().getMetaAccess().lookupJavaMethod(m);
+        JavaMethod javaMethod = runtime.getProviders().getMetaAccess().lookupJavaMethod(m);
         assert !Modifier.isAbstract(((HotSpotResolvedJavaMethod) javaMethod).getModifiers()) && !Modifier.isNative(((HotSpotResolvedJavaMethod) javaMethod).getModifiers()) : javaMethod;
         compileMethod((HotSpotResolvedJavaMethod) javaMethod, StructuredGraph.INVOCATION_ENTRY_BCI, false);
     }
@@ -584,8 +557,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
                 final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
                 int id = compileTaskIds.incrementAndGet();
-                HotSpotBackend backend = runtime.getHostBackend();
-                CompilationTask task = CompilationTask.create(backend, createPhasePlan(backend.getProviders(), optimisticOpts, osrCompilation), optimisticOpts, method, entryBCI, id);
+                CompilationTask task = CompilationTask.create(runtime, createPhasePlan(optimisticOpts, osrCompilation), optimisticOpts, method, entryBCI, id);
 
                 if (blocking) {
                     task.runCompilation();
@@ -718,10 +690,10 @@ public class VMToCompilerImpl implements VMToCompiler {
         return new LocalImpl(name, type, holder, bciStart, bciEnd, slot);
     }
 
-    public PhasePlan createPhasePlan(HotSpotProviders providers, OptimisticOptimizations optimisticOpts, boolean onStackReplacement) {
+    public PhasePlan createPhasePlan(OptimisticOptimizations optimisticOpts, boolean onStackReplacement) {
         PhasePlan phasePlan = new PhasePlan();
-        MetaAccessProvider metaAccess = providers.getMetaAccess();
-        ForeignCallsProvider foreignCalls = providers.getForeignCalls();
+        MetaAccessProvider metaAccess = runtime.getProviders().getMetaAccess();
+        ForeignCallsProvider foreignCalls = runtime.getProviders().getForeignCalls();
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(metaAccess, foreignCalls, GraphBuilderConfiguration.getDefault(), optimisticOpts));
         if (onStackReplacement) {
             phasePlan.addPhase(PhasePosition.AFTER_PARSING, new OnStackReplacementPhase());
