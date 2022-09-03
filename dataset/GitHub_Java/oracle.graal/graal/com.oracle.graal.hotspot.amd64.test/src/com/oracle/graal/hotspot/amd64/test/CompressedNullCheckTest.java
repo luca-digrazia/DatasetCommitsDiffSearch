@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,15 +24,11 @@ package com.oracle.graal.hotspot.amd64.test;
 
 import org.junit.*;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.options.*;
-import com.oracle.graal.options.OptionValue.OverrideScope;
 
 /**
  * Ensures that frame omission works in cases where it is expected to.
@@ -40,60 +36,17 @@ import com.oracle.graal.options.OptionValue.OverrideScope;
 public class CompressedNullCheckTest extends GraalCompilerTest {
 
     private static final class Container {
-        Integer i;
+        Integer i = new Integer(1);
     }
 
     public static void testSnippet(Container c) {
         c.i.intValue();
     }
 
-    private void testImplicit(Integer i) {
+    @Test
+    public void test() {
         Assume.assumeTrue(HotSpotGraalRuntime.runtime().getConfig().useCompressedOops);
-
-        Container c = new Container();
-        c.i = i;
-
-        try (OverrideScope s = OptionValue.override(GraalOptions.OptImplicitNullChecks, true)) {
-            ResolvedJavaMethod method = getResolvedJavaMethod("testSnippet");
-            Result expect = executeExpected(method, null, c);
-
-            // make sure we don't get a profile that removes the implicit null check
-            method.reprofile();
-
-            Result actual = executeActual(method, null, c);
-            assertEquals(expect, actual);
-        }
-    }
-
-    private void testExplicit(Integer i) {
-        Assume.assumeTrue(HotSpotGraalRuntime.runtime().getConfig().useCompressedOops);
-
-        Container c = new Container();
-        c.i = i;
-
-        try (OverrideScope s = OptionValue.override(GraalOptions.OptImplicitNullChecks, false)) {
-            test("testSnippet", c);
-        }
-    }
-
-    @Test
-    public void implicit() {
-        testImplicit(new Integer(1));
-    }
-
-    @Test
-    public void implicitNull() {
-        testImplicit(null);
-    }
-
-    @Test
-    public void explicit() {
-        testExplicit(new Integer(1));
-    }
-
-    @Test
-    public void explicitNull() {
-        testExplicit(null);
+        test("testSnippet", new Container());
     }
 
     @Override

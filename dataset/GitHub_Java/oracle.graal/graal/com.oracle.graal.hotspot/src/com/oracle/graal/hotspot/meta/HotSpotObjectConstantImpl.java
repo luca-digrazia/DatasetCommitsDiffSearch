@@ -22,21 +22,41 @@
  */
 package com.oracle.graal.hotspot.meta;
 
+import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectTypeImpl.*;
+
+import java.lang.invoke.*;
+
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.*;
+
+import edu.umd.cs.findbugs.annotations.*;
 
 /**
  * Represents a constant non-{@code null} object reference, within the compiler and across the
  * compiler/runtime interface.
  */
-public final class HotSpotObjectConstantImpl extends JavaConstant implements HotSpotObjectConstant {
+public final class HotSpotObjectConstantImpl extends AbstractValue implements HotSpotObjectConstant, HotSpotProxified {
 
     private static final long serialVersionUID = 3592151693708093496L;
 
-    public static JavaConstant forObject(Object object) {
+    static JavaConstant forObject(Object object) {
+        return forObject(object, false);
+    }
+
+    static JavaConstant forObject(Object object, boolean compressed) {
         if (object == null) {
-            return JavaConstant.NULL_OBJECT;
+            return compressed ? HotSpotCompressedNullConstant.COMPRESSED_NULL : JavaConstant.NULL_POINTER;
         } else {
-            return new HotSpotObjectConstantImpl(object, false);
+            return new HotSpotObjectConstantImpl(object, compressed);
+        }
+    }
+
+    static JavaConstant forStableArray(Object object, int stableDimension, boolean isDefaultStable) {
+        if (object == null) {
+            return JavaConstant.NULL_POINTER;
+        } else {
+            assert object.getClass().isArray();
+            return new HotSpotObjectConstantImpl(object, false, stableDimension, isDefaultStable);
         }
     }
 
@@ -48,15 +68,7 @@ public final class HotSpotObjectConstantImpl extends JavaConstant implements Hot
         }
     }
 
-    public static Object asObject(Constant constant) {
-        if (JavaConstant.isNull(constant)) {
-            return null;
-        } else {
-            return ((HotSpotObjectConstantImpl) constant).object;
-        }
-    }
-
-    public static Object asBoxedValue(Constant constant) {
+    static Object asBoxedValue(Constant constant) {
         if (JavaConstant.isNull(constant)) {
             return null;
         } else if (constant instanceof HotSpotObjectConstantImpl) {
@@ -66,32 +78,132 @@ public final class HotSpotObjectConstantImpl extends JavaConstant implements Hot
         }
     }
 
-    public static boolean isCompressed(Constant constant) {
-        if (JavaConstant.isNull(constant)) {
-            return HotSpotCompressedNullConstant.NULL_OBJECT.equals(constant);
-        } else {
-            return ((HotSpotObjectConstantImpl) constant).compressed;
-        }
-    }
-
     private final Object object;
     private final boolean compressed;
+    private final byte stableDimension;
+    private final boolean isDefaultStable;
 
-    private HotSpotObjectConstantImpl(Object object, boolean compressed) {
+    private HotSpotObjectConstantImpl(Object object, boolean compressed, int stableDimension, boolean isDefaultStable) {
         super(LIRKind.reference(compressed ? Kind.Int : Kind.Object));
         this.object = object;
         this.compressed = compressed;
+        this.stableDimension = (byte) stableDimension;
+        this.isDefaultStable = isDefaultStable;
         assert object != null;
+        assert stableDimension == 0 || (object != null && object.getClass().isArray());
+        assert stableDimension >= 0 && stableDimension <= 255;
+        assert !isDefaultStable || stableDimension > 0;
+    }
+
+    private HotSpotObjectConstantImpl(Object object, boolean compressed) {
+        this(object, compressed, 0, false);
+    }
+
+    /**
+     * Package-private accessor for the object represented by this constant.
+     */
+    Object object() {
+        return object;
+    }
+
+    /**
+     * Determines if the object represented by this constant is {@link Object#equals(Object) equal}
+     * to a given object.
+     */
+    public boolean isEqualTo(Object obj) {
+        return object.equals(obj);
+    }
+
+    /**
+     * Gets the class of the object represented by this constant.
+     */
+    public Class<?> getObjectClass() {
+        return object.getClass();
+    }
+
+    public boolean isCompressed() {
+        return compressed;
     }
 
     public JavaConstant compress() {
         assert !compressed;
-        return new HotSpotObjectConstantImpl(object, true);
+        return new HotSpotObjectConstantImpl(object, true, stableDimension, isDefaultStable);
     }
 
     public JavaConstant uncompress() {
         assert compressed;
-        return new HotSpotObjectConstantImpl(object, false);
+        return new HotSpotObjectConstantImpl(object, false, stableDimension, isDefaultStable);
+    }
+
+    public HotSpotResolvedObjectType getType() {
+        return fromObjectClass(object.getClass());
+    }
+
+    public JavaConstant getClassLoader() {
+        if (object instanceof Class) {
+            /*
+             * This is an intrinsic for getClassLoader0, which occurs after any security checks. We
+             * can't call that directly so just call getClassLoader.
+             */
+            return HotSpotObjectConstantImpl.forObject(((Class<?>) object).getClassLoader());
+        }
+        return null;
+    }
+
+    public int getIdentityHashCode() {
+        return System.identityHashCode(object);
+    }
+
+    public JavaConstant getComponentType() {
+        if (object instanceof Class) {
+            return HotSpotObjectConstantImpl.forObject(((Class<?>) object).getComponentType());
+        }
+        return null;
+    }
+
+    public JavaConstant getSuperclass() {
+        if (object instanceof Class) {
+            return HotSpotObjectConstantImpl.forObject(((Class<?>) object).getSuperclass());
+        }
+        return null;
+    }
+
+    public JavaConstant getCallSiteTarget(Assumptions assumptions) {
+        if (object instanceof CallSite) {
+            CallSite callSite = (CallSite) object;
+            MethodHandle target = callSite.getTarget();
+            if (!(callSite instanceof ConstantCallSite)) {
+                if (assumptions == null) {
+                    return null;
+                }
+                assumptions.record(new Assumptions.CallSiteTargetValue(callSite, target));
+            }
+            return HotSpotObjectConstantImpl.forObject(target);
+        }
+        return null;
+    }
+
+    @SuppressFBWarnings(value = "ES_COMPARING_STRINGS_WITH_EQ", justification = "reference equality is what we want")
+    public boolean isInternedString() {
+        if (object instanceof String) {
+            String s = (String) object;
+            return s.intern() == s;
+        }
+        return false;
+    }
+
+    public <T> T asObject(Class<T> type) {
+        if (type.isInstance(object)) {
+            return type.cast(object);
+        }
+        return null;
+    }
+
+    public Object asObject(ResolvedJavaType type) {
+        if (type.isInstance(this)) {
+            return object;
+        }
+        return null;
     }
 
     @Override
@@ -141,7 +253,13 @@ public final class HotSpotObjectConstantImpl extends JavaConstant implements Hot
 
     @Override
     public boolean equals(Object o) {
-        return o == this || (o instanceof HotSpotObjectConstantImpl && super.equals(o) && object == ((HotSpotObjectConstantImpl) o).object);
+        if (o == this) {
+            return true;
+        } else if (o instanceof HotSpotObjectConstantImpl) {
+            HotSpotObjectConstantImpl other = (HotSpotObjectConstantImpl) o;
+            return super.equals(o) && object == other.object && compressed == other.compressed && stableDimension == other.stableDimension && isDefaultStable == other.isDefaultStable;
+        }
+        return false;
     }
 
     @Override
@@ -156,5 +274,20 @@ public final class HotSpotObjectConstantImpl extends JavaConstant implements Hot
     @Override
     public String toString() {
         return (compressed ? "NarrowOop" : getKind().getJavaName()) + "[" + Kind.Object.format(object) + "]";
+    }
+
+    /**
+     * Number of stable dimensions if this constant is a stable array.
+     */
+    public int getStableDimension() {
+        return stableDimension & 0xff;
+    }
+
+    /**
+     * Returns {@code true} if this is a stable array constant and its elements should be considered
+     * as stable regardless of whether they are default values.
+     */
+    public boolean isDefaultStable() {
+        return isDefaultStable;
     }
 }

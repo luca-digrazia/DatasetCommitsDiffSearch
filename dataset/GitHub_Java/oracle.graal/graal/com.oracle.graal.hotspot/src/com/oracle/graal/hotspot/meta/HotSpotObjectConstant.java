@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,139 +22,92 @@
  */
 package com.oracle.graal.hotspot.meta;
 
+import java.lang.invoke.*;
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
 
 /**
  * Represents a constant non-{@code null} object reference, within the compiler and across the
  * compiler/runtime interface.
  */
-public final class HotSpotObjectConstant extends Constant implements HotSpotConstant {
+public interface HotSpotObjectConstant extends JavaConstant, HotSpotConstant, VMConstant {
 
-    private static final long serialVersionUID = 3592151693708093496L;
+    JavaConstant compress();
 
-    public static Constant forObject(Object object) {
-        if (object == null) {
-            return Constant.NULL_OBJECT;
-        } else {
-            return new HotSpotObjectConstant(object, false);
-        }
-    }
+    JavaConstant uncompress();
 
-    public static Constant forBoxedValue(Kind kind, Object value) {
-        if (kind == Kind.Object) {
-            return HotSpotObjectConstant.forObject(value);
-        } else {
-            return Constant.forBoxedPrimitive(value);
-        }
-    }
+    /**
+     * Gets the resolved Java type of the object represented by this constant.
+     */
+    HotSpotResolvedObjectType getType();
 
-    public static Object asObject(Constant constant) {
-        if (constant.isNull()) {
-            return null;
-        } else {
-            return ((HotSpotObjectConstant) constant).object;
-        }
-    }
+    /**
+     * Gets the result of {@link Class#getClassLoader()} for the {@link Class} object represented by
+     * this constant.
+     *
+     * @return {@code null} if this constant does not represent a {@link Class} object
+     */
+    JavaConstant getClassLoader();
 
-    public static Object asBoxedValue(Constant constant) {
-        if (constant.isNull()) {
-            return null;
-        } else if (constant instanceof HotSpotObjectConstant) {
-            return ((HotSpotObjectConstant) constant).object;
-        } else {
-            return constant.asBoxedPrimitive();
-        }
-    }
+    /**
+     * Gets the {@linkplain System#identityHashCode(Object) identity} has code for the object
+     * represented by this constant.
+     */
+    int getIdentityHashCode();
 
-    public static boolean isCompressed(Constant constant) {
-        if (constant.isNull()) {
-            return HotSpotCompressedNullConstant.NULL_OBJECT.equals(constant);
-        } else {
-            return ((HotSpotObjectConstant) constant).compressed;
-        }
-    }
+    /**
+     * Gets the result of {@link Class#getComponentType()} for the {@link Class} object represented
+     * by this constant.
+     *
+     * @return {@code null} if this constant does not represent a {@link Class} object
+     */
+    JavaConstant getComponentType();
 
-    private final Object object;
-    private final boolean compressed;
+    /**
+     * Gets the result of {@link Class#getSuperclass()} for the {@link Class} object represented by
+     * this constant.
+     *
+     * @return {@code null} if this constant does not represent a {@link Class} object
+     */
+    JavaConstant getSuperclass();
 
-    private HotSpotObjectConstant(Object object, boolean compressed) {
-        super(LIRKind.reference(compressed ? Kind.Int : Kind.Object));
-        this.object = object;
-        this.compressed = compressed;
-        assert object != null;
-    }
+    /**
+     * Gets the result of {@link CallSite#getTarget()} for the {@link CallSite} object represented
+     * by this constant.
+     *
+     * @param assumptions used to register an assumption that the {@link CallSite}'s target does not
+     *            change
+     * @return {@code null} if this constant does not represent a {@link CallSite} object
+     */
+    JavaConstant getCallSiteTarget(Assumptions assumptions);
 
-    public Constant compress() {
-        assert !compressed;
-        return new HotSpotObjectConstant(object, true);
-    }
+    /**
+     * Determines if this constant represents an {@linkplain String#intern() interned} string.
+     */
+    boolean isInternedString();
 
-    public Constant uncompress() {
-        assert compressed;
-        return new HotSpotObjectConstant(object, false);
-    }
+    /**
+     * Gets the object represented by this constant represents if it is of a given type.
+     *
+     * @param type the expected type of the object represented by this constant. If the object is
+     *            required to be of this type, then wrap the call to this method in
+     *            {@link Objects#requireNonNull(Object)}.
+     * @return the object value represented by this constant if it is an
+     *         {@link ResolvedJavaType#isInstance(JavaConstant) instance of} {@code type} otherwise
+     *         {@code null}
+     */
+    <T> T asObject(Class<T> type);
 
-    @Override
-    public boolean isNull() {
-        return false;
-    }
-
-    @Override
-    public boolean isDefaultForKind() {
-        return false;
-    }
-
-    @Override
-    public Object asBoxedPrimitive() {
-        throw new IllegalArgumentException();
-    }
-
-    @Override
-    public int asInt() {
-        throw new IllegalArgumentException();
-    }
-
-    @Override
-    public boolean asBoolean() {
-        throw new IllegalArgumentException();
-    }
-
-    @Override
-    public long asLong() {
-        throw new IllegalArgumentException();
-    }
-
-    @Override
-    public float asFloat() {
-        throw new IllegalArgumentException();
-    }
-
-    @Override
-    public double asDouble() {
-        throw new IllegalArgumentException();
-    }
-
-    @Override
-    public int hashCode() {
-        return System.identityHashCode(object);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        return o == this || (o instanceof HotSpotObjectConstant && super.equals(o) && object == ((HotSpotObjectConstant) o).object);
-    }
-
-    @Override
-    public String toValueString() {
-        if (object instanceof String) {
-            return (String) object;
-        } else {
-            return Kind.Object.format(object);
-        }
-    }
-
-    @Override
-    public String toString() {
-        return (compressed ? "NarrowOop" : getKind().getJavaName()) + "[" + Kind.Object.format(object) + "]";
-    }
+    /**
+     * Gets the object represented by this constant represents if it is of a given type.
+     *
+     * @param type the expected type of the object represented by this constant. If the object is
+     *            required to be of this type, then wrap the call to this method in
+     *            {@link Objects#requireNonNull(Object)}.
+     * @return the object value represented by this constant if it is an
+     *         {@link ResolvedJavaType#isInstance(JavaConstant) instance of} {@code type} otherwise
+     *         {@code null}
+     */
+    Object asObject(ResolvedJavaType type);
 }
