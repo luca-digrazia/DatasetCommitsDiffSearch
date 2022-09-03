@@ -74,7 +74,6 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
         this.targetMethod = targetMethod;
         this.returnType = returnType;
         this.invokeKind = invokeKind;
-        assert bci >= 0;
     }
 
     public int getBci() {
@@ -109,7 +108,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
      * lowered}.
      */
     protected StructuredGraph getLoweredSubstitutionGraph(LoweringTool tool) {
-        StructuredGraph methodSubstitution = tool.getReplacements().getSubstitution(getTargetMethod(), true, bci);
+        StructuredGraph methodSubstitution = tool.getReplacements().getSubstitution(getTargetMethod(), true);
         if (methodSubstitution != null) {
             methodSubstitution = methodSubstitution.copy();
             if (stateAfter() == null || stateAfter().bci == BytecodeFrame.AFTER_BCI) {
