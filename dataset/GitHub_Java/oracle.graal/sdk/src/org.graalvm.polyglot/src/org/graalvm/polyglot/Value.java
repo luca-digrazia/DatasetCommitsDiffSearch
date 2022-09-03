@@ -68,7 +68,9 @@ public final class Value {
     }
 
     /**
+     * Returns the array element at a given index as polyglot value.
      *
+     * @param index
      *
      * @since 1.0
      */
@@ -76,67 +78,32 @@ public final class Value {
         return impl.getArrayElement(receiver, index);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public void setArrayElement(long index, Object value) {
         impl.setArrayElement(receiver, index, value);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public long getArraySize() {
         return impl.getArraySize(receiver);
     }
 
     // dynamic object
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean hasMembers() {
         return impl.hasMembers(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public Value getMember(String key) {
         return impl.getMember(receiver, key);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean hasMember(String key) {
         return impl.hasMember(receiver, key);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public Set<String> getMemberKeys() {
         return impl.getMemberKeys(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public void putMember(String key, Object member) {
         impl.putMember(receiver, key, member);
     }
@@ -154,191 +121,102 @@ public final class Value {
     }
 
     /**
+     * Executes the value and returns its result.
      *
-     *
-     * @since 1.0
+     * @param arguments
+     * @return
      */
     public Value execute(Object... arguments) {
         return impl.execute(receiver, arguments);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean isString() {
         return impl.isString(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public String asString() {
         return impl.asString(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean fitsInInt() {
         return impl.fitsInInt(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public int asInt() {
         return impl.asInt(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean isBoolean() {
         return impl.isBoolean(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean asBoolean() {
         return impl.asBoolean(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean isNumber() {
         return impl.isNumber(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean fitsInLong() {
         return impl.fitsInLong(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public long asLong() {
         return impl.asLong(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean fitsInDouble() {
         return impl.fitsInDouble(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public double asDouble() {
         return impl.asDouble(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean fitsInFloat() {
         return impl.fitsInFloat(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public float asFloat() {
         return impl.asFloat(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean fitsInByte() {
         return impl.fitsInByte(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public byte asByte() {
         return impl.asByte(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean isNull() {
         return impl.isNull(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public boolean isNativePointer() {
         return impl.isNativePointer(receiver);
     }
 
-    /**
-     *
-     *
-     * @since 1.0
-     */
     public long asNativePointer() {
         return impl.asNativePointer(receiver);
     }
 
     /**
-     * Returns <code>true</code> if the value originated form the host language Java. In such a case
-     * the value can be accessed using {@link #asHostObject()}.
+     * Returns <code>true</code> if the value is a Java object.
      *
-     * @since 1.0
+     * @param clazz
+     * @return
      */
     public boolean isHostObject() {
         return impl.isHostObject(receiver);
     }
 
     /**
-     * Returns the original Java host language object.
+     * Return as coerced original Java type.
      *
-     * @throws UnsupportedOperationException if {@link #isHostObject()} is <code>false</code>.
-     * @since 1.0
+     * @param clazz
+     * @return
      */
     @SuppressWarnings("unchecked")
     public <T> T asHostObject() {
@@ -347,8 +225,6 @@ public final class Value {
 
     /**
      * Language specific string representation of the value, when printed.
-     *
-     * @since 1.0
      */
     @Override
     public String toString() {

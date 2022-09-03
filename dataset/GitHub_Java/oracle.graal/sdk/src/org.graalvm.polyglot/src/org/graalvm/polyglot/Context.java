@@ -36,8 +36,9 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 import org.graalvm.polyglot.proxy.Proxy;
 
 /**
- * A polyglot context for Graal guest languages that allows to {@link #eval(Source) evaluate} code
- * and exchange symbols.
+ * Polyglot (multi-language) access to a Graal {@linkplain Engine engine} for evaluating code
+ * written in Graal-supported {@linkplain Language guest languages}, with support for
+ * <em>interoperability</em> among those languages and with Java.
  *
  * <h4>Sample Usage</h4>
  *
@@ -58,6 +59,13 @@ import org.graalvm.polyglot.proxy.Proxy;
  * allocated resources are freed. Contexts are {@link AutoCloseable} for use with the Java
  * {@code try-with-resources} statement.
  *
+ * <h4>Isolation</h4>
+ *
+ * Each context is by default isolated from all other instances with respect to both language
+ * evaluation semantics and resource consumption. Contexts can be optionally
+ * {@linkplain Builder#engine(Engine) configured} to share a single underlying engine; see
+ * {@link Engine} for more details about sharing.
+ *
  * <h4>Language Initialization</h4>
  *
  * Each Graal language performs some initialization in a context before it can be used to execute
@@ -67,18 +75,18 @@ import org.graalvm.polyglot.proxy.Proxy;
  *
  * <h4>Evaluation</h4>
  *
- * <h4>Values</h4>
+ * <h4>Polyglot Values</h4>
  *
  * See {@link Value}
  *
- * <h4>Symbol Exchange</h4>
+ * <h4>Symbol Lookup</h4>
  *
- * After evaluating code that creates top-level named values, a context can be used to
- * {@link #lookup(String, String) lookup} these symbols using their name.
+ * After evaluating code that creates top-level named values, a context treats those values as Graal
+ * <em>symbols</em> that can be {@link #lookup(String, String) retrieved} by specifying the language
+ * and name.
  * <p>
- * Each context provides access to a shared (global) collection of polyglot <em>symbols</em> that
- * can be {@link #importSymbol(String) imported} and {@link #exportSymbol(String, Object) exported}
- * with the symbol name.
+ * Each context provides access to a shared (global) collection of Graal <em>symbols</em> that can
+ * be {@link #importSymbol(String) retrieved} by name.
  *
  * <h4>Interoperability</h4>
  *
@@ -87,13 +95,6 @@ import org.graalvm.polyglot.proxy.Proxy;
  * Most context methods throw {@link PolyglotException} when errors occur in guest languages.
  *
  * <h4>Proxies</h4>
- *
- * <h4>Isolation</h4>
- *
- * Each context is by default isolated from all other instances with respect to both language
- * evaluation semantics and resource consumption. Contexts can be optionally
- * {@linkplain Builder#engine(Engine) configured} to share a single underlying engine; see
- * {@link Engine} for more details about sharing.
  *
  * <h4>Thread-Safety</h4>
  *
@@ -165,7 +166,6 @@ public final class Context implements AutoCloseable {
      * @param languageId
      * @param symbol name of a symbol
      * @return result of the evaluation wrapped in a non-null {@link Value}
-     * @since 1.0
      */
     public Value lookup(String languageId, String symbol) {
         return impl.lookup(getEngine().getLanguage(languageId).impl, symbol);
@@ -213,7 +213,6 @@ public final class Context implements AutoCloseable {
      * @throws IllegalArgumentException if the language does not exist.
      * @return <code>true</code> if the language was initialized. Returns <code>false</code> if it
      *         was already initialized.
-     * @since 1.0
      */
     public boolean initialize(String languageId) {
         return impl.initializeLanguage(getEngine().getLanguage(languageId).impl);
@@ -315,7 +314,7 @@ public final class Context implements AutoCloseable {
         }
 
         /**
-         *
+         * TODO
          *
          * @since 1.0
          */
@@ -472,7 +471,7 @@ public final class Context implements AutoCloseable {
         }
 
         /**
-         *
+         * TODO
          *
          * @since 1.0
          */
