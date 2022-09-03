@@ -26,9 +26,7 @@ import com.oracle.truffle.api.nodes.Node;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-@RunWith(SeparateClassloaderTestRunner.class)
 public class BranchProfileTest {
 
     @Test
