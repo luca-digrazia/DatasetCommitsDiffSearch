@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -146,7 +144,7 @@ public class XOptions {
     }
 
     /** Parse the "-X" options out of a String[], returning the ones that are not "-X" options. */
-    public String[] parse(String[] args, boolean exitOnError) {
+    public String[] parse(String[] args) {
         int newIdx = 0;
         for (int oldIdx = 0; oldIdx < args.length; oldIdx += 1) {
             final String arg = args[oldIdx];
@@ -155,12 +153,8 @@ public class XOptions {
                 try {
                     parsed |= parseWithNameAndPrefix(xFlag, arg);
                 } catch (NumberFormatException nfe) {
-                    if (exitOnError) {
-                        Log.logStream().println("error: Wrong value for option '" + arg + "' is not a valid number.");
-                        System.exit(1);
-                    } else {
-                        throw new IllegalArgumentException("Illegal value for option '" + arg + "'", nfe);
-                    }
+                    Log.logStream().println("error: Wrong value for option '" + arg + "' is not a valid number.");
+                    System.exit(1);
                 }
             }
             if (!parsed) {
