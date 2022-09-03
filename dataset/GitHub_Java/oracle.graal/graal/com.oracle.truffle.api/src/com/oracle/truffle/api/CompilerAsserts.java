@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,10 +29,9 @@ package com.oracle.truffle.api;
  * either executed in the interpreter or in the compiled code. The assertions are checked during
  * code generation and the Truffle compiler produces for failing assertions a stack trace that
  * identifies the code position of the assertion in the context of the current compilation.
- * 
+ *
  */
 public class CompilerAsserts {
-
     /**
      * Assertion that this code position should never be reached during compilation. It can be used
      * for exceptional code paths or rare code paths that should never be included in a compilation
@@ -38,95 +39,37 @@ public class CompilerAsserts {
      * directive.
      */
     public static void neverPartOfCompilation() {
+        neverPartOfCompilation("");
+    }
+
+    /**
+     * Assertion that this code position should never be reached during compilation. It can be used
+     * for exceptional code paths or rare code paths that should never be included in a compilation
+     * unit. See {@link CompilerDirectives#transferToInterpreter()} for the corresponding compiler
+     * directive.
+     *
+     * @param message text associated with the bailout exception
+     */
+    public static void neverPartOfCompilation(String message) {
     }
 
     /**
      * Assertion that the corresponding value is reduced to a constant during compilation.
-     * 
+     *
      * @param value the value that must be constant during compilation
-     * @return the value given as parameter
      */
-    public static boolean compilationConstant(boolean value) {
-        return value;
+    public static <T> void compilationConstant(Object value) {
+        if (!CompilerDirectives.isCompilationConstant(value)) {
+            neverPartOfCompilation("Value is not compilation constant");
+        }
     }
 
     /**
-     * Assertion that the corresponding value is reduced to a constant during compilation.
-     * 
+     * Assertion that the corresponding value is reduced to a constant during the initial partial
+     * evaluation phase.
+     *
      * @param value the value that must be constant during compilation
-     * @return the value given as parameter
      */
-    public static byte compilationConstant(byte value) {
-        return value;
-    }
-
-    /**
-     * Assertion that the corresponding value is reduced to a constant during compilation.
-     * 
-     * @param value the value that must be constant during compilation
-     * @return the value given as parameter
-     */
-    public static char compilationConstant(char value) {
-        return value;
-    }
-
-    /**
-     * Assertion that the corresponding value is reduced to a constant during compilation.
-     * 
-     * @param value the value that must be constant during compilation
-     * @return the value given as parameter
-     */
-    public static short compilationConstant(short value) {
-        return value;
-    }
-
-    /**
-     * Assertion that the corresponding value is reduced to a constant during compilation.
-     * 
-     * @param value the value that must be constant during compilation
-     * @return the value given as parameter
-     */
-    public static int compilationConstant(int value) {
-        return value;
-    }
-
-    /**
-     * Assertion that the corresponding value is reduced to a constant during compilation.
-     * 
-     * @param value the value that must be constant during compilation
-     * @return the value given as parameter
-     */
-    public static long compilationConstant(long value) {
-        return value;
-    }
-
-    /**
-     * Assertion that the corresponding value is reduced to a constant during compilation.
-     * 
-     * @param value the value that must be constant during compilation
-     * @return the value given as parameter
-     */
-    public static float compilationConstant(float value) {
-        return value;
-    }
-
-    /**
-     * Assertion that the corresponding value is reduced to a constant during compilation.
-     * 
-     * @param value the value that must be constant during compilation
-     * @return the value given as parameter
-     */
-    public static double compilationConstant(double value) {
-        return value;
-    }
-
-    /**
-     * Assertion that the corresponding value is reduced to a constant during compilation.
-     * 
-     * @param value the value that must be constant during compilation
-     * @return the value given as parameter
-     */
-    public static Object compilationConstant(Object value) {
-        return value;
+    public static <T> void partialEvaluationConstant(Object value) {
     }
 }
