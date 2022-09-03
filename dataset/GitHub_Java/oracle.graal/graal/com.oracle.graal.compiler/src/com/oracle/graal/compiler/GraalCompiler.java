@@ -31,20 +31,18 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.phases.*;
+import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.compiler.phases.ea.*;
+import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.loop.phases.*;
+import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.PhasePlan.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.virtual.phases.ea.*;
-import com.oracle.graal.virtual.phases.ea.experimental.*;
+import com.oracle.max.cri.xir.*;
 
 public class GraalCompiler {
 
@@ -59,19 +57,25 @@ public class GraalCompiler {
     public final GraalCodeCacheProvider runtime;
 
     /**
+     * The XIR generator that lowers Java operations to machine operations.
+     */
+    public final XirGenerator xir;
+
+    /**
      * The backend that this compiler has been configured for.
      */
     public final Backend backend;
 
-    public GraalCompiler(GraalCodeCacheProvider runtime, TargetDescription target, Backend backend) {
+    public GraalCompiler(GraalCodeCacheProvider runtime, TargetDescription target, Backend backend, XirGenerator xirGen) {
         this.runtime = runtime;
         this.target = target;
+        this.xir = xirGen;
         this.backend = backend;
     }
 
     public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, int osrBCI, final GraphCache cache, final PhasePlan plan,
                     final OptimisticOptimizations optimisticOpts) {
-        assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
+        assert (method.accessFlags() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
         if (osrBCI != -1) {
             throw new BailoutException("No OSR supported");
         }
@@ -89,7 +93,7 @@ public class GraalCompiler {
                 final FrameMap frameMap = Debug.scope("BackEnd", lir, new Callable<FrameMap>() {
 
                     public FrameMap call() {
-                        return emitLIR(lir, graph, method);
+                        return emitLIR(lir, graph, method, assumptions);
                     }
                 });
                 return Debug.scope("CodeGen", frameMap, new Callable<CompilationResult>() {
@@ -134,7 +138,7 @@ public class GraalCompiler {
             }
 
             if (GraalOptions.CheckCastElimination && GraalOptions.OptCanonicalizer) {
-                new IterativeConditionalEliminationPhase(target, runtime, assumptions).apply(graph);
+                new IterativeCheckCastEliminationPhase(target, runtime, assumptions).apply(graph);
             }
         }
 
@@ -149,15 +153,11 @@ public class GraalCompiler {
             }
         }
 
-        if (GraalOptions.OptTailDuplication) {
-            new TailDuplicationPhase().apply(graph);
-            if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-            }
+        if (GraalOptions.EscapeAnalysis && !plan.isPhaseDisabled(EscapeAnalysisPhase.class)) {
+            new EscapeAnalysisPhase(target, runtime, assumptions).apply(graph);
         }
-
         if (GraalOptions.PartialEscapeAnalysis && !plan.isPhaseDisabled(PartialEscapeAnalysisPhase.class)) {
-            new SplitPartialEscapeAnalysisPhase(runtime).apply(graph);
+            new PartialEscapeAnalysisPhase(target, runtime, assumptions).apply(graph);
         }
         if (GraalOptions.OptLoopTransform) {
             new LoopTransformHighPhase().apply(graph);
@@ -167,6 +167,13 @@ public class GraalCompiler {
         }
 
         new LoweringPhase(runtime, assumptions).apply(graph);
+
+        if (GraalOptions.OptTailDuplication) {
+            new TailDuplicationPhase().apply(graph);
+            if (GraalOptions.OptCanonicalizer) {
+                new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
+            }
+        }
 
         if (GraalOptions.CullFrameStates) {
             new CullFrameStatesPhase().apply(graph);
@@ -191,7 +198,7 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.CheckCastElimination && GraalOptions.OptCanonicalizer) {
-            new IterativeConditionalEliminationPhase(target, runtime, assumptions).apply(graph);
+            new IterativeCheckCastEliminationPhase(target, runtime, assumptions).apply(graph);
         }
 
         plan.runPhases(PhasePosition.MID_LEVEL, graph);
@@ -233,9 +240,9 @@ public class GraalCompiler {
         });
     }
 
-    public FrameMap emitLIR(final LIR lir, StructuredGraph graph, final ResolvedJavaMethod method) {
-        final FrameMap frameMap = backend.newFrameMap(runtime.lookupRegisterConfig(method));
-        final LIRGenerator lirGenerator = backend.newLIRGenerator(graph, frameMap, method, lir);
+    public FrameMap emitLIR(final LIR lir, StructuredGraph graph, final ResolvedJavaMethod method, Assumptions assumptions) {
+        final FrameMap frameMap = backend.newFrameMap(runtime.getRegisterConfig(method));
+        final LIRGenerator lirGenerator = backend.newLIRGenerator(graph, frameMap, method, lir, xir, assumptions);
 
         Debug.scope("LIRGen", lirGenerator, new Runnable() {
 
