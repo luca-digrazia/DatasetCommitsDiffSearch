@@ -75,6 +75,7 @@ public final class Target_java_lang_reflect_Executable {
     @Alias //
     Parameter[] parameters;
 
+    @Alias
     @Alias //
     @TargetElement(onlyWith = JDK8OrEarlier.class)
     native Target_java_lang_reflect_Executable getRoot();
