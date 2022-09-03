@@ -24,7 +24,6 @@ package com.oracle.graal.hotspot;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.stubs.*;
 
@@ -80,19 +79,17 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
     }
 
     public void setStub(Stub stub) {
-        assert address == 0L : "cannot set stub for linkage that already has an address: " + this;
+        assert address == 0L : "cannot stub for linkage that already has an address: " + this;
         this.stub = stub;
     }
 
-    public void finalizeAddress(Backend backend) {
-        if (address == 0) {
-            assert stub != null : "linkage without an address must be a stub";
-            address = stub.getAddress(backend);
-        }
+    public void setAddress(long address) {
+        assert this.address == 0L : "cannot re-initialize address of " + this;
+        this.address = address;
     }
 
-    @Override
-    public boolean preservesRegisters() {
-        return stub == null;
+    public long getAddress() {
+        assert address != 0L : "address not yet initialized for " + this;
+        return address;
     }
 }

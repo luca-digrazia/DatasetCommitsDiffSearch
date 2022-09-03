@@ -114,6 +114,4 @@ public interface RuntimeCallTarget extends InvokeTarget {
     long getMaxCallTargetOffset();
 
     Descriptor getDescriptor();
-
-    boolean preservesRegisters();
 }

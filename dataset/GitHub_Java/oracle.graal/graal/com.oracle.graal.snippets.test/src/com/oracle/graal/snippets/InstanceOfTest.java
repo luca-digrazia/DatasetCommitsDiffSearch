@@ -26,14 +26,20 @@ import java.util.*;
 
 import org.junit.*;
 
+import com.oracle.graal.api.code.CompilationResult.Call;
+import com.oracle.graal.api.code.CompilationResult.Mark;
+import com.oracle.graal.api.code.CompilationResult.Site;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.snippets.CheckCastTest.Depth12;
+import com.oracle.graal.snippets.CheckCastTest.Depth13;
+import com.oracle.graal.snippets.CheckCastTest.Depth14;
 
 /**
- * Tests the implementation of instanceof, allowing profiling information to
- * be manually specified.
+ * Tests the implementation of instanceof, allowing profiling information to be manually specified.
  */
 public class InstanceOfTest extends TypeCheckTest {
 
@@ -46,93 +52,119 @@ public class InstanceOfTest extends TypeCheckTest {
     protected void replaceProfile(StructuredGraph graph, JavaTypeProfile profile) {
         InstanceOfNode ion = graph.getNodes().filter(InstanceOfNode.class).first();
         if (ion != null) {
-            InstanceOfNode ionNew = graph.add(new InstanceOfNode(ion.targetClassInstruction(), ion.targetClass(), ion.object(), profile));
+            InstanceOfNode ionNew = graph.add(new InstanceOfNode(ion.type(), ion.object(), profile));
             graph.replaceFloating(ion, ionNew);
         }
     }
 
     @Test
     public void test1() {
-        test("isString",    profile(),                        "object");
-        test("isString",    profile(String.class),            "object");
+        test("isString", profile(), "object");
+        test("isString", profile(String.class), "object");
 
-        test("isString",    profile(),                        Object.class);
-        test("isString",    profile(String.class),            Object.class);
+        test("isString", profile(), Object.class);
+        test("isString", profile(String.class), Object.class);
     }
 
     @Test
     public void test2() {
-        test("isStringInt",    profile(),                        "object");
-        test("isStringInt",    profile(String.class),            "object");
+        test("isStringInt", profile(), "object");
+        test("isStringInt", profile(String.class), "object");
 
-        test("isStringInt",    profile(),                        Object.class);
-        test("isStringInt",    profile(String.class),            Object.class);
+        test("isStringInt", profile(), Object.class);
+        test("isStringInt", profile(String.class), Object.class);
     }
 
     @Test
     public void test2_1() {
-        test("isStringIntComplex",    profile(),                        "object");
-        test("isStringIntComplex",    profile(String.class),            "object");
+        test("isStringIntComplex", profile(), "object");
+        test("isStringIntComplex", profile(String.class), "object");
 
-        test("isStringIntComplex",    profile(),                        Object.class);
-        test("isStringIntComplex",    profile(String.class),            Object.class);
+        test("isStringIntComplex", profile(), Object.class);
+        test("isStringIntComplex", profile(String.class), Object.class);
     }
 
     @Test
     public void test3() {
         Throwable throwable = new Exception();
-        test("isThrowable",    profile(),                             throwable);
-        test("isThrowable",    profile(Throwable.class),              throwable);
-        test("isThrowable",    profile(Exception.class, Error.class), throwable);
+        test("isThrowable", profile(), throwable);
+        test("isThrowable", profile(Throwable.class), throwable);
+        test("isThrowable", profile(Exception.class, Error.class), throwable);
 
-        test("isThrowable",    profile(),                             Object.class);
-        test("isThrowable",    profile(Throwable.class),              Object.class);
-        test("isThrowable",    profile(Exception.class, Error.class), Object.class);
+        test("isThrowable", profile(), Object.class);
+        test("isThrowable", profile(Throwable.class), Object.class);
+        test("isThrowable", profile(Exception.class, Error.class), Object.class);
     }
 
     @Test
     public void test3_1() {
         onlyFirstIsException(new Exception(), new Error());
-        test("onlyFirstIsException",    profile(),                             new Exception(), new Error());
-        test("onlyFirstIsException",    profile(),                             new Error(), new Exception());
-        test("onlyFirstIsException",    profile(),                             new Exception(), new Exception());
-        test("onlyFirstIsException",    profile(),                             new Error(), new Error());
+        test("onlyFirstIsException", profile(), new Exception(), new Error());
+        test("onlyFirstIsException", profile(), new Error(), new Exception());
+        test("onlyFirstIsException", profile(), new Exception(), new Exception());
+        test("onlyFirstIsException", profile(), new Error(), new Error());
     }
 
     @Test
     public void test4() {
         Throwable throwable = new Exception();
-        test("isThrowableInt",    profile(),                             throwable);
-        test("isThrowableInt",    profile(Throwable.class),              throwable);
-        test("isThrowableInt",    profile(Exception.class, Error.class), throwable);
+        test("isThrowableInt", profile(), throwable);
+        test("isThrowableInt", profile(Throwable.class), throwable);
+        test("isThrowableInt", profile(Exception.class, Error.class), throwable);
 
-        test("isThrowableInt",    profile(),                             Object.class);
-        test("isThrowableInt",    profile(Throwable.class),              Object.class);
-        test("isThrowableInt",    profile(Exception.class, Error.class), Object.class);
+        test("isThrowableInt", profile(), Object.class);
+        test("isThrowableInt", profile(Throwable.class), Object.class);
+        test("isThrowableInt", profile(Exception.class, Error.class), Object.class);
     }
 
     @Test
     public void test5() {
         Map map = new HashMap<>();
-        test("isMap",    profile(),                             map);
-        test("isMap",    profile(HashMap.class),                map);
-        test("isMap",    profile(TreeMap.class, HashMap.class), map);
+        test("isMap", profile(), map);
+        test("isMap", profile(HashMap.class), map);
+        test("isMap", profile(TreeMap.class, HashMap.class), map);
 
-        test("isMap",    profile(),                             Object.class);
-        test("isMap",    profile(HashMap.class),                Object.class);
-        test("isMap",    profile(TreeMap.class, HashMap.class), Object.class);
+        test("isMap", profile(), Object.class);
+        test("isMap", profile(HashMap.class), Object.class);
+        test("isMap", profile(TreeMap.class, HashMap.class), Object.class);
     }
 
     @Test
     public void test6() {
         Map map = new HashMap<>();
-        test("isMapInt",    profile(),                             map);
-        test("isMapInt",    profile(HashMap.class),                map);
-        test("isMapInt",    profile(TreeMap.class, HashMap.class), map);
+        test("isMapInt", profile(), map);
+        test("isMapInt", profile(HashMap.class), map);
+        test("isMapInt", profile(TreeMap.class, HashMap.class), map);
 
-        test("isMapInt",    profile(),                             Object.class);
-        test("isMapInt",    profile(HashMap.class),                Object.class);
-        test("isMapInt",    profile(TreeMap.class, HashMap.class), Object.class);
+        test("isMapInt", profile(), Object.class);
+        test("isMapInt", profile(HashMap.class), Object.class);
+        test("isMapInt", profile(TreeMap.class, HashMap.class), Object.class);
+    }
+
+    @Test
+    public void test7() {
+        Object o = new Depth13();
+        test("isDepth12", profile(), o);
+        test("isDepth12", profile(Depth13.class), o);
+        test("isDepth12", profile(Depth13.class, Depth14.class), o);
+
+        o = "not a depth";
+        test("isDepth12", profile(), o);
+        test("isDepth12", profile(Depth13.class), o);
+        test("isDepth12", profile(Depth13.class, Depth14.class), o);
+    }
+
+    @Test
+    public void test8() {
+        Object o = new Depth13();
+        test("isDepth12Int", profile(), o);
+        test("isDepth12Int", profile(Depth13.class), o);
+        test("isDepth12Int", profile(Depth13.class, Depth14.class), o);
+
+        o = "not a depth";
+        test("isDepth12Int", profile(), o);
+        test("isDepth12Int", profile(Depth13.class), o);
+        test("isDepth12Int", profile(Depth13.class, Depth14.class), o);
     }
 
     public static boolean isString(Object o) {
@@ -141,7 +173,7 @@ public class InstanceOfTest extends TypeCheckTest {
 
     public static int isStringInt(Object o) {
         if (o instanceof String) {
-            return id(0);
+            return id(1);
         }
         return id(0);
     }
@@ -168,15 +200,12 @@ public class InstanceOfTest extends TypeCheckTest {
         return -1;
     }
 
-
     public static int isThrowableInt(Object o) {
+        int result = o instanceof Throwable ? 4 : 5;
         if (o instanceof Throwable) {
-            return 1;
+            return id(4);
         }
-        if (o instanceof Throwable) {
-            return 2;
-        }
-        return 0;
+        return result;
     }
 
     public static boolean isMap(Object o) {
@@ -185,8 +214,187 @@ public class InstanceOfTest extends TypeCheckTest {
 
     public static int isMapInt(Object o) {
         if (o instanceof Map) {
-            return 1;
+            return id(1);
         }
-        return 0;
+        return id(0);
+    }
+
+    public static boolean isDepth12(Object o) {
+        return o instanceof Depth12;
+    }
+
+    public static int isDepth12Int(Object o) {
+        if (o instanceof Depth12) {
+            return id(0);
+        }
+        return id(0);
+    }
+
+    abstract static class MySite {
+
+        final int offset;
+
+        MySite(int offset) {
+            this.offset = offset;
+        }
+    }
+
+    static class MyMark extends MySite {
+
+        MyMark(int offset) {
+            super(offset);
+        }
+    }
+
+    abstract static class MySafepoint extends MySite {
+
+        MySafepoint(int offset) {
+            super(offset);
+        }
+    }
+
+    static class MyCall extends MySafepoint {
+
+        MyCall(int offset) {
+            super(offset);
+        }
+    }
+
+    @Test
+    public void test9() {
+        MyCall callAt63 = new MyCall(63);
+        MyMark markAt63 = new MyMark(63);
+        test("compareMySites", callAt63, callAt63);
+        test("compareMySites", callAt63, markAt63);
+        test("compareMySites", markAt63, callAt63);
+        test("compareMySites", markAt63, markAt63);
+    }
+
+    public static int compareMySites(MySite s1, MySite s2) {
+        if (s1.offset == s2.offset && (s1 instanceof MyMark ^ s2 instanceof MyMark)) {
+            return s1 instanceof MyMark ? -1 : 1;
+        }
+        return s1.offset - s2.offset;
+    }
+
+    @Test
+    public void test10() {
+        Mark[] noMarks = {};
+        Call callAt63 = new Call(null, 63, 5, true, null);
+        Mark markAt63 = new Mark(63, "1", noMarks);
+        test("compareSites", callAt63, callAt63);
+        test("compareSites", callAt63, markAt63);
+        test("compareSites", markAt63, callAt63);
+        test("compareSites", markAt63, markAt63);
+    }
+
+    public static int compareSites(Site s1, Site s2) {
+        if (s1.pcOffset == s2.pcOffset && (s1 instanceof Mark ^ s2 instanceof Mark)) {
+            return s1 instanceof Mark ? -1 : 1;
+        }
+        return s1.pcOffset - s2.pcOffset;
+    }
+
+    /**
+     * This test exists to show the kind of pattern that is be optimizable by
+     * {@code removeIntermediateMaterialization()} in {@link IfNode}.
+     * <p>
+     * The test exists in this source file as the transformation was originally motivated by the
+     * need to remove use of special JumpNodes in the {@code InstanceOfSnippets}.
+     */
+    @Test
+    public void test_removeIntermediateMaterialization() {
+        List<String> list = Arrays.asList("1", "2", "3", "4");
+        test("removeIntermediateMaterialization", profile(), list, "2", "yes", "no");
+        test("removeIntermediateMaterialization", profile(), list, null, "yes", "no");
+        test("removeIntermediateMaterialization", profile(), null, "2", "yes", "no");
+    }
+
+    public static String removeIntermediateMaterialization(List<Object> list, Object e, String a, String b) {
+        boolean test;
+        if (list == null || e == null) {
+            test = false;
+        } else {
+            test = false;
+            for (Object i : list) {
+                if (i.equals(e)) {
+                    test = true;
+                    break;
+                }
+            }
+        }
+        if (test) {
+            return a;
+        }
+        return b;
+    }
+
+    abstract static class A {
+    }
+
+    static class B extends A {
+    }
+
+    static class C extends B {
+    }
+
+    abstract static class D extends C {
+    }
+
+    public static boolean isArrayOfA(Object o) {
+        return o instanceof A[];
+    }
+
+    public static boolean isArrayOfB(Object o) {
+        return o instanceof B[];
+    }
+
+    public static boolean isArrayOfC(Object o) {
+        return o instanceof C[];
+    }
+
+    public static boolean isArrayOfD(Object o) {
+        return o instanceof D[];
+    }
+
+    @Test
+    public void testArray() {
+        Object aArray = new A[10];
+        test("isArrayOfA", aArray);
+
+        Object bArray = new B[10];
+        test("isArrayOfA", aArray);
+        test("isArrayOfA", bArray);
+        test("isArrayOfB", aArray);
+        test("isArrayOfB", bArray);
+
+        Object cArray = new C[10];
+        test("isArrayOfA", aArray);
+        test("isArrayOfA", bArray);
+        test("isArrayOfA", cArray);
+        test("isArrayOfB", aArray);
+        test("isArrayOfB", bArray);
+        test("isArrayOfB", cArray);
+        test("isArrayOfC", aArray);
+        test("isArrayOfC", bArray);
+        test("isArrayOfC", cArray);
+
+        Object dArray = new D[10];
+        test("isArrayOfA", aArray);
+        test("isArrayOfA", bArray);
+        test("isArrayOfA", cArray);
+        test("isArrayOfA", dArray);
+        test("isArrayOfB", aArray);
+        test("isArrayOfB", bArray);
+        test("isArrayOfB", cArray);
+        test("isArrayOfB", dArray);
+        test("isArrayOfC", aArray);
+        test("isArrayOfC", bArray);
+        test("isArrayOfC", cArray);
+        test("isArrayOfC", dArray);
+        test("isArrayOfD", aArray);
+        test("isArrayOfD", bArray);
+        test("isArrayOfD", cArray);
+        test("isArrayOfD", dArray);
     }
 }

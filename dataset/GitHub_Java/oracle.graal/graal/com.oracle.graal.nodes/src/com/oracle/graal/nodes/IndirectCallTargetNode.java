@@ -28,11 +28,11 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.type.*;
 
-public class IndirectCallTargetNode extends LoweredCallTargetNode {
+public class IndirectCallTargetNode extends AbstractCallTargetNode {
 
     @Input protected ValueNode computedAddress;
 
-    public IndirectCallTargetNode(ValueNode computedAddress, List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature, ResolvedJavaMethod target, CallingConvention.Type callType) {
+    public IndirectCallTargetNode(ValueNode computedAddress, List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature, InvokeTarget target, CallingConvention.Type callType) {
         super(arguments, returnStamp, signature, target, callType);
         this.computedAddress = computedAddress;
     }
@@ -43,6 +43,12 @@ public class IndirectCallTargetNode extends LoweredCallTargetNode {
 
     @Override
     public String targetName() {
-        return "Indirect#" + ((JavaMethod) target()).getName();
+        if (target() instanceof JavaMethod) {
+            return "Indirect#" + ((JavaMethod) target()).getName();
+        } else if (target() != null) {
+            return "Indirect#" + target().getClass().getSimpleName();
+        } else {
+            return "Indirect#null";
+        }
     }
 }

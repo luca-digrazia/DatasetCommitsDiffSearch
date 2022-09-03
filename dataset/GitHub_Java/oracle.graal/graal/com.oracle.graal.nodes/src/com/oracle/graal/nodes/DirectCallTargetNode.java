@@ -28,14 +28,20 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.type.*;
 
-public class DirectCallTargetNode extends LoweredCallTargetNode {
+public class DirectCallTargetNode extends AbstractCallTargetNode {
 
-    public DirectCallTargetNode(List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature, ResolvedJavaMethod target, CallingConvention.Type callType) {
+    public DirectCallTargetNode(List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature, InvokeTarget target, CallingConvention.Type callType) {
         super(arguments, returnStamp, signature, target, callType);
     }
 
     @Override
     public String targetName() {
-        return "Direct#" + ((JavaMethod) target()).getName();
+        if (target() instanceof JavaMethod) {
+            return "Direct#" + ((JavaMethod) target()).getName();
+        } else if (target() != null) {
+            return "Direct#" + target().getClass().getSimpleName();
+        } else {
+            return "Direct#null";
+        }
     }
 }

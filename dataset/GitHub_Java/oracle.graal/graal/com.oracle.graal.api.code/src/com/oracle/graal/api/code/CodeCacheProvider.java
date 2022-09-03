@@ -60,8 +60,10 @@ public interface CodeCacheProvider extends MetaAccessProvider {
 
     /**
      * Gets the register configuration to use when compiling a given method.
+     * 
+     * @param method the top level method of a compilation
      */
-    RegisterConfig lookupRegisterConfig();
+    RegisterConfig lookupRegisterConfig(ResolvedJavaMethod method);
 
     /**
      * Custom area on the stack of each compiled method that the VM can use for its own purposes.

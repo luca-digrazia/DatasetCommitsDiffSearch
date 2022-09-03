@@ -20,26 +20,43 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.nodes;
+package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.CallingConvention.Type;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.type.*;
 
-public class HotSpotDirectCallTargetNode extends DirectCallTargetNode {
+public abstract class AbstractCallTargetNode extends CallTargetNode {
 
-    private final InvokeKind invokeKind;
+    private final Stamp returnStamp;
+    private final JavaType[] signature;
+    private final InvokeTarget target;
+    private final CallingConvention.Type callType;
 
-    public HotSpotDirectCallTargetNode(List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature, InvokeTarget target, Type callType, InvokeKind invokeKind) {
-        super(arguments, returnStamp, signature, target, callType);
-        this.invokeKind = invokeKind;
+    public AbstractCallTargetNode(List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature, InvokeTarget target, CallingConvention.Type callType) {
+        super(arguments);
+        this.returnStamp = returnStamp;
+        this.signature = signature;
+        this.target = target;
+        this.callType = callType;
     }
 
-    public InvokeKind invokeKind() {
-        return invokeKind;
+    @Override
+    public Stamp returnStamp() {
+        return returnStamp;
+    }
+
+    public JavaType[] signature() {
+        return signature;
+    }
+
+    public InvokeTarget target() {
+        return target;
+    }
+
+    public CallingConvention.Type callType() {
+        return callType;
     }
 }
