@@ -68,7 +68,7 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         tool.getRuntime().lower(this, tool);
     }
 
@@ -105,10 +105,6 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
         UnsafeStoreNode unsafeStoreNode = graph().add(new UnsafeStoreNode(stamp(), object(), intDisplacement, ConstantNode.forInt(0, graph()), value(), accessKind()));
         unsafeStoreNode.setStateAfter(stateAfter());
         return unsafeStoreNode;
-    }
-
-    public FrameState getState() {
-        return stateAfter;
     }
 
     // specialized on value type until boxing/unboxing is sorted out in intrinsification
