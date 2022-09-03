@@ -283,7 +283,6 @@ import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.core.common.util.Util;
-import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.DebugCloseable;
@@ -1512,7 +1511,7 @@ public class BytecodeParser implements GraphBuilderContext {
         final Mark mark;
 
         InvocationPluginAssertions(InvocationPlugin plugin, ValueNode[] args, ResolvedJavaMethod targetMethod, JavaKind resultType) {
-            guarantee(Assertions.ENABLED, "%s should only be loaded and instantiated if assertions are enabled", getClass().getSimpleName());
+            guarantee(assertionsEnabled(), "%s should only be loaded and instantiated if assertions are enabled", getClass().getSimpleName());
             this.plugin = plugin;
             this.targetMethod = targetMethod;
             this.args = args;
@@ -1744,7 +1743,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 }
             }
 
-            InvocationPluginAssertions assertions = Assertions.ENABLED ? new InvocationPluginAssertions(plugin, args, targetMethod, resultType) : null;
+            InvocationPluginAssertions assertions = assertionsEnabled() ? new InvocationPluginAssertions(plugin, args, targetMethod, resultType) : null;
             if (plugin.execute(this, targetMethod, pluginReceiver, args)) {
                 afterInvocationPluginExecution(true, assertions, intrinsicGuard, invokeKind, args, targetMethod, resultType, returnType);
                 return true;
@@ -4104,5 +4103,12 @@ public class BytecodeParser implements GraphBuilderContext {
 
     static String nSpaces(int n) {
         return n == 0 ? "" : format("%" + n + "s", "");
+    }
+
+    @SuppressWarnings("all")
+    private static boolean assertionsEnabled() {
+        boolean assertionsEnabled = false;
+        assert assertionsEnabled = true;
+        return assertionsEnabled;
     }
 }
