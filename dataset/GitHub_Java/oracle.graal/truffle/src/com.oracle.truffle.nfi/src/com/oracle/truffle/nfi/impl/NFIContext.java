@@ -24,9 +24,6 @@
  */
 package com.oracle.truffle.nfi.impl;
 
-import java.util.HashMap;
-import java.util.function.Supplier;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -41,6 +38,9 @@ import com.oracle.truffle.nfi.types.NativeSimpleType;
 import com.oracle.truffle.nfi.types.NativeSimpleTypeMirror;
 import com.oracle.truffle.nfi.types.NativeTypeMirror;
 import com.oracle.truffle.nfi.types.NativeTypeMirror.Kind;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
 
 class NFIContext {
 

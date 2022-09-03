@@ -1839,6 +1839,7 @@ public abstract class TruffleLanguage<C> {
             }
         }
 
+        @TruffleBoundary
         void postInit() {
             try {
                 spi.initializeContext(context);
@@ -2014,29 +2015,12 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         public Object createEnvContext(Env env) {
-            RootNode root = new RootNode(env.spi) {
-                @Override
-                public Object execute(VirtualFrame frame) {
-                    Object context = env.getSpi().createContext(env);
-                    env.context = context;
-                    Assumption contextUnchanged = env.contextUnchangedAssumption;
-                    env.contextUnchangedAssumption = Truffle.getRuntime().createAssumption("Language context unchanged");
-                    contextUnchanged.invalidate();
-                    return context;
-                }
-
-                @Override
-                public boolean isInternal() {
-                    return false;
-                }
-
-                @Override
-                public String getName() {
-                    return "<context-initialization>";
-                }
-            };
-            // we create this call target to create a stack entry
-            return Truffle.getRuntime().createCallTarget(root).call();
+            Object context = env.getSpi().createContext(env);
+            env.context = context;
+            Assumption contextUnchanged = env.contextUnchangedAssumption;
+            env.contextUnchangedAssumption = Truffle.getRuntime().createAssumption("Language context unchanged");
+            contextUnchanged.invalidate();
+            return context;
         }
 
         @Override
@@ -2046,25 +2030,7 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         public void postInitEnv(Env env) {
-            RootNode root = new RootNode(env.spi) {
-                @Override
-                public Object execute(VirtualFrame frame) {
-                    env.postInit();
-                    return null;
-                }
-
-                @Override
-                public boolean isInternal() {
-                    return false;
-                }
-
-                @Override
-                public String getName() {
-                    return "<context-initialization>";
-                }
-            };
-            // we create this call target to create a stack entry
-            Truffle.getRuntime().createCallTarget(root).call();
+            env.postInit();
         }
 
         @Override
