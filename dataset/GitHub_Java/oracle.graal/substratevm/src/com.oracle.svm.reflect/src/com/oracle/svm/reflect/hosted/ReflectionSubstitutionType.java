@@ -28,7 +28,6 @@ package com.oracle.svm.reflect.hosted;
 
 import static com.oracle.svm.reflect.hosted.ReflectionSubstitution.getStableProxyName;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -65,7 +64,6 @@ import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
 
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.svm.core.annotate.Delete;
-import com.oracle.svm.core.jdk.IgnoreForGetCallerClass;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.annotation.CustomSubstitutionField;
@@ -150,18 +148,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
                     addSubstitutionMethod(method, createWriteMethod(method, (Field) member, JavaKind.Double));
                     break;
                 case "newInstance":
-                    Class<?> holder = member.getDeclaringClass();
-                    if (Modifier.isAbstract(holder.getModifiers()) || holder.isInterface() || holder.isPrimitive() || holder.isArray()) {
-                        /*
-                         * Invoking the constructor of an abstract class always throws an
-                         * InstantiationException. It should not be possible to get a Constructor
-                         * object for an interface, array, or primitive type, but we are defensive
-                         * and throw the exception in that case too.
-                         */
-                        addSubstitutionMethod(method, new ThrowingMethod(method, InstantiationException.class, "Cannot instantiate " + holder));
-                    } else {
-                        addSubstitutionMethod(method, new ReflectiveNewInstanceMethod(method, (Constructor<?>) member));
-                    }
+                    addSubstitutionMethod(method, new ReflectiveNewInstanceMethod(method, (Constructor<?>) member));
                     break;
                 case "toString":
                     addSubstitutionMethod(method, new ToStringMethod(method, member.getName()));
@@ -753,21 +740,4 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
         }
     }
 
-    @Override
-    public Annotation[] getAnnotations() {
-        return IgnoreForGetCallerClass.Holder.ARRAY;
-    }
-
-    @Override
-    public boolean isAnnotationPresent(Class<? extends Annotation> annotationClass) {
-        return annotationClass == IgnoreForGetCallerClass.class;
-    }
-
-    @Override
-    public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
-        if (annotationClass == IgnoreForGetCallerClass.class) {
-            return annotationClass.cast(IgnoreForGetCallerClass.Holder.INSTANCE);
-        }
-        return null;
-    }
 }
