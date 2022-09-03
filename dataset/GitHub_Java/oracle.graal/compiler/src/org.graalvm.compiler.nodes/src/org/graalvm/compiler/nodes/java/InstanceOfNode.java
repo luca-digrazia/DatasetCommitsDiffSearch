@@ -49,8 +49,6 @@ import org.graalvm.compiler.nodes.type.StampTool;
 import jdk.vm.ci.meta.JavaTypeProfile;
 import jdk.vm.ci.meta.TriState;
 
-import java.util.Objects;
-
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
  */
@@ -130,7 +128,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
                 return LogicConstantNode.tautology();
             } else if (checkedStamp.alwaysNull()) {
                 return IsNullNode.create(object);
-            } else if (Objects.equals(checkedStamp.type(), meetStamp.type()) && checkedStamp.isExactType() == meetStamp.isExactType() && checkedStamp.alwaysNull() == meetStamp.alwaysNull()) {
+            } else if (checkedStamp.type().equals(meetStamp.type()) && checkedStamp.isExactType() == meetStamp.isExactType() && checkedStamp.alwaysNull() == meetStamp.alwaysNull()) {
                 assert checkedStamp.nonNull() != inputStamp.nonNull();
                 // The only difference makes the null-ness of the value => simplify the check.
                 if (checkedStamp.nonNull()) {
@@ -139,8 +137,8 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
                     return IsNullNode.create(object);
                 }
             }
-            assert checkedStamp.type() != null;
         }
+
         return null;
     }
 
