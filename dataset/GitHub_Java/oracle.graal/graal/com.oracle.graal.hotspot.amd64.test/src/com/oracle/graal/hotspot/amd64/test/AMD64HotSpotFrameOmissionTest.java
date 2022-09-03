@@ -48,7 +48,6 @@ public class AMD64HotSpotFrameOmissionTest extends GraalCompilerTest {
         return;
     }
 
-    @Ignore
     @Test
     public void test1() {
         testHelper("test1snippet", new CodeGenerator() {
@@ -65,7 +64,6 @@ public class AMD64HotSpotFrameOmissionTest extends GraalCompilerTest {
         return x + 5;
     }
 
-    @Ignore
     @Test
     public void test2() {
         testHelper("test2snippet", new CodeGenerator() {
@@ -85,7 +83,6 @@ public class AMD64HotSpotFrameOmissionTest extends GraalCompilerTest {
         return 1 + x;
     }
 
-    @Ignore
     @Test
     public void test3() {
         testHelper("test3snippet", new CodeGenerator() {
@@ -104,14 +101,14 @@ public class AMD64HotSpotFrameOmissionTest extends GraalCompilerTest {
     private void testHelper(String name, CodeGenerator gen) {
         Method method = getMethod(name);
         ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
-        InstalledCode installedCode = getCode(javaMethod, parseEager(method));
+        InstalledCode installedCode = getCode(javaMethod, parse(method));
 
         TargetDescription target = getCodeCache().getTarget();
         RegisterConfig registerConfig = getCodeCache().getRegisterConfig();
         AMD64Assembler asm = new AMD64Assembler(target, registerConfig);
 
         gen.generateCode(asm);
-        byte[] expectedCode = asm.close(true);
+        byte[] expectedCode = asm.codeBuffer.close(true);
 
         // Only compare up to expectedCode.length bytes to ignore
         // padding instructions adding during code installation
