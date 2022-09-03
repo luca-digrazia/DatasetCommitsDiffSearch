@@ -162,7 +162,7 @@ public final class ConvertNode extends FloatingNode implements Canonicalizable, 
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 
@@ -172,15 +172,5 @@ public final class ConvertNode extends FloatingNode implements Canonicalizable, 
     }
 
     @NodeIntrinsic
-    public static native float convert(@ConstantNodeParameter Op op, int value);
-
-    @NodeIntrinsic
-    public static native int convert(@ConstantNodeParameter Op op, float value);
-
-    @NodeIntrinsic
-    public static native double convert(@ConstantNodeParameter Op op, long value);
-
-    @NodeIntrinsic
-    public static native long convert(@ConstantNodeParameter Op op, double value);
-
+    public static native <S, T> S convert(@ConstantNodeParameter Op op, T value);
 }
