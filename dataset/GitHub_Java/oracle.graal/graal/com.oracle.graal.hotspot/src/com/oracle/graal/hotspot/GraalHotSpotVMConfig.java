@@ -27,6 +27,7 @@ import java.lang.reflect.Modifier;
 
 import com.oracle.graal.api.replacements.Fold;
 import com.oracle.graal.api.replacements.Fold.InjectedParameter;
+import com.oracle.graal.hotspot.nodes.GraalHotSpotVMConfigNode;
 
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotVMConfigAccess;
@@ -56,6 +57,29 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
         klassEncoding = new CompressEncoding(narrowKlassBase, narrowKlassShift, logKlassAlignment);
 
         assert check();
+    }
+
+    /**
+     * Gets the value of a static C++ field under two possible names. {@code name} is the preferred
+     * name and will be checked first.
+     *
+     * @param name fully qualified name of the field
+     * @param alternateName fully qualified alternate name of the field
+     * @param type the boxed type to which the constant value will be converted
+     * @param cppType if non-null, the expected C++ type of the field (e.g., {@code "HeapWord*"})
+     * @return the value of the requested field
+     * @throws JVMCIError if the field is not static or not present
+     */
+    public <T> T getFieldValueWithAlternate(String name, String alternateName, Class<T> type, String cppType) {
+        try {
+            return getFieldValue(name, type, cppType);
+        } catch (JVMCIError e) {
+            try {
+                return getFieldValue(alternateName, type, cppType);
+            } catch (JVMCIError e2) {
+                throw new JVMCIError("expected VM field not found: " + name + " or " + alternateName);
+            }
+        }
     }
 
     private final CompressEncoding oopEncoding;
@@ -115,6 +139,11 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
     public final boolean cAssertions = getConstant("ASSERT", Boolean.class);
 
     public final int codeEntryAlignment = getFlag("CodeEntryAlignment", Integer.class);
+    public final boolean enableContended = getFlag("EnableContended", Boolean.class);
+    public final boolean restrictContended = getFlag("RestrictContended", Boolean.class);
+    public final int contendedPaddingWidth = getFlag("ContendedPaddingWidth", Integer.class);
+    public final int fieldsAllocationStyle = getFlag("FieldsAllocationStyle", Integer.class);
+    public final boolean compactFields = getFlag("CompactFields", Boolean.class);
     public final boolean verifyOops = getFlag("VerifyOops", Boolean.class);
     public final boolean ciTime = getFlag("CITime", Boolean.class);
     public final boolean ciTimeEach = getFlag("CITimeEach", Boolean.class);
@@ -134,6 +163,52 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
     public final boolean usePopCountInstruction = getFlag("UsePopCountInstruction", Boolean.class);
     public final boolean useAESIntrinsics = getFlag("UseAESIntrinsics", Boolean.class);
     public final boolean useCRC32Intrinsics = getFlag("UseCRC32Intrinsics", Boolean.class);
+
+    private final boolean useMultiplyToLenIntrinsic = getFlag("UseMultiplyToLenIntrinsic", Boolean.class);
+    private final boolean useSHA1Intrinsics = getFlag("UseSHA1Intrinsics", Boolean.class);
+    private final boolean useSHA256Intrinsics = getFlag("UseSHA256Intrinsics", Boolean.class);
+    private final boolean useSHA512Intrinsics = getFlag("UseSHA512Intrinsics", Boolean.class);
+    private final boolean useMontgomeryMultiplyIntrinsic = getFlag("UseMontgomeryMultiplyIntrinsic", Boolean.class, false);
+    private final boolean useMontgomerySquareIntrinsic = getFlag("UseMontgomerySquareIntrinsic", Boolean.class, false);
+    private final boolean useMulAddIntrinsic = getFlag("UseMulAddIntrinsic", Boolean.class, false);
+    private final boolean useSquareToLenIntrinsic = getFlag("UseSquareToLenIntrinsic", Boolean.class, false);
+
+    /*
+     * These are methods because in some JDKs the flags are visible but the stubs themselves haven't
+     * been exported so we have to check both if the flag is on and if we have the stub.
+     */
+    public boolean useMultiplyToLenIntrinsic() {
+        return useMultiplyToLenIntrinsic && multiplyToLen != 0;
+    }
+
+    public boolean useSHA1Intrinsics() {
+        return useSHA1Intrinsics && sha1ImplCompress != 0;
+    }
+
+    public boolean useSHA256Intrinsics() {
+        return useSHA256Intrinsics && sha256ImplCompress != 0;
+    }
+
+    public boolean useSHA512Intrinsics() {
+        return useSHA512Intrinsics && sha512ImplCompress != 0;
+    }
+
+    public boolean useMontgomeryMultiplyIntrinsic() {
+        return useMontgomeryMultiplyIntrinsic && montgomeryMultiply != 0;
+    }
+
+    public boolean useMontgomerySquareIntrinsic() {
+        return useMontgomerySquareIntrinsic && montgomerySquare != 0;
+    }
+
+    public boolean useMulAddIntrinsic() {
+        return useMulAddIntrinsic && mulAdd != 0;
+    }
+
+    public boolean useSquareToLenIntrinsic() {
+        return useSquareToLenIntrinsic && squareToLen != 0;
+    }
+
     public final boolean useG1GC = getFlag("UseG1GC", Boolean.class);
     public final boolean useCMSGC = getFlag("UseConcMarkSweepGC", Boolean.class);
 
@@ -362,7 +437,14 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
     public final long markOopDescHashMaskInPlace = getConstant("markOopDesc::hash_mask_in_place", Long.class);
 
     public final int unlockedMask = getConstant("markOopDesc::unlocked_value", Integer.class);
+    public final int monitorMask = getConstant("markOopDesc::monitor_value", Integer.class, -1);
     public final int biasedLockPattern = getConstant("markOopDesc::biased_lock_pattern", Integer.class);
+
+    // This field has no type in vmStructs.cpp
+    public final int objectMonitorOwner = getFieldOffset("ObjectMonitor::_owner", Integer.class, null, -1);
+    public final int objectMonitorRecursions = getFieldOffset("ObjectMonitor::_recursions", Integer.class, "intptr_t", -1);
+    public final int objectMonitorcxq = getFieldOffset("ObjectMonitor::_cxq", Integer.class, "ObjectWaiter*", -1);
+    public final int objectMonitorEntryList = getFieldOffset("ObjectMonitor::_EntryList", Integer.class, "ObjectWaiter*", -1);
 
     public final int markWordNoHashInPlace = getConstant("markOopDesc::no_hash_in_place", Integer.class);
     public final int markWordNoLockInPlace = getConstant("markOopDesc::no_lock_in_place", Integer.class);
@@ -414,6 +496,8 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
 
     public final int invocationCounterOffset = getFieldOffset("MethodCounters::_invocation_counter", Integer.class, "InvocationCounter");
     public final int backedgeCounterOffset = getFieldOffset("MethodCounters::_backedge_counter", Integer.class, "InvocationCounter");
+    public final int invocationCounterIncrement = getConstant("InvocationCounter::count_increment", Integer.class, intNotPresentInJDK8);
+    public final int invocationCounterShift = getConstant("InvocationCounter::count_shift", Integer.class, intNotPresentInJDK8);
 
     public final int nmethodEntryOffset = getFieldOffset("nmethod::_verified_entry_point",
                     Integer.class, "address");
@@ -441,16 +525,14 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
     public final byte dirtyCardValue = isJDK8 ? getFieldValue("CompilerToVM::Data::dirty_card", Byte.class, "int") : getConstant("CardTableModRefBS::dirty_card", Byte.class);
     public final byte g1YoungCardValue = isJDK8 ? getFieldValue("CompilerToVM::Data::g1_young_card", Byte.class, "int") : getConstant("G1SATBCardTableModRefBS::g1_young_gen", Byte.class);
 
-    private final long cardtableStartAddress = getFieldValue("CompilerToVM::Data::cardtable_start_address", Long.class, "jbyte*");
-    private final int cardtableShift = getFieldValue("CompilerToVM::Data::cardtable_shift", Integer.class, "int");
+    public final long cardtableStartAddress = getFieldValue("CompilerToVM::Data::cardtable_start_address", Long.class, "jbyte*");
+    public final int cardtableShift = getFieldValue("CompilerToVM::Data::cardtable_shift", Integer.class, "int");
 
-    public long cardtableStartAddress() {
-        return cardtableStartAddress;
-    }
-
-    public int cardtableShift() {
-        return cardtableShift;
-    }
+    /**
+     * This is the largest stack offset encodeable in an OopMapValue. Offsets larger than this will
+     * throw an exception during code installation.
+     */
+    public final int maxOopMapStackOffset = getFieldValueWithAlternate("CompilerToVM::Data::_max_oop_map_stack_offset", "JVMCIRuntime::max_oop_map_stack_offset", Integer.class, "int");
 
     public final long safepointPollingAddress = getFieldValue("os::_polling_page", Long.class, "address");
 
@@ -539,7 +621,7 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
     // FIXME This is only temporary until the GC code is changed.
     public final boolean inlineContiguousAllocationSupported = getFieldValue("CompilerToVM::Data::_supports_inline_contig_alloc", Boolean.class);
     public final long heapEndAddress = getFieldValue("CompilerToVM::Data::_heap_end_addr", Long.class, "HeapWord**");
-    public final long heapTopAddress = getFieldValue("CompilerToVM::Data::_heap_top_addr", Long.class, "HeapWord**");
+    public final long heapTopAddress = getFieldValue("CompilerToVM::Data::_heap_top_addr", Long.class, isJDK8 ? "HeapWord**" : "HeapWord* volatile*");
 
     public final long inlineCacheMissStub = getFieldValue("CompilerToVM::Data::SharedRuntime_ic_miss_stub", Long.class, "address");
     public final long handleWrongMethodStub = getFieldValue("CompilerToVM::Data::SharedRuntime_handle_wrong_method_stub", Long.class, "address");
@@ -556,6 +638,25 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
     public final long cipherBlockChainingDecryptAESCryptStub = getFieldValue("StubRoutines::_cipherBlockChaining_decryptAESCrypt", Long.class, "address");
     public final long updateBytesCRC32Stub = getFieldValue("StubRoutines::_updateBytesCRC32", Long.class, "address");
     public final long crcTableAddress = getFieldValue("StubRoutines::_crc_table_adr", Long.class, "address");
+
+    public final long sha1ImplCompress = getFieldValue("StubRoutines::_sha1_implCompress", Long.class, "address", 0L);
+    public final long sha1ImplCompressMB = getFieldValue("StubRoutines::_sha1_implCompressMB", Long.class, "address", 0L);
+    public final long sha256ImplCompress = getFieldValue("StubRoutines::_sha256_implCompress", Long.class, "address", 0L);
+    public final long sha256ImplCompressMB = getFieldValue("StubRoutines::_sha256_implCompressMB", Long.class, "address", 0L);
+    public final long sha512ImplCompress = getFieldValue("StubRoutines::_sha512_implCompress", Long.class, "address", 0L);
+    public final long sha512ImplCompressMB = getFieldValue("StubRoutines::_sha512_implCompressMB", Long.class, "address", 0L);
+    public final long multiplyToLen = getFieldValue("StubRoutines::_multiplyToLen", Long.class, "address", 0L);
+
+    public final long counterModeAESCrypt = getFieldValue("StubRoutines::_counterMode_AESCrypt", Long.class, "address", 0L);
+    public final long ghashProcessBlocks = getFieldValue("StubRoutines::_ghash_processBlocks", Long.class, "address", 0L);
+    public final long crc32cTableTddr = getFieldValue("StubRoutines::_crc32c_table_addr", Long.class, "address", 0L);
+    public final long updateBytesCRC32C = getFieldValue("StubRoutines::_updateBytesCRC32C", Long.class, "address", 0L);
+    public final long updateBytesAdler32 = getFieldValue("StubRoutines::_updateBytesAdler32", Long.class, "address", 0L);
+    public final long squareToLen = getFieldValue("StubRoutines::_squareToLen", Long.class, "address", 0L);
+    public final long mulAdd = getFieldValue("StubRoutines::_mulAdd", Long.class, "address", 0L);
+    public final long montgomeryMultiply = getFieldValue("StubRoutines::_montgomeryMultiply", Long.class, "address", 0L);
+    public final long montgomerySquare = getFieldValue("StubRoutines::_montgomerySquare", Long.class, "address", 0L);
+    public final long vectorizedMismatch = getFieldValue("StubRoutines::_vectorizedMismatch", Long.class, "address", 0L);
 
     public final long throwDelayedStackOverflowErrorEntry = getFieldValue("StubRoutines::_throw_delayed_StackOverflowError_entry", Long.class, "address", longNotPresentInJDK8);
 
@@ -629,6 +730,9 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
     public final long arithmeticLog10Address = getFieldValue("CompilerToVM::Data::dlog10", Long.class, "address");
     public final long arithmeticPowAddress = getFieldValue("CompilerToVM::Data::dpow", Long.class, "address");
 
+    public final long fremAddress = getAddress("SharedRuntime::frem");
+    public final long dremAddress = getAddress("SharedRuntime::drem");
+
     public final int jvmciCountersSize = getFlag("JVMCICounterSize", Integer.class);
 
     public final long deoptimizationFetchUnrollInfo = getAddress("Deoptimization::fetch_unroll_info");
@@ -666,11 +770,20 @@ public class GraalHotSpotVMConfig extends HotSpotVMConfigAccess {
     public final int MARKID_POLL_RETURN_FAR = getConstant("CodeInstaller::POLL_RETURN_FAR", Integer.class);
     public final int MARKID_CARD_TABLE_SHIFT = getConstant("CodeInstaller::CARD_TABLE_SHIFT", Integer.class);
     public final int MARKID_CARD_TABLE_ADDRESS = getConstant("CodeInstaller::CARD_TABLE_ADDRESS", Integer.class);
-    public final int MARKID_HEAP_TOP_ADDRESS = getConstant("CodeInstaller::HEAP_TOP_ADDRESS", Integer.class, intNotPresentInJDK8);
-    public final int MARKID_HEAP_END_ADDRESS = getConstant("CodeInstaller::HEAP_END_ADDRESS", Integer.class, intNotPresentInJDK8);
-    public final int MARKID_NARROW_KLASS_BASE_ADDRESS = getConstant("CodeInstaller::NARROW_KLASS_BASE_ADDRESS", Integer.class, intNotPresentInJDK8);
-    public final int MARKID_CRC_TABLE_ADDRESS = getConstant("CodeInstaller::CRC_TABLE_ADDRESS", Integer.class, intNotPresentInJDK8);
     public final int MARKID_INVOKE_INVALID = getConstant("CodeInstaller::INVOKE_INVALID", Integer.class);
+
+    /**
+     * The following constants are given default values here since they are missing in the native
+     * JVMCI-8 code but are still required for {@link GraalHotSpotVMConfigNode#canonical} to work in
+     * a JDK8 environment.
+     */
+    public final int MARKID_HEAP_TOP_ADDRESS = getConstant("CodeInstaller::HEAP_TOP_ADDRESS", Integer.class, 17);
+    public final int MARKID_HEAP_END_ADDRESS = getConstant("CodeInstaller::HEAP_END_ADDRESS", Integer.class, 18);
+    public final int MARKID_NARROW_KLASS_BASE_ADDRESS = getConstant("CodeInstaller::NARROW_KLASS_BASE_ADDRESS", Integer.class, 19);
+    public final int MARKID_CRC_TABLE_ADDRESS = getConstant("CodeInstaller::CRC_TABLE_ADDRESS", Integer.class, 20);
+    public final int MARKID_LOG_OF_HEAP_REGION_GRAIN_BYTES = getConstant("CodeInstaller::LOG_OF_HEAP_REGION_GRAIN_BYTES", Integer.class, 21);
+    public final int MARKID_INLINE_CONTIGUOUS_ALLOCATION_SUPPORTED = getConstant("CodeInstaller::INLINE_CONTIGUOUS_ALLOCATION_SUPPORTED", Integer.class, 22);
+
     // Checkstyle: resume
 
     private boolean check() {
