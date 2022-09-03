@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.type.*;
  * For example, a PI node refines the type of a receiver during
  * type-guarded inlining to be the type tested by the guard.
  */
-public class PiNode extends FloatingNode implements LIRLowerable, Virtualizable {
+public class PiNode extends FloatingNode implements LIRLowerable {
 
     @Input private ValueNode object;
     @Input(notDataflow = true) private final FixedNode anchor;
@@ -58,18 +58,10 @@ public class PiNode extends FloatingNode implements LIRLowerable, Virtualizable 
     @Override
     public boolean inferStamp() {
         if (object().objectStamp().alwaysNull() && objectStamp().nonNull()) {
-            // a null value flowing into a nonNull PiNode should be guarded by a type/isNull guard, but the
+            // a null value flowing into a nonNull PiNode can happen should be guarded by a type/isNull guard, but the
             // compiler might see this situation before the branch is deleted
             return false;
         }
         return updateStamp(stamp().join(object().stamp()));
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object);
-        if (state != null && state.getState() == EscapeState.Virtual) {
-            tool.replaceWithVirtual(state.getVirtualObject());
-        }
     }
 }
