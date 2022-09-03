@@ -112,13 +112,6 @@ final class JavaInteropReflect {
         return classDesc.lookupMethod(name, onlyStatic) != null;
     }
 
-    static boolean isInternalMethod(JavaObject object, String name) {
-        JavaClassDesc classDesc = JavaClassDesc.forClass(object.clazz);
-        final boolean onlyStatic = object.isClass();
-        JavaMethodDesc method = classDesc.lookupMethod(name, onlyStatic);
-        return method != null && method.isInternal();
-    }
-
     static boolean isMemberType(JavaObject object, String name) {
         final boolean onlyStatic = object.isClass();
         if (!onlyStatic) {
@@ -137,9 +130,6 @@ final class JavaInteropReflect {
     }
 
     static boolean isJNIMethod(JavaObject object, String jniName) {
-        if (!isJNIName(jniName)) {
-            return false;
-        }
         JavaClassDesc classDesc = JavaClassDesc.forClass(object.clazz);
         final boolean onlyStatic = object.isClass();
         return (classDesc.lookupMethodByJNIName(jniName, onlyStatic)) != null;
@@ -248,7 +238,7 @@ final class JavaInteropReflect {
         JavaClassDesc classDesc = JavaClassDesc.forClass(clazz);
         Collection<String> names = new LinkedHashSet<>();
         names.addAll(classDesc.getFieldNames(!onlyInstance));
-        names.addAll(classDesc.getMethodNames(!onlyInstance, includeInternal));
+        names.addAll(classDesc.getMethodNames(!onlyInstance));
         if (includeInternal) {
             names.addAll(classDesc.getJNIMethodNames(!onlyInstance));
         }

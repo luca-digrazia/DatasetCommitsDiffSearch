@@ -28,8 +28,4 @@ interface JavaMethodDesc {
     String getName();
 
     JavaMethodDesc[] getOverloads();
-
-    default boolean isInternal() {
-        return false;
-    }
 }

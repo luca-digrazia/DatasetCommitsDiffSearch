@@ -278,17 +278,20 @@ class JavaObjectMessageResolution {
             if (i < 0) {
                 return 0;
             }
-            if (receiver.isArray()) {
-                int length = Array.getLength(receiver.obj);
-                if (i < length) {
-                    return 0b111;
+            Object obj = receiver.obj;
+            try {
+                int length = Array.getLength(obj);
+                if (i >= length) {
+                    return 0;
                 }
+                return 0b111;
+            } catch (IllegalArgumentException notAnArr) {
+                return 0;
             }
-            return 0;
         }
 
         @TruffleBoundary
-        public int access(JavaObject receiver, String name) {
+        public Object access(JavaObject receiver, String name) {
             if (receiver.obj instanceof Map) {
                 Map<?, ?> map = (Map<?, ?>) receiver.obj;
                 if (map.containsKey(name)) {
@@ -303,18 +306,16 @@ class JavaObjectMessageResolution {
             if (JavaInteropReflect.isField(receiver, name)) {
                 return 0b111;
             }
-            if (JavaInteropReflect.isMethod(receiver, name)) {
-                if (JavaInteropReflect.isInternalMethod(receiver, name)) {
-                    return 0b11111;
-                } else {
-                    return 0b1111;
-                }
-            }
-            if (JavaInteropReflect.isJNIMethod(receiver, name)) {
-                return 0b11111;
-            }
             if (JavaInteropReflect.isMemberType(receiver, name)) {
                 return 0b11;
+            }
+            if (JavaInteropReflect.isMethod(receiver, name)) {
+                return 0b1111;
+            }
+            if (JavaInteropReflect.isJNIName(name)) {
+                if (JavaInteropReflect.isJNIMethod(receiver, name)) {
+                    return 0b11111;
+                }
             }
             return 0;
         }

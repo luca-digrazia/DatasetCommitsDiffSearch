@@ -52,14 +52,4 @@ class OverloadedMethodDesc implements JavaMethodDesc {
         }
         return sj.toString();
     }
-
-    @Override
-    public boolean isInternal() {
-        for (SingleMethodDesc overload : overloads) {
-            if (!overload.isInternal()) {
-                return false;
-            }
-        }
-        return true;
-    }
 }

@@ -24,13 +24,11 @@
  */
 package com.oracle.truffle.api.interop.java.test;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -40,15 +38,14 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.KeyInfo;
@@ -58,6 +55,7 @@ import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
 import com.oracle.truffle.api.nodes.Node;
@@ -129,26 +127,26 @@ public class JavaInteropTest {
         assertEquals("The two proxies are equal", anotherThis, xyp);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void assertKeysAndProperties() {
-        TruffleObject keys = sendKeys(obj);
-        List<Object> list = JavaInterop.asJavaObject(List.class, keys);
-        assertThat(list, CoreMatchers.hasItems("x", "y", "arr", "value", "map", "dataMap", "data", "plus"));
+        CallTarget callTarget = sendKeys();
+        final TruffleObject ret = (TruffleObject) callTarget.call(obj);
+        List<?> list = JavaInterop.asJavaObject(List.class, ret);
+        assertTrue("Contains x " + list, list.contains("x"));
+        assertTrue("Contains y " + list, list.contains("y"));
+        assertTrue("Contains arr " + list, list.contains("arr"));
+        assertTrue("Contains value " + list, list.contains("value"));
+        assertTrue("Contains map " + list, list.contains("map"));
 
-        Method[] objectMethods = Object.class.getMethods();
-        for (Method objectMethod : objectMethods) {
-            assertThat("No java.lang.Object methods", list, CoreMatchers.not(CoreMatchers.hasItem(objectMethod.getName())));
-        }
-
-        keys = sendKeys(obj, true);
-        list = JavaInterop.asJavaObject(List.class, keys);
-        for (Method objectMethod : objectMethods) {
-            assertThat("java.lang.Object methods", list, CoreMatchers.hasItem(objectMethod.getName()));
-        }
+        assertFalse("No object fields " + list, list.contains("notifyAll"));
+        assertFalse("No object fields " + list, list.contains("notify"));
+        assertFalse("No object fields " + list, list.contains("wait"));
+        assertFalse("No object fields " + list, list.contains("hashCode"));
+        assertFalse("No object fields " + list, list.contains("equals"));
+        assertFalse("No object fields " + list, list.contains("toString"));
+        assertFalse("No object fields " + list, list.contains("getClass"));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void assertKeysFromAMap() {
         Map<String, Integer> map = new HashMap<>();
@@ -157,9 +155,12 @@ public class JavaInteropTest {
         map.put("three", 3);
 
         TruffleObject truffleMap = JavaInterop.asTruffleObject(map);
-        TruffleObject ret = sendKeys(truffleMap);
-        List<Object> list = JavaInterop.asJavaObject(List.class, ret);
-        assertThat(list, CoreMatchers.hasItems("one", "null", "three"));
+        TruffleObject ret = (TruffleObject) sendKeys().call(truffleMap);
+        List<?> list = JavaInterop.asJavaObject(List.class, ret);
+        assertTrue("Contains one " + list, list.contains("one"));
+        assertTrue("Contains null " + list, list.contains("null"));
+        assertTrue("Contains three " + list, list.contains("three"));
+
     }
 
     @Test
@@ -167,72 +168,73 @@ public class JavaInteropTest {
         assertNoRead("unknown");
     }
 
-    private void assertReadMethod(final String name) throws UnsupportedMessageException, UnknownIdentifierException {
-        Object method = ForeignAccess.sendRead(Message.READ.createNode(), obj, name);
-        assertTrue("Expected executable", method instanceof TruffleObject && ForeignAccess.sendIsExecutable(Message.IS_EXECUTABLE.createNode(), (TruffleObject) method));
-    }
-
     private void assertNoRead(final String name) throws UnsupportedMessageException {
         try {
             ForeignAccess.sendRead(Message.READ.createNode(), obj, name);
-            fail("Expected exception when reading field: " + name);
+            fail("Exception thrown when reading " + name + " field");
         } catch (UnknownIdentifierException ex) {
             assertEquals(name, ex.getUnknownIdentifier());
         }
     }
 
-    static void assertThrowsExceptionWithCause(Callable<?> callable, Class<? extends Exception> exception) {
-        try {
-            callable.call();
-            fail("Expected " + exception.getSimpleName() + " but no exception was thrown");
-        } catch (Exception e) {
-            List<Class<? extends Throwable>> causes = new ArrayList<>();
-            for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-                if (cause.getClass() == exception) {
-                    return;
-                }
-                causes.add(cause.getClass());
+    private void assertNoInvoke(final String name) throws UnsupportedMessageException {
+        for (int arity = 0;; arity++) {
+            try {
+                ForeignAccess.sendInvoke(Message.createInvoke(arity).createNode(), obj, name);
+                fail("Exception thrown when reading " + name + " field");
+            } catch (UnknownIdentifierException ex) {
+                assertEquals(name, ex.getUnknownIdentifier());
+                break;
+            } catch (UnsupportedTypeException ex) {
+                fail("Types are OK");
+            } catch (ArityException ex) {
+                assertEquals(arity, ex.getExpectedArity());
             }
-            fail("Expected " + exception.getSimpleName() + ", got " + causes);
         }
     }
 
     @Test
-    public void readJavaLangObjectFields() throws InteropException {
-        assertReadMethod("notify");
-        assertReadMethod("notifyAll");
-        assertReadMethod("wait");
-        assertReadMethod("hashCode");
-        assertReadMethod("equals");
-        assertReadMethod("toString");
-        assertReadMethod("getClass");
+    public void readJavaLangObjectFields() throws Exception {
+        assertNoRead("notify");
+        assertNoRead("notifyAll");
+        assertNoRead("wait");
+        assertNoRead("hashCode");
+        assertNoRead("equals");
+        assertNoRead("toString");
+        assertNoRead("getClass");
     }
 
     @Test
-    public void invokeJavaLangObjectFields() throws InteropException {
-        Object string = ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), obj, "toString");
-        assertTrue(string instanceof String && ((String) string).startsWith(Data.class.getName() + "@"));
-        Object clazz = ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), obj, "getClass");
-        assertTrue(clazz instanceof TruffleObject && JavaInterop.asJavaObject((TruffleObject) clazz) == Data.class);
-        assertEquals(true, ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), obj, "equals", obj));
-        assertTrue(ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), obj, "hashCode") instanceof Integer);
-
-        for (String m : new String[]{"notify", "notifyAll", "wait"}) {
-            assertThrowsExceptionWithCause(() -> ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), obj, m), IllegalMonitorStateException.class);
-        }
+    public void invokeJavaLangObjectFields() throws Exception {
+        assertNoInvoke("notify");
+        assertNoInvoke("notifyAll");
+        assertNoInvoke("wait");
+        assertNoInvoke("hashCode");
+        assertNoInvoke("equals");
+        assertNoInvoke("toString");
+        assertNoInvoke("getClass");
     }
 
-    static TruffleObject sendKeys(TruffleObject receiver) {
-        return sendKeys(receiver, false);
-    }
-
-    static TruffleObject sendKeys(TruffleObject receiver, boolean includeInternal) {
+    static CallTarget sendKeys() {
         final Node keysNode = Message.KEYS.createNode();
-        try {
-            return ForeignAccess.sendKeys(keysNode, receiver, includeInternal);
-        } catch (InteropException ex) {
-            throw ex.raise();
+
+        class SendKeys extends RootNode {
+            SendKeys() {
+                super(null);
+            }
+
+            @Override
+            public Object execute(VirtualFrame frame) {
+                try {
+                    final TruffleObject receiver = (TruffleObject) frame.getArguments()[0];
+                    return ForeignAccess.sendKeys(keysNode, receiver);
+                } catch (InteropException ex) {
+                    throw ex.raise();
+                }
+            }
         }
+        CallTarget callTarget = Truffle.getRuntime().createCallTarget(new SendKeys());
+        return callTarget;
     }
 
     class PrivatePOJO {
@@ -259,7 +261,8 @@ public class JavaInteropTest {
     @Test
     public void accessAllPropertiesDirectly() {
         TruffleObject pojo = JavaInterop.asTruffleObject(new PrivatePOJO());
-        TruffleObject result = sendKeys(pojo);
+        CallTarget callKeys = sendKeys();
+        TruffleObject result = (TruffleObject) callKeys.call(pojo);
         List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
         assertEquals("No props, class isn't public", 0, propertyNames.size());
     }
@@ -292,7 +295,8 @@ public class JavaInteropTest {
     public void accessAllPublicPropertiesDirectly() {
         final PublicPOJO orig = new PublicPOJO();
         final TruffleObject pojo = JavaInterop.asTruffleObject(orig);
-        TruffleObject result = sendKeys(pojo);
+        CallTarget callKeys = sendKeys();
+        TruffleObject result = (TruffleObject) callKeys.call(pojo);
         List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
         assertEquals("One instance field and one method", 2, propertyNames.size());
         assertEquals("One field x", "x", propertyNames.get(0));
@@ -310,7 +314,8 @@ public class JavaInteropTest {
     @Test
     public void noNonStaticPropertiesForAClass() {
         TruffleObject pojo = JavaInterop.asTruffleObject(PublicPOJO.class);
-        TruffleObject result = sendKeys(pojo);
+        CallTarget callKeys = sendKeys();
+        TruffleObject result = (TruffleObject) callKeys.call(pojo);
         List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
         assertEquals("One static field and one method", 2, propertyNames.size());
         assertEquals("One field y", "y", propertyNames.get(0));
@@ -507,39 +512,17 @@ public class JavaInteropTest {
 
     @Test
     public void functionalInterfaceWithDefaultMethods() throws Exception {
-        assertTrue("yes, it is", isJavaFunctionalInterface(FunctionalWithDefaults.class));
+        final boolean is = isJavaFunctionalInterface(FunctionalWithDefaults.class);
+        assertTrue("yes, it is", is);
     }
 
     @FunctionalInterface
-    public interface FunctionalWithDefaults {
+    interface FunctionalWithDefaults {
         Object call(Object... args);
 
         default int call(int a, int b) {
             return (int) call(new Object[]{a, b});
         }
-    }
-
-    @Test
-    public void functionalInterfaceOverridingObjectMethods() throws Exception {
-        assertTrue("yes, it is", isJavaFunctionalInterface(FunctionalWithObjectMethodOverrides.class));
-        TruffleObject object = JavaInterop.asTruffleObject((FunctionalWithObjectMethodOverrides) (args) -> null);
-        TruffleObject keysObject = ForeignAccess.sendKeys(Message.KEYS.createNode(), object);
-        List<?> keyList = JavaInterop.asJavaObject(List.class, keysObject);
-        assertArrayEquals(new Object[]{"call"}, keyList.toArray());
-    }
-
-    @FunctionalInterface
-    public interface FunctionalWithObjectMethodOverrides {
-        Object call(Object... args);
-
-        @Override
-        boolean equals(Object obj);
-
-        @Override
-        int hashCode();
-
-        @Override
-        String toString();
     }
 
     @Test
@@ -800,24 +783,26 @@ public class JavaInteropTest {
 
     static Object message(final Message m, TruffleObject receiver, Object... arr) {
         Node n = m.createNode();
-        CallTarget callTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(n, receiver));
-        return callTarget.call(arr);
+        CallTarget callTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(n, receiver, arr));
+        return callTarget.call();
     }
 
     private static class TemporaryRoot extends RootNode {
         @Child private Node foreignAccess;
         private final TruffleObject function;
+        private final Object[] args;
 
-        TemporaryRoot(Node foreignAccess, TruffleObject function) {
+        TemporaryRoot(Node foreignAccess, TruffleObject function, Object... args) {
             super(null);
             this.foreignAccess = foreignAccess;
             this.function = function;
+            this.args = args;
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
             try {
-                return ForeignAccess.send(foreignAccess, function, frame.getArguments());
+                return ForeignAccess.send(foreignAccess, function, args);
             } catch (InteropException e) {
                 throw e.raise();
             }
@@ -950,7 +935,7 @@ public class JavaInteropTest {
         @MessageResolution(receiverType = InternalPropertiesObject.class)
         static final class PropertiesVisibilityObjectMessageResolution {
             @Resolve(message = "KEYS")
-            public abstract static class KeysNode extends Node {
+            public abstract static class PropertiesKeysNode extends Node {
 
                 public Object access(InternalPropertiesObject receiver, boolean includeInternal) {
                     assert receiver != null;
@@ -969,7 +954,7 @@ public class JavaInteropTest {
             }
 
             @Resolve(message = "KEY_INFO")
-            public abstract static class KeyInfoNode extends Node {
+            public abstract static class IsReadableNode extends Node {
 
                 public int access(InternalPropertiesObject receiver, String propertyName) {
                     if (propertyName.length() != 2 || propertyName.charAt(0) != 'p' || !Character.isDigit(propertyName.charAt(1))) {
