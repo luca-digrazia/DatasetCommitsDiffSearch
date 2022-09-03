@@ -24,7 +24,6 @@
  */
 package org.graalvm.polyglot.impl;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -126,7 +125,7 @@ public abstract class AbstractPolyglotImpl {
             this.engineImpl = engineImpl;
         }
 
-        public abstract Source build(Object origin, URI uri, String name, String content, boolean interactive, boolean internal) throws IOException;
+        public abstract Source build(Object origin, URI uri, String name, boolean interactive, boolean internal);
 
         public abstract String getName(Object impl);
 

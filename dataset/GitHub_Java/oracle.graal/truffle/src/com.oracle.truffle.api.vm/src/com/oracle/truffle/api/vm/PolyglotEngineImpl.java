@@ -534,13 +534,11 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     private static final class PolyglotShutDownHook implements Runnable {
 
         public void run() {
-            PolyglotEngineImpl[] engines = ENGINES.keySet().toArray(new PolyglotEngineImpl[0]);
-            for (PolyglotEngineImpl engine : engines) {
+            for (PolyglotEngineImpl engine : ENGINES.keySet()) {
                 if (engine != null) {
                     engine.ensureClosed(false, true);
                 }
             }
-            ENGINES.keySet().removeAll(Arrays.asList(engines));
         }
     }
 
