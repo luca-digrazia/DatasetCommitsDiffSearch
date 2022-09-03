@@ -378,9 +378,10 @@ public final class Runner {
     private void allocateGlobals(List<LLVMParserResult> parserResults) {
         for (LLVMParserResult res : parserResults) {
             ArrayList<LLVMGlobal> globals = new ArrayList<>();
-            for (GlobalVariable symbol : res.getDefinedGlobals()) {
-                LLVMGlobal global = res.getRuntime().getFileScope().getGlobalVariable(symbol.getName());
-                globals.add(global);
+            for (LLVMSymbol symbol : res.getRuntime().getFileScope().values()) {
+                if (symbol instanceof LLVMGlobal) {
+                    globals.add((LLVMGlobal) symbol);
+                }
             }
             allocateGlobals(globals);
         }

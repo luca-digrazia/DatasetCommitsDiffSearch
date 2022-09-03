@@ -39,7 +39,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Random;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -54,6 +53,7 @@ import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ControlFlowException;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.NullFunction;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
@@ -70,6 +70,7 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
+import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMContext {
@@ -134,7 +135,7 @@ public final class LLVMContext {
     private final InteropNodeFactory interopNodeFactory;
 
     private final class LLVMFunctionPointerRegistry {
-        private int currentFunctionIndex = 1;
+        private int currentFunctionIndex = 0;
         private final HashMap<LLVMNativePointer, LLVMFunctionDescriptor> functionDescriptors = new HashMap<>();
 
         synchronized LLVMFunctionDescriptor getDescriptor(LLVMNativePointer pointer) {
@@ -146,7 +147,12 @@ public final class LLVMContext {
         }
 
         synchronized LLVMFunctionDescriptor create(String name, FunctionType type) {
-            return LLVMFunctionDescriptor.createDescriptor(LLVMContext.this, name, type, currentFunctionIndex++);
+            LLVMFunctionDescriptor fn = LLVMFunctionDescriptor.createDescriptor(LLVMContext.this, name, type, currentFunctionIndex++);
+            if (fn.isNullFunction()) {
+                assert !functionDescriptors.containsKey(LLVMNativePointer.createNull());
+                functionDescriptors.put(LLVMNativePointer.createNull(), fn);
+            }
+            return fn;
         }
     }
 
@@ -171,7 +177,7 @@ public final class LLVMContext {
         this.functionPointerRegistry = new LLVMFunctionPointerRegistry();
         this.sourceContext = new LLVMSourceContext();
 
-        this.globalScope = new LLVMScope();
+        this.globalScope = createGlobalScope();
         this.dynamicLinkChain = new DynamicLinkChain();
 
         Object mainArgs = env.getConfig().get(LLVMLanguage.MAIN_ARGS_KEY);
@@ -186,6 +192,15 @@ public final class LLVMContext {
         }
     }
 
+    private LLVMScope createGlobalScope() {
+        LLVMFunctionDescriptor nullFunction = functionPointerRegistry.create("<nullFunction>", new FunctionType(MetaType.UNKNOWN, new Type[0], false));
+        nullFunction.define(new ExternalLibrary("Default", false), new NullFunction());
+
+        LLVMScope scope = new LLVMScope();
+        scope.register(nullFunction);
+        return scope;
+    }
+
     public void initialize() {
         // we can't do the initialization in the LLVMContext constructor nor in
         // Sulong.createContext() because Truffle is not properly initialized there. So, we need to
@@ -198,7 +213,7 @@ public final class LLVMContext {
             LLVMFunctionDescriptor initContextDescriptor = globalScope.getFunction("@__sulong_init_context");
             RootCallTarget initContextFunction = initContextDescriptor.getLLVMIRFunction();
             try (StackPointer stackPointer = threadingStack.getStack().newFrame()) {
-                Object[] args = new Object[]{stackPointer, getApplicationArguments(), getEnvironmentVariables(), getRandomValues()};
+                Object[] args = new Object[]{stackPointer, toTruffleObjects(getApplicationArguments()), toTruffleObjects(getEnvironmentVariables())};
                 initContextFunction.call(args);
             }
         }
@@ -212,7 +227,7 @@ public final class LLVMContext {
         defaultLibrariesLoaded = true;
     }
 
-    private LLVMManagedPointer getApplicationArguments() {
+    private String[] getApplicationArguments() {
         int mainArgsCount = mainArguments == null ? 0 : mainArguments.length;
         String[] result = new String[mainArgsCount + 1];
         // we don't have an application path at this point in time. it will be overwritten when
@@ -221,38 +236,19 @@ public final class LLVMContext {
         for (int i = 1; i < result.length; i++) {
             result[i] = mainArguments[i - 1].toString();
         }
-        return toTruffleObjects(result);
+        return result;
     }
 
-    private LLVMManagedPointer getEnvironmentVariables() {
-        String[] result = environment.entrySet().stream().map((e) -> e.getKey() + "=" + e.getValue()).toArray(String[]::new);
-        return toTruffleObjects(result);
-    }
-
-    private LLVMManagedPointer getRandomValues() {
-        byte[] result = new byte[16];
-        random().nextBytes(result);
-        return toManagedPointer(toTruffleObject(result));
-    }
-
-    private static Random random() {
-        return new Random();
+    private String[] getEnvironmentVariables() {
+        return environment.entrySet().stream().map((e) -> e.getKey() + "=" + e.getValue()).toArray(String[]::new);
     }
 
     private LLVMManagedPointer toTruffleObjects(String[] values) {
         TruffleObject[] result = new TruffleObject[values.length];
         for (int i = 0; i < values.length; i++) {
-            result[i] = toTruffleObject(values[i].getBytes());
+            result[i] = (TruffleObject) env.asGuestValue(values[i].getBytes());
         }
-        return toManagedPointer(toTruffleObject(result));
-    }
-
-    private TruffleObject toTruffleObject(Object value) {
-        return (TruffleObject) env.asGuestValue(value);
-    }
-
-    private static LLVMManagedPointer toManagedPointer(TruffleObject value) {
-        return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(value));
+        return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown((TruffleObject) env.asGuestValue(result)));
     }
 
     public void dispose(LLVMMemory memory) {
@@ -633,8 +629,9 @@ public final class LLVMContext {
         return sourceContext;
     }
 
-    @TruffleBoundary
     public LLVMGlobal findGlobal(LLVMPointer pointer) {
+        CompilerAsserts.neverPartOfCompilation();
+
         LLVMGlobal result = globalsReverseMap.get(pointer);
         if (result == null) {
             throw new IllegalStateException("Could not find pointer " + pointer);
