@@ -114,23 +114,13 @@ public class StampTool {
         return StampFactory.forKind(kind);
     }
 
-    private static boolean addOverflowsPositively(long x, long y, Kind kind) {
+    private static boolean addOverflows(long x, long y, Kind kind) {
         long result = x + y;
         if (kind == Kind.Long) {
-            return (~x & ~y & result) < 0;
+            return ((x ^ result) & (y ^ result)) < 0;
         } else {
             assert kind == Kind.Int;
-            return result > Integer.MAX_VALUE;
-        }
-    }
-
-    private static boolean addOverflowsNegatively(long x, long y, Kind kind) {
-        long result = x + y;
-        if (kind == Kind.Long) {
-            return (x & y & ~result) < 0;
-        } else {
-            assert kind == Kind.Int;
-            return result < Integer.MIN_VALUE;
+            return result > Integer.MAX_VALUE || result < Integer.MIN_VALUE;
         }
     }
 
@@ -152,22 +142,16 @@ public class StampTool {
 
             long lowerBound;
             long upperBound;
-            boolean lowerOverflowsPositively = addOverflowsPositively(stamp1.lowerBound(), stamp2.lowerBound(), kind);
-            boolean upperOverflowsPositively = addOverflowsPositively(stamp1.upperBound(), stamp2.upperBound(), kind);
-            boolean lowerOverflowsNegatively = addOverflowsNegatively(stamp1.lowerBound(), stamp2.lowerBound(), kind);
-            boolean upperOverflowsNegatively = addOverflowsNegatively(stamp1.upperBound(), stamp2.upperBound(), kind);
-            if ((lowerOverflowsNegatively && !upperOverflowsNegatively) || (!lowerOverflowsNegatively && !lowerOverflowsPositively && upperOverflowsPositively)) {
+            if (addOverflows(stamp1.lowerBound(), stamp2.lowerBound(), kind) || addOverflows(stamp1.upperBound(), stamp2.upperBound(), kind)) {
                 lowerBound = kind.getMinValue();
                 upperBound = kind.getMaxValue();
             } else {
-                lowerBound = signExtend(stamp1.lowerBound() + stamp2.lowerBound(), kind);
-                upperBound = signExtend(stamp1.upperBound() + stamp2.upperBound(), kind);
+                lowerBound = stamp1.lowerBound() + stamp2.lowerBound();
+                upperBound = stamp1.upperBound() + stamp2.upperBound();
             }
             IntegerStamp limit = StampFactory.forInteger(kind, lowerBound, upperBound);
             newUpMask &= limit.upMask();
-            upperBound = signExtend(upperBound & newUpMask, kind);
-            lowerBound |= newDownMask;
-            return new IntegerStamp(kind, lowerBound, upperBound, newDownMask, newUpMask);
+            return new IntegerStamp(kind, lowerBound | newDownMask, signExtend(upperBound & newUpMask, kind), newDownMask, newUpMask);
         } catch (Throwable e) {
             throw new RuntimeException(stamp1 + " + " + stamp2, e);
         }
@@ -254,16 +238,14 @@ public class StampTool {
             if (shiftCount != 0) {
                 long lowerBound;
                 long upperBound;
-                long downMask = value.downMask() >>> shiftCount;
-                long upMask = value.upMask() >>> shiftCount;
                 if (value.lowerBound() < 0) {
-                    lowerBound = downMask;
-                    upperBound = upMask;
+                    lowerBound = 0;
+                    upperBound = IntegerStamp.defaultMask(kind) >>> shiftCount;
                 } else {
                     lowerBound = value.lowerBound() >>> shiftCount;
                     upperBound = value.upperBound() >>> shiftCount;
                 }
-                return new IntegerStamp(kind, lowerBound, upperBound, downMask, upMask);
+                return new IntegerStamp(kind, lowerBound, upperBound, value.downMask() >>> shiftCount, value.upMask() >>> shiftCount);
             }
         }
         long mask = IntegerStamp.upMaskFor(kind, value.lowerBound(), value.upperBound());
@@ -327,7 +309,7 @@ public class StampTool {
     }
 
     private static long signExtend(long value, Kind valueKind) {
-        if (valueKind != Kind.Char && valueKind != Kind.Long && (value >>> (valueKind.getBitCount() - 1) & 1) == 1) {
+        if (valueKind != Kind.Char && (value >>> (valueKind.getBitCount() - 1) & 1) == 1) {
             return value | (-1L << valueKind.getBitCount());
         } else {
             return value;

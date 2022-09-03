@@ -92,6 +92,12 @@ public class FloatStamp extends Stamp {
     }
 
     @Override
+    public boolean alwaysDistinct(Stamp otherStamp) {
+        FloatStamp other = (FloatStamp) otherStamp;
+        return (nonNaN || other.nonNaN) && (lowerBound > other.upperBound || upperBound < other.lowerBound);
+    }
+
+    @Override
     public Stamp meet(Stamp otherStamp) {
         if (otherStamp == this) {
             return this;
@@ -148,7 +154,6 @@ public class FloatStamp extends Stamp {
         final int prime = 31;
         int result = 1;
         long temp;
-        result = prime * result + kind().hashCode();
         temp = Double.doubleToLongBits(lowerBound);
         result = prime * result + (int) (temp ^ (temp >>> 32));
         result = prime * result + (nonNaN ? 1231 : 1237);
@@ -166,9 +171,6 @@ public class FloatStamp extends Stamp {
             return false;
         }
         FloatStamp other = (FloatStamp) obj;
-        if (kind() != other.kind()) {
-            return false;
-        }
         if (Double.doubleToLongBits(lowerBound) != Double.doubleToLongBits(other.lowerBound)) {
             return false;
         }
@@ -181,16 +183,4 @@ public class FloatStamp extends Stamp {
         return true;
     }
 
-    @Override
-    public Constant asConstant() {
-        if (nonNaN && lowerBound == upperBound) {
-            switch (kind()) {
-                case Float:
-                    return Constant.forFloat((float) lowerBound);
-                case Double:
-                    return Constant.forDouble(lowerBound);
-            }
-        }
-        return null;
-    }
 }

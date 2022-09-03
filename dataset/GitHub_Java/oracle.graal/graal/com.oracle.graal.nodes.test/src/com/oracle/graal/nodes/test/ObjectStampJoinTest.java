@@ -46,10 +46,6 @@ public class ObjectStampJoinTest extends GraalCompilerTest {
 
     }
 
-    private abstract static class E extends A {
-
-    }
-
     private interface I {
 
     }
@@ -94,10 +90,7 @@ public class ObjectStampJoinTest extends GraalCompilerTest {
     public void testJoin5() {
         Stamp dExact = StampFactory.exact(getType(D.class));
         Stamp c = StampFactory.declared(getType(C.class));
-        Stamp join = join(c, dExact);
-        Assert.assertTrue(ObjectStamp.isObjectAlwaysNull(join));
-        Assert.assertNull(ObjectStamp.typeOrNull(join));
-        Assert.assertFalse(ObjectStamp.isExactType(join));
+        Assert.assertTrue(ObjectStamp.isObjectAlwaysNull(join(c, dExact)));
     }
 
     @Test
@@ -107,16 +100,6 @@ public class ObjectStampJoinTest extends GraalCompilerTest {
         Stamp join = join(allwaysNull, dExactNonNull);
         Assert.assertFalse(ObjectStamp.isObjectNonNull(join));
         Assert.assertFalse(ObjectStamp.isObjectAlwaysNull(join));
-    }
-
-    @Test
-    public void testJoin7() {
-        Stamp aExact = StampFactory.exact(getType(A.class));
-        Stamp e = StampFactory.declared(getType(E.class));
-        Stamp join = join(aExact, e);
-        Assert.assertTrue(ObjectStamp.isObjectAlwaysNull(join));
-        Assert.assertNull(ObjectStamp.typeOrNull(join));
-        Assert.assertFalse(ObjectStamp.isExactType(join));
     }
 
     @Test

@@ -452,16 +452,12 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         append(new JumpOp(getLIRBlock(merge)));
     }
 
-    protected PlatformKind getPhiKind(PhiNode phi) {
-        return phi.kind();
-    }
-
     private Value operandForPhi(PhiNode phi) {
         assert phi.type() == PhiType.Value : "wrong phi type: " + phi;
         Value result = operand(phi);
         if (result == null) {
             // allocate a variable for this phi
-            Variable newOperand = newVariable(getPhiKind(phi));
+            Variable newOperand = newVariable(phi.kind());
             setResult(phi, newOperand);
             return newOperand;
         } else {

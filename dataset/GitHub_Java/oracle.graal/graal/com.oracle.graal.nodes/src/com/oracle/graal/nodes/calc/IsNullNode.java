@@ -23,8 +23,6 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -50,7 +48,7 @@ public final class IsNullNode extends LogicNode implements Canonicalizable, LIRL
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
         // Nothing to do.
     }
 
@@ -62,7 +60,7 @@ public final class IsNullNode extends LogicNode implements Canonicalizable, LIRL
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public LogicNode canonical(CanonicalizerTool tool) {
         Constant constant = object().asConstant();
         if (constant != null) {
             assert constant.getKind() == Kind.Object;
