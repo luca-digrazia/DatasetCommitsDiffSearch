@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.util.Random;
+import java.util.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.phases.common.AbstractInliningPhase;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.phases.common.*;
 
 /**
  * Tests that deoptimization upon exception handling works.
@@ -75,8 +74,8 @@ public class DeoptimizeOnExceptionTest extends GraalCompilerTest {
                 r.run();
             }
             // compile
-            ResolvedJavaMethod method = getResolvedJavaMethod(c, "run");
-            getCode(method);
+            ResolvedJavaMethod m = getResolvedJavaMethod(c, "run");
+            getCode(m);
             ct = 0;
             r.run();
         } catch (Throwable e) {
@@ -86,7 +85,7 @@ public class DeoptimizeOnExceptionTest extends GraalCompilerTest {
         return "SUCCESS";
     }
 
-    public static class MyClassLoader extends ExportingClassLoader {
+    public static class MyClassLoader extends ClassLoader {
         @Override
         protected Class<?> findClass(String className) throws ClassNotFoundException {
             return defineClass(name.replace('/', '.'), clazz, 0, clazz.length);
