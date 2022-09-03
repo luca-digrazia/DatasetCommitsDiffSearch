@@ -208,7 +208,6 @@ public @interface Layout {
         private interface RectLayout {
 
         }
-
         // END: rectlayout
 
         private static class RectLayoutImpl {
@@ -225,7 +224,6 @@ public @interface Layout {
         interface InterfaceSnippets {
             // BEGIN: rectlayoutcreate
             DynamicObject createRect();
-
             // END: rectlayoutcreate
 
             // BEGIN: rectlayoutguards
@@ -234,7 +232,6 @@ public @interface Layout {
             boolean isRect(Object object);
 
             boolean isRect(ObjectType objectType);
-
             // END: rectlayoutguards
 
             // BEGIN: rectlayoutprops
@@ -247,12 +244,10 @@ public @interface Layout {
             int getWidth(DynamicObject object);
 
             void setWidth(DynamicObject object, int value);
-
             // END: rectlayoutprops
 
             // BEGIN: nullable
             DynamicObject createObject(@Nullable Object nullableProperty);
-
             // END: nullable
 
             // BEGIN: volatile
@@ -260,12 +255,10 @@ public @interface Layout {
                             int expectedValue, int newValue);
 
             int getAndSet(DynamicObject object, int value);
-
             // END: volatile
 
             // BEGIN: semifinal
             void setValueUnsafe(DynamicObject object, Object value);
-
             // END: semifinal
 
             class JavaClass {
@@ -288,7 +281,6 @@ public @interface Layout {
                 int getHashCode(DynamicObject object);
 
             }
-
             // END: javaobject
 
             // BEGIN: shapesetters
@@ -356,7 +348,6 @@ public @interface Layout {
 
             void setB(DynamicObject object, int value);
         }
-
         // END: inheritanceinterfaces
 
         static class BaseImpl {
