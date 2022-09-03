@@ -41,7 +41,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.TimeUnit;
@@ -216,15 +215,12 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                     Map<String, String> originalEngineOptions, Map<String, String> originalCompilerOptions,
                     Map<PolyglotLanguage, Map<String, String>> languagesOptions, Map<PolyglotInstrument, Map<String, String>> instrumentsOptions) {
         if (useSystemProperties) {
-            Properties properties = System.getProperties();
-            synchronized (properties) {
-                for (Object systemKey : properties.keySet()) {
-                    String key = (String) systemKey;
-                    if (key.startsWith(OptionValuesImpl.SYSTEM_PROPERTY_PREFIX)) {
-                        String engineKey = key.substring(OptionValuesImpl.SYSTEM_PROPERTY_PREFIX.length(), key.length());
-                        if (!options.containsKey(engineKey)) {
-                            options.put(engineKey, System.getProperty(key));
-                        }
+            for (Object systemKey : System.getProperties().keySet()) {
+                String key = (String) systemKey;
+                if (key.startsWith(OptionValuesImpl.SYSTEM_PROPERTY_PREFIX)) {
+                    String engineKey = key.substring(OptionValuesImpl.SYSTEM_PROPERTY_PREFIX.length(), key.length());
+                    if (!options.containsKey(engineKey)) {
+                        options.put(engineKey, System.getProperty(key));
                     }
                 }
             }
