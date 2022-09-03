@@ -71,17 +71,6 @@ public class NodeData extends Template {
         return !noSpecialization;
     }
 
-    public List<NodeData> getNodeChildren() {
-        List<NodeData> children = new ArrayList<>();
-        for (NodeData child : getDeclaredChildren()) {
-            if (child.needsFactory()) {
-                children.add(child);
-            }
-            children.addAll(child.getNodeChildren());
-        }
-        return children;
-    }
-
     void setDeclaredChildren(List<NodeData> declaredChildren) {
         this.declaredChildren = declaredChildren;
 
@@ -137,17 +126,34 @@ public class NodeData extends Template {
         return executableTypes;
     }
 
-    public ExecutableTypeData findGenericExecutableType(ProcessorContext context, TypeData type) {
+    public ExecutableTypeData findGenericExecutableType(ProcessorContext context) {
         List<ExecutableTypeData> types = findGenericExecutableTypes(context);
-        for (ExecutableTypeData availableType : types) {
-            if (Utils.typeEquals(availableType.getType().getBoxedType(), type.getBoxedType())) {
-                return availableType;
+        if (types.isEmpty()) {
+            return null;
+        } else if (types.size() == 1) {
+            return types.get(0);
+        } else if (types.size() == 2) {
+            if (types.get(0).getType().isVoid()) {
+                return types.get(1);
+            } else if (types.get(1).getType().isVoid()) {
+                return types.get(0);
             }
         }
-        return null;
+
+        ExecutableTypeData execType = null;
+        for (ExecutableTypeData type : types) {
+            TypeData returnType = type.getReturnType().getActualTypeData(getTypeSystem());
+            if (returnType.isGeneric()) {
+                if (execType != null) {
+                    return null;
+                }
+                execType = type;
+            }
+        }
+        return execType;
     }
 
-    public List<ExecutableTypeData> findGenericExecutableTypes(ProcessorContext context) {
+    private List<ExecutableTypeData> findGenericExecutableTypes(ProcessorContext context) {
         List<ExecutableTypeData> types = new ArrayList<>();
         for (ExecutableTypeData type : executableTypes) {
             if (!type.hasUnexpectedValue(context)) {
