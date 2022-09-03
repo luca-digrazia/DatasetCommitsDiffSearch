@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -46,19 +46,16 @@ import com.oracle.truffle.llvm.parser.model.enums.ReadModifyWriteOperator;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMFrameValueAccess;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateStringNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
-import com.oracle.truffle.llvm.runtime.memory.VarargsAreaStackAllocationNode;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
@@ -141,28 +138,26 @@ public interface NodeFactory {
 
     LLVMControlFlowNode createUnconditionalBranch(LLVMParserRuntime runtime, int unconditionalIndex, LLVMExpressionNode phi, LLVMSourceLocation source);
 
-    LLVMExpressionNode createArrayLiteral(LLVMParserRuntime runtime, List<LLVMExpressionNode> arrayValues, ArrayType arrayType);
+    LLVMExpressionNode createArrayLiteral(LLVMParserRuntime runtime, List<LLVMExpressionNode> arrayValues, Type arrayType);
 
     /*
      * Stack allocations with type (LLVM's alloca instruction)
      */
-    LLVMExpressionNode createAlloca(LLVMParserRuntime runtime, Type type);
+    LLVMExpressionNode createAlloca(LLVMParserRuntime runtime, Type type, int size, int alignment);
 
-    LLVMExpressionNode createAlloca(LLVMParserRuntime runtime, Type type, int alignment);
-
-    LLVMExpressionNode createAllocaArray(LLVMParserRuntime runtime, Type elementType, LLVMExpressionNode numElements, int alignment);
+    LLVMExpressionNode createAlloca(LLVMParserRuntime runtime, Type elementType, LLVMExpressionNode numElements, int alignment);
 
     /*
      * Stack allocation without a type
      */
-    VarargsAreaStackAllocationNode createVarargsAreaStackAllocation(LLVMParserRuntime runtime);
+    LLVMStackAllocationNode createStackAllocation(LLVMParserRuntime runtime);
 
     LLVMExpressionNode createInsertValue(LLVMParserRuntime runtime, LLVMExpressionNode resultAggregate, LLVMExpressionNode sourceAggregate, int size, long offset, LLVMExpressionNode valueToInsert,
                     Type llvmType);
 
     LLVMExpressionNode createZeroNode(LLVMParserRuntime runtime, LLVMExpressionNode addressNode, int size);
 
-    RootNode createGlobalRootNode(LLVMParserRuntime runtime, RootCallTarget mainCallTarget, LLVMFunctionDescriptor mainFunctionDescriptor, String applicationPath);
+    RootNode createGlobalRootNode(LLVMParserRuntime runtime, RootCallTarget mainCallTarget, Source sourceFile, Type mainReturnType, Type[] mainTypes);
 
     RootNode createGlobalRootNodeWrapping(LLVMParserRuntime runtime, RootCallTarget mainCallTarget, Type returnType);
 
@@ -179,12 +174,12 @@ public interface NodeFactory {
     LLVMExpressionNode createInlineAssemblerExpression(LLVMParserRuntime runtime, String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type[] argTypes, Type retType,
                     LLVMSourceLocation sourceSection);
 
-    Object allocateGlobalVariable(LLVMParserRuntime runtime, GlobalVariable globalVariable, LLVMSourceSymbol sourceSymbol);
+    Object allocateGlobalVariable(LLVMParserRuntime runtime, GlobalVariable globalVariable);
 
-    Object allocateGlobalConstant(LLVMParserRuntime runtime, GlobalConstant globalConstant, LLVMSourceSymbol sourceSymbol);
+    Object allocateGlobalConstant(LLVMParserRuntime runtime, GlobalConstant globalConstant);
 
     LLVMExpressionNode createLandingPad(LLVMParserRuntime runtime, LLVMExpressionNode allocateLandingPadValue, FrameSlot exceptionSlot, boolean cleanup, long[] clauseKinds,
-                    LLVMExpressionNode[] entries, LLVMExpressionNode getStack);
+                    LLVMExpressionNode[] entries);
 
     LLVMControlFlowNode createResumeInstruction(LLVMParserRuntime runtime, FrameSlot exceptionSlot, LLVMSourceLocation sourceSection);
 
@@ -197,7 +192,7 @@ public interface NodeFactory {
 
     LLVMExpressionNode createPhi(LLVMParserRuntime runtime, LLVMExpressionNode[] from, FrameSlot[] to, Type[] types);
 
-    LLVMExpressionNode createCopyStructByValue(LLVMParserRuntime runtime, Type type, LLVMExpressionNode parameterNode);
+    LLVMExpressionNode createCopyStructByValue(LLVMParserRuntime runtime, Type type, int length, int alignment, LLVMExpressionNode parameterNode);
 
     LLVMExpressionNode createVarArgCompoundValue(LLVMParserRuntime runtime, int length, int alignment, LLVMExpressionNode parameterNode);
 
