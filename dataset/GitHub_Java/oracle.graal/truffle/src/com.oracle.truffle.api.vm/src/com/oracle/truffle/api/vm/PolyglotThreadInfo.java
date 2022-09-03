@@ -46,11 +46,8 @@ final class PolyglotThreadInfo {
         enteredCount++;
     }
 
-    boolean isPolyglotThread(PolyglotContextImpl context) {
-        if (thread instanceof PolyglotThread) {
-            return ((PolyglotThread) thread).isOwner(context);
-        }
-        return false;
+    boolean isPolyglotThread() {
+        return thread instanceof PolyglotThread;
     }
 
     void leave() {

@@ -680,7 +680,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
     PolyglotThreadInfo getFirstActiveOtherThread(boolean includePolyglotThread) {
         assert Thread.holdsLock(this);
         // send enters and leaves into a lock by setting the lastThread to null.
-        this.lastThread = PolyglotThreadInfo.NULL;
         for (PolyglotThreadInfo otherInfo : threads.values()) {
             if (!includePolyglotThread && otherInfo.isPolyglotThread()) {
                 continue;
