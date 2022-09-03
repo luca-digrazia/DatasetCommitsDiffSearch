@@ -70,13 +70,7 @@ public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArit
         }
 
         if (forX.isConstant() && !forY.isConstant()) {
-            // we try to swap and canonicalize
-            ValueNode improvement = canonical(tool, forY, forX);
-            if (improvement != this) {
-                return improvement;
-            }
-            // if this fails we only swap
-            return new AddNode(forY, forX);
+            return canonical(tool, forY, forX);
         }
         BinaryOp<Add> op = getOp(forX, forY);
         boolean associative = op.isAssociative();
