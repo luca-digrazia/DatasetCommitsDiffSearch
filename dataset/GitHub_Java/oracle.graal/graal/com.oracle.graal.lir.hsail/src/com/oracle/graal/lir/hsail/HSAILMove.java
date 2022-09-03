@@ -60,8 +60,8 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            move(crb, masm, getResult(), getInput());
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
+            move(tasm, masm, getResult(), getInput());
         }
 
         @Override
@@ -87,8 +87,8 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            move(crb, masm, getResult(), getInput());
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
+            move(tasm, masm, getResult(), getInput());
         }
 
         @Override
@@ -114,8 +114,8 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            move(crb, masm, getResult(), getInput());
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
+            move(tasm, masm, getResult(), getInput());
         }
 
         @Override
@@ -144,9 +144,9 @@ public class HSAILMove {
         protected abstract void emitMemAccess(HSAILAssembler masm);
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             if (state != null) {
-                // crb.recordImplicitException(masm.codeBuffer.position(), state);
+                // tasm.recordImplicitException(masm.codeBuffer.position(), state);
                 throw new InternalError("NYI");
             }
             emitMemAccess(masm);
@@ -162,7 +162,7 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             masm.emitMembar(barriers);
         }
     }
@@ -197,56 +197,6 @@ public class HSAILMove {
             assert isRegister(input);
             HSAILAddress addr = address.toAddress();
             masm.emitStore(kind, input, addr);
-        }
-    }
-
-    public static class StoreConstantOp extends MemOp {
-
-        protected final Constant input;
-
-        public StoreConstantOp(Kind kind, HSAILAddressValue address, Constant input, LIRFrameState state) {
-            super(kind, address, state);
-            this.input = input;
-        }
-
-        @Override
-        public void emitMemAccess(HSAILAssembler masm) {
-            switch (kind) {
-                case Boolean:
-                case Byte:
-                    masm.emitStoreImmediate(kind, input.asLong() & 0xFF, address.toAddress());
-                    break;
-                case Char:
-                case Short:
-                    masm.emitStoreImmediate(kind, input.asLong() & 0xFFFF, address.toAddress());
-                    break;
-                case Int:
-                case Long:
-                    masm.emitStoreImmediate(kind, input.asLong(), address.toAddress());
-                    break;
-                case Float:
-                    masm.emitStoreImmediate(input.asFloat(), address.toAddress());
-                    break;
-                case Double:
-                    masm.emitStoreImmediate(input.asDouble(), address.toAddress());
-                    break;
-                case Object:
-                    if (input.isNull()) {
-                        masm.emitStoreImmediate(kind, 0L, address.toAddress());
-                    } else {
-                        throw GraalInternalError.shouldNotReachHere("Cannot store 64-bit constants to object ref");
-                    }
-                    break;
-                case NarrowOop:
-                    if (input.isNull()) {
-                        masm.emitStoreImmediate(kind, 0L, address.toAddress());
-                    } else {
-                        throw GraalInternalError.shouldNotReachHere("Cannot store 64-bit constants to object ref");
-                    }
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
         }
     }
 
@@ -299,13 +249,13 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             masm.emitMov(scratch, input);
             boolean testForNull = (kind == Kind.Object);
             encodePointer(masm, scratch, base, shift, alignment, testForNull);
             if (state != null) {
                 throw new InternalError("NYI");
-                // crb.recordImplicitException(masm.codeBuffer.position(), state);
+                // tasm.recordImplicitException(masm.codeBuffer.position(), state);
             }
             masm.emitStore(scratch, address.toAddress(), "u32");
         }
@@ -342,7 +292,7 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             throw new InternalError("NYI");
         }
     }
@@ -358,7 +308,7 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             throw new InternalError("NYI");
         }
     }
@@ -379,7 +329,7 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             masm.emitAtomicCas(result, address.toAddress(), cmpValue, newValue);
         }
     }
@@ -411,7 +361,7 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             // assume any encoded or decoded value could be null
             boolean testForNull = true;
             // set up scratch registers to be encoded versions
@@ -442,13 +392,13 @@ public class HSAILMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             Debug.log("NullCheckOp unimplemented");
         }
     }
 
     @SuppressWarnings("unused")
-    public static void move(CompilationResultBuilder crb, HSAILAssembler masm, Value result, Value input) {
+    public static void move(TargetMethodAssembler tasm, HSAILAssembler masm, Value result, Value input) {
         if (isRegister(input)) {
             if (isRegister(result)) {
                 masm.emitMov(result, input);
