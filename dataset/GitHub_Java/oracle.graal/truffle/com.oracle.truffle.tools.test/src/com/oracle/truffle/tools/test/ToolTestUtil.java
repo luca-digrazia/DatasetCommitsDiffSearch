@@ -33,11 +33,8 @@ import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrument.ASTProber;
-import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
-import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
 import com.oracle.truffle.api.instrument.EventHandlerNode;
 import com.oracle.truffle.api.instrument.Instrumenter;
-import com.oracle.truffle.api.instrument.KillException;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrument.SyntaxTag;
 import com.oracle.truffle.api.instrument.Visualizer;
@@ -54,7 +51,7 @@ public class ToolTestUtil {
 
     static final String MIME_TYPE = "text/x-toolTest";
 
-    static enum ToolTestTag implements SyntaxTag {
+    enum ToolTestTag implements SyntaxTag {
 
         ADD_TAG("addition", "test language addition node"),
 
@@ -63,7 +60,7 @@ public class ToolTestUtil {
         private final String name;
         private final String description;
 
-        private ToolTestTag(String name, String description) {
+        ToolTestTag(String name, String description) {
             this.name = name;
             this.description = description;
         }
@@ -85,8 +82,6 @@ public class ToolTestUtil {
     public static final class ToolTestLang extends TruffleLanguage<Object> {
 
         public static final ToolTestLang INSTANCE = new ToolTestLang();
-
-        private final ASTProber prober = new TestASTProber();
 
         private ToolTestLang() {
         }
@@ -123,11 +118,6 @@ public class ToolTestUtil {
         }
 
         @Override
-        protected ASTProber getDefaultASTProber() {
-            return prober;
-        }
-
-        @Override
         protected boolean isInstrumentable(Node node) {
             return node instanceof TestAdditionNode || node instanceof TestValueNode;
         }
@@ -142,11 +132,6 @@ public class ToolTestUtil {
 
         @Override
         protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
-            return null;
-        }
-
-        @Override
-        protected AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
             return null;
         }
 
@@ -182,10 +167,17 @@ public class ToolTestUtil {
     }
 
     abstract static class ToolTestLangNode extends Node {
-        public abstract Object execute(VirtualFrame vFrame);
+        private final SourceSection section;
+
+        public abstract Object execute(VirtualFrame frame);
 
         protected ToolTestLangNode(SourceSection ss) {
-            super(ss);
+            this.section = ss;
+        }
+
+        @Override
+        public SourceSection getSourceSection() {
+            return section;
         }
     }
 
@@ -194,7 +186,7 @@ public class ToolTestUtil {
         @Child private ToolTestLangNode child;
         @Child private EventHandlerNode eventHandlerNode;
 
-        public ToolTestWrapperNode(ToolTestLangNode child) {
+        ToolTestWrapperNode(ToolTestLangNode child) {
             super(null);
             assert !(child instanceof ToolTestWrapperNode);
             this.child = child;
@@ -220,16 +212,14 @@ public class ToolTestUtil {
         }
 
         @Override
-        public Object execute(VirtualFrame vFrame) {
-            eventHandlerNode.enter(child, vFrame);
+        public Object execute(VirtualFrame frame) {
+            eventHandlerNode.enter(child, frame);
             Object result;
             try {
-                result = child.execute(vFrame);
-                eventHandlerNode.returnValue(child, vFrame, result);
-            } catch (KillException e) {
-                throw (e);
+                result = child.execute(frame);
+                eventHandlerNode.returnValue(child, frame, result);
             } catch (Exception e) {
-                eventHandlerNode.returnExceptional(child, vFrame, e);
+                eventHandlerNode.returnExceptional(child, frame, e);
                 throw (e);
             }
             return result;
@@ -242,13 +232,13 @@ public class ToolTestUtil {
     static class TestValueNode extends ToolTestLangNode {
         private final int value;
 
-        public TestValueNode(int value, SourceSection s) {
+        TestValueNode(int value, SourceSection s) {
             super(s);
             this.value = value;
         }
 
         @Override
-        public Object execute(VirtualFrame vFrame) {
+        public Object execute(VirtualFrame frame) {
             return new Integer(this.value);
         }
     }
@@ -260,15 +250,15 @@ public class ToolTestUtil {
         @Child private ToolTestLangNode leftChild;
         @Child private ToolTestLangNode rightChild;
 
-        public TestAdditionNode(TestValueNode leftChild, TestValueNode rightChild, SourceSection s) {
+        TestAdditionNode(TestValueNode leftChild, TestValueNode rightChild, SourceSection s) {
             super(s);
             this.leftChild = insert(leftChild);
             this.rightChild = insert(rightChild);
         }
 
         @Override
-        public Object execute(VirtualFrame vFrame) {
-            return new Integer(((Integer) leftChild.execute(vFrame)).intValue() + ((Integer) rightChild.execute(vFrame)).intValue());
+        public Object execute(VirtualFrame frame) {
+            return new Integer(((Integer) leftChild.execute(frame)).intValue() + ((Integer) rightChild.execute(frame)).intValue());
         }
     }
 
@@ -285,14 +275,14 @@ public class ToolTestUtil {
          * newly created AST. Global registry is not used, since that would interfere with other
          * tests run in the same environment.
          */
-        public InstrumentationTestRootNode(ToolTestLangNode body) {
+        InstrumentationTestRootNode(ToolTestLangNode body) {
             super(ToolTestLang.class, null, null);
             this.body = body;
         }
 
         @Override
-        public Object execute(VirtualFrame vFrame) {
-            return body.execute(vFrame);
+        public Object execute(VirtualFrame frame) {
+            return body.execute(frame);
         }
 
         @Override
@@ -317,15 +307,15 @@ public class ToolTestUtil {
          * newly created AST. Global registry is not used, since that would interfere with other
          * tests run in the same environment.
          */
-        public TestRootNode(ToolTestLangNode body, Instrumenter instrumenter) {
+        TestRootNode(ToolTestLangNode body, Instrumenter instrumenter) {
             super(ToolTestLang.class, null, null);
             this.instrumenter = instrumenter;
             this.body = body;
         }
 
         @Override
-        public Object execute(VirtualFrame vFrame) {
-            return body.execute(vFrame);
+        public Object execute(VirtualFrame frame) {
+            return body.execute(frame);
         }
 
         @Override

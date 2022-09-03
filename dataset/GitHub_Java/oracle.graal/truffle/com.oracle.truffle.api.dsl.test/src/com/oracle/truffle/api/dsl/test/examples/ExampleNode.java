@@ -32,31 +32,14 @@ import com.oracle.truffle.api.dsl.test.TestingLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 @TypeSystemReference(ExampleTypes.class)
 @NodeChild(value = "args", type = ExampleNode[].class)
 public abstract class ExampleNode extends Node {
 
-    public ExampleNode[] getArgs() {
-        throw new UnsupportedOperationException();
-    }
-
     public Object execute(@SuppressWarnings("unused") VirtualFrame frame) {
         // will get implemented by the DSL.
         throw new UnsupportedOperationException();
-    }
-
-    public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
-        return ExampleTypesGen.expectInteger(execute(frame));
-    }
-
-    public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
-        return ExampleTypesGen.expectDouble(execute(frame));
-    }
-
-    public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-        return ExampleTypesGen.expectLong(execute(frame));
     }
 
     @Override
@@ -72,17 +55,13 @@ public abstract class ExampleNode extends Node {
         return Truffle.getRuntime().createCallTarget(new ExampleRootNode(node));
     }
 
-    public static ExampleArgumentNode[] getArguments(CallTarget target) {
-        return (ExampleArgumentNode[]) ((ExampleRootNode) ((RootCallTarget) target).getRootNode()).child.getArgs();
-    }
-
     @SuppressWarnings("unchecked")
     public static <T> T getNode(CallTarget target) {
         return (T) ((ExampleRootNode) ((RootCallTarget) target).getRootNode()).child;
     }
 
-    public static ExampleArgumentNode[] createArguments(int count) {
-        ExampleArgumentNode[] nodes = new ExampleArgumentNode[count];
+    public static ExampleNode[] createArguments(int count) {
+        ExampleNode[] nodes = new ExampleNode[count];
         for (int i = 0; i < count; i++) {
             nodes[i] = new ExampleArgumentNode(i);
         }
@@ -105,19 +84,9 @@ public abstract class ExampleNode extends Node {
 
     }
 
-    public static class ExampleArgumentNode extends ExampleNode {
+    private static class ExampleArgumentNode extends ExampleNode {
 
         private final int index;
-
-        public int genericInvocationCount;
-        public int intInvocationCount;
-        public int doubleInvocationCount;
-        public int longInvocationCount;
-
-        @Override
-        public ExampleNode[] getArgs() {
-            return new ExampleNode[0];
-        }
 
         ExampleArgumentNode(int index) {
             this.index = index;
@@ -125,30 +94,11 @@ public abstract class ExampleNode extends Node {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            genericInvocationCount++;
             Object[] arguments = frame.getArguments();
             if (index < arguments.length) {
                 return arguments[index];
             }
             return null;
-        }
-
-        @Override
-        public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
-            doubleInvocationCount++;
-            return super.executeDouble(frame);
-        }
-
-        @Override
-        public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
-            intInvocationCount++;
-            return super.executeInt(frame);
-        }
-
-        @Override
-        public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-            longInvocationCount++;
-            return super.executeLong(frame);
         }
     }
 

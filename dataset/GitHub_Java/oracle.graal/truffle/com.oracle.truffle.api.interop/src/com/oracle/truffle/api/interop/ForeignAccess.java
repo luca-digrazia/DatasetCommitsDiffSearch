@@ -38,8 +38,6 @@ import com.oracle.truffle.api.nodes.Node;
  * foreign language implementations, you need to implement {@link TruffleObject} and its
  * {@link TruffleObject#getForeignAccess()} method. To create instance of <code>ForeignAccess</code>
  * , use one of the factory methods available in this class.
- * 
- * @since 0.8 or earlier
  */
 public final class ForeignAccess {
     private final Factory factory;
@@ -60,7 +58,6 @@ public final class ForeignAccess {
      * @param factory the factory that handles access requests to {@link Message}s known as of
      *            version 1.0
      * @return new instance wrapping <code>factory</code>
-     * @since 0.8 or earlier
      */
     public static ForeignAccess create(final Class<? extends TruffleObject> baseClass, final Factory10 factory) {
         if (baseClass == null) {
@@ -75,7 +72,6 @@ public final class ForeignAccess {
      *
      * @param factory the factory that handles various access requests {@link Message}s.
      * @return new instance wrapping <code>factory</code>
-     * @since 0.8 or earlier
      */
     public static ForeignAccess create(Factory factory) {
         return new ForeignAccess(factory);
@@ -99,7 +95,6 @@ public final class ForeignAccess {
      *             {@link Message#createNode()} method.
      * @throws IllegalStateException if any error occurred while accessing the <code>receiver</code>
      *             object
-     * @since 0.8 or earlier
      */
     @SuppressWarnings("deprecation")
     @Deprecated
@@ -122,7 +117,6 @@ public final class ForeignAccess {
      *             {@link Message#createNode()} method.
      * @throws InteropException if any error occurred while accessing the <code>receiver</code>
      *             object
-     * @since 0.11
      */
     public static Object send(Node foreignNode, VirtualFrame frame, TruffleObject receiver, Object... arguments) throws InteropException {
         ForeignObjectAccessHeadNode fn = (ForeignObjectAccessHeadNode) foreignNode;
@@ -149,7 +143,6 @@ public final class ForeignAccess {
      *             {@link Message#createNode() message represented} by <code>readNode</code>
      * @throws UnknownIdentifierException if the <code>receiver</code> does not allow reading a
      *             property for the given <code>identifier</code>
-     * @since 0.11
      */
     public static Object sendRead(Node readNode, VirtualFrame frame, TruffleObject receiver, Object identifier) throws UnknownIdentifierException, UnsupportedMessageException {
         ForeignObjectAccessHeadNode fn = (ForeignObjectAccessHeadNode) readNode;
@@ -182,7 +175,6 @@ public final class ForeignAccess {
      * @throws UnknownIdentifierException if the <code>receiver</code> does not allow writing a
      *             property for the given <code>identifier</code>
      * @throws UnsupportedTypeException if <code>value</code> has an unsupported type
-     * @since 0.11
      */
     public static Object sendWrite(Node writeNode, VirtualFrame frame, TruffleObject receiver, Object identifier, Object value)
                     throws UnknownIdentifierException, UnsupportedTypeException, UnsupportedMessageException {
@@ -209,7 +201,6 @@ public final class ForeignAccess {
      *             {@link Message#createNode()} method.
      * @throws UnsupportedMessageException if the <code>receiver</code> does not support the
      *             {@link Message#createNode() message represented} by <code>unboxNode</code>
-     * @since 0.11
      */
     public static Object sendUnbox(Node unboxNode, VirtualFrame frame, TruffleObject receiver) throws UnsupportedMessageException {
         ForeignObjectAccessHeadNode fn = (ForeignObjectAccessHeadNode) unboxNode;
@@ -240,7 +231,6 @@ public final class ForeignAccess {
      *             of arguments for the foreign function
      * @throws UnsupportedMessageException if the <code>receiver</code> does not support the
      *             {@link Message#createNode() message represented} by <code>executeNode</code>
-     * @since 0.11
      */
     public static Object sendExecute(Node executeNode, VirtualFrame frame, TruffleObject receiver, Object... arguments) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
         ForeignObjectAccessHeadNode fn = (ForeignObjectAccessHeadNode) executeNode;
@@ -264,7 +254,6 @@ public final class ForeignAccess {
      * @return return value, if any
      * @throws ClassCastException if the createNode has not been created by
      *             {@link Message#createNode()} method.
-     * @since 0.11
      */
     public static boolean sendIsExecutable(Node isExecutableNode, VirtualFrame frame, TruffleObject receiver) {
         try {
@@ -294,7 +283,6 @@ public final class ForeignAccess {
      *             of arguments for the foreign function
      * @throws UnsupportedMessageException if the <code>receiver</code> does not support the
      *             {@link Message#createNode() message represented} by <code>invokeNode</code>
-     * @since 0.11
      */
     public static Object sendInvoke(Node invokeNode, VirtualFrame frame, TruffleObject receiver, String identifier, Object... arguments)
                     throws UnsupportedTypeException, ArityException, UnknownIdentifierException, UnsupportedMessageException {
@@ -329,7 +317,6 @@ public final class ForeignAccess {
      *             of arguments for the foreign function
      * @throws UnsupportedMessageException if the <code>receiver</code> does not support the
      *             {@link Message#createNode() message represented} by <code>newNode</code>
-     * @since 0.11
      */
     public static Object sendNew(Node newNode, VirtualFrame frame, TruffleObject receiver, Object... arguments) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
         ForeignObjectAccessHeadNode fn = (ForeignObjectAccessHeadNode) newNode;
@@ -353,7 +340,6 @@ public final class ForeignAccess {
      * @return return value, if any
      * @throws ClassCastException if the createNode has not been created by
      *             {@link Message#createNode()} method.
-     * @since 0.11
      */
     public static boolean sendIsNull(Node isNullNode, VirtualFrame frame, TruffleObject receiver) {
         try {
@@ -374,7 +360,6 @@ public final class ForeignAccess {
      * @return return value, if any
      * @throws ClassCastException if the createNode has not been created by
      *             {@link Message#createNode()} method.
-     * @since 0.11
      */
     public static boolean sendHasSize(Node hasSizeNode, VirtualFrame frame, TruffleObject receiver) {
         try {
@@ -397,7 +382,6 @@ public final class ForeignAccess {
      *             {@link Message#createNode()} method.
      * @throws UnsupportedMessageException if the <code>receiver</code> does not support the
      *             {@link Message#createNode() message represented} by <code>getSizeNode</code>
-     * @since 0.11
      */
     public static Object sendGetSize(Node getSizeNode, VirtualFrame frame, TruffleObject receiver) throws UnsupportedMessageException {
         ForeignObjectAccessHeadNode fn = (ForeignObjectAccessHeadNode) getSizeNode;
@@ -421,7 +405,6 @@ public final class ForeignAccess {
      * @return return value, if any
      * @throws ClassCastException if the createNode has not been created by
      *             {@link Message#createNode()} method.
-     * @since 0.11
      */
     public static boolean sendIsBoxed(Node isBoxedNode, VirtualFrame frame, TruffleObject receiver) {
         try {
@@ -437,7 +420,6 @@ public final class ForeignAccess {
      * @param frame the frame that was called via
      *            {@link #execute(com.oracle.truffle.api.nodes.Node, com.oracle.truffle.api.frame.VirtualFrame, com.oracle.truffle.api.interop.TruffleObject, java.lang.Object...) }
      * @return read-only list of parameters passed to the frame
-     * @since 0.11
      */
     public static List<Object> getArguments(Frame frame) {
         final Object[] arr = frame.getArguments();
@@ -450,13 +432,11 @@ public final class ForeignAccess {
      * @param frame the frame that was called via
      *            {@link #execute(com.oracle.truffle.api.nodes.Node, com.oracle.truffle.api.frame.VirtualFrame, com.oracle.truffle.api.interop.TruffleObject, java.lang.Object...) }
      * @return the receiver used when invoking the frame
-     * @since 0.8 or earlier
      */
     public static TruffleObject getReceiver(Frame frame) {
         return (TruffleObject) frame.getArguments()[ForeignAccessArguments.RECEIVER_INDEX];
     }
 
-    /** @since 0.8 or earlier */
     @Override
     public String toString() {
         Object f;
@@ -490,8 +470,6 @@ public final class ForeignAccess {
      * that provides an AST snippet for a given {@link Message}. Rather than using this generic
      * {@code Factory}, consider implementing {@link Factory10} interface that captures the set of
      * messages each language should implement as of Truffle version 1.0.
-     * 
-     * @since 0.8 or earlier
      */
     public interface Factory {
 
@@ -501,7 +479,6 @@ public final class ForeignAccess {
          *
          * @param obj the object to check
          * @return true, if the object can be processed
-         * @since 0.8 or earlier
          */
         boolean canHandle(TruffleObject obj);
 
@@ -511,7 +488,6 @@ public final class ForeignAccess {
          * @param tree the {@code Message} that represents the access to a {@code TruffleObject}.
          * @return the AST snippet for accessing the {@code TruffleObject}, wrapped as a
          *         {@code CallTarget}.
-         * @since 0.8 or earlier
          */
         CallTarget accessMessage(Message tree);
     }
@@ -520,7 +496,6 @@ public final class ForeignAccess {
      * Specialized {@link Factory factory} that handles {@link Message messages} known as of release
      * 1.0 of Truffle API.
      *
-     * @since 0.8 or earlier
      */
     public interface Factory10 {
         /**
@@ -528,7 +503,6 @@ public final class ForeignAccess {
          *
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessIsNull();
 
@@ -537,7 +511,6 @@ public final class ForeignAccess {
          *
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessIsExecutable();
 
@@ -546,7 +519,6 @@ public final class ForeignAccess {
          *
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessIsBoxed();
 
@@ -555,7 +527,6 @@ public final class ForeignAccess {
          *
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessHasSize();
 
@@ -564,7 +535,6 @@ public final class ForeignAccess {
          *
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessGetSize();
 
@@ -573,7 +543,6 @@ public final class ForeignAccess {
          *
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessUnbox();
 
@@ -582,7 +551,6 @@ public final class ForeignAccess {
          *
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessRead();
 
@@ -591,7 +559,6 @@ public final class ForeignAccess {
          *
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessWrite();
 
@@ -601,7 +568,6 @@ public final class ForeignAccess {
          * @param argumentsLength number of parameters the messages has been created for
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessExecute(int argumentsLength);
 
@@ -611,7 +577,6 @@ public final class ForeignAccess {
          * @param argumentsLength number of parameters the messages has been created for
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessInvoke(int argumentsLength);
 
@@ -621,7 +586,6 @@ public final class ForeignAccess {
          * @param argumentsLength number of parameters the messages has been created for
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.9
          */
         CallTarget accessNew(int argumentsLength);
 
@@ -631,11 +595,8 @@ public final class ForeignAccess {
          * @param unknown the message
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
-         * @since 0.8 or earlier
          */
         CallTarget accessMessage(Message unknown);
-
-        CallTarget accessProperties();
     }
 
     private static class DelegatingFactory implements Factory {
@@ -681,8 +642,6 @@ public final class ForeignAccess {
                         return factory.accessUnbox();
                     case Write.HASH:
                         return factory.accessWrite();
-                    case Properties.HASH:
-                        return factory.accessProperties();
                 }
             }
             return factory.accessMessage(msg);

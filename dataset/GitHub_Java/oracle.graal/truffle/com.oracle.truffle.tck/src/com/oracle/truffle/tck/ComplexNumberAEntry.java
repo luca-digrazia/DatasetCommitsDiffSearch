@@ -42,7 +42,7 @@ final class ComplexNumberAEntry implements TruffleObject {
     }
 
     public ForeignAccess getForeignAccess() {
-        return ComplexNumberAEntryMessageResolutionForeign.ACCESS;
+        return ComplexNumberAEntryForeign.ACCESS;
     }
 
     public ComplexNumbersA getNumbers() {

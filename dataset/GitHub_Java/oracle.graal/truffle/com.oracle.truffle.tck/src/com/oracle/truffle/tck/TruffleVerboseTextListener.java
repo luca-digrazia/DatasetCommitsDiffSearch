@@ -24,19 +24,18 @@
  */
 package com.oracle.truffle.tck;
 
-import java.io.*;
-
-import org.junit.internal.*;
-import org.junit.runner.*;
-import org.junit.runner.notification.*;
+import java.io.PrintStream;
+import org.junit.internal.JUnitSystem;
+import org.junit.runner.Description;
+import org.junit.runner.notification.Failure;
 
 class TruffleVerboseTextListener extends TruffleTextListener {
 
-    public TruffleVerboseTextListener(JUnitSystem system) {
+    TruffleVerboseTextListener(JUnitSystem system) {
         this(system.out());
     }
 
-    public TruffleVerboseTextListener(PrintStream writer) {
+    TruffleVerboseTextListener(PrintStream writer) {
         super(writer);
     }
 

@@ -36,6 +36,17 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.ASTProber;
+import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.instrument.ProbeException;
+import com.oracle.truffle.api.instrument.ProbeFailure;
+import com.oracle.truffle.api.instrument.ProbeInstrument;
+import com.oracle.truffle.api.instrument.ProbeListener;
+import com.oracle.truffle.api.instrument.StandardInstrumentListener;
+import com.oracle.truffle.api.instrument.SyntaxTag;
+import com.oracle.truffle.api.instrument.impl.DefaultProbeListener;
+import com.oracle.truffle.api.instrument.impl.DefaultStandardInstrumentListener;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.NodeVisitor;
@@ -87,9 +98,7 @@ import com.oracle.truffle.api.nodes.RootNode;
  * @see SyntaxTag
  * @see ProbeFailure
  */
-@SuppressWarnings("deprecation")
-@Deprecated
-public final class NodeExecCounter extends com.oracle.truffle.api.instrument.Instrumenter.Tool {
+public final class NodeExecCounter extends Instrumenter.Tool {
 
     /**
      * Execution count for AST nodes of a particular type.
@@ -104,9 +113,9 @@ public final class NodeExecCounter extends com.oracle.truffle.api.instrument.Ins
      * Listener for events at instrumented nodes. Counts are maintained in a shared table, so the
      * listener is stateless and can be shared by every {@link ProbeInstrument}.
      */
-    private final com.oracle.truffle.api.instrument.StandardInstrumentListener instrumentListener = new com.oracle.truffle.api.instrument.impl.DefaultStandardInstrumentListener() {
+    private final StandardInstrumentListener instrumentListener = new DefaultStandardInstrumentListener() {
         @Override
-        public void onEnter(com.oracle.truffle.api.instrument.Probe probe, Node node, VirtualFrame frame) {
+        public void onEnter(Probe probe, Node node, VirtualFrame frame) {
             if (isEnabled()) {
                 final Class<?> nodeClass = node.getClass();
                 /*
@@ -140,25 +149,25 @@ public final class NodeExecCounter extends com.oracle.truffle.api.instrument.Ins
     private final Map<Class<?>, AtomicLong> counters = new HashMap<>();
 
     /** Failure log. */
-    private final List<com.oracle.truffle.api.instrument.ProbeFailure> failures = new ArrayList<>();
+    private final List<ProbeFailure> failures = new ArrayList<>();
 
     /** For disposal. */
-    private final List<com.oracle.truffle.api.instrument.ProbeInstrument> instruments = new ArrayList<>();
+    private final List<ProbeInstrument> instruments = new ArrayList<>();
 
     /**
      * If non-null, counting is restricted to nodes holding this tag.
      */
-    private final com.oracle.truffle.api.instrument.SyntaxTag countingTag;
+    private final SyntaxTag countingTag;
 
     /**
      * Prober used only when instrumenting every node.
      */
-    private com.oracle.truffle.api.instrument.ASTProber astProber;
+    private ASTProber astProber;
 
     /**
      * Listener used only when restricting counting to a specific tag.
      */
-    private com.oracle.truffle.api.instrument.ProbeListener probeListener;
+    private ProbeListener probeListener;
 
     /**
      * Create a per node-type execution counting tool for all nodes in subsequently created ASTs.
@@ -171,7 +180,7 @@ public final class NodeExecCounter extends com.oracle.truffle.api.instrument.Ins
      * Creates a per-type execution counting for nodes tagged as specified in subsequently created
      * ASTs.
      */
-    public NodeExecCounter(com.oracle.truffle.api.instrument.SyntaxTag tag) {
+    public NodeExecCounter(SyntaxTag tag) {
         this.countingTag = tag;
     }
 
@@ -201,7 +210,7 @@ public final class NodeExecCounter extends com.oracle.truffle.api.instrument.Ins
         if (probeListener != null) {
             getInstrumenter().removeProbeListener(probeListener);
         }
-        for (com.oracle.truffle.api.instrument.ProbeInstrument instrument : instruments) {
+        for (ProbeInstrument instrument : instruments) {
             instrument.dispose();
         }
     }
@@ -223,8 +232,8 @@ public final class NodeExecCounter extends com.oracle.truffle.api.instrument.Ins
     /**
      * Gets a log containing a report of every failed attempt to instrument a node.
      */
-    public com.oracle.truffle.api.instrument.ProbeFailure[] getFailures() {
-        return failures.toArray(new com.oracle.truffle.api.instrument.ProbeFailure[failures.size()]);
+    public ProbeFailure[] getFailures() {
+        return failures.toArray(new ProbeFailure[failures.size()]);
     }
 
     /**
@@ -274,7 +283,7 @@ public final class NodeExecCounter extends com.oracle.truffle.api.instrument.Ins
         if (verbose && missedNodes > 0) {
             out.println("Instrumentation failures for execution counts:");
 
-            for (com.oracle.truffle.api.instrument.ProbeFailure failure : failures) {
+            for (ProbeFailure failure : failures) {
                 out.println("\t" + failure.getMessage());
             }
         }
@@ -283,19 +292,19 @@ public final class NodeExecCounter extends com.oracle.truffle.api.instrument.Ins
     /**
      * A prober that attempts to probe and instrument every node.
      */
-    private class ExecCounterASTProber implements com.oracle.truffle.api.instrument.ASTProber {
+    private class ExecCounterASTProber implements ASTProber {
 
-        public void probeAST(final com.oracle.truffle.api.instrument.Instrumenter instrumenter, final RootNode startNode) {
+        public void probeAST(final Instrumenter instrumenter, final RootNode startNode) {
 
             startNode.accept(new NodeVisitor() {
 
                 public boolean visit(Node node) {
                     try {
 
-                        final com.oracle.truffle.api.instrument.Probe probe = instrumenter.probe(node);
-                        final com.oracle.truffle.api.instrument.ProbeInstrument instrument = instrumenter.attach(probe, instrumentListener, "NodeExecCounter");
+                        final Probe probe = instrumenter.probe(node);
+                        final ProbeInstrument instrument = instrumenter.attach(probe, instrumentListener, "NodeExecCounter");
                         instruments.add(instrument);
-                    } catch (com.oracle.truffle.api.instrument.ProbeException ex) {
+                    } catch (ProbeException ex) {
                         failures.add(ex.getFailure());
                     }
                     return true;
@@ -309,12 +318,12 @@ public final class NodeExecCounter extends com.oracle.truffle.api.instrument.Ins
      * A listener that assumes ASTs have been tagged external to this tool, and which instruments
      * nodes holding a specified tag.
      */
-    private class NodeExecCounterProbeListener extends com.oracle.truffle.api.instrument.impl.DefaultProbeListener {
+    private class NodeExecCounterProbeListener extends DefaultProbeListener {
 
         @Override
-        public void probeTaggedAs(com.oracle.truffle.api.instrument.Probe probe, com.oracle.truffle.api.instrument.SyntaxTag tag, Object tagValue) {
+        public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
             if (countingTag == tag) {
-                final com.oracle.truffle.api.instrument.ProbeInstrument instrument = getInstrumenter().attach(probe, instrumentListener, NodeExecCounter.class.getSimpleName());
+                final ProbeInstrument instrument = getInstrumenter().attach(probe, instrumentListener, NodeExecCounter.class.getSimpleName());
                 instruments.add(instrument);
             }
         }

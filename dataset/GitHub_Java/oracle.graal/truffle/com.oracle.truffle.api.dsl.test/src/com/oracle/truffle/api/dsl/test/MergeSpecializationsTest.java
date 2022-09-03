@@ -27,7 +27,6 @@ import static com.oracle.truffle.api.dsl.test.TestHelper.executeWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
@@ -37,12 +36,10 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.dsl.internal.SpecializationNode;
 import com.oracle.truffle.api.dsl.internal.SpecializedNode;
 import com.oracle.truffle.api.dsl.test.MergeSpecializationsTestFactory.TestCachedNodeFactory;
 import com.oracle.truffle.api.dsl.test.MergeSpecializationsTestFactory.TestNodeFactory;
-import com.oracle.truffle.api.dsl.test.TypeBoxingTest.TypeBoxingTypeSystem;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -53,7 +50,6 @@ public class MergeSpecializationsTest {
 
     @NodeChild
     @SuppressWarnings("unused")
-    @TypeSystemReference(TypeBoxingTypeSystem.class)
     abstract static class TestNode extends ValueNode {
 
         @Specialization
@@ -74,7 +70,6 @@ public class MergeSpecializationsTest {
 
     @NodeChild
     @SuppressWarnings("unused")
-    @TypeSystemReference(TypeBoxingTypeSystem.class)
     abstract static class TestCachedNode extends ValueNode {
 
         @Specialization(guards = "a == cachedA", limit = "3")
@@ -94,41 +89,41 @@ public class MergeSpecializationsTest {
     }
 
     @Test
-    public void testMultithreadedMergeInOrder() throws Exception {
+    public void testMultithreadedMergeInOrder() {
         for (int i = 0; i < 100; i++) {
             multithreadedMerge(TestNodeFactory.getInstance(), new Executions(1, 1L << 32, 1.0), 1, 2, 3);
         }
     }
 
     @Test
-    public void testMultithreadedMergeReverse() throws Exception {
+    public void testMultithreadedMergeReverse() {
         for (int i = 0; i < 100; i++) {
             multithreadedMerge(TestNodeFactory.getInstance(), new Executions(1.0, 1L << 32, 1), 3, 2, 1);
         }
     }
 
     @Test
-    public void testMultithreadedMergeCachedInOrder() throws Exception {
+    public void testMultithreadedMergeCachedInOrder() {
         for (int i = 0; i < 100; i++) {
             multithreadedMerge(TestCachedNodeFactory.getInstance(), new Executions(1, 1L << 32, 1.0), 1, 2, 3);
         }
     }
 
     @Test
-    public void testMultithreadedMergeCachedTwoEntries() throws Exception {
+    public void testMultithreadedMergeCachedTwoEntries() {
         for (int i = 0; i < 100; i++) {
             multithreadedMerge(TestCachedNodeFactory.getInstance(), new Executions(1, 2, 1.0), 1, 1, 3);
         }
     }
 
     @Test
-    public void testMultithreadedMergeCachedThreeEntries() throws Exception {
+    public void testMultithreadedMergeCachedThreeEntries() {
         for (int i = 0; i < 100; i++) {
             multithreadedMerge(TestCachedNodeFactory.getInstance(), new Executions(1, 2, 3), 1, 1, 1);
         }
     }
 
-    private static <T extends ValueNode> void multithreadedMerge(NodeFactory<T> factory, final Executions executions, int... order) throws Exception {
+    private static <T extends ValueNode> void multithreadedMerge(NodeFactory<T> factory, final Executions executions, int... order) {
         assertEquals(3, order.length);
         final TestRootNode<T> node = createRoot(factory);
 
@@ -165,58 +160,39 @@ public class MergeSpecializationsTest {
             threads[i].start();
         }
 
-        T checkedNode = node.getNode();
-        if (node instanceof SpecializedNode) {
-            final SpecializedNode gen = (SpecializedNode) checkedNode;
+        final SpecializedNode gen = (SpecializedNode) node.getNode();
 
-            final SpecializationNode start0 = gen.getSpecializationNode();
-            assertEquals("UninitializedNode_", start0.getClass().getSimpleName());
+        final SpecializationNode start0 = gen.getSpecializationNode();
+        assertEquals("UninitializedNode_", start0.getClass().getSimpleName());
 
-            await(threadsStarted);
-            beforeFirst.countDown();
-            await(executedFirst);
+        await(threadsStarted);
+        beforeFirst.countDown();
+        await(executedFirst);
 
-            final SpecializationNode start1 = gen.getSpecializationNode();
-            assertEquals("S" + order[0] + "Node_", start1.getClass().getSimpleName());
-            assertEquals("UninitializedNode_", nthChild(1, start1).getClass().getSimpleName());
+        final SpecializationNode start1 = gen.getSpecializationNode();
+        assertEquals("S" + order[0] + "Node_", start1.getClass().getSimpleName());
+        assertEquals("UninitializedNode_", nthChild(1, start1).getClass().getSimpleName());
 
-            beforeSecond.countDown();
-            await(executedSecond);
+        beforeSecond.countDown();
+        await(executedSecond);
 
-            final SpecializationNode start2 = gen.getSpecializationNode();
-            Arrays.sort(order, 0, 2);
-            assertEquals("PolymorphicNode_", start2.getClass().getSimpleName());
-            assertEquals("S" + order[0] + "Node_", nthChild(1, start2).getClass().getSimpleName());
-            assertEquals("S" + order[1] + "Node_", nthChild(2, start2).getClass().getSimpleName());
-            assertEquals("UninitializedNode_", nthChild(3, start2).getClass().getSimpleName());
+        final SpecializationNode start2 = gen.getSpecializationNode();
+        Arrays.sort(order, 0, 2);
+        assertEquals("PolymorphicNode_", start2.getClass().getSimpleName());
+        assertEquals("S" + order[0] + "Node_", nthChild(1, start2).getClass().getSimpleName());
+        assertEquals("S" + order[1] + "Node_", nthChild(2, start2).getClass().getSimpleName());
+        assertEquals("UninitializedNode_", nthChild(3, start2).getClass().getSimpleName());
 
-            beforeThird.countDown();
-            await(executedThird);
+        beforeThird.countDown();
+        await(executedThird);
 
-            final SpecializationNode start3 = gen.getSpecializationNode();
-            Arrays.sort(order);
-            assertEquals("PolymorphicNode_", start3.getClass().getSimpleName());
-            assertEquals("S" + order[0] + "Node_", nthChild(1, start3).getClass().getSimpleName());
-            assertEquals("S" + order[1] + "Node_", nthChild(2, start3).getClass().getSimpleName());
-            assertEquals("S" + order[2] + "Node_", nthChild(3, start3).getClass().getSimpleName());
-            assertEquals("UninitializedNode_", nthChild(4, start3).getClass().getSimpleName());
-        } else {
-            assertState(checkedNode, order, 0);
-
-            await(threadsStarted);
-            beforeFirst.countDown();
-
-            await(executedFirst);
-            assertState(checkedNode, order, 1);
-
-            beforeSecond.countDown();
-            await(executedSecond);
-            assertState(checkedNode, order, 2);
-
-            beforeThird.countDown();
-            await(executedThird);
-            assertState(checkedNode, order, 3);
-        }
+        final SpecializationNode start3 = gen.getSpecializationNode();
+        Arrays.sort(order);
+        assertEquals("PolymorphicNode_", start3.getClass().getSimpleName());
+        assertEquals("S" + order[0] + "Node_", nthChild(1, start3).getClass().getSimpleName());
+        assertEquals("S" + order[1] + "Node_", nthChild(2, start3).getClass().getSimpleName());
+        assertEquals("S" + order[2] + "Node_", nthChild(3, start3).getClass().getSimpleName());
+        assertEquals("UninitializedNode_", nthChild(4, start3).getClass().getSimpleName());
 
         for (Thread thread : threads) {
             try {
@@ -225,18 +201,6 @@ public class MergeSpecializationsTest {
                 fail("interrupted");
             }
         }
-    }
-
-    private static void assertState(Node node, int[] expectedOrder, int checkedIndices) throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException {
-        Field stateField = node.getClass().getDeclaredField("state_");
-        stateField.setAccessible(true);
-        int state = (((Number) stateField.get(node))).intValue();
-        Arrays.sort(expectedOrder, 0, checkedIndices);
-        int mask = 0;
-        for (int i = 0; i < checkedIndices; i++) {
-            mask |= 0b1 << expectedOrder[i] - 1;
-        }
-        assertEquals(mask, state & 0b111);
     }
 
     private static class Executions {

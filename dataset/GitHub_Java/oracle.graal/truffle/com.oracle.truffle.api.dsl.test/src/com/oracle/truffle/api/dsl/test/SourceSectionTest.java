@@ -42,7 +42,6 @@ import com.oracle.truffle.api.dsl.test.TypeSystemTest.ArgumentNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import static com.oracle.truffle.api.dsl.test.TestHelper.createRoot;
 import static org.hamcrest.CoreMatchers.is;
@@ -57,7 +56,7 @@ public class SourceSectionTest {
     @Theory
     public void testSourceSections(int value0, int value1, int value2) {
         TestRootNode<MutableSourceSectionNode> root = createRoot(SourceSectionTestFactory.MutableSourceSectionNodeFactory.getInstance());
-        SourceSection section = Source.newBuilder("").name("a").mimeType("").build().createUnavailableSection();
+        SourceSection section = SourceSection.createUnavailable("a", "b");
         root.getNode().changeSourceSection(section);
         expectSourceSection(root.getNode(), section);
         assertThat((int) executeWith(root, value0), is(value0));
@@ -120,7 +119,7 @@ public class SourceSectionTest {
 
     @Test
     public void testCreateCast() {
-        SourceSection section = Source.newBuilder("").name("a").mimeType("").build().createUnavailableSection();
+        SourceSection section = SourceSection.createUnavailable("a", "b");
         assertNull(section.getSource());
         TestRootNode<NodeWithFixedSourceSection> root = createRootPrefix(SourceSectionTestFactory.NodeWithFixedSourceSectionFactory.getInstance(), true, section);
         expectSourceSection(root.getNode(), section);

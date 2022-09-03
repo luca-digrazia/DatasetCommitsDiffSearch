@@ -24,11 +24,11 @@
  */
 package com.oracle.truffle.tck;
 
-import org.junit.runner.notification.*;
+import org.junit.runner.notification.Failure;
 
 class EagerStackTraceDecorator extends TruffleJUnitRunListenerDecorator {
 
-    public EagerStackTraceDecorator(TruffleJUnitRunListener l) {
+    EagerStackTraceDecorator(TruffleJUnitRunListener l) {
         super(l);
     }
 
