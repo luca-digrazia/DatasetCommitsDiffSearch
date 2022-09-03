@@ -26,8 +26,8 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.*;
 
 /**
@@ -36,8 +36,8 @@ import com.oracle.graal.snippets.*;
  */
 public final class MonitorCounterNode extends FloatingNode implements LIRGenLowerable {
 
-    public MonitorCounterNode() {
-        super(HotSpotGraalRuntime.wordStamp());
+    public MonitorCounterNode(Kind wordKind) {
+        super(StampFactory.forWord(wordKind, true));
     }
 
     @Override
@@ -48,6 +48,11 @@ public final class MonitorCounterNode extends FloatingNode implements LIRGenLowe
         gen.setResult(this, result);
     }
 
+
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native Word counter();
+    public static Word counter(@ConstantNodeParameter Kind wordKind) {
+        throw new UnsupportedOperationException();
+    }
+
 }

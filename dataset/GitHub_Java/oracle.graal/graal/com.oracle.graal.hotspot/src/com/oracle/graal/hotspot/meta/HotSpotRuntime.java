@@ -38,9 +38,9 @@ import com.oracle.graal.api.meta.JavaType.Representation;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.snippets.*;
+import com.oracle.graal.hotspot.target.amd64.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -149,7 +149,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
      * Decodes a mark to a mnemonic if possible.
      */
     private static String getMarkName(Mark mark) {
-        Field[] fields = Marks.class.getDeclaredFields();
+        Field[] fields = HotSpotXirGenerator.class.getDeclaredFields();
         for (Field f : fields) {
             if (Modifier.isStatic(f.getModifiers()) && f.getName().startsWith("MARK_")) {
                 f.setAccessible(true);
@@ -237,7 +237,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
             graph.replaceFixedWithFixed(arrayLengthNode, safeReadArrayLength);
         } else if (n instanceof Invoke) {
             Invoke invoke = (Invoke) n;
-            if (invoke.callTarget() instanceof MethodCallTargetNode) {
+            if (!GraalOptions.XIRLowerInvokes && invoke.callTarget() instanceof MethodCallTargetNode) {
                 MethodCallTargetNode callTarget = invoke.methodCallTarget();
                 NodeInputList<ValueNode> parameters = callTarget.arguments();
                 ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
@@ -257,6 +257,8 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
                         // as HotSpot does not guarantee they are final values.
                         int vtableEntryOffset = hsMethod.vtableEntryOffset();
                         assert vtableEntryOffset > 0;
+                        // Cannot use 'unique' here as we don't want to common out with a hub load that is scheduled
+                        // below the invoke we are lowering.
                         LoadHubNode hub = graph.add(new LoadHubNode(receiver));
                         Kind wordKind = graalRuntime.getTarget().wordKind;
                         Stamp nonNullWordStamp = StampFactory.forWord(wordKind, true);
@@ -265,8 +267,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
 
                         loweredCallTarget = graph.add(new HotSpotIndirectCallTargetNode(methodOop, compiledEntry, parameters, invoke.node().stamp(), signature, callTarget.targetMethod(), CallingConvention.Type.JavaCall));
 
-                        graph.addBeforeFixed(invoke.node(), hub);
-                        graph.addAfterFixed(hub, methodOop);
+                        graph.addBeforeFixed(invoke.node(), methodOop);
                         graph.addAfterFixed(methodOop, compiledEntry);
                     }
                 }
@@ -362,7 +363,6 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
                     FloatingReadNode arrayElementKlass = graph.unique(new FloatingReadNode(arrayClass, LocationNode.create(LocationNode.FINAL_LOCATION, Kind.Object, config.arrayClassElementOffset, graph), null, StampFactory.objectNonNull()));
                     checkcast = graph.add(new CheckCastNode(arrayElementKlass, null, value));
                     graph.addBeforeFixed(storeIndexed, checkcast);
-                    graph.addBeforeFixed(checkcast, arrayClass);
                     value = checkcast;
                 }
             }
@@ -405,24 +405,34 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
             }
         } else if (n instanceof LoadHubNode) {
             LoadHubNode loadHub = (LoadHubNode) n;
-            LocationNode location = LocationNode.create(LocationNode.FINAL_LOCATION, Kind.Object, config.hubOffset, graph);
             ValueNode object = loadHub.object();
             ValueNode guard = tool.createNullCheckGuard(object, StructuredGraph.INVALID_GRAPH_ID);
-            ReadNode hub = graph.add(new ReadNode(object, location, StampFactory.objectNonNull()));
-            hub.dependencies().add(guard);
-            graph.replaceFixed(loadHub, hub);
+            FloatingReadNode hub = graph.add(new FloatingReadNode(object, LocationNode.create(LocationNode.FINAL_LOCATION, Kind.Object, config.hubOffset, graph), null, StampFactory.objectNonNull(), guard));
+            graph.replaceFloating(loadHub, hub);
         } else if (n instanceof CheckCastNode) {
-            checkcastSnippets.lower((CheckCastNode) n, tool);
+            if (matches(graph, GraalOptions.HIRLowerCheckcast)) {
+                checkcastSnippets.lower((CheckCastNode) n, tool);
+            }
         } else if (n instanceof InstanceOfNode) {
-            instanceofSnippets.lower((InstanceOfNode) n, tool);
+            if (matches(graph, GraalOptions.HIRLowerInstanceOf)) {
+                instanceofSnippets.lower((InstanceOfNode) n, tool);
+            }
         } else if (n instanceof NewInstanceNode) {
-            newObjectSnippets.lower((NewInstanceNode) n, tool);
+            if (matches(graph, GraalOptions.HIRLowerNewInstance)) {
+                newObjectSnippets.lower((NewInstanceNode) n, tool);
+            }
         } else if (n instanceof NewArrayNode) {
-            newObjectSnippets.lower((NewArrayNode) n, tool);
+            if (matches(graph, GraalOptions.HIRLowerNewArray)) {
+                newObjectSnippets.lower((NewArrayNode) n, tool);
+            }
         } else if (n instanceof MonitorEnterNode) {
-            monitorSnippets.lower((MonitorEnterNode) n, tool);
+            if (matches(graph, GraalOptions.HIRLowerMonitors)) {
+                monitorSnippets.lower((MonitorEnterNode) n, tool);
+            }
         } else if (n instanceof MonitorExitNode) {
-            monitorSnippets.lower((MonitorExitNode) n, tool);
+            if (matches(graph, GraalOptions.HIRLowerMonitors)) {
+                monitorSnippets.lower((MonitorExitNode) n, tool);
+            }
         } else if (n instanceof TLABAllocateNode) {
             newObjectSnippets.lower((TLABAllocateNode) n, tool);
         } else if (n instanceof InitializeObjectNode) {
@@ -430,10 +440,23 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
         } else if (n instanceof InitializeArrayNode) {
             newObjectSnippets.lower((InitializeArrayNode) n, tool);
         } else if (n instanceof NewMultiArrayNode) {
-            newObjectSnippets.lower((NewMultiArrayNode) n, tool);
+            if (matches(graph, GraalOptions.HIRLowerNewMultiArray)) {
+                newObjectSnippets.lower((NewMultiArrayNode) n, tool);
+            }
         } else {
             assert false : "Node implementing Lowerable not handled: " + n;
         }
+    }
+
+    private static boolean matches(StructuredGraph graph, String filter) {
+        if (filter != null) {
+            if (filter.length() == 0) {
+                return true;
+            }
+            ResolvedJavaMethod method = graph.method();
+            return method != null && MetaUtil.format("%H.%n", method).contains(filter);
+        }
+        return false;
     }
 
     private static IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index) {
@@ -475,8 +498,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
                 Stamp resultStamp = StampFactory.declaredNonNull(getResolvedJavaType(Class.class));
                 FloatingReadNode result = graph.unique(new FloatingReadNode(hub, LocationNode.create(LocationNode.FINAL_LOCATION, Kind.Object, config.classMirrorOffset, graph), null, resultStamp));
                 ReturnNode ret = graph.add(new ReturnNode(result));
-                graph.start().setNext(hub);
-                hub.setNext(ret);
+                graph.start().setNext(ret);
                 return graph;
             }
         } else if (holderName.equals("Ljava/lang/Class;")) {

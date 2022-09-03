@@ -25,15 +25,14 @@ package com.oracle.graal.hotspot.snippets;
 import static com.oracle.graal.hotspot.nodes.BeginLockScopeNode.*;
 import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.*;
 import static com.oracle.graal.hotspot.nodes.EndLockScopeNode.*;
-import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
-import static com.oracle.graal.snippets.SnippetTemplate.*;
 import static com.oracle.graal.snippets.nodes.DirectObjectStoreNode.*;
 
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graph.iterators.*;
@@ -43,7 +42,6 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.common.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
 import com.oracle.graal.snippets.Snippet.Parameter;
@@ -71,7 +69,7 @@ public class MonitorSnippets implements SnippetsInterface {
      */
     private static final String TRACE_METHOD_FILTER = System.getProperty("graal.monitors.trace.methodFilter");
 
-    public static final boolean CHECK_BALANCED_MONITORS = Boolean.getBoolean("graal.monitors.checkBalanced");
+    public static final boolean CHECK_BALANCED_MONITORS = Boolean.getBoolean("graal.monitors.checkBalance");
 
     @Snippet
     public static void monitorenter(@Parameter("object") Object object, @ConstantParameter("trace") boolean trace) {
@@ -349,8 +347,11 @@ public class MonitorSnippets implements SnippetsInterface {
      */
     private static final boolean ENABLE_BREAKPOINT = false;
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic(BreakpointNode.class)
-    static native void bkpt(Object object, Word mark, Word tmp, Word value);
+    static void bkpt(Object object, Word mark, Word tmp, Word value) {
+        throw new GraalInternalError("");
+    }
 
     private static void incCounter() {
         if (CHECK_BALANCED_MONITORS) {
@@ -379,7 +380,9 @@ public class MonitorSnippets implements SnippetsInterface {
         final Word counter = MonitorCounterNode.counter(wordKind());
         final int count = UnsafeLoadNode.load(counter, 0, 0, Kind.Int);
         if (count != 0) {
-            vmError(errMsg, count);
+            Log.print(errMsg);
+            Log.println(count);
+            DirectObjectStoreNode.storeInt(Word.zero(), 0, 0, count + 1);
         }
     }
 
@@ -432,7 +435,7 @@ public class MonitorSnippets implements SnippetsInterface {
                 arguments.add("object", monitorenterNode.object());
             }
             SnippetTemplate template = cache.get(key);
-            Map<Node, Node> nodes = template.instantiate(runtime, monitorenterNode, DEFAULT_REPLACER, arguments);
+            Map<Node, Node> nodes = template.instantiate(runtime, monitorenterNode, arguments);
             for (Node n : nodes.values()) {
                 if (n instanceof BeginLockScopeNode) {
                     BeginLockScopeNode begin = (BeginLockScopeNode) n;
@@ -457,7 +460,7 @@ public class MonitorSnippets implements SnippetsInterface {
                 arguments.add("object", monitorexitNode.object());
             }
             SnippetTemplate template = cache.get(key);
-            Map<Node, Node> nodes = template.instantiate(runtime, monitorexitNode, DEFAULT_REPLACER, arguments);
+            Map<Node, Node> nodes = template.instantiate(runtime, monitorexitNode, arguments);
             for (Node n : nodes.values()) {
                 if (n instanceof EndLockScopeNode) {
                     EndLockScopeNode end = (EndLockScopeNode) n;
@@ -477,7 +480,7 @@ public class MonitorSnippets implements SnippetsInterface {
                 if (type == null) {
                     return false;
                 }
-                return (type.getName().contains(TRACE_TYPE_FILTER));
+                return (type.name().contains(TRACE_TYPE_FILTER));
             }
         }
 
@@ -505,25 +508,25 @@ public class MonitorSnippets implements SnippetsInterface {
                 NodeIterable<MonitorCounterNode> nodes = graph.getNodes().filter(MonitorCounterNode.class);
                 if (nodes.isEmpty()) {
                     // Only insert the nodes if this is the first monitorenter being lowered.
-                    JavaType returnType = initCounter.getSignature().getReturnType(initCounter.getDeclaringClass());
+                    JavaType returnType = initCounter.signature().returnType(initCounter.holder());
                     MethodCallTargetNode callTarget = graph.add(new MethodCallTargetNode(InvokeKind.Static, initCounter, new ValueNode[0], returnType));
                     InvokeNode invoke = graph.add(new InvokeNode(callTarget, 0, -1));
                     invoke.setStateAfter(graph.start().stateAfter());
                     graph.addAfterFixed(graph.start(), invoke);
-                    StructuredGraph inlineeGraph = (StructuredGraph) initCounter.getCompilerStorage().get(Graph.class);
+                    StructuredGraph inlineeGraph = (StructuredGraph) initCounter.compilerStorage().get(Graph.class);
                     InliningUtil.inline(invoke, inlineeGraph, false);
 
                     List<ReturnNode> rets = graph.getNodes().filter(ReturnNode.class).snapshot();
                     for (ReturnNode ret : rets) {
-                        returnType = checkCounter.getSignature().getReturnType(checkCounter.getDeclaringClass());
-                        ConstantNode errMsg = ConstantNode.forObject("unbalanced monitors in " + MetaUtil.format("%H.%n(%p)", graph.method()) + ", count = %d", runtime, graph);
+                        returnType = checkCounter.signature().returnType(checkCounter.holder());
+                        ConstantNode errMsg = ConstantNode.forObject("unbalanced monitors in " + MetaUtil.format("%H.%n(%p)", graph.method()), runtime, graph);
                         callTarget = graph.add(new MethodCallTargetNode(InvokeKind.Static, checkCounter, new ValueNode[] {errMsg}, returnType));
                         invoke = graph.add(new InvokeNode(callTarget, 0, -1));
                         List<ValueNode> stack = Collections.emptyList();
-                        FrameState stateAfter = new FrameState(graph.method(), FrameState.AFTER_BCI, new ValueNode[0], stack, new ValueNode[0], false, false);
+                        FrameState stateAfter = new FrameState(graph.method(), FrameState.AFTER_BCI, new ValueNode[0], stack, new ValueNode[0], false, false, null);
                         invoke.setStateAfter(graph.add(stateAfter));
                         graph.addBeforeFixed(ret, invoke);
-                        inlineeGraph = (StructuredGraph) checkCounter.getCompilerStorage().get(Graph.class);
+                        inlineeGraph = (StructuredGraph) checkCounter.compilerStorage().get(Graph.class);
                         InliningUtil.inline(invoke, inlineeGraph, false);
                     }
                 }

@@ -23,15 +23,16 @@
 package com.oracle.graal.hotspot.snippets;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.Register.RegisterFlag;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.snippets.Snippet.Fold;
 import com.oracle.graal.snippets.*;
+import com.oracle.max.asm.target.amd64.*;
 
 //JaCoCo Exclude
 
@@ -62,12 +63,12 @@ public class HotSpotSnippetUtils {
 
     @Fold
     static Register threadRegister() {
-        return HotSpotGraalRuntime.getInstance().getRuntime().threadRegister();
+        return HotSpotGraalRuntime.getInstance().getConfig().threadRegister;
     }
 
     @Fold
     static Register stackPointerRegister() {
-        return HotSpotGraalRuntime.getInstance().getRuntime().stackPointerRegister();
+        return AMD64.rsp;
     }
 
     @Fold
@@ -139,28 +140,18 @@ public class HotSpotSnippetUtils {
     }
 
     @Fold
-    static int metaspaceArrayLengthOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().metaspaceArrayLengthOffset;
-    }
-
-    @Fold
-    static int metaspaceArrayBaseOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().metaspaceArrayBaseOffset;
-    }
-
-    @Fold
     static int arrayLengthOffset() {
         return HotSpotGraalRuntime.getInstance().getConfig().arrayLengthOffset;
     }
 
     @Fold
     static int arrayBaseOffset(Kind elementKind) {
-        return HotSpotRuntime.getArrayBaseOffset(elementKind);
+        return elementKind.getArrayBaseOffset();
     }
 
     @Fold
     static int arrayIndexScale(Kind elementKind) {
-        return HotSpotRuntime.getArrayIndexScale(elementKind);
+        return elementKind.getArrayIndexScale();
     }
 
     @Fold
@@ -201,9 +192,10 @@ public class HotSpotSnippetUtils {
     /**
      * Loads the hub from a object, null checking it first.
      */
-    static Word loadHub(Object object) {
-        return loadHubIntrinsic(object, wordKind());
+    static Object loadHub(Object object) {
+        return LoadHubNode.loadHub(object);
     }
+
 
     static Object verifyOop(Object object) {
         if (verifyOops()) {
@@ -226,11 +218,6 @@ public class HotSpotSnippetUtils {
         return HotSpotSnippetUtils.registerAsWord(threadRegister());
     }
 
-    static int loadIntFromWord(Word address, int offset) {
-        Integer value = UnsafeLoadNode.load(address, 0, offset, Kind.Int);
-        return value;
-    }
-
     static Word loadWordFromWord(Word address, int offset) {
         return loadWordFromWordIntrinsic(address, 0, offset, wordKind());
     }
@@ -248,9 +235,6 @@ public class HotSpotSnippetUtils {
     @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
     private static native Word loadWordFromWordIntrinsic(Word address, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter Kind wordKind);
 
-    @NodeIntrinsic(value = LoadHubNode.class, setStampFromReturnType = true)
-    static native Word loadHubIntrinsic(Object object, @ConstantNodeParameter Kind word);
-
     static {
         assert arrayIndexScale(Kind.Byte) == 1;
         assert arrayIndexScale(Kind.Boolean) == 1;
@@ -260,5 +244,10 @@ public class HotSpotSnippetUtils {
         assert arrayIndexScale(Kind.Long) == 8;
         assert arrayIndexScale(Kind.Float) == 4;
         assert arrayIndexScale(Kind.Double) == 8;
+    }
+
+    public static Register getStubParameterRegister(int index) {
+        RegisterConfig regConfig = HotSpotGraalRuntime.getInstance().getRuntime().getGlobalStubRegisterConfig();
+        return regConfig.getCallingConventionRegisters(CallingConvention.Type.RuntimeCall, RegisterFlag.CPU)[index];
     }
 }
