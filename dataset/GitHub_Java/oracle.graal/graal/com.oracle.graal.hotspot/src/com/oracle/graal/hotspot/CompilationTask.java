@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
 import static com.oracle.graal.hotspot.bridge.VMToCompilerImpl.*;
@@ -50,9 +49,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
-public class CompilationTask implements Runnable, Comparable {
-
-    private static final DebugMetric BAILOUTS = Debug.metric("Bailouts");
+public class CompilationTask implements Runnable {
 
     public static final ThreadLocal<Boolean> withinEnqueue = new ThreadLocal<Boolean>() {
 
@@ -63,7 +60,7 @@ public class CompilationTask implements Runnable, Comparable {
     };
 
     private enum CompilationStatus {
-        Queued, Running, Finished
+        Queued, Running
     }
 
     private final HotSpotBackend backend;
@@ -74,22 +71,12 @@ public class CompilationTask implements Runnable, Comparable {
 
     private StructuredGraph graph;
 
-    private static final AtomicLong uniqueTaskIds = new AtomicLong();
-
-    /**
-     * A long representing the sequence number of this task. Used for sorting the compile queue.
-     */
-    private long taskId;
-
-    private boolean blocking;
-
-    public CompilationTask(HotSpotBackend backend, HotSpotResolvedJavaMethod method, int entryBCI, boolean blocking) {
+    public CompilationTask(HotSpotBackend backend, HotSpotResolvedJavaMethod method, int entryBCI, int id) {
+        assert id >= 0;
         this.backend = backend;
         this.method = method;
         this.entryBCI = entryBCI;
-        this.id = backend.getRuntime().getCompilerToVM().allocateCompileId(method, entryBCI);
-        this.blocking = blocking;
-        this.taskId = uniqueTaskIds.incrementAndGet();
+        this.id = id;
         this.status = new AtomicReference<>(CompilationStatus.Queued);
     }
 
@@ -114,40 +101,7 @@ public class CompilationTask implements Runnable, Comparable {
                 method.setCurrentTask(null);
             }
             withinEnqueue.set(Boolean.TRUE);
-            status.set(CompilationStatus.Finished);
-            synchronized (this) {
-                notifyAll();
-            }
         }
-    }
-
-    /**
-     * Block waiting till the compilation completes.
-     */
-    public synchronized void block() {
-        while (status.get() != CompilationStatus.Finished) {
-            try {
-                wait();
-            } catch (InterruptedException e) {
-                // Ignore and retry
-            }
-        }
-    }
-
-    /**
-     * Sort blocking tasks before non-blocking ones and then by lowest taskId within the group.
-     */
-    public int compareTo(Object o) {
-        if (!(o instanceof CompilationTask)) {
-            return 1;
-        }
-        CompilationTask task2 = (CompilationTask) o;
-        if (this.blocking != task2.blocking) {
-            // Blocking CompilationTasks are always higher than CompilationTasks
-            return task2.blocking ? 1 : -1;
-        }
-        // Within the two groups sort by sequence id, so they are processed in insertion order.
-        return this.taskId > task2.taskId ? 1 : -1;
     }
 
     /**
@@ -225,13 +179,6 @@ public class CompilationTask implements Runnable, Comparable {
                 }
                 InlinedBytecodes.add(method.getCodeSize());
                 CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
-                if (graph.getEntryBCI() != StructuredGraph.INVOCATION_ENTRY_BCI) {
-                    // for OSR, only a pointer is passed to the method.
-                    JavaType[] parameterTypes = new JavaType[]{providers.getMetaAccess().lookupJavaType(long.class)};
-                    CallingConvention tmp = providers.getCodeCache().getRegisterConfig().getCallingConvention(JavaCallee, providers.getMetaAccess().lookupJavaType(void.class), parameterTypes,
-                                    backend.getTarget(), false);
-                    cc = new CallingConvention(cc.getStackSize(), cc.getReturn(), tmp.getArgument(0));
-                }
                 Suites suites = getSuites(providers);
                 ProfilingInfo profilingInfo = getProfilingInfo();
                 OptimisticOptimizations optimisticOpts = getOptimisticOpts(profilingInfo);
@@ -256,7 +203,7 @@ public class CompilationTask implements Runnable, Comparable {
             }
             stats.finish(method);
         } catch (BailoutException bailout) {
-            BAILOUTS.increment();
+            Debug.metric("Bailouts").increment();
             if (ExitVMOnBailout.getValue()) {
                 TTY.cachedOut.println(MetaUtil.format("Bailout in %H.%n(%p)", method));
                 bailout.printStackTrace(TTY.cachedOut);

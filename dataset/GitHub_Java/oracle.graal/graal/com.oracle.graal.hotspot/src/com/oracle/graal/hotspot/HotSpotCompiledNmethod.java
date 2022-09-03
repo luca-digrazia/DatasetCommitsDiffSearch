@@ -35,8 +35,8 @@ public final class HotSpotCompiledNmethod extends HotSpotCompiledCode {
     public final int entryBCI;
     public final int id;
 
-    public HotSpotCompiledNmethod(Architecture arch, HotSpotResolvedJavaMethod method, CompilationResult compResult) {
-        super(arch, compResult);
+    public HotSpotCompiledNmethod(HotSpotResolvedJavaMethod method, CompilationResult compResult) {
+        super(compResult);
         this.method = method;
         this.entryBCI = compResult.getEntryBCI();
         this.id = compResult.getId();

@@ -33,11 +33,11 @@ import com.oracle.graal.hotspot.meta.*;
  */
 public class CompilerToVMImpl implements CompilerToVM {
 
-    private native int installCode0(HotSpotCompiledCode compiledCode, HotSpotInstalledCode code, SpeculationLog speculationLog);
+    private native int installCode0(HotSpotCompiledCode compiledCode, HotSpotInstalledCode code, boolean[] triggeredDeoptimizations);
 
     @Override
     public CodeInstallResult installCode(HotSpotCompiledCode compiledCode, HotSpotInstalledCode code, SpeculationLog speculationLog) {
-        return CodeInstallResult.getEnum(installCode0(compiledCode, code, speculationLog));
+        return CodeInstallResult.getEnum(installCode0(compiledCode, code, (speculationLog == null) ? null : speculationLog.getRawMap()));
     }
 
     @Override

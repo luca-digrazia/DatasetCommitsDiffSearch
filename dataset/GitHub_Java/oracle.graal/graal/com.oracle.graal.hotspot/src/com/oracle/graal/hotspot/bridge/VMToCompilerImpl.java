@@ -519,7 +519,12 @@ public class VMToCompilerImpl implements VMToCompiler {
 
     @Override
     public void compileMethod(long metaspaceMethod, final int entryBCI, final boolean blocking) {
-        final HotSpotResolvedJavaMethod method = HotSpotResolvedJavaMethod.fromMetaspace(metaspaceMethod);
+        HotSpotVMConfig config = runtime().getConfig();
+        final long metaspaceConstMethod = unsafe.getAddress(metaspaceMethod + config.methodConstMethodOffset);
+        final long metaspaceConstantPool = unsafe.getAddress(metaspaceConstMethod + config.constMethodConstantsOffset);
+        final long metaspaceKlass = unsafe.getAddress(metaspaceConstantPool + config.constantPoolHolderOffset);
+        final HotSpotResolvedObjectType holder = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
+        final HotSpotResolvedJavaMethod method = holder.createMethod(metaspaceMethod);
         // We have to use a privileged action here because compilations are enqueued from user code
         // which very likely contains unprivileged frames.
         AccessController.doPrivileged(new PrivilegedAction<Void>() {

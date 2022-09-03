@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.hotspot.CompileTheWorld.Options.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
 import static com.oracle.graal.phases.GraalOptions.*;
@@ -38,7 +39,9 @@ import com.oracle.graal.bytecode.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.HotSpotOptions.OptionConsumer;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.tiers.*;
@@ -90,7 +93,7 @@ public final class CompileTheWorld {
      * A mechanism for overriding Graal options that affect compilation. A {@link Config} object
      * should be used in a try-with-resources statement to ensure overriding of options is scoped
      * properly. For example:
-     *
+     * 
      * <pre>
      *     Config config = ...;
      *     try (AutoCloseable s = config == null ? null : config.apply()) {
@@ -104,7 +107,7 @@ public final class CompileTheWorld {
 
         /**
          * Creates a {@link Config} object by parsing a set of space separated override options.
-         *
+         * 
          * @param options a space separated set of option value settings with each option setting in
          *            a format compatible with
          *            {@link HotSpotOptions#parseOption(String, OptionConsumer)}. Ignored if null.
@@ -144,14 +147,15 @@ public final class CompileTheWorld {
 
     // Some runtime instances we need.
     private final HotSpotGraalRuntime runtime = runtime();
+    private final VMToCompilerImpl vmToCompiler = (VMToCompilerImpl) runtime.getVMToCompiler();
 
-    /** List of Zip/Jar files to compile (see {@link Options#CompileTheWorldClasspath}). */
+    /** List of Zip/Jar files to compile (see {@link #CompileTheWorldClasspath}. */
     private final String files;
 
-    /** Class index to start compilation at (see {@link Options#CompileTheWorldStartAt}). */
+    /** Class index to start compilation at (see {@link #CompileTheWorldStartAt}. */
     private final int startAt;
 
-    /** Class index to stop compilation at (see {@link Options#CompileTheWorldStopAt}). */
+    /** Class index to stop compilation at (see {@link #CompileTheWorldStopAt}. */
     private final int stopAt;
 
     // Counters
@@ -164,7 +168,7 @@ public final class CompileTheWorld {
 
     /**
      * Creates a compile-the-world instance.
-     *
+     * 
      * @param files {@link File#pathSeparator} separated list of Zip/Jar files to compile
      * @param startAt index of the class file to start compilation at
      * @param stopAt index of the class file to stop compilation at
@@ -186,9 +190,9 @@ public final class CompileTheWorld {
 
     /**
      * Compiles all methods in all classes in the Zip/Jar archive files in
-     * {@link Options#CompileTheWorldClasspath}. If {@link Options#CompileTheWorldClasspath}
-     * contains the magic token {@link #SUN_BOOT_CLASS_PATH} passed up from HotSpot we take the
-     * files from the boot class path.
+     * {@link #CompileTheWorldClasspath}. If {@link #CompileTheWorldClasspath} contains the magic
+     * token {@link #SUN_BOOT_CLASS_PATH} passed up from HotSpot we take the files from the boot
+     * class path.
      */
     public void compile() throws Throwable {
         if (SUN_BOOT_CLASS_PATH.equals(files)) {
@@ -228,7 +232,7 @@ public final class CompileTheWorld {
 
     /**
      * Compiles all methods in all classes in the Zip/Jar files passed.
-     *
+     * 
      * @param fileList {@link File#pathSeparator} separated list of Zip/Jar files to compile
      * @throws Throwable
      */
@@ -316,8 +320,8 @@ public final class CompileTheWorld {
 
     class CTWCompilationTask extends CompilationTask {
 
-        CTWCompilationTask(HotSpotBackend backend, HotSpotResolvedJavaMethod method) {
-            super(backend, method, INVOCATION_ENTRY_BCI, false);
+        CTWCompilationTask(HotSpotBackend backend, HotSpotResolvedJavaMethod method, int id) {
+            super(backend, method, INVOCATION_ENTRY_BCI, id);
         }
 
         /**
@@ -347,8 +351,9 @@ public final class CompileTheWorld {
         try {
             long start = System.currentTimeMillis();
 
+            int id = vmToCompiler.allocateCompileTaskId(method, StructuredGraph.INVOCATION_ENTRY_BCI);
             HotSpotBackend backend = runtime.getHostBackend();
-            CompilationTask task = new CTWCompilationTask(backend, method);
+            CompilationTask task = new CTWCompilationTask(backend, method, id);
             task.runCompilation(false);
 
             compileTime += (System.currentTimeMillis() - start);
@@ -363,7 +368,7 @@ public final class CompileTheWorld {
 
     /**
      * Determines if a method should be compiled (Cf. CompilationPolicy::can_be_compiled).
-     *
+     * 
      * @return true if it can be compiled, false otherwise
      */
     private boolean canBeCompiled(HotSpotResolvedJavaMethod javaMethod, int modifiers) {
