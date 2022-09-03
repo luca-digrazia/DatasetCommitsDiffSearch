@@ -125,9 +125,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
             SpecialService ss = env.lookup(info, SpecialService.class);
             assertNotNull("Service found", ss);
             assertEquals("The right extension", ss.fileExtension(), InstrumentationTestLanguage.FILENAME_EXTENSION);
-
-            assertNull("Can't query object", env.lookup(info, Object.class));
-            assertNull("Can't query language", env.lookup(info, TruffleLanguage.class));
         }
 
         private LanguageInfo obtainInstrumentationLanguage() {
