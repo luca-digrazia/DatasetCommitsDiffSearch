@@ -22,9 +22,12 @@
  */
 package com.oracle.max.graal.hotspot.ri;
 
+import java.util.*;
+
 import sun.misc.*;
 
 import com.oracle.max.cri.ri.*;
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.hotspot.*;
 import com.oracle.max.graal.hotspot.Compiler;
 
@@ -40,9 +43,10 @@ public final class HotSpotMethodData extends CompilerObject {
         config = CompilerImpl.getInstance().getConfig();
     }
 
-    // TODO (ch) use same logic as in NodeClass?
+    // TODO (chaeubl) use same logic as in NodeClass?
     private static final Unsafe unsafe = Unsafe.getUnsafe();
-    private static final HotSpotMethodDataAccessor NO_DATA_ACCESSOR = new NoMethodData();
+    private static final HotSpotMethodDataAccessor NO_DATA_NO_EXCEPTION_ACCESSOR = new NoMethodData(RiExceptionSeen.FALSE);
+    private static final HotSpotMethodDataAccessor NO_DATA_EXCEPTION_POSSIBLY_NOT_RECORDED_ACCESSOR = new NoMethodData(RiExceptionSeen.NOT_SUPPORTED);
     private static final HotSpotVMConfig config;
     // sorted by tag
     private static final HotSpotMethodDataAccessor[] PROFILE_DATA_ACCESSORS = {
@@ -54,7 +58,6 @@ public final class HotSpotMethodData extends CompilerObject {
     private Object hotspotMirror;
     private int normalDataSize;
     private int extraDataSize;
-    private boolean mature;
 
     private HotSpotMethodData(Compiler compiler) {
         super(compiler);
@@ -69,11 +72,8 @@ public final class HotSpotMethodData extends CompilerObject {
         return extraDataSize > 0;
     }
 
-    public boolean isMature() {
-        if (!mature) {
-            mature = compiler.getVMEntries().HotSpotMethodData_isMature(this);
-        }
-        return mature;
+    public int getExtraDataBeginOffset() {
+        return normalDataSize;
     }
 
     public boolean isWithin(int position) {
@@ -85,25 +85,29 @@ public final class HotSpotMethodData extends CompilerObject {
             return null;
         }
 
-        HotSpotMethodDataAccessor result = getData(position, 0);
+        HotSpotMethodDataAccessor result = getData(position);
         assert result != null : "NO_DATA tag is not allowed";
         return result;
     }
 
     public HotSpotMethodDataAccessor getExtraData(int position) {
-        if (position >= extraDataSize) {
+        if (position >= normalDataSize + extraDataSize) {
             return null;
         }
-        return getData(position, normalDataSize);
+        return getData(position);
     }
 
-    public static HotSpotMethodDataAccessor getNoMethodData() {
-        return NO_DATA_ACCESSOR;
+    public static HotSpotMethodDataAccessor getNoDataAccessor(boolean exceptionPossiblyNotRecorded) {
+        if (exceptionPossiblyNotRecorded) {
+            return NO_DATA_EXCEPTION_POSSIBLY_NOT_RECORDED_ACCESSOR;
+        } else {
+            return NO_DATA_NO_EXCEPTION_ACCESSOR;
+        }
     }
 
-    private HotSpotMethodDataAccessor getData(int position, int displacement) {
+    private HotSpotMethodDataAccessor getData(int position) {
         assert position >= 0 : "out of bounds";
-        int tag = AbstractMethodData.readTag(this, displacement + position);
+        int tag = AbstractMethodData.readTag(this, position);
         assert tag >= 0 && tag < PROFILE_DATA_ACCESSORS.length : "illegal tag";
         return PROFILE_DATA_ACCESSORS[tag];
     }
@@ -155,7 +159,7 @@ public final class HotSpotMethodData extends CompilerObject {
     }
 
     private abstract static class AbstractMethodData implements HotSpotMethodDataAccessor {
-        private static final int IMPLICIT_EXCEPTIONS_MASK = 0x0E;
+        private static final int EXCEPTIONS_MASK = 0x80;
 
         private final int tag;
         private final int staticSize;
@@ -184,9 +188,8 @@ public final class HotSpotMethodData extends CompilerObject {
         }
 
         @Override
-        public boolean getImplicitExceptionSeen(HotSpotMethodData data, int position) {
-            // TODO (ch) might return true too often because flags are also used for deoptimization reasons
-            return (getFlags(data, position) & IMPLICIT_EXCEPTIONS_MASK) != 0;
+        public RiExceptionSeen getExceptionSeen(HotSpotMethodData data, int position) {
+            return RiExceptionSeen.get((getFlags(data, position) & EXCEPTIONS_MASK) != 0);
         }
 
         @Override
@@ -222,8 +225,11 @@ public final class HotSpotMethodData extends CompilerObject {
         private static final int NO_DATA_TAG = 0;
         private static final int NO_DATA_SIZE = cellIndexToOffset(0);
 
-        protected NoMethodData() {
+        private final RiExceptionSeen exceptionSeen;
+
+        protected NoMethodData(RiExceptionSeen exceptionSeen) {
             super(NO_DATA_TAG, NO_DATA_SIZE);
+            this.exceptionSeen = exceptionSeen;
         }
 
         @Override
@@ -233,8 +239,8 @@ public final class HotSpotMethodData extends CompilerObject {
 
 
         @Override
-        public boolean getImplicitExceptionSeen(HotSpotMethodData data, int position) {
-            return false;
+        public RiExceptionSeen getExceptionSeen(HotSpotMethodData data, int position) {
+            return exceptionSeen;
         }
     }
 
@@ -296,7 +302,7 @@ public final class HotSpotMethodData extends CompilerObject {
 
         @Override
         public double getBranchTakenProbability(HotSpotMethodData data, int position) {
-            return 1;
+            return getExecutionCount(data, position) != 0 ? 1 : 0;
         }
 
         @Override
@@ -310,7 +316,7 @@ public final class HotSpotMethodData extends CompilerObject {
         }
     }
 
-    private static class AbstractTypeData extends CounterData {
+    private abstract static class AbstractTypeData extends CounterData {
         private static final int RECEIVER_TYPE_DATA_ROW_SIZE = cellsToBytes(2);
         private static final int RECEIVER_TYPE_DATA_SIZE = cellIndexToOffset(1) + RECEIVER_TYPE_DATA_ROW_SIZE * config.typeProfileWidth;
         private static final int RECEIVER_TYPE_DATA_FIRST_RECEIVER_OFFSET = cellIndexToOffset(1);
@@ -322,8 +328,6 @@ public final class HotSpotMethodData extends CompilerObject {
 
         @Override
         public RiTypeProfile getTypeProfile(HotSpotMethodData data, int position) {
-            // TODO (ch) detect polymorphic case and return null and document interface accordingly
-            // is it really the best solution to return null?
             int typeProfileWidth = config.typeProfileWidth;
 
             RiResolvedType[] sparseTypes = new RiResolvedType[typeProfileWidth];
@@ -350,29 +354,39 @@ public final class HotSpotMethodData extends CompilerObject {
                 }
             }
 
+            totalCount += getTypesNotRecordedExecutionCount(data, position);
             return createRiTypeProfile(sparseTypes, counts, totalCount, entries);
+        }
+
+        protected long getTypesNotRecordedExecutionCount(HotSpotMethodData data, int position) {
+            // checkcast/aastore/instanceof profiling in the HotSpot template-based interpreter was adjusted so that the counter
+            // is incremented to indicate the polymorphic case instead of decrementing it for failed type checks
+            return getCounterValue(data, position);
         }
 
         private static RiTypeProfile createRiTypeProfile(RiResolvedType[] sparseTypes, double[] counts, long totalCount, int entries) {
             RiResolvedType[] types;
             double[] probabilities;
 
-            if (entries <= 0) {
+            if (entries <= 0 || totalCount < GraalOptions.MatureExecutionsTypeProfile) {
                 return null;
             } else if (entries < sparseTypes.length) {
-                RiResolvedType[] compactedTypes = new RiResolvedType[entries];
-                System.arraycopy(sparseTypes, 0, compactedTypes, 0, entries);
-                types = compactedTypes;
+                types = Arrays.copyOf(sparseTypes, entries);
                 probabilities = new double[entries];
             } else {
                 types = sparseTypes;
                 probabilities = counts;
             }
 
+            double totalProbability = 0.0;
             for (int i = 0; i < entries; i++) {
-                probabilities[i] = counts[i] / totalCount;
+                double p = counts[i] / totalCount;
+                probabilities[i] = p;
+                totalProbability += p;
             }
-            return new RiTypeProfile(types, probabilities);
+
+            double notRecordedTypeProbability = entries < config.typeProfileWidth ? 0.0 : Math.min(1.0, Math.max(0.0, 1.0 - totalProbability));
+            return new RiTypeProfile(types, notRecordedTypeProbability, probabilities);
         }
 
         private static int getReceiverOffset(int row) {
@@ -432,7 +446,6 @@ public final class HotSpotMethodData extends CompilerObject {
         private static final int BRANCH_DATA_TAG = 7;
         private static final int BRANCH_DATA_SIZE = cellIndexToOffset(3);
         private static final int NOT_TAKEN_COUNT_OFFSET = cellIndexToOffset(2);
-        private static final int BRANCH_DATA_MATURE_COUNT = 40;
 
         public BranchData() {
             super(BRANCH_DATA_TAG, BRANCH_DATA_SIZE);
@@ -444,7 +457,7 @@ public final class HotSpotMethodData extends CompilerObject {
             long notTakenCount = data.readUnsignedInt(position, NOT_TAKEN_COUNT_OFFSET);
             long total = takenCount + notTakenCount;
 
-            if (total < BRANCH_DATA_MATURE_COUNT) {
+            if (total < GraalOptions.MatureExecutionsBranch) {
                 return -1;
             } else {
                 return takenCount / (double) total;
@@ -509,7 +522,7 @@ public final class HotSpotMethodData extends CompilerObject {
                 result[i - 1] = count;
             }
 
-            if (totalCount < 10 * (length + 2)) {
+            if (totalCount < GraalOptions.MatureExecutionsPerSwitchCase * length) {
                 return null;
             } else {
                 for (int i = 0; i < length; i++) {

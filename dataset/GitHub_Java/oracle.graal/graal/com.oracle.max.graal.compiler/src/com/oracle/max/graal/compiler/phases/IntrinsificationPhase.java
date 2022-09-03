@@ -22,11 +22,12 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.cri.*;
+import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
-import com.sun.cri.ri.*;
 
 public class IntrinsificationPhase extends Phase {
 
@@ -46,20 +47,31 @@ public class IntrinsificationPhase extends Phase {
         }
     }
 
-    public static void tryIntrinsify(Invoke invoke, GraalRuntime runtime) {
-        RiResolvedMethod target = invoke.callTarget().targetMethod();
-        tryIntrinsify(invoke, target, runtime);
+    public static boolean canIntrinsify(Invoke invoke, RiResolvedMethod target, GraalRuntime runtime) {
+        return getIntrinsicGraph(invoke, target, runtime) != null;
     }
 
-    @SuppressWarnings("unchecked")
-    public static void tryIntrinsify(Invoke invoke, RiResolvedMethod target, GraalRuntime runtime) {
-        StructuredGraph intrinsicGraph = (StructuredGraph) target.compilerStorage().get(Graph.class);
-        if (intrinsicGraph == null) {
-            // TODO (ph) remove once all intrinsics are available via RiMethod
-            intrinsicGraph = runtime.intrinsicGraph(invoke.stateAfter().method(), invoke.bci(), target, invoke.callTarget().arguments());
+    private static void tryIntrinsify(Invoke invoke, GraalRuntime runtime) {
+        RiResolvedMethod target = invoke.callTarget().targetMethod();
+        if (target != null) {
+            tryIntrinsify(invoke, target, runtime);
         }
+    }
+
+    private static void tryIntrinsify(Invoke invoke, RiResolvedMethod target, GraalRuntime runtime) {
+        StructuredGraph intrinsicGraph = getIntrinsicGraph(invoke, target, runtime);
         if (intrinsicGraph != null) {
+            Debug.log(" > Intrinsify %s", target);
             InliningUtil.inline(invoke, intrinsicGraph, true);
         }
+    }
+
+    private static StructuredGraph getIntrinsicGraph(Invoke invoke, RiResolvedMethod target, GraalRuntime runtime) {
+        StructuredGraph intrinsicGraph = (StructuredGraph) target.compilerStorage().get(Graph.class);
+        if (intrinsicGraph == null) {
+            // TODO remove once all intrinsics are available via compilerStorage
+            intrinsicGraph = runtime.intrinsicGraph(invoke.stateAfter().method(), invoke.bci(), target, invoke.callTarget().arguments());
+        }
+        return intrinsicGraph;
     }
 }
