@@ -95,16 +95,11 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
         return length;
     }
 
-    private static boolean isNaNFloat(JavaConstant constant) {
-        JavaKind kind = constant.getJavaKind();
-        return (kind == JavaKind.Float && Float.isNaN(constant.asFloat())) || (kind == JavaKind.Double && Double.isNaN(constant.asDouble()));
-    }
-
     private static boolean arrayEquals(ConstantReflectionProvider constantReflection, JavaConstant a, JavaConstant b, int len) {
         for (int i = 0; i < len; i++) {
             JavaConstant aElem = constantReflection.readArrayElement(a, i);
             JavaConstant bElem = constantReflection.readArrayElement(b, i);
-            if (!constantReflection.constantEquals(aElem, bElem) && !(isNaNFloat(aElem) && isNaNFloat(bElem))) {
+            if (!constantReflection.constantEquals(aElem, bElem)) {
                 return false;
             }
         }
