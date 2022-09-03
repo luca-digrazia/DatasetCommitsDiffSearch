@@ -37,6 +37,6 @@ public class ASTTransitionCanonicalizer extends StateTransitionCanonicalizer<AST
     @SuppressWarnings("unchecked")
     @Override
     protected TransitionBuilder<ASTTransitionSet>[] createResultArray(int size) {
-        return new TransitionBuilder[size];
+        return (TransitionBuilder<ASTTransitionSet>[]) new TransitionBuilder[size];
     }
 }
