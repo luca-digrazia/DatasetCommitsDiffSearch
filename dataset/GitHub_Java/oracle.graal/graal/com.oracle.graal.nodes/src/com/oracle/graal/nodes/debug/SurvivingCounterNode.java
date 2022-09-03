@@ -44,7 +44,9 @@ public class SurvivingCounterNode extends DynamicCounterNode implements Simplifi
     public void simplify(SimplifierTool tool) {
         if (checkedValue instanceof FloatingNode && checkedValue.usages().count() == 1) {
             tool.addToWorkList(checkedValue);
-            graph().removeFixed(this);
+            ((StructuredGraph) graph()).removeFixed(this);
+            // ((StructuredGraph) graph()).replaceFixedWithFixed(this, graph().add(new
+            // DynamicCounterNode("non-surviving " + getName(), getIncrement(), isAddContext())));
         }
     }
 
