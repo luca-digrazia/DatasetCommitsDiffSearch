@@ -290,11 +290,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     }
 
                     currentBlock = blockMap.getStartBlock();
-                    setEntryState(startBlock, 0, frameState);
+                    startBlock.setEntryState(0, frameState);
                     if (startBlock.isLoopHeader && !explodeLoops) {
                         appendGoto(startBlock);
                     } else {
-                        setFirstInstruction(startBlock, 0, lastInstr);
+                        startBlock.setFirstInstruction(0, lastInstr);
                     }
 
                     int index = 0;
@@ -1204,7 +1204,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         }
                         HIRFrameStateBuilder newState = state.copy();
                         for (BciBlock loop : exitLoops) {
-                            LoopBeginNode loopBegin = (LoopBeginNode) getFirstInstruction(loop, this.getCurrentDimension());
+                            LoopBeginNode loopBegin = (LoopBeginNode) loop.getFirstInstruction(this.getCurrentDimension());
                             LoopExitNode loopExit = currentGraph.add(new LoopExitNode(loopBegin));
                             if (lastLoopExit != null) {
                                 lastLoopExit.setNext(loopExit);
@@ -1214,7 +1214,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                             }
                             lastLoopExit = loopExit;
                             Debug.log("Target %s Exits %s, scanning framestates...", targetBlock, loop);
-                            newState.insertLoopProxies(loopExit, (HIRFrameStateBuilder) getEntryState(loop, this.getCurrentDimension()));
+                            newState.insertLoopProxies(loopExit, (HIRFrameStateBuilder) loop.getEntryState(this.getCurrentDimension()));
                             loopExit.setStateAfter(newState.create(bci));
                         }
 
@@ -1223,18 +1223,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     }
                 }
                 return new Target(target, state);
-            }
-
-            private void setEntryState(BciBlock block, int operatingDimension, AbstractFrameStateBuilder<?, ?> entryState) {
-                block.setEntryState(operatingDimension, entryState);
-            }
-
-            private void setFirstInstruction(BciBlock block, int operatingDimension, FixedWithNextNode firstInstruction) {
-                block.setFirstInstruction(operatingDimension, firstInstruction);
-            }
-
-            private FixedWithNextNode getFirstInstruction(BciBlock block, int dimension) {
-                return block.getFirstInstruction(dimension);
             }
 
             private FixedNode createTarget(double probability, BciBlock block, HIRFrameStateBuilder stateAfter) {
@@ -1255,9 +1243,41 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 assert block != null && state != null;
                 assert !block.isExceptionEntry || state.stackSize() == 1;
 
-                int operatingDimension = findOperatingDimension(block);
+                int operatingDimension = this.getCurrentDimension();
+                if (this.explodeLoops && this.explodeLoopsContext != null && !this.explodeLoopsContext.isEmpty()) {
+                    int i;
+                    for (i = explodeLoopsContext.size() - 1; i >= 0; --i) {
+                        ExplodedLoopContext context = explodeLoopsContext.elementAt(i);
+                        if (context.header == block) {
 
-                if (getFirstInstruction(block, operatingDimension) == null) {
+                            // We have a hit on our current explosion context loop begin.
+                            if (context.targetPeelIteration == -1) {
+                                // This is the first hit => allocate a new dimension and at the same
+                                // time mark the context loop begin as hit during the current
+                                // iteration.
+                                context.targetPeelIteration = nextPeelIteration++;
+                                if (nextPeelIteration > MaximumLoopExplosionCount.getValue()) {
+                                    throw new BailoutException("too many loop explosion interations - does the explosion not terminate?");
+                                }
+                            }
+
+                            // Operate on the target dimension.
+                            operatingDimension = context.targetPeelIteration;
+                            break;
+                        } else if (block.getId() > context.header.getId() && block.getId() <= context.header.loopEnd) {
+                            // We hit the range of this context.
+                            operatingDimension = context.peelIteration;
+                            break;
+                        }
+                    }
+
+                    if (i == -1) {
+                        // I did not find a dimension.
+                        operatingDimension = 0;
+                    }
+                }
+
+                if (block.getFirstInstruction(operatingDimension) == null) {
                     /*
                      * This is the first time we see this block as a branch target. Create and
                      * return a placeholder that later can be replaced with a MergeNode when we see
@@ -1265,16 +1285,16 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                      */
                     FixedNode targetNode;
                     if (isGoto && (block.getPredecessorCount() == 1 || !controlFlowSplit) && !block.isLoopHeader && (currentBlock.loops & ~block.loops) == 0) {
-                        setFirstInstruction(block, operatingDimension, lastInstr);
+                        block.setFirstInstruction(operatingDimension, lastInstr);
                         lastInstr = null;
                     } else {
-                        setFirstInstruction(block, operatingDimension, currentGraph.add(new BeginNode()));
+                        block.setFirstInstruction(operatingDimension, currentGraph.add(new BeginNode()));
                     }
-                    targetNode = getFirstInstruction(block, operatingDimension);
+                    targetNode = block.getFirstInstruction(operatingDimension);
                     Target target = checkLoopExit(targetNode, block, state);
                     FixedNode result = target.fixed;
                     AbstractFrameStateBuilder<?, ?> entryState = target.state == state ? state.copy() : target.state;
-                    setEntryState(block, operatingDimension, entryState);
+                    block.setEntryState(operatingDimension, entryState);
                     entryState.clearNonLiveLocals(block, liveness, true);
 
                     Debug.log("createTarget %s: first visit, result: %s", block, targetNode);
@@ -1282,34 +1302,34 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
 
                 // We already saw this block before, so we have to merge states.
-                if (!((HIRFrameStateBuilder) getEntryState(block, operatingDimension)).isCompatibleWith(state)) {
+                if (!((HIRFrameStateBuilder) block.getEntryState(operatingDimension)).isCompatibleWith(state)) {
                     throw new BailoutException("stacks do not match; bytecodes would not verify");
                 }
 
-                if (getFirstInstruction(block, operatingDimension) instanceof LoopBeginNode) {
+                if (block.getFirstInstruction(operatingDimension) instanceof LoopBeginNode) {
                     assert this.explodeLoops || (block.isLoopHeader && currentBlock.getId() >= block.getId()) : "must be backward branch";
                     /*
                      * Backward loop edge. We need to create a special LoopEndNode and merge with
                      * the loop begin node created before.
                      */
-                    LoopBeginNode loopBegin = (LoopBeginNode) getFirstInstruction(block, operatingDimension);
+                    LoopBeginNode loopBegin = (LoopBeginNode) block.getFirstInstruction(operatingDimension);
                     Target target = checkLoopExit(currentGraph.add(new LoopEndNode(loopBegin)), block, state);
                     FixedNode result = target.fixed;
-                    ((HIRFrameStateBuilder) getEntryState(block, operatingDimension)).merge(loopBegin, target.state);
+                    ((HIRFrameStateBuilder) block.getEntryState(operatingDimension)).merge(loopBegin, target.state);
 
                     Debug.log("createTarget %s: merging backward branch to loop header %s, result: %s", block, loopBegin, result);
                     return result;
                 }
                 assert currentBlock == null || currentBlock.getId() < block.getId() : "must not be backward branch";
-                assert getFirstInstruction(block, operatingDimension).next() == null : "bytecodes already parsed for block";
+                assert block.getFirstInstruction(operatingDimension).next() == null : "bytecodes already parsed for block";
 
-                if (getFirstInstruction(block, operatingDimension) instanceof AbstractBeginNode && !(getFirstInstruction(block, operatingDimension) instanceof AbstractMergeNode)) {
+                if (block.getFirstInstruction(operatingDimension) instanceof AbstractBeginNode && !(block.getFirstInstruction(operatingDimension) instanceof AbstractMergeNode)) {
                     /*
                      * This is the second time we see this block. Create the actual MergeNode and
                      * the End Node for the already existing edge. For simplicity, we leave the
                      * placeholder in the graph and just append the new nodes after the placeholder.
                      */
-                    AbstractBeginNode placeholder = (AbstractBeginNode) getFirstInstruction(block, operatingDimension);
+                    AbstractBeginNode placeholder = (AbstractBeginNode) block.getFirstInstruction(operatingDimension);
 
                     // The EndNode for the already existing edge.
                     AbstractEndNode end = currentGraph.add(new EndNode());
@@ -1327,60 +1347,20 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     mergeNode.addForwardEnd(end);
                     mergeNode.setNext(next);
 
-                    setFirstInstruction(block, operatingDimension, mergeNode);
+                    block.setFirstInstruction(operatingDimension, mergeNode);
                 }
 
-                AbstractMergeNode mergeNode = (AbstractMergeNode) getFirstInstruction(block, operatingDimension);
+                AbstractMergeNode mergeNode = (AbstractMergeNode) block.getFirstInstruction(operatingDimension);
 
                 // The EndNode for the newly merged edge.
                 AbstractEndNode newEnd = currentGraph.add(new EndNode());
                 Target target = checkLoopExit(newEnd, block, state);
                 FixedNode result = target.fixed;
-                ((HIRFrameStateBuilder) getEntryState(block, operatingDimension)).merge(mergeNode, target.state);
+                ((HIRFrameStateBuilder) block.getEntryState(operatingDimension)).merge(mergeNode, target.state);
                 mergeNode.addForwardEnd(newEnd);
 
                 Debug.log("createTarget %s: merging state, result: %s", block, result);
                 return result;
-            }
-
-            private AbstractFrameStateBuilder<?, ?> getEntryState(BciBlock block, int operatingDimension) {
-                return block.getEntryState(operatingDimension);
-            }
-
-            private int findOperatingDimension(BciBlock block) {
-                if (this.explodeLoops && this.explodeLoopsContext != null && !this.explodeLoopsContext.isEmpty()) {
-                    return findOperatingDimensionWithLoopExplosion(block);
-                }
-                return this.getCurrentDimension();
-            }
-
-            private int findOperatingDimensionWithLoopExplosion(BciBlock block) {
-                int i;
-                for (i = explodeLoopsContext.size() - 1; i >= 0; --i) {
-                    ExplodedLoopContext context = explodeLoopsContext.elementAt(i);
-                    if (context.header == block) {
-
-                        // We have a hit on our current explosion context loop begin.
-                        if (context.targetPeelIteration == -1) {
-                            // This is the first hit => allocate a new dimension and at the same
-                            // time mark the context loop begin as hit during the current
-                            // iteration.
-                            context.targetPeelIteration = nextPeelIteration++;
-                            if (nextPeelIteration > MaximumLoopExplosionCount.getValue()) {
-                                throw new BailoutException("too many loop explosion interations - does the explosion not terminate?");
-                            }
-                        }
-
-                        // Operate on the target dimension.
-                        return context.targetPeelIteration;
-                    } else if (block.getId() > context.header.getId() && block.getId() <= context.header.loopEnd) {
-                        // We hit the range of this context.
-                        return context.peelIteration;
-                    }
-                }
-
-                // No dimension found.
-                return 0;
             }
 
             /**
@@ -1406,14 +1386,14 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             protected void processBlock(BytecodeParser parser, BciBlock block) {
                 // Ignore blocks that have no predecessors by the time their bytecodes are parsed
-                if (block == null || getFirstInstruction(block, this.getCurrentDimension()) == null) {
+                if (block == null || block.getFirstInstruction(this.getCurrentDimension()) == null) {
                     Debug.log("Ignoring block %s", block);
                     return;
                 }
                 try (Indent indent = Debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, block.getFirstInstruction(this.getCurrentDimension()), block.isLoopHeader)) {
 
-                    lastInstr = getFirstInstruction(block, this.getCurrentDimension());
-                    frameState = (HIRFrameStateBuilder) getEntryState(block, this.getCurrentDimension());
+                    lastInstr = block.getFirstInstruction(this.getCurrentDimension());
+                    frameState = (HIRFrameStateBuilder) block.getEntryState(this.getCurrentDimension());
                     parser.setCurrentFrameState(frameState);
                     currentBlock = block;
 
@@ -1573,12 +1553,12 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                      * merge to the loop header. This ensures that the loop header has exactly one
                      * non-loop predecessor.
                      */
-                    setFirstInstruction(block, this.getCurrentDimension(), loopBegin);
+                    block.setFirstInstruction(this.getCurrentDimension(), loopBegin);
                     /*
                      * We need to preserve the frame state builder of the loop header so that we can
                      * merge values for phi functions, so make a copy of it.
                      */
-                    setEntryState(block, this.getCurrentDimension(), frameState.copy());
+                    block.setEntryState(this.getCurrentDimension(), frameState.copy());
 
                     Debug.log("  created loop header %s", loopBegin);
                 }
