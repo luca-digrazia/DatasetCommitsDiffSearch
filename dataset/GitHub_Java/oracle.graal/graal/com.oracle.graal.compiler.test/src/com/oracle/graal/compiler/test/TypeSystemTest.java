@@ -35,7 +35,6 @@ import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * In the following tests, the scalar type system of the compiler should be complete enough to see
@@ -185,13 +184,13 @@ public class TypeSystemTest extends GraalCompilerTest {
         StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         Assumptions assumptions = new Assumptions(false);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(runtime(), assumptions, replacements));
+        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
         new ConditionalEliminationPhase(runtime()).apply(graph);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(runtime(), assumptions, replacements));
+        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
         // a second canonicalizer is needed to process nested MaterializeNodes
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(runtime(), assumptions, replacements));
+        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
         StructuredGraph referenceGraph = parse(referenceSnippet);
-        new CanonicalizerPhase(true).apply(referenceGraph, new PhaseContext(runtime(), assumptions, replacements));
+        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(referenceGraph);
         assertEquals(referenceGraph, graph);
     }
 
@@ -237,13 +236,13 @@ public class TypeSystemTest extends GraalCompilerTest {
         }
     }
 
-    private <T extends Node & IterableNodeType> void test(String snippet, Class<T> clazz) {
+    private <T extends Node & Node.IterableNodeType> void test(String snippet, Class<T> clazz) {
         StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         Assumptions assumptions = new Assumptions(false);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(runtime(), assumptions, replacements));
+        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
         new ConditionalEliminationPhase(runtime()).apply(graph);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(runtime(), assumptions, replacements));
+        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
         Debug.dump(graph, "Graph");
         Assert.assertFalse("shouldn't have nodes of type " + clazz, graph.getNodes(clazz).iterator().hasNext());
     }
