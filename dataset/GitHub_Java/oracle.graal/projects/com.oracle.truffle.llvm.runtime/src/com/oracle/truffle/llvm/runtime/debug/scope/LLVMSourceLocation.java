@@ -34,14 +34,12 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -79,7 +77,6 @@ public abstract class LLVMSourceLocation {
         FILE,
         GLOBAL,
         LOCAL,
-        IR_MODULE,
         UNKNOWN
     }
 
@@ -106,7 +103,7 @@ public abstract class LLVMSourceLocation {
         this.sourceSection = sourceSection;
     }
 
-    public synchronized SourceSection getSourceSection() {
+    public SourceSection getSourceSection() {
         CompilerAsserts.neverPartOfCompilation();
         if (sourceSection == null && lazySourceSection != null) {
             sourceSection = lazySourceSection.get();
@@ -227,7 +224,6 @@ public abstract class LLVMSourceLocation {
             case COMPILEUNIT:
                 return "<static>";
 
-            case IR_MODULE:
             case MODULE:
                 if (name != null) {
                     return "module " + name;
@@ -379,29 +375,6 @@ public abstract class LLVMSourceLocation {
         public LLVMSourceLocation getCompileUnit() {
             return compileUnit;
         }
-    }
-
-    public static final class TextModule extends DefaultScope implements Iterable<LLVMGlobal> {
-
-        private final List<LLVMGlobal> globals;
-
-        TextModule(String name, SourceSection sourceSection) {
-            super(null, Kind.IR_MODULE, name, sourceSection);
-            globals = new ArrayList<>();
-        }
-
-        public void addGlobal(LLVMGlobal global) {
-            globals.add(global);
-        }
-
-        @Override
-        public Iterator<LLVMGlobal> iterator() {
-            return globals.iterator();
-        }
-    }
-
-    public static TextModule createLLModule(String name, SourceSection sourceSection) {
-        return new TextModule(name, sourceSection);
     }
 
     public static LLVMSourceLocation create(LLVMSourceLocation parent, LLVMSourceLocation.Kind kind, String name, LazySourceSection lazySourceSection, LLVMSourceLocation compileUnit) {
