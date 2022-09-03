@@ -22,27 +22,35 @@
  */
 package com.oracle.graal.debug.internal;
 
-import static com.oracle.graal.debug.DebugCloseable.*;
-
 import java.lang.management.*;
 import java.util.concurrent.*;
 
 import com.oracle.graal.debug.*;
 
-public final class TimerImpl extends AccumulatedDebugValue implements DebugTimer {
+public final class TimerImpl extends DebugValue implements DebugTimer {
 
-    private static final ThreadMXBean threadMXBean = Management.getThreadMXBean();
+    private static final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
+
+    public static final TimerCloseable VOID_CLOSEABLE = new TimerCloseable() {
+
+        @Override
+        public void close() {
+        }
+    };
 
     /**
      * Records the most recent active timer.
      */
-    private static final ThreadLocal<CloseableCounterImpl> currentTimer = new ThreadLocal<>();
+    private static final ThreadLocal<AbstractTimer> currentTimer = new ThreadLocal<>();
+
+    private final FlatTimer flat;
 
     static class FlatTimer extends DebugValue implements DebugTimer {
-        private TimerImpl accm;
+        private final TimerImpl accm;
 
-        public FlatTimer(String name, boolean conditional) {
-            super(name + "_Flat", conditional);
+        public FlatTimer(TimerImpl accm, String name) {
+            super(name + "_Flat", accm.isConditional());
+            this.accm = accm;
         }
 
         @Override
@@ -54,24 +62,31 @@ public final class TimerImpl extends AccumulatedDebugValue implements DebugTimer
             return accm.getTimeUnit();
         }
 
-        public DebugCloseable start() {
+        public TimerCloseable start() {
             return accm.start();
         }
     }
 
     public TimerImpl(String name, boolean conditional) {
-        super(name, conditional, new FlatTimer(name, conditional));
-        ((FlatTimer) flat).accm = this;
+        super(name + "_Accm", conditional);
+        this.flat = new FlatTimer(this, name);
     }
 
     @Override
-    public DebugCloseable start() {
+    public TimerCloseable start() {
         if (!isConditional() || Debug.isTimeEnabled()) {
+            long startTime;
+            if (threadMXBean.isCurrentThreadCpuTimeSupported()) {
+                startTime = threadMXBean.getCurrentThreadCpuTime();
+            } else {
+                startTime = System.nanoTime();
+            }
+
             AbstractTimer result;
             if (threadMXBean.isCurrentThreadCpuTimeSupported()) {
-                result = new CpuTimeTimer(this);
+                result = new CpuTimeTimer(this, startTime);
             } else {
-                result = new SystemNanosTimer(this);
+                result = new SystemNanosTimer(this, startTime);
             }
             currentTimer.set(result);
             return result;
@@ -85,7 +100,7 @@ public final class TimerImpl extends AccumulatedDebugValue implements DebugTimer
     }
 
     public DebugTimer getFlat() {
-        return (FlatTimer) flat;
+        return flat;
     }
 
     @Override
@@ -97,39 +112,68 @@ public final class TimerImpl extends AccumulatedDebugValue implements DebugTimer
         return TimeUnit.NANOSECONDS;
     }
 
-    private abstract static class AbstractTimer extends CloseableCounterImpl implements DebugCloseable {
+    private static abstract class AbstractTimer implements TimerCloseable {
 
-        private AbstractTimer(AccumulatedDebugValue counter) {
-            super(currentTimer.get(), counter);
+        private final AbstractTimer parent;
+        private final TimerImpl timer;
+        private final long startTime;
+        private long nestedTimeToSubtract;
+
+        private AbstractTimer(TimerImpl timer, long startTime) {
+            this.parent = currentTimer.get();
+            this.timer = timer;
+            this.startTime = startTime;
         }
 
         @Override
         public void close() {
-            super.close();
+            long endTime = currentTime();
+            long timeSpan = endTime - startTime;
+            if (parent != null) {
+                if (timer != parent.timer) {
+                    parent.nestedTimeToSubtract += timeSpan;
+
+                    // Look for our timer in an outer timing scope and fix up
+                    // the adjustment to the flat time
+                    AbstractTimer ancestor = parent.parent;
+                    while (ancestor != null) {
+                        if (ancestor.timer == timer) {
+                            ancestor.nestedTimeToSubtract -= timeSpan;
+                            break;
+                        }
+                        ancestor = ancestor.parent;
+                    }
+                }
+            }
             currentTimer.set(parent);
+            long flatTime = timeSpan - nestedTimeToSubtract;
+            timer.addToCurrentValue(timeSpan);
+            timer.flat.addToCurrentValue(flatTime);
         }
+
+        protected abstract long currentTime();
     }
 
     private final class SystemNanosTimer extends AbstractTimer {
 
-        public SystemNanosTimer(TimerImpl timer) {
-            super(timer);
+        public SystemNanosTimer(TimerImpl timer, long startTime) {
+            super(timer, startTime);
         }
 
         @Override
-        protected long getCounterValue() {
+        protected long currentTime() {
             return System.nanoTime();
         }
     }
 
     private final class CpuTimeTimer extends AbstractTimer {
 
-        public CpuTimeTimer(TimerImpl timer) {
-            super(timer);
+        public CpuTimeTimer(TimerImpl timer, long startTime) {
+            super(timer, startTime);
         }
 
         @Override
-        protected long getCounterValue() {
+        protected long currentTime() {
             return threadMXBean.getCurrentThreadCpuTime();
         }
     }

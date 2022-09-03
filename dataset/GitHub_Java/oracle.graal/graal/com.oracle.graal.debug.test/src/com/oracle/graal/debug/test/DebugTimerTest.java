@@ -38,16 +38,8 @@ public class DebugTimerTest {
         }
     }
 
-    private static boolean runningOnWindows() {
-        return System.getProperty("os.name").toLowerCase().contains("windows");
-    }
-
     @Test
     public void test1() {
-        if (runningOnWindows()) {
-            // mx beans regression
-            return;
-        }
         DebugConfig debugConfig = Debug.fixedConfig(0, 0, false, false, true, false, null, null, System.out);
         try (DebugConfigScope dcs = new DebugConfigScope(debugConfig); Debug.Scope s = Debug.scope("DebugTimerTest")) {
 
@@ -97,10 +89,6 @@ public class DebugTimerTest {
 
     @Test
     public void test3() {
-        if (runningOnWindows()) {
-            // mx beans regression
-            return;
-        }
         DebugConfig debugConfig = Debug.fixedConfig(0, 0, false, false, true, false, null, null, System.out);
         try (DebugConfigScope dcs = new DebugConfigScope(debugConfig); Debug.Scope s = Debug.scope("DebugTimerTest")) {
 
