@@ -45,7 +45,7 @@ public class ClassSubstitutions {
             // Class for primitive type
             return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
         } else {
-            return klass.readInt(klassModifierFlagsOffset(), FINAL_LOCATION);
+            return klass.readInt(klassModifierFlagsOffset());
         }
     }
 
@@ -55,7 +55,7 @@ public class ClassSubstitutions {
         if (klass.equal(0)) {
             return false;
         } else {
-            int accessFlags = klass.readInt(klassAccessFlagsOffset(), FINAL_LOCATION);
+            int accessFlags = klass.readInt(klassAccessFlagsOffset());
             return (accessFlags & Modifier.INTERFACE) != 0;
         }
     }
@@ -66,7 +66,8 @@ public class ClassSubstitutions {
         if (klass.equal(0)) {
             return false;
         } else {
-            return (readLayoutHelper(klass) & arrayKlassLayoutHelperIdentifier()) != 0;
+            int layoutHelper = klass.readInt(klassLayoutHelperOffset());
+            return (layoutHelper & arrayKlassLayoutHelperIdentifier()) != 0;
         }
     }
 
@@ -80,16 +81,17 @@ public class ClassSubstitutions {
     public static Class<?> getSuperclass(final Class<?> thisObj) {
         Word klass = loadWordFromObject(thisObj, klassOffset());
         if (klass.notEqual(0)) {
-            int accessFlags = klass.readInt(klassAccessFlagsOffset(), FINAL_LOCATION);
+            int accessFlags = klass.readInt(klassAccessFlagsOffset());
             if ((accessFlags & Modifier.INTERFACE) == 0) {
-                if ((readLayoutHelper(klass) & arrayKlassLayoutHelperIdentifier()) != 0) {
+                int layoutHelper = klass.readInt(klassLayoutHelperOffset());
+                if ((layoutHelper & arrayKlassLayoutHelperIdentifier()) != 0) {
                     return Object.class;
                 } else {
-                    Word superKlass = klass.readWord(klassSuperKlassOffset(), FINAL_LOCATION);
+                    Word superKlass = klass.readWord(klassSuperKlassOffset());
                     if (superKlass.equal(0)) {
                         return null;
                     } else {
-                        return unsafeCast(superKlass.readObject(classMirrorOffset(), FINAL_LOCATION), Class.class, true, true);
+                        return unsafeCast(superKlass.readObject(classMirrorOffset()), Class.class, true, true);
                     }
                 }
             }
@@ -101,8 +103,9 @@ public class ClassSubstitutions {
     public static Class<?> getComponentType(final Class<?> thisObj) {
         Word klass = loadWordFromObject(thisObj, klassOffset());
         if (klass.notEqual(0)) {
-            if ((readLayoutHelper(klass) & arrayKlassLayoutHelperIdentifier()) != 0) {
-                return unsafeCast(klass.readObject(arrayKlassComponentMirrorOffset(), FINAL_LOCATION), Class.class, true, true);
+            int layoutHelper = klass.readInt(klassLayoutHelperOffset());
+            if ((layoutHelper & arrayKlassLayoutHelperIdentifier()) != 0) {
+                return unsafeCast(klass.readObject(arrayKlassComponentMirrorOffset()), Class.class, true, true);
             }
         }
         return null;

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -60,21 +58,6 @@ public interface TruffleRuntime {
      * @return the new call target object
      */
     CallTarget createCallTarget(RootNode rootNode, FrameDescriptor frameDescriptor);
-
-    /**
-     * Creates a new assumption object that can be checked and invalidated.
-     * 
-     * @return the newly created assumption object
-     */
-    Assumption createAssumption();
-
-    /**
-     * Creates a new assumption object with a given name that can be checked and invalidated.
-     * 
-     * @param name the name for the new assumption
-     * @return the newly created assumption object
-     */
-    Assumption createAssumption(String name);
 
     /**
      * Creates a new materialized frame object that can be used to store values.

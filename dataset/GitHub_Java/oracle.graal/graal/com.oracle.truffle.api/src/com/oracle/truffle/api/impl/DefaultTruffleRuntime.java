@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -40,13 +38,13 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
     }
 
     @Override
-    public CallTarget createCallTarget(RootNode rootNode) {
-        return createCallTarget(rootNode, new FrameDescriptor());
+    public CallTarget createCallTarget(RootNode rootNode, FrameDescriptor frameDescriptor) {
+        return new DefaultCallTarget(rootNode, frameDescriptor);
     }
 
     @Override
-    public CallTarget createCallTarget(RootNode rootNode, FrameDescriptor frameDescriptor) {
-        return new DefaultCallTarget(rootNode, frameDescriptor);
+    public CallTarget createCallTarget(RootNode rootNode) {
+        return createCallTarget(rootNode, new FrameDescriptor());
     }
 
     @Override
@@ -57,15 +55,5 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
     @Override
     public MaterializedFrame createMaterializedFrame(Arguments arguments, FrameDescriptor frameDescriptor) {
         return new DefaultMaterializedFrame(new DefaultVirtualFrame(frameDescriptor, null, arguments));
-    }
-
-    @Override
-    public Assumption createAssumption() {
-        return createAssumption(null);
-    }
-
-    @Override
-    public Assumption createAssumption(String name) {
-        return new DefaultAssumption(name);
     }
 }
