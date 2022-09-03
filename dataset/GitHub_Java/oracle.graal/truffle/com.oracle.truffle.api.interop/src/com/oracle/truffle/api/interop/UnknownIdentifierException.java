@@ -25,11 +25,15 @@
 
 package com.oracle.truffle.api.interop;
 
+import com.oracle.truffle.api.CompilerDirectives;
+
 /**
  * An exception thrown if a foreign access tries to access a property of a {@link TruffleObject}
  * that is not accessible.
+ *
+ * @since 0.11
  */
-public class UnknownIdentifierException extends InteropException {
+public final class UnknownIdentifierException extends InteropException {
 
     private static final long serialVersionUID = 1857745390734085182L;
 
@@ -41,9 +45,10 @@ public class UnknownIdentifierException extends InteropException {
     }
 
     /**
-     * Returns the identifier that could not be accessed
+     * Returns the identifier that could not be accessed.
      *
      * @return the unaccessible identifier
+     * @since 0.11
      */
     public String getUnknownIdentifier() {
         return unknownIdentifier;
@@ -58,8 +63,10 @@ public class UnknownIdentifierException extends InteropException {
      * @param unknownIdentifier the identifier that could not be accessed
      *
      * @return the exception
+     * @since 0.11
      */
     public static RuntimeException raise(String unknownIdentifier) {
+        CompilerDirectives.transferToInterpreter();
         return silenceException(RuntimeException.class, new UnknownIdentifierException(unknownIdentifier));
     }
 
