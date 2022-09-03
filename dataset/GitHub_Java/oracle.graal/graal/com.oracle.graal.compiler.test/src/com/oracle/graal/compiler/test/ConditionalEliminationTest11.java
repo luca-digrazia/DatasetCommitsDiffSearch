@@ -33,10 +33,6 @@ import com.oracle.graal.api.directives.GraalDirectives;
  * triggered bugs in this phase.
  */
 public class ConditionalEliminationTest11 extends ConditionalEliminationTestBase {
-    public ConditionalEliminationTest11() {
-        // Don't disable simplification
-        super(false);
-    }
 
     @SuppressWarnings("all")
     public static int referenceSnippet(int a) {
@@ -143,6 +139,7 @@ public class ConditionalEliminationTest11 extends ConditionalEliminationTestBase
         testConditionalElimination("test5Snippet", "test5Snippet");
     }
 
+    @SuppressWarnings("all")
     public static int test6Snippet(int a) {
         if ((a & 8) != 0) {
             GraalDirectives.deoptimize();
@@ -153,6 +150,7 @@ public class ConditionalEliminationTest11 extends ConditionalEliminationTestBase
         return 0;
     }
 
+    @SuppressWarnings("all")
     public static int reference6Snippet(int a) {
         if ((a & 8) != 0) {
             GraalDirectives.deoptimize();
