@@ -168,7 +168,7 @@ public class Target_java_lang_Class {
     @Intrinsic(hasReceiver = true)
     public static @Type(Method[].class) StaticObject getDeclaredMethods0(StaticObjectClass self, boolean publicOnly) {
         final MethodInfo[] methods = Arrays.stream(self.getMirror().getDeclaredMethods()).filter(m -> !publicOnly || m.isPublic()).toArray(
-                        MethodInfo[]::new);
+                MethodInfo[]::new);
 
         EspressoContext context = EspressoLanguage.getCurrentContext();
         Meta meta = context.getMeta();
@@ -178,16 +178,16 @@ public class Target_java_lang_Class {
             Meta.Method m = meta(methods[i]);
 
             StaticObject parameterTypes = (StaticObject) meta.CLASS.allocateArray(
-                            m.getParameterCount(),
-                            j -> m.getParameterTypes()[j].rawKlass().mirror());
+                    m.getParameterCount(),
+                    j -> m.getParameterTypes()[j].rawKlass().mirror());
 
             StaticObjectImpl method = (StaticObjectImpl) methodKlass.metaNew().fields(
-                            Meta.Field.set("modifiers", m.getModifiers()),
-                            Meta.Field.set("clazz", m.getDeclaringClass().rawKlass().mirror()),
-                            Meta.Field.set("slot", i),
-                            Meta.Field.set("name", context.getVm().intern(meta.toGuest(m.getName()))),
-                            Meta.Field.set("returnType", m.getReturnType().rawKlass().mirror()),
-                            Meta.Field.set("parameterTypes", parameterTypes)).getInstance();
+                    Meta.Field.set("modifiers", m.getModifiers()),
+                    Meta.Field.set("clazz", m.getDeclaringClass().rawKlass().mirror()),
+                    Meta.Field.set("slot", i),
+                    Meta.Field.set("name", context.getVm().intern(meta.toGuest(m.getName()))),
+                    Meta.Field.set("returnType", m.getReturnType().rawKlass().mirror()),
+                    Meta.Field.set("parameterTypes", parameterTypes)).getInstance();
 
             method.setHiddenField("$$method_info", m.rawMethod());
             return method;
@@ -199,7 +199,7 @@ public class Target_java_lang_Class {
     @Intrinsic(hasReceiver = true)
     public static @Type(Class[].class) StaticObject getInterfaces0(StaticObjectClass self) {
         final Klass[] interfaces = Arrays.stream(self.getMirror().getInterfaces()).toArray(
-                        Klass[]::new);
+                Klass[]::new);
         Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         Meta.Klass classKlass = meta.knownKlass(Class.class);
         StaticObject arr = (StaticObject) classKlass.allocateArray(interfaces.length, i -> interfaces[i].mirror());
@@ -338,33 +338,10 @@ public class Target_java_lang_Class {
         return outerKlass;
     }
 
-    /**
-     * Determines if the specified {@code Object} is assignment-compatible with the object
-     * represented by this {@code Class}. This method is the dynamic equivalent of the Java language
-     * {@code instanceof} operator. The method returns {@code true} if the specified {@code Object}
-     * argument is non-null and can be cast to the reference type represented by this {@code Class}
-     * object without raising a {@code ClassCastException.} It returns {@code false} otherwise.
-     *
-     * <p>
-     * Specifically, if this {@code Class} object represents a declared class, this method returns
-     * {@code true} if the specified {@code Object} argument is an instance of the represented class
-     * (or of any of its subclasses); it returns {@code false} otherwise. If this {@code Class}
-     * object represents an array class, this method returns {@code true} if the specified
-     * {@code Object} argument can be converted to an object of the array class by an identity
-     * conversion or by a widening reference conversion; it returns {@code false} otherwise. If this
-     * {@code Class} object represents an interface, this method returns {@code true} if the class
-     * or any superclass of the specified {@code Object} argument implements this interface; it
-     * returns {@code false} otherwise. If this {@code Class} object represents a primitive type,
-     * this method returns {@code false}.
-     *
-     * @param obj the object to check
-     * @return true if {@code obj} is an instance of this class
-     *
-     * @since JDK1.1
-     */
     @Intrinsic(hasReceiver = true)
     public static boolean isInstance(StaticObjectClass self, Object obj) {
-        return EspressoLanguage.getCurrentContext().getVm().instanceOf(obj, self.getMirror());
+        Meta meta = meta(self.getKlass()).getMeta();
+        return meta(self.getMirror()).isAssignableFrom(meta.meta(obj));
     }
 
     @Intrinsic
