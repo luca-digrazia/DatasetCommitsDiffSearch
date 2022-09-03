@@ -27,7 +27,7 @@ import java.lang.annotation.*;
 /**
  * Describes the attributes of an option whose {@link OptionValue value} is in a static field
  * annotated by this annotation type.
- *
+ * 
  * @see OptionProcessor
  * @see OptionDescriptor
  */
@@ -45,9 +45,4 @@ public @interface Option {
      * The name of the option. By default, the name of the annotated field should be used.
      */
     String name() default "";
-
-    /**
-     * Specifies the type of the option.
-     */
-    OptionType type() default OptionType.Debug;
 }
