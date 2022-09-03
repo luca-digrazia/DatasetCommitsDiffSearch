@@ -38,7 +38,6 @@ import org.graalvm.compiler.phases.common.ExpandLogicPhase;
 import org.graalvm.compiler.phases.common.FixReadsPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
 import org.graalvm.compiler.phases.common.ProfileCompiledMethodsPhase;
-import org.graalvm.compiler.phases.common.PropagateDeoptimizeProbabilityPhase;
 import org.graalvm.compiler.phases.common.UseTrappingNullChecksPhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
@@ -79,8 +78,6 @@ public class LowTier extends PhaseSuite<LowTierContext> {
         appendPhase(new UseTrappingNullChecksPhase());
 
         appendPhase(new DeadCodeEliminationPhase(Required));
-
-        appendPhase(new PropagateDeoptimizeProbabilityPhase());
 
         appendPhase(new SchedulePhase(SchedulePhase.SchedulingStrategy.FINAL_SCHEDULE));
     }
