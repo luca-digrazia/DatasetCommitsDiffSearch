@@ -37,74 +37,51 @@ public final class SulongStackTrace {
     private final LinkedList<Element> trace = new LinkedList<>();
 
     public static final class Element {
-        private final String actualFunctionName;
-        private final String actualSourceName;
+        private final String functionName;
+        private final String llvmIRBlock;
+        private int lineNumber;
 
-        private final String irFunctionName;
-        private final String irBlock;
-        private final String irSourceName;
+        Element(String functionName, String llvmIRBlock) {
+            this(functionName, llvmIRBlock, -1);
+        }
 
-        private final int lineNumber;
-        private final int columnNumber;
-
-        Element(String actualFunctionName, String actualSource, String irFunctionName, String llvmirSourceName, String irBlock, int lineNumber, int columnNumber) {
-            this.actualFunctionName = actualFunctionName;
-            this.irFunctionName = irFunctionName;
-            this.irBlock = irBlock;
+        Element(String functionName, String llvmIRBlock, int lineNumber) {
+            this.functionName = functionName;
+            this.llvmIRBlock = llvmIRBlock;
             this.lineNumber = lineNumber;
-            this.columnNumber = columnNumber;
-            this.actualSourceName = actualSource;
-            this.irSourceName = llvmirSourceName;
         }
 
-        Element(String irFunctionName, String llvmirSourceName, String irBlock) {
-            this(null, null, irFunctionName, llvmirSourceName, irBlock, -1, -1);
+        public String getFunctionName() {
+            return functionName;
         }
 
-        void appendToStackTrace(StringBuilder builder) {
-            builder.append("\t ");
-            if (actualFunctionName != null) {
-                builder.append(actualFunctionName);
-                builder.append(" in ").append(actualSourceName);
-                if (lineNumber != -1) {
-                    builder.append(':').append(lineNumber);
-                    if (columnNumber != -1) {
-                        builder.append(':').append(columnNumber);
-                    }
-                }
-                builder.append(" (");
+        public String getLLVMIRBlock() {
+            return llvmIRBlock;
+        }
+
+        public String getLineNumber() {
+            if (lineNumber == -1) {
+                return "N/A";
+            } else {
+                return String.valueOf(lineNumber);
             }
-            builder.append("LLVM IR Function ").append(irFunctionName);
-            builder.append(" in ").append(irSourceName);
-            builder.append(" in Block {").append(irBlock).append('}');
-            if (actualSourceName != null) {
-                builder.append(')');
-            }
-            builder.append('\n');
-        }
-
-        @Override
-        public String toString() {
-            final StringBuilder sb = new StringBuilder();
-            appendToStackTrace(sb);
-            return sb.toString();
         }
     }
 
-    public void addStackTraceElement(String sourceFunctionName, String sourceFileName, String irFunctionName, String irSourceName, String irBlock, int line, int column) {
-        trace.addLast(new Element(sourceFunctionName, sourceFileName, irFunctionName, irSourceName, irBlock, line, column));
+    public void addStackTraceElement(String functionName, String llvmIRBlock, int lineNumber) {
+        trace.addLast(new Element(functionName, llvmIRBlock, lineNumber));
     }
 
-    public void addStackTraceElement(String irFunctionName, String irSourceName, String irBlock) {
-        trace.addLast(new Element(irFunctionName, irSourceName, irBlock));
+    public void addStackTraceElement(String functionName, String llvmIRBlock) {
+        trace.addLast(new Element(functionName, llvmIRBlock));
     }
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
         sb.append("C stack trace:\n");
         for (Element e : trace) {
-            e.appendToStackTrace(sb);
+            sb.append(String.format("\t %s at line %s (LLVM IR block: %s)\n", e.getFunctionName(), e.getLineNumber(), e.getLLVMIRBlock()));
         }
         return sb.toString();
     }

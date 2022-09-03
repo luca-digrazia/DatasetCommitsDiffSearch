@@ -29,9 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-/**
- * An exception that also contains a C stack trace so that debugging is easier.
- */
 public final class SulongRuntimeException extends RuntimeException {
 
     private static final long serialVersionUID = 8152326202993926377L;
@@ -49,6 +46,6 @@ public final class SulongRuntimeException extends RuntimeException {
 
     @Override
     public String getMessage() {
-        return getCause().getClass().getSimpleName() + " " + cStackTrace.toString();
+        return cStackTrace.toString();
     }
 }
