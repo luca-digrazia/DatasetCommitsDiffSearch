@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.api.dsl.test.processor;
 
-import com.oracle.truffle.api.dsl.ExpectError;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.dsl.processor.verify.VerifyTruffleProcessor;
 import java.util.Locale;
 import java.util.ServiceLoader;
@@ -37,10 +35,6 @@ import org.junit.Test;
  * Verify errors emitted by the processor.
  */
 public class TruffleProcessorTest {
-    //
-    // AnnotationProcessor test using the NetBeans style
-    //
-
     @Test
     public void childCannotBeFinal() throws Exception {
         // @formatter:off
@@ -83,17 +77,5 @@ public class TruffleProcessorTest {
             }
         }
         fail(sb.toString());
-    }
-
-    //
-    // and now the Truffle traditional way
-    //
-
-    abstract class MyNode extends Node {
-        @ExpectError("@Child field cannot be final") @Child final MyNode first;
-
-        MyNode(MyNode n) {
-            this.first = n;
-        }
     }
 }
