@@ -196,10 +196,6 @@ public class LLVMTckTest extends TruffleTCK {
     }
 
     @Override
-    public void testPropertiesInteropMessage() throws Exception {
-    }
-
-    @Override
     public void testSumRealOfComplexNumbersAsStructuredDataRowBased() throws Exception {
     }
 
