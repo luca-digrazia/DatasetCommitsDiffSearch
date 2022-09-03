@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.sl.test;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -61,19 +59,11 @@ import com.oracle.truffle.api.debug.ExecutionEvent;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.ForeignAccess.Factory;
-import com.oracle.truffle.api.interop.ForeignAccess.Factory10;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.LineLocation;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.EventConsumer;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
-import com.oracle.truffle.sl.SLLanguage;
 
 public class SLDebugTest {
     private Debugger debugger;
@@ -131,37 +121,6 @@ public class SLDebugTest {
                                         "application/x-sl");
     }
 
-    private static Source createFactorialWithDebugger() {
-        return Source.fromText("function main() {\n" +
-                        "  res = fac(2);\n" + "  println(res);\n" +
-                        "  return res;\n" +
-                        "}\n" +
-                        "function fac(n) {\n" +
-                        "  if (n <= 1) {\n" +
-                        "    return 1;\n" + "  }\n" +
-                        "  nMinusOne = n - 1;\n" +
-                        "  nMOFact = fac(nMinusOne);\n" +
-                        "  debugger;\n" +
-                        "  res = n * nMOFact;\n" +
-                        "  return res;\n" + "}\n",
-                        "factorial.sl").withMimeType(
-                                        "application/x-sl");
-    }
-
-    private static Source createInteropComputation() {
-        return Source.fromText("function main() {\n" +
-                        "}\n" +
-                        "function interopFunction(notifyHandler) {\n" +
-                        "  executing = true;\n" +
-                        "  while (executing == true || executing) {\n" +
-                        "    executing = notifyHandler.isExecuting;\n" +
-                        "  }\n" +
-                        "  return executing;\n" +
-                        "}\n",
-                        "interopComputation.sl").withMimeType(
-                                        "application/x-sl");
-    }
-
     protected final String getOut() {
         return new String(out.toByteArray());
     }
@@ -206,41 +165,6 @@ public class SLDebugTest {
                         1L, "nMinusOne",
                         null, "nMOFact",
                         null, "res", null);
-        continueExecution();
-
-        Value value = engine.findGlobalSymbol("main").execute();
-        assertExecutedOK();
-        Assert.assertEquals("2\n", getOut());
-        Number n = value.as(Number.class);
-        assertNotNull(n);
-        assertEquals("Factorial computed OK", 2, n.intValue());
-    }
-
-    @Test
-    public void testDebuggerBreakpoint() throws Throwable {
-        final Source factorial = createFactorialWithDebugger();
-
-        run.addLast(new Runnable() {
-            @Override
-            public void run() {
-                assertNull(suspendedEvent);
-                assertNotNull(executionEvent);
-            }
-        });
-        engine.eval(factorial);
-        assertExecutedOK();
-
-        run.addLast(new Runnable() {
-            @Override
-            public void run() {
-                // the breakpoint should hit instead
-            }
-        });
-        assertLocation(12, true,
-                        "debugger", "n",
-                        2L, "nMinusOne",
-                        1L, "nMOFact",
-                        1L, "res", null);
         continueExecution();
 
         Value value = engine.findGlobalSymbol("main").execute();
@@ -308,67 +232,6 @@ public class SLDebugTest {
         Number n = value.as(Number.class);
         assertNotNull(n);
         assertEquals("Factorial computed OK", 2, n.intValue());
-    }
-
-    @Test
-    public void testPause() throws Throwable {
-        final Source interopComp = createInteropComputation();
-
-        run.addLast(new Runnable() {
-            @Override
-            public void run() {
-                assertNull(suspendedEvent);
-                assertNotNull(executionEvent);
-            }
-        });
-        engine.eval(interopComp);
-        assertExecutedOK();
-
-        final ExecNotifyHandler nh = new ExecNotifyHandler();
-
-        run.addLast(new Runnable() {
-            @Override
-            public void run() {
-                assertNull(suspendedEvent);
-                assertNotNull(executionEvent);
-                // Do pause after execution has really started
-                new Thread() {
-                    @Override
-                    public void run() {
-                        nh.waitTillCanPause();
-                        boolean paused = debugger.pause();
-                        Assert.assertTrue(paused);
-                    }
-                }.start();
-            }
-        });
-
-        run.addLast(new Runnable() {
-            @Override
-            public void run() {
-                // paused
-                assertNotNull(suspendedEvent);
-                int line = suspendedEvent.getNode().getSourceSection().getLineLocation().getLineNumber();
-                Assert.assertTrue("Unexpected line: " + line, 5 <= line && line <= 6);
-                final MaterializedFrame frame = suspendedEvent.getFrame();
-                String[] expectedIdentifiers = new String[]{"executing"};
-                for (String expectedIdentifier : expectedIdentifiers) {
-                    FrameSlot slot = frame.getFrameDescriptor().findFrameSlot(expectedIdentifier);
-                    Assert.assertNotNull(expectedIdentifier, slot);
-                }
-                // Assert.assertTrue(debugger.isExecuting());
-                suspendedEvent.prepareContinue();
-                nh.pauseDone();
-            }
-        });
-
-        Value value = engine.findGlobalSymbol("interopFunction").execute(nh);
-
-        assertExecutedOK();
-        // Assert.assertFalse(debugger.isExecuting());
-        Boolean n = value.as(Boolean.class);
-        assertNotNull(n);
-        assertTrue("Interop computation OK", !n.booleanValue());
     }
 
     private void performWork() {
@@ -447,138 +310,5 @@ public class SLDebugTest {
             }
         }
         assertTrue("Assuming all requests processed: " + run, run.isEmpty());
-    }
-
-    private static class ExecNotifyHandler implements TruffleObject {
-
-        private final ExecNotifyHandlerForeign nhf = new ExecNotifyHandlerForeign(this);
-        private final ForeignAccess access = ForeignAccess.create(null, nhf);
-        private final Object pauseLock = new Object();
-        private boolean canPause;
-        private volatile boolean pauseDone;
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return access;
-        }
-
-        private void waitTillCanPause() {
-            synchronized (pauseLock) {
-                while (!canPause) {
-                    try {
-                        pauseLock.wait();
-                    } catch (InterruptedException iex) {
-                    }
-                }
-            }
-        }
-
-        void setCanPause() {
-            synchronized (pauseLock) {
-                canPause = true;
-                pauseLock.notifyAll();
-            }
-        }
-
-        private void pauseDone() {
-            pauseDone = true;
-        }
-
-        boolean isPauseDone() {
-            return pauseDone;
-        }
-
-    }
-
-    private static class ExecNotifyHandlerForeign implements Factory10, Factory {
-
-        private final ExecNotifyHandler nh;
-
-        ExecNotifyHandlerForeign(ExecNotifyHandler nh) {
-            this.nh = nh;
-        }
-
-        @Override
-        public CallTarget accessIsNull() {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessIsExecutable() {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessIsBoxed() {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessHasSize() {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessGetSize() {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessUnbox() {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessRead() {
-            return Truffle.getRuntime().createCallTarget(new ExecNotifyReadNode(nh));
-        }
-
-        @Override
-        public CallTarget accessWrite() {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessExecute(int i) {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessInvoke(int i) {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessNew(int i) {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallTarget accessMessage(Message msg) {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public boolean canHandle(TruffleObject to) {
-            return (to instanceof ExecNotifyHandler);
-        }
-
-    }
-
-    private static class ExecNotifyReadNode extends RootNode {
-
-        private final ExecNotifyHandler nh;
-
-        ExecNotifyReadNode(ExecNotifyHandler nh) {
-            super(SLLanguage.class, null, null);
-            this.nh = nh;
-        }
-
-        @Override
-        public Object execute(VirtualFrame vf) {
-            nh.setCanPause();
-            return !nh.isPauseDone();
-        }
-
     }
 }
