@@ -219,7 +219,7 @@ public class MatchProcessor extends AbstractProcessor {
      */
     private static final boolean DEBUG = false;
 
-    private static final String LOGFILE = new File(System.getProperty("java.io.tmpdir"), "matchprocessor.log").getPath();
+    private static final String MATCHPROCESSOR_LOG = "/tmp/matchprocessor.log";
 
     private static PrintWriter log;
 
@@ -230,7 +230,7 @@ public class MatchProcessor extends AbstractProcessor {
     private static synchronized PrintWriter getLog() {
         if (log == null) {
             try {
-                log = new PrintWriter(new FileWriter(LOGFILE, true));
+                log = new PrintWriter(new FileWriter(MATCHPROCESSOR_LOG, true));
             } catch (IOException e) {
                 // Do nothing
             }
@@ -331,8 +331,7 @@ public class MatchProcessor extends AbstractProcessor {
     List<String> requiredPackages = new ArrayList<>();
 
     /**
-     * The mapping between elements with MatchRules and the wrapper class used invoke the code
-     * generation after the match.
+     * The java.lang.reflect.Method for invoking a method based MatchRule.
      */
     private Map<ExecutableElement, MethodInvokerItem> invokers = new LinkedHashMap<>();
 
@@ -456,7 +455,7 @@ public class MatchProcessor extends AbstractProcessor {
         }
 
         String generatePositionDeclaration() {
-            return String.format("NodeClass.Position[] %s_positions = MatchRuleRegistry.findPositions(lookup, %s.class, new String[]{\"%s\"});", nodeType.nodeClass, nodeType.nodeClass,
+            return String.format("private static final NodeClass.Position[] %s_positions = MatchPattern.findPositions(%s.class, new String[]{\"%s\"});", nodeType.nodeClass, nodeType.nodeClass,
                             String.join("\", \"", nodeType.inputs));
         }
     }
@@ -487,7 +486,9 @@ public class MatchProcessor extends AbstractProcessor {
             out.println("package " + pkg + ";");
             out.println("");
             out.println("import java.util.*;");
+            out.println("import java.lang.reflect.*;");
             out.println("import " + MatchStatementSet.class.getPackage().getName() + ".*;");
+            out.println("import " + GraalInternalError.class.getName() + ";");
             out.println("import " + NodeLIRBuilder.class.getName() + ";");
             out.println("import " + NodeClass.class.getName() + ";");
             for (String p : requiredPackages) {
@@ -497,67 +498,64 @@ public class MatchProcessor extends AbstractProcessor {
             out.println("public class " + matchStatementClassName + " implements " + MatchStatementSet.class.getSimpleName() + " {");
 
             out.println();
+            out.println("    private static Method lookupMethod(Class<?> theClass, String name, Class<?>... args) {");
+            out.println("        try {");
+            out.println("            return theClass.getDeclaredMethod(name, args);");
+            out.println("        } catch (Exception e) {");
+            out.println("            throw new GraalInternalError(e);");
+            out.println("        }");
+            out.println("    }");
+            out.println();
 
-            // Generate declarations for the wrapper class to invoke the code generation methods.
+            // Generate declarations for the reflective invocation of the code generation methods.
             for (MethodInvokerItem invoker : invokers.values()) {
                 StringBuilder args = new StringBuilder();
                 StringBuilder types = new StringBuilder();
                 int count = invoker.fields.size();
-                int index = 0;
                 for (VariableElement arg : invoker.fields) {
                     args.append('"');
                     args.append(arg.getSimpleName());
                     args.append('"');
-                    types.append(String.format("(%s) args[%s]", fullClassName(typeUtils.asElement(arg.asType())), index++));
+                    types.append(fullClassName(typeUtils.asElement(arg.asType())));
+                    types.append(".class");
                     if (count-- > 1) {
                         args.append(", ");
                         types.append(", ");
                     }
                 }
                 out.printf("    private static final String[] %s = new String[] {%s};\n", invoker.argumentsListName(), args);
-                out.printf("    private static final class %s implements MatchGenerator {\n", invoker.wrapperClass());
-                out.printf("        static MatchGenerator instance = new %s();\n", invoker.wrapperClass());
-                out.printf("        public ComplexMatchResult match(NodeLIRBuilder builder, Object...args) {\n");
-                out.printf("            return ((%s) builder).%s(%s);\n", invoker.nodeLIRBuilderClass, invoker.methodName, types);
-                out.printf("        }\n");
-                out.printf("        public String getName() {\n");
-                out.printf("             return \"%s\";\n", invoker.methodName);
-                out.printf("        }\n");
-                out.printf("    }\n");
+                out.printf("    private static final Method %s = lookupMethod(%s.class, \"%s\", %s);\n", invoker.reflectiveMethodName(), invoker.nodeLIRBuilderClass, invoker.methodName, types);
                 out.println();
 
             }
 
+            for (String positionDeclaration : info.positionDeclarations) {
+                out.println("    " + positionDeclaration);
+            }
+            out.println();
+
             String desc = MatchStatement.class.getSimpleName();
+            out.println("    // CheckStyle: stop line length check");
+            out.println("    private static final List<" + desc + "> statements = Collections.unmodifiableList(Arrays.asList(");
+
+            int i = 0;
+            for (MatchRuleItem matchRule : info.matchRules) {
+                String comma = i == info.matchRules.size() - 1 ? "" : ",";
+                out.printf("        %s%s\n", matchRule.ruleBuilder(), comma);
+                i++;
+            }
+            out.println("    ));");
+            out.println("    // CheckStyle: resume line length check");
+            out.println();
 
             out.println("    public Class<? extends NodeLIRBuilder> forClass() {");
             out.println("        return " + topDeclaringClass + ".class;");
             out.println("    }");
             out.println();
             out.println("    @Override");
-            out.println("    public List<" + desc + "> statements(MatchRuleRegistry.NodeClassLookup lookup) {");
-
-            for (String positionDeclaration : info.positionDeclarations) {
-                out.println("        " + positionDeclaration);
-            }
-            out.println();
-
-            out.println("        // CheckStyle: stop line length check");
-            out.println("        List<" + desc + "> statements = Collections.unmodifiableList(Arrays.asList(");
-
-            int i = 0;
-            for (MatchRuleItem matchRule : info.matchRules) {
-                String comma = i == info.matchRules.size() - 1 ? "" : ",";
-                out.printf("            %s%s\n", matchRule.ruleBuilder(), comma);
-                i++;
-            }
-            out.println("        ));");
-            out.println("        // CheckStyle: resume line length check");
+            out.println("    public List<" + desc + "> statements() {");
             out.println("        return statements;");
             out.println("    }");
-
-            out.println();
-
             out.println("}");
         }
 
@@ -608,12 +606,13 @@ public class MatchProcessor extends AbstractProcessor {
          * @return a string which will construct the MatchStatement instance to match this pattern.
          */
         public String ruleBuilder() {
-            return String.format("new MatchStatement(\"%s\", %s, %s.instance, %s)", invoker.name, matchPattern, invoker.wrapperClass(), invoker.argumentsListName());
+            return String.format("new MatchStatement(\"%s\", %s, %s, %s)", invoker.name, matchPattern, invoker.reflectiveMethodName(), invoker.argumentsListName());
         }
     }
 
     /**
-     * Used to generate the wrapper class to invoke the code generation method.
+     * Used to generate the declarations needed for reflective invocation of the code generation
+     * method.
      */
     static class MethodInvokerItem {
         final String name;
@@ -628,8 +627,8 @@ public class MatchProcessor extends AbstractProcessor {
             this.fields = fields;
         }
 
-        String wrapperClass() {
-            return "MatchGenerator_" + methodName;
+        String reflectiveMethodName() {
+            return methodName + "_invoke";
         }
 
         String argumentsListName() {
