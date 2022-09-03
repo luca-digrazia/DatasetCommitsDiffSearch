@@ -22,14 +22,14 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Loads an object's hub. The object is not null-checked by this operation.
@@ -47,15 +47,6 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
     private static Stamp hubStamp(StampProvider stampProvider, ValueNode value) {
         assert value.stamp() instanceof ObjectStamp;
         return stampProvider.createHubStamp(((ObjectStamp) value.stamp()));
-    }
-
-    public static ValueNode create(ValueNode value, StampProvider stampProvider, MetaAccessProvider metaAccess) {
-        Stamp stamp = hubStamp(stampProvider, value);
-        ValueNode synonym = findSynonym(value, stamp, null, metaAccess);
-        if (synonym != null) {
-            return synonym;
-        }
-        return new LoadHubNode(stamp, value, null);
     }
 
     public LoadHubNode(@InjectedNodeParameter StampProvider stampProvider, ValueNode value) {
@@ -83,33 +74,25 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         MetaAccessProvider metaAccess = tool.getMetaAccess();
-        ValueNode curValue = getValue();
-        ValueNode newNode = findSynonym(curValue, stamp(), graph(), metaAccess);
-        if (newNode != null) {
-            return newNode;
-        }
-        return this;
-    }
+        if (metaAccess != null && getValue().stamp() instanceof ObjectStamp) {
+            ObjectStamp objectStamp = (ObjectStamp) getValue().stamp();
 
-    private static ValueNode findSynonym(ValueNode curValue, Stamp stamp, StructuredGraph graph, MetaAccessProvider metaAccess) {
-        if (metaAccess != null && curValue.stamp() instanceof ObjectStamp) {
-            ObjectStamp objectStamp = (ObjectStamp) curValue.stamp();
             ResolvedJavaType exactType = null;
             if (objectStamp.isExactType()) {
                 exactType = objectStamp.type();
-            } else if (objectStamp.type() != null && graph != null && graph.getAssumptions() != null) {
+            } else if (objectStamp.type() != null && graph() != null && graph().getAssumptions() != null) {
                 AssumptionResult<ResolvedJavaType> leafConcreteSubtype = objectStamp.type().findLeafConcreteSubtype();
                 if (leafConcreteSubtype != null) {
                     exactType = leafConcreteSubtype.getResult();
-                    graph.getAssumptions().record(leafConcreteSubtype);
+                    graph().getAssumptions().record(leafConcreteSubtype);
                 }
             }
 
             if (exactType != null) {
-                return ConstantNode.forConstant(stamp, exactType.getObjectHub(), metaAccess);
+                return ConstantNode.forConstant(stamp(), exactType.getObjectHub(), metaAccess);
             }
         }
-        return null;
+        return this;
     }
 
     @Override
