@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -50,11 +50,10 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.Runner.SulongLibrary;
-import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.runtime.Configuration;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMDebuggerScopeFactory;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
@@ -79,26 +78,6 @@ public final class Sulong extends LLVMLanguage {
             configurations.add(f);
         }
         configurations.add(new NativeConfiguration());
-    }
-
-    private volatile List<LLVMParserResult> cachedDefaultDependencies;
-    private volatile ExternalLibrary[] cachedSulongLibraries;
-
-    private synchronized void parseDefaultDependencies(Runner runner) {
-        if (cachedDefaultDependencies == null) {
-            ArrayList<LLVMParserResult> parserResults = new ArrayList<>();
-            cachedSulongLibraries = runner.parseDefaultLibraries(parserResults);
-            parserResults.trimToSize();
-            cachedDefaultDependencies = Collections.unmodifiableList(parserResults);
-        }
-    }
-
-    ExternalLibrary[] getDefaultDependencies(Runner runner, List<LLVMParserResult> parserResults) {
-        if (cachedDefaultDependencies == null) {
-            parseDefaultDependencies(runner);
-        }
-        parserResults.addAll(cachedDefaultDependencies);
-        return cachedSulongLibraries;
     }
 
     @TruffleBoundary
@@ -132,6 +111,31 @@ public final class Sulong extends LLVMLanguage {
         Source source = request.getSource();
         LLVMContext context = findLLVMContext();
         return new Runner(context).parse(source);
+    }
+
+    @Override
+    @SuppressWarnings("deprecation") // for compatibility, will be removed in a future release
+    protected Object findExportedSymbol(LLVMContext context, String globalName, boolean onlyExplicit) {
+        String atname = globalName.startsWith("@") ? globalName : "@" + globalName; // for interop
+        LLVMSymbol result = null;
+        if (context.getGlobalScope().contains(atname)) {
+            result = context.getGlobalScope().get(atname);
+        } else if (context.getGlobalScope().contains(globalName)) {
+            result = context.getGlobalScope().get(globalName);
+        }
+        return dealias(result);
+    }
+
+    private static Object dealias(LLVMSymbol symbol) {
+        if (symbol == null) {
+            return null;
+        } else if (symbol.isFunction()) {
+            return symbol.asFunction();
+        } else if (symbol.isGlobalVariable()) {
+            return symbol.asGlobalVariable();
+        } else {
+            throw new IllegalStateException("Unknown symbol: " + symbol.getClass());
+        }
     }
 
     @Override
