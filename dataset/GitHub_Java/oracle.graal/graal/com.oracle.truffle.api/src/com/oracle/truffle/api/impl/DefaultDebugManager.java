@@ -32,11 +32,7 @@ import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.instrument.InstrumentationProbeNode.ProbeChain;
 import com.oracle.truffle.api.source.*;
 
-/**
- * A minimal, language-agnostic implementation that tracks loaded sources, and keeps maps describing
- * what locations in the source have instrumentation available.
- */
-public class DefaultDebugManager implements DebugManager {
+public final class DefaultDebugManager implements DebugManager {
 
     private final Set<Source> loadedSources = new HashSet<>();
 
@@ -91,11 +87,13 @@ public class DefaultDebugManager implements DebugManager {
         return probeChain;
     }
 
+    @Override
     public void notifyStartLoading(Source source) {
         assert beingLoaded == null;
         beingLoaded = source;
     }
 
+    @Override
     public void notifyFinishedLoading(Source source) {
         assert source == beingLoaded;
         loadedSources.add(source);

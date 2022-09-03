@@ -190,16 +190,16 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
         return installMethod(hotspotMethod, compResult);
     }
 
-    public HotSpotNmethod addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult) {
+    public InstalledCode addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult) {
         HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotNmethod code = new HotSpotNmethod(javaMethod, compResult.getName(), false, true);
+        HotSpotInstalledCode icode = new HotSpotNmethod(javaMethod, compResult.getName(), false, true);
         HotSpotCompiledNmethod compiled = new HotSpotCompiledNmethod(target.arch, javaMethod, compResult);
         CompilerToVM vm = runtime.getCompilerToVM();
-        CodeInstallResult result = vm.installCode(compiled, code, null);
+        CodeInstallResult result = vm.installCode(compiled, icode, null);
         if (result != CodeInstallResult.OK) {
             return null;
         }
-        return code;
+        return icode;
     }
 
     public boolean needsDataPatch(Constant constant) {

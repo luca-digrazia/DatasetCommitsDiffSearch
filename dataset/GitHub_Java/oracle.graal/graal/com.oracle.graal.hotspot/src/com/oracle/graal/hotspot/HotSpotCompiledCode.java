@@ -31,7 +31,6 @@ import com.oracle.graal.api.code.CompilationResult.CodeComment;
 import com.oracle.graal.api.code.CompilationResult.Data;
 import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.code.CompilationResult.ExceptionHandler;
-import com.oracle.graal.api.code.CompilationResult.Infopoint;
 import com.oracle.graal.api.code.CompilationResult.JumpTable;
 import com.oracle.graal.api.code.CompilationResult.Mark;
 import com.oracle.graal.api.code.CompilationResult.Site;
@@ -77,12 +76,12 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
         }
 
         @Override
-        public int getSize(TargetDescription target) {
+        public int getSize(Architecture arch) {
             return 0;
         }
 
         @Override
-        public void emit(TargetDescription target, ByteBuffer buffer) {
+        public void emit(Architecture arch, ByteBuffer buffer) {
         }
     }
 
@@ -106,7 +105,7 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
          */
         public final HotSpotData[] patches;
 
-        public DataSection(TargetDescription target, Site[] sites) {
+        public DataSection(Architecture arch, Site[] sites) {
             int size = 0;
             int patchCount = 0;
             List<DataPatch> externalDataList = new ArrayList<>();
@@ -118,7 +117,7 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
                     if (dataPatch.externalData != null) {
                         Data d = dataPatch.externalData;
                         size = NumUtil.roundUp(size, d.getAlignment());
-                        size += d.getSize(target);
+                        size += d.getSize(arch);
                         externalDataList.add(dataPatch);
                         if (dataPatch.getConstant() != null && dataPatch.getConstant().getKind() == Kind.Object) {
                             patchCount++;
@@ -150,8 +149,8 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
                 }
                 dataPatch.externalData = hsData;
 
-                index += d.getSize(target);
-                d.emit(target, buffer);
+                index += d.getSize(arch);
+                d.emit(arch, buffer);
             }
 
             this.sectionAlignment = alignment;
@@ -169,10 +168,10 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
         }
     }
 
-    public HotSpotCompiledCode(TargetDescription target, CompilationResult compResult) {
+    public HotSpotCompiledCode(Architecture arch, CompilationResult compResult) {
         this.comp = compResult;
         sites = getSortedSites(compResult);
-        dataSection = new DataSection(target, sites);
+        dataSection = new DataSection(arch, sites);
         if (compResult.getExceptionHandlers().isEmpty()) {
             exceptionHandlers = null;
         } else {
@@ -196,24 +195,6 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
                 comments[i] = new Comment(annotation.position, text);
             }
         }
-        assert validateFrames();
-    }
-
-    /**
-     * Ensure that all the frames passed into HotSpot are properly formatted with an empty or
-     * illegal slot following double word slots.
-     */
-    private boolean validateFrames() {
-        for (Site site : sites) {
-            if (site instanceof Infopoint) {
-                Infopoint info = (Infopoint) site;
-                if (info.debugInfo != null) {
-                    BytecodeFrame frame = info.debugInfo.frame();
-                    assert frame == null || frame.validateFormat();
-                }
-            }
-        }
-        return true;
     }
 
     static class SiteComparator implements Comparator<Site> {

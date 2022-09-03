@@ -38,8 +38,8 @@ public final class HotSpotCompiledRuntimeStub extends HotSpotCompiledCode {
 
     public final String stubName;
 
-    public HotSpotCompiledRuntimeStub(TargetDescription target, Stub stub, CompilationResult compResult) {
-        super(target, compResult);
+    public HotSpotCompiledRuntimeStub(Architecture arch, Stub stub, CompilationResult compResult) {
+        super(arch, compResult);
         assert checkStubInvariants(compResult);
         this.stubName = stub.toString();
     }

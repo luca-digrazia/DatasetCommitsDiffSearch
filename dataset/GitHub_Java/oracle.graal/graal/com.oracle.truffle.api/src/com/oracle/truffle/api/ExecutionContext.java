@@ -24,9 +24,6 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.debug.*;
-import com.oracle.truffle.api.source.*;
-
 /**
  * Information about the runtime context of a Truffle program.
  * <p>
@@ -41,13 +38,8 @@ public interface ExecutionContext {
     String getLanguageShortName();
 
     /**
-     * Gets access to source management services.
+     * Gets access to debugging services, {@code null} if not enabled in this context.
      */
-    SourceManager getSourceManager();
-
-    /**
-     * Gets access to debugging services. Returns an inert instance if no services installed.
-     */
-    DebugContext getDebugContext();
+    DebugManager getDebugManager();
 
 }
