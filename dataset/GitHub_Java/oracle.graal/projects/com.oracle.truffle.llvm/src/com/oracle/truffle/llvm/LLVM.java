@@ -33,7 +33,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.util.ServiceLoader;
 
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.common.util.URI;
@@ -59,10 +58,8 @@ import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
-import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
-import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
-import com.oracle.truffle.llvm.parser.NodeFactoryFacadeProvider;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMBitcodeVisitor;
+import com.oracle.truffle.llvm.parser.factories.NodeFactoryFacadeImpl;
 import com.oracle.truffle.llvm.parser.impl.LLVMVisitor;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMPropertyOptimizationConfiguration;
@@ -77,31 +74,6 @@ public class LLVM {
 
     static {
         LLVMLanguage.provider = getProvider();
-    }
-
-    private static NodeFactoryFacade getNodeFactoryFacade(LLVMParserRuntime parserRuntime) {
-        NodeFactoryFacade factoryFacade = getNodeFactoryFacade();
-        factoryFacade.setUpFacade(parserRuntime);
-        return factoryFacade;
-    }
-
-    private static NodeFactoryFacade getNodeFactoryFacade() {
-        ServiceLoader<NodeFactoryFacadeProvider> loader = ServiceLoader.load(NodeFactoryFacadeProvider.class);
-        if (!loader.iterator().hasNext()) {
-            throw new AssertionError("Could not find a " + NodeFactoryFacadeProvider.class.getSimpleName() + " for the creation of the Truffle nodes");
-        }
-        NodeFactoryFacade facade = null;
-        String expectedConfigName = LLVMBaseOptionFacade.getNodeConfiguration();
-        for (NodeFactoryFacadeProvider prov : loader) {
-            String configName = prov.getConfigurationName();
-            if (configName != null && configName.equals(expectedConfigName)) {
-                facade = prov.getNodeFactoryFacade();
-            }
-        }
-        if (facade == null) {
-            throw new AssertionError("Could not find a " + NodeFactoryFacadeProvider.class.getSimpleName() + " with the name " + expectedConfigName);
-        }
-        return facade;
     }
 
     private static LLVMLanguage.LLVMLanguageProvider getProvider() {
@@ -185,10 +157,10 @@ public class LLVM {
 
             @Override
             public LLVMContext createContext(Env env) {
-                NodeFactoryFacade facade = getNodeFactoryFacade();
+                NodeFactoryFacadeImpl facade = new NodeFactoryFacadeImpl();
                 LLVMContext context = new LLVMContext(facade, OPTIMIZATION_CONFIGURATION);
                 LLVMVisitor runtime = new LLVMVisitor(OPTIMIZATION_CONFIGURATION, context.getMainArguments(), context.getMainSourceFile(), context.getMainSourceFile());
-                facade.setUpFacade(runtime);
+                facade.setParserRuntime(runtime);
                 if (env != null) {
                     Object mainArgs = env.getConfig().get(LLVMLanguage.MAIN_ARGS_KEY);
                     if (mainArgs != null) {
@@ -247,7 +219,7 @@ public class LLVM {
         }
         Model model = (Model) contents.get(0);
         LLVMVisitor llvmVisitor = new LLVMVisitor(OPTIMIZATION_CONFIGURATION, context.getMainArguments(), source, context.getMainSourceFile());
-        return llvmVisitor.getMain(model, getNodeFactoryFacade(llvmVisitor));
+        return llvmVisitor.getMain(model, new NodeFactoryFacadeImpl(llvmVisitor));
     }
 
     public static LLVMParserResult parseFile(Source source, LLVMContext context) {
@@ -262,7 +234,7 @@ public class LLVM {
         }
         Model model = (Model) contents.get(0);
         LLVMVisitor llvmVisitor = new LLVMVisitor(OPTIMIZATION_CONFIGURATION, context.getMainArguments(), source, context.getMainSourceFile());
-        return llvmVisitor.getMain(model, getNodeFactoryFacade(llvmVisitor));
+        return llvmVisitor.getMain(model, new NodeFactoryFacadeImpl(llvmVisitor));
     }
 
     public static LLVMParserResult parseBitcodeFile(Source source, LLVMContext context) {
