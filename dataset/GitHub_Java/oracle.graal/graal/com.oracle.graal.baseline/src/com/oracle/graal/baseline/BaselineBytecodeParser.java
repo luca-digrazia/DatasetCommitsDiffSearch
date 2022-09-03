@@ -22,71 +22,92 @@
  */
 package com.oracle.graal.baseline;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-import static java.lang.reflect.Modifier.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
 
-import com.oracle.graal.alloc.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
-import com.oracle.graal.bytecode.*;
-import com.oracle.graal.compiler.alloc.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
+import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.nodes.calc.FloatConvertNode.FloatConvert;
-import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.lir.StandardOp.BlockEndOp;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.phases.*;
 
-public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFrameStateBuilder> implements BytecodeParserTool {
+public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, BaselineFrameStateBuilder> implements BytecodeParserTool {
     private Backend backend;
-    protected LIRGenerator gen;
+    protected LIRGeneratorTool gen;
     private LIRGenerationResult lirGenRes;
     private BytecodeLIRBuilder lirBuilder;
+    @SuppressWarnings("unused") private BciBlock[] loopHeaders;
+    private LocalLiveness liveness;
+    private BciBlockBitMap blockVisited;
+
+    private static class BciBlockBitMap {
+        BitSet bitSet;
+
+        public BciBlockBitMap(BciBlockMapping blockMap) {
+            bitSet = new BitSet(blockMap.getBlocks().length);
+        }
+
+        public boolean get(BciBlock block) {
+            return bitSet.get(block.getId());
+        }
+
+        public void set(BciBlock block) {
+            bitSet.set(block.getId());
+        }
+    }
 
     public BaselineBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
-                    LIRFrameStateBuilder frameState, BytecodeStream stream, ProfilingInfo profilingInfo, ConstantPool constantPool, int entryBCI, Backend backend) {
+                    BaselineFrameStateBuilder frameState, Backend backend) {
 
-        super(metaAccess, method, graphBuilderConfig, optimisticOpts, frameState, stream, profilingInfo, constantPool, entryBCI);
+        super(metaAccess, method, graphBuilderConfig, optimisticOpts);
         this.backend = backend;
+        this.setCurrentFrameState(frameState);
     }
 
-    public LIRGenerationResult getLIRGenerationResult() {
-        return lirGenRes;
-    }
-
-    @Override
-    protected void build() {
+    protected LIRGenerationResult build() {
         if (PrintProfilingInformation.getValue()) {
-            TTY.println("Profiling info for " + MetaUtil.format("%H.%n(%p)", method));
-            TTY.println(MetaUtil.indent(MetaUtil.profileToString(profilingInfo, method, CodeUtil.NEW_LINE), "  "));
+            TTY.println("Profiling info for " + method.format("%H.%n(%p)"));
+            TTY.println(MetaUtil.indent(profilingInfo.toString(method, CodeUtil.NEW_LINE), "  "));
         }
 
         try (Indent indent = Debug.logAndIndent("build graph for %s", method)) {
 
-            // compute the block map, setup exception handlers and get the entrypoint(s)
-            BciBlockMapping blockMap = BciBlockMapping.create(method);
-            // add predecessors
-            for (BciBlock block : blockMap.blocks) {
-                for (BciBlock successor : block.getSuccessors()) {
-                    successor.getPredecessors().add(block);
-                }
+            BciBlockMapping blockMap;
+            try (Scope ds = Debug.scope("BciBlockMapping")) {
+                // compute the block map, setup exception handlers and get the entrypoint(s)
+                blockMap = BciBlockMapping.create(method, graphBuilderConfig.doLivenessAnalysis(), false);
+            } catch (Throwable e) {
+                throw Debug.handle(e);
             }
 
-            if (isSynchronized(method.getModifiers())) {
+            loopHeaders = blockMap.getLoopHeaders();
+            liveness = blockMap.liveness;
+            blockVisited = new BciBlockBitMap(blockMap);
+
+            if (method.isSynchronized()) {
                 throw GraalInternalError.unimplemented("Handle synchronized methods");
             }
 
-            // TODO: clear non live locals
+            frameState = new BaselineFrameStateBuilder(method);
+            frameState.clearNonLiveLocals(blockMap.startBlock, liveness, true);
 
             currentBlock = blockMap.startBlock;
+            blockMap.startBlock.setEntryState(0, frameState);
             if (blockMap.startBlock.isLoopHeader) {
                 throw GraalInternalError.unimplemented("Handle start block as loop header");
             }
@@ -94,22 +115,18 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
             // add loops ? how do we add looks when we haven't parsed the bytecode?
 
             // create the control flow graph
-            LIRControlFlowGraph cfg = new LIRControlFlowGraph(blockMap.blocks.toArray(new BciBlock[0]), new Loop[0]);
-
-            BlocksToDoubles blockProbabilities = new BlocksToDoubles(blockMap.blocks.size());
-            for (BciBlock b : blockMap.blocks) {
-                blockProbabilities.put(b, 1);
-            }
+            BaselineControlFlowGraph cfg = BaselineControlFlowGraph.compute(blockMap);
 
             // create the LIR
-            List<? extends AbstractBlock<?>> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blockMap.blocks.size(), blockMap.startBlock, blockProbabilities);
-            List<? extends AbstractBlock<?>> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blockMap.blocks.size(), blockMap.startBlock, blockProbabilities);
+            List<BciBlock> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blockMap.getBlocks().length, blockMap.startBlock);
+            List<BciBlock> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blockMap.getBlocks().length, blockMap.startBlock);
             LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder);
 
-            FrameMap frameMap = backend.newFrameMap();
+            RegisterConfig registerConfig = null;
+            FrameMapBuilder frameMapBuilder = backend.newFrameMapBuilder(registerConfig);
             TargetDescription target = backend.getTarget();
             CallingConvention cc = CodeUtil.getCallingConvention(backend.getProviders().getCodeCache(), CallingConvention.Type.JavaCallee, method, false);
-            this.lirGenRes = backend.newLIRGenerationResult(lir, frameMap, null);
+            this.lirGenRes = backend.newLIRGenerationResult(lir, frameMapBuilder, method, null);
             this.gen = backend.newLIRGenerator(cc, lirGenRes);
             this.lirBuilder = backend.newBytecodeLIRBuilder(gen, this);
 
@@ -118,7 +135,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
                     // possibly add all the arguments to slots in the local variable array
 
-                    for (BciBlock block : blockMap.blocks) {
+                    for (BciBlock block : blockMap.getBlocks()) {
                         emitBlock(block);
                     }
 
@@ -128,14 +145,13 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
                     throw Debug.handle(e);
                 }
 
-                try (Scope s = Debug.scope("Allocator")) {
-
-                    if (backend.shouldAllocateRegisters()) {
-                        new LinearScan(target, lir, frameMap).allocate();
-                    }
+                try (Scope s = Debug.scope("LIRTier", this)) {
+                    LIRSuites lirSuites = backend.getSuites().getDefaultLIRSuites();
+                    return GraalCompiler.emitLowLevel(target, codeEmittingOrder, linearScanOrder, lirGenRes, gen, lirSuites);
                 } catch (Throwable e) {
                     throw Debug.handle(e);
                 }
+
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
@@ -204,7 +220,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     }
 
     @Override
-    protected void handleUnresolvedExceptionType(Representation representation, JavaType type) {
+    protected void handleUnresolvedExceptionType(JavaType type) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
@@ -223,7 +239,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
     @Override
     protected Value genIntegerAdd(Kind kind, Value x, Value y) {
-        return gen.emitAdd(x, y);
+        return gen.emitAdd(x, y, false);
     }
 
     @Override
@@ -234,8 +250,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
     @Override
     protected Value genIntegerMul(Kind kind, Value x, Value y) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+        return gen.emitMul(x, y, false);
     }
 
     @Override
@@ -365,6 +380,24 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     }
 
     @Override
+    protected void genIf(Value x, Condition cond, Value y) {
+        assert currentBlock.getSuccessors().size() == 2;
+        BciBlock trueBlock = currentBlock.getSuccessors().get(0);
+        BciBlock falseBlock = currentBlock.getSuccessors().get(1);
+        if (trueBlock == falseBlock) {
+            genGoto();
+            return;
+        }
+
+        double probability = branchProbability();
+
+        LabelRef trueDestination = getSuccessor(0);
+        LabelRef falseDestination = getSuccessor(1);
+
+        gen.emitCompareBranch(x.getKind(), x, y, cond, false, trueDestination, falseDestination, probability);
+    }
+
+    @Override
     protected Value genIntegerLessThan(Value x, Value y) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
@@ -377,25 +410,19 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     }
 
     @Override
-    protected Value genIf(Value condition, Value falseSuccessor, Value trueSuccessor, double d) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    @Override
     protected void genThrow() {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
 
     @Override
-    protected Value genCheckCast(ResolvedJavaType type, Value object, JavaTypeProfile profileForTypeCheck, boolean b) {
+    protected Value createCheckCast(ResolvedJavaType type, Value object, JavaTypeProfile profileForTypeCheck, boolean b) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
 
     @Override
-    protected Value genInstanceOf(ResolvedJavaType type, Value object, JavaTypeProfile profileForTypeCheck) {
+    protected Value createInstanceOf(ResolvedJavaType type, Value object, JavaTypeProfile profileForTypeCheck) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
@@ -426,14 +453,21 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
     @Override
     protected Value genLoadField(Value receiver, ResolvedJavaField field) {
+        if (field.isStatic()) {
+            Value classRef = lirBuilder.getClassConstant(field.getDeclaringClass());
+            long displacement = lirBuilder.getFieldOffset(field);
+            Value address = gen.emitAddress(classRef, displacement, Value.ILLEGAL, 0);
+            LIRKind readKind = backend.getTarget().getLIRKind(field.getKind());
+            LIRFrameState state = createFrameState(frameState);
+            return gen.emitLoad(readKind, address, state);
+        }
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
 
     @Override
     protected void emitNullCheck(Value receiver) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+        gen.emitNullCheck(receiver, createFrameState(frameState));
     }
 
     @Override
@@ -443,9 +477,38 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     }
 
     @Override
-    protected Value genArrayLength(Value x) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    protected Value genArrayLength(Value array) {
+        emitNullCheck(array);
+        long displacement = lirBuilder.getArrayLengthOffset();
+        Value address = gen.emitAddress(array, displacement, Value.ILLEGAL, 0);
+        LIRKind readKind = backend.getTarget().getLIRKind(Kind.Int);
+        LIRFrameState state = createFrameState(frameState);
+        return gen.emitLoad(readKind, address, state);
+    }
+
+    private LIRFrameState createFrameState(BaselineFrameStateBuilder state) {
+        LabelRef exceptionEdge = null;
+        BytecodeFrame caller = null;
+        boolean duringCall = false;
+        int numLocals = state.localsSize();
+        int numStack = state.stackSize();
+        int numLocks = state.lockDepth();
+        JavaValue[] values = new JavaValue[numLocals + numStack + numLocks];
+
+        for (int i = 0; i < numLocals; i++) {
+            values[i] = (JavaValue) state.localAt(i);
+        }
+
+        for (int i = 0; i < numStack; i++) {
+            values[numLocals + i] = (JavaValue) state.stackAt(i);
+        }
+
+        for (int i = 0; i < numStack; i++) {
+            values[numLocals + numStack + i] = (JavaValue) state.lockAt(i);
+        }
+
+        BytecodeFrame frame = new BytecodeFrame(caller, method, bci(), state.rethrowException(), duringCall, values, numLocals, numStack, numLocks);
+        return new LIRFrameState(frame, null, exceptionEdge);
     }
 
     @Override
@@ -486,10 +549,6 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
     @Override
     protected void genReturn(Value x) {
-        if (x != null) {
-            AllocatableValue operand = gen.resultOperandFor(x.getKind());
-            gen.emitMove(operand, x);
-        }
         gen.emitReturn(x);
     }
 
@@ -518,21 +577,14 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     }
 
     @Override
-    protected void setBlockSuccessor(Value switchNode, int i, Value createBlockTarget) {
+    protected void genIntegerSwitch(Value value, ArrayList<BciBlock> actualSuccessors, int[] keys, double[] keyProbabilities, int[] keySuccessors) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
 
     @Override
-    protected Value genIntegerSwitch(Value value, int size, int[] keys, double[] keyProbabilities, int[] keySuccessors) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    @Override
-    protected Value appendConstant(Constant constant) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    protected Value appendConstant(JavaConstant constant) {
+        return gen.emitLoadConstant(constant.getLIRKind(), constant);
     }
 
     @Override
@@ -540,33 +592,126 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
         return v;
     }
 
-    @Override
-    protected Value genDeoptimization() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    private void createTarget(BciBlock block) {
+        assert block != null && frameState != null;
+        assert !block.isExceptionEntry || frameState.stackSize() == 1;
+
+        if (!blockVisited.get(block)) {
+            /*
+             * This is the first time we see this block as a branch target. Create and return a
+             * placeholder that later can be replaced with a MergeNode when we see this block again.
+             */
+            blockVisited.set(block);
+            if (block.getPredecessorCount() > 1) {
+                /*
+                 * If there are more than one predecessors we have to ensure that we are not passing
+                 * constants to the new framestate otherwise we will get interfacing problems.
+                 */
+                moveConstantsToVariables();
+            }
+            block.setEntryState(0, frameState.copy());
+            block.getEntryState(0).clearNonLiveLocals(block, liveness, true);
+
+            Debug.log("createTarget %s: first visit", block);
+            return;
+        }
+
+        // We already saw this block before, so we have to merge states.
+        if (!((BaselineFrameStateBuilder) block.getEntryState(0)).isCompatibleWith(frameState)) {
+            throw new BailoutException("stacks do not match; bytecodes would not verify");
+        }
+
+        if (block.isLoopHeader) {
+            assert currentBlock == null || currentBlock.getId() >= block.getId() : "must be backward branch";
+            if (currentBlock != null && currentBlock.numNormalSuccessors() == 1) {
+                // this is the only successor of the current block so we can adjust
+                adaptFramestate((BaselineFrameStateBuilder) block.getEntryState(0));
+                return;
+            }
+            GraalInternalError.unimplemented("Loops not yet supported");
+        }
+        assert currentBlock == null || currentBlock.getId() < block.getId() : "must not be backward branch";
+
+        /*
+         * This is the second time we see this block. Create the actual MergeNode and the End Node
+         * for the already existing edge. For simplicity, we leave the placeholder in the graph and
+         * just append the new nodes after the placeholder.
+         */
+        if (currentBlock != null && currentBlock.numNormalSuccessors() == 1) {
+            // this is the only successor of the current block so we can adjust
+            adaptFramestate((BaselineFrameStateBuilder) block.getEntryState(0));
+            return;
+        }
+        GraalInternalError.unimplemented("second block visit not yet implemented");
+
+        // merge frame states e.g. block.entryState.merge(mergeNode, target.state);
+
+        Debug.log("createTarget %s: merging state", block);
     }
 
-    @Override
-    protected Value createTarget(BciBlock trueBlock, AbstractFrameStateBuilder<Value> state) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    private void moveConstantsToVariables() {
+        Debug.log("moveConstantsToVariables: framestate before: %s", frameState);
+        for (int i = 0; i < frameState.stackSize(); i++) {
+            Value src = frameState.stackAt(i);
+            if (src instanceof JavaConstant) {
+                AllocatableValue dst = gen.newVariable(src.getLIRKind());
+                gen.emitMove(dst, src);
+                frameState.storeStack(i, dst);
+                Debug.log("introduce new variabe %s for stackslot %d (end of block %s", dst, i, currentBlock);
+            }
+        }
+        for (int i = 0; i < frameState.localsSize(); i++) {
+            Value src = frameState.localAt(i);
+            if (src instanceof JavaConstant) {
+                AllocatableValue dst = gen.newVariable(src.getLIRKind());
+                gen.emitMove(dst, src);
+                frameState.storeLocal(i, dst);
+                Debug.log("introduce new variabe %s for local %d (end of block %s", dst, i, currentBlock);
+            }
+        }
+        Debug.log("moveConstantsToVariables: framestate after: %s", frameState);
     }
 
-    @Override
-    protected Value createBlockTarget(double probability, BciBlock bciBlock, AbstractFrameStateBuilder<Value> stateAfter) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    private static void adaptValues(Value dst, Value src, PhiResolver resolver) {
+        if (dst == null) {
+            return;
+        }
+        assert src != null : "Source is null but Destination is not!";
+
+        if (!dst.equals(src)) {
+            resolver.move(dst, src);
+        }
     }
 
-    @Override
+    private void adaptFramestate(BaselineFrameStateBuilder other) {
+        assert frameState.isCompatibleWith(other) : "framestates not compatible!";
+        PhiResolver resolver = new PhiResolver(gen);
+        for (int i = 0; i < frameState.stackSize(); i++) {
+            Value src = frameState.stackAt(i);
+            Value dst = other.stackAt(i);
+            adaptValues(dst, src, resolver);
+        }
+        for (int i = 0; i < frameState.localsSize(); i++) {
+            Value src = frameState.localAt(i);
+            Value dst = other.localAt(i);
+            adaptValues(dst, src, resolver);
+        }
+        resolver.dispose();
+    }
+
     protected void processBlock(BciBlock block) {
+        frameState = (BaselineFrameStateBuilder) block.getEntryState(0);
+        setCurrentFrameState(frameState);
+        currentBlock = block;
         iterateBytecodesForBlock(block);
     }
 
-    @Override
-    protected void appendGoto(Value target) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    private boolean isBlockEnd() {
+        List<LIRInstruction> l = gen.getResult().getLIR().getLIRforBlock(currentBlock);
+        if (l.isEmpty()) {
+            return false;
+        }
+        return l.get(l.size() - 1) instanceof BlockEndOp;
     }
 
     @Override
@@ -580,6 +725,14 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
             assert block.getPredecessorCount() > 0;
         }
 
+        if (block.isLoopHeader) {
+            /*
+             * We need to preserve the frame state builder of the loop header so that we can merge
+             * values for phi functions, so make a copy of it.
+             */
+            block.setEntryState(0, frameState.copy());
+
+        }
         int endBCI = stream.endBCI();
 
         stream.setBCI(block.startBci);
@@ -598,12 +751,17 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
             stream.next();
             bci = stream.currentBCI();
 
+            if (isBlockEnd()) {
+                break;
+            }
+
             if (bci < endBCI) {
                 if (bci > block.endBci) {
-                    assert !block.getSuccessor(0).isExceptionEntry;
-                    assert block.numNormalSuccessors() == 1;
-                    // we fell through to the next block, add a goto and break
-                    appendGoto(createTarget(block.getSuccessor(0), frameState));
+                    if (block.numNormalSuccessors() == 1) {
+                        assert !block.getSuccessor(0).isExceptionEntry;
+                        // we fell through to the next block, add a goto and break
+                        genGoto();
+                    }
                     break;
                 }
             }
@@ -615,6 +773,16 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
     public void storeLocal(int i, Value x) {
         frameState.storeLocal(i, x);
+    }
+
+    LabelRef getSuccessor(int index) {
+        createTarget(currentBlock.getSuccessor(index));
+        return LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, index);
+    }
+
+    @Override
+    protected void genGoto() {
+        gen.emitJump(getSuccessor(0));
     }
 
 }

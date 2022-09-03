@@ -23,15 +23,15 @@
 package com.oracle.graal.lir.phases;
 
 import com.oracle.graal.lir.alloc.lsra.*;
-import com.oracle.graal.lir.phases.LowLevelMidTierPhase.*;
+import com.oracle.graal.lir.phases.LIRMidTierPhase.*;
 import com.oracle.graal.lir.stackslotalloc.*;
 
-public class LIRMidTier extends LowLevelPhaseSuite<LowLevelMidTierContext> {
+public class LIRMidTier extends LIRPhaseSuite<LIRMidTierContext> {
     public LIRMidTier() {
         appendPhase(new LinearScanPhase());
 
         // build frame map
-        if (LSStackSlotAllocator.Options.LowLevelOptLSStackSlotAllocator.getValue()) {
+        if (LSStackSlotAllocator.Options.LIROptLSStackSlotAllocator.getValue()) {
             appendPhase(new LSStackSlotAllocator());
         } else {
             appendPhase(new SimpleStackSlotAllocator());

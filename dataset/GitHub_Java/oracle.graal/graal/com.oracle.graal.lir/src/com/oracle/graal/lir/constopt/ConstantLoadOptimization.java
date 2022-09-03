@@ -47,7 +47,7 @@ import com.oracle.graal.options.*;
  * a constant, which is potentially scheduled into a block with high probability, with one or more
  * definitions in blocks with a lower probability.
  */
-public final class ConstantLoadOptimization extends PreAllocationOptimizationPhase {
+public final class ConstantLoadOptimization extends LIRHighTierPhase {
 
     public static class Options {
         // @formatter:off
@@ -291,7 +291,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
             // create variable
             Variable variable = lirGen.newVariable(kind);
             // create move
-            LIRInstruction move = lirGen.getSpillMoveFactory().createMove(variable, constant);
+            LIRInstruction move = lir.getSpillMoveFactory().createMove(variable, constant);
             // insert instruction
             getInsertionBuffer(block).append(1, move);
             Debug.log("new move (%s) and inserted in block %s", move, block);

@@ -38,7 +38,6 @@ import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.options.*;
 
@@ -52,7 +51,7 @@ import com.oracle.graal.options.*;
  * {@link OperandFlag#UNINITIALIZED}. Otherwise the stack slot might be reused and its content
  * destroyed.
  */
-public final class LSStackSlotAllocator extends AllocationPhase implements StackSlotAllocator {
+public final class LSStackSlotAllocator extends LIRMidTierPhase implements StackSlotAllocator {
 
     public static class Options {
         // @formatter:off
@@ -69,7 +68,7 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
     private static final DebugTimer AssignSlotsTimer = Debug.timer("LSStackSlotAllocator[AssignSlots]");
 
     @Override
-    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
+    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
         lirGenRes.buildFrameMap(this);
     }
 

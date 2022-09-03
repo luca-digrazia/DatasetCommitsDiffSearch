@@ -23,11 +23,11 @@
 package com.oracle.graal.lir.phases;
 
 import com.oracle.graal.lir.constopt.*;
-import com.oracle.graal.lir.phases.LowLevelHighTierPhase.*;
+import com.oracle.graal.lir.phases.LIRHighTierPhase.*;
 
-public class LIRHighTier extends LowLevelPhaseSuite<LowLevelHighTierContext> {
+public class LIRHighTier extends LIRPhaseSuite<LIRHighTierContext> {
     public LIRHighTier() {
-        if (ConstantLoadOptimization.Options.LowLevelOptConstantLoadOptimization.getValue()) {
+        if (ConstantLoadOptimization.Options.LIROptConstantLoadOptimization.getValue()) {
             appendPhase(new ConstantLoadOptimization());
         }
     }

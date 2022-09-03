@@ -23,34 +23,34 @@
 package com.oracle.graal.lir.phases;
 
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.phases.LowLevelLowTierPhase.*;
+import com.oracle.graal.lir.phases.LIRLowTierPhase.*;
 import com.oracle.graal.options.*;
 
-public class LIRLowTier extends LowLevelPhaseSuite<LowLevelLowTierContext> {
+public class LIRLowTier extends LIRPhaseSuite<LIRLowTierContext> {
     public static class Options {
         // @formatter:off
         @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LowLevelOptEdgeMoveOptimizer = new OptionValue<>(true);
+        public static final OptionValue<Boolean> LIROptEdgeMoveOptimizer = new OptionValue<>(true);
         @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LowLevelOptControlFlowOptmizer = new OptionValue<>(true);
+        public static final OptionValue<Boolean> LIROptControlFlowOptmizer = new OptionValue<>(true);
         @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LowLevelOptRedundantMoveElimination = new OptionValue<>(true);
+        public static final OptionValue<Boolean> LIROptRedundantMoveElimination = new OptionValue<>(true);
         @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LowLevelOptNullCheckOptimizer = new OptionValue<>(true);
+        public static final OptionValue<Boolean> LIROptNullCheckOptimizer = new OptionValue<>(true);
         // @formatter:on
     }
 
     public LIRLowTier() {
-        if (Options.LowLevelOptEdgeMoveOptimizer.getValue()) {
+        if (Options.LIROptEdgeMoveOptimizer.getValue()) {
             appendPhase(new EdgeMoveOptimizer());
         }
-        if (Options.LowLevelOptControlFlowOptmizer.getValue()) {
+        if (Options.LIROptControlFlowOptmizer.getValue()) {
             appendPhase(new ControlFlowOptimizer());
         }
-        if (Options.LowLevelOptRedundantMoveElimination.getValue()) {
+        if (Options.LIROptRedundantMoveElimination.getValue()) {
             appendPhase(new RedundantMoveElimination());
         }
-        if (Options.LowLevelOptNullCheckOptimizer.getValue()) {
+        if (Options.LIROptNullCheckOptimizer.getValue()) {
             appendPhase(new NullCheckOptimizer());
         }
     }
