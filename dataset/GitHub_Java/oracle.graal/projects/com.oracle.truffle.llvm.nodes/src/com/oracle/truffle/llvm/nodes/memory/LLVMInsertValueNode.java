@@ -32,11 +32,11 @@ package com.oracle.truffle.llvm.nodes.memory;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions.MemCopyNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class LLVMInsertValueNode extends LLVMExpressionNode {
 
@@ -86,8 +86,9 @@ public abstract class LLVMInsertValueNode extends LLVMExpressionNode {
         @Override
         public LLVMAddress executeLLVMAddress(VirtualFrame frame) {
             LLVMAddress targetAggr = super.executeLLVMAddress(frame);
+            LLVMAddress insertPosition = targetAggr.increment(offset);
             float value = element.executeFloat(frame);
-            LLVMMemory.putFloat(targetAggr.getVal() + offset, value);
+            LLVMMemory.putFloat(insertPosition, value);
             return targetAggr;
         }
     }
@@ -105,8 +106,9 @@ public abstract class LLVMInsertValueNode extends LLVMExpressionNode {
         @Override
         public LLVMAddress executeLLVMAddress(VirtualFrame frame) {
             LLVMAddress targetAggr = super.executeLLVMAddress(frame);
+            LLVMAddress insertPosition = targetAggr.increment(offset);
             double value = element.executeDouble(frame);
-            LLVMMemory.putDouble(targetAggr.getVal() + offset, value);
+            LLVMMemory.putDouble(insertPosition, value);
             return targetAggr;
         }
     }
@@ -124,8 +126,9 @@ public abstract class LLVMInsertValueNode extends LLVMExpressionNode {
         @Override
         public LLVMAddress executeLLVMAddress(VirtualFrame frame) {
             LLVMAddress targetAggr = super.executeLLVMAddress(frame);
+            LLVMAddress insertPosition = targetAggr.increment(offset);
             int value = element.executeI32(frame);
-            LLVMMemory.putI32(targetAggr.getVal() + offset, value);
+            LLVMMemory.putI32(insertPosition, value);
             return targetAggr;
         }
     }
@@ -144,8 +147,9 @@ public abstract class LLVMInsertValueNode extends LLVMExpressionNode {
         public LLVMAddress executeLLVMAddress(VirtualFrame frame) {
             try {
                 LLVMAddress targetAggr = super.executeLLVMAddress(frame);
+                LLVMAddress insertPosition = targetAggr.increment(offset);
                 LLVMAddress value = element.executeLLVMAddress(frame);
-                LLVMMemory.putAddress(targetAggr.getVal() + offset, value);
+                LLVMMemory.putAddress(insertPosition, value);
                 return targetAggr;
             } catch (UnexpectedResultException e) {
                 CompilerDirectives.transferToInterpreter();

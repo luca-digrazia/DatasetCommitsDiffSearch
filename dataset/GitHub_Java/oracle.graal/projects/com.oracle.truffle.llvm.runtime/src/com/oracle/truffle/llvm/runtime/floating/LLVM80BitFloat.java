@@ -83,37 +83,31 @@ public final class LLVM80BitFloat {
 
     private static final long UNDEFINED_DOUBLE_VALUE = 0x80000000_00000000L;
 
-    public static final int ALL_ONE_EXPONENT = 0b111111111111111;
-
-    // all cached LLVM80BitFloat objects are escaping objects and must not be used directly
+    private static final int ALL_ONE_EXPONENT = 0b111111111111111;
     private static final LLVM80BitFloat DOUBLE_MINUS_INFINITY_CONVERSION_NUMBER = LLVM80BitFloat.fromRawValues(true, ALL_ONE_EXPONENT, UNDEFINED_DOUBLE_VALUE);
     private static final LLVM80BitFloat DOUBLE_INFINITY_CONVERSION_NUMBER = LLVM80BitFloat.fromRawValues(false, ALL_ONE_EXPONENT, UNDEFINED_DOUBLE_VALUE);
     private static final LLVM80BitFloat DOUBLE_NAN_CONVERSION_NUMBER = LLVM80BitFloat.fromRawValues(false, ALL_ONE_EXPONENT, 0xc000000000000000L);
 
-    private static final LLVM80BitFloat POSITIVE_ZERO = new LLVM80BitFloat(false, 0, 0);
-    private static final LLVM80BitFloat NEGATIVE_ZERO = new LLVM80BitFloat(true, 0, 0);
+    public static final LLVM80BitFloat POSITIVE_ZERO = new LLVM80BitFloat(false, 0, 0);
+    public static final LLVM80BitFloat NEGATIVE_ZERO = new LLVM80BitFloat(true, 0, 0);
 
-    private static final LLVM80BitFloat POSITIVE_INFINITY = new LLVM80BitFloat(false, ALL_ONE_EXPONENT, bit(63L));
-    private static final LLVM80BitFloat NEGATIVE_INFINITY = new LLVM80BitFloat(true, ALL_ONE_EXPONENT, bit(63L));
+    public static final LLVM80BitFloat POSITIVE_INFINITY = new LLVM80BitFloat(false, ALL_ONE_EXPONENT, bit(63L));
+    public static final LLVM80BitFloat NEGATIVE_INFINITY = new LLVM80BitFloat(true, ALL_ONE_EXPONENT, bit(63L));
 
     private static final int EXPLICIT_LEADING_ONE_BITS = 1;
+
     private static final int EXPONENT_BIAS = 16383;
+
     private static final int FLOAT_EXPONENT_BIAS = 127;
 
-    private final boolean sign;
-    private final int biasedExponent; // 15 bit
-    private final long fraction; // 64 bit
+    private boolean sign;
+    private int biasedExponent; // 15 bit
+    private long fraction; // 64 bit
 
     public LLVM80BitFloat(boolean sign, int exponent, long fraction) {
         this.sign = sign;
         this.biasedExponent = exponent;
         this.fraction = fraction;
-    }
-
-    private LLVM80BitFloat(LLVM80BitFloat value) {
-        this.sign = value.sign;
-        this.biasedExponent = value.biasedExponent;
-        this.fraction = value.fraction;
     }
 
     private int getUnbiasedExponent() {
@@ -124,13 +118,13 @@ public final class LLVM80BitFloat {
         return 1 << i;
     }
 
-    public static long bit(long i) {
+    private static long bit(long i) {
         return 1L << i;
     }
 
     public static LLVM80BitFloat fromLong(long val) {
         if (val == 0) {
-            return new LLVM80BitFloat(POSITIVE_ZERO);
+            return POSITIVE_ZERO;
         }
         boolean sign = val < 0;
         return fromLong(Math.abs(val), sign);
@@ -153,21 +147,21 @@ public final class LLVM80BitFloat {
 
     public static LLVM80BitFloat fromUnsignedLong(long val) {
         if (val == 0) {
-            return new LLVM80BitFloat(POSITIVE_ZERO);
+            return POSITIVE_ZERO;
         }
         return fromLong(val, false);
     }
 
     public static LLVM80BitFloat fromUnsignedInt(int val) {
         if (val == 0) {
-            return new LLVM80BitFloat(POSITIVE_ZERO);
+            return POSITIVE_ZERO;
         }
         return fromLong(val & BinaryHelper.INT_MASK, false);
     }
 
     public static LLVM80BitFloat fromInt(int val) {
         if (val == 0) {
-            return new LLVM80BitFloat(POSITIVE_ZERO);
+            return POSITIVE_ZERO;
         }
         boolean sign = val < 0;
         return fromInt(val, sign);
@@ -203,15 +197,15 @@ public final class LLVM80BitFloat {
     public static LLVM80BitFloat fromDouble(double val) {
         boolean sign = val < 0;
         if (DoubleHelper.isPositiveZero(val)) {
-            return new LLVM80BitFloat(POSITIVE_ZERO);
+            return POSITIVE_ZERO;
         } else if (DoubleHelper.isNegativeZero(val)) {
-            return new LLVM80BitFloat(NEGATIVE_ZERO);
+            return NEGATIVE_ZERO;
         } else if (DoubleHelper.isPositiveInfinty(val)) {
-            return new LLVM80BitFloat(DOUBLE_INFINITY_CONVERSION_NUMBER);
+            return DOUBLE_INFINITY_CONVERSION_NUMBER;
         } else if (DoubleHelper.isNegativeInfinity(val)) {
-            return new LLVM80BitFloat(DOUBLE_MINUS_INFINITY_CONVERSION_NUMBER);
+            return DOUBLE_MINUS_INFINITY_CONVERSION_NUMBER;
         } else if (DoubleHelper.isNaN(val)) {
-            return new LLVM80BitFloat(DOUBLE_NAN_CONVERSION_NUMBER);
+            return DOUBLE_NAN_CONVERSION_NUMBER;
         } else {
             long rawValue = Double.doubleToRawLongBits(val);
             int doubleExponent = DoubleHelper.getUnbiasedExponent(val);
@@ -506,6 +500,9 @@ public final class LLVM80BitFloat {
             long rawVal = doubleFraction | shiftedExponent | shiftedSignBit;
             return Double.longBitsToDouble(rawVal);
         }
+    }
+
+    public static void iDependOnTheDoubleHack() {
     }
 
     public LLVM80BitFloat negate() {
