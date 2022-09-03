@@ -66,7 +66,6 @@ import com.oracle.truffle.dsl.processor.model.SpecializationData.SpecializationK
 import com.oracle.truffle.dsl.processor.model.SpecializationThrowsData;
 import com.oracle.truffle.dsl.processor.model.TemplateMethod;
 import com.oracle.truffle.dsl.processor.model.TypeSystemData;
-
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -80,7 +79,6 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
@@ -306,7 +304,9 @@ public class NodeParser extends AbstractParser<NodeData> {
     }
 
     private List<Element> loadMembers(TypeElement templateType) {
-        return newElementList(CompilerFactory.getCompiler(templateType).getAllMembersInDeclarationOrder(context.getEnvironment(), templateType));
+        List<Element> members = new ArrayList<>(CompilerFactory.getCompiler(templateType).getAllMembersInDeclarationOrder(context.getEnvironment(), templateType));
+
+        return members;
     }
 
     private boolean containsSpecializations(List<Element> elements) {
@@ -1276,7 +1276,7 @@ public class NodeParser extends AbstractParser<NodeData> {
 
     private static List<Element> filterNotAccessibleElements(TypeElement templateType, List<? extends Element> elements) {
         String packageName = ElementUtils.getPackageName(templateType);
-        List<Element> filteredElements = newElementList(elements);
+        List<Element> filteredElements = new ArrayList<>(elements);
         for (Element element : elements) {
             Modifier visibility = ElementUtils.getVisibility(element.getModifiers());
             if (visibility == Modifier.PRIVATE) {
@@ -1599,14 +1599,6 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
     }
 
-    /**
-     * @see "https://bugs.openjdk.java.net/browse/JDK-8039214"
-     */
-    private static List<Element> newElementList(List<? extends Element> src) {
-        List<Element> workaround = new ArrayList<>(src);
-        return workaround;
-    }
-
     private static void verifyMissingAbstractMethods(NodeData nodeData, List<? extends Element> originalElements) {
         if (!nodeData.needsFactory()) {
             // missing abstract methods only needs to be implemented
@@ -1614,7 +1606,7 @@ public class NodeParser extends AbstractParser<NodeData> {
             return;
         }
 
-        List<Element> elements = newElementList(originalElements);
+        List<Element> elements = new ArrayList<>(originalElements);
         Set<Element> unusedElements = new HashSet<>(elements);
         for (ExecutableElement method : nodeData.getAllTemplateMethods()) {
             unusedElements.remove(method);
