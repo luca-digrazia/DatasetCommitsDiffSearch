@@ -66,7 +66,7 @@ public abstract class NewArray extends Value {
      */
     NewArray(Value length, int inputCount, int successorCount, Graph graph) {
         super(CiKind.Object, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
-        setNonNull(true);
+        setFlag(Flag.NonNull);
         setLength(length);
     }
 }
