@@ -39,6 +39,7 @@ import com.oracle.truffle.api.source.*;
 public abstract class ExecutionContext {
 
     private final ProbeManager probeManager = new ProbeManager();
+    private final SourceManager sourceManager = new SourceManager();
     private final List<SourceListener> sourceListeners = new ArrayList<>();
     private Visualizer visualizer = new DefaultVisualizer();
 
@@ -60,6 +61,13 @@ public abstract class ExecutionContext {
                 }
             }
         });
+    }
+
+    /**
+     * Gets access to source management services.
+     */
+    public final SourceManager getSourceManager() {
+        return sourceManager;
     }
 
     /**
