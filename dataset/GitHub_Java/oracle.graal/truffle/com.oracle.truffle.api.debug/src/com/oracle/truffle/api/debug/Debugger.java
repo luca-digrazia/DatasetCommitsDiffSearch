@@ -955,10 +955,13 @@ public final class Debugger {
                 @Override
                 public FrameInstance visitFrame(FrameInstance frameInstance) {
                     if (stackIndex < contextStackDepth) {
-                        if (TRACE && frameInstance.getCallNode() != null) {
+                        final Node callNode = frameInstance.getCallNode();
+                        if (callNode != null) {
+                            frames.add(frameInstance);
+                        } else if (TRACE) {
                             contextTrace("including frame %d with no callNode: %s", stackIndex, frameInstance.getFrame(FrameAccess.READ_ONLY, true));
+                            frames.add(frameInstance);
                         }
-                        frames.add(frameInstance);
                         stackIndex++;
                         return null;
                     }
