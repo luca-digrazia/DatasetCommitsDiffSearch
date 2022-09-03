@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,15 @@
  */
 package com.oracle.graal.truffle;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaMethod;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
-
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.JavaMethodContext;
-import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
+import com.oracle.truffle.api.*;
 
 /**
  * Enables a Truffle compilable to masquerade as a {@link JavaMethod} for use as a context value in
  * {@linkplain Debug#scope(Object) debug scopes}.
  */
-public class TruffleDebugJavaMethod implements JavaMethod, JavaMethodContext {
+public class TruffleDebugJavaMethod implements JavaMethod {
     private final RootCallTarget compilable;
 
     private static final JavaType declaringClass = new JavaType() {
@@ -53,8 +47,8 @@ public class TruffleDebugJavaMethod implements JavaMethod, JavaMethodContext {
             throw new UnsupportedOperationException();
         }
 
-        public JavaKind getJavaKind() {
-            return JavaKind.Object;
+        public Kind getKind() {
+            return Kind.Object;
         }
 
         public ResolvedJavaType resolve(ResolvedJavaType accessingClass) {
@@ -113,7 +107,7 @@ public class TruffleDebugJavaMethod implements JavaMethod, JavaMethodContext {
     }
 
     public String getName() {
-        return (compilable.toString() + "").replace('.', '_').replace(' ', '_');
+        return compilable.toString().replace('.', '_').replace(' ', '_');
     }
 
     public JavaType getDeclaringClass() {
@@ -123,9 +117,5 @@ public class TruffleDebugJavaMethod implements JavaMethod, JavaMethodContext {
     @Override
     public String toString() {
         return format("Truffle<%n(%p)>");
-    }
-
-    public JavaMethod asJavaMethod() {
-        return this;
     }
 }
