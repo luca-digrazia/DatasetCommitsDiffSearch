@@ -65,6 +65,7 @@ import com.oracle.truffle.llvm.parser.bc.impl.LLVMPhiManager.Phi;
 import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMNodeGenerator;
 import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
+import com.oracle.truffle.llvm.parser.factories.LLVMIntrinsicFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMSelectFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMVectorFactory;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
@@ -248,8 +249,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         final Symbol target = call.getCallTarget();
         LLVMExpressionNode result;
         if (target instanceof FunctionDeclaration && (((ValueSymbol) target).getName()).startsWith("@llvm.")) {
-            FunctionDeclaration targetDecl = (FunctionDeclaration) target;
-            result = (LLVMExpressionNode) factoryFacade.createLLVMIntrinsic(targetDecl, argNodes, targetDecl.getArgumentTypes().length);
+            result = (LLVMExpressionNode) factoryFacade.createLLVMIntrinsic(((ValueSymbol) target).getName(), argNodes, call.getCallType());
 
         } else if (target instanceof FunctionDeclaration && (((ValueSymbol) target).getName()).startsWith("@truffle_")) {
             method.addInstruction(factoryFacade.createTruffleIntrinsic(((ValueSymbol) target).getName(), argNodes));
@@ -627,7 +627,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         if (target instanceof FunctionDeclaration && (((ValueSymbol) target).getName()).startsWith("@llvm.")) {
             // number of arguments of the caller so llvm intrinsics can distinguish varargs
             final int parentArgCount = method.getArgCount();
-            node = factoryFacade.createLLVMIntrinsic((FunctionDeclaration) target, args, parentArgCount);
+            node = LLVMIntrinsicFactory.create(((ValueSymbol) target).getName(), args, parentArgCount, method.getStackSlot());
 
         } else if (target instanceof FunctionDeclaration && (((ValueSymbol) target).getName()).startsWith("@truffle_")) {
             node = factoryFacade.createTruffleIntrinsic(((ValueSymbol) target).getName(), args);

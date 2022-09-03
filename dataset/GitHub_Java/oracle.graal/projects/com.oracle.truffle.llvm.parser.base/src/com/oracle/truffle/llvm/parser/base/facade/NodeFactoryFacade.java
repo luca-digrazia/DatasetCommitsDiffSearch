@@ -39,6 +39,7 @@ import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 
 import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.dsl.NodeFactory;
@@ -106,13 +107,12 @@ public interface NodeFactoryFacade {
     /**
      * Creates an intrinsic for a <code>@llvm.*</code> function.
      *
-     * @param declaration the function declaration of the function from which the intrinsic is
-     *            called
+     * @param functionName the name of the intrinsic function starting with <code>@llvm.</code>
      * @param argNodes the arguments to the intrinsic function
-     * @param argCount number of arguments (could differ from declaration arg count)
+     * @param functionDef the function definition of the function from which the intrinsic is called
      * @return the created intrinsic
      */
-    LLVMNode createLLVMIntrinsic(FunctionDeclaration declaration, Object[] argNodes, int argCount);
+    LLVMNode createLLVMIntrinsic(String functionName, Object[] argNodes, FunctionType functionDef);
 
     LLVMNode createTruffleIntrinsic(String functionName, LLVMExpressionNode[] argNodes);
 
