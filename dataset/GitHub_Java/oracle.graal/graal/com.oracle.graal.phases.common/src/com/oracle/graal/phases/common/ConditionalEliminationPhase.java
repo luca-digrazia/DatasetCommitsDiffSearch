@@ -540,7 +540,7 @@ public class ConditionalEliminationPhase extends Phase {
                 }
 
                 if (replacement != null) {
-                    if (!(replacementAnchor instanceof AbstractBeginNode)) {
+                    if (replacementAnchor instanceof GuardNode) {
                         ValueAnchorNode anchor = graph.add(new ValueAnchorNode(replacementAnchor));
                         graph.addBeforeFixed(ifNode, anchor);
                     }
