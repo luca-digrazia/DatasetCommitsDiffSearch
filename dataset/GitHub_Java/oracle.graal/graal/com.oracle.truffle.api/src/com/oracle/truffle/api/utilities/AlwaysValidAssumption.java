@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -20,32 +22,39 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.test.utilities;
+package com.oracle.truffle.api.utilities;
 
-import static org.junit.Assert.*;
-import org.junit.*;
-
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.utilities.*;
 
-public class AlwaysValidAssumptionTest {
+/**
+ * An assumption that is always valid. Used as a placeholder where an assumption is needed but never
+ * invalidated.
+ */
+public final class AlwaysValidAssumption implements Assumption {
 
-    @Test
-    public void testCheck() throws InvalidAssumptionException {
-        final AlwaysValidAssumption assumption = AlwaysValidAssumption.INSTANCE;
-        assumption.check();
+    public static final AlwaysValidAssumption INSTANCE = new AlwaysValidAssumption();
+
+    private AlwaysValidAssumption() {
     }
 
-    @Test
-    public void testIsValid() {
-        final AlwaysValidAssumption assumption = AlwaysValidAssumption.INSTANCE;
-        assertTrue(assumption.isValid());
+    @Override
+    public void check() throws InvalidAssumptionException {
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void testCannotInvalidate() {
-        final AlwaysValidAssumption assumption = AlwaysValidAssumption.INSTANCE;
-        assumption.invalidate();
+    @Override
+    public void invalidate() {
+        throw new UnsupportedOperationException("Cannot invalidate this assumption - it is always valid");
+    }
+
+    @Override
+    public String getName() {
+        return getClass().getName();
+    }
+
+    @Override
+    public boolean isValid() {
+        return true;
     }
 
 }
