@@ -612,7 +612,7 @@ public final class BciBlockMapping {
                 }
                 sb.append(n);
             }
-            Debug.log("%s", sb);
+            Debug.log(sb.toString());
         }
     }
 
