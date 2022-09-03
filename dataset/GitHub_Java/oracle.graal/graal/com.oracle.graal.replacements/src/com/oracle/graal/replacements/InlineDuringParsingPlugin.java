@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,21 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.TrivialInliningSize;
-import static com.oracle.graal.java.BytecodeParserOptions.InlineDuringParsingMaxDepth;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.java.BytecodeParser.Options.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
-
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.nodes.*;
 
 public final class InlineDuringParsingPlugin implements InlineInvokePlugin {
 
     @Override
-    public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-        // @formatter:off
-        if (method.hasBytecodes() &&
-            method.getDeclaringClass().isLinked() &&
-            method.canBeInlined()) {
-
-            // Test force inlining first
-            if (method.shouldBeInlined()) {
-                return new InlineInfo(method, false);
-            }
-
-            if (!method.isSynchronized() &&
-                checkSize(method, args) &&
-                b.getDepth() < InlineDuringParsingMaxDepth.getValue()) {
-                return new InlineInfo(method, false);
-            }
+    public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType) {
+        if (method.hasBytecodes() && method.getDeclaringClass().isLinked() && method.canBeInlined() && !method.isSynchronized() && checkSize(method, args) &&
+                        b.getDepth() < InlineDuringParsingMaxDepth.getValue()) {
+            return new InlineInfo(method, false);
         }
-        // @formatter:on
         return null;
     }
 
