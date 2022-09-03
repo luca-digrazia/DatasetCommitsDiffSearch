@@ -200,10 +200,6 @@ final class LinearScan {
         return spillMoveFactory;
     }
 
-    protected MoveResolver createMoveResolver() {
-        return new MoveResolver(this);
-    }
-
     public static boolean isVariableOrRegister(Value value) {
         return isVariable(value) || isRegister(value);
     }
@@ -1523,7 +1519,7 @@ final class LinearScan {
         try (Indent indent = Debug.logAndIndent("resolve data flow")) {
 
             int numBlocks = blockCount();
-            MoveResolver moveResolver = createMoveResolver();
+            MoveResolver moveResolver = new MoveResolver(this);
             BitSet blockCompleted = new BitSet(numBlocks);
             BitSet alreadyResolved = new BitSet(numBlocks);
 
