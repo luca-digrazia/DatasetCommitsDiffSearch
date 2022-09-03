@@ -24,9 +24,8 @@
  */
 package org.graalvm.compiler.truffle.compiler.amd64.substitutions;
 
-import static org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
-import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.Java8OrEarlier;
-
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
@@ -36,8 +35,8 @@ import org.graalvm.compiler.replacements.amd64.AMD64ArrayIndexOf;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.word.Pointer;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import static org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
+import static org.graalvm.compiler.serviceprovider.GraalServices.Java8OrEarlier;
 
 @ClassSubstitution(className = "com.oracle.truffle.api.ArrayUtils", optional = true)
 public class AMD64ArrayUtilsSubstitutions {
