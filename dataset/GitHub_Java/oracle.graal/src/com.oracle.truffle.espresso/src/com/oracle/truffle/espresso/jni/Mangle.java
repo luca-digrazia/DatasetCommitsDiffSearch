@@ -23,11 +23,9 @@
 
 package com.oracle.truffle.espresso.jni;
 
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
-import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.meta.MetaUtil;
+import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.types.SignatureDescriptor;
+import com.oracle.truffle.espresso.types.TypeDescriptor;
 
 /**
  * A utility for mangling Java method name and signatures into C function names. Support is also
@@ -38,7 +36,6 @@ import com.oracle.truffle.espresso.meta.MetaUtil;
 public final class Mangle {
 
     private Mangle() {
-        /* no instances */
     }
 
     // Mangling
@@ -77,14 +74,14 @@ public final class Mangle {
      * @param withSignature if true, the method's signature is included in the mangled name
      * @return the mangled C function name for {@code method}
      */
-    public static String mangleMethod(Method method, boolean withSignature) {
-        return mangleMethod(method.getDeclaringKlass().getType(), method.getName().toString(), withSignature ? method.getRawSignature() : null, false);
+    public static String mangleMethod(Meta.Method method, boolean withSignature) {
+        return mangleMethod(method.getDeclaringClass().rawKlass().getTypeDescriptor(), method.getName(), withSignature ? method.rawMethod().getSignature() : null, false);
     }
 
     /**
-     * The delimiter in the string returned by mangleMethod(ByteString<Type>, String, ByteString
-     * <Signature>, boolean) separating the short mangled form from the suffix to be added to obtain
-     * the long mangled form.
+     * The delimiter in the string returned by
+     * {@link #mangleMethod(TypeDescriptor, String, SignatureDescriptor, boolean)} separating the
+     * short mangled form from the suffix to be added to obtain the long mangled form.
      */
     public static final char LONG_NAME_DELIMITER = ' ';
 
@@ -101,9 +98,9 @@ public final class Mangle {
      *            above
      * @return the symbol for the C function as described above
      */
-    public static String mangleMethod(Symbol<Type> declaringClass, String name, Symbol<Signature> signature, boolean splitSuffix) {
+    public static String mangleMethod(TypeDescriptor declaringClass, String name, SignatureDescriptor signature, boolean splitSuffix) {
         final StringBuilder result = new StringBuilder(100);
-        final String declaringClassName = MetaUtil.internalNameToJava(declaringClass.toString(), true, false);
+        final String declaringClassName = declaringClass.toJavaName();
         result.append("Java_").append(mangle(declaringClassName)).append('_').append(mangle(name));
         if (signature != null) {
             if (splitSuffix) {
