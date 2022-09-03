@@ -29,11 +29,11 @@ import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.options.OptionValue.OverrideScope;
+import com.oracle.graal.phases.*;
 
 public class LambdaEagerTest extends GraalCompilerTest {
 
@@ -62,19 +62,19 @@ public class LambdaEagerTest extends GraalCompilerTest {
     @Test
     public void testEagerResolveNonCapturing01() {
         Result expected = new Result(3, null);
-        testAgainstExpected(getResolvedJavaMethod("nonCapturing"), expected, UNRESOLVED_UNREACHED, 1, 2);
+        testAgainstExpected(getMethod("nonCapturing"), expected, UNRESOLVED_UNREACHED, 1, 2);
     }
 
     @Test
     public void testEagerResolveNonCapturing02() {
         Result expected = new Result(3, null);
-        testAgainstExpected(getResolvedJavaMethod("nonCapturing2"), expected, UNRESOLVED_UNREACHED, 1, 2);
+        testAgainstExpected(getMethod("nonCapturing2"), expected, UNRESOLVED_UNREACHED, 1, 2);
     }
 
     @Test
     public void testEagerResolveCapturing() {
         Result expected = new Result(0, null);
-        testAgainstExpected(getResolvedJavaMethod("capturing"), expected, UNRESOLVED_UNREACHED, 1, 2, 3);
+        testAgainstExpected(getMethod("capturing"), expected, UNRESOLVED_UNREACHED, 1, 2, 3);
     }
 
     @Override
