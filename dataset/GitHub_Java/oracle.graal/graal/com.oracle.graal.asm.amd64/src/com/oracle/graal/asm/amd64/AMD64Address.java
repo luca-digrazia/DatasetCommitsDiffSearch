@@ -70,8 +70,6 @@ public final class AMD64Address extends AbstractAddress {
         this.index = index;
         this.scale = scale;
         this.displacement = displacement;
-
-        assert scale != null;
     }
 
     /**
@@ -106,7 +104,7 @@ public final class AMD64Address extends AbstractAddress {
                 case 8:
                     return Times8;
                 default:
-                    return null;
+                    throw new IllegalArgumentException(String.valueOf(scale));
             }
         }
     }
