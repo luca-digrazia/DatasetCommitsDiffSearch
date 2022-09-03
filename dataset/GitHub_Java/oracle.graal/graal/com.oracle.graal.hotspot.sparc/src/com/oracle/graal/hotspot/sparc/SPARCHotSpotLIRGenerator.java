@@ -49,16 +49,12 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 
 public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator {
 
-    private final HotSpotVMConfig config;
-
-    public SPARCHotSpotLIRGenerator(StructuredGraph graph, HotSpotProviders providers, HotSpotVMConfig config, FrameMap frameMap, CallingConvention cc, LIR lir) {
-        super(graph, providers, frameMap, cc, lir);
-        this.config = config;
+    private HotSpotRuntime runtime() {
+        return (HotSpotRuntime) codeCache;
     }
 
-    @Override
-    protected HotSpotProviders getProviders() {
-        return (HotSpotProviders) super.getProviders();
+    public SPARCHotSpotLIRGenerator(StructuredGraph graph, MetaAccessProvider metaAccess, CodeCacheProvider codeCache, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
+        super(graph, metaAccess, codeCache, target, frameMap, cc, lir);
     }
 
     /**
@@ -71,7 +67,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @SuppressWarnings("hiding")
     @Override
     protected DebugInfoBuilder createDebugInfoBuilder(NodeMap<Value> nodeOperands) {
-        assert config.basicLockSize == 8;
+        assert runtime().config.basicLockSize == 8;
         HotSpotLockStack lockStack = new HotSpotLockStack(frameMap, Kind.Long);
         return new HotSpotDebugInfoBuilder(nodeOperands, lockStack);
     }
@@ -118,7 +114,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @Override
     public void visitSafepointNode(SafepointNode i) {
         LIRFrameState info = state(i);
-        append(new SPARCHotSpotSafepointOp(info, config, this));
+        append(new SPARCHotSpotSafepointOp(info, runtime().config, this));
     }
 
     @Override
@@ -132,7 +128,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         Variable newValue = load(operand(x.newValue()));
 
         if (ValueUtil.isConstant(offset)) {
-            assert !getCodeCache().needsDataPatch(asConstant(offset));
+            assert !codeCache.needsDataPatch(asConstant(offset));
             Variable longAddress = newVariable(Kind.Long);
             emitMove(longAddress, address);
             address = emitAdd(longAddress, asConstant(offset));
@@ -180,7 +176,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public void emitUnwind(Value exception) {
-        ForeignCallLinkage linkage = getForeignCalls().lookupForeignCall(HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER);
+        ForeignCallLinkage linkage = getCodeCache().lookupForeignCall(HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER);
         CallingConvention linkageCc = linkage.getOutgoingCallingConvention();
         assert linkageCc.getArgumentCount() == 2;
         RegisterValue exceptionParameter = (RegisterValue) linkageCc.getArgument(0);
@@ -189,9 +185,8 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     }
 
     private void moveDeoptimizationActionAndReasonToThread(Value actionAndReason) {
-        int pendingDeoptimizationOffset = runtime().getConfig().pendingDeoptimizationOffset;
-        Kind wordKind = getProviders().getCodeCache().getTarget().wordKind;
-        RegisterValue thread = getProviders().getRegisters().getThreadRegister().asValue(wordKind);
+        int pendingDeoptimizationOffset = graalRuntime().getConfig().pendingDeoptimizationOffset;
+        RegisterValue thread = runtime().threadRegister().asValue(HotSpotGraalRuntime.wordKind());
         SPARCAddressValue pendingDeoptAddress = new SPARCAddressValue(actionAndReason.getKind(), thread, pendingDeoptimizationOffset);
         append(new StoreOp(actionAndReason.getKind(), pendingDeoptAddress, emitMove(actionAndReason), null));
     }
@@ -204,7 +199,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason) {
-        moveDeoptimizationActionAndReasonToThread(getMetaAccess().encodeDeoptActionAndReason(action, reason));
+        moveDeoptimizationActionAndReasonToThread(metaAccess.encodeDeoptActionAndReason(action, reason));
         append(new SPARCHotSpotDeoptimizeCallerOp());
     }
 
@@ -216,7 +211,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @Override
     public void emitJumpToExceptionHandlerInCaller(ValueNode handlerInCallerPc, ValueNode exception, ValueNode exceptionPc) {
         Variable handler = load(operand(handlerInCallerPc));
-        ForeignCallLinkage linkage = getForeignCalls().lookupForeignCall(EXCEPTION_HANDLER_IN_CALLER);
+        ForeignCallLinkage linkage = getCodeCache().lookupForeignCall(EXCEPTION_HANDLER_IN_CALLER);
         CallingConvention linkageCc = linkage.getOutgoingCallingConvention();
         assert linkageCc.getArgumentCount() == 2;
         RegisterValue exceptionFixed = (RegisterValue) linkageCc.getArgument(0);
@@ -237,15 +232,15 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         Variable result = newVariable(kind);
         assert access == null || access instanceof HeapAccess;
         if (isCompressCandidate(access)) {
-            if (config.useCompressedOops && kind == Kind.Object) {
+            if (runtime().config.useCompressedOops && kind == Kind.Object) {
 // append(new LoadCompressedPointer(kind, result, loadAddress, access != null ? state(access) :
-// null, config.narrowOopBase, config.narrowOopShift,
-// config.logMinObjAlignment));
+// null, runtime().config.narrowOopBase, runtime().config.narrowOopShift,
+// runtime().config.logMinObjAlignment));
                 throw GraalInternalError.unimplemented();
-            } else if (config.useCompressedClassPointers && kind == Kind.Long) {
+            } else if (runtime().config.useCompressedClassPointers && kind == Kind.Long) {
 // append(new LoadCompressedPointer(kind, result, loadAddress, access != null ? state(access) :
-// null, config.narrowKlassBase, config.narrowKlassShift,
-// config.logKlassAlignment));
+// null, runtime().config.narrowKlassBase, runtime().config.narrowKlassShift,
+// runtime().config.logKlassAlignment));
                 throw GraalInternalError.unimplemented();
             } else {
                 append(new LoadOp(kind, result, loadAddress, access != null ? state(access) : null));
@@ -264,9 +259,9 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
             Constant c = asConstant(inputVal);
             if (canStoreConstant(c)) {
                 if (inputVal.getKind() == Kind.Object) {
-                    append(new StoreConstantOp(kind, storeAddress, c, state, config.useCompressedOops && isCompressCandidate(access)));
+                    append(new StoreConstantOp(kind, storeAddress, c, state, runtime().config.useCompressedOops && isCompressCandidate(access)));
                 } else if (inputVal.getKind() == Kind.Long) {
-                    append(new StoreConstantOp(kind, storeAddress, c, state, config.useCompressedClassPointers && isCompressCandidate(access)));
+                    append(new StoreConstantOp(kind, storeAddress, c, state, runtime().config.useCompressedClassPointers && isCompressCandidate(access)));
                 } else {
                     append(new StoreConstantOp(kind, storeAddress, c, state, false));
                 }
@@ -275,22 +270,22 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         }
         Variable input = load(inputVal);
         if (isCompressCandidate(access)) {
-            if (config.useCompressedOops && kind == Kind.Object) {
+            if (runtime().config.useCompressedOops && kind == Kind.Object) {
 // if (input.getKind() == Kind.Object) {
 // Variable scratch = newVariable(Kind.Long);
 // append(new StoreCompressedPointer(kind, storeAddress, input, scratch, state,
-// config.narrowOopBase, config.narrowOopShift,
-// config.logMinObjAlignment));
+// runtime().config.narrowOopBase, runtime().config.narrowOopShift,
+// runtime().config.logMinObjAlignment));
 // } else {
 // // the input oop is already compressed
 // append(new StoreOp(input.getKind(), storeAddress, input, state));
 // }
                 throw GraalInternalError.unimplemented();
-            } else if (config.useCompressedClassPointers && kind == Kind.Long) {
+            } else if (runtime().config.useCompressedClassPointers && kind == Kind.Long) {
 // Variable scratch = newVariable(Kind.Long);
 // append(new StoreCompressedPointer(kind, storeAddress, input, scratch, state,
-// config.narrowKlassBase, config.narrowKlassShift,
-// config.logKlassAlignment));
+// runtime().config.narrowKlassBase, runtime().config.narrowKlassShift,
+// runtime().config.logKlassAlignment));
                 throw GraalInternalError.unimplemented();
             } else {
                 append(new StoreOp(kind, storeAddress, input, state));
