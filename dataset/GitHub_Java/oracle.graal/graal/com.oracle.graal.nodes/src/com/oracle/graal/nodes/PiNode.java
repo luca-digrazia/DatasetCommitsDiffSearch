@@ -43,7 +43,6 @@ import com.oracle.graal.nodes.type.*;
 public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, IterableNodeType, Canonicalizable, ValueProxy {
 
     @Input private ValueNode object;
-    private final Stamp piStamp;
 
     public ValueNode object() {
         return object;
@@ -51,14 +50,12 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
 
     public PiNode(ValueNode object, Stamp stamp) {
         super(stamp);
-        this.piStamp = stamp;
         this.object = object;
     }
 
     public PiNode(ValueNode object, Stamp stamp, ValueNode anchor) {
         super(stamp, (GuardingNode) anchor);
         this.object = object;
-        this.piStamp = stamp;
     }
 
     public PiNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
@@ -74,13 +71,13 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
 
     @Override
     public boolean inferStamp() {
-        if (piStamp == StampFactory.forNodeIntrinsic()) {
+        if (stamp() == StampFactory.forNodeIntrinsic()) {
             return false;
         }
-        if (piStamp instanceof ObjectStamp && object.stamp() instanceof ObjectStamp) {
-            return updateStamp(((ObjectStamp) object.stamp()).castTo((ObjectStamp) piStamp));
+        if (stamp() instanceof ObjectStamp && object.stamp() instanceof ObjectStamp) {
+            return updateStamp(((ObjectStamp) object.stamp()).castTo((ObjectStamp) stamp()));
         }
-        return updateStamp(piStamp.join(object().stamp()));
+        return updateStamp(stamp().join(object().stamp()));
     }
 
     @Override
