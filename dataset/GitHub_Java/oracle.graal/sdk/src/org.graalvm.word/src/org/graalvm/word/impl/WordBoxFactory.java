@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,14 +22,21 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.launcher;
+package org.graalvm.word.impl;
 
-import org.graalvm.nativeimage.Feature;
-import org.graalvm.nativeimage.RuntimeReflection;
+import org.graalvm.word.WordBase;
 
-class PolyglotLauncherFeature implements Feature {
-    @Override
-    public void beforeAnalysis(BeforeAnalysisAccess access) {
-        PolyglotLauncher.AOT_LAUNCHER_CLASSES.values().forEach(RuntimeReflection::registerForReflectiveInstantiation);
+/**
+ * Base class for a factory to create boxed {@link Word} instances. A concrete subclass must
+ * initialize {@link #boxFactory}.
+ */
+public abstract class WordBoxFactory {
+
+    protected static WordBoxFactory boxFactory;
+
+    protected abstract <T extends WordBase> T boxImpl(long val);
+
+    public static <T extends WordBase> T box(long val) {
+        return boxFactory.boxImpl(val);
     }
 }

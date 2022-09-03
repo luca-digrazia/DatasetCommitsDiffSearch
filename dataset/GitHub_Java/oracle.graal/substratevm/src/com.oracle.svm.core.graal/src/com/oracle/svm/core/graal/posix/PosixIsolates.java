@@ -30,7 +30,6 @@ import static com.oracle.svm.core.posix.headers.Mman.PROT_WRITE;
 
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Isolate;
-import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
@@ -50,8 +49,6 @@ import com.oracle.svm.core.posix.headers.Unistd;
 public class PosixIsolates {
     public static final String IMAGE_HEAP_BEGIN_SYMBOL_NAME = "__svm_heap_begin";
     public static final String IMAGE_HEAP_END_SYMBOL_NAME = "__svm_heap_end";
-    public static final String IMAGE_HEAP_RELOCATABLE_BEGIN_SYMBOL_NAME = "__svm_heap_relocatable_begin";
-    public static final String IMAGE_HEAP_RELOCATABLE_END_SYMBOL_NAME = "__svm_heap_relocatable_end";
 
     private static final CGlobalData<Word> IMAGE_HEAP_BEGIN = CGlobalDataFactory.forSymbol(IMAGE_HEAP_BEGIN_SYMBOL_NAME);
     private static final CGlobalData<Word> IMAGE_HEAP_END = CGlobalDataFactory.forSymbol(IMAGE_HEAP_END_SYMBOL_NAME);
@@ -115,17 +112,5 @@ public class PosixIsolates {
             return IMAGE_HEAP_BEGIN.get();
         }
         return isolate;
-    }
-
-    @Uninterruptible(reason = "Tear-down in progress.")
-    public static int tearDownCurrent() {
-        if (SubstrateOptions.SpawnIsolates.getValue()) {
-            PointerBase heapBase = getHeapBase(CEntryPointContext.getCurrentIsolate());
-            Word size = IMAGE_HEAP_END.get().subtract(IMAGE_HEAP_BEGIN.get());
-            if (Mman.NoTransitions.munmap(heapBase, size) != 0) {
-                return Errors.UNSPECIFIED;
-            }
-        }
-        return Errors.NO_ERROR;
     }
 }

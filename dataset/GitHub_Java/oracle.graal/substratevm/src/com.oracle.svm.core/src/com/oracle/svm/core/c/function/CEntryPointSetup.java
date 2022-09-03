@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -78,7 +76,7 @@ public class CEntryPointSetup {
         private static final CGlobalData<CCharPointer> errorMessage = CGlobalDataFactory.createCString(
                         "Failed to create a new Isolate.");
 
-        public static void enter() {
+        static void enter() {
             int code = CEntryPointActions.enterCreateIsolate(WordFactory.nullPointer());
             if (code != 0) {
                 CEntryPointActions.failFatally(code, errorMessage.get());

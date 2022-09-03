@@ -283,12 +283,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
 
     @SubstrateForeignCallTarget
     private static int tearDownIsolate() {
-        boolean success = JavaThreads.singleton().tearDownVM();
-        if (!success) {
-            return Errors.UNSPECIFIED;
-        }
-        PosixVMThreads.finishTearDown();
-        return PosixIsolates.tearDownCurrent();
+        return JavaThreads.singleton().tearDownVM() ? Errors.NO_ERROR : Errors.UNSPECIFIED;
     }
 
     @Snippet
@@ -373,7 +368,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
             }
         }
         Log.log().newline();
-        ImageSingletons.lookup(LogHandler.class).fatalError();
+        LogHandler.get().fatalError();
         return Errors.UNSPECIFIED; // unreachable
     }
 

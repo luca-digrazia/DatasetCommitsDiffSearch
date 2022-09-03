@@ -28,11 +28,6 @@ import org.graalvm.word.impl.WordBoxFactory;
 import org.graalvm.word.impl.WordFactoryOpcode;
 import org.graalvm.word.impl.WordFactoryOperation;
 
-/**
- * Provides factory method to create machine-word-sized values.
- *
- * @since 1.0
- */
 public final class WordFactory {
 
     private WordFactory() {
@@ -43,8 +38,6 @@ public final class WordFactory {
      * unsigned zero.
      *
      * @return the constant 0.
-     *
-     * @since 1.0
      */
     @WordFactoryOperation(opcode = WordFactoryOpcode.ZERO)
     public static <T extends WordBase> T zero() {
@@ -56,8 +49,6 @@ public final class WordFactory {
      * unsigned {@link #zero}.
      *
      * @return the null pointer.
-     *
-     * @since 1.0
      */
     @WordFactoryOperation(opcode = WordFactoryOpcode.ZERO)
     public static <T extends PointerBase> T nullPointer() {
@@ -70,8 +61,6 @@ public final class WordFactory {
      *
      * @param val a 64 bit unsigned value
      * @return the value cast to Word
-     *
-     * @since 1.0
      */
     @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_UNSIGNED)
     public static <T extends UnsignedWord> T unsigned(long val) {
@@ -84,8 +73,6 @@ public final class WordFactory {
      *
      * @param val a 64 bit unsigned value
      * @return the value cast to PointerBase
-     *
-     * @since 1.0
      */
     @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_UNSIGNED)
     public static <T extends PointerBase> T pointer(long val) {
@@ -98,8 +85,6 @@ public final class WordFactory {
      *
      * @param val a 32 bit unsigned value
      * @return the value cast to Word
-     *
-     * @since 1.0
      */
     @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_UNSIGNED)
     public static <T extends UnsignedWord> T unsigned(int val) {
@@ -112,8 +97,6 @@ public final class WordFactory {
      *
      * @param val a 64 bit signed value
      * @return the value cast to Word
-     *
-     * @since 1.0
      */
     @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_SIGNED)
     public static <T extends SignedWord> T signed(long val) {
@@ -126,8 +109,6 @@ public final class WordFactory {
      *
      * @param val a 32 bit signed value
      * @return the value cast to Word
-     *
-     * @since 1.0
      */
     @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_SIGNED)
     public static <T extends SignedWord> T signed(int val) {

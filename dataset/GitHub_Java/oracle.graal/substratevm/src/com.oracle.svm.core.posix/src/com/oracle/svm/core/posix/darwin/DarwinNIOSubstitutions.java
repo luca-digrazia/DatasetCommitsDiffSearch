@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -118,7 +116,7 @@ public final class DarwinNIOSubstitutions {
             // 077     struct kevent changes[1];
             DarwinEvent.kevent changes = StackValue.get(1, SizeOf.get(DarwinEvent.kevent.class));
             //  078     struct timespec timeout = {0, 0};
-            Time.timespec timeout = StackValue.get(Time.timespec.class);
+            Time.timespec timeout = StackValue.get(SizeOf.get(Time.timespec.class));
             timeout.set_tv_sec(0);
             timeout.set_tv_nsec(0);
             // 079     int res;
@@ -197,7 +195,7 @@ public final class DarwinNIOSubstitutions {
             // 113     struct kevent errors[2];
             DarwinEvent.kevent errors = StackValue.get(2, SizeOf.get(DarwinEvent.kevent.class));
             // 114     struct timespec dontBlock = {0, 0};
-            Time.timespec dontBlock = StackValue.get(Time.timespec.class);
+            Time.timespec dontBlock = StackValue.get(SizeOf.get(Time.timespec.class));
             dontBlock.set_tv_sec(0);
             dontBlock.set_tv_nsec(0);
             // 115
@@ -237,7 +235,7 @@ public final class DarwinNIOSubstitutions {
             // 132     struct kevent *kevs = (struct kevent *)jlong_to_ptr(kevAddr);
             DarwinEvent.kevent keys = WordFactory.pointer(kevAddr);
             // 133     struct timespec ts;
-            Time.timespec ts = StackValue.get(Time.timespec.class);
+            Time.timespec ts = StackValue.get(SizeOf.get(Time.timespec.class));
             // 134     struct timespec *tsp;
             Time.timespec tsp;
             // 135     int result;
@@ -283,7 +281,7 @@ public final class DarwinNIOSubstitutions {
         @Substitute
         static void interrupt(int fd) throws IOException {
             // 166     char c = 1;
-            CCharPointer cPointer = StackValue.get(CCharPointer.class);
+            CCharPointer cPointer = StackValue.get(SizeOf.get(CCharPointer.class));
             cPointer.write((byte) 1);
             // 167     if (1 != write(fd, &c, 1)) {
             if (1 != (int) Unistd.write(fd, cPointer, WordFactory.unsigned(1)).rawValue()) {

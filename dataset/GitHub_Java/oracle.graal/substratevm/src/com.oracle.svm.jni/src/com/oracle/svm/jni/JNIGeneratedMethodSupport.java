@@ -87,19 +87,14 @@ public final class JNIGeneratedMethodSupport {
         return StaticFieldsSupport.getStaticObjectFields();
     }
 
-    static void setPendingException(Throwable t) {
+    static void retainPendingException(Throwable t) {
         JNIThreadLocalPendingException.set(t);
     }
 
-    static Throwable getAndClearPendingException() {
-        Throwable t = JNIThreadLocalPendingException.get();
-        JNIThreadLocalPendingException.clear();
-        return t;
-    }
-
     static void rethrowPendingException() throws Throwable {
-        Throwable t = getAndClearPendingException();
+        Throwable t = JNIThreadLocalPendingException.get();
         if (t != null) {
+            JNIThreadLocalPendingException.clear();
             throw t;
         }
     }

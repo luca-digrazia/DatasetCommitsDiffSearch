@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,8 +28,7 @@ import static com.oracle.svm.jni.nativeapi.JNIVersion.JNI_VERSION_1_4;
 import static com.oracle.svm.jni.nativeapi.JNIVersion.JNI_VERSION_1_6;
 import static com.oracle.svm.jni.nativeapi.JNIVersion.JNI_VERSION_1_8;
 
-import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
@@ -68,45 +65,22 @@ class JNILibraryInitializer implements LibraryInitializer {
 
     @Override
     public boolean isBuiltinLibrary(String libName) {
-        if (PlatformNativeLibrarySupport.singleton().isBuiltinLibrary(libName)) {
-            return true;
-        }
         String onLoadName = getOnLoadName(libName, true);
         PointerBase onLoad = PlatformNativeLibrarySupport.singleton().findBuiltinSymbol(onLoadName);
         return onLoad.isNonNull();
     }
 
-    @CFunction("JNI_OnLoad_net")
-    private static native int nativeJNIOnLoadNet(JNIJavaVM vm, VoidPointer str);
-
     @Override
     public void initialize(NativeLibrary lib) {
         String name = getOnLoadName(lib.getCanonicalIdentifier(), lib.isBuiltin());
-
-        /*
-         * Native "net", "java", "zip" libraries are statically linked, and can have an 'OnLoad_*'
-         * function to pre-initialize there state. But, only "net" library OnLoad function is not
-         * trivial and probes network protocol version. For statically linked libraries, dynamic
-         * symbol lookup can't be used, so 'JNI_OnLoad_net' library function should be called
-         * explicitly.
-         */
-        if (name.equals("JNI_OnLoad_net")) {
-            int expected = nativeJNIOnLoadNet(JNIFunctionTables.singleton().getGlobalJavaVM(), WordFactory.nullPointer());
-            checkSupportedJNIVersion(lib, expected);
-        } else {
-            PointerBase symbol = lib.findSymbol(name);
-            if (symbol.isNonNull()) {
-                JNIOnLoadFunctionPointer onLoad = (JNIOnLoadFunctionPointer) symbol;
-                int expected = onLoad.invoke(JNIFunctionTables.singleton().getGlobalJavaVM(), WordFactory.nullPointer());
-                checkSupportedJNIVersion(lib, expected);
+        PointerBase symbol = lib.findSymbol(name);
+        if (symbol.isNonNull()) {
+            JNIOnLoadFunctionPointer onLoad = (JNIOnLoadFunctionPointer) symbol;
+            int expected = onLoad.invoke(JNIFunctionTables.singleton().getGlobalJavaVM(), WordFactory.nullPointer());
+            if (expected != JNI_VERSION_1_8() && expected != JNI_VERSION_1_6() && expected != JNI_VERSION_1_4() && expected != JNI_VERSION_1_2() && expected != JNI_VERSION_1_1()) {
+                String message = "Unsupported JNI version 0x" + Integer.toHexString(expected) + ", required by " + lib.getCanonicalIdentifier();
+                throw new UnsatisfiedLinkError(message);
             }
-        }
-    }
-
-    private static void checkSupportedJNIVersion(NativeLibrary lib, int expected) {
-        if (expected != JNI_VERSION_1_8() && expected != JNI_VERSION_1_6() && expected != JNI_VERSION_1_4() && expected != JNI_VERSION_1_2() && expected != JNI_VERSION_1_1()) {
-            String message = "Unsupported JNI version 0x" + Integer.toHexString(expected) + ", required by " + lib.getCanonicalIdentifier();
-            throw new UnsatisfiedLinkError(message);
         }
     }
 }

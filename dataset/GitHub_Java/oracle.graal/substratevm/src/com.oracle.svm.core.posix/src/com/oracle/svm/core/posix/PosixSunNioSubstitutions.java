@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,8 +27,6 @@ import java.io.IOException;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CIntPointer;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Substitute;
@@ -45,8 +41,7 @@ import com.oracle.svm.core.posix.headers.Unistd;
 public final class PosixSunNioSubstitutions {
 
     /** Translations of jdk/src/solaris/native/sun/nio/ch/PollArrayWrapper.c?v=Java_1.8.0_40_b10. */
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
-    @TargetClass(className = "sun.nio.ch.PollArrayWrapper")
+    @TargetClass(sun.nio.ch.PollArrayWrapper.class)
     static final class Target_sun_nio_ch_PollArrayWrapper {
 
         // 035 #define RESTARTABLE(_cmd, _result) do { \
@@ -128,7 +123,7 @@ public final class PosixSunNioSubstitutions {
             // 045     int remaining = timeout;
             int remaining = timeout;
             // 046     struct timeval t;
-            Time.timeval t = StackValue.get(Time.timeval.class);
+            Time.timeval t = StackValue.get(SizeOf.get(Time.timeval.class));
             // 047     int diff;
             long diff;
             // 048

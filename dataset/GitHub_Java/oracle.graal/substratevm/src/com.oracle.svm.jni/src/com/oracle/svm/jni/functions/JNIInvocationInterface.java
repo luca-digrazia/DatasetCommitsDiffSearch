@@ -251,7 +251,7 @@ final class JNIInvocationInterface {
                     env.write(WordFactory.nullPointer());
                     CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_EVERSION());
                 }
-                if (!CEntryPointActions.isCurrentThreadAttachedTo(vm.getFunctions().getIsolate())) {
+                if (!CEntryPointContext.isCurrentThreadAttachedTo(vm.getFunctions().getIsolate())) {
                     env.write(WordFactory.nullPointer());
                     CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_EDETACHED());
                 }

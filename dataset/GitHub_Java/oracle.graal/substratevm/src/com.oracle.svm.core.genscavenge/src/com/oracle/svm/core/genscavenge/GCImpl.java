@@ -301,6 +301,9 @@ public class GCImpl implements GC {
                     scavenge(false);
                 }
             }
+
+            /* Distribute any discovered references to their queues. */
+            DiscoverableReferenceProcessing.Scatterer.distributeReferences();
         }
 
         getAccounting().afterCollection(completeCollection, collectionTimer);
@@ -311,9 +314,6 @@ public class GCImpl implements GC {
         }
 
         postcondition();
-
-        /* Distribute any discovered references to their queues. */
-        DiscoverableReferenceProcessing.Scatterer.distributeReferences();
 
         trace.string("]").newline();
     }
