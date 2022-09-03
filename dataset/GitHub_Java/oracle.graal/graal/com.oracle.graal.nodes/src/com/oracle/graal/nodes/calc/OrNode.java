@@ -25,7 +25,6 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Or;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -34,7 +33,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "|")
-public class OrNode extends BinaryArithmeticNode<Or> {
+public class OrNode extends BinaryArithmeticNode {
 
     public static OrNode create(ValueNode x, ValueNode y) {
         return USE_GENERATED_NODES ? new OrNodeGen(x, y) : new OrNode(x, y);

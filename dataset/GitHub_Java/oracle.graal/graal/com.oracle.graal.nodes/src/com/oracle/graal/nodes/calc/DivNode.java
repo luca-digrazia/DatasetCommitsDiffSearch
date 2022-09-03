@@ -25,7 +25,6 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Div;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -33,7 +32,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "/")
-public class DivNode extends BinaryArithmeticNode<Div> {
+public class DivNode extends BinaryArithmeticNode {
 
     public static DivNode create(ValueNode x, ValueNode y) {
         return USE_GENERATED_NODES ? new DivNodeGen(x, y) : new DivNode(x, y);

@@ -23,8 +23,6 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.Narrow;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.SignExtend;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -35,7 +33,7 @@ import com.oracle.graal.nodes.spi.*;
  * The {@code SignExtendNode} converts an integer to a wider integer using sign extension.
  */
 @NodeInfo
-public class SignExtendNode extends IntegerConvertNode<SignExtend, Narrow> {
+public class SignExtendNode extends IntegerConvertNode {
 
     public static SignExtendNode create(ValueNode input, int resultBits) {
         return USE_GENERATED_NODES ? new SignExtendNodeGen(input, resultBits) : new SignExtendNode(input, resultBits);

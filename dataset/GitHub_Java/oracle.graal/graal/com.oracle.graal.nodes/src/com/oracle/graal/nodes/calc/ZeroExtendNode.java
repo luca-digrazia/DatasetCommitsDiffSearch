@@ -25,8 +25,6 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.Narrow;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.ZeroExtend;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -37,7 +35,7 @@ import com.oracle.graal.nodes.spi.*;
  * The {@code ZeroExtendNode} converts an integer to a wider integer using zero extension.
  */
 @NodeInfo
-public class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow> {
+public class ZeroExtendNode extends IntegerConvertNode {
 
     public static ZeroExtendNode create(ValueNode input, int resultBits) {
         return USE_GENERATED_NODES ? new ZeroExtendNodeGen(input, resultBits) : new ZeroExtendNode(input, resultBits);
