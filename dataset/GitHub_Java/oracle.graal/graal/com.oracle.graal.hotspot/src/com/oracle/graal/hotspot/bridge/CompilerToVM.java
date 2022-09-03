@@ -282,9 +282,7 @@ public interface CompilerToVM {
 
     String getFileName(HotSpotResolvedJavaType method);
 
-    Class<?> getJavaMirror(long metaspaceKlass);
-
-    void setNodeClass(Class<?> c, NodeClass nodeClass);
+    Object readUnsafeUncompressedPointer(Object o, long displacement);
 
     long readUnsafeKlassPointer(Object o);
 
@@ -330,7 +328,7 @@ public interface CompilerToVM {
     /**
      * Fetch the time stamp used for printing inside hotspot. It's relative to VM start to that all
      * events can be ordered.
-     *
+     * 
      * @return milliseconds since VM start
      */
     long getTimeStamp();

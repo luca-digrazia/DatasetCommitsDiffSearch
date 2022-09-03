@@ -25,14 +25,14 @@ package com.oracle.graal.hotspot;
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.bridge.VMToCompilerImpl.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
-import static com.oracle.graal.phases.common.inlining.InliningUtil.*;
+import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.phases.common.InliningUtil.*;
 
 import java.io.*;
 import java.lang.management.*;
+import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
@@ -40,17 +40,12 @@ import java.util.concurrent.atomic.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.baseline.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.bridge.*;
-import com.oracle.graal.hotspot.events.*;
-import com.oracle.graal.hotspot.events.EventProvider.CompilationEvent;
-import com.oracle.graal.hotspot.events.EventProvider.CompilerFailureEvent;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.java.*;
@@ -122,23 +117,11 @@ public class CompilationTask implements Runnable, Comparable<Object> {
      */
     private final com.sun.management.ThreadMXBean threadMXBean = (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
 
-    /**
-     * The address of the native CompileTask associated with this compilation. If 0L, then this
-     * compilation is being managed by a Graal compilation queue otherwise its managed by a native
-     * HotSpot compilation queue.
-     */
-    private final long ctask;
-
-    public CompilationTask(HotSpotBackend backend, HotSpotResolvedJavaMethod method, int entryBCI, long ctask, boolean blocking) {
+    public CompilationTask(HotSpotBackend backend, HotSpotResolvedJavaMethod method, int entryBCI, boolean blocking) {
         this.backend = backend;
         this.method = method;
         this.entryBCI = entryBCI;
-        if (ctask == 0L) {
-            this.id = method.allocateCompileId(entryBCI);
-        } else {
-            this.id = unsafe.getInt(ctask + backend.getRuntime().getConfig().compileTaskCompileIdOffset);
-        }
-        this.ctask = ctask;
+        this.id = method.allocateCompileId(entryBCI);
         this.blocking = blocking;
         this.taskId = uniqueTaskIds.incrementAndGet();
         this.status = new AtomicReference<>(CompilationStatus.Queued);
@@ -148,11 +131,6 @@ public class CompilationTask implements Runnable, Comparable<Object> {
         return method;
     }
 
-    /**
-     * Returns the compilation id of this task.
-     *
-     * @return compile id
-     */
     public int getId() {
         return id;
     }
@@ -246,16 +224,12 @@ public class CompilationTask implements Runnable, Comparable<Object> {
         long previousInlinedBytecodes = InlinedBytecodes.getCurrentValue();
         long previousCompilationTime = CompilationTime.getCurrentValue();
         HotSpotInstalledCode installedCode = null;
-        final boolean isOSR = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
-
-        // Log a compilation event.
-        EventProvider eventProvider = Graal.getRequiredCapability(EventProvider.class);
-        CompilationEvent compilationEvent = eventProvider.newCompilationEvent();
 
         try (TimerCloseable a = CompilationTime.start()) {
             if (!tryToChangeStatus(CompilationStatus.Queued, CompilationStatus.Running)) {
                 return;
             }
+            boolean isOSR = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
 
             // If there is already compiled code for this method on our level we simply return.
             // Graal compiles are always at the highest compile level, even in non-tiered mode so we
@@ -279,8 +253,6 @@ public class CompilationTask implements Runnable, Comparable<Object> {
             final long allocatedBytesBefore = threadMXBean.getThreadAllocatedBytes(threadId);
 
             try (Scope s = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true))) {
-                // Begin the compilation event.
-                compilationEvent.begin();
 
                 if (UseBaselineCompiler.getValue() == true) {
                     HotSpotProviders providers = backend.getProviders();
@@ -322,9 +294,6 @@ public class CompilationTask implements Runnable, Comparable<Object> {
             } catch (Throwable e) {
                 throw Debug.handle(e);
             } finally {
-                // End the compilation event.
-                compilationEvent.end();
-
                 filter.remove();
                 final boolean printAfterCompilation = PrintAfterCompilation.getValue() && !TTY.isSuppressed();
 
@@ -343,7 +312,7 @@ public class CompilationTask implements Runnable, Comparable<Object> {
             }
 
             try (TimerCloseable b = CodeInstallationTime.start()) {
-                installedCode = (HotSpotInstalledCode) installMethod(result);
+                installedCode = installMethod(result);
                 if (!isOSR) {
                     ProfilingInfo profile = method.getProfilingInfo();
                     profile.setCompilerIRSize(StructuredGraph.class, graph.getNodeCount());
@@ -364,42 +333,17 @@ public class CompilationTask implements Runnable, Comparable<Object> {
             if (PrintStackTraceOnException.getValue() || ExitVMOnException.getValue()) {
                 t.printStackTrace(TTY.cachedOut);
             }
-
-            // Log a failure event.
-            CompilerFailureEvent event = eventProvider.newCompilerFailureEvent();
-            if (event.shouldWrite()) {
-                event.setCompileId(getId());
-                event.setMessage(t.getMessage());
-                event.commit();
-            }
-
             if (ExitVMOnException.getValue()) {
                 System.exit(-1);
             }
         } finally {
-            final int processedBytes = (int) (InlinedBytecodes.getCurrentValue() - previousInlinedBytecodes);
-
-            // Log a compilation event.
-            if (compilationEvent.shouldWrite()) {
-                compilationEvent.setMethod(MetaUtil.format("%H.%n(%p)", method));
-                compilationEvent.setCompileId(getId());
-                compilationEvent.setCompileLevel(config.compilationLevelFullOptimization);
-                compilationEvent.setSucceeded(true);
-                compilationEvent.setIsOsr(isOSR);
-                compilationEvent.setCodeSize(installedCode.getSize());
-                compilationEvent.setInlinedBytes(processedBytes);
-                compilationEvent.commit();
-            }
-
-            if (ctask != 0L) {
-                unsafe.putInt(ctask + config.compileTaskNumInlinedBytecodesOffset, processedBytes);
-            }
             if ((config.ciTime || config.ciTimeEach || PrintCompRate.getValue() != 0) && installedCode != null) {
+                long processedBytes = InlinedBytecodes.getCurrentValue() - previousInlinedBytecodes;
                 long time = CompilationTime.getCurrentValue() - previousCompilationTime;
                 TimeUnit timeUnit = CompilationTime.getTimeUnit();
                 long timeUnitsPerSecond = timeUnit.convert(1, TimeUnit.SECONDS);
                 CompilerToVM c2vm = backend.getRuntime().getCompilerToVM();
-                c2vm.notifyCompilationStatistics(id, method, entryBCI != INVOCATION_ENTRY_BCI, processedBytes, time, timeUnitsPerSecond, installedCode);
+                c2vm.notifyCompilationStatistics(id, method, entryBCI != INVOCATION_ENTRY_BCI, (int) processedBytes, time, timeUnitsPerSecond, installedCode);
             }
 
             if (clearFromCompilationQueue) {
@@ -419,6 +363,7 @@ public class CompilationTask implements Runnable, Comparable<Object> {
      */
     private void printCompilation() {
         final boolean isOSR = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
+        final int mod = method.getModifiers();
         String compilerName = "";
         if (HotSpotCIPrintCompilerName.getValue()) {
             compilerName = "Graal:";
@@ -435,16 +380,16 @@ public class CompilationTask implements Runnable, Comparable<Object> {
             compLevelString = "";
         }
         boolean hasExceptionHandlers = method.getExceptionHandlers().length > 0;
-        TTY.println(String.format("%s%7d %4d %c%c%c%c%c %s      %s %s(%d bytes)", compilerName, backend.getRuntime().compilerToVm.getTimeStamp(), id, isOSR ? '%' : ' ', method.isSynchronized() ? 's'
-                        : ' ', hasExceptionHandlers ? '!' : ' ', blocking ? 'b' : ' ', method.isNative() ? 'n' : ' ', compLevelString, MetaUtil.format("%H::%n(%p)", method), isOSR ? "@ " + entryBCI +
-                        " " : "", method.getCodeSize()));
+        TTY.println(String.format("%s%7d %4d %c%c%c%c%c %s      %s %s(%d bytes)", compilerName, backend.getRuntime().compilerToVm.getTimeStamp(), id, isOSR ? '%' : ' ',
+                        Modifier.isSynchronized(mod) ? 's' : ' ', hasExceptionHandlers ? '!' : ' ', blocking ? 'b' : ' ', Modifier.isNative(mod) ? 'n' : ' ', compLevelString,
+                        MetaUtil.format("%H::%n(%p)", method), isOSR ? "@ " + entryBCI + " " : "", method.getCodeSize()));
     }
 
-    private InstalledCode installMethod(final CompilationResult compResult) {
+    private HotSpotInstalledCode installMethod(final CompilationResult compResult) {
         final HotSpotCodeCacheProvider codeCache = backend.getProviders().getCodeCache();
-        InstalledCode installedCode = null;
+        HotSpotInstalledCode installedCode = null;
         try (Scope s = Debug.scope("CodeInstall", new DebugDumpScope(String.valueOf(id), true), codeCache, method)) {
-            installedCode = codeCache.installMethod(method, compResult, ctask);
+            installedCode = codeCache.installMethod(method, compResult);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
