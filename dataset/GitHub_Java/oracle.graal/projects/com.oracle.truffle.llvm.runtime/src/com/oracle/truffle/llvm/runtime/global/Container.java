@@ -271,11 +271,11 @@ abstract class Container {
     }
 
     static final class NativeContainer extends Container {
-        private final long address;
+        private final LLVMAddress address;
 
         NativeContainer(Type type, LLVMAddress address) {
             super(type);
-            this.address = address.getVal();
+            this.address = address;
         }
 
         @Override
@@ -285,7 +285,7 @@ abstract class Container {
 
         @Override
         LLVMAddress getNativeLocation(LLVMGlobalVariable global) {
-            return LLVMAddress.fromLong(address);
+            return address;
         }
 
         @Override
@@ -342,7 +342,7 @@ abstract class Container {
 
         @Override
         void putFunction(LLVMGlobalVariable global, LLVMFunction value) {
-            LLVMMemory.putAddress(address, value.getFunctionPointer());
+            LLVMMemory.putAddress(address, value.getFunctionIndex());
         }
 
         @Override
@@ -710,7 +710,7 @@ abstract class Container {
             CompilerAsserts.neverPartOfCompilation();
             assert type instanceof PointerType;
             if (managedValue instanceof LLVMFunction) {
-                LLVMMemory.putAddress(address, ((LLVMFunction) managedValue).getFunctionPointer());
+                LLVMMemory.putAddress(address, ((LLVMFunction) managedValue).getFunctionIndex());
             } else if (managedValue instanceof LLVMAddress) {
                 LLVMMemory.putAddress(address, (LLVMAddress) managedValue);
             } else if (managedValue instanceof LLVMGlobalVariable) {
@@ -904,7 +904,7 @@ abstract class Container {
             CompilerAsserts.neverPartOfCompilation();
             assert type instanceof PointerType;
             if (managedValue instanceof LLVMFunction) {
-                LLVMMemory.putAddress(address, ((LLVMFunction) managedValue).getFunctionPointer());
+                LLVMMemory.putAddress(address, ((LLVMFunction) managedValue).getFunctionIndex());
             } else if (managedValue instanceof LLVMAddress) {
                 LLVMMemory.putAddress(address, (LLVMAddress) managedValue);
             } else if (managedValue instanceof LLVMGlobalVariable) {
