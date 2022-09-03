@@ -173,7 +173,6 @@ public class StructuredGraph extends Graph {
 
     public void replaceFixedWithFixed(FixedWithNextNode node, FixedWithNextNode replacement) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
-        replacement.setProbability(node.probability());
         FixedNode next = node.next();
         node.setNext(null);
         replacement.setNext(next);
@@ -269,7 +268,6 @@ public class StructuredGraph extends Graph {
     public void addAfterFixed(FixedWithNextNode node, FixedWithNextNode newNode) {
         assert node != null && newNode != null && node.isAlive() && newNode.isAlive() : "cannot add " + newNode + " after " + node;
         assert newNode.next() == null;
-        newNode.setProbability(node.probability());
         FixedNode next = node.next();
         node.setNext(newNode);
         newNode.setNext(next);
@@ -279,43 +277,9 @@ public class StructuredGraph extends Graph {
         assert node != null && newNode != null && node.isAlive() && newNode.isAlive() : "cannot add " + newNode + " before " + node;
         assert node.predecessor() != null && node.predecessor() instanceof FixedWithNextNode : "cannot add " + newNode + " before " + node;
         assert newNode.next() == null;
-        newNode.setProbability(node.probability());
         FixedWithNextNode pred = (FixedWithNextNode) node.predecessor();
         pred.setNext(newNode);
         newNode.setNext(node);
     }
 
-    public void reduceDegenerateLoopBegin(LoopBeginNode begin) {
-        assert begin.loopEnds().count() == 0 : "Loop begin still has backedges";
-        if (begin.forwardEndCount() == 1) { // bypass merge and remove
-            reduceTrivialMerge(begin);
-        } else { // convert to merge
-            MergeNode merge = this.add(new MergeNode());
-            this.replaceFixedWithFixed(begin, merge);
-        }
-    }
-
-    public void reduceTrivialMerge(MergeNode merge) {
-        assert merge.forwardEndCount() == 1;
-        assert !(merge instanceof LoopBeginNode) || ((LoopBeginNode) merge).loopEnds().count() == 0;
-        for (PhiNode phi : merge.phis().snapshot()) {
-            assert phi.valueCount() == 1;
-            ValueNode singleValue = phi.valueAt(0);
-            phi.replaceAtUsages(singleValue);
-            phi.safeDelete();
-        }
-        EndNode singleEnd = merge.forwardEndAt(0);
-        FixedNode sux = merge.next();
-        FrameState stateAfter = merge.stateAfter();
-        merge.safeDelete();
-        if (stateAfter != null && stateAfter.usages().count() == 0) {
-            stateAfter.safeDelete();
-        }
-        if (sux == null) {
-            singleEnd.replaceAtPredecessors(null);
-            singleEnd.safeDelete();
-        } else {
-            singleEnd.replaceAndDelete(sux);
-        }
-    }
 }
