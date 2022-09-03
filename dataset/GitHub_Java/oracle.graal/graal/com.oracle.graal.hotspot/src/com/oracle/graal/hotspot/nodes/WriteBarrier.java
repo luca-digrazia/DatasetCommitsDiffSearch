@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,46 +22,29 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.graph.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public abstract class WriteBarrier extends FixedWithNextNode implements Lowerable, IterableNodeType {
+public abstract class WriteBarrier extends FixedWithNextNode {
 
-    @Input private ValueNode object;
-    @Input private ValueNode value;
-    @Input private LocationNode location;
-    private final boolean precise;
-
-    public WriteBarrier(ValueNode object, ValueNode value, LocationNode location, boolean precise) {
+    public WriteBarrier() {
         super(StampFactory.forVoid());
-        this.object = object;
-        this.value = value;
-        this.location = location;
-        this.precise = precise;
     }
 
-    public ValueNode getValue() {
-        return value;
-    }
+    protected void generateBarrier(Value adr, LIRGeneratorTool gen) {
+        HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
+        Value base = gen.emitUShr(adr, Constant.forInt(config.cardtableShift));
 
-    public ValueNode getObject() {
-        return object;
-    }
-
-    public LocationNode getLocation() {
-        return location;
-    }
-
-    public boolean usePrecise() {
-        return precise;
-    }
-
-    @Override
-    public void lower(LoweringTool generator) {
-        assert graph().getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA;
-        generator.getRuntime().lower(this, generator);
+        long startAddress = config.cardtableStartAddress;
+        int displacement = 0;
+        if (((int) startAddress) == startAddress) {
+            displacement = (int) startAddress;
+        } else {
+            base = gen.emitAdd(base, Constant.forLong(config.cardtableStartAddress));
+        }
+        gen.emitStore(Kind.Boolean, base, displacement, Value.ILLEGAL, 0, Constant.FALSE, false);
     }
 }

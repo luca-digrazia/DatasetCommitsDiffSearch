@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * Writes a given {@linkplain #value() value} a {@linkplain AccessNode memory location}.
  */
-public final class WriteNode extends AccessNode implements StateSplit, LIRLowerable, MemoryCheckpoint {
+public final class WriteNode extends AccessNode implements StateSplit, LIRLowerable {
 
     @Input private ValueNode value;
     @Input(notDataflow = true) private FrameState stateAfter;
@@ -64,9 +64,4 @@ public final class WriteNode extends AccessNode implements StateSplit, LIRLowera
 
     @NodeIntrinsic
     public static native void writeMemory(Object object, Object value, Object location);
-
-    @Override
-    public Object[] getLocationIdentities() {
-        return new Object[]{location().locationIdentity()};
-    }
 }

@@ -888,7 +888,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         Value expected = loadNonConst(operand(node.expected()));
         Variable newValue = load(operand(node.newValue()));
 
-        AMD64Address address;
+        Address address;
         int displacement = node.displacement();
         Value index = operand(node.offset());
         if (isConstant(index) && NumUtil.isInt(asConstant(index).asLong() + displacement)) {

@@ -22,29 +22,29 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
+/**
+ * A node that loads the {@link Thread} object for the current thread.
+ */
 public final class CurrentThread extends FloatingNode implements LIRLowerable {
 
-    private int threadObjectOffset;
-
-    public CurrentThread(int threadObjectOffset) {
-        super(StampFactory.forKind(CiKind.Object));
-        this.threadObjectOffset = threadObjectOffset;
+    public CurrentThread() {
+        super(StampFactory.declaredNonNull(HotSpotGraalRuntime.getInstance().getRuntime().lookupJavaType(Thread.class)));
     }
 
     @Override
-    public void generate(LIRGeneratorTool generator) {
-        generator.setResult(this, generator.emitLoad(new CiAddress(CiKind.Object, AMD64.r15.asValue(generator.target().wordKind), threadObjectOffset), false));
+    public void generate(LIRGeneratorTool gen) {
+        HotSpotGraalRuntime runtime = HotSpotGraalRuntime.getInstance();
+        Register thread = runtime.getRuntime().threadRegister();
+        gen.setResult(this, gen.emitLoad(Kind.Object, thread.asValue(gen.target().wordKind), runtime.getConfig().threadObjectOffset, Value.ILLEGAL, 0, false));
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Object get(int threadObjectOffset) {
-        throw new UnsupportedOperationException();
-    }
+    public static native Thread get();
 }
