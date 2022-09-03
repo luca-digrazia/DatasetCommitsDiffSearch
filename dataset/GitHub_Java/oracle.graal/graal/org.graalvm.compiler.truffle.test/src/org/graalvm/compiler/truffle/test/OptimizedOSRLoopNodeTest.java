@@ -22,9 +22,6 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInvalidationReprofileCount;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleMinInvokeThreshold;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleOSRCompilationThreshold;
 import static org.junit.Assert.assertSame;
 
 import java.util.concurrent.ExecutionException;
@@ -68,8 +65,8 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
 
     private static final GraalTruffleRuntime runtime = (GraalTruffleRuntime) Truffle.getRuntime();
 
-    private static final int OSR_THRESHOLD = TruffleCompilerOptions.getValue(TruffleOSRCompilationThreshold);
-    private static final int OSR_INVALIDATION_REPROFILE = TruffleCompilerOptions.getValue(TruffleInvalidationReprofileCount);
+    private static final int OSR_THRESHOLD = TruffleCompilerOptions.TruffleOSRCompilationThreshold.getValue();
+    private static final int OSR_INVALIDATION_REPROFILE = TruffleCompilerOptions.TruffleInvalidationReprofileCount.getValue();
 
     @DataPoint public static final OSRLoopFactory CONFIGURED = (repeating, readFrameSlots,
                     writtenFrameSlots) -> OptimizedOSRLoopNode.createOSRLoop(repeating, OSR_THRESHOLD,
@@ -101,41 +98,6 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         target.call(2);
         assertCompiled(rootNode.getOSRTarget());
         Assert.assertTrue(rootNode.wasRepeatingCalledCompiled());
-    }
-
-    /*
-     * Test that calling CompilerDirectives.transferToInterpreter does not invalidate the target.
-     */
-    @Test
-    public void testTransferToInterpreter() {
-        OSRLoopFactory factory = CONFIGURED;
-
-        class TransferToInterpreterTestRepeatingNode extends TestRepeatingNode {
-            @Override
-            public boolean executeRepeating(VirtualFrame frame) {
-                try {
-                    if (CompilerDirectives.inCompiledCode()) {
-                        CompilerDirectives.transferToInterpreter();
-                    }
-                    int counter = frame.getInt(param1);
-                    frame.setInt(param1, counter - 1);
-                    return counter != 0;
-                } catch (FrameSlotTypeException e) {
-                    return false;
-                }
-            }
-        }
-
-        TestRootNode rootNode = new TestRootNode(factory, new TransferToInterpreterTestRepeatingNode());
-        CallTarget target = runtime.createCallTarget(rootNode);
-        target.call(OSR_THRESHOLD + 1);
-        try {
-            // Invalidation is asynchronous.
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        Assert.assertNotNull(rootNode.getOSRTarget());
     }
 
     /*
@@ -280,7 +242,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         assertCompiled(osrTarget);
 
         int i;
-        for (i = 0; i < TruffleCompilerOptions.getValue(TruffleMinInvokeThreshold) - 2; i++) {
+        for (i = 0; i < TruffleCompilerOptions.TruffleMinInvokeThreshold.getValue() - 2; i++) {
             target.call(0);
             assertNotCompiled(target);
             assertCompiled(rootNode.getOSRTarget());
@@ -320,7 +282,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
         RootCallTarget target = runtime.createCallTarget(rootNode);
         int i;
-        for (i = 0; i < TruffleCompilerOptions.getValue(TruffleMinInvokeThreshold); i++) {
+        for (i = 0; i < TruffleCompilerOptions.TruffleMinInvokeThreshold.getValue(); i++) {
             target.call(0);
             assertNotCompiled(rootNode.getOSRTarget());
         }
@@ -336,7 +298,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
         OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
         int osrThreshold = OSR_THRESHOLD;
-        int truffleMinInvokes = TruffleCompilerOptions.getValue(TruffleMinInvokeThreshold);
+        int truffleMinInvokes = TruffleCompilerOptions.TruffleMinInvokeThreshold.getValue();
 
         int i;
         int invokesleft = osrThreshold;
