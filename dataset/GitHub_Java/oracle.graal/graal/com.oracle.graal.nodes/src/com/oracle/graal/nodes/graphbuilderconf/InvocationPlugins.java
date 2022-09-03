@@ -35,17 +35,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.MetaUtil;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import sun.misc.Launcher;
+
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.api.replacements.MethodSubstitutionRegistry;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin.Receiver;
-
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.MetaUtil;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Manages a set of {@link InvocationPlugin}s.
@@ -62,11 +63,8 @@ public class InvocationPlugins {
         }
 
         @Override
-        public ValueNode get(boolean performNullCheck) {
+        public ValueNode get() {
             assert args != null : "Cannot get the receiver of a static method";
-            if (!performNullCheck) {
-                return args[0];
-            }
             if (value == null) {
                 value = parser.nullCheckedValue(args[0]);
                 if (value != args[0]) {
@@ -103,7 +101,6 @@ public class InvocationPlugins {
             this.name = name;
         }
 
-        @Override
         public String getTypeName() {
             return name;
         }
@@ -127,7 +124,8 @@ public class InvocationPlugins {
     }
 
     /**
-     * Utility for {@linkplain InvocationPlugins#register(InvocationPlugin, Class, String, Class...)
+     * Utility for
+     * {@linkplain InvocationPlugins#register(InvocationPlugin, Class, String, Class...)
      * registration} of invocation plugins.
      */
     public static class Registration implements MethodSubstitutionRegistry {
@@ -136,7 +134,6 @@ public class InvocationPlugins {
         private final Type declaringType;
         private boolean allowOverwrite;
 
-        @Override
         public Class<?> getReceiverType() {
             return Receiver.class;
         }
@@ -295,7 +292,6 @@ public class InvocationPlugins {
          *            is non-static. Upon returning, element 0 will have been rewritten to
          *            {@code declaringClass}
          */
-        @Override
         public void registerMethodSubstitution(Class<?> substituteDeclaringClass, String name, Type... argumentTypes) {
             registerMethodSubstitution(substituteDeclaringClass, name, name, argumentTypes);
         }
@@ -311,7 +307,6 @@ public class InvocationPlugins {
          *            is non-static. Upon returning, element 0 will have been rewritten to
          *            {@code declaringClass}
          */
-        @Override
         public void registerMethodSubstitution(Class<?> substituteDeclaringClass, String name, String substituteName, Type... argumentTypes) {
             MethodSubstitutionPlugin plugin = new MethodSubstitutionPlugin(substituteDeclaringClass, substituteName, argumentTypes);
             plugins.register(plugin, false, allowOverwrite, declaringType, name, argumentTypes);
@@ -789,10 +784,9 @@ public class InvocationPlugins {
      */
     public static Class<?> resolveClass(String className, boolean optional) {
         try {
-            // Need to use the system class loader to handle classes
-            // loaded by the application class loader which is not
-            // delegated to by the JVMCI class loader.
-            ClassLoader cl = ClassLoader.getSystemClassLoader();
+            // Need to use launcher class path to handle classes
+            // that are not on the boot class path
+            ClassLoader cl = Launcher.getLauncher().getClassLoader();
             return Class.forName(className, false, cl);
         } catch (ClassNotFoundException e) {
             if (optional) {

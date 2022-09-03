@@ -22,42 +22,26 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.lang.reflect.*;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.replacements.*;
+import com.oracle.graal.api.replacements.SnippetReflectionProvider;
+import com.oracle.graal.hotspot.word.HotSpotOperation;
+import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.replacements.ReplacementsImpl;
 
 /**
- * Filters certain method substitutions based on whether there is underlying hardware support for them.
+ * Filters certain method substitutions based on whether there is underlying hardware support for
+ * them.
  */
 public class HotSpotReplacementsImpl extends ReplacementsImpl {
 
-    private final HotSpotVMConfig config;
-
-    public HotSpotReplacementsImpl(HotSpotRuntime runtime, Assumptions assumptions, TargetDescription target) {
-        super(runtime, assumptions, target);
-        this.config = runtime.config;
+    public HotSpotReplacementsImpl(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
+        super(providers, snippetReflection, target);
     }
 
     @Override
-    protected void registerMethodSubstitution(Member originalMethod, Method substituteMethod) {
-        if (substituteMethod.getDeclaringClass() == IntegerSubstitutions.class || substituteMethod.getDeclaringClass() == LongSubstitutions.class) {
-            if (substituteMethod.getName().equals("bitCount")) {
-                if (!config.usePopCountInstruction) {
-                    return;
-                }
-            }
-        } else if (substituteMethod.getDeclaringClass() == AESCryptSubstitutions.class || substituteMethod.getDeclaringClass() == CipherBlockChainingSubstitutions.class) {
-            if (!config.useAESIntrinsics) {
-                return;
-            }
-            assert config.aescryptEncryptBlockStub != 0L;
-            assert config.aescryptDecryptBlockStub != 0L;
-            assert config.cipherBlockChainingEncryptAESCryptStub != 0L;
-            assert config.cipherBlockChainingDecryptAESCryptStub != 0L;
-        }
-        super.registerMethodSubstitution(originalMethod, substituteMethod);
+    protected boolean hasGenericInvocationPluginAnnotation(ResolvedJavaMethod method) {
+        return method.getAnnotation(HotSpotOperation.class) != null || super.hasGenericInvocationPluginAnnotation(method);
     }
 }

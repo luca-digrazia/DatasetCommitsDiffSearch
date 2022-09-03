@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,42 @@
  */
 package com.oracle.graal.replacements.test;
 
-import org.junit.*;
+import java.util.function.Function;
 
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.runtime.*;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
+import org.junit.Test;
+
+import com.oracle.graal.api.replacements.ClassSubstitution;
+import com.oracle.graal.api.replacements.MethodSubstitution;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.graph.Node.ConstantNodeParameter;
+import com.oracle.graal.graph.Node.NodeIntrinsic;
+import com.oracle.graal.nodes.PiNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
+
+/**
+ * Tests for expected behavior when parsing snippets and intrinsics.
+ */
 public class ReplacementsParseTest extends GraalCompilerTest {
+
+    @Override
+    protected Plugins getDefaultGraphBuilderPlugins() {
+        Plugins ret = super.getDefaultGraphBuilderPlugins();
+        // manually register generated factory, jvmci service providers don't work from unit tests
+        new PluginFactory_ReplacementsParseTest().registerPlugins(ret.getInvocationPlugins(), null);
+        return ret;
+    }
+
+    private static final Object THROW_EXCEPTION_MARKER = new Object() {
+        @Override
+        public String toString() {
+            return "THROW_EXCEPTION_MARKER";
+        }
+    };
 
     static class TestMethods {
         static double next(double v) {
@@ -45,36 +72,72 @@ public class ReplacementsParseTest extends GraalCompilerTest {
             return Math.nextAfter(x, d);
         }
 
+        static String stringize(Object obj) {
+            String res = String.valueOf(obj);
+            if (res.equals(THROW_EXCEPTION_MARKER.toString())) {
+                // Tests exception throwing from partial intrinsification
+                throw new RuntimeException("ex: " + obj);
+            }
+            return res;
+        }
+
+        static String identity(String s) {
+            return s;
+        }
     }
 
     @ClassSubstitution(TestMethods.class)
     static class TestMethodsSubstitutions {
 
         @MethodSubstitution(isStatic = true)
-        static double next(double v) {
-            return TestMethods.next(v);
-        }
-
-        @MethodSubstitution(isStatic = true)
-        static double next2(double v) {
-            return next2(v);
-        }
-
-        @MethodSubstitution(isStatic = true)
         static double nextAfter(double x, double d) {
             double xx = (x == -0.0 ? 0.0 : x);
             return Math.nextAfter(xx, d);
         }
+
+        /**
+         * Tests partial intrinsification.
+         */
+        @MethodSubstitution
+        static String stringize(Object obj) {
+            if (obj != null && obj.getClass() == String.class) {
+                return asNonNullString(obj);
+            } else {
+                // A recursive call denotes exiting/deoptimizing
+                // out of the partial intrinsification to the
+                // slow/uncommon case.
+                return stringize(obj);
+            }
+        }
+
+        public static String asNonNullString(Object object) {
+            return asNonNullStringIntrinsic(object, String.class, true, true);
+        }
+
+        @NodeIntrinsic(PiNode.class)
+        private static native String asNonNullStringIntrinsic(Object object, @ConstantNodeParameter Class<?> toType, @ConstantNodeParameter boolean exactType, @ConstantNodeParameter boolean nonNull);
+
+        /**
+         * Tests that non-capturing lambdas are folded away.
+         */
+        @MethodSubstitution
+        static String identity(String value) {
+            return apply(s -> s, value);
+        }
+
+        private static String apply(Function<String, String> f, String value) {
+            return f.apply(value);
+        }
     }
 
-    private static boolean substitutionsInstalled;
-
-    public ReplacementsParseTest() {
-        if (!substitutionsInstalled) {
-            Replacements replacements = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders().getReplacements();
-            replacements.registerSubstitutions(TestMethods.class, TestMethodsSubstitutions.class);
-            substitutionsInstalled = true;
-        }
+    @Override
+    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
+        InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
+        Registration r = new Registration(invocationPlugins, TestMethods.class);
+        r.registerMethodSubstitution(TestMethodsSubstitutions.class, "nextAfter", double.class, double.class);
+        r.registerMethodSubstitution(TestMethodsSubstitutions.class, "stringize", Object.class);
+        r.registerMethodSubstitution(TestMethodsSubstitutions.class, "identity", String.class);
+        return super.editGraphBuilderConfiguration(conf);
     }
 
     /**
@@ -121,5 +184,34 @@ public class ReplacementsParseTest extends GraalCompilerTest {
             double direction = (i & 1) == 0 ? Double.POSITIVE_INFINITY : -Double.NEGATIVE_INFINITY;
             outArray[i] = TestMethods.nextAfter(inArray[i], direction);
         }
+    }
+
+    @Test
+    public void testCallStringize() {
+        test("callStringize", "a string");
+        test("callStringize", THROW_EXCEPTION_MARKER);
+        test("callStringize", Boolean.TRUE);
+    }
+
+    public static Object callStringize(Object obj) {
+        return TestMethods.stringize(obj);
+    }
+
+    @Test
+    public void testRootCompileStringize() {
+        ResolvedJavaMethod method = getResolvedJavaMethod(TestMethods.class, "stringize");
+        test(method, null, "a string");
+        test(method, null, Boolean.TRUE);
+        test(method, null, THROW_EXCEPTION_MARKER);
+    }
+
+    @Test
+    public void testLambda() {
+        test("callLambda", (String) null);
+        test("callLambda", "a string");
+    }
+
+    public static String callLambda(String value) {
+        return TestMethods.identity(value);
     }
 }

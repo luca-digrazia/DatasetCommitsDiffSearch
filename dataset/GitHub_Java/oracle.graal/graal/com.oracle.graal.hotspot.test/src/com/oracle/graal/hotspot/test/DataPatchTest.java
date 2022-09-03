@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,17 +23,21 @@
 
 package com.oracle.graal.hotspot.test;
 
-import org.junit.*;
+import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
 
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.nodes.*;
+import org.junit.Assume;
+import org.junit.Test;
+
+import com.oracle.graal.api.directives.GraalDirectives;
+import com.oracle.graal.api.replacements.ClassSubstitution;
+import com.oracle.graal.api.replacements.MethodSubstitution;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.hotspot.nodes.CompressionNode;
 import com.oracle.graal.hotspot.nodes.CompressionNode.CompressionOp;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
 
 public class DataPatchTest extends GraalCompilerTest {
 
@@ -69,15 +73,14 @@ public class DataPatchTest extends GraalCompilerTest {
         test("narrowOopSnippet");
     }
 
-    private static final HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
-    private static boolean initReplacements = false;
+    private static final HotSpotVMConfig config = config();
 
-    @Before
-    public void initReplacements() {
-        if (!initReplacements) {
-            getReplacements().registerSubstitutions(DataPatchTest.class, DataPatchTestSubstitutions.class);
-            initReplacements = true;
-        }
+    @Override
+    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
+        InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
+        Registration r = new Registration(invocationPlugins, DataPatchTest.class);
+        r.registerMethodSubstitution(DataPatchTestSubstitutions.class, "compressUncompress", Object.class);
+        return super.editGraphBuilderConfiguration(conf);
     }
 
     @ClassSubstitution(DataPatchTest.class)
@@ -86,30 +89,8 @@ public class DataPatchTest extends GraalCompilerTest {
         @MethodSubstitution
         public static Object compressUncompress(Object obj) {
             Object compressed = CompressionNode.compression(CompressionOp.Compress, obj, config.getOopEncoding());
-            Object proxy = ConstantFoldBarrier.wrap(compressed);
+            Object proxy = GraalDirectives.opaque(compressed);
             return CompressionNode.compression(CompressionOp.Uncompress, proxy, config.getOopEncoding());
         }
-    }
-
-    @NodeInfo
-    private static class ConstantFoldBarrier extends FloatingNode implements LIRLowerable {
-
-        @Input protected ValueNode input;
-
-        public static ConstantFoldBarrier create(ValueNode input) {
-            return new ConstantFoldBarrier(input);
-        }
-
-        protected ConstantFoldBarrier(ValueNode input) {
-            super(input.stamp());
-            this.input = input;
-        }
-
-        public void generate(NodeLIRBuilderTool generator) {
-            generator.setResult(this, generator.operand(input));
-        }
-
-        @NodeIntrinsic
-        public static native Object wrap(Object object);
     }
 }
