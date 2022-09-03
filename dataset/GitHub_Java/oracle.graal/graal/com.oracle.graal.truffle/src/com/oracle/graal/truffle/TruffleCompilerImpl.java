@@ -31,7 +31,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.Assumptions.Assumption;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
@@ -41,7 +40,6 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
@@ -77,8 +75,7 @@ public class TruffleCompilerImpl {
         this.compilationNotify = graalTruffleRuntime.getCompilationNotify();
         this.backend = runtime.getHostBackend();
         Replacements truffleReplacements = graalTruffleRuntime.getReplacements();
-        ConstantReflectionProvider constantReflection = new TruffleConstantReflectionProvider(backend.getProviders().getConstantReflection(), backend.getProviders().getMetaAccess());
-        this.providers = backend.getProviders().copyWith(truffleReplacements).copyWith(constantReflection);
+        this.providers = backend.getProviders().copyWith(truffleReplacements);
         this.suites = backend.getSuites().getDefaultSuites();
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
@@ -86,7 +83,7 @@ public class TruffleCompilerImpl {
         this.config = GraphBuilderConfiguration.getDefault().withSkippedExceptionTypes(skippedExceptionTypes);
         this.truffleCache = new TruffleCacheImpl(providers, eagerConfig, config, TruffleCompilerImpl.Optimizations);
 
-        this.partialEvaluator = new PartialEvaluator(providers, truffleCache, Graal.getRequiredCapability(SnippetReflectionProvider.class));
+        this.partialEvaluator = new PartialEvaluator(providers, truffleCache);
 
         if (Debug.isEnabled()) {
             DebugEnvironment.initialize(System.out);
@@ -123,13 +120,6 @@ public class TruffleCompilerImpl {
 
             if (Thread.currentThread().isInterrupted()) {
                 return;
-            }
-
-            if (!TruffleCompilerOptions.TruffleInlineAcrossTruffleBoundary.getValue()) {
-                // Do not inline across Truffle boundaries.
-                for (MethodCallTargetNode mct : graph.getNodes(MethodCallTargetNode.class)) {
-                    mct.invoke().setUseForInlining(false);
-                }
             }
 
             compilationNotify.notifyCompilationTruffleTierFinished(compilable, graph);
