@@ -61,7 +61,7 @@ public abstract class Launcher {
 
     private Engine tempEngine;
 
-    public enum VMType {
+    enum VMType {
         Native,
         JVM
     }
@@ -135,7 +135,7 @@ public abstract class Launcher {
         }
 
         AbortException(Throwable cause, int exitCode) {
-            super(null, cause);
+            super(cause);
             this.exitCode = exitCode;
         }
 
@@ -888,21 +888,6 @@ public abstract class Launcher {
             boolean polyglot = false;
             List<String> jvmArgs = new ArrayList<>();
             List<String> remainingArgs = new ArrayList<>(args.size());
-
-            // move jvm polyglot options to jvmArgs
-            Iterator<Entry<String, String>> polyglotOptionsIterator = polyglotOptions.entrySet().iterator();
-            while (polyglotOptionsIterator.hasNext()) {
-                Map.Entry<String, String> entry = polyglotOptionsIterator.next();
-                if (entry.getKey().startsWith("jvm.")) {
-                    jvmArgs.add('-' + entry.getKey().substring(4));
-                    if (entry.getValue() != null && !entry.getValue().isEmpty()) {
-                        jvmArgs.add(entry.getValue());
-                    }
-                    vmType = VMType.JVM;
-                    polyglotOptionsIterator.remove();
-                }
-            }
-
             Iterator<String> iterator = args.iterator();
             while (iterator.hasNext()) {
                 String arg = iterator.next();
