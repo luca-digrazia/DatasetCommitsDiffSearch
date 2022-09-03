@@ -52,25 +52,25 @@ public class InstrumentationNode extends DeoptimizingFixedWithNextNode implement
     @OptionalInput protected NodeInputList<ValueNode> weakDependencies;
 
     protected StructuredGraph instrumentationGraph;
-    protected final boolean anchored;
+    protected final int offset;
 
-    public InstrumentationNode(ValueNode target, boolean anchored) {
+    public InstrumentationNode(ValueNode target, int offset) {
         super(TYPE, StampFactory.forVoid());
 
         this.target = target;
-        this.anchored = anchored;
+        this.offset = offset;
         this.weakDependencies = new NodeInputList<>(this);
     }
 
-    public ValueNode getTarget() {
+    public ValueNode target() {
         return target;
     }
 
-    public boolean isAnchored() {
-        return anchored;
+    public int offset() {
+        return offset;
     }
 
-    public StructuredGraph getInstrumentationGraph() {
+    public StructuredGraph instrumentationGraph() {
         return instrumentationGraph;
     }
 
@@ -99,9 +99,7 @@ public class InstrumentationNode extends DeoptimizingFixedWithNextNode implement
                 AccessMonitorNode monitor = (AccessMonitorNode) target;
                 ValueNode alias = tool.getAlias(monitor.object());
                 if (alias instanceof VirtualObjectNode) {
-                    MonitorProxyNode proxy = new MonitorProxyNode(null, monitor.getMonitorId());
-                    tool.addNode(proxy);
-                    tool.replaceFirstInput(target, proxy);
+                    tool.replaceFirstInput(target, graph().addWithoutUnique(new MonitorProxyNode(null, monitor.getMonitorId())));
                 }
             } else if (!(target instanceof VirtualObjectNode)) {
                 ValueNode alias = tool.getAlias(target);

@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.phases.common.instrumentation;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
-
-import java.util.Collections;
 import java.util.Map;
 
 import com.oracle.graal.compiler.common.type.StampPair;
@@ -50,7 +47,6 @@ import com.oracle.graal.nodes.debug.instrumentation.InstrumentationBeginNode;
 import com.oracle.graal.nodes.debug.instrumentation.InstrumentationEndNode;
 import com.oracle.graal.nodes.debug.instrumentation.InstrumentationNode;
 import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.nodes.virtual.EscapeObjectState;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
 import com.oracle.graal.phases.tiers.HighTierContext;
@@ -66,17 +62,12 @@ public class ExtractInstrumentationPhase extends BasePhase<HighTierContext> {
     protected void run(StructuredGraph graph, HighTierContext context) {
         for (InstrumentationBeginNode begin : graph.getNodes().filter(InstrumentationBeginNode.class)) {
             Instrumentation instrumentation = new Instrumentation(begin);
-            if (begin.isAnchored() || begin.getTarget() != null) {
+            if (begin.offset() == 0 || begin.target() != null) {
                 // we create InstrumentationNode when the instrumentation is anchored (when 0 is
                 // passed to instrumentationBegin), or when the instrumentation is associated with
                 // some target.
-                InstrumentationNode instrumentationNode = graph.addWithoutUnique(new InstrumentationNode(begin.getTarget(), begin.isAnchored()));
+                InstrumentationNode instrumentationNode = graph.addWithoutUnique(new InstrumentationNode(begin.target(), begin.offset()));
                 graph.addBeforeFixed(begin, instrumentationNode);
-                FrameState currentState = begin.stateAfter();
-                FrameState newState = graph.addWithoutUnique(new FrameState(currentState.outerFrameState(), currentState.getCode(), currentState.bci, 0, 0,
-                                0, currentState.rethrowException(), currentState.duringCall(), null,
-                                Collections.<EscapeObjectState> emptyList()));
-                instrumentationNode.setStateBefore(newState);
 
                 StructuredGraph instrumentationGraph = instrumentation.genInstrumentationGraph(graph, instrumentationNode);
                 new DeadCodeEliminationPhase().apply(instrumentationGraph, false);
@@ -125,15 +116,10 @@ public class ExtractInstrumentationPhase extends BasePhase<HighTierContext> {
             NodeBitMap cfgNodes = cfgFlood.getVisited();
             NodeFlood dfgFlood = begin.graph().createNodeFlood();
             dfgFlood.addAll(cfgNodes);
-            dfgFlood.add(begin.stateAfter());
             for (Node current : dfgFlood) {
                 for (Position pos : current.inputPositions()) {
                     Node input = pos.get(current);
                     if (pos.getInputType() == InputType.Value) {
-                        if (current instanceof FrameState) {
-                            // don't include value input for the FrameState
-                            continue;
-                        }
                         if (!(input instanceof FloatingNode)) {
                             // we only consider FloatingNode for this input type
                             continue;
@@ -146,7 +132,10 @@ public class ExtractInstrumentationPhase extends BasePhase<HighTierContext> {
                             dfgFlood.add(input);
                         }
                     } else {
-                        dfgFlood.add(input);
+                        if (!(input instanceof FrameState)) {
+                            // FrameState will be reassigned upon inlining instrumentation
+                            dfgFlood.add(input);
+                        }
                     }
                 }
             }
@@ -159,10 +148,14 @@ public class ExtractInstrumentationPhase extends BasePhase<HighTierContext> {
          * InstrumentationNode is alive.
          */
         StructuredGraph genInstrumentationGraph(StructuredGraph oldGraph, InstrumentationNode instrumentationNode) {
-            StructuredGraph instrumentationGraph = new StructuredGraph(AllowAssumptions.YES, INVALID_COMPILATION_ID);
+            StructuredGraph instrumentationGraph = new StructuredGraph(AllowAssumptions.YES);
             Map<Node, Node> replacements = Node.newMap();
             int index = 0; // for ParameterNode index
             for (Node current : nodes) {
+                if (current instanceof FrameState) {
+                    // FrameState will be re-assigned by FrameStateAssignmentPhase upon inlining
+                    continue;
+                }
                 // mark any input that is not included in the instrumentation a weak dependency
                 for (Node input : current.inputs()) {
                     if (input instanceof ValueNode) {
@@ -180,7 +173,6 @@ public class ExtractInstrumentationPhase extends BasePhase<HighTierContext> {
             }
             replacements = instrumentationGraph.addDuplicates(nodes, oldGraph, nodes.count(), replacements);
             instrumentationGraph.start().setNext((FixedNode) replacements.get(begin.next()));
-            instrumentationGraph.start().setStateAfter((FrameState) replacements.get(begin.stateAfter()));
             replacements.get(end).replaceAtPredecessor(instrumentationGraph.addWithoutUnique(new ReturnNode(null)));
             return instrumentationGraph;
         }
@@ -209,11 +201,6 @@ public class ExtractInstrumentationPhase extends BasePhase<HighTierContext> {
             GraphUtil.killCFG(begin);
         }
 
-    }
-
-    @Override
-    public boolean checkContract() {
-        return false;
     }
 
 }

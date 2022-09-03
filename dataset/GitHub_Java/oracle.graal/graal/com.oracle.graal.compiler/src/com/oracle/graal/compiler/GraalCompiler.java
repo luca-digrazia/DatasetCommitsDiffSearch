@@ -32,6 +32,7 @@ import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.LIRGenerationPhase.LIRGenerationContext;
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
@@ -85,7 +86,6 @@ import jdk.vm.ci.meta.VMConstant;
  */
 public class GraalCompiler {
 
-    private static final DebugTimer CompilerTimer = Debug.timer("GraalCompiler");
     private static final DebugTimer FrontEnd = Debug.timer("FrontEnd");
     private static final DebugTimer BackEnd = Debug.timer("BackEnd");
     private static final DebugTimer EmitLIR = Debug.timer("EmitLIR");
@@ -170,7 +170,7 @@ public class GraalCompiler {
     public static <T extends CompilationResult> T compile(Request<T> r) {
         try (Scope s = MethodMetricsRootScopeInfo.createRootScopeIfAbsent(r.installedCodeOwner)) {
             assert !r.graph.isFrozen();
-            try (Scope s0 = Debug.scope("GraalCompiler", r.graph, r.providers.getCodeCache()); DebugCloseable a = CompilerTimer.start()) {
+            try (Scope s0 = Debug.scope("GraalCompiler", r.graph, r.providers.getCodeCache())) {
                 emitFrontEnd(r.providers, r.backend, r.graph, r.graphBuilderSuite, r.optimisticOpts, r.profilingInfo, r.suites);
                 emitBackEnd(r.graph, null, r.installedCodeOwner, r.backend, r.compilationResult, r.factory, null, r.lirSuites);
             } catch (Throwable e) {
@@ -190,12 +190,12 @@ public class GraalCompiler {
             HighTierContext highTierContext = new HighTierContext(providers, graphBuilderSuite, optimisticOpts);
             if (graph.start().next() == null) {
                 graphBuilderSuite.apply(graph, highTierContext);
-                if (UseGraalInstrumentation.getValue()) {
-                    new ExtractInstrumentationPhase().apply(graph, highTierContext);
-                }
                 new DeadCodeEliminationPhase(Optional).apply(graph);
             } else {
                 Debug.dump(Debug.INFO_LOG_LEVEL, graph, "initial state");
+            }
+            if (UseGraalInstrumentation.getValue()) {
+                new ExtractInstrumentationPhase().apply(graph, highTierContext);
             }
 
             suites.getHighTier().apply(graph, highTierContext);
@@ -291,11 +291,11 @@ public class GraalCompiler {
 
             // LIR generation
             LIRGenerationContext context = new LIRGenerationContext(lirGen, nodeLirGen, graph, schedule);
-            LIR_GENERATION_PHASE.apply(backend.getTarget(), lirGenRes, context);
+            LIR_GENERATION_PHASE.apply(backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, context);
 
             try (Scope s = Debug.scope("LIRStages", nodeLirGen, lir)) {
                 Debug.dump(Debug.BASIC_LOG_LEVEL, lir, "After LIR generation");
-                LIRGenerationResult result = emitLowLevel(backend.getTarget(), lirGenRes, lirGen, lirSuites, backend.newRegisterAllocationConfig(registerConfig));
+                LIRGenerationResult result = emitLowLevel(backend.getTarget(), codeEmittingOrder, linearScanOrder, lirGenRes, lirGen, lirSuites, backend.newRegisterAllocationConfig(registerConfig));
                 Debug.dump(Debug.BASIC_LOG_LEVEL, lir, "Before code generation");
                 return result;
             } catch (Throwable e) {
@@ -317,16 +317,16 @@ public class GraalCompiler {
         return method.format("%H.%n(%p)");
     }
 
-    public static LIRGenerationResult emitLowLevel(TargetDescription target, LIRGenerationResult lirGenRes, LIRGeneratorTool lirGen, LIRSuites lirSuites,
-                    RegisterAllocationConfig registerAllocationConfig) {
+    public static <T extends AbstractBlockBase<T>> LIRGenerationResult emitLowLevel(TargetDescription target, List<T> codeEmittingOrder, List<T> linearScanOrder, LIRGenerationResult lirGenRes,
+                    LIRGeneratorTool lirGen, LIRSuites lirSuites, RegisterAllocationConfig registerAllocationConfig) {
         PreAllocationOptimizationContext preAllocOptContext = new PreAllocationOptimizationContext(lirGen);
-        lirSuites.getPreAllocationOptimizationStage().apply(target, lirGenRes, preAllocOptContext);
+        lirSuites.getPreAllocationOptimizationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, preAllocOptContext);
 
         AllocationContext allocContext = new AllocationContext(lirGen.getSpillMoveFactory(), registerAllocationConfig);
-        lirSuites.getAllocationStage().apply(target, lirGenRes, allocContext);
+        lirSuites.getAllocationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, allocContext);
 
         PostAllocationOptimizationContext postAllocOptContext = new PostAllocationOptimizationContext(lirGen);
-        lirSuites.getPostAllocationOptimizationStage().apply(target, lirGenRes, postAllocOptContext);
+        lirSuites.getPostAllocationOptimizationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, postAllocOptContext);
 
         return lirGenRes;
     }

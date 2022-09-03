@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.api.directives;
 
+// JaCoCo Exclude
+
 /**
  * Directives that influence the compilation of methods by Graal. They don't influence the semantics
  * of the code, but they are useful for unit testing and benchmarking.
@@ -177,6 +179,75 @@ public final class GraalDirectives {
     }
 
     /**
+     * Forces a value to be kept in a register.
+     */
+    @SuppressWarnings("unused")
+    public static void bindToRegister(boolean value) {
+    }
+
+    /**
+     * Forces a value to be kept in a register.
+     */
+    @SuppressWarnings("unused")
+    public static void bindToRegister(byte value) {
+    }
+
+    /**
+     * Forces a value to be kept in a register.
+     */
+    @SuppressWarnings("unused")
+    public static void bindToRegister(short value) {
+    }
+
+    /**
+     * Forces a value to be kept in a register.
+     */
+    @SuppressWarnings("unused")
+    public static void bindToRegister(char value) {
+    }
+
+    /**
+     * Forces a value to be kept in a register.
+     */
+    @SuppressWarnings("unused")
+    public static void bindToRegister(int value) {
+    }
+
+    /**
+     * Forces a value to be kept in a register.
+     */
+    @SuppressWarnings("unused")
+    public static void bindToRegister(long value) {
+    }
+
+    /**
+     * Forces a value to be kept in a register.
+     */
+    @SuppressWarnings("unused")
+    public static void bindToRegister(float value) {
+    }
+
+    /**
+     * Forces a value to be kept in a register.
+     */
+    @SuppressWarnings("unused")
+    public static void bindToRegister(double value) {
+    }
+
+    /**
+     * Forces a value to be kept in a register.
+     */
+    @SuppressWarnings("unused")
+    public static void bindToRegister(Object value) {
+    }
+
+    /**
+     * Spills all caller saved registers.
+     */
+    public static void spillRegisters() {
+    }
+
+    /**
      * Do nothing, but also make sure the compiler doesn't do any optimizations across this call.
      *
      * For example, the compiler will constant fold the expression 5 * 3, but the expression 5 *
@@ -274,4 +345,91 @@ public final class GraalDirectives {
     public static <T> T opaque(T value) {
         return value;
     }
+
+    public static <T> T guardingNonNull(T value) {
+        if (value == null) {
+            deoptimize();
+        }
+        return value;
+    }
+
+    /**
+     * Ensures that the given object will be virtual (escape analyzed) at all points that are
+     * dominated by the current position.
+     */
+    public static void ensureVirtualized(@SuppressWarnings("unused") Object object) {
+    }
+
+    /**
+     * Ensures that the given object will be virtual at the current position.
+     */
+    public static void ensureVirtualizedHere(@SuppressWarnings("unused") Object object) {
+    }
+
+    /**
+     * Marks the beginning of an instrumentation boundary. The instrumentation code will be folded
+     * during compilation and will not affect inlining heuristics regarding graph size except one on
+     * compiled low-level graph size (e.g., {@code GraalOptions.SmallCompiledLowLevelGraphSize}).
+     * The {@code offset} value specifies the bytecode instruction with which the instrumentation is
+     * associated. If the instrumented instruction is {@code new}, then instrumentation will adapt
+     * to optimizations concerning allocation, and only be executed if allocation really happens.
+     *
+     * Example (the instrumentation is associated with {@code new}):
+     *
+     * <blockquote>
+     *
+     * <pre>
+     *  0  new java.lang.Object
+     *  3  invokespecial java.lang.Object()
+     *  6  bipush -2
+     *  8  invokestatic com.oracle.graal.api.directives.GraalDirectives.instrumentationBegin(int) : void
+     * 11  invokestatic AllocationProfiler.countActualAllocation() : void
+     * 14  invokestatic com.oracle.graal.api.directives.GraalDirectives.instrumentationEnd() : void
+     * </pre>
+     *
+     * </blockquote>
+     *
+     * @param offset the length of a sequential path from a target bytecode to the invocation to
+     *            this API (if negative, excluding the bytecode loading this parameter), or from the
+     *            invocation to {@link #instrumentationEnd()} to a target node (if positive). Pass 0
+     *            to anchor the instrumentation.
+     */
+    public static void instrumentationBegin(int offset) {
+    }
+
+    /**
+     * Marks the end of the instrumentation boundary.
+     *
+     * @see #instrumentationBegin(int)
+     */
+    public static void instrumentationEnd() {
+    }
+
+    /**
+     * @return an integer representing a control flow path taken for a @Snippet. This API is valid
+     *         only if invoked within an instrumentation (see {@link #instrumentationBegin(int)} and
+     *         {@link #instrumentationEnd()} , and the associated target node of the instrumentation
+     *         is a preceding node that will be substituted by a @Snippet with multiple control flow
+     *         paths. It will be replaced with a ValuePhiNode with constant integer inputs [0, N-1],
+     *         where N denotes the number of control flow paths of the snippet.
+     */
+    public static int controlFlowPath() {
+        return -1;
+    }
+
+    /**
+     * @return true if the enclosing method is inlined.
+     */
+    public static boolean isMethodInlined() {
+        return false;
+    }
+
+    /**
+     * @return the name of the root method for the current compilation task. If the enclosing method
+     *         is inlined, it returns the name of the method into which it is inlined.
+     */
+    public static String rootName() {
+        return "unknown";
+    }
+
 }

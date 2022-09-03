@@ -83,7 +83,7 @@ import com.oracle.graal.hotspot.replacements.KlassLayoutHelperNode;
 import com.oracle.graal.hotspot.replacements.LoadExceptionObjectSnippets;
 import com.oracle.graal.hotspot.replacements.MonitorSnippets;
 import com.oracle.graal.hotspot.replacements.NewObjectSnippets;
-import com.oracle.graal.hotspot.replacements.RuntimeStringSnippets;
+import com.oracle.graal.hotspot.replacements.NewStringSnippets;
 import com.oracle.graal.hotspot.replacements.UnsafeLoadSnippets;
 import com.oracle.graal.hotspot.replacements.WriteBarrierSnippets;
 import com.oracle.graal.hotspot.replacements.arraycopy.ArrayCopyNode;
@@ -108,10 +108,13 @@ import com.oracle.graal.nodes.UnwindNode;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.AddNode;
 import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.calc.IntegerDivRemNode;
+import com.oracle.graal.nodes.calc.IntegerDivNode;
+import com.oracle.graal.nodes.calc.IntegerRemNode;
 import com.oracle.graal.nodes.calc.IsNullNode;
 import com.oracle.graal.nodes.calc.RemNode;
-import com.oracle.graal.nodes.debug.RuntimeStringNode;
+import com.oracle.graal.nodes.calc.UnsignedDivNode;
+import com.oracle.graal.nodes.calc.UnsignedRemNode;
+import com.oracle.graal.nodes.debug.NewStringNode;
 import com.oracle.graal.nodes.debug.VerifyHeapNode;
 import com.oracle.graal.nodes.extended.BytecodeExceptionNode;
 import com.oracle.graal.nodes.extended.ForeignCallNode;
@@ -183,7 +186,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     protected UnsafeLoadSnippets.Templates unsafeLoadSnippets;
     protected AssertionSnippets.Templates assertionSnippets;
     protected ArrayCopySnippets.Templates arraycopySnippets;
-    protected RuntimeStringSnippets.Templates runtimeStringSnippets;
+    protected NewStringSnippets.Templates newStringSnippets;
 
     public DefaultHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
@@ -207,7 +210,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(providers, target);
         assertionSnippets = new AssertionSnippets.Templates(providers, target);
         arraycopySnippets = new ArrayCopySnippets.Templates(providers, target);
-        runtimeStringSnippets = new RuntimeStringSnippets.Templates(providers, target);
+        newStringSnippets = new NewStringSnippets.Templates(providers, target);
         providers.getReplacements().registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(providers, target));
     }
 
@@ -317,9 +320,11 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             exceptionObjectSnippets.lower((LoadExceptionObjectNode) n, registers, tool);
         } else if (n instanceof AssertionNode) {
             assertionSnippets.lower((AssertionNode) n, tool);
-        } else if (n instanceof RuntimeStringNode) {
-            runtimeStringSnippets.lower((RuntimeStringNode) n, tool);
-        } else if (n instanceof IntegerDivRemNode) {
+        } else if (n instanceof NewStringNode) {
+            if (graph.getGuardsStage().areDeoptsFixed()) {
+                newStringSnippets.lower((NewStringNode) n, tool);
+            }
+        } else if (n instanceof IntegerDivNode || n instanceof IntegerRemNode || n instanceof UnsignedDivNode || n instanceof UnsignedRemNode) {
             // Nothing to do for division nodes. The HotSpot signal handler catches divisions by
             // zero and the MIN_VALUE / -1 cases.
         } else if (n instanceof AbstractDeoptimizeNode || n instanceof UnwindNode || n instanceof RemNode || n instanceof SafepointNode) {
@@ -347,30 +352,10 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
             return;
         }
-        ResolvedJavaMethod method = math.graph().method();
-        if (method != null) {
-            if (method.getAnnotation(Snippet.class) != null) {
-                /*
-                 * In the context of the snippet use the LIR lowering instead of the Node lowering.
-                 */
-                return;
-            }
-            if (method.getName().equalsIgnoreCase(math.getOperation().name()) && tool.getMetaAccess().lookupJavaType(Math.class).equals(method.getDeclaringClass())) {
-                /*
-                 * A root compilation of the intrinsic method should emit the full assembly
-                 * implementation.
-                 */
-                return;
-            }
-
-        }
-        ForeignCallDescriptor foreignCall = foreignCallForBinaryOperation(math.getOperation());
-        if (foreignCall != null) {
-            StructuredGraph graph = math.graph();
-            ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, foreignCall, math.getX(), math.getY()));
-            graph.addAfterFixed(tool.lastFixedNode(), call);
-            math.replaceAtUsages(call);
-        }
+        StructuredGraph graph = math.graph();
+        ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, toForeignCall(math.getOperation()), math.getX(), math.getY()));
+        graph.addAfterFixed(tool.lastFixedNode(), call);
+        math.replaceAtUsages(call);
     }
 
     private void lowerUnaryMath(UnaryMathIntrinsicNode math, LoweringTool tool) {
@@ -394,16 +379,13 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             }
 
         }
-        ForeignCallDescriptor foreignCall = foreignCallForUnaryOperation(math.getOperation());
-        if (foreignCall != null) {
-            StructuredGraph graph = math.graph();
-            ForeignCallNode call = math.graph().add(new ForeignCallNode(foreignCalls, foreignCall, math.getValue()));
-            graph.addAfterFixed(tool.lastFixedNode(), call);
-            math.replaceAtUsages(call);
-        }
+        StructuredGraph graph = math.graph();
+        ForeignCallNode call = math.graph().add(new ForeignCallNode(foreignCalls, toForeignCall(math.getOperation()), math.getValue()));
+        graph.addAfterFixed(tool.lastFixedNode(), call);
+        math.replaceAtUsages(call);
     }
 
-    protected ForeignCallDescriptor foreignCallForUnaryOperation(UnaryOperation operation) {
+    private static ForeignCallDescriptor toForeignCall(UnaryOperation operation) {
         switch (operation) {
             case LOG:
                 return ARITHMETIC_LOG;
@@ -422,7 +404,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         }
     }
 
-    protected ForeignCallDescriptor foreignCallForBinaryOperation(BinaryOperation operation) {
+    private static ForeignCallDescriptor toForeignCall(BinaryOperation operation) {
         switch (operation) {
             case POW:
                 return ARITHMETIC_POW;

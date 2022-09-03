@@ -68,7 +68,6 @@ import com.oracle.graal.nodes.Invoke;
 import com.oracle.graal.nodes.InvokeNode;
 import com.oracle.graal.nodes.InvokeWithExceptionNode;
 import com.oracle.graal.nodes.KillingBeginNode;
-import com.oracle.graal.nodes.LogicNode;
 import com.oracle.graal.nodes.MergeNode;
 import com.oracle.graal.nodes.ParameterNode;
 import com.oracle.graal.nodes.PhiNode;
@@ -718,7 +717,7 @@ public class InliningUtil {
             Stamp paramStamp = firstParam.stamp();
             Stamp stamp = paramStamp.join(StampFactory.objectNonNull(TypeReference.create(graph.getAssumptions(), callTarget.targetMethod().getDeclaringClass())));
             if (!StampTool.isPointerNonNull(firstParam)) {
-                LogicNode condition = graph.unique(IsNullNode.create(firstParam));
+                IsNullNode condition = graph.unique(new IsNullNode(firstParam));
                 FixedGuardNode fixedGuard = graph.add(new FixedGuardNode(condition, NullCheckException, InvalidateReprofile, true));
                 PiNode nonNullReceiver = graph.unique(new PiNode(firstParam, stamp, fixedGuard));
                 graph.addBeforeFixed(invoke.asNode(), fixedGuard);
@@ -790,8 +789,8 @@ public class InliningUtil {
     public static void detachInstrumentation(Invoke invoke) {
         FixedNode invokeNode = invoke.asNode();
         for (InstrumentationNode instrumentation : invokeNode.usages().filter(InstrumentationNode.class).snapshot()) {
-            if (instrumentation.getTarget() == invoke) {
-                instrumentation.replaceFirstInput(instrumentation.getTarget(), null);
+            if (instrumentation.target() == invoke) {
+                instrumentation.replaceFirstInput(instrumentation.target(), null);
             }
         }
     }

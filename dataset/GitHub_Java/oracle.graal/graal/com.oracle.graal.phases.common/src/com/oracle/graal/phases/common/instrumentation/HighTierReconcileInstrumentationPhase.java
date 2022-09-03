@@ -23,6 +23,8 @@
 package com.oracle.graal.phases.common.instrumentation;
 
 import java.util.HashMap;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeFlood;
@@ -58,35 +60,22 @@ public class HighTierReconcileInstrumentationPhase extends Phase {
             // InstrumentationNode targets one of these VirtualObjectNodes
             for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
                 VirtualObjectNode virtual = commit.getVirtualObjects().get(objIndex);
-                for (InstrumentationNode instrumentationNode : graph.getNodes().filter(InstrumentationNode.class)) {
-                    if (isCFGAccessible(instrumentationNode, commit) && instrumentationNode.getTarget() == virtual) {
-                        // clone InstrumentationNode when the CommitAllocationNode is accessible
-                        // from the InstrumentationNode, and the InstrumentationNode's target
-                        // matches the given VirtualObjectNode
-                        aggr.insertClone(instrumentationNode, getAllocatedObject(graph, commit, virtual));
-                    }
-                }
+                aggr.cloneInstrumentationIf(in -> in.target() == virtual,
+                                () -> getAllocatedObject(graph, commit, virtual));
             }
             // iterate through all MonitorIdNodes held by the CommitAllocationNode, clone if any
             // InstrumentationNode targets one of these MonitorIdNodes (via MonitorProxyNode)
             for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
                 VirtualObjectNode virtual = commit.getVirtualObjects().get(objIndex);
                 for (MonitorIdNode monitorId : commit.getLocks(objIndex)) {
-                    for (InstrumentationNode instrumentationNode : graph.getNodes().filter(InstrumentationNode.class)) {
-                        if (isCFGAccessible(instrumentationNode, commit) && instrumentationNode.getTarget() instanceof MonitorProxyNode &&
-                                        ((MonitorProxyNode) instrumentationNode.getTarget()).getMonitorId() == monitorId) {
-                            // clone InstrumentationNode when the CommitAllocationNode is accessible
-                            // from the InstrumentationNode, and the InstrumentationNode's target is
-                            // a MonitorProxyNode that matches the MonitorIdNode
-                            aggr.insertClone(instrumentationNode, graph.addWithoutUnique(new MonitorProxyNode(getAllocatedObject(graph, commit, virtual), monitorId)));
-                        }
-                    }
+                    aggr.cloneInstrumentationIf(in -> in.target() instanceof MonitorProxyNode && ((MonitorProxyNode) in.target()).getMonitorId() == monitorId,
+                                    () -> new MonitorProxyNode(getAllocatedObject(graph, commit, virtual), monitorId));
                 }
             }
         }
         // remove InstrumentationNodes that still target virtual nodes
         for (InstrumentationNode instrumentationNode : graph.getNodes().filter(InstrumentationNode.class)) {
-            ValueNode target = instrumentationNode.getTarget();
+            ValueNode target = instrumentationNode.target();
             if (target instanceof VirtualObjectNode) {
                 graph.removeFixed(instrumentationNode);
             } else if (target instanceof MonitorProxyNode) {
@@ -115,20 +104,35 @@ public class HighTierReconcileInstrumentationPhase extends Phase {
             this.insertAfter = commit;
         }
 
-        void insertClone(InstrumentationNode instrumentationNode, ValueNode newTarget) {
-            InstrumentationNode clone = (InstrumentationNode) instrumentationNode.copyWithInputs();
-            // update the clone instrumentation node with the new target
-            clone.replaceFirstInput(clone.getTarget(), newTarget);
-            // update weak dependencies of the clone instrumentation node where the dependency
-            // is also a VirtualObjectNode. This is common when one allocation in the
-            // CommitAllocationNode depends on another allocation.
-            for (ValueNode input : clone.getWeakDependencies()) {
-                if ((input instanceof VirtualObjectNode) && (commit.getVirtualObjects().contains(input))) {
-                    clone.replaceFirstInput(input, getAllocatedObject(graph, commit, (VirtualObjectNode) input));
+        void cloneInstrumentationIf(Predicate<InstrumentationNode> filter, Supplier<ValueNode> newTargetSupplier) {
+            for (InstrumentationNode instrumentationNode : graph.getNodes().filter(InstrumentationNode.class)) {
+                if (!filter.test(instrumentationNode)) {
+                    continue;
                 }
+                if (!isCFGAccessible(instrumentationNode, commit)) {
+                    // clone instrumentation node only if the CommitAllocationNode is accessible
+                    // from the original instrumentation node
+                    continue;
+                }
+                InstrumentationNode clone = (InstrumentationNode) instrumentationNode.copyWithInputs();
+                // update the clone instrumentation node with the new target
+                ValueNode newTarget = newTargetSupplier.get();
+                if (!newTarget.isAlive()) {
+                    graph.addWithoutUnique(newTarget);
+                }
+                clone.replaceFirstInput(clone.target(), newTarget);
+                // update weak dependencies of the clone instrumentation node where the dependency
+                // is also a VirtualObjectNode. This is common when one allocation in the
+                // CommitAllocationNode depends on another allocation.
+                for (ValueNode input : clone.getWeakDependencies()) {
+                    if ((input instanceof VirtualObjectNode) && (commit.getVirtualObjects().contains(input))) {
+                        clone.replaceFirstInput(input, getAllocatedObject(graph, commit, (VirtualObjectNode) input));
+                    }
+                }
+
+                graph.addAfterFixed(insertAfter, clone);
+                insertAfter = clone;
             }
-            graph.addAfterFixed(insertAfter, clone);
-            insertAfter = clone;
         }
 
     }
