@@ -82,7 +82,6 @@ public class SLDebugTest {
             @Override
             protected void on(ExecutionEvent event) {
                 executionEvent = event;
-                debugger = executionEvent.getDebugger();
                 performWork();
                 executionEvent = null;
             }
@@ -94,6 +93,8 @@ public class SLDebugTest {
                 suspendedEvent = null;
             }
         }).build();
+        debugger = Debugger.find(engine);
+        assertNotNull("Debugger found", debugger);
         run.clear();
     }
 

@@ -42,9 +42,10 @@ package com.oracle.truffle.sl.nodes;
 
 import java.io.File;
 
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.Instrumentable;
-import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
@@ -58,14 +59,15 @@ import com.oracle.truffle.api.source.SourceSection;
 @Instrumentable(factory = SLStatementNodeWrapper.class)
 public abstract class SLStatementNode extends Node {
 
-    private static final int STATEMENT_BIT = 0;
-    private static final int ROOT_BIT = 1;
-
-    private final SourceSection section;
-    private byte tags;
+    @CompilationFinal private SourceSection section;
 
     public SLStatementNode(SourceSection src) {
         section = src;
+    }
+
+    public final void setSourceSection(SourceSection section) {
+        CompilerAsserts.neverPartOfCompilation();
+        this.section = section;
     }
 
     @Override
@@ -84,36 +86,6 @@ public abstract class SLStatementNode extends Node {
 
     public SLStatementNode getNonWrapperNode() {
         return this;
-    }
-
-    public void setStatementTagged(boolean isStatementTagged) {
-        setTagBit(STATEMENT_BIT, isStatementTagged);
-    }
-
-    public void setRootTagged(boolean isRootTagged) {
-        setTagBit(ROOT_BIT, isRootTagged);
-    }
-
-    private void setTagBit(int pos, boolean value) {
-        if (value) {
-            tags = (byte) (tags | (1 << pos));
-        } else {
-            tags = (byte) (tags & ~(1 << pos));
-        }
-    }
-
-    private boolean isTagBit(int pos) {
-        return (tags & 1 << pos) != 0;
-    }
-
-    @Override
-    protected boolean isTaggedWith(Class<?> tag) {
-        if (tag == StandardTags.StatementTag.class) {
-            return isTagBit(STATEMENT_BIT);
-        } else if (tag == StandardTags.RootTag.class) {
-            return isTagBit(ROOT_BIT);
-        }
-        return false;
     }
 
     @Override
