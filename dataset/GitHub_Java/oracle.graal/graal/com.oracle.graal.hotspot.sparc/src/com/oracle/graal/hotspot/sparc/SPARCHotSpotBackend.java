@@ -22,21 +22,24 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
+import static com.oracle.graal.api.code.CallingConvention.Type.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.jvmci.code.CallingConvention.Type.*;
-import static com.oracle.jvmci.code.ValueUtil.*;
-import static com.oracle.jvmci.common.UnsafeAccess.*;
-import static com.oracle.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.hotspot.*;
@@ -50,9 +53,6 @@ import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * HotSpot SPARC specific backend.
@@ -211,7 +211,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         RegisterConfig regConfig = frameMap.getRegisterConfig();
         HotSpotVMConfig config = getRuntime().getConfig();
         Label unverifiedStub = installedCodeOwner == null || installedCodeOwner.isStatic() ? null : new Label();
-        boolean hasUnsafeAccess = crb.compilationResult.hasUnsafeAccess();
+
         int i = 0;
         do {
             if (i > 0) {
@@ -246,8 +246,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
             // Emit code for the LIR
             crb.emit(lir);
         } while (i++ < 1);
-        // Restore the unsafeAccess flag
-        crb.compilationResult.setHasUnsafeAccess(hasUnsafeAccess);
+
         profileInstructions(lir, crb);
 
         HotSpotFrameContext frameContext = (HotSpotFrameContext) crb.frameContext;

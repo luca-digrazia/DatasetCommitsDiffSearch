@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,20 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
+import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.api.code.CallingConvention.Type.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static jdk.internal.jvmci.amd64.AMD64.*;
-import static jdk.internal.jvmci.code.CallingConvention.Type.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.common.UnsafeAccess.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.amd64.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.*;
+import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
@@ -69,7 +67,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
 
     @Override
     public FrameMap newFrameMap(RegisterConfig registerConfig) {
-        return new AMD64FrameMap(getCodeCache(), registerConfig, this);
+        return new AMD64FrameMap(getCodeCache(), registerConfig);
     }
 
     @Override
@@ -116,7 +114,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
                     }
                     crb.blockComment("[stack overflow check]");
                     int pos = asm.position();
-                    asm.movl(new AMD64Address(rsp, -disp), AMD64.rax);
+                    asm.movq(new AMD64Address(rsp, -disp), AMD64.rax);
                     assert i > 0 || !isVerifiedEntryPoint || asm.position() - pos >= PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE;
                 }
             }

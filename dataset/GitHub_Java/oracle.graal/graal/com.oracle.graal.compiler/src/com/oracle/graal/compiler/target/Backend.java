@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,11 @@
  */
 package com.oracle.graal.compiler.target;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.stack.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.lir.*;
@@ -33,10 +37,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.code.stack.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Represents a compiler backend for Graal.
@@ -65,19 +65,13 @@ public abstract class Backend {
         return providers.getCodeCache();
     }
 
-    public MetaAccessProvider getMetaAccess() {
-        return providers.getMetaAccess();
-    }
-
-    public ConstantReflectionProvider getConstantReflection() {
-        return providers.getConstantReflection();
-    }
-
     public ForeignCallsProvider getForeignCalls() {
         return providers.getForeignCalls();
     }
 
     public abstract SuitesProvider getSuites();
+
+    public abstract DisassemblerProvider getDisassembler();
 
     public TargetDescription getTarget() {
         return providers.getCodeCache().getTarget();
@@ -104,7 +98,7 @@ public abstract class Backend {
      * @param parser the bytecode parser the BytecodeLIRBuilder should use
      */
     public BytecodeLIRBuilder newBytecodeLIRBuilder(LIRGeneratorTool gen, BytecodeParserTool parser) {
-        throw JVMCIError.unimplemented("Baseline compilation is not available for this Backend!");
+        throw GraalInternalError.unimplemented("Baseline compilation is not available for this Backend!");
     }
 
     /**
