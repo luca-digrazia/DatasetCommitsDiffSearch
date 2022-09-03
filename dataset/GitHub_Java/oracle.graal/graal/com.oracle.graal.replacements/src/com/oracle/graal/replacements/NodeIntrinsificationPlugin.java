@@ -28,11 +28,11 @@ import static jdk.internal.jvmci.meta.MetaUtil.*;
 import java.util.*;
 
 import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.nodeinfo.*;
@@ -183,10 +183,10 @@ public class NodeIntrinsificationPlugin implements NodePlugin {
         }
 
         if (returnKind != Kind.Void) {
-            assert nonValueType || res.getStackKind() != Kind.Void;
+            assert nonValueType || res.getKind().getStackKind() != Kind.Void;
             res = b.addPush(returnKind, res);
         } else {
-            assert res.getStackKind() == Kind.Void;
+            assert res.getKind().getStackKind() == Kind.Void;
             res = b.add(res);
         }
 
