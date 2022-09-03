@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.spi;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 
 /**
  * This interface can be used to generate LIR for arithmetic operations (@see
@@ -65,9 +66,7 @@ public interface ArithmeticLIRGenerator {
 
     Value emitUShr(Value a, Value b);
 
-    Value emitConvert(Kind from, Kind to, Value inputVal);
-
-    Value emitReinterpret(Kind to, Value inputVal);
+    Value emitConvert(ConvertNode.Op opcode, Value inputVal);
 
     Value emitMathAbs(Value input);
 

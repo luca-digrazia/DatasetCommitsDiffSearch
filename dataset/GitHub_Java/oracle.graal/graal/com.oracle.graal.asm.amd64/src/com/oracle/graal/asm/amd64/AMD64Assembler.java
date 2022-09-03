@@ -747,7 +747,7 @@ public class AMD64Assembler extends AbstractAssembler {
         emitOperandHelper(0, dst);
     }
 
-    public void jcc(ConditionFlag cc, int jumpTarget, boolean forceDisp32) {
+    private void jcc(ConditionFlag cc, int jumpTarget, boolean forceDisp32) {
         int shortSize = 2;
         int longSize = 6;
         long disp = jumpTarget - codeBuffer.position();
