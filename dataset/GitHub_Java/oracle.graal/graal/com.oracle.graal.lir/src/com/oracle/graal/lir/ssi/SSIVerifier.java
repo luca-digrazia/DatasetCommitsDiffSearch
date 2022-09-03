@@ -22,22 +22,30 @@
  */
 package com.oracle.graal.lir.ssi;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
+import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
+import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.*;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
 
-import jdk.internal.jvmci.meta.*;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.InstructionValueConsumer;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 
-public class SSIVerifier {
+public final class SSIVerifier {
 
     public static boolean verify(LIR lir) {
         return new SSIVerifier(lir).verify();
@@ -49,6 +57,7 @@ public class SSIVerifier {
         this.lir = lir;
     }
 
+    @SuppressWarnings("try")
     private boolean verify() {
         try (Scope s = Debug.scope("SSIVerifier", lir)) {
             for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
@@ -68,8 +77,8 @@ public class SSIVerifier {
     }
 
     private void verifyEdge(AbstractBlockBase<?> from, AbstractBlockBase<?> to) {
-        BlockEndOp out = SSIUtils.outgoing(lir, from);
-        LabelOp in = SSIUtils.incoming(lir, to);
+        BlockEndOp out = SSIUtil.outgoing(lir, from);
+        LabelOp in = SSIUtil.incoming(lir, to);
         int outgoingSize = out.getOutgoingSize();
         int incomingSize = in.getIncomingSize();
         assert outgoingSize == incomingSize : String.format("Outgoing size %d and incoming size %d do not match", outgoingSize, incomingSize);
@@ -133,6 +142,10 @@ public class SSIVerifier {
             // registers can be redefined
             return false;
         }
+        if (isStackSlotValue(value) && !isVirtualStackSlot(value)) {
+            // non-virtual stack slots can be redefined
+            return false;
+        }
         if (value.equals(Value.ILLEGAL)) {
             // Don't care about illegal values
             return false;
@@ -141,12 +154,16 @@ public class SSIVerifier {
     }
 
     private static boolean checkUsage(Value value) {
-        if (value instanceof Constant) {
+        if (isConstantValue(value)) {
             // Constants do not need to be defined
             return false;
         }
         if (isRegister(value)) {
             // Assume fixed registers are correct
+            return false;
+        }
+        if (isStackSlotValue(value)) {
+            // stack slots are assumed to be correct
             return false;
         }
         if (value.equals(Value.ILLEGAL)) {
