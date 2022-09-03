@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,38 @@
  */
 package com.oracle.graal.hotspot.meta;
 
+import static java.util.Objects.*;
+
 import java.lang.annotation.*;
 import java.lang.reflect.*;
+import java.net.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.hotspot.*;
 
 /**
  * Implementation of {@link JavaType} for primitive HotSpot types.
  */
-public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType {
+public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType implements HotSpotProxified {
 
     private static final long serialVersionUID = -6208552348908071473L;
     private final Kind kind;
-    private final Class<?> javaMirror;
-    private final Class javaArrayMirror;
 
+    /**
+     * Creates the Graal mirror for a primitive {@link Kind}.
+     *
+     * <p>
+     * <b>NOTE</b>: Creating an instance of this class does not install the mirror for the
+     * {@link Class} type. Use {@link #fromClass(Class)} instead.
+     * </p>
+     *
+     * @param kind the Kind to create the mirror for
+     */
     public HotSpotResolvedPrimitiveType(Kind kind) {
         super(String.valueOf(Character.toUpperCase(kind.getTypeChar())));
         this.kind = kind;
-        this.javaMirror = kind.toJavaClass();
-        this.javaArrayMirror = kind.isVoid() ? null : Array.newInstance(javaMirror, 0).getClass();
+        assert mirror().isPrimitive() : mirror() + " not a primitive type";
     }
 
     @Override
@@ -51,8 +62,16 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public ResolvedJavaType getArrayClass() {
-        return HotSpotResolvedObjectType.fromClass(javaArrayMirror);
+    public HotSpotResolvedObjectTypeImpl getArrayClass() {
+        if (kind == Kind.Void) {
+            return null;
+        }
+        Class<?> javaArrayMirror = Array.newInstance(mirror(), 0).getClass();
+        return HotSpotResolvedObjectTypeImpl.fromObjectClass(javaArrayMirror);
+    }
+
+    public ResolvedJavaType getElementalType() {
+        return this;
     }
 
     @Override
@@ -67,7 +86,6 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
 
     @Override
     public ResolvedJavaType getSuperclass() {
-        assert javaMirror.getSuperclass() == null;
         return null;
     }
 
@@ -77,13 +95,23 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
+    public ResolvedJavaType getSingleImplementor() {
+        throw new GraalInternalError("Cannot call getImplementor() on a non-interface type: " + this);
+    }
+
+    @Override
     public ResolvedJavaType findLeastCommonAncestor(ResolvedJavaType otherType) {
         return null;
     }
 
     @Override
-    public Constant getEncoding(Representation r) {
-        throw GraalInternalError.unimplemented("HotSpotResolvedPrimitiveType.getEncoding");
+    public JavaConstant getObjectHub() {
+        throw GraalInternalError.unimplemented("HotSpotResolvedPrimitiveType.getObjectHub");
+    }
+
+    @Override
+    public JavaConstant getJavaClass() {
+        throw GraalInternalError.unimplemented("HotSpotResolvedPrimitiveType.getJavaClass");
     }
 
     @Override
@@ -111,8 +139,12 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
         return true;
     }
 
+    public boolean isLinked() {
+        return true;
+    }
+
     @Override
-    public boolean isInstance(Constant obj) {
+    public boolean isInstance(JavaConstant obj) {
         return false;
     }
 
@@ -127,8 +159,9 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public boolean isAssignableTo(ResolvedJavaType other) {
-        return other == this;
+    public boolean isAssignableFrom(ResolvedJavaType other) {
+        assert other != null;
+        return other.equals(this);
     }
 
     @Override
@@ -137,7 +170,17 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method) {
+    public boolean isJavaLangObject() {
+        return false;
+    }
+
+    @Override
+    public ResolvedJavaMethod resolveConcreteMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
+        return null;
+    }
+
+    @Override
+    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType, boolean includeAbstract) {
         return null;
     }
 
@@ -162,17 +205,18 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
-        return javaMirror.getAnnotation(annotationClass);
+    public ResolvedJavaField[] getStaticFields() {
+        return new ResolvedJavaField[0];
     }
 
     @Override
-    public boolean isClass(Class c) {
-        return c == javaMirror;
+    public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
+        return null;
     }
 
     @Override
     public ResolvedJavaType resolve(ResolvedJavaType accessingClass) {
+        requireNonNull(accessingClass);
         return this;
     }
 
@@ -181,12 +225,57 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public ResolvedJavaField findInstanceFieldWithOffset(long offset) {
+    public ResolvedJavaField findInstanceFieldWithOffset(long offset, Kind expectedType) {
         return null;
     }
 
     @Override
+    public String getSourceFileName() {
+        throw GraalInternalError.shouldNotReachHere();
+    }
+
+    @Override
     public Class<?> mirror() {
-        return javaMirror;
+        return kind.toJavaClass();
+    }
+
+    @Override
+    public URL getClassFilePath() {
+        return null;
+    }
+
+    @Override
+    public boolean isLocal() {
+        return false;
+    }
+
+    @Override
+    public boolean isMember() {
+        return false;
+    }
+
+    @Override
+    public ResolvedJavaType getEnclosingType() {
+        return null;
+    }
+
+    @Override
+    public ResolvedJavaMethod[] getDeclaredConstructors() {
+        return new ResolvedJavaMethod[0];
+    }
+
+    @Override
+    public ResolvedJavaMethod[] getDeclaredMethods() {
+        return new ResolvedJavaMethod[0];
+    }
+
+    @Override
+    public ResolvedJavaMethod getClassInitializer() {
+        return null;
+    }
+
+    @Override
+    public boolean isTrustedInterfaceType() {
+        return false;
     }
 }

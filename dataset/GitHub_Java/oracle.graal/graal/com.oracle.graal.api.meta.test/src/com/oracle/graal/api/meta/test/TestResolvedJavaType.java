@@ -34,8 +34,8 @@ import org.junit.*;
 
 import sun.reflect.ConstantPool;
 
-import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 
 /**
  * Tests for {@link ResolvedJavaType}.
@@ -273,30 +273,30 @@ public class TestResolvedJavaType extends TypeUniverse {
     }
 
     void checkConcreteSubtype(ResolvedJavaType type, ResolvedJavaType expected) {
-        AssumptionResult<ResolvedJavaType> leafConcreteSubtype = type.findLeafConcreteSubtype();
-        if (leafConcreteSubtype == null) {
-            // findLeafConcreteSubtype() is conservative
+        ResolvedJavaType subtype = type.findUniqueConcreteSubtype();
+        if (subtype == null) {
+            // findUniqueConcreteSubtype() is conservative
         } else {
             if (expected == null) {
-                assertNull(leafConcreteSubtype);
+                assertNull(subtype);
             } else {
-                assertTrue(leafConcreteSubtype.getResult().equals(expected));
+                assertTrue(subtype.equals(expected));
             }
         }
 
         if (!type.isArray()) {
             ResolvedJavaType arrayType = type.getArrayClass();
-            AssumptionResult<ResolvedJavaType> arraySubtype = arrayType.findLeafConcreteSubtype();
+            ResolvedJavaType arraySubtype = arrayType.findUniqueConcreteSubtype();
             if (arraySubtype != null) {
-                assertEquals(arraySubtype.getResult(), arrayType);
+                assertEquals(arraySubtype, arrayType);
             } else {
-                // findLeafConcreteSubtype() method is conservative
+                // findUniqueConcreteSubtype() method is conservative
             }
         }
     }
 
     @Test
-    public void findLeafConcreteSubtypeTest() {
+    public void findUniqueConcreteSubtypeTest() {
         ResolvedJavaType base = metaAccess.lookupJavaType(Base.class);
         checkConcreteSubtype(base, base);
 
@@ -416,13 +416,13 @@ public class TestResolvedJavaType extends TypeUniverse {
         assertEquals(aSai2, iSai2.getSingleImplementor());
     }
 
-    @Test(expected = InternalError.class)
+    @Test(expected = GraalInternalError.class)
     public void getSingleImplementorTestClassReceiver() {
         ResolvedJavaType base = metaAccess.lookupJavaType(Base.class);
         base.getSingleImplementor();
     }
 
-    @Test(expected = InternalError.class)
+    @Test(expected = GraalInternalError.class)
     public void getSingleImplementorTestPrimitiveReceiver() {
         ResolvedJavaType primitive = metaAccess.lookupJavaType(int.class);
         primitive.getSingleImplementor();
@@ -617,7 +617,7 @@ public class TestResolvedJavaType extends TypeUniverse {
     @Test
     public void findUniqueConcreteMethodTest() throws NoSuchMethodException {
         ResolvedJavaMethod thisMethod = metaAccess.lookupJavaMethod(getClass().getDeclaredMethod("findUniqueConcreteMethodTest"));
-        ResolvedJavaMethod ucm = metaAccess.lookupJavaType(getClass()).findUniqueConcreteMethod(thisMethod).getResult();
+        ResolvedJavaMethod ucm = metaAccess.lookupJavaType(getClass()).findUniqueConcreteMethod(thisMethod);
         assertEquals(thisMethod, ucm);
     }
 
@@ -677,9 +677,6 @@ public class TestResolvedJavaType extends TypeUniverse {
         if (f.getDeclaringClass().equals(metaAccess.lookupJavaType(ConstantPool.class)) && f.getName().equals("constantPoolOop")) {
             return true;
         }
-        if (f.getDeclaringClass().equals(metaAccess.lookupJavaType(Class.class)) && f.getName().equals("classLoader")) {
-            return true;
-        }
         return false;
     }
 
@@ -695,7 +692,7 @@ public class TestResolvedJavaType extends TypeUniverse {
                 }
                 for (ResolvedJavaField rf : actual) {
                     if (!isHiddenFromReflection(rf)) {
-                        assertEquals(rf.toString(), lookupField(expected, rf) != null, !rf.isInternal());
+                        assertEquals(lookupField(expected, rf) != null, !rf.isInternal());
                     }
                 }
 

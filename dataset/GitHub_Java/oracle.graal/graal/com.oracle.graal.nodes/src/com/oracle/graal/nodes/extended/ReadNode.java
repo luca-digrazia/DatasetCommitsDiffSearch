@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,20 +37,18 @@ import com.oracle.graal.nodes.util.*;
  * Reads an {@linkplain FixedAccessNode accessed} value.
  */
 @NodeInfo
-public final class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, PiPushable, Virtualizable, GuardingNode {
-
-    public static final NodeClass TYPE = NodeClass.get(ReadNode.class);
+public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, PiPushable, Virtualizable, GuardingNode {
 
     public ReadNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
-        super(TYPE, object, location, stamp, null, barrierType);
+        super(object, location, stamp, null, barrierType);
     }
 
     public ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
-        super(TYPE, object, location, stamp, guard, barrierType);
+        super(object, location, stamp, guard, barrierType);
     }
 
     public ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
-        super(TYPE, object, location, stamp, guard, barrierType, nullCheck, stateBefore);
+        super(object, location, stamp, guard, barrierType, nullCheck, stateBefore);
     }
 
     public ReadNode(ValueNode object, ValueNode location, ValueNode guard, BarrierType barrierType) {
@@ -59,7 +57,7 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
          * location is a parameter, i.e., a ParameterNode, the constructor cannot use the declared
          * type LocationNode.
          */
-        super(TYPE, object, location, StampFactory.forNodeIntrinsic(), (GuardingNode) guard, barrierType);
+        super(object, location, StampFactory.forNodeIntrinsic(), (GuardingNode) guard, barrierType);
     }
 
     @Override
