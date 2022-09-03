@@ -143,15 +143,8 @@ public class LLVMFunctionRegistry {
         return function;
     }
 
-    /**
-     * Creates a function descriptor from the given <code>index</code> that has previously been
-     * obtained by {@link LLVMFunctionDescriptor#getFunctionIndex()}}.
-     *
-     * @param index the function index
-     * @return the function descriptor
-     */
-    public LLVMFunctionDescriptor createFromIndex(long index) {
-        LLVMFunctionDescriptor llvmFunction = functionDescriptors[(int) index];
+    public LLVMFunctionDescriptor createFromIndex(long addr) {
+        LLVMFunctionDescriptor llvmFunction = functionDescriptors[(int) addr];
         assert llvmFunction != null;
         return llvmFunction;
     }
