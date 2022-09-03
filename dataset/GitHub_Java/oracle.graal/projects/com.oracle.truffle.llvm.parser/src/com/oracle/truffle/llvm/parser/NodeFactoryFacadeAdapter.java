@@ -58,7 +58,7 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
 import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.LLVMFunction.LLVMRuntimeType;
 
 /**
  * This class implements an abstract adapter that returns <code>null</code> for each implemented
@@ -262,7 +262,7 @@ public abstract class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public RootNode createGlobalRootNode(LLVMNode[] staticInits, RootCallTarget mainCallTarget, LLVMNode[] destructors, Object[] args, Source sourceFile, LLVMRuntimeType[] mainTypes) {
+    public RootNode createGlobalRootNode(LLVMNode[] staticInits, RootCallTarget mainCallTarget, LLVMAddress[] allocatedGlobalAddresses, Object[] args, Source sourceFile, LLVMRuntimeType[] mainTypes) {
         return null;
     }
 
