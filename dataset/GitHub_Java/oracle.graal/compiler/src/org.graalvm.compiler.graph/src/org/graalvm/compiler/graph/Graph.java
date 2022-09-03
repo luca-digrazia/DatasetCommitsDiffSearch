@@ -22,10 +22,6 @@
  */
 package org.graalvm.compiler.graph;
 
-import static org.graalvm.compiler.core.common.GraalOptions.TrackNodeInsertion;
-import static org.graalvm.compiler.graph.Graph.SourcePositionTracking.Default;
-import static org.graalvm.compiler.graph.Graph.SourcePositionTracking.Track;
-import static org.graalvm.compiler.graph.Graph.SourcePositionTracking.UpdateOnly;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
 
@@ -34,24 +30,20 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.function.Consumer;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
-import org.graalvm.collections.UnmodifiableEconomicMap;
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TimerKey;
-import org.graalvm.compiler.graph.Node.NodeInsertionStackTrace;
 import org.graalvm.compiler.graph.Node.ValueNumberable;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
-
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.graalvm.util.EconomicMap;
+import org.graalvm.util.Equivalence;
+import org.graalvm.util.UnmodifiableEconomicMap;
 
 /**
  * This class is a graph container, it contains the set of nodes that belong to this graph.
@@ -73,13 +65,6 @@ public class Graph {
         DeepFreeze
     }
 
-    public enum SourcePositionTracking {
-        Default,
-        Ignore,
-        UpdateOnly,
-        Track
-    }
-
     public final String name;
 
     /**
@@ -95,7 +80,7 @@ public class Graph {
     /**
      * Records if updating of node source information is required when performing inlining.
      */
-    protected SourcePositionTracking trackNodeSourcePosition;
+    boolean seenNodeSourcePosition;
 
     /**
      * The number of valid entries in {@link #nodes}.
@@ -199,7 +184,7 @@ public class Graph {
      *         was opened
      */
     public DebugCloseable withNodeSourcePosition(Node node) {
-        return withNodeSourcePosition(node.getNodeSourcePosition());
+        return withNodeSourcePosition(node.sourcePosition);
     }
 
     /**
@@ -210,7 +195,7 @@ public class Graph {
      *         was opened
      */
     public DebugCloseable withNodeSourcePosition(NodeSourcePosition sourcePosition) {
-        return trackNodeSourcePosition() && sourcePosition != null ? new NodeSourcePositionScope(sourcePosition) : null;
+        return sourcePosition != null ? new NodeSourcePositionScope(sourcePosition) : null;
     }
 
     /**
@@ -227,26 +212,16 @@ public class Graph {
      * to short circuit logic for updating those positions after inlining since that requires
      * visiting every node in the graph.
      */
-    public boolean updateNodeSourcePosition() {
-        return trackNodeSourcePosition == Track || trackNodeSourcePosition == UpdateOnly;
+    public boolean mayHaveNodeSourcePosition() {
+        assert seenNodeSourcePosition || verifyHasNoSourcePosition();
+        return seenNodeSourcePosition;
     }
 
-    public boolean trackNodeSourcePosition() {
-        return trackNodeSourcePosition == Track;
-    }
-
-    public void setTrackNodeSourcePosition() {
-        if (trackNodeSourcePosition != Track) {
-            assert trackNodeSourcePosition == Default : trackNodeSourcePosition;
-            trackNodeSourcePosition = Track;
+    private boolean verifyHasNoSourcePosition() {
+        for (Node node : getNodes()) {
+            assert node.getNodeSourcePosition() == null;
         }
-    }
-
-    public static SourcePositionTracking trackNodeSourcePositionDefault(OptionValues options, DebugContext debug) {
-        if (GraalOptions.TrackNodeSourcePosition.getValue(options) || debug.isDumpEnabledForMethod()) {
-            return Track;
-        }
-        return Default;
+        return true;
     }
 
     /**
@@ -280,7 +255,6 @@ public class Graph {
         iterableNodesLast = new ArrayList<>(NodeClass.allocatedNodeIterabledIds());
         this.name = name;
         this.options = options;
-        this.trackNodeSourcePosition = trackNodeSourcePositionDefault(options, debug);
         assert debug != null;
         this.debug = debug;
 
@@ -384,9 +358,6 @@ public class Graph {
      */
     protected Graph copy(String newName, Consumer<UnmodifiableEconomicMap<Node, Node>> duplicationMapCallback, DebugContext debugForCopy) {
         Graph copy = new Graph(newName, options, debugForCopy);
-        if (trackNodeSourcePosition()) {
-            copy.setTrackNodeSourcePosition();
-        }
         UnmodifiableEconomicMap<Node, Node> duplicates = copy.addDuplicates(getNodes(), this, this.getNodeCount(), (EconomicMap<Node, Node>) null);
         if (duplicationMapCallback != null) {
             duplicationMapCallback.accept(duplicates);
@@ -723,9 +694,6 @@ public class Graph {
         assert node.getNodeClass().valueNumberable();
         T other = this.findDuplicate(node);
         if (other != null) {
-            if (other.getNodeSourcePosition() == null) {
-                other.setNodeSourcePosition(node.getNodeSourcePosition());
-            }
             return other;
         } else {
             T result = addHelper(node);
@@ -1101,12 +1069,10 @@ public class Graph {
         int id = nodesSize++;
         nodes[id] = node;
         node.id = id;
-        if (currentNodeSourcePosition != null && trackNodeSourcePosition()) {
+        if (currentNodeSourcePosition != null) {
             node.setNodeSourcePosition(currentNodeSourcePosition);
         }
-        if (TrackNodeInsertion.getValue(getOptions())) {
-            node.setInsertionPosition(new NodeInsertionStackTrace());
-        }
+        seenNodeSourcePosition = seenNodeSourcePosition || node.getNodeSourcePosition() != null;
 
         updateNodeCaches(node);
 
@@ -1193,23 +1159,6 @@ public class Graph {
                     }
                 } catch (GraalError e) {
                     throw GraalGraphError.transformAndAddContext(e, node).addContext(this);
-                }
-            }
-        }
-        return true;
-    }
-
-    public boolean verifySourcePositions() {
-        if (trackNodeSourcePosition()) {
-            ResolvedJavaMethod root = null;
-            for (Node node : getNodes()) {
-                NodeSourcePosition pos = node.getNodeSourcePosition();
-                if (pos != null) {
-                    if (root == null) {
-                        root = pos.getRootMethod();
-                    } else {
-                        assert pos.verifyRootMethod(root) : node;
-                    }
                 }
             }
         }
