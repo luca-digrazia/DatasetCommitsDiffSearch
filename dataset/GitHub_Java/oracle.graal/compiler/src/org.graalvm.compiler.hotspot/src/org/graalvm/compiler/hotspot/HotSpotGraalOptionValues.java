@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -39,11 +37,10 @@ import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
 
-import jdk.vm.ci.common.NativeImageReinitialize;
 import jdk.vm.ci.common.InitTimer;
 
 /**
- * The {@link #defaultOptions()} methods returns the options values initialized in a HotSpot VM. The
+ * The {@link #HOTSPOT_OPTIONS} value contains the options values initialized in a HotSpot VM. The
  * values are set via system properties with the {@value #GRAAL_OPTION_PROPERTY_PREFIX} prefix.
  */
 public class HotSpotGraalOptionValues {
@@ -72,15 +69,7 @@ public class HotSpotGraalOptionValues {
         return GRAAL_OPTION_PROPERTY_PREFIX + value.getName() + "=" + value.getValue(options);
     }
 
-    @NativeImageReinitialize private static volatile OptionValues hotspotOptions;
-
-    public static OptionValues defaultOptions() {
-        OptionValues options = hotspotOptions;
-        if (options != null) {
-            return options;
-        }
-        return (hotspotOptions = initializeOptions());
-    }
+    public static final OptionValues HOTSPOT_OPTIONS = initializeOptions();
 
     /**
      * Global options. The values for these options are initialized by parsing the file denoted by
