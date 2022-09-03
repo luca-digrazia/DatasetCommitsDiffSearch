@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,98 +22,61 @@
  */
 package com.oracle.graal.lir.ssi;
 
-import java.util.*;
+import java.util.BitSet;
 
-import jdk.internal.jvmci.code.*;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.lir.alloc.lsra.LinearScanLifetimeAnalysisPhase;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.phases.AllocationPhase;
+import com.oracle.graal.lir.ssa.SSAUtil;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.StableOptionValue;
 
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.lir.ssa.*;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
 
-public final class SSIConstructionPhase extends PreAllocationOptimizationPhase {
+/**
+ * Constructs {@linkplain SSIUtil SSI LIR} using a liveness analysis.
+ *
+ * Implementation derived from {@link LinearScanLifetimeAnalysisPhase}.
+ *
+ * @see SSIUtil
+ */
+public final class SSIConstructionPhase extends AllocationPhase {
 
-    @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, LIRGeneratorTool lirGen) {
-        assert SSAUtils.verifySSAForm(lirGenRes.getLIR());
-        LIR lir = lirGenRes.getLIR();
-        new SSIBuilder(lir).build(lirGen);
+    static class Options {
+
+        //@formatter:off
+        @Option(help = "Use fast SSI builder.", type = OptionType.Debug)
+        public static final StableOptionValue<Boolean> TraceRAFastSSIBuilder = new StableOptionValue<>(true);
+        //@formatter:on
     }
 
-    private static class SSIBuilder {
-        private final SSIBlockValueMapImpl valueMap;
-        private final LIR lir;
-        private final BitSet processed;
-
-        private SSIBuilder(LIR lir) {
-            this.lir = lir;
-            valueMap = new SSIBlockValueMapImpl(lir.getControlFlowGraph());
-            processed = new BitSet(lir.getControlFlowGraph().getBlocks().size());
+    @Override
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
+        assert SSAUtil.verifySSAForm(lirGenRes.getLIR());
+        if (Options.TraceRAFastSSIBuilder.getValue()) {
+            FastSSIBuilder fastSSIBuilder = new FastSSIBuilder(lirGenRes.getLIR());
+            fastSSIBuilder.build();
+            fastSSIBuilder.finish();
+        } else {
+            SSIBuilder ssiBuilder = new SSIBuilder(lirGenRes.getLIR());
+            ssiBuilder.build();
+            ssiBuilder.finish();
         }
+    }
 
-        private void build(LIRGeneratorTool lirGen) {
-            Deque<AbstractBlockBase<?>> worklist = new ArrayDeque<>(lir.getControlFlowGraph().getBlocks());
-            while (!worklist.isEmpty()) {
-                AbstractBlockBase<?> block = worklist.poll();
-                if (!processed.get(block.getId())) {
-                    try (Indent indent = Debug.logAndIndent("Try processing Block %s", block)) {
-                        // check predecessors
-                        boolean reschedule = false;
-                        for (AbstractBlockBase<?> pred : block.getPredecessors()) {
-                            if (!processed.get(pred.getId()) && !isLoopBackEdge(pred, block)) {
-                                Debug.log("Schedule predecessor: %s", pred);
-                                worklist.addLast(pred);
-                                reschedule = true;
-                            }
-                        }
-                        if (reschedule) {
-                            Debug.log("Reschedule block %s", block);
-                            worklist.addLast(block);
-                        } else {
-                            processBlock(block);
-                        }
-                    }
-                }
-            }
-            valueMap.finish(lirGen);
+    static void check(AbstractBlockBase<?>[] blocks, SSIBuilderBase liveSets1, SSIBuilderBase liveSets2) {
+        for (AbstractBlockBase<?> block : blocks) {
+            check(block, liveSets1.getLiveIn(block), liveSets2.getLiveIn(block));
+            check(block, liveSets1.getLiveOut(block), liveSets2.getLiveOut(block));
         }
+    }
 
-        public void processBlock(AbstractBlockBase<?> block) {
-            assert !processed.get(block.getId()) : "Block already processed " + block;
-            try (Indent indent = Debug.logAndIndent("Process Block %s", block)) {
-                // track values
-                ValueConsumer useConsumer = (value, mode, flags) -> {
-                    if (flags.contains(OperandFlag.UNINITIALIZED)) {
-                        AbstractBlockBase<?> startBlock = lir.getControlFlowGraph().getStartBlock();
-                        Debug.log("Set definition of %s in block %s", value, startBlock);
-                        valueMap.defineOperand(value, startBlock);
-                    } else {
-                        Debug.log("Access %s in block %s", value, block);
-                        valueMap.accessOperand(value, block);
-                    }
-                };
-                ValueConsumer defConsumer = (value, mode, flags) -> {
-                    Debug.log("Set definition of %s in block %s", value, block);
-                    valueMap.defineOperand(value, block);
-                };
-                for (LIRInstruction op : lir.getLIRforBlock(block)) {
-                    // use
-                    op.visitEachInput(useConsumer);
-                    op.visitEachAlive(useConsumer);
-                    op.visitEachState(useConsumer);
-                    // def
-                    op.visitEachTemp(defConsumer);
-                    op.visitEachOutput(defConsumer);
-                }
-                processed.set(block.getId());
-            }
-        }
-
-        private static boolean isLoopBackEdge(AbstractBlockBase<?> from, AbstractBlockBase<?> to) {
-            return from.isLoopEnd() && to.isLoopHeader() && from.getLoop().equals(to.getLoop());
+    private static void check(AbstractBlockBase<?> block, BitSet liveIn1, BitSet liveIn2) {
+        if (!liveIn1.equals(liveIn2)) {
+            throw JVMCIError.shouldNotReachHere(String.format("%s LiveSet differ: %s vs %s", block, liveIn1, liveIn2));
         }
     }
 }
