@@ -25,6 +25,8 @@ package com.oracle.graal.hotspot.bridge;
 
 import java.io.*;
 
+import com.oracle.graal.api.meta.*;
+
 /**
  * Calls from HotSpot into Java.
  */
@@ -38,15 +40,31 @@ public interface VMToCompiler {
 
     void shutdownCompiler() throws Exception;
 
-    /**
-     * @param hostedOnly specifies if the Graal compiler is only being used in hosted mode (i.e., it
-     *            will never compile itself)
-     */
-    void startCompiler(boolean bootstrapEnabled, boolean hostedOnly) throws Throwable;
+    void startCompiler(boolean bootstrapEnabled) throws Throwable;
 
     void bootstrap() throws Throwable;
 
     void compileTheWorld() throws Throwable;
 
     PrintStream log();
+
+    JavaMethod createUnresolvedJavaMethod(String name, String signature, JavaType holder);
+
+    JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags, boolean internal);
+
+    ResolvedJavaMethod createResolvedJavaMethod(JavaType holder, long metaspaceMethod);
+
+    JavaType createPrimitiveJavaType(int basicType);
+
+    JavaType createUnresolvedJavaType(String name);
+
+    /**
+     * Creates a resolved Java type.
+     * 
+     * @param javaMirror the {@link Class} mirror
+     * @return the resolved type associated with {@code javaMirror} which may not be the type
+     *         instantiated by this call in the case of another thread racing to create the same
+     *         type
+     */
+    ResolvedJavaType createResolvedJavaType(Class javaMirror);
 }
