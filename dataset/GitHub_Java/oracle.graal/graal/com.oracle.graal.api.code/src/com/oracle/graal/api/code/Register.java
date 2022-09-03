@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,31 @@
  */
 package com.oracle.graal.api.code;
 
-import java.io.*;
-import java.util.*;
-
 import com.oracle.graal.api.meta.*;
 
 /**
  * Represents a target machine register.
  */
-public final class Register implements Comparable<Register>, Serializable {
+public final class Register implements Comparable<Register> {
 
-    private static final long serialVersionUID = -7213269157816016300L;
+    public static final RegisterCategory SPECIAL = new RegisterCategory("SPECIAL");
 
     /**
      * Invalid register.
      */
-    public static final Register None = new Register(-1, -1, 0, "noreg");
+    public static final Register None = new Register(-1, -1, "noreg", SPECIAL);
 
     /**
-     * Frame pointer of the current method. All spill slots and outgoing stack-based arguments
-     * are addressed relative to this register.
+     * Frame pointer of the current method. All spill slots and outgoing stack-based arguments are
+     * addressed relative to this register.
      */
-    public static final Register Frame = new Register(-2, -2, 0, "framereg", RegisterFlag.CPU);
+    public static final Register Frame = new Register(-2, -2, "framereg", SPECIAL);
 
-    public static final Register CallerFrame = new Register(-3, -3, 0, "callerframereg", RegisterFlag.CPU);
+    public static final Register CallerFrame = new Register(-3, -3, "callerframereg", SPECIAL);
 
     /**
-     * The identifier for this register that is unique across all the registers in a {@link Architecture}.
-     * A valid register has {@code number > 0}.
+     * The identifier for this register that is unique across all the registers in a
+     * {@link Architecture}. A valid register has {@code number > 0}.
      */
     public final int number;
 
@@ -59,48 +56,66 @@ public final class Register implements Comparable<Register>, Serializable {
     public final String name;
 
     /**
-     * The actual encoding in a target machine instruction for this register, which may or
-     * may not be the same as {@link #number}.
+     * The actual encoding in a target machine instruction for this register, which may or may not
+     * be the same as {@link #number}.
      */
     public final int encoding;
 
     /**
-     * The size of the stack slot used to spill the value of this register.
+     * The assembler calls this method to get the register's encoding.
      */
-    public final int spillSlotSize;
+    public int encoding() {
+        return encoding;
+    }
 
     /**
-     * The set of {@link RegisterFlag} values associated with this register.
+     * A platform specific register category that describes which values can be stored in a
+     * register.
      */
-    private final int flags;
+    private final RegisterCategory registerCategory;
 
     /**
-     * An array of {@link RegisterValue} objects, for this register, with one entry
-     * per {@link Kind}, indexed by {@link Kind#ordinal}.
+     * A platform specific register type that describes which values can be stored in a register.
      */
-    private final RegisterValue[] values;
+    public static class RegisterCategory {
 
-    /**
-     * Attributes that characterize a register in a useful way.
-     *
-     */
-    public enum RegisterFlag {
-        /**
-         * Denotes an integral (i.e. non floating point) register.
-         */
-        CPU,
+        private final String name;
 
-        /**
-         * Denotes a register whose lowest order byte can be addressed separately.
-         */
-        Byte,
+        private final int referenceMapOffset;
+        private final int referenceMapShift;
 
-        /**
-         * Denotes a floating point register.
-         */
-        FPU;
+        public RegisterCategory(String name) {
+            this(name, 0, 0);
+        }
 
-        public final int mask = 1 << (ordinal() + 1);
+        public RegisterCategory(String name, int referenceMapOffset) {
+            this(name, referenceMapOffset, 0);
+        }
+
+        public RegisterCategory(String name, int referenceMapOffset, int referenceMapShift) {
+            this.name = name;
+            this.referenceMapOffset = referenceMapOffset;
+            this.referenceMapShift = referenceMapShift;
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
+
+        @Override
+        public int hashCode() {
+            return 23 + name.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof RegisterCategory) {
+                RegisterCategory that = (RegisterCategory) obj;
+                return this.referenceMapOffset == that.referenceMapOffset && this.referenceMapShift == that.referenceMapShift && this.name.equals(that.name);
+            }
+            return false;
+        }
     }
 
     /**
@@ -108,101 +123,53 @@ public final class Register implements Comparable<Register>, Serializable {
      *
      * @param number unique identifier for the register
      * @param encoding the target machine encoding for the register
-     * @param spillSlotSize the size of the stack slot used to spill the value of the register
      * @param name the mnemonic name for the register
-     * @param flags the set of {@link RegisterFlag} values for the register
+     * @param registerCategory the register category
      */
-    public Register(int number, int encoding, int spillSlotSize, String name, RegisterFlag... flags) {
+    public Register(int number, int encoding, String name, RegisterCategory registerCategory) {
         this.number = number;
         this.name = name;
-        this.spillSlotSize = spillSlotSize;
-        this.flags = createMask(flags);
+        this.registerCategory = registerCategory;
         this.encoding = encoding;
-
-        values = new RegisterValue[Kind.VALUES.length];
-        for (Kind kind : Kind.VALUES) {
-            values[kind.ordinal()] = new RegisterValue(kind, this);
-        }
     }
 
-    private static int createMask(RegisterFlag... flags) {
-        int result = 0;
-        for (RegisterFlag f : flags) {
-            result |= f.mask;
-        }
-        return result;
+    public RegisterCategory getRegisterCategory() {
+        return registerCategory;
     }
 
-    public boolean isSet(RegisterFlag f) {
-        return (flags & f.mask) != 0;
+    /**
+     * Get the start index of this register in the {@link ReferenceMap}.
+     */
+    public int getReferenceMapIndex() {
+        return (encoding << registerCategory.referenceMapShift) + registerCategory.referenceMapOffset;
     }
 
     /**
      * Gets this register as a {@linkplain RegisterValue value} with a specified kind.
+     *
      * @param kind the specified kind
      * @return the {@link RegisterValue}
      */
-    public RegisterValue asValue(Kind kind) {
-        return values[kind.ordinal()];
+    public RegisterValue asValue(LIRKind kind) {
+        return new RegisterValue(kind, this);
     }
 
     /**
      * Gets this register as a {@linkplain RegisterValue value} with no particular kind.
+     *
      * @return a {@link RegisterValue} with {@link Kind#Illegal} kind.
      */
     public RegisterValue asValue() {
-        return asValue(Kind.Illegal);
+        return asValue(LIRKind.Illegal);
     }
 
     /**
      * Determines if this is a valid register.
+     *
      * @return {@code true} iff this register is valid
      */
     public boolean isValid() {
         return number >= 0;
-    }
-
-    /**
-     * Determines if this a floating point register.
-     */
-    public boolean isFpu() {
-        return isSet(RegisterFlag.FPU);
-    }
-
-    /**
-     * Determines if this a general purpose register.
-     */
-    public boolean isCpu() {
-        return isSet(RegisterFlag.CPU);
-    }
-
-    /**
-     * Determines if this register has the {@link RegisterFlag#Byte} attribute set.
-     * @return {@code true} iff this register has the {@link RegisterFlag#Byte} attribute set.
-     */
-    public boolean isByte() {
-        return isSet(RegisterFlag.Byte);
-    }
-
-    /**
-     * Categorizes a set of registers by {@link RegisterFlag}.
-     *
-     * @param registers a list of registers to be categorized
-     * @return a map from each {@link RegisterFlag} constant to the list of registers for which the flag is
-     *         {@linkplain #isSet(RegisterFlag) set}
-     */
-    public static EnumMap<RegisterFlag, Register[]> categorize(Register[] registers) {
-        EnumMap<RegisterFlag, Register[]> result = new EnumMap<>(RegisterFlag.class);
-        for (RegisterFlag flag : RegisterFlag.values()) {
-            ArrayList<Register> list = new ArrayList<>();
-            for (Register r : registers) {
-                if (r.isSet(flag)) {
-                    list.add(r);
-                }
-            }
-            result.put(flag, list.toArray(new Register[list.size()]));
-        }
-        return result;
     }
 
     /**
@@ -253,4 +220,22 @@ public final class Register implements Comparable<Register>, Serializable {
         return 0;
     }
 
+    @Override
+    public int hashCode() {
+        return 17 + name.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof Register) {
+            Register other = (Register) obj;
+            if (number == other.number) {
+                assert name.equals(other.name);
+                assert encoding == other.encoding;
+                assert registerCategory.equals(other.registerCategory);
+                return true;
+            }
+        }
+        return false;
+    }
 }
