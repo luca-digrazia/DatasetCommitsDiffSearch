@@ -142,7 +142,22 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         if (substitution != null) {
             return substitution;
         }
+        if (getAnnotation(NativeImageReinitialize.class, field) != null) {
+            synchronized (fieldSubstitutions) {
+                substitution = fieldSubstitutions.get(field);
+                if (substitution == null) {
+                    boolean isFinal = false;
+                    substitution = new ComputedValueField(field, null, Kind.Reset, null, "", isFinal);
+                    fieldSubstitutions.put(field, substitution);
+                }
+                return substitution;
+            }
+        }
         return field;
+    }
+
+    private static <T extends Annotation> T getAnnotation(Class<T> type, ResolvedJavaField field) {
+        return type.cast(field.getAnnotation(type));
     }
 
     public boolean isDeleted(ResolvedJavaField field) {
@@ -223,11 +238,6 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
 
         for (Class<?> annotatedClass : annotatedClasses) {
             handleClass(annotatedClass);
-        }
-
-        List<Field> annotatedFields = imageClassLoader.findAnnotatedFields(NativeImageReinitialize.class);
-        for (Field annotatedField : annotatedFields) {
-            reinitializeField(annotatedField);
         }
     }
 
@@ -712,12 +722,6 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         }
 
         return new ComputedValueField(original, annotated, kind, targetClass, targetName, isFinal);
-    }
-
-    private void reinitializeField(Field annotatedField) {
-        ResolvedJavaField annotated = metaAccess.lookupJavaField(annotatedField);
-        ComputedValueField alias = new ComputedValueField(annotated, annotated, Kind.Reset, annotatedField.getDeclaringClass(), "", false);
-        register(fieldSubstitutions, annotated, annotated, alias);
     }
 
     public Class<?> getTargetClass(Class<?> annotatedClass) {

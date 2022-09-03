@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,12 +32,11 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.util.Collections;
 import java.util.EnumSet;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
+import java.util.HashMap;
+import java.util.Map;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 
 import com.oracle.graal.pointsto.meta.AnalysisField;
@@ -75,14 +74,7 @@ public class ComputedValueField implements ReadableJavaField, ComputedValue {
     private final boolean isFinal;
 
     private JavaConstant constantValue;
-
-    private final EconomicMap<JavaConstant, JavaConstant> valueCache;
-    /**
-     * Economic map does not allow to store null keys. Therefore null key is stored in an extra
-     * field.
-     */
-    private JavaConstant valueCacheNullKey;
-    private final ReentrantReadWriteLock valueCacheLock = new ReentrantReadWriteLock();
+    private final Map<JavaConstant, JavaConstant> valueCache;
 
     private HostedMetaAccess hMetaAccess;
 
@@ -113,7 +105,7 @@ public class ComputedValueField implements ReadableJavaField, ComputedValue {
         }
         guarantee(!isFinal || isFinalValid(kind));
         this.targetField = f;
-        this.valueCache = EconomicMap.create();
+        this.valueCache = Collections.synchronizedMap(new HashMap<>());
     }
 
     public static boolean isFinalValid(RecomputeFieldValue.Kind kind) {
@@ -210,7 +202,7 @@ public class ComputedValueField implements ReadableJavaField, ComputedValue {
             return ReadableJavaField.readFieldValue(GraalAccess.getOriginalProviders().getConstantReflection(), original, receiver);
         }
 
-        JavaConstant result = getCached(receiver);
+        JavaConstant result = valueCache.get(receiver);
         if (result != null) {
             return result;
         }
@@ -267,37 +259,8 @@ public class ComputedValueField implements ReadableJavaField, ComputedValue {
             default:
                 throw shouldNotReachHere("Field recomputation of kind " + kind + " specified by alias " + annotated.format("%H.%n") + " not yet supported");
         }
-        putCached(receiver, result);
-        return result;
-    }
 
-    private void putCached(JavaConstant receiver, JavaConstant result) {
-        WriteLock writeLock = valueCacheLock.writeLock();
-        try {
-            writeLock.lock();
-            if (receiver == null) {
-                valueCacheNullKey = result;
-            } else {
-                valueCache.put(receiver, result);
-            }
-        } finally {
-            writeLock.unlock();
-        }
-    }
-
-    private JavaConstant getCached(JavaConstant receiver) {
-        JavaConstant result;
-        ReadLock readLock = valueCacheLock.readLock();
-        try {
-            readLock.lock();
-            if (receiver == null) {
-                result = valueCacheNullKey;
-            } else {
-                result = valueCache.get(receiver);
-            }
-        } finally {
-            readLock.unlock();
-        }
+        valueCache.put(receiver, result);
         return result;
     }
 
