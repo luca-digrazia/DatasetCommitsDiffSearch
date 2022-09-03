@@ -22,14 +22,29 @@
  */
 package com.oracle.graal.truffle.test;
 
-import org.junit.*;
-import org.junit.runner.*;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
-import com.oracle.graal.truffle.test.builtins.*;
-import com.oracle.truffle.sl.test.*;
+import com.oracle.graal.truffle.test.builtins.SLAssertFalseBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLAssertTrueBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLCallFunctionsWithBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLCallUntilOptimizedBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLDeoptimizeWhenCompiledBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLDisableSplittingBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLGenerateDummyNodesBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLGetOptionBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLIsCompilationConstantBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLIsInlinedBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLIsOptimizedBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLSetOptionBuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLTestTruffleBoundary01BuiltinFactory;
+import com.oracle.graal.truffle.test.builtins.SLWaitForOptimizationBuiltinFactory;
+import com.oracle.truffle.sl.test.SLTestRunner;
+import com.oracle.truffle.sl.test.SLTestSuite;
 
 @RunWith(SLTestRunner.class)
-@SLTestSuite({"graal/com.oracle.graal.truffle.test/sl", "sl"})
+@SLTestSuite({"sl"})
 public class SLTruffleGraalTestSuite {
 
     public static void main(String[] args) throws Exception {
@@ -38,7 +53,6 @@ public class SLTruffleGraalTestSuite {
 
     @BeforeClass
     public static void setupTestRunner() {
-        SLTestRunner.setRepeats(1);
         SLTestRunner.installBuiltin(SLGetOptionBuiltinFactory.getInstance());
         SLTestRunner.installBuiltin(SLSetOptionBuiltinFactory.getInstance());
         SLTestRunner.installBuiltin(SLIsOptimizedBuiltinFactory.getInstance());
@@ -47,9 +61,14 @@ public class SLTruffleGraalTestSuite {
         SLTestRunner.installBuiltin(SLCallUntilOptimizedBuiltinFactory.getInstance());
         SLTestRunner.installBuiltin(SLIsInlinedBuiltinFactory.getInstance());
         SLTestRunner.installBuiltin(SLGenerateDummyNodesBuiltinFactory.getInstance());
+        SLTestRunner.installBuiltin(SLCallFunctionsWithBuiltinFactory.getInstance());
+        SLTestRunner.installBuiltin(SLIsCompilationConstantBuiltinFactory.getInstance());
+        SLTestRunner.installBuiltin(SLDeoptimizeWhenCompiledBuiltinFactory.getInstance());
+        SLTestRunner.installBuiltin(SLAssertTrueBuiltinFactory.getInstance());
+        SLTestRunner.installBuiltin(SLAssertFalseBuiltinFactory.getInstance());
 
         /* test specific builtins */
-        SLTestRunner.installBuiltin(SLTestSlowPath01BuiltinFactory.getInstance());
+        SLTestRunner.installBuiltin(SLTestTruffleBoundary01BuiltinFactory.getInstance());
     }
 
     /*
