@@ -92,7 +92,6 @@ import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.except.LLVMUserException;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.UniquesRegion;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
@@ -118,7 +117,6 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
     private final List<? extends FrameSlot> frameSlots;
     private final List<FrameSlot> notNullable;
     private final LLVMRuntimeDebugInformation dbgInfoHandler;
-    private final UniquesRegion uniquesRegion;
 
     private final List<LLVMStatementNode> blockInstructions;
     private int instructionIndex;
@@ -126,8 +124,8 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
     private LLVMSourceLocation lastLocation;
 
-    LLVMBitcodeInstructionVisitor(FrameDescriptor frame, UniquesRegion uniquesRegion, List<Phi> blockPhis, NodeFactory nodeFactory, int argCount, LLVMSymbolReadResolver symbols, LLVMContext context,
-                    ExternalLibrary library, ArrayList<LLVMLivenessAnalysis.NullerInformation> nullerInfos, List<FrameSlot> notNullable, LLVMRuntimeDebugInformation dbgInfoHandler) {
+    LLVMBitcodeInstructionVisitor(FrameDescriptor frame, List<Phi> blockPhis, NodeFactory nodeFactory, int argCount, LLVMSymbolReadResolver symbols, LLVMContext context, ExternalLibrary library,
+                    ArrayList<LLVMLivenessAnalysis.NullerInformation> nullerInfos, List<FrameSlot> notNullable, LLVMRuntimeDebugInformation dbgInfoHandler) {
         this.frame = frame;
         this.blockPhis = blockPhis;
         this.nodeFactory = nodeFactory;
@@ -140,7 +138,6 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         this.notNullable = notNullable;
         this.dbgInfoHandler = dbgInfoHandler;
         this.lastLocation = null;
-        this.uniquesRegion = uniquesRegion;
 
         this.blockInstructions = new ArrayList<>();
     }
@@ -241,7 +238,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
         if (targetType instanceof StructureType) {
             argTypes[argIndex] = new PointerType(targetType);
-            argNodes[argIndex] = nodeFactory.createUniqueAlloc(context, targetType, uniquesRegion);
+            argNodes[argIndex] = nodeFactory.createUniqueAlloc(context, targetType);
             argIndex++;
         }
         for (int i = 0; argIndex < argumentCount; i++) {
@@ -275,7 +272,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
     @Override
     public void visit(LandingpadInstruction landingpadInstruction) {
         Type type = landingpadInstruction.getType();
-        LLVMExpressionNode allocateLandingPadValue = nodeFactory.createUniqueAlloc(context, type, uniquesRegion);
+        LLVMExpressionNode allocateLandingPadValue = nodeFactory.createUniqueAlloc(context, type);
         LLVMExpressionNode[] entries = new LLVMExpressionNode[landingpadInstruction.getClauseSymbols().length];
         for (int i = 0; i < entries.length; i++) {
             entries[i] = symbols.resolve(landingpadInstruction.getClauseSymbols()[i]);
@@ -385,7 +382,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         argIndex++;
         if (targetType instanceof StructureType) {
             argTypes[argIndex] = new PointerType(targetType);
-            argNodes[argIndex] = nodeFactory.createUniqueAlloc(context, targetType, uniquesRegion);
+            argNodes[argIndex] = nodeFactory.createUniqueAlloc(context, targetType);
             argIndex++;
         }
         for (int i = 0; argIndex < argumentCount; i++, argIndex++) {
@@ -634,7 +631,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         final Type valueType = insert.getValue().getType();
         final int targetIndex = insert.getIndex();
 
-        final LLVMExpressionNode resultAggregate = nodeFactory.createUniqueAlloc(context, sourceType, uniquesRegion);
+        final LLVMExpressionNode resultAggregate = nodeFactory.createUniqueAlloc(context, sourceType);
 
         final long offset = context.getIndexOffset(targetIndex, sourceType);
         final LLVMExpressionNode result = nodeFactory.createInsertValue(resultAggregate, sourceAggregate,
