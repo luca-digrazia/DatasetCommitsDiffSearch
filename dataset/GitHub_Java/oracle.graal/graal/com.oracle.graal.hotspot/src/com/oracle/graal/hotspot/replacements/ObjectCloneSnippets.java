@@ -27,7 +27,6 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.hotspot.replacements.arraycopy.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.replacements.*;
@@ -114,7 +113,7 @@ public class ObjectCloneSnippets implements Snippets {
 
     @Snippet(removeAllFrameStates = true)
     public static Object[] objectArrayClone(Object[] src) {
-        Object[] result = (Object[]) DynamicNewArrayNode.newUninitializedArray(GuardingPiNode.guardingNonNull(src.getClass().getComponentType()), src.length, Kind.Object);
+        Object[] result = (Object[]) DynamicNewArrayNode.newUninitializedArray(GuardingPiNode.guardingNonNull(src.getClass().getComponentType()), src.length);
         ArrayCopyCallNode.disjointUninitializedArraycopy(src, 0, result, 0, src.length, Kind.Object);
         return result;
     }
