@@ -1739,7 +1739,7 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    protected enum ExceptionEdgeAction {
+    enum ExceptionEdgeAction {
         OMIT,
         INCLUDE_AND_HANDLE,
         INCLUDE_AND_DEOPTIMIZE
