@@ -106,7 +106,6 @@ public class RootNameDirectiveTest extends GraalCompilerTest {
     static String rootNameInCallee;
     static String rootNameInCaller;
 
-    @BytecodeParserForceInline
     public static void rootNameWithinInstrumentationSnippet() {
         GraalDirectives.instrumentationBegin();
         rootNameInCallee = GraalDirectives.rootName();
