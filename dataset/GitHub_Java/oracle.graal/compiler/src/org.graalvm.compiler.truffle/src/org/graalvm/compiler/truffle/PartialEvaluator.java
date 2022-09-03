@@ -33,6 +33,7 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrum
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleIterativePartialEscape;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TrufflePerformanceWarningsAreFatal;
 
+import java.lang.invoke.MethodHandle;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,16 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.SpeculationLog;
-
+import jdk.vm.ci.meta.*;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.type.StampPair;
@@ -117,6 +109,9 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.common.JVMCIError;
+
 /**
  * Class performing the partial evaluation starting from the root node of an AST.
  */
@@ -142,16 +137,14 @@ public class PartialEvaluator {
         this.architecture = architecture;
         this.canonicalizer = new CanonicalizerPhase();
         this.snippetReflection = snippetReflection;
+        this.callDirectMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod());
+        this.callInlinedMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallInlinedMethod());
+        this.callSiteProxyMethod = providers.getMetaAccess().lookupJavaMethod(GraalFrameInstance.CALL_NODE_METHOD);
+        this.knownTruffleFields = new KnownTruffleFields(providers.getMetaAccess());
         this.instrumentation = instrumentation;
 
-        MetaAccessProvider metaAccess = providers.getMetaAccess();
-        this.callDirectMethod = metaAccess.lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod());
-        this.callInlinedMethod = metaAccess.lookupJavaMethod(OptimizedCallTarget.getCallInlinedMethod());
-        this.callSiteProxyMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_NODE_METHOD);
-        this.knownTruffleFields = new KnownTruffleFields(metaAccess);
-
         try {
-            callRootMethod = metaAccess.lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("callRoot", Object[].class));
+            callRootMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("callRoot", Object[].class));
         } catch (NoSuchMethodException ex) {
             throw new RuntimeException(ex);
         }
@@ -163,6 +156,14 @@ public class PartialEvaluator {
 
     public Providers getProviders() {
         return providers;
+    }
+
+    public MetaAccessProvider getMetaAccess() {
+        return providers.getMetaAccess();
+    }
+
+    public SnippetReflectionProvider getSnippetReflection() {
+        return snippetReflection;
     }
 
     public GraphBuilderConfiguration getConfigForParsing() {
@@ -195,7 +196,7 @@ public class PartialEvaluator {
 
     @SuppressWarnings("try")
     public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, ResolvedJavaMethod rootMethod, AllowAssumptions allowAssumptions,
-                                       CompilationIdentifier compilationId, SpeculationLog log, CancellableCompileTask task) {
+                    CompilationIdentifier compilationId, SpeculationLog log, CancellableCompileTask task) {
 
         String name = callTarget.toString();
         OptionValues options = TruffleCompilerOptions.getOptions();
@@ -256,7 +257,7 @@ public class PartialEvaluator {
         @Override
         public FloatingNode interceptParameter(GraphBuilderTool b, int index, StampPair stamp) {
             if (index == 0) {
-                return ConstantNode.forConstant(snippetReflection.forObject(receiver), providers.getMetaAccess());
+                return ConstantNode.forConstant(snippetReflection.forObject(receiver), getMetaAccess());
             }
             return null;
         }
@@ -423,7 +424,7 @@ public class PartialEvaluator {
             plugins.appendInlineInvokePlugin(new InlineDuringParsingPlugin());
         }
 
-        Providers compilationUnitProviders = providers.copyWith(new TruffleConstantFieldProvider(providers.getConstantFieldProvider(), providers.getMetaAccess()));
+        Providers compilationUnitProviders = providers.copyWith(new TruffleConstantFieldProvider(providers.getConstantFieldProvider(), getMetaAccess()));
         return new CachingPEGraphDecoder(architecture, graph, compilationUnitProviders, newConfig, TruffleCompiler.Optimizations, AllowAssumptions.ifNonNull(graph.getAssumptions()),
                         loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePluginList);
     }
@@ -465,11 +466,10 @@ public class PartialEvaluator {
     }
 
     protected void registerTruffleInvocationPlugins(InvocationPlugins invocationPlugins, boolean canDelayIntrinsification) {
-        ConstantReflectionProvider constantReflection = providers.getConstantReflection();
-        TruffleGraphBuilderPlugins.registerInvocationPlugins(invocationPlugins, canDelayIntrinsification, constantReflection, snippetReflection, knownTruffleFields);
+        TruffleGraphBuilderPlugins.registerInvocationPlugins(invocationPlugins, canDelayIntrinsification, snippetReflection, knownTruffleFields);
 
         for (TruffleInvocationPluginProvider p : GraalServices.load(TruffleInvocationPluginProvider.class)) {
-            p.registerInvocationPlugins(providers.getMetaAccess(), invocationPlugins, canDelayIntrinsification, constantReflection);
+            p.registerInvocationPlugins(getMetaAccess(), invocationPlugins, canDelayIntrinsification, providers.getConstantReflection(), snippetReflection);
         }
     }
 
