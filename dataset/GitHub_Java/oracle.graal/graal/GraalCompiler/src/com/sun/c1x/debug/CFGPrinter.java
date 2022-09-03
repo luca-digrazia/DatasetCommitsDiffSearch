@@ -99,10 +99,6 @@ public class CFGPrinter {
 
     private void end(String string) {
         out.adjustIndentation(-2);
-        end("states");
-        end("states");
-        end("states");
-        end("states");
         out.println("end_" + string);
     }
 
@@ -131,7 +127,6 @@ public class CFGPrinter {
     void printBlock(BlockBegin block, List<BlockBegin> successors, Iterable<BlockBegin> handlers, boolean printHIR, boolean printLIR) {
         begin("block");
 
-        end("states");
         out.print("name \"B").print(block.blockID).println('"');
         out.print("from_bci ").println(block.bci());
         out.print("to_bci ").println(block.end() == null ? -1 : block.end().bci());
@@ -163,8 +158,6 @@ public class CFGPrinter {
         }
         if (block.isSubroutineEntry()) {
             out.print("\"sr\" ");
-            end("states");
-            end("states");
         }
         if (block.isBackwardBranchTarget()) {
             out.print("\"bb\" ");
@@ -209,68 +202,73 @@ public class CFGPrinter {
      * @param block the block for which the frame state is to be printed
      */
     private void printState(BlockBegin block) {
-        begin("state");
+        begin("states");
 
         FrameState state = block.stateBefore();
-        int stackSize = state.stackSize();
-        if (stackSize > 0) {
-            begin("stack");
-            out.print("size ").println(stackSize);
-            out.print("method \"").print(CiUtil.toLocation(state.method, state.bci)).println('"');
 
+        do {
+            int stackSize = state.stackSize();
+            if (stackSize > 0) {
+                begin("stack");
+                out.print("size ").println(stackSize);
+                out.print("method \"").print(CiUtil.toLocation(state.scope().method, state.bci)).println('"');
+
+                int i = 0;
+                while (i < stackSize) {
+                    Value value = state.stackAt(i);
+                    out.disableIndentation();
+                    out.print(block.stateString(i, value));
+                    printOperand(value);
+                    out.println();
+                    out.enableIndentation();
+                    if (value == null) {
+                        i++;
+                    } else {
+                        i += value.kind.sizeInSlots();
+                    }
+                }
+                end("stack");
+            }
+
+            if (state.locksSize() > 0) {
+                begin("locks");
+                out.print("size ").println(state.locksSize());
+                out.print("method \"").print(CiUtil.toLocation(state.scope().method, state.bci)).println('"');
+
+                for (int i = 0; i < state.locksSize(); ++i) {
+                    Value value = state.lockAt(i);
+                    out.disableIndentation();
+                    out.print(block.stateString(i, value));
+                    printOperand(value);
+                    out.println();
+                    out.enableIndentation();
+                }
+                end("locks");
+            }
+
+            begin("locals");
+            out.print("size ").println(state.localsSize());
+            out.print("method \"").print(CiUtil.toLocation(state.scope().method, state.bci)).println('"');
             int i = 0;
-            while (i < stackSize) {
-                Value value = state.stackAt(i);
-                out.disableIndentation();
-                out.print(block.stateString(i, value));
-                printOperand(value);
-                out.println();
-                out.enableIndentation();
-                if (value == null) {
-                    i++;
+            while (i < state.localsSize()) {
+                Value value = state.localAt(i);
+                if (value != null) {
+                    out.disableIndentation();
+                    out.print(block.stateString(i, value));
+                    printOperand(value);
+                    out.println();
+                    out.enableIndentation();
+                    // also ignore illegal HiWords
+                    i += value.isIllegal() ? 1 : value.kind.sizeInSlots();
                 } else {
-                    i += value.kind.sizeInSlots();
+                    i++;
                 }
             }
-            end("stack");
-        }
+            state = state.callerState();
+            end("locals");
+        } while (state != null);
 
-        if (state.locksSize() > 0) {
-            begin("locks");
-            out.print("size ").println(state.locksSize());
-            out.print("method \"").print(CiUtil.toLocation(state.method, state.bci)).println('"');
-
-            for (int i = 0; i < state.locksSize(); ++i) {
-                Value value = state.lockAt(i);
-                out.disableIndentation();
-                out.print(block.stateString(i, value));
-                printOperand(value);
-                out.println();
-                out.enableIndentation();
-            }
-            end("locks");
-        }
-
-        begin("locals");
-        out.print("size ").println(state.localsSize());
-        out.print("method \"").print(CiUtil.toLocation(state.method, state.bci)).println('"');
-        int i = 0;
-        while (i < state.localsSize()) {
-            Value value = state.localAt(i);
-            if (value != null) {
-                out.disableIndentation();
-                out.print(block.stateString(i, value));
-                printOperand(value);
-                out.println();
-                out.enableIndentation();
-                // also ignore illegal HiWords
-                i += value.isIllegal() ? 1 : value.kind.sizeInSlots();
-            } else {
-                i++;
-            }
-        }
-        end("locals");
-        end("state");
+        end("states");
     }
 
     /**
@@ -282,45 +280,49 @@ public class CFGPrinter {
         }
 
         StringBuilder buf = new StringBuilder();
-        buf.append(CiUtil.toLocation(state.method, state.bci));
-        buf.append('\n');
-        if (state.stackSize() > 0) {
+
+        do {
+            buf.append(CiUtil.toLocation(state.scope().method, state.bci));
+            buf.append('\n');
+            if (state.stackSize() > 0) {
+                int i = 0;
+                buf.append("stack: ");
+                while (i < state.stackSize()) {
+                    if (i == 0) {
+                        buf.append(' ');
+                    }
+                    Value value = state.stackAt(i);
+                    buf.append(stateValueToString(value, operandFmt)).append(' ');
+                    i++;
+                }
+                buf.append("\n");
+            }
+
+            if (state.locksSize() > 0) {
+                buf.append("locks: ");
+                for (int i = 0; i < state.locksSize(); ++i) {
+                    if (i == 0) {
+                        buf.append(' ');
+                    }
+                    Value value = state.lockAt(i);
+                    buf.append(stateValueToString(value, operandFmt)).append(' ');
+                }
+                buf.append("\n");
+            }
+
+            buf.append("locals: ");
             int i = 0;
-            buf.append("stack: ");
-            while (i < state.stackSize()) {
+            while (i < state.localsSize()) {
                 if (i == 0) {
                     buf.append(' ');
                 }
-                Value value = state.stackAt(i);
+                Value value = state.localAt(i);
                 buf.append(stateValueToString(value, operandFmt)).append(' ');
                 i++;
             }
             buf.append("\n");
-        }
-
-        if (state.locksSize() > 0) {
-            buf.append("locks: ");
-            for (int i = 0; i < state.locksSize(); ++i) {
-                if (i == 0) {
-                    buf.append(' ');
-                }
-                Value value = state.lockAt(i);
-                buf.append(stateValueToString(value, operandFmt)).append(' ');
-            }
-            buf.append("\n");
-        }
-
-        buf.append("locals: ");
-        int i = 0;
-        while (i < state.localsSize()) {
-            if (i == 0) {
-                buf.append(' ');
-            }
-            Value value = state.localAt(i);
-            buf.append(stateValueToString(value, operandFmt)).append(' ');
-            i++;
-        }
-        buf.append("\n");
+            state = state.callerState();
+        } while (state != null);
         return buf.toString();
     }
 

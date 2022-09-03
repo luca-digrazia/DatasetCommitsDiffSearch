@@ -419,6 +419,9 @@ public final class LIRList {
         TTY.print("B%d ", x.blockID);
 
         // print flags
+        if (x.checkBlockFlag(BlockBegin.BlockFlag.StandardEntry)) {
+            TTY.print("std ");
+        }
         if (x.checkBlockFlag(BlockBegin.BlockFlag.ExceptionEntry)) {
             TTY.print("ex ");
         }

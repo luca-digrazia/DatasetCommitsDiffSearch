@@ -510,7 +510,22 @@ public final class ComputeLinearScanOrder {
 
         assert startBlock.end() instanceof Base : "start block must end with Base-instruction";
         BlockBegin stdEntry = ((Base) startBlock.end()).standardEntry();
+        BlockBegin osrEntry = ((Base) startBlock.end()).osrEntry();
 
+        BlockBegin suxOfOsrEntry = null;
+        if (osrEntry != null) {
+            // special handling for osr entry:
+            // ignore the edge between the osr entry and its successor for processing
+            // the osr entry block is added manually below
+            assert osrEntry.numberOfSux() == 1 : "osr entry must have exactly one successor";
+            assert osrEntry.suxAt(0).numberOfPreds() >= 2 : "sucessor of osr entry must have two predecessors (otherwise it is not present in normal control flow)";
+
+            suxOfOsrEntry = osrEntry.suxAt(0);
+            decForwardBranches(suxOfOsrEntry);
+
+            computeDominator(osrEntry, startBlock);
+            iterativeDominators = true;
+        }
         computeDominator(stdEntry, startBlock);
 
         // start processing with standard entry block
@@ -524,6 +539,13 @@ public final class ComputeLinearScanOrder {
 
         do {
             BlockBegin cur = workList.remove(workList.size() - 1);
+
+            if (cur == suxOfOsrEntry) {
+                // the osr entry block is ignored in normal processing : it is never added to the
+                // work list. Instead : it is added as late as possible manually here.
+                appendBlock(osrEntry);
+                computeDominator(cur, osrEntry);
+            }
             appendBlock(cur);
 
             int i;
@@ -674,7 +696,7 @@ public final class ComputeLinearScanOrder {
             assert cur.linearScanNumber() == i : "incorrect linearScanNumber";
             assert cur.linearScanNumber() >= 0 && cur.linearScanNumber() == linearScanOrder.indexOf(cur) : "incorrect linearScanNumber";
 
-            for (BlockBegin sux : cur.end().blockSuccessors()) {
+            for (BlockBegin sux : cur.end().successors()) {
                 assert sux.linearScanNumber() >= 0 && sux.linearScanNumber() == linearScanOrder.indexOf(sux) : "incorrect linearScanNumber";
                 if (!cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd)) {
                     assert cur.linearScanNumber() < sux.linearScanNumber() : "invalid order";
@@ -684,7 +706,7 @@ public final class ComputeLinearScanOrder {
                 }
             }
 
-            for (BlockBegin pred : cur.blockPredecessors()) {
+            for (BlockBegin pred : cur.predecessors()) {
                 assert pred.linearScanNumber() >= 0 && pred.linearScanNumber() == linearScanOrder.indexOf(pred) : "incorrect linearScanNumber";
                 if (!cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader)) {
                     assert cur.linearScanNumber() > pred.linearScanNumber() : "invalid order";

@@ -28,6 +28,7 @@ import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.observer.*;
+import com.sun.c1x.opt.*;
 import com.sun.c1x.value.*;
 
 /**
@@ -87,7 +88,9 @@ public class IR {
             C1XTimers.HIR_OPTIMIZE.start();
         }
 
+        optimize1();
         computeLinearScanOrder();
+        optimize2();
 
         if (C1XOptions.PrintTimers) {
             C1XTimers.HIR_OPTIMIZE.stop();
@@ -104,6 +107,36 @@ public class IR {
 
         if (C1XOptions.PrintCompilation) {
             TTY.print(String.format("%3d blocks | ", this.numberOfBlocks()));
+        }
+    }
+
+    private void optimize1() {
+        // do basic optimizations
+        if (C1XOptions.PhiSimplify) {
+            new PhiSimplifier(this);
+            verifyAndPrint("After phi simplification");
+        }
+        if (C1XOptions.OptNullCheckElimination) {
+            new NullCheckEliminator(this);
+            verifyAndPrint("After null check elimination");
+        }
+        if (C1XOptions.OptDeadCodeElimination1) {
+            new LivenessMarker(this).removeDeadCode();
+            verifyAndPrint("After dead code elimination 1");
+        }
+        if (C1XOptions.OptCEElimination) {
+            new CEEliminator(this);
+            verifyAndPrint("After CEE elimination");
+        }
+        if (C1XOptions.OptBlockMerging) {
+            new BlockMerger(this);
+            verifyAndPrint("After block merging");
+        }
+
+        if (compilation.compiler.extensions != null) {
+            for (C1XCompilerExtension ext : compilation.compiler.extensions) {
+                ext.run(this);
+            }
         }
     }
 
@@ -126,6 +159,20 @@ public class IR {
         }
     }
 
+    private void optimize2() {
+        // do more advanced, dominator-based optimizations
+        if (C1XOptions.OptGlobalValueNumbering) {
+            makeLinearScanOrder();
+            new GlobalValueNumberer(this);
+            verifyAndPrint("After global value numbering");
+        }
+        if (C1XOptions.OptDeadCodeElimination2) {
+            new LivenessMarker(this).removeDeadCode();
+            verifyAndPrint("After dead code elimination 2");
+        }
+
+    }
+
     /**
      * Gets the linear scan ordering of blocks as a list.
      * @return the blocks in linear scan order
@@ -138,7 +185,7 @@ public class IR {
         if (!TTY.isSuppressed()) {
             TTY.println("IR for " + compilation.method);
             final InstructionPrinter ip = new InstructionPrinter(TTY.out());
-            final BlockPrinter bp = new BlockPrinter(this, ip, cfgOnly);
+            final BlockPrinter bp = new BlockPrinter(this, ip, cfgOnly, false);
             startBlock.iteratePreOrder(bp);
         }
     }

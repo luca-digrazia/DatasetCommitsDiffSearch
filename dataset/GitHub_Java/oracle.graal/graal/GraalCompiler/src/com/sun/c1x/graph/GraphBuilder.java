@@ -76,6 +76,7 @@ public final class GraphBuilder {
      */
     final MemoryMap memoryMap;
 
+    final Canonicalizer canonicalizer;     // canonicalizer which does strength reduction + constant folding
     ScopeData scopeData;                   // Per-scope data; used for inlining
     BlockBegin curBlock;                   // the current block
     MutableFrameState curState;            // the current execution state
@@ -97,6 +98,7 @@ public final class GraphBuilder {
         this.stats = compilation.stats;
         this.memoryMap = C1XOptions.OptLocalLoadElimination ? new MemoryMap() : null;
         this.localValueMap = C1XOptions.OptLocalValueNumbering ? new ValueMap() : null;
+        this.canonicalizer = C1XOptions.OptCanonicalize ? new Canonicalizer(compilation.runtime, compilation.method, compilation.target) : null;
         log = C1XOptions.TraceBytecodeParserLevel > 0 ? new LogStream(TTY.out()) : null;
     }
 
@@ -151,11 +153,45 @@ public final class GraphBuilder {
             finishStartBlock(startBlock, stdEntry);
         }
 
-        // 5. SKIPPED: look for intrinsics
-
-        // 6B.1 do the normal parsing
-        scopeData.addToWorkList(stdEntry);
-        iterateAllBlocks();
+        // 5.
+        C1XIntrinsic intrinsic = C1XOptions.OptIntrinsify ? C1XIntrinsic.getIntrinsic(rootMethod) : null;
+        if (intrinsic != null) {
+            lastInstr = stdEntry;
+            // 6A.1 the root method is an intrinsic; load the parameters onto the stack and try to inline it
+            if (C1XOptions.OptIntrinsify) {
+                // try to inline an Intrinsic node
+                boolean isStatic = Modifier.isStatic(rootMethod.accessFlags());
+                int argsSize = rootMethod.signature().argumentSlots(!isStatic);
+                Value[] args = new Value[argsSize];
+                for (int i = 0; i < args.length; i++) {
+                    args[i] = curState.localAt(i);
+                }
+                if (tryInlineIntrinsic(rootMethod, args, isStatic, intrinsic)) {
+                    // intrinsic inlining succeeded, add the return node
+                    CiKind rt = returnKind(rootMethod).stackKind();
+                    Value result = null;
+                    if (rt != CiKind.Void) {
+                        result = pop(rt);
+                    }
+                    genReturn(result);
+                    BlockEnd end = (BlockEnd) lastInstr;
+                    stdEntry.setEnd(end);
+                    end.setStateAfter(curState.immutableCopy(bci()));
+                }  else {
+                    // try intrinsic failed; do the normal parsing
+                    scopeData.addToWorkList(stdEntry);
+                    iterateAllBlocks();
+                }
+            } else {
+                // 6B.1 do the normal parsing
+                scopeData.addToWorkList(stdEntry);
+                iterateAllBlocks();
+            }
+        } else {
+            // 6B.1 do the normal parsing
+            scopeData.addToWorkList(stdEntry);
+            iterateAllBlocks();
+        }
 
         if (syncHandler != null && syncHandler.stateBefore() != null) {
             // generate unlocking code if the exception handler is reachable
@@ -636,7 +672,7 @@ public final class GraphBuilder {
         BlockBegin fsucc = blockAt(stream().nextBCI());
         int bci = stream().currentBCI();
         boolean isSafepoint = !scopeData.noSafepoints() && tsucc.bci() <= bci || fsucc.bci() <= bci;
-        append(new If(x, cond, y, tsucc, fsucc, isSafepoint ? stateBefore : null, isSafepoint));
+        append(new If(x, cond, false, y, tsucc, fsucc, isSafepoint ? stateBefore : null, isSafepoint));
     }
 
     void genIfZero(Condition cond) {
@@ -752,7 +788,7 @@ public final class GraphBuilder {
         RiType holder = field.holder();
         boolean isInitialized = !C1XOptions.TestPatching && field.isResolved() && holder.isResolved() && holder.isInitialized();
         CiConstant constantValue = null;
-        if (isInitialized) {
+        if (isInitialized && C1XOptions.CanonicalizeConstantFields) {
             constantValue = field.constantValue(null);
         }
         if (constantValue != null) {
@@ -823,28 +859,32 @@ public final class GraphBuilder {
         }
 
         Value[] args = curState.popArguments(target.signature().argumentSlots(false));
-        if (!tryInline(target, args)) {
-            appendInvoke(INVOKESTATIC, target, args, true, cpi, constantPool);
+        if (!tryRemoveCall(target, args, true)) {
+            if (!tryInline(target, args)) {
+                appendInvoke(INVOKESTATIC, target, args, true, cpi, constantPool);
+            }
         }
     }
 
     void genInvokeInterface(RiMethod target, int cpi, RiConstantPool constantPool) {
         Value[] args = curState.popArguments(target.signature().argumentSlots(true));
-
-        genInvokeIndirect(INVOKEINTERFACE, target, args, cpi, constantPool);
-
+        if (!tryRemoveCall(target, args, false)) {
+            genInvokeIndirect(INVOKEINTERFACE, target, args, cpi, constantPool);
+        }
     }
 
     void genInvokeVirtual(RiMethod target, int cpi, RiConstantPool constantPool) {
         Value[] args = curState.popArguments(target.signature().argumentSlots(true));
-        genInvokeIndirect(INVOKEVIRTUAL, target, args, cpi, constantPool);
-
+        if (!tryRemoveCall(target, args, false)) {
+            genInvokeIndirect(INVOKEVIRTUAL, target, args, cpi, constantPool);
+        }
     }
 
     void genInvokeSpecial(RiMethod target, RiType knownHolder, int cpi, RiConstantPool constantPool) {
         Value[] args = curState.popArguments(target.signature().argumentSlots(true));
-        invokeDirect(target, args, knownHolder, cpi, constantPool);
-
+        if (!tryRemoveCall(target, args, false)) {
+            invokeDirect(target, args, knownHolder, cpi, constantPool);
+        }
     }
 
     /**
@@ -1039,14 +1079,17 @@ public final class GraphBuilder {
         }
 
         if (needsCheck) {
-            // append a call to the finalizer registration
-            append(new RegisterFinalizer(curState.loadLocal(0), curState.immutableCopy(bci())));
+            // append a call to the registration intrinsic
+            loadLocal(0, CiKind.Object);
+            FrameState stateBefore = curState.immutableCopy(bci());
+            append(new Intrinsic(CiKind.Void, C1XIntrinsic.java_lang_Object$init,
+                                 null, curState.popArguments(1), false, stateBefore, true, true));
             C1XMetrics.InlinedFinalizerChecks++;
         }
     }
 
     void genReturn(Value x) {
-        if (method().isConstructor() && method().holder().superType() == null) {
+        if (C1XIntrinsic.getIntrinsic(method()) == C1XIntrinsic.java_lang_Object$init) {
             callRegisterFinalizer();
         }
 
@@ -1055,6 +1098,7 @@ public final class GraphBuilder {
             if (isSynchronized(method().accessFlags())) {
                 // if the inlined method is synchronized, then the monitor
                 // must be released before jumping to the continuation point
+                assert C1XOptions.OptInlineSynchronized;
                 Value object = curState.lockAt(0);
                 if (object instanceof Instruction) {
                     Instruction obj = (Instruction) object;
@@ -1231,18 +1275,36 @@ public final class GraphBuilder {
     }
 
     private Value appendConstant(CiConstant type) {
-        return appendWithBCI(new Constant(type), bci());
+        return appendWithBCI(new Constant(type), bci(), false);
     }
 
     private Value append(Instruction x) {
-        return appendWithBCI(x, bci());
+        return appendWithBCI(x, bci(), C1XOptions.OptCanonicalize);
     }
 
     private Value appendWithoutOptimization(Instruction x, int bci) {
-        return appendWithBCI(x, bci);
+        return appendWithBCI(x, bci, false);
     }
 
-    private Value appendWithBCI(Instruction x, int bci) {
+    private Value appendWithBCI(Instruction x, int bci, boolean canonicalize) {
+        if (canonicalize) {
+            // attempt simple constant folding and strength reduction
+            Value r = canonicalizer.canonicalize(x);
+            List<Instruction> extra = canonicalizer.extra();
+            if (extra != null) {
+                // the canonicalization introduced instructions that should be added before this
+                for (Instruction i : extra) {
+                    appendWithBCI(i, bci, false); // don't try to canonicalize the new instructions
+                }
+            }
+            if (r instanceof Instruction) {
+                // the result is an instruction that may need to be appended
+                x = (Instruction) r;
+            } else {
+                // the result is not an instruction (and thus cannot be appended)
+                return r;
+            }
+        }
         if (x.isAppended()) {
             // the instruction has already been added
             return x;
@@ -1262,7 +1324,10 @@ public final class GraphBuilder {
         assert x.next() == null : "instruction should not have been appended yet";
         assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
         if (lastInstr instanceof Base) {
-            assert false : "may only happen when inlining intrinsics";
+            assert x instanceof Intrinsic : "may only happen when inlining intrinsics";
+            Instruction prev = lastInstr.prev(lastInstr.block());
+            prev.setNext(x, bci);
+            x.setNext(lastInstr, bci);
         } else {
             lastInstr = lastInstr.setNext(x, bci);
         }
@@ -1292,7 +1357,7 @@ public final class GraphBuilder {
     }
 
     private boolean hasUncontrollableSideEffects(Value x) {
-        return x instanceof Invoke || x instanceof ResolveClass;
+        return x instanceof Invoke || x instanceof Intrinsic && !((Intrinsic) x).preservesState() || x instanceof ResolveClass;
     }
 
     private BlockBegin blockAtOrNull(int bci) {
@@ -1399,6 +1464,191 @@ public final class GraphBuilder {
         return state;
     }
 
+    boolean tryRemoveCall(RiMethod target, Value[] args, boolean isStatic) {
+        if (target.isResolved()) {
+            if (C1XOptions.OptIntrinsify) {
+                // try to create an intrinsic node instead of a call
+                C1XIntrinsic intrinsic = C1XIntrinsic.getIntrinsic(target);
+                if (intrinsic != null && tryInlineIntrinsic(target, args, isStatic, intrinsic)) {
+                    // this method is not an intrinsic
+                    return true;
+                }
+            }
+            if (C1XOptions.CanonicalizeFoldableMethods) {
+                // next try to fold the method call
+                if (tryFoldable(target, args)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean tryInlineIntrinsic(RiMethod target, Value[] args, boolean isStatic, C1XIntrinsic intrinsic) {
+        boolean preservesState = true;
+        boolean canTrap = false;
+
+        Instruction result = null;
+
+        // handle intrinsics differently
+        switch (intrinsic) {
+
+            case java_lang_System$arraycopy:
+                if (compilation.runtime.supportsArrayIntrinsics()) {
+                    break;
+                } else {
+                    return false;
+                }
+            case java_lang_Object$getClass:
+                canTrap = true;
+                break;
+            case java_lang_Thread$currentThread:
+                break;
+            case java_util_Arrays$copyOf:
+                if (args[0].declaredType() != null && args[0].declaredType().isArrayClass() && compilation.runtime.supportsArrayIntrinsics()) {
+                    break;
+                } else {
+                    return false;
+                }
+            case java_lang_Object$init: // fall through
+            case java_lang_String$equals: // fall through
+            case java_lang_String$compareTo: // fall through
+            case java_lang_String$indexOf: // fall through
+            case java_lang_Math$max: // fall through
+            case java_lang_Math$min: // fall through
+            case java_lang_Math$atan2: // fall through
+            case java_lang_Math$pow: // fall through
+            case java_lang_Math$exp: // fall through
+            case java_nio_Buffer$checkIndex: // fall through
+            case java_lang_System$identityHashCode: // fall through
+            case java_lang_System$currentTimeMillis: // fall through
+            case java_lang_System$nanoTime: // fall through
+            case java_lang_Object$hashCode: // fall through
+            case java_lang_Class$isAssignableFrom: // fall through
+            case java_lang_Class$isInstance: // fall through
+            case java_lang_Class$getModifiers: // fall through
+            case java_lang_Class$isInterface: // fall through
+            case java_lang_Class$isArray: // fall through
+            case java_lang_Class$isPrimitive: // fall through
+            case java_lang_Class$getSuperclass: // fall through
+            case java_lang_Class$getComponentType: // fall through
+            case java_lang_reflect_Array$getLength: // fall through
+            case java_lang_reflect_Array$newArray: // fall through
+            case java_lang_Double$doubleToLongBits: // fall through
+            case java_lang_Float$floatToIntBits: // fall through
+            case java_lang_Math$sin: // fall through
+            case java_lang_Math$cos: // fall through
+            case java_lang_Math$tan: // fall through
+            case java_lang_Math$log: // fall through
+            case java_lang_Math$log10: // fall through
+            case java_lang_Integer$bitCount: // fall through
+            case java_lang_Integer$reverseBytes: // fall through
+            case java_lang_Long$bitCount: // fall through
+            case java_lang_Long$reverseBytes: // fall through
+            case java_lang_Object$clone:  return false;
+            // TODO: preservesState and canTrap for complex intrinsics
+        }
+
+
+
+        // get the arguments for the intrinsic
+        CiKind resultType = returnKind(target);
+
+        if (C1XOptions.PrintInlinedIntrinsics) {
+            TTY.println("Inlining intrinsic: " + intrinsic);
+        }
+
+        // Create state before intrinsic.
+        for (int i = 0; i < args.length; ++i) {
+            if (args[i] != null) {
+                curState.push(args[i].kind.stackKind(), args[i]);
+            }
+        }
+
+        // Create the intrinsic node.
+        if (intrinsic == C1XIntrinsic.java_lang_System$arraycopy) {
+            result = genArrayCopy(target, args);
+        } else if (intrinsic == C1XIntrinsic.java_util_Arrays$copyOf) {
+            result = genArrayClone(target, args);
+        } else {
+            result = new Intrinsic(resultType.stackKind(), intrinsic, target, args, isStatic, curState.immutableCopy(bci()), preservesState, canTrap);
+        }
+
+        // Pop arguments.
+        curState.popArguments(args.length);
+
+        pushReturn(resultType, append(result));
+        stats.intrinsicCount++;
+        return true;
+    }
+
+    private Instruction genArrayClone(RiMethod target, Value[] args) {
+        FrameState state = curState.immutableCopy(bci());
+        Value array = args[0];
+        RiType type = array.declaredType();
+        assert type != null && type.isResolved() && type.isArrayClass();
+        Value newLength = args[1];
+
+        Value oldLength = append(new ArrayLength(array, state));
+        Value newArray = append(new NewObjectArrayClone(newLength, array, state));
+        Value copyLength = append(new IfOp(newLength, Condition.LT, oldLength, newLength, oldLength));
+        append(new ArrayCopy(array, Constant.forInt(0), newArray, Constant.forInt(0), copyLength, null, null));
+        return (Instruction) newArray;
+    }
+
+    private Instruction genArrayCopy(RiMethod target, Value[] args) {
+        FrameState state = curState.immutableCopy(bci());
+        Instruction result;
+        Value src = args[0];
+        Value srcPos = args[1];
+        Value dest = args[2];
+        Value destPos = args[3];
+        Value length = args[4];
+
+        // Check src start pos.
+        Value srcLength = append(new ArrayLength(src, state));
+
+        // Check dest start pos.
+        Value destLength = srcLength;
+        if (src != dest) {
+            destLength = append(new ArrayLength(dest, state));
+        }
+
+        // Check src end pos.
+        Value srcEndPos = append(new ArithmeticOp(IADD, CiKind.Int, srcPos, length, false, null));
+        append(new BoundsCheck(srcEndPos, srcLength, state, Condition.LE));
+
+        // Check dest end pos.
+        Value destEndPos = srcEndPos;
+        if (destPos != srcPos) {
+            destEndPos = append(new ArithmeticOp(IADD, CiKind.Int, destPos, length, false, null));
+        }
+        append(new BoundsCheck(destEndPos, destLength, state, Condition.LE));
+
+        Value zero = append(Constant.forInt(0));
+        append(new BoundsCheck(length, zero, state, Condition.GE));
+        append(new BoundsCheck(srcPos, zero, state, Condition.GE));
+        append(new BoundsCheck(destPos, zero, state, Condition.GE));
+
+        result = new ArrayCopy(src, srcPos, dest, destPos, length, target, state);
+        return result;
+    }
+
+    private boolean tryFoldable(RiMethod target, Value[] args) {
+        CiConstant result = Canonicalizer.foldInvocation(compilation.runtime, target, args);
+        if (result != null) {
+            if (C1XOptions.TraceBytecodeParserLevel > 0) {
+                log.println("|");
+                log.println("|   [folded " + target + " --> " + result + "]");
+                log.println("|");
+            }
+
+            pushReturn(returnKind(target), append(new Constant(result)));
+            return true;
+        }
+        return false;
+    }
+
     private boolean tryInline(RiMethod target, Value[] args) {
         boolean forcedInline = compilation.runtime.mustInline(target);
         if (forcedInline) {
@@ -1468,10 +1718,10 @@ public final class GraphBuilder {
         if (compilation.runtime.mustNotCompile(target)) {
             return cannotInline(target, "compile excluded by runtime");
         }
-        if (isSynchronized(target.accessFlags())) {
+        if (isSynchronized(target.accessFlags()) && !C1XOptions.OptInlineSynchronized) {
             return cannotInline(target, "is synchronized");
         }
-        if (target.exceptionHandlers().length != 0) {
+        if (target.exceptionHandlers().length != 0 && !C1XOptions.OptInlineExcept) {
             return cannotInline(target, "has exception handlers");
         }
         if (!target.hasBalancedMonitors()) {
