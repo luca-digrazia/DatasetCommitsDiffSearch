@@ -32,6 +32,7 @@ import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback2Factory;
 import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback3Factory;
 import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback4Factory;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.*;
+import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
 public class FallbackTest {
@@ -47,18 +48,21 @@ public class FallbackTest {
     }
 
     /**
-     * test with fallback handler defined
+     * Test with fallback handler defined.
      */
     @SuppressWarnings("unused")
     @NodeChild("a")
     abstract static class Fallback1 extends ValueNode {
+
+        @Override
+        public abstract String executeString(VirtualFrame frame);
 
         @Specialization
         String f1(int a) {
             return "(int)";
         }
 
-        @Generic
+        @Fallback
         String f2(Object a) {
             return "(fallback)";
         }
@@ -72,7 +76,7 @@ public class FallbackTest {
     }
 
     /**
-     * test without fallback handler defined
+     * Test without fallback handler defined.
      */
     @SuppressWarnings("unused")
     @NodeChild("a")
@@ -93,7 +97,7 @@ public class FallbackTest {
     }
 
     /**
-     * test without fallback handler and unreachable
+     * Test without fallback handler and unreachable.
      */
     @SuppressWarnings("unused")
     @NodeChild("a")
@@ -104,7 +108,7 @@ public class FallbackTest {
             return "(int)";
         }
 
-        @Specialization(guards = "notInt")
+        @Specialization(guards = "notInt(a)")
         String f2(Object a) {
             return "(object)";
         }
@@ -136,7 +140,7 @@ public class FallbackTest {
     }
 
     /**
-     * test without fallback handler and unreachable
+     * Test without fallback handler and unreachable.
      */
     @SuppressWarnings("unused")
     @NodeChild("a")

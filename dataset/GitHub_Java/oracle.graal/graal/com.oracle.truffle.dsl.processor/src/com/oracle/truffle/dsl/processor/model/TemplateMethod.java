@@ -153,14 +153,6 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
         newParameter.setMethod(this);
     }
 
-    public Iterable<Parameter> getDynamicParameters() {
-        return new FilteredIterable<>(getParameters(), new Predicate<Parameter>() {
-            public boolean evaluate(Parameter value) {
-                return !value.getSpecification().isLocal() && !value.getSpecification().isAnnotated();
-            }
-        });
-    }
-
     public Iterable<Parameter> getSignatureParameters() {
         return new FilteredIterable<>(getParameters(), new Predicate<Parameter>() {
             public boolean evaluate(Parameter value) {
@@ -299,8 +291,8 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
     }
 
     public int compareBySignature(TemplateMethod compareMethod) {
-        List<TypeMirror> signature1 = getDynamicTypes();
-        List<TypeMirror> signature2 = compareMethod.getDynamicTypes();
+        List<TypeMirror> signature1 = getSignatureTypes(this);
+        List<TypeMirror> signature2 = getSignatureTypes(compareMethod);
 
         int result = 0;
         for (int i = 0; i < Math.max(signature1.size(), signature2.size()); i++) {
@@ -315,9 +307,9 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
         return result;
     }
 
-    public List<TypeMirror> getDynamicTypes() {
+    public static List<TypeMirror> getSignatureTypes(TemplateMethod method) {
         List<TypeMirror> types = new ArrayList<>();
-        for (Parameter param : getDynamicParameters()) {
+        for (Parameter param : method.getSignatureParameters()) {
             types.add(param.getType());
         }
         return types;

@@ -35,7 +35,6 @@ import com.oracle.truffle.dsl.processor.java.*;
 
 public class ExecutableTypeData extends MessageContainer implements Comparable<ExecutableTypeData> {
 
-    private final NodeData node;
     private final ExecutableElement method;
     private final TypeMirror returnType;
     private final TypeMirror frameParameter;
@@ -45,8 +44,7 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
 
     private String uniqueName;
 
-    public ExecutableTypeData(NodeData node, TypeMirror returnType, String uniqueName, TypeMirror frameParameter, List<TypeMirror> evaluatedParameters) {
-        this.node = node;
+    public ExecutableTypeData(TypeMirror returnType, String uniqueName, TypeMirror frameParameter, List<TypeMirror> evaluatedParameters) {
         this.returnType = returnType;
         this.frameParameter = frameParameter;
         this.evaluatedParameters = evaluatedParameters;
@@ -54,8 +52,7 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
         this.method = null;
     }
 
-    public ExecutableTypeData(NodeData node, ExecutableElement method, int signatureSize, List<TypeMirror> frameTypes) {
-        this.node = node;
+    public ExecutableTypeData(ExecutableElement method, int signatureSize, List<TypeMirror> frameTypes) {
         this.method = method;
         this.returnType = method.getReturnType();
         TypeMirror foundFrameParameter = null;
@@ -126,21 +123,6 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
         return evaluatedParameters;
     }
 
-    public List<TypeMirror> getSignatureParameters() {
-        List<TypeMirror> signaturetypes = new ArrayList<>();
-        int index = 0;
-        for (NodeExecutionData execution : node.getChildExecutions()) {
-            if (execution.isShortCircuit()) {
-                index++;
-            }
-            if (index < getEvaluatedCount()) {
-                signaturetypes.add(getEvaluatedParameters().get(index));
-            }
-            index++;
-        }
-        return signaturetypes;
-    }
-
     public int getVarArgsIndex(int parameterIndex) {
         if (method.isVarArgs()) {
             int index = parameterIndex - (method.getParameters().size() - 1);
@@ -177,7 +159,7 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
         return evaluatedParameters.size();
     }
 
-    public boolean canDelegateTo(ExecutableTypeData to) {
+    public boolean canDelegateTo(NodeData node, ExecutableTypeData to) {
         ExecutableTypeData from = this;
         if (to.getEvaluatedCount() < from.getEvaluatedCount()) {
             return false;
@@ -207,13 +189,18 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
             }
         }
 
-        List<TypeMirror> fromSignatureParameters = from.getSignatureParameters();
-        List<TypeMirror> toSignatureParameters = to.getSignatureParameters();
-        for (int i = fromSignatureParameters.size(); i < toSignatureParameters.size(); i++) {
-            TypeMirror delegateToParameter = toSignatureParameters.get(i);
+        for (int i = from.getEvaluatedCount(); i < to.getEvaluatedCount(); i++) {
+            TypeMirror delegateToParameter = to.getEvaluatedParameters().get(i);
             if (i < node.getChildExecutions().size()) {
-                TypeMirror genericType = node.getGenericType(node.getChildExecutions().get(i));
-                if (!isSubtypeBoxed(context, genericType, delegateToParameter)) {
+                List<TypeMirror> genericTypes = node.getGenericTypes(node.getChildExecutions().get(i));
+
+                boolean typeFound = false;
+                for (TypeMirror generic : genericTypes) {
+                    if (isSubtypeBoxed(context, generic, delegateToParameter)) {
+                        typeFound = true;
+                    }
+                }
+                if (!typeFound) {
                     return false;
                 }
             }
@@ -225,14 +212,6 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
     public int compareTo(ExecutableTypeData o2) {
         ExecutableTypeData o1 = this;
         ProcessorContext context = ProcessorContext.getInstance();
-
-        if (canDelegateTo(o2)) {
-            if (!o2.canDelegateTo(this)) {
-                return 1;
-            }
-        } else if (o2.canDelegateTo(this)) {
-            return -1;
-        }
 
         int result = Integer.compare(o2.getEvaluatedCount(), o1.getEvaluatedCount());
         if (result != 0) {
@@ -310,22 +289,9 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
         }
     }
 
-    public String getName() {
-        if (method != null) {
-            return method.getSimpleName().toString();
-        } else {
-            return getUniqueName();
-        }
-
-    }
-
-    private static String formatType(TypeMirror type) {
-        return type == null ? "null" : ElementUtils.getSimpleName(type);
-    }
-
     @Override
     public String toString() {
-        return String.format("%s %s(%s,%s)", formatType(getReturnType()), getName(), formatType(getFrameParameter()), getEvaluatedParameters());
+        return method != null ? ElementUtils.createReferenceName(method) : getUniqueName() + evaluatedParameters.toString();
     }
 
     public boolean sameParameters(ExecutableTypeData other) {

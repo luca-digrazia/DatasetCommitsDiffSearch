@@ -66,11 +66,7 @@ public class NodeGenFactory {
     private final boolean singleSpecializable;
     private final int varArgsThreshold;
     private final Set<TypeMirror> expectedTypes = new HashSet<>();
-    private final Set<NodeExecutionData> usedExecuteChildMethods = new HashSet<>();
     private boolean nextUsed;
-
-    private List<ExecutableTypeData> usedTypes;
-    private List<SpecializationData> reachableSpecializations;
 
     public NodeGenFactory(ProcessorContext context, NodeData node) {
         this.context = context;
@@ -78,10 +74,8 @@ public class NodeGenFactory {
         this.typeSystem = node.getTypeSystem();
         this.genericType = context.getType(Object.class);
         this.options = typeSystem.getOptions();
-        this.varArgsThreshold = calculateVarArgsThreshold();
-        this.reachableSpecializations = calculateReachableSpecializations();
         this.singleSpecializable = isSingleSpecializableImpl();
-        this.usedTypes = filterBaseExecutableTypes(node.getExecutableTypes(), reachableSpecializations);
+        this.varArgsThreshold = calculateVarArgsThreshold();
     }
 
     private int calculateVarArgsThreshold() {
@@ -211,8 +205,9 @@ public class NodeGenFactory {
             }
         }
 
+        List<ExecutableTypeData> usedTypes = filterBaseExecutableTypes(node.getExecutableTypes(), getReachableSpecializations());
         for (ExecutableTypeData execType : usedTypes) {
-            if (!singleSpecializable && execType.getMethod() == null) {
+            if (execType.getMethod() == null) {
                 continue;
             }
             clazz.add(createExecutableTypeOverride(usedTypes, execType));
@@ -275,7 +270,7 @@ public class NodeGenFactory {
 
     private Element createUnsupportedMethod() {
         LocalContext locals = LocalContext.load(this);
-        CodeExecutableElement method = locals.createMethod(modifiers(PROTECTED), getType(UnsupportedSpecializationException.class), "unsupported", varArgsThreshold);
+        CodeExecutableElement method = locals.createMethod(modifiers(PROTECTED), getType(UnsupportedSpecializationException.class), "unsupported");
 
         CodeTreeBuilder builder = method.createBuilder();
         builder.startReturn();
@@ -361,6 +356,8 @@ public class NodeGenFactory {
     }
 
     private SpecializationData createSpecializations(CodeTypeElement clazz) {
+        List<SpecializationData> reachableSpecializations = getReachableSpecializations();
+
         CodeTypeElement baseSpecialization = clazz.add(createBaseSpecialization());
         TypeMirror baseSpecializationType = baseSpecialization.asType();
 
@@ -377,25 +374,17 @@ public class NodeGenFactory {
             generated.put(specialization, clazz.add(createSpecialization(specialization, baseSpecializationType)));
         }
 
-        baseSpecialization.addOptional(createCreateNext(generated));
+        if (nextUsed) {
+            baseSpecialization.addOptional(createCreateNext(generated));
+        }
         baseSpecialization.addOptional(createCreateFallback(generated));
         baseSpecialization.addOptional(createCreatePolymorphic(generated));
-        baseSpecialization.addOptional(createGetNext(baseSpecialization));
-
-        for (NodeExecutionData execution : node.getChildExecutions()) {
-            Collection<TypeMirror> specializedTypes = node.findSpecializedTypes(execution);
-            specializedTypes.add(genericType);
-            for (TypeMirror specializedType : specializedTypes) {
-                if (isExecuteChildShared(execution, specializedType)) {
-                    baseSpecialization.addOptional(createExecuteChildMethod(execution, specializedType));
-                }
-            }
-        }
 
         return node.getUninitializedSpecialization();
     }
 
     private boolean needsPolymorphic() {
+        List<SpecializationData> reachableSpecializations = getReachableSpecializations();
         if (reachableSpecializations.size() != 1) {
             return true;
         }
@@ -417,26 +406,43 @@ public class NodeGenFactory {
     // create specialization
 
     private CodeTypeElement createBaseSpecialization() {
-        CodeTypeElement clazz = createClass(node, null, modifiers(PRIVATE, ABSTRACT, STATIC), specializationTypeName(null), typeSystem.getContext().getType(SpecializationNode.class));
+        CodeTypeElement clazz = createClass(node, null, modifiers(PRIVATE, ABSTRACT, STATIC), specializationTypeName(null), TypeSystemNodeFactory.nodeType(typeSystem));
 
         clazz.addOptional(createSpecializationConstructor(clazz, null, null));
         clazz.add(new CodeVariableElement(modifiers(PROTECTED, FINAL), nodeType(node), "root"));
 
         clazz.addOptional(createUnsupported());
         clazz.add(createGetSuppliedChildrenMethod());
+        clazz.add(createGetNext(clazz));
         clazz.add(createAcceptAndExecute());
 
+        List<ExecutableTypeData> usedTypes = filterBaseExecutableTypes(node.getExecutableTypes(), getReachableSpecializations());
         for (ExecutableTypeData type : usedTypes) {
             clazz.add(createFastPathExecuteMethod(null, type, usedTypes));
+        }
+
+        for (NodeExecutionData execution : node.getChildExecutions()) {
+            Collection<TypeMirror> specializedTypes = node.findSpecializedTypes(execution);
+            specializedTypes.add(genericType);
+            for (TypeMirror specializedType : specializedTypes) {
+                if (isExecuteChildShared(execution, specializedType)) {
+                    clazz.add(createExecuteChildMethod(execution, specializedType));
+                }
+            }
         }
 
         return clazz;
     }
 
     private Element createAcceptAndExecute() {
-        ExecutableTypeData executableElement = createSpecializationNodeSignature(node.getSignatureSize());
-        LocalContext currentLocals = LocalContext.load(this, executableElement, varArgsThreshold);
-        CodeExecutableElement executable = createExecuteMethod(null, executableElement, currentLocals, false, varArgsThreshold);
+
+        TypeMirror[] parameters = new TypeMirror[node.getSignatureSize()];
+        Arrays.fill(parameters, genericType);
+
+        ExecutableTypeData executableElement = new ExecutableTypeData(genericType, "acceptAndExecute", context.getType(Frame.class), Arrays.asList(parameters));
+
+        LocalContext currentLocals = LocalContext.load(this, node.getSignatureSize(), varArgsThreshold);
+        CodeExecutableElement executable = createExecuteMethod(null, executableElement, currentLocals, false);
 
         executable.getModifiers().add(FINAL);
         CodeTreeBuilder builder = executable.createBuilder();
@@ -448,32 +454,25 @@ public class NodeGenFactory {
         return executable;
     }
 
-    private ExecutableTypeData createSpecializationNodeSignature(int argumentCount) {
-        TypeMirror[] parameters = new TypeMirror[argumentCount];
-        Arrays.fill(parameters, genericType);
-        return new ExecutableTypeData(node, genericType, "acceptAndExecute", context.getType(Frame.class), Arrays.asList(parameters));
-    }
-
     private boolean shouldImplementExecutableType(SpecializationData specialization, ExecutableTypeData executableType) {
         // always implement the root execute method. they are declared abstract in the base node.
         if (executableType.getDelegatedTo() == null) {
             return true;
         }
 
-        // specializations with more parameters are just ignored
-        if (executableType.getEvaluatedCount() > node.getExecutionCount()) {
+        if (!isSubtypeBoxed(context, specialization.getReturnType().getType(), executableType.getReturnType())) {
             return false;
         }
 
-        if (!isSubtypeBoxed(context, specialization.getReturnType().getType(), executableType.getReturnType())) {
+        // specializations with more parameters are just ignored
+        if (executableType.getEvaluatedCount() > node.getSignatureSize()) {
             return false;
         }
 
         // the evaluated signature might be compatible to the specialization
         boolean specializationCompatible = true;
-        List<TypeMirror> signatureParameters = executableType.getSignatureParameters();
-        for (int i = 0; i < signatureParameters.size(); i++) {
-            TypeMirror evaluatedType = signatureParameters.get(i);
+        for (int i = 0; i < executableType.getEvaluatedCount(); i++) {
+            TypeMirror evaluatedType = executableType.getEvaluatedParameters().get(i);
             TypeMirror specializedType = specialization.findParameterOrDie(node.getChildExecutions().get(i)).getType();
 
             if (!isSubtypeBoxed(context, evaluatedType, specializedType) && !isSubtypeBoxed(context, specializedType, evaluatedType)) {
@@ -493,7 +492,7 @@ public class NodeGenFactory {
         }
 
         // trigger type boxing elimination for unevaluated arguments
-        for (int i = executableType.getEvaluatedCount(); i < node.getExecutionCount(); i++) {
+        for (int i = executableType.getEvaluatedCount(); i < node.getSignatureSize(); i++) {
             NodeExecutionData execution = node.getChildExecutions().get(i);
             TypeMirror specializedType = specialization.findParameterOrDie(execution).getType();
             if (isTypeBoxingOptimized(options.monomorphicTypeBoxingOptimization(), specializedType)) {
@@ -516,8 +515,8 @@ public class NodeGenFactory {
         }
 
         // trigger generation for evaluated assignable type matches other than generic
-        for (int i = 0; i < signatureParameters.size(); i++) {
-            TypeMirror evaluatedType = signatureParameters.get(i);
+        for (int i = 0; i < executableType.getEvaluatedCount(); i++) {
+            TypeMirror evaluatedType = executableType.getEvaluatedParameters().get(i);
             NodeExecutionData execution = node.getChildExecutions().get(i);
             TypeMirror specializedType = specialization.findParameterOrDie(execution).getType();
 
@@ -530,33 +529,11 @@ public class NodeGenFactory {
     }
 
     private List<ExecutableTypeData> filterBaseExecutableTypes(List<ExecutableTypeData> executableTypes, List<SpecializationData> specializations) {
-        Set<TypeMirror> returnTypes = new HashSet<>();
-        for (SpecializationData specialization : node.getSpecializations()) {
-            returnTypes.add(specialization.getReturnType().getType());
-        }
-
-        List<ExecutableTypeData> prefilteredTypes = new ArrayList<>();
-        for (ExecutableTypeData type : executableTypes) {
-            if (type.getDelegatedTo() == null || shouldAlwaysImplementExecutableType(type)) {
-                prefilteredTypes.add(type);
-            } else {
-                boolean foundSubtype = false;
-                for (TypeMirror returnType : returnTypes) {
-                    if (isSubtypeBoxed(context, returnType, type.getReturnType())) {
-                        foundSubtype = true;
-                    }
-                }
-                if (foundSubtype) {
-                    prefilteredTypes.add(type);
-                }
-            }
-        }
-
-        Set<ExecutableTypeData> types = new HashSet<>();
-        type: for (ExecutableTypeData type : prefilteredTypes) {
+        Set<ExecutableTypeData> usedTypes = new HashSet<>();
+        type: for (ExecutableTypeData type : executableTypes) {
             for (SpecializationData specialization : specializations) {
-                if (shouldImplementExecutableType(specialization, type) || shouldAlwaysImplementExecutableType(type)) {
-                    types.add(type);
+                if (shouldImplementExecutableType(specialization, type) || type.isAbstract() || !(type.hasUnexpectedValue(context) && type.getMethod() != null)) {
+                    usedTypes.add(type);
                     continue type;
                 }
             }
@@ -564,21 +541,17 @@ public class NodeGenFactory {
         Set<ExecutableTypeData> delegatesToAdd = new HashSet<>();
         do {
             delegatesToAdd.clear();
-            for (ExecutableTypeData type : types) {
+            for (ExecutableTypeData type : usedTypes) {
                 ExecutableTypeData delegate = type.getDelegatedTo();
-                if (delegate != null && !types.contains(delegate)) {
+                if (delegate != null && !usedTypes.contains(delegate)) {
                     delegatesToAdd.add(delegate);
                 }
             }
-            types.addAll(delegatesToAdd);
+            usedTypes.addAll(delegatesToAdd);
         } while (!delegatesToAdd.isEmpty());
-        List<ExecutableTypeData> newUsedTypes = new ArrayList<>(types);
+        List<ExecutableTypeData> newUsedTypes = new ArrayList<>(usedTypes);
         Collections.sort(newUsedTypes);
         return newUsedTypes;
-    }
-
-    private boolean shouldAlwaysImplementExecutableType(ExecutableTypeData type) {
-        return type.isAbstract() || !(type.hasUnexpectedValue(context) && type.getMethod() != null);
     }
 
     private CodeTypeElement createSpecialization(SpecializationData specialization, TypeMirror baseType) {
@@ -668,12 +641,12 @@ public class NodeGenFactory {
             return null;
         }
 
-        LocalContext currentLocals = LocalContext.load(this, createSpecializationNodeSignature(node.getSignatureSize()), varArgsThreshold);
+        LocalContext currentLocals = LocalContext.load(this, node.getSignatureSize(), varArgsThreshold);
         currentLocals.loadFastPathState(specialization);
 
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), getType(boolean.class), "isIdentical");
         method.addParameter(new CodeVariableElement(getType(SpecializationNode.class), "other"));
-        currentLocals.addParametersTo(method, varArgsThreshold, FRAME_VALUE);
+        currentLocals.addParametersTo(method, FRAME_VALUE);
         method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(Override.class)));
         final CodeTreeBuilder builder = method.createBuilder();
 
@@ -733,11 +706,11 @@ public class NodeGenFactory {
             return null;
         }
         TypeMirror specializationNodeType = getType(SpecializationNode.class);
-        LocalContext currentLocals = LocalContext.load(this, createSpecializationNodeSignature(node.getSignatureSize()), varArgsThreshold);
+        LocalContext currentLocals = LocalContext.load(this, node.getSignatureSize(), varArgsThreshold);
 
         CodeExecutableElement executable = new CodeExecutableElement(modifiers(PUBLIC), specializationNodeType, "merge");
         executable.addParameter(new CodeVariableElement(specializationNodeType, "newNode"));
-        currentLocals.addParametersTo(executable, varArgsThreshold, FRAME_VALUE);
+        currentLocals.addParametersTo(executable, FRAME_VALUE);
         executable.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(Override.class)));
         CodeTreeBuilder builder = executable.createBuilder();
 
@@ -806,7 +779,7 @@ public class NodeGenFactory {
     private CodeExecutableElement createCreateNext(final Map<SpecializationData, CodeTypeElement> specializationClasses) {
         final LocalContext locals = LocalContext.load(this);
 
-        CodeExecutableElement method = locals.createMethod(modifiers(PROTECTED, FINAL), getType(SpecializationNode.class), "createNext", varArgsThreshold, FRAME_VALUE);
+        CodeExecutableElement method = locals.createMethod(modifiers(PROTECTED, FINAL), getType(SpecializationNode.class), "createNext", FRAME_VALUE);
         method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(Override.class)));
 
         CodeTreeBuilder builder = method.createBuilder();
@@ -838,7 +811,7 @@ public class NodeGenFactory {
             locals.removeValue(FRAME_VALUE);
         }
 
-        CodeExecutableElement boundaryMethod = locals.createMethod(modifiers(PRIVATE), getType(boolean.class), "guardFallback", varArgsThreshold, FRAME_VALUE);
+        CodeExecutableElement boundaryMethod = locals.createMethod(modifiers(PRIVATE), getType(boolean.class), "guardFallback", FRAME_VALUE);
         if (!frameUsed) {
             boundaryMethod.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
         }
@@ -891,7 +864,7 @@ public class NodeGenFactory {
         }
         LocalContext locals = LocalContext.load(this);
 
-        CodeExecutableElement method = locals.createMethod(modifiers(PROTECTED, FINAL), genericType, "unsupported", varArgsThreshold, FRAME_VALUE);
+        CodeExecutableElement method = locals.createMethod(modifiers(PROTECTED, FINAL), genericType, "unsupported", FRAME_VALUE);
         method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(Override.class)));
 
         CodeTreeBuilder builder = method.createBuilder();
@@ -903,6 +876,7 @@ public class NodeGenFactory {
     }
 
     private boolean isSingleSpecializableImpl() {
+        List<SpecializationData> reachableSpecializations = getReachableSpecializations();
         if (reachableSpecializations.size() != 1) {
             return false;
         }
@@ -928,7 +902,7 @@ public class NodeGenFactory {
         return true;
     }
 
-    private List<SpecializationData> calculateReachableSpecializations() {
+    private List<SpecializationData> getReachableSpecializations() {
         List<SpecializationData> specializations = new ArrayList<>();
         for (SpecializationData specialization : node.getSpecializations()) {
             if (specialization.isReachable() && //
@@ -954,12 +928,12 @@ public class NodeGenFactory {
     }
 
     private CodeExecutableElement createExecutableTypeOverride(List<ExecutableTypeData> usedExecutables, ExecutableTypeData execType) {
-        LocalContext locals = LocalContext.load(this, execType, Integer.MAX_VALUE);
-        CodeExecutableElement method = createExecuteMethod(null, execType, locals, true, Integer.MAX_VALUE);
+        LocalContext locals = LocalContext.load(this, execType.getEvaluatedCount(), Integer.MAX_VALUE);
+        CodeExecutableElement method = createExecuteMethod(null, execType, locals, true);
 
         CodeTreeBuilder builder = method.createBuilder();
         if (singleSpecializable) {
-            SpecializationData specialization = reachableSpecializations.iterator().next();
+            SpecializationData specialization = getReachableSpecializations().iterator().next();
             builder.tree(createFastPath(builder, specialization, execType, usedExecutables, locals));
         } else {
             // create acceptAndExecute
@@ -1047,38 +1021,17 @@ public class NodeGenFactory {
                 values.add(createTypeSafeReference(frameLocal, method.getFrameParameter()));
             }
         }
-
-        int evaluatedIndex = 0;
-        for (int executionIndex = 0; executionIndex < node.getExecutionCount(); executionIndex++) {
-            NodeExecutionData parameterExecution;
-            if (executeWith != null && executionIndex < executeWith.size()) {
-                parameterExecution = executeWith.get(executionIndex);
+        for (int parameterIndex = 0; parameterIndex < method.getEvaluatedCount(); parameterIndex++) {
+            TypeMirror targetParameter = method.getEvaluatedParameters().get(parameterIndex);
+            LocalVariable variable;
+            if (executeWith != null && parameterIndex < executeWith.size()) {
+                variable = currentValues.getValue(executeWith.get(parameterIndex));
             } else {
-                parameterExecution = node.getChildExecutions().get(executionIndex);
+                variable = currentValues.getValue(parameterIndex);
             }
-            if (parameterExecution.isShortCircuit()) {
-                if (evaluatedIndex < method.getEvaluatedCount()) {
-                    TypeMirror targetType = method.getEvaluatedParameters().get(evaluatedIndex);
-                    LocalVariable shortCircuit = currentValues.getShortCircuit(parameterExecution);
-                    if (shortCircuit != null) {
-                        values.add(createTypeSafeReference(shortCircuit, targetType));
-                    } else {
-                        values.add(CodeTreeBuilder.createBuilder().defaultValue(targetType).build());
-                    }
-                    evaluatedIndex++;
-                }
-            }
-            if (evaluatedIndex < method.getEvaluatedCount()) {
-                TypeMirror targetType = method.getEvaluatedParameters().get(evaluatedIndex);
-                LocalVariable value = currentValues.getValue(parameterExecution);
-                if (value != null) {
-                    values.add(createTypeSafeReference(value, targetType));
-                } else {
-                    values.add(CodeTreeBuilder.createBuilder().defaultValue(targetType).build());
-                }
-                evaluatedIndex++;
-            }
+            values.add(createTypeSafeReference(variable, targetParameter));
         }
+
         return values.toArray(new CodeTree[values.size()]);
     }
 
@@ -1123,7 +1076,7 @@ public class NodeGenFactory {
     }
 
     private SpecializationGroup createSpecializationGroups() {
-        return SpecializationGroup.create(reachableSpecializations);
+        return SpecializationGroup.create(getReachableSpecializations());
     }
 
     private CodeTree createSlowPathExecute(SpecializationData specialization, LocalContext currentValues) {
@@ -1272,10 +1225,7 @@ public class NodeGenFactory {
         return false;
     }
 
-    private Element createGetNext(CodeTypeElement type) {
-        if (!nextUsed) {
-            return null;
-        }
+    private static Element createGetNext(CodeTypeElement type) {
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PROTECTED, FINAL), type.asType(), "getNext");
         CodeTreeBuilder builder = method.createBuilder();
         builder.startReturn().cast(type.asType(), CodeTreeBuilder.singleString("this.next")).end();
@@ -1527,7 +1477,7 @@ public class NodeGenFactory {
     }
 
     private CodeTree expectOrCast(TypeMirror sourceType, ExecutableTypeData targetType, CodeTree content) {
-        if (needsUnexpectedResultException(targetType)) {
+        if (targetType.hasUnexpectedValue(context)) {
             return expect(sourceType, targetType.getReturnType(), content);
         } else {
             return cast(sourceType, targetType.getReturnType(), content);
@@ -1543,11 +1493,8 @@ public class NodeGenFactory {
     }
 
     private CodeTree expect(TypeMirror sourceType, TypeMirror forType, CodeTree tree) {
-        if (sourceType == null || ElementUtils.needsCastTo(sourceType, forType)) {
-            expectedTypes.add(forType);
-            return TypeSystemCodeGenerator.expect(typeSystem, forType, tree);
-        }
-        return tree;
+        expectedTypes.add(forType);
+        return TypeSystemCodeGenerator.expect(typeSystem, sourceType, forType, tree);
     }
 
     private Set<ExecutableTypeData> findSpecializedExecutableTypes(NodeExecutionData execution, TypeMirror type) {
@@ -1572,7 +1519,7 @@ public class NodeGenFactory {
         return executableType;
     }
 
-    private boolean hasChildUnexpectedResult(NodeExecutionData execution, TypeMirror type) {
+    private boolean hasUnexpectedResult(NodeExecutionData execution, TypeMirror type) {
         for (ExecutableTypeData executableType : findSpecializedExecutableTypes(execution, type)) {
             if (executableType != null && (executableType.hasUnexpectedValue(context) || needsCastTo(executableType.getReturnType(), type))) {
                 return true;
@@ -1582,8 +1529,8 @@ public class NodeGenFactory {
     }
 
     private Element createFastPathExecuteMethod(SpecializationData specialization, ExecutableTypeData executedType, List<ExecutableTypeData> allTypes) {
-        LocalContext currentLocals = LocalContext.load(this, executedType, Integer.MAX_VALUE);
-        CodeExecutableElement executable = createExecuteMethod(specialization, executedType, currentLocals, false, Integer.MAX_VALUE);
+        LocalContext currentLocals = LocalContext.load(this, executedType.getEvaluatedCount(), varArgsThreshold);
+        CodeExecutableElement executable = createExecuteMethod(specialization, executedType, currentLocals, false);
         CodeTreeBuilder builder = executable.createBuilder();
         if (specialization == null) {
             if (executedType.getDelegatedTo() == null) {
@@ -1597,17 +1544,28 @@ public class NodeGenFactory {
         return executable;
     }
 
-    private static final String VARARGS_NAME = "args";
-
-    private CodeExecutableElement createExecuteMethod(SpecializationData specialization, ExecutableTypeData executedType, LocalContext currentLocals, boolean originalOverride, int varArgs) {
+    private CodeExecutableElement createExecuteMethod(SpecializationData specialization, ExecutableTypeData executedType, LocalContext currentLocals, boolean originalOverride) {
         TypeMirror returnType = executedType.getReturnType();
+        TypeMirror frame = executedType.getFrameParameter();
+        List<TypeMirror> evaluatedParameters = executedType.getEvaluatedParameters();
 
         if (specialization != null) {
             currentLocals.loadFastPathState(specialization);
         }
 
+        if (frame == null) {
+            currentLocals.removeValue(FRAME_VALUE);
+        } else {
+            currentLocals.set(FRAME_VALUE, currentLocals.get(FRAME_VALUE).newType(frame));
+        }
+
+        for (int i = 0; i < Math.min(node.getChildExecutions().size(), evaluatedParameters.size()); i++) {
+            NodeExecutionData execution = node.getChildExecutions().get(i);
+            currentLocals.setValue(execution, currentLocals.getValue(execution).newType(evaluatedParameters.get(i)));
+        }
+
         String methodName;
-        if (originalOverride && executedType.getMethod() != null) {
+        if (originalOverride) {
             methodName = executedType.getMethod().getSimpleName().toString();
         } else {
             methodName = executedType.getUniqueName();
@@ -1625,75 +1583,38 @@ public class NodeGenFactory {
                 ((CodeVariableElement) executable.getParameters().get(0)).setName(FRAME_VALUE);
             }
 
+            final String varArgsName = "args";
             if (executable.isVarArgs()) {
-                ((CodeVariableElement) executable.getParameters().get(executable.getParameters().size() - 1)).setName(VARARGS_NAME);
+                ((CodeVariableElement) executable.getParameters().get(executable.getParameters().size() - 1)).setName(varArgsName);
             }
 
-            renameOriginalParameters(executedType, executable, currentLocals);
-        } else {
-            executable = currentLocals.createMethod(modifiers(PUBLIC), returnType, methodName, varArgs, FRAME_VALUE);
-        }
-        executable.getThrownTypes().clear();
+            // rename varargs parameter
+            int signatureIndex = 0;
+            for (TypeMirror parameter : executedType.getEvaluatedParameters()) {
+                LocalVariable var = currentLocals.getValue(signatureIndex);
+                if (var != null) {
+                    int varArgsIndex = executedType.getVarArgsIndex(executedType.getParameterIndex(signatureIndex));
+                    if (varArgsIndex >= 0) {
+                        var = var.accessWith(CodeTreeBuilder.singleString(varArgsName + "[" + varArgsIndex + "]"));
+                    } else {
+                        ((CodeVariableElement) executable.getParameters().get(executedType.getParameterIndex(signatureIndex))).setName(var.getName());
+                    }
+                    if (!isObject(parameter)) {
+                        var = var.newType(parameter);
+                    }
+                    currentLocals.setValue(node.getChildExecutions().get(signatureIndex), var);
+                }
 
-        if (needsUnexpectedResultException(executedType)) {
-            executable.getThrownTypes().add(context.getDeclaredType(UnexpectedResultException.class));
+                signatureIndex++;
+            }
+        } else {
+            executable = currentLocals.createMethod(modifiers(PUBLIC), returnType, methodName, FRAME_VALUE);
+            if (executedType.hasUnexpectedValue(context)) {
+                executable.getThrownTypes().add(context.getDeclaredType(UnexpectedResultException.class));
+            }
         }
 
         return executable;
-    }
-
-    private void renameOriginalParameters(ExecutableTypeData executedType, CodeExecutableElement executable, LocalContext currentLocals) {
-        // rename varargs parameter
-        int evaluatedIndex = 0;
-        for (int executionIndex = 0; executionIndex < node.getExecutionCount(); executionIndex++) {
-            NodeExecutionData execution = node.getChildExecutions().get(executionIndex);
-            if (execution.isShortCircuit()) {
-                if (evaluatedIndex < executedType.getEvaluatedCount()) {
-                    TypeMirror evaluatedType = executedType.getEvaluatedParameters().get(evaluatedIndex);
-                    LocalVariable shortCircuit = currentLocals.getShortCircuit(execution);
-                    if (shortCircuit != null) {
-                        currentLocals.setShortCircuitValue(execution, renameExecutableTypeParameter(executable, executedType, evaluatedIndex, evaluatedType, shortCircuit));
-                    }
-                    evaluatedIndex++;
-                }
-            }
-            if (evaluatedIndex < executedType.getEvaluatedCount()) {
-                TypeMirror evaluatedType = executedType.getEvaluatedParameters().get(evaluatedIndex);
-                LocalVariable value = currentLocals.getValue(execution);
-                if (value != null) {
-                    currentLocals.setValue(execution, renameExecutableTypeParameter(executable, executedType, evaluatedIndex, evaluatedType, value));
-                }
-                evaluatedIndex++;
-            }
-        }
-    }
-
-    private static LocalVariable renameExecutableTypeParameter(CodeExecutableElement method, ExecutableTypeData executedType, int evaluatedIndex, TypeMirror targetType, LocalVariable var) {
-        int parameterIndex = executedType.getParameterIndex(evaluatedIndex);
-        int varArgsIndex = executedType.getVarArgsIndex(parameterIndex);
-        LocalVariable returnVar = var;
-        if (varArgsIndex >= 0) {
-            returnVar = returnVar.accessWith(CodeTreeBuilder.singleString(VARARGS_NAME + "[" + varArgsIndex + "]"));
-        } else {
-            ((CodeVariableElement) method.getParameters().get(parameterIndex)).setName(returnVar.getName());
-        }
-        if (!isObject(targetType)) {
-            returnVar = returnVar.newType(targetType);
-        }
-        return returnVar;
-    }
-
-    private boolean needsUnexpectedResultException(ExecutableTypeData executedType) {
-        if (!executedType.hasUnexpectedValue(context)) {
-            return false;
-        }
-
-        SpecializationData polymorphicSpecialization = node.getPolymorphicSpecialization();
-        if (polymorphicSpecialization != null && isSubtypeBoxed(context, polymorphicSpecialization.getReturnType().getType(), executedType.getReturnType())) {
-            return false;
-        } else {
-            return true;
-        }
     }
 
     private CodeTree createFastPath(CodeTreeBuilder parent, SpecializationData specialization, final ExecutableTypeData executableType, List<ExecutableTypeData> allTypes, LocalContext currentLocals) {
@@ -1709,9 +1630,8 @@ public class NodeGenFactory {
             delegate = findFastPathDelegate((specialization != null ? specialization.getReturnType().getType() : genericType), executableType, allTypes);
         }
 
-        int delegateSignatureCount = delegate != null ? delegate.getSignatureParameters().size() : 0;
         for (NodeExecutionData execution : node.getChildExecutions()) {
-            if (specialization == null && delegate != null && execution.getIndex() >= delegateSignatureCount) {
+            if (specialization == null && delegate != null && execution.getIndex() >= delegate.getEvaluatedCount()) {
                 // we just evaluate children for the next delegate
                 continue;
             } else if (specialization != null && delegate != null) {
@@ -1723,7 +1643,12 @@ public class NodeGenFactory {
             if (var == null) {
                 TypeMirror targetType;
                 if (specialization == null) {
-                    targetType = node.getGenericType(execution);
+                    List<TypeMirror> genericTypes = node.getGenericTypes(execution);
+                    if (genericTypes.isEmpty()) {
+                        targetType = genericType;
+                    } else {
+                        targetType = genericTypes.get(0);
+                    }
                 } else {
                     targetType = specialization.findParameterOrDie(execution).getType();
                 }
@@ -1731,6 +1656,7 @@ public class NodeGenFactory {
                 var = currentLocals.createValue(execution, targetType).nextName();
                 builder.tree(createAssignExecuteChild(builder, execution, executableType, var, shortCircuit, currentLocals));
                 currentLocals.setValue(execution, var);
+
             }
         }
 
@@ -1753,7 +1679,7 @@ public class NodeGenFactory {
             };
             builder.tree(createGuardAndCast(group, returnType, currentLocals, executionFactory));
             if (hasFallthrough(group, returnType, originalValues, true, null) || group.getSpecialization().isFallback()) {
-                builder.tree(createCallNext(builder, executableType, node.getGenericExecutableType(executableType), originalValues));
+                builder.tree(createCallNext(builder, executableType, executableType, originalValues));
             }
         }
         return builder.build();
@@ -1762,7 +1688,7 @@ public class NodeGenFactory {
     private CodeTree createCallDelegateExecute(final CodeTreeBuilder parent, CodeTree receiver, LocalContext currentLocals, ExecutableTypeData source, ExecutableTypeData delegate) {
         CodeTreeBuilder callBuilder = parent.create();
 
-        if (singleSpecializable && delegate.getMethod() != null) {
+        if (singleSpecializable) {
             callBuilder.startCall(receiver, delegate.getMethod().getSimpleName().toString());
         } else {
             callBuilder.startCall(receiver, delegate.getUniqueName());
@@ -1784,7 +1710,7 @@ public class NodeGenFactory {
 
         CodeTreeBuilder builder = parent.create();
 
-        if (!needsUnexpectedResultException(source) && needsUnexpectedResultException(delegate)) {
+        if (!source.hasUnexpectedValue(context) && delegate.hasUnexpectedValue(context)) {
             builder.startTryBlock();
             builder.tree(returnBuilder.build());
             builder.end().startCatchBlock(context.getType(UnexpectedResultException.class), "ex");
@@ -1834,21 +1760,15 @@ public class NodeGenFactory {
 
     private LocalVariable resolveShortCircuit(SpecializationData specialization, NodeExecutionData execution, LocalContext currentLocals) {
         LocalVariable shortCircuit = null;
-        if (execution.isShortCircuit()) {
-            shortCircuit = currentLocals.getShortCircuit(execution);
+        SpecializationData resolvedSpecialization = specialization;
+        if (specialization == null) {
+            resolvedSpecialization = node.getGenericSpecialization();
+        }
 
-            if (shortCircuit == null) {
-                SpecializationData resolvedSpecialization = specialization;
-                if (specialization == null) {
-                    resolvedSpecialization = node.getGenericSpecialization();
-                }
-                ShortCircuitData shortCircuitData = resolvedSpecialization.getShortCircuits().get(calculateShortCircuitIndex(execution));
-                CodeTree access = callTemplateMethod(accessParent(null), shortCircuitData, currentLocals);
-                shortCircuit = currentLocals.createShortCircuitValue(execution).accessWith(access);
-            } else {
-                CodeTree access = shortCircuit.createReference();
-                shortCircuit = shortCircuit.nextName().accessWith(access);
-            }
+        if (execution.isShortCircuit()) {
+            ShortCircuitData shortCircuitData = resolvedSpecialization.getShortCircuits().get(calculateShortCircuitIndex(execution));
+            CodeTree access = callTemplateMethod(accessParent(null), shortCircuitData, currentLocals);
+            shortCircuit = currentLocals.createShortCircuitValue(execution).accessWith(access);
         }
         return shortCircuit;
     }
@@ -1872,11 +1792,7 @@ public class NodeGenFactory {
         if (specialization.isFallback()) {
             builder.startIf().startCall("guardFallback");
             if (node.isFrameUsedByAnyGuard()) {
-                if (currentValues.get(FRAME_VALUE) != null) {
-                    builder.string(FRAME_VALUE);
-                } else {
-                    builder.nullLiteral();
-                }
+                builder.string(FRAME_VALUE);
             }
             currentValues.addReferencesTo(builder);
 
@@ -2062,14 +1978,10 @@ public class NodeGenFactory {
     }
 
     private CodeExecutableElement createExecuteChildMethod(NodeExecutionData execution, TypeMirror targetType) {
-        if (!usedExecuteChildMethods.contains(execution)) {
-            return null;
-        }
+        LocalContext locals = LocalContext.load(this, 0, varArgsThreshold);
 
-        LocalContext locals = LocalContext.load(this, createSpecializationNodeSignature(0), Integer.MAX_VALUE);
-
-        CodeExecutableElement method = locals.createMethod(modifiers(PROTECTED, FINAL), targetType, executeChildMethodName(execution, targetType), Integer.MAX_VALUE, FRAME_VALUE);
-        if (hasChildUnexpectedResult(execution, targetType)) {
+        CodeExecutableElement method = locals.createMethod(modifiers(PROTECTED, FINAL), targetType, executeChildMethodName(execution, targetType), FRAME_VALUE);
+        if (hasUnexpectedResult(execution, targetType)) {
             method.getThrownTypes().add(getType(UnexpectedResultException.class));
         }
 
@@ -2097,10 +2009,6 @@ public class NodeGenFactory {
 
     private CodeVariableElement createImplicitProfileParameter(NodeExecutionData execution, TypeMirror targetType) {
         if (typeSystem.hasImplicitSourceTypes(targetType)) {
-            if (typeEquals(node.getGenericType(execution), targetType)) {
-                return null;
-            }
-
             switch (options.implicitCastOptimization()) {
                 case NONE:
                     return null;
@@ -2146,7 +2054,7 @@ public class NodeGenFactory {
     private CodeTree createAssignExecuteChild(CodeTreeBuilder parent, NodeExecutionData execution, ExecutableTypeData type, LocalVariable targetValue, LocalVariable shortCircuit,
                     LocalContext currentValues) {
         CodeTreeBuilder builder = parent.create();
-        boolean hasUnexpected = hasChildUnexpectedResult(execution, targetValue.getTypeMirror());
+        boolean hasUnexpected = hasUnexpectedResult(execution, targetValue.getTypeMirror());
 
         CodeTree executeChild;
         if (isExecuteChildShared(execution, targetValue.getTypeMirror())) {
@@ -2239,16 +2147,11 @@ public class NodeGenFactory {
         if (!isExecuteChildShared(execution, targetValue.getTypeMirror())) {
             throw new AssertionError("Execute child not shared with method but called.");
         }
-        usedExecuteChildMethods.add(execution);
 
         CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
         builder.tree(targetValue.createReference()).string(" = ");
         builder.startCall(executeChildMethodName(execution, targetValue.getTypeMirror()));
-        if (currentValues.get(FRAME_VALUE) == null) {
-            builder.nullLiteral();
-        } else {
-            builder.string(FRAME_VALUE);
-        }
+        builder.string(FRAME_VALUE);
 
         CodeVariableElement implicitProfile = createImplicitProfileParameter(execution, targetValue.getTypeMirror());
         if (implicitProfile != null) {
@@ -2649,59 +2552,20 @@ public class NodeGenFactory {
             }
         }
 
-        public CodeExecutableElement createMethod(Set<Modifier> modifiers, TypeMirror returnType, String name, int varArgsThreshold, String... optionalArguments) {
+        public CodeExecutableElement createMethod(Set<Modifier> modifiers, TypeMirror returnType, String name, String... optionalArguments) {
             CodeExecutableElement method = new CodeExecutableElement(modifiers, returnType, name);
-            addParametersTo(method, varArgsThreshold, optionalArguments);
+            addParametersTo(method, optionalArguments);
             return method;
         }
 
-        public static LocalContext load(NodeGenFactory factory, ExecutableTypeData type, int varargsThreshold) {
+        public static LocalContext load(NodeGenFactory factory, int signatureSize, int varargsThreshold) {
             LocalContext context = new LocalContext(factory);
-            context.loadEvaluatedValues(type, varargsThreshold);
+            context.loadValues(signatureSize, varargsThreshold);
             return context;
         }
 
-        private void loadEvaluatedValues(ExecutableTypeData executedType, int varargsThreshold) {
-            TypeMirror frame = executedType.getFrameParameter();
-            if (frame == null) {
-                removeValue(FRAME_VALUE);
-            } else {
-                set(FRAME_VALUE, new LocalVariable(frame, FRAME_VALUE, null, null));
-            }
-            for (NodeFieldData field : factory.node.getFields()) {
-                String fieldName = fieldValueName(field);
-                values.put(fieldName, new LocalVariable(field.getType(), fieldName, factory.accessParent(field.getName()), null));
-            }
-            boolean varargs = needsVarargs(false, varargsThreshold);
-            List<TypeMirror> evaluatedParameter = executedType.getEvaluatedParameters();
-            int evaluatedIndex = 0;
-            for (int executionIndex = 0; executionIndex < factory.node.getExecutionCount(); executionIndex++) {
-                NodeExecutionData execution = factory.node.getChildExecutions().get(executionIndex);
-                if (execution.isShortCircuit()) {
-                    if (evaluatedIndex < executedType.getEvaluatedCount()) {
-                        TypeMirror evaluatedType = evaluatedParameter.get(evaluatedIndex);
-                        LocalVariable shortCircuit = createShortCircuitValue(execution).newType(evaluatedType);
-                        if (varargs) {
-                            shortCircuit = shortCircuit.accessWith(createReadVarargs(evaluatedIndex));
-                        }
-                        values.put(shortCircuit.getName(), shortCircuit.makeOriginal());
-                        evaluatedIndex++;
-                    }
-                }
-                if (evaluatedIndex < executedType.getEvaluatedCount()) {
-                    TypeMirror evaluatedType = evaluatedParameter.get(evaluatedIndex);
-                    LocalVariable value = createValue(execution, evaluatedType);
-                    if (varargs) {
-                        value = value.accessWith(createReadVarargs(evaluatedIndex));
-                    }
-                    values.put(value.getName(), value.makeOriginal());
-                    evaluatedIndex++;
-                }
-            }
-        }
-
         public static LocalContext load(NodeGenFactory factory) {
-            return load(factory, factory.createSpecializationNodeSignature(factory.node.getSignatureSize()), factory.varArgsThreshold);
+            return load(factory, factory.node.getSignatureSize(), factory.varArgsThreshold);
         }
 
         public LocalContext copy() {
@@ -2795,6 +2659,36 @@ public class NodeGenFactory {
             return size >= varArgsThreshold;
         }
 
+        private void loadValues(int evaluatedArguments, int varargsThreshold) {
+            values.put(FRAME_VALUE, new LocalVariable(factory.getType(Frame.class), FRAME_VALUE, null, null));
+
+            for (NodeFieldData field : factory.node.getFields()) {
+                String fieldName = fieldValueName(field);
+                values.put(fieldName, new LocalVariable(field.getType(), fieldName, factory.accessParent(field.getName()), null));
+            }
+
+            boolean varargs = needsVarargs(false, varargsThreshold);
+            for (int i = 0; i < evaluatedArguments; i++) {
+                List<NodeExecutionData> childExecutions = factory.node.getChildExecutions();
+                if (i >= childExecutions.size()) {
+                    break;
+                }
+                NodeExecutionData execution = childExecutions.get(i);
+                if (execution.isShortCircuit()) {
+                    LocalVariable shortCircuit = createShortCircuitValue(execution).makeGeneric(factory.context);
+                    if (varargs) {
+                        shortCircuit = shortCircuit.accessWith(createReadVarargs(i));
+                    }
+                    values.put(shortCircuit.getName(), shortCircuit.makeOriginal());
+                }
+                LocalVariable value = createValue(execution, factory.genericType);
+                if (varargs) {
+                    value = value.accessWith(createReadVarargs(i));
+                }
+                values.put(value.getName(), value.makeOriginal());
+            }
+        }
+
         private static CodeTree createReadVarargs(int i) {
             return CodeTreeBuilder.createBuilder().string("args_[").string(String.valueOf(i)).string("]").build();
         }
@@ -2830,14 +2724,14 @@ public class NodeGenFactory {
             }
         }
 
-        public void addParametersTo(CodeExecutableElement method, int varArgsThreshold, String... optionalNames) {
+        public void addParametersTo(CodeExecutableElement method, String... optionalNames) {
             for (String var : optionalNames) {
                 LocalVariable local = values.get(var);
                 if (local != null) {
                     method.addParameter(local.createParameter());
                 }
             }
-            if (needsVarargs(true, varArgsThreshold)) {
+            if (needsVarargs(true, factory.varArgsThreshold)) {
                 method.addParameter(new CodeVariableElement(factory.getType(Object[].class), "args_"));
                 method.setVarArgs(true);
             } else {

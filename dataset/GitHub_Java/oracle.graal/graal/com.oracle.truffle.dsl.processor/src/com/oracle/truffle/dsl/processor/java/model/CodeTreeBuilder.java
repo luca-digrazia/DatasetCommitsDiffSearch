@@ -77,11 +77,11 @@ public class CodeTreeBuilder {
     }
 
     public static CodeTree singleString(String s) {
-        return new CodeTreeBuilder(null).string(s).getTree();
+        return createBuilder().string(s).build();
     }
 
     public static CodeTree singleType(TypeMirror s) {
-        return new CodeTreeBuilder(null).type(s).getTree();
+        return createBuilder().type(s).build();
     }
 
     private CodeTreeBuilder push(CodeTreeKind kind) {
@@ -174,7 +174,11 @@ public class CodeTreeBuilder {
     }
 
     public CodeTreeBuilder startCall(String receiver, String callSite) {
-        return startCall(singleString(receiver), callSite);
+        if (receiver != null) {
+            return startCall(singleString(receiver), callSite);
+        } else {
+            return startCall(callSite);
+        }
     }
 
     public CodeTreeBuilder startCall(CodeTree receiver, String callSite) {
@@ -312,16 +316,19 @@ public class CodeTreeBuilder {
         }
     }
 
+    public CodeTreeBuilder trees(CodeTree... trees) {
+        for (CodeTree tree : trees) {
+            tree(tree);
+        }
+        return this;
+    }
+
     public CodeTreeBuilder string(String chunk1, String chunk2, String chunk3, String chunk4, String... chunks) {
         push(GROUP).string(chunk1).string(chunk2).string(chunk3).string(chunk4);
         for (int i = 0; i < chunks.length; i++) {
             string(chunks[i]);
         }
         return end();
-    }
-
-    public CodeTreeBuilder dot() {
-        return string(".");
     }
 
     public CodeTreeBuilder newLine() {
@@ -572,17 +579,6 @@ public class CodeTreeBuilder {
         return declaration(type, name, init.getTree());
     }
 
-    public CodeTreeBuilder declaration(String type, String name, CodeTreeBuilder init) {
-        if (init == this) {
-            throw new IllegalArgumentException("Recursive builder usage.");
-        }
-        return declaration(type, name, init.getTree());
-    }
-
-    public CodeTreeBuilder declaration(TypeMirror type, String name) {
-        return declaration(type, name, (CodeTree) null);
-    }
-
     public CodeTreeBuilder create() {
         return new CodeTreeBuilder(this);
     }
@@ -592,7 +588,7 @@ public class CodeTreeBuilder {
     }
 
     public CodeTreeBuilder typeLiteral(TypeMirror type) {
-        return startGroup().type(type).string(".class").end();
+        return startGroup().type(ElementUtils.eraseGenericTypes(type)).string(".class").end();
     }
 
     private void assertRoot() {
@@ -614,12 +610,12 @@ public class CodeTreeBuilder {
         return root;
     }
 
-    public CodeTree getRoot() {
+    public CodeTree build() {
         return root;
     }
 
-    public CodeTreeBuilder cast(String baseClassName) {
-        string("(").string(baseClassName).string(") ");
+    public CodeTreeBuilder cast(TypeMirror type) {
+        string("(").type(type).string(") ");
         return this;
     }
 
@@ -662,21 +658,8 @@ public class CodeTreeBuilder {
         return startReturn().string("true").end();
     }
 
-    public CodeTreeBuilder instanceOf(CodeTree var, CodeTree type) {
-        tree(var).string(" instanceof ").tree(type);
-        return this;
-    }
-
-    public CodeTreeBuilder instanceOf(String var, String type) {
-        return instanceOf(singleString(var), singleString(type));
-    }
-
-    public CodeTreeBuilder instanceOf(String var, TypeMirror type) {
-        TypeElement element = ElementUtils.fromTypeMirror(type);
-        if (element == null) {
-            throw new IllegalArgumentException("Cannot call instanceof for a non supported type: " + type.getKind());
-        }
-        return instanceOf(singleString(var), singleType(type));
+    public CodeTreeBuilder instanceOf(CodeTree var, TypeMirror type) {
+        return tree(var).string(" instanceof ").type(type);
     }
 
     public CodeTreeBuilder defaultValue(TypeMirror mirror) {
@@ -709,26 +692,6 @@ public class CodeTreeBuilder {
         }
     }
 
-    public CodeTreeBuilder assertFalse() {
-        return startAssert().string("false").end();
-    }
-
-    public CodeTreeBuilder breakStatement() {
-        return statement("break");
-    }
-
-    public CodeTreeBuilder isNull() {
-        return string(" == null");
-    }
-
-    public CodeTreeBuilder isNotNull() {
-        return string(" != null");
-    }
-
-    public CodeTreeBuilder is(CodeTree tree) {
-        return string(" == ").tree(tree);
-    }
-
     public CodeTreeBuilder startTryBlock() {
         return string("try ").startBlock();
     }
@@ -736,6 +699,21 @@ public class CodeTreeBuilder {
     public CodeTreeBuilder startCatchBlock(TypeMirror exceptionType, String localVarName) {
         clearLast(CodeTreeKind.NEW_LINE);
         string(" catch (").type(exceptionType).string(" ").string(localVarName).string(") ");
+        return startBlock();
+    }
+
+    public CodeTreeBuilder startCatchBlock(TypeMirror[] exceptionTypes, String localVarName) {
+        clearLast(CodeTreeKind.NEW_LINE);
+        string(" catch (");
+
+        for (int i = 0; i < exceptionTypes.length; i++) {
+            if (i != 0) {
+                string(" | ");
+            }
+            type(exceptionTypes[i]);
+        }
+
+        string(" ").string(localVarName).string(") ");
         return startBlock();
     }
 
@@ -888,6 +866,17 @@ public class CodeTreeBuilder {
                 b.append("    ");
             }
         }
+    }
+
+    public CodeTreeBuilder returnDefault() {
+        ExecutableElement method = findMethod();
+        if (ElementUtils.isVoid(method.getReturnType())) {
+            returnStatement();
+        } else {
+            startReturn().defaultValue(method.getReturnType()).end();
+        }
+        return this;
+
     }
 
 }

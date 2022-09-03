@@ -42,27 +42,28 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
     }
 
     protected ParameterSpec createValueParameterSpec(NodeExecutionData execution) {
-        ParameterSpec spec = new ParameterSpec(execution.getName(), nodeTypeMirrors(execution.getChild().getNodeData()));
+        ParameterSpec spec = new ParameterSpec(execution.getName(), getPossibleParameterTypes(execution));
         spec.setExecution(execution);
         return spec;
     }
 
-    protected List<TypeMirror> nodeTypeMirrors(NodeData nodeData) {
-        Set<TypeMirror> typeMirrors = new LinkedHashSet<>();
-
-        for (ExecutableTypeData typeData : nodeData.getExecutableTypes()) {
-            typeMirrors.add(typeData.getType().getPrimitiveType());
-        }
-
-        typeMirrors.add(nodeData.getTypeSystem().getGenericType());
-
-        return new ArrayList<>(typeMirrors);
+    protected Collection<TypeMirror> getPossibleParameterTypes(NodeExecutionData execution) {
+        return getNode().getGenericTypes(execution);
     }
 
     protected ParameterSpec createReturnParameterSpec() {
-        ParameterSpec returnValue = new ParameterSpec("returnValue", nodeTypeMirrors(getNode()));
+        ParameterSpec returnValue = new ParameterSpec("returnValue", getPossibleReturnTypes());
         returnValue.setExecution(getNode().getThisExecution());
         return returnValue;
+    }
+
+    protected Collection<TypeMirror> getPossibleReturnTypes() {
+        List<TypeMirror> possibleTypes = getNode().getGenericTypes(getNode().getThisExecution());
+        if (possibleTypes.size() > 1) {
+            return Arrays.asList(ElementUtils.getCommonSuperType(getContext(), possibleTypes.toArray(new TypeMirror[0])));
+        } else {
+            return possibleTypes;
+        }
     }
 
     @Override
@@ -92,7 +93,7 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
         }
 
         for (NodeExecutionData execution : getNode().getChildExecutions()) {
-            if (breakName != null && execution.getShortCircuitId().equals(breakName)) {
+            if (breakName != null && execution.getIndexedName().equals(breakName)) {
                 break;
             }
 
@@ -103,9 +104,9 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
         }
     }
 
-    private void addDefaultFrame(MethodSpec methodSpec) {
+    protected void addDefaultFrame(MethodSpec methodSpec) {
         if (getNode().supportsFrame()) {
-            methodSpec.addOptional(new ParameterSpec("frame", getContext().getTruffleTypes().getFrame()));
+            methodSpec.addOptional(new ParameterSpec("frame", getNode().getFrameType()));
         }
     }
 

@@ -163,7 +163,7 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
 
         node.getSpecializations().addAll(new SpecializationMethodParser(context, node).parse(members));
-        node.getSpecializations().addAll(new FallbackParser(context, node).parse(members));
+        node.getSpecializations().addAll(new GenericParser(context, node).parse(members));
         node.getCasts().addAll(new CreateCastParser(context, node).parse(members));
         node.getShortCircuits().addAll(new ShortCircuitParser(context, node).parse(members));
 
@@ -1261,7 +1261,7 @@ public class NodeParser extends AbstractParser<NodeData> {
     }
 
     private SpecializationData createGenericSpecialization(final NodeData node) {
-        FallbackParser parser = new FallbackParser(context, node);
+        GenericParser parser = new GenericParser(context, node);
         MethodSpec specification = parser.createDefaultMethodSpec(node.getSpecializations().iterator().next().getMethod(), null, true, null);
 
         List<VariableElement> parameterTypes = new ArrayList<>();
@@ -1293,7 +1293,7 @@ public class NodeParser extends AbstractParser<NodeData> {
         if (allowedTypes.size() == 1) {
             return allowedTypes.iterator().next();
         } else {
-            return ElementUtils.getCommonSuperType(context, allowedTypes);
+            return ElementUtils.getCommonSuperType(context, allowedTypes.toArray(new TypeMirror[allowedTypes.size()]));
         }
     }
 
@@ -1332,35 +1332,30 @@ public class NodeParser extends AbstractParser<NodeData> {
 
         List<VariableElement> types = new ArrayList<>();
 
-        Collection<TypeMirror> frameTypes = new HashSet<>();
+        Set<TypeMirror> frameTypes = new HashSet<>();
         for (SpecializationData specialization : node.getSpecializations()) {
             if (specialization.getFrame() != null) {
                 frameTypes.add(specialization.getFrame().getType());
             }
         }
         if (!frameTypes.isEmpty()) {
-            frameTypes = ElementUtils.uniqueSortedTypes(frameTypes);
             TypeMirror frameType;
             if (frameTypes.size() == 1) {
                 frameType = frameTypes.iterator().next();
             } else {
                 frameType = context.getType(Frame.class);
             }
-            types.add(new CodeVariableElement(frameType, TemplateMethod.FRAME_NAME));
+            types.add(new CodeVariableElement(frameType, "frameValue"));
         }
 
         TypeMirror returnType = null;
         int index = 0;
         for (Parameter genericParameter : generic.getReturnTypeAndParameters()) {
             TypeMirror polymorphicType;
-            if (genericParameter.getLocalName().equals(TemplateMethod.FRAME_NAME)) {
-                continue;
-            }
-            boolean isReturnParameter = genericParameter == generic.getReturnType();
             if (!genericParameter.getSpecification().isSignature()) {
                 polymorphicType = genericParameter.getType();
             } else {
-                Collection<TypeMirror> usedTypes = new HashSet<>();
+                Set<TypeMirror> usedTypes = new HashSet<>();
                 for (SpecializationData specialization : node.getSpecializations()) {
                     if (specialization.isUninitialized()) {
                         continue;
@@ -1374,19 +1369,18 @@ public class NodeParser extends AbstractParser<NodeData> {
                     }
                     usedTypes.add(parameter.getType());
                 }
-                usedTypes = ElementUtils.uniqueSortedTypes(usedTypes);
 
                 if (usedTypes.size() == 1) {
                     polymorphicType = usedTypes.iterator().next();
 
-                    if (!isReturnParameter && node.getTypeSystem().hasImplicitSourceTypes(polymorphicType)) {
+                    if (node.getTypeSystem().hasImplicitSourceTypes(polymorphicType)) {
                         polymorphicType = context.getType(Object.class);
                     }
                 } else {
                     polymorphicType = context.getType(Object.class);
                 }
             }
-            if (isReturnParameter) {
+            if (genericParameter == generic.getReturnType()) {
                 returnType = polymorphicType;
             } else {
                 types.add(new CodeVariableElement(polymorphicType, "param" + index));

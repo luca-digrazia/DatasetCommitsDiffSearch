@@ -134,19 +134,8 @@ public class NodeData extends Template implements Comparable<NodeData> {
         return types;
     }
 
-    public int getExecutionCount() {
-        return getChildExecutions().size();
-    }
-
     public int getSignatureSize() {
-        int count = 0;
-        for (NodeExecutionData execution : getChildExecutions()) {
-            if (execution.isShortCircuit()) {
-                count++;
-            }
-            count++;
-        }
-        return count;
+        return getChildExecutions().size();
     }
 
     public boolean isFrameUsedByAnyGuard() {
@@ -154,18 +143,8 @@ public class NodeData extends Template implements Comparable<NodeData> {
             if (!specialization.isReachable()) {
                 continue;
             }
-            Parameter frame = specialization.getFrame();
-            if (frame != null) {
-                for (GuardExpression guard : specialization.getGuards()) {
-                    if (guard.getExpression().findBoundVariableElements().contains(frame.getVariableElement())) {
-                        return true;
-                    }
-                }
-                for (CacheExpression cache : specialization.getCaches()) {
-                    if (cache.getExpression().findBoundVariableElements().contains(frame.getVariableElement())) {
-                        return true;
-                    }
-                }
+            if (specialization.isFrameUsed()) {
+                return true;
             }
         }
         return false;
@@ -565,10 +544,6 @@ public class NodeData extends Template implements Comparable<NodeData> {
         return getNodeId().compareTo(o.getNodeId());
     }
 
-    public TypeMirror getGenericType(NodeExecutionData execution) {
-        return ElementUtils.getCommonSuperType(getContext(), getGenericTypes(execution));
-    }
-
     public List<TypeMirror> getGenericTypes(NodeExecutionData execution) {
         List<TypeMirror> types = new ArrayList<>();
 
@@ -585,10 +560,8 @@ public class NodeData extends Template implements Comparable<NodeData> {
         int executionIndex = execution.getIndex();
         if (executionIndex >= 0) {
             for (ExecutableTypeData typeData : getExecutableTypes()) {
-                List<TypeMirror> signatureParameters = typeData.getSignatureParameters();
-                if (executionIndex < signatureParameters.size()) {
-                    TypeMirror genericType = signatureParameters.get(executionIndex);
-                    types.add(genericType);
+                if (executionIndex < typeData.getEvaluatedCount()) {
+                    types.add(typeData.getEvaluatedParameters().get(executionIndex));
                 }
             }
         }
