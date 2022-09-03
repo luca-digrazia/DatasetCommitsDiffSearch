@@ -24,7 +24,6 @@ package org.graalvm.compiler.truffle.runtime;
 
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleSplitting;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleSplittingMaxCalleeSize;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 
@@ -96,10 +95,6 @@ final class TruffleSplittingStrategy {
 
         // Disable splitting if it will cause a deep split-only recursion
         if (isRecursiveSplit(call)) {
-            return false;
-        }
-
-        if (TruffleCompilerOptions.TruffleEconomyMode.getValue(getOptions())) {
             return false;
         }
 
