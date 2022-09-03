@@ -29,7 +29,6 @@ import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 import static jdk.internal.jvmci.sparc.SPARC.*;
 import jdk.internal.jvmci.code.*;
@@ -135,7 +134,7 @@ public enum SPARCArithmetic {
         @Override
         public void verify() {
             super.verify();
-            verifyKind(opcode, result.getPlatformKind(), x.getPlatformKind(), y.getPlatformKind());
+            verifyKind(opcode, result, x, y);
         }
 
         @Override
@@ -186,7 +185,7 @@ public enum SPARCArithmetic {
         @Override
         public void verify() {
             super.verify();
-            verifyKind(opcode, result.getPlatformKind(), x.getPlatformKind(), y.getJavaKind());
+            verifyKind(opcode, result, x, y);
         }
     }
 
@@ -224,7 +223,7 @@ public enum SPARCArithmetic {
         @Override
         public void verify() {
             super.verify();
-            verifyKind(opcode, result.getPlatformKind(), x.getPlatformKind(), y.getPlatformKind());
+            verifyKind(opcode, result, x, y);
         }
     }
 
@@ -253,21 +252,21 @@ public enum SPARCArithmetic {
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             Label noOverflow = new Label();
-            masm.mulx(asRegister(x, JavaKind.Long), asRegister(y, JavaKind.Long), asRegister(result, JavaKind.Long));
+            masm.mulx(asLongReg(x), asLongReg(y), asLongReg(result));
 
             // Calculate the upper 64 bit signed := (umulxhi product - (x{63}&y + y{63}&x))
-            masm.umulxhi(asRegister(x, JavaKind.Long), asRegister(y, JavaKind.Long), asRegister(scratch1, JavaKind.Long));
-            masm.srax(asRegister(x, JavaKind.Long), 63, asRegister(scratch2, JavaKind.Long));
-            masm.and(asRegister(scratch2, JavaKind.Long), asRegister(y, JavaKind.Long), asRegister(scratch2, JavaKind.Long));
-            masm.sub(asRegister(scratch1, JavaKind.Long), asRegister(scratch2, JavaKind.Long), asRegister(scratch1, JavaKind.Long));
+            masm.umulxhi(asLongReg(x), asLongReg(y), asLongReg(scratch1));
+            masm.srax(asLongReg(x), 63, asLongReg(scratch2));
+            masm.and(asLongReg(scratch2), asLongReg(y), asLongReg(scratch2));
+            masm.sub(asLongReg(scratch1), asLongReg(scratch2), asLongReg(scratch1));
 
-            masm.srax(asRegister(y, JavaKind.Long), 63, asRegister(scratch2, JavaKind.Long));
-            masm.and(asRegister(scratch2, JavaKind.Long), asRegister(x, JavaKind.Long), asRegister(scratch2, JavaKind.Long));
-            masm.sub(asRegister(scratch1, JavaKind.Long), asRegister(scratch2, JavaKind.Long), asRegister(scratch1, JavaKind.Long));
+            masm.srax(asLongReg(y), 63, asLongReg(scratch2));
+            masm.and(asLongReg(scratch2), asLongReg(x), asLongReg(scratch2));
+            masm.sub(asLongReg(scratch1), asLongReg(scratch2), asLongReg(scratch1));
 
             // Now construct the lower half and compare
-            masm.srax(asRegister(result, JavaKind.Long), 63, asRegister(scratch2, JavaKind.Long));
-            masm.cmp(asRegister(scratch1, JavaKind.Long), asRegister(scratch2, JavaKind.Long));
+            masm.srax(asLongReg(result), 63, asLongReg(scratch2));
+            masm.cmp(asLongReg(scratch1), asLongReg(scratch2));
             masm.bpcc(Equal, NOT_ANNUL, noOverflow, Xcc, PREDICT_TAKEN);
             masm.nop();
             masm.wrccr(g0, 1 << (CCR_XCC_SHIFT + CCR_V_SHIFT));
@@ -277,94 +276,94 @@ public enum SPARCArithmetic {
 
     private static void emitRegConstant(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCArithmetic opcode, Value dst, Value src1, JavaConstant src2, LIRFrameState info,
                     SPARCDelayedControlTransfer delaySlotLir) {
-        assert isSimm13(src2.asLong()) : src2;
-        int constant = (int) src2.asLong();
+        assert isSimm13(crb.asIntConst(src2)) : src2;
+        int constant = crb.asIntConst(src2);
         int exceptionOffset = -1;
         delaySlotLir.emitControlTransfer(crb, masm);
         switch (opcode) {
             case IADD:
-                masm.add(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.add(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IADDCC:
-                masm.addcc(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.addcc(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case ISUB:
-                masm.sub(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.sub(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case ISUBCC:
-                masm.subcc(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.subcc(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IMUL:
-                masm.mulx(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.mulx(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IMULCC:
                 throw JVMCIError.unimplemented();
             case IDIV:
                 masm.sra(asRegister(src1), 0, asRegister(src1));
-                masm.sdivx(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.sdivx(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IUDIV:
                 masm.srl(asRegister(src1), 0, asRegister(src1));
-                masm.udivx(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.udivx(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IAND:
-                masm.and(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.and(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case ISHL:
-                masm.sll(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.sll(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case ISHR:
-                masm.sra(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.sra(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IUSHR:
-                masm.srl(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.srl(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IOR:
-                masm.or(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.or(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IXOR:
-                masm.xor(asRegister(src1, JavaKind.Int), constant, asRegister(dst, JavaKind.Int));
+                masm.xor(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case LADD:
-                masm.add(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.add(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LADDCC:
-                masm.addcc(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.addcc(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LSUB:
-                masm.sub(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.sub(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LSUBCC:
-                masm.subcc(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.subcc(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LMUL:
-                masm.mulx(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.mulx(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LDIV:
                 exceptionOffset = masm.position();
-                masm.sdivx(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.sdivx(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LUDIV:
                 exceptionOffset = masm.position();
-                masm.udivx(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.udivx(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LAND:
-                masm.and(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.and(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LOR:
-                masm.or(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.or(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LXOR:
-                masm.xor(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.xor(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LSHL:
-                masm.sllx(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.sllx(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LSHR:
-                masm.srax(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.srax(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case LUSHR:
-                masm.srlx(asRegister(src1, JavaKind.Long), constant, asRegister(dst, JavaKind.Long));
+                masm.srlx(asLongReg(src1), constant, asLongReg(dst));
                 break;
             case DAND: // Has no constant implementation in SPARC
             case FADD:
@@ -385,35 +384,35 @@ public enum SPARCArithmetic {
     public static void emitRegReg(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCArithmetic opcode, Value dst, Value src1, Value src2, LIRFrameState info,
                     SPARCDelayedControlTransfer delaySlotLir) {
         int exceptionOffset = -1;
-        assert !isJavaConstant(src1) : src1;
-        assert !isJavaConstant(src2) : src2;
+        assert !isConstant(src1) : src1;
+        assert !isConstant(src2) : src2;
         switch (opcode) {
             case IADD:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.add(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.add(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IADDCC:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.addcc(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.addcc(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case ISUB:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.sub(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.sub(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case ISUBCC:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.subcc(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.subcc(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IMUL:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.mulx(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.mulx(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IMULCC:
                 try (ScratchRegister tmpScratch = masm.getScratchRegister()) {
                     Register tmp = tmpScratch.getRegister();
-                    masm.mulx(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                    masm.mulx(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                     Label noOverflow = new Label();
-                    masm.sra(asRegister(dst, JavaKind.Int), 0, tmp);
+                    masm.sra(asIntReg(dst), 0, tmp);
                     masm.xorcc(SPARC.g0, SPARC.g0, SPARC.g0);
                     masm.compareBranch(tmp, asRegister(dst), Equal, Xcc, noOverflow, PREDICT_TAKEN, null);
                     masm.wrccr(SPARC.g0, 1 << (SPARCAssembler.CCR_ICC_SHIFT + SPARCAssembler.CCR_V_SHIFT));
@@ -421,146 +420,146 @@ public enum SPARCArithmetic {
                 }
                 break;
             case IDIV:
-                masm.signx(asRegister(src1, JavaKind.Int), asRegister(src1, JavaKind.Int));
-                masm.signx(asRegister(src2, JavaKind.Int), asRegister(src2, JavaKind.Int));
+                masm.signx(asIntReg(src1), asIntReg(src1));
+                masm.signx(asIntReg(src2), asIntReg(src2));
                 delaySlotLir.emitControlTransfer(crb, masm);
                 exceptionOffset = masm.position();
-                masm.sdivx(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.sdivx(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IUDIV:
-                masm.srl(asRegister(src1, JavaKind.Int), 0, asRegister(src1, JavaKind.Int));
-                masm.srl(asRegister(src2, JavaKind.Int), 0, asRegister(src2, JavaKind.Int));
+                masm.srl(asIntReg(src1), 0, asIntReg(src1));
+                masm.srl(asIntReg(src2), 0, asIntReg(src2));
                 delaySlotLir.emitControlTransfer(crb, masm);
                 exceptionOffset = masm.position();
-                masm.udivx(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.udivx(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IAND:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.and(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.and(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IOR:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.or(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.or(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IXOR:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.xor(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.xor(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case ISHL:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.sll(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.sll(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case ISHR:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.sra(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.sra(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IUSHR:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.srl(asRegister(src1, JavaKind.Int), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.srl(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IREM:
                 throw JVMCIError.unimplemented();
             case LADD:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.add(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.add(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LADDCC:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.addcc(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.addcc(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LSUB:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.sub(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.sub(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LSUBCC:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.subcc(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.subcc(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LMUL:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.mulx(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.mulx(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LMULCC:
                 throw JVMCIError.unimplemented();
             case LDIV:
                 delaySlotLir.emitControlTransfer(crb, masm);
                 exceptionOffset = masm.position();
-                masm.sdivx(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.sdivx(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LUDIV:
                 delaySlotLir.emitControlTransfer(crb, masm);
                 exceptionOffset = masm.position();
-                masm.udivx(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.udivx(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LAND:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.and(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.and(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LOR:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.or(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.or(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LXOR:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.xor(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.xor(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LSHL:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.sllx(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Long));
+                masm.sllx(asLongReg(src1), asIntReg(src2), asLongReg(dst));
                 break;
             case LSHR:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.srax(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Long));
+                masm.srax(asLongReg(src1), asIntReg(src2), asLongReg(dst));
                 break;
             case LUSHR:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.srlx(asRegister(src1, JavaKind.Long), asRegister(src2, JavaKind.Int), asRegister(dst, JavaKind.Long));
+                masm.srlx(asLongReg(src1), asIntReg(src2), asLongReg(dst));
                 break;
             case FADD:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fadds(asRegister(src1, JavaKind.Float), asRegister(src2, JavaKind.Float), asRegister(dst, JavaKind.Float));
+                masm.fadds(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst));
                 break;
             case FSUB:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fsubs(asRegister(src1, JavaKind.Float), asRegister(src2, JavaKind.Float), asRegister(dst, JavaKind.Float));
+                masm.fsubs(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst));
                 break;
             case FMUL:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                if (dst.getPlatformKind() == JavaKind.Double) {
-                    masm.fsmuld(asRegister(src1, JavaKind.Float), asRegister(src2, JavaKind.Float), asRegister(dst, JavaKind.Double));
-                } else if (dst.getPlatformKind() == JavaKind.Float) {
-                    masm.fmuls(asRegister(src1, JavaKind.Float), asRegister(src2, JavaKind.Float), asRegister(dst, JavaKind.Float));
+                if (dst.getPlatformKind() == Kind.Double) {
+                    masm.fsmuld(asFloatReg(src1), asFloatReg(src2), asDoubleReg(dst));
+                } else if (dst.getPlatformKind() == Kind.Float) {
+                    masm.fmuls(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst));
                 }
                 break;
             case FDIV:
                 delaySlotLir.emitControlTransfer(crb, masm);
                 exceptionOffset = masm.position();
-                masm.fdivs(asRegister(src1, JavaKind.Float), asRegister(src2, JavaKind.Float), asRegister(dst, JavaKind.Float));
+                masm.fdivs(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst));
                 break;
             case FREM:
                 throw JVMCIError.unimplemented();
             case DADD:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.faddd(asRegister(src1, JavaKind.Double), asRegister(src2, JavaKind.Double), asRegister(dst, JavaKind.Double));
+                masm.faddd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                 break;
             case DSUB:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fsubd(asRegister(src1, JavaKind.Double), asRegister(src2, JavaKind.Double), asRegister(dst, JavaKind.Double));
+                masm.fsubd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                 break;
             case DMUL:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fmuld(asRegister(src1, JavaKind.Double), asRegister(src2, JavaKind.Double), asRegister(dst, JavaKind.Double));
+                masm.fmuld(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                 break;
             case DDIV:
                 delaySlotLir.emitControlTransfer(crb, masm);
                 exceptionOffset = masm.position();
-                masm.fdivd(asRegister(src1, JavaKind.Double), asRegister(src2, JavaKind.Double), asRegister(dst, JavaKind.Double));
+                masm.fdivd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                 break;
             case DREM:
                 throw JVMCIError.unimplemented();
             case DAND:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fandd(asRegister(src1, JavaKind.Double), asRegister(src2, JavaKind.Double), asRegister(dst, JavaKind.Double));
+                masm.fandd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                 break;
             default:
                 throw JVMCIError.shouldNotReachHere();
@@ -574,33 +573,33 @@ public enum SPARCArithmetic {
     public static void emitRem(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCArithmetic opcode, Value dst, Value src1, Value src2, Value scratch1, Value scratch2, LIRFrameState info,
                     SPARCDelayedControlTransfer delaySlotLir) {
         int exceptionOffset = -1;
-        if (!isJavaConstant(src1) && isJavaConstant(src2)) {
+        if (!isConstant(src1) && isConstant(src2)) {
             assert isSimm13(crb.asIntConst(src2));
             assert !src1.equals(scratch1);
             assert !src1.equals(scratch2);
             assert !src2.equals(scratch1);
             switch (opcode) {
                 case IREM:
-                    masm.sra(asRegister(src1, JavaKind.Int), 0, asRegister(dst, JavaKind.Int));
+                    masm.sra(asIntReg(src1), 0, asIntReg(dst));
                     exceptionOffset = masm.position();
-                    masm.sdivx(asRegister(dst, JavaKind.Int), crb.asIntConst(src2), asRegister(scratch1, JavaKind.Int));
-                    masm.mulx(asRegister(scratch1, JavaKind.Int), crb.asIntConst(src2), asRegister(scratch2, JavaKind.Int));
+                    masm.sdivx(asIntReg(dst), crb.asIntConst(src2), asIntReg(scratch1));
+                    masm.mulx(asIntReg(scratch1), crb.asIntConst(src2), asIntReg(scratch2));
                     delaySlotLir.emitControlTransfer(crb, masm);
-                    masm.sub(asRegister(dst, JavaKind.Int), asRegister(scratch2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                    masm.sub(asIntReg(dst), asIntReg(scratch2), asIntReg(dst));
                     break;
                 case LREM:
                     exceptionOffset = masm.position();
-                    masm.sdivx(asRegister(src1, JavaKind.Long), crb.asIntConst(src2), asRegister(scratch1, JavaKind.Long));
-                    masm.mulx(asRegister(scratch1, JavaKind.Long), crb.asIntConst(src2), asRegister(scratch2, JavaKind.Long));
+                    masm.sdivx(asLongReg(src1), crb.asIntConst(src2), asLongReg(scratch1));
+                    masm.mulx(asLongReg(scratch1), crb.asIntConst(src2), asLongReg(scratch2));
                     delaySlotLir.emitControlTransfer(crb, masm);
-                    masm.sub(asRegister(src1, JavaKind.Long), asRegister(scratch2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                    masm.sub(asLongReg(src1), asLongReg(scratch2), asLongReg(dst));
                     break;
                 case LUREM:
                     exceptionOffset = masm.position();
-                    masm.udivx(asRegister(src1, JavaKind.Long), crb.asIntConst(src2), asRegister(scratch1, JavaKind.Long));
-                    masm.mulx(asRegister(scratch1, JavaKind.Long), crb.asIntConst(src2), asRegister(scratch2, JavaKind.Long));
+                    masm.udivx(asLongReg(src1), crb.asIntConst(src2), asLongReg(scratch1));
+                    masm.mulx(asLongReg(scratch1), crb.asIntConst(src2), asLongReg(scratch2));
                     delaySlotLir.emitControlTransfer(crb, masm);
-                    masm.sub(asRegister(src1, JavaKind.Long), asRegister(scratch2, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                    masm.sub(asLongReg(src1), asLongReg(scratch2), asLongReg(dst));
                     break;
                 case IUREM:
                     JVMCIError.unimplemented();
@@ -612,57 +611,57 @@ public enum SPARCArithmetic {
             Value srcLeft = src1;
             switch (opcode) {
                 case LREM:
-                    if (isJavaConstant(src1)) {
-                        new Setx(crb.asLongConst(src1), asRegister(scratch2, JavaKind.Long), false).emit(masm);
+                    if (isConstant(src1)) {
+                        new Setx(crb.asLongConst(src1), asLongReg(scratch2), false).emit(masm);
                         srcLeft = scratch2;
                     }
-                    assert !asRegister(srcLeft, JavaKind.Long).equals(asRegister(scratch1, JavaKind.Long));
-                    assert !asRegister(src2, JavaKind.Long).equals(asRegister(scratch1, JavaKind.Long));
+                    assert !asLongReg(srcLeft).equals(asLongReg(scratch1));
+                    assert !asLongReg(src2).equals(asLongReg(scratch1));
                     // But src2 can be scratch2
                     exceptionOffset = masm.position();
-                    masm.sdivx(asRegister(srcLeft, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(scratch1, JavaKind.Long));
-                    masm.mulx(asRegister(scratch1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(scratch1, JavaKind.Long));
+                    masm.sdivx(asLongReg(srcLeft), asLongReg(src2), asLongReg(scratch1));
+                    masm.mulx(asLongReg(scratch1), asLongReg(src2), asLongReg(scratch1));
                     delaySlotLir.emitControlTransfer(crb, masm);
-                    masm.sub(asRegister(srcLeft, JavaKind.Long), asRegister(scratch1, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                    masm.sub(asLongReg(srcLeft), asLongReg(scratch1), asLongReg(dst));
                     break;
                 case LUREM:
-                    if (isJavaConstant(src1)) {
-                        new Setx(crb.asLongConst(src1), asRegister(scratch2, JavaKind.Long), false).emit(masm);
+                    if (isConstant(src1)) {
+                        new Setx(crb.asLongConst(src1), asLongReg(scratch2), false).emit(masm);
                         srcLeft = scratch2;
                     }
-                    assert !asRegister(srcLeft, JavaKind.Long).equals(asRegister(scratch1, JavaKind.Long));
-                    assert !asRegister(src2, JavaKind.Long).equals(asRegister(scratch1, JavaKind.Long));
+                    assert !asLongReg(srcLeft).equals(asLongReg(scratch1));
+                    assert !asLongReg(src2).equals(asLongReg(scratch1));
                     exceptionOffset = masm.position();
-                    masm.udivx(asRegister(srcLeft, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(scratch1, JavaKind.Long));
-                    masm.mulx(asRegister(scratch1, JavaKind.Long), asRegister(src2, JavaKind.Long), asRegister(scratch1, JavaKind.Long));
+                    masm.udivx(asLongReg(srcLeft), asLongReg(src2), asLongReg(scratch1));
+                    masm.mulx(asLongReg(scratch1), asLongReg(src2), asLongReg(scratch1));
                     delaySlotLir.emitControlTransfer(crb, masm);
-                    masm.sub(asRegister(srcLeft, JavaKind.Long), asRegister(scratch1, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                    masm.sub(asLongReg(srcLeft), asLongReg(scratch1), asLongReg(dst));
                     break;
                 case IREM:
-                    if (isJavaConstant(src1)) {
-                        new Setx(crb.asIntConst(src1), asRegister(scratch2, JavaKind.Int), false).emit(masm);
+                    if (isConstant(src1)) {
+                        new Setx(crb.asIntConst(src1), asIntReg(scratch2), false).emit(masm);
                         srcLeft = scratch2;
                     }
-                    assert !asRegister(srcLeft, JavaKind.Int).equals(asRegister(scratch1, JavaKind.Int));
-                    assert !asRegister(src2, JavaKind.Int).equals(asRegister(scratch1, JavaKind.Int));
-                    masm.sra(asRegister(src1, JavaKind.Int), 0, asRegister(scratch1, JavaKind.Int));
-                    masm.sra(asRegister(src2, JavaKind.Int), 0, asRegister(scratch2, JavaKind.Int));
+                    assert !asIntReg(srcLeft).equals(asIntReg(scratch1));
+                    assert !asIntReg(src2).equals(asIntReg(scratch1));
+                    masm.sra(asIntReg(src1), 0, asIntReg(scratch1));
+                    masm.sra(asIntReg(src2), 0, asIntReg(scratch2));
                     exceptionOffset = masm.position();
-                    masm.sdivx(asRegister(scratch1, JavaKind.Int), asRegister(scratch2, JavaKind.Int), asRegister(dst, JavaKind.Int));
-                    masm.mulx(asRegister(dst, JavaKind.Int), asRegister(scratch2, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                    masm.sdivx(asIntReg(scratch1), asIntReg(scratch2), asIntReg(dst));
+                    masm.mulx(asIntReg(dst), asIntReg(scratch2), asIntReg(dst));
                     delaySlotLir.emitControlTransfer(crb, masm);
-                    masm.sub(asRegister(scratch1, JavaKind.Int), asRegister(dst, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                    masm.sub(asIntReg(scratch1), asIntReg(dst), asIntReg(dst));
                     break;
                 case IUREM:
-                    assert !asRegister(dst, JavaKind.Int).equals(asRegister(scratch1, JavaKind.Int));
-                    assert !asRegister(dst, JavaKind.Int).equals(asRegister(scratch2, JavaKind.Int));
-                    masm.srl(asRegister(src1, JavaKind.Int), 0, asRegister(scratch1, JavaKind.Int));
-                    masm.srl(asRegister(src2, JavaKind.Int), 0, asRegister(dst, JavaKind.Int));
+                    assert !asIntReg(dst).equals(asIntReg(scratch1));
+                    assert !asIntReg(dst).equals(asIntReg(scratch2));
+                    masm.srl(asIntReg(src1), 0, asIntReg(scratch1));
+                    masm.srl(asIntReg(src2), 0, asIntReg(dst));
                     exceptionOffset = masm.position();
-                    masm.udivx(asRegister(scratch1, JavaKind.Int), asRegister(dst, JavaKind.Int), asRegister(scratch2, JavaKind.Int));
-                    masm.mulx(asRegister(scratch2, JavaKind.Int), asRegister(dst, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                    masm.udivx(asIntReg(scratch1), asIntReg(dst), asIntReg(scratch2));
+                    masm.mulx(asIntReg(scratch2), asIntReg(dst), asIntReg(dst));
                     delaySlotLir.emitControlTransfer(crb, masm);
-                    masm.sub(asRegister(scratch1, JavaKind.Int), asRegister(dst, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                    masm.sub(asIntReg(scratch1), asIntReg(dst), asIntReg(dst));
                     break;
                 default:
                     throw JVMCIError.shouldNotReachHere();
@@ -682,111 +681,111 @@ public enum SPARCArithmetic {
         switch (opcode) {
             case INEG:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.neg(asRegister(src, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.neg(asIntReg(src), asIntReg(dst));
                 break;
             case LNEG:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.neg(asRegister(src, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.neg(asLongReg(src), asLongReg(dst));
                 break;
             case INOT:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.not(asRegister(src, JavaKind.Int), asRegister(dst, JavaKind.Int));
+                masm.not(asIntReg(src), asIntReg(dst));
                 break;
             case LNOT:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.not(asRegister(src, JavaKind.Long), asRegister(dst, JavaKind.Long));
+                masm.not(asLongReg(src), asLongReg(dst));
                 break;
             case D2F:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fdtos(asRegister(src, JavaKind.Double), asRegister(dst, JavaKind.Float));
+                masm.fdtos(asDoubleReg(src), asFloatReg(dst));
                 break;
             case L2D:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fxtod(asRegister(src, JavaKind.Double), asRegister(dst, JavaKind.Double));
+                masm.fxtod(asDoubleReg(src), asDoubleReg(dst));
                 break;
             case L2F:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fxtos(asRegister(src, JavaKind.Double), asRegister(dst, JavaKind.Float));
+                masm.fxtos(asDoubleReg(src), asFloatReg(dst));
                 break;
             case I2D:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fitod(asRegister(src, JavaKind.Float), asRegister(dst, JavaKind.Double));
+                masm.fitod(asFloatReg(src), asDoubleReg(dst));
                 break;
             case I2L:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.signx(asRegister(src, JavaKind.Int), asRegister(dst, JavaKind.Long));
+                masm.signx(asIntReg(src), asLongReg(dst));
                 break;
             case L2I:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.signx(asRegister(src, JavaKind.Long), asRegister(dst, JavaKind.Int));
+                masm.signx(asLongReg(src), asIntReg(dst));
                 break;
             case B2L:
-                masm.sll(asRegister(src), 24, asRegister(dst, JavaKind.Long));
+                masm.sll(asIntReg(src), 24, asLongReg(dst));
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.sra(asRegister(dst, JavaKind.Long), 24, asRegister(dst, JavaKind.Long));
+                masm.sra(asLongReg(dst), 24, asLongReg(dst));
                 break;
             case B2I:
-                masm.sll(asRegister(src), 24, asRegister(dst, JavaKind.Int));
+                masm.sll(asIntReg(src), 24, asIntReg(dst));
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.sra(asRegister(dst, JavaKind.Int), 24, asRegister(dst, JavaKind.Int));
+                masm.sra(asIntReg(dst), 24, asIntReg(dst));
                 break;
             case S2L:
-                masm.sll(asRegister(src), 16, asRegister(dst, JavaKind.Long));
+                masm.sll(asIntReg(src), 16, asLongReg(dst));
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.sra(asRegister(dst, JavaKind.Long), 16, asRegister(dst, JavaKind.Long));
+                masm.sra(asLongReg(dst), 16, asLongReg(dst));
                 break;
             case S2I:
-                masm.sll(asRegister(src), 16, asRegister(dst, JavaKind.Int));
+                masm.sll(asIntReg(src), 16, asIntReg(dst));
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.sra(asRegister(dst, JavaKind.Int), 16, asRegister(dst, JavaKind.Int));
+                masm.sra(asIntReg(dst), 16, asIntReg(dst));
                 break;
             case I2F:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fitos(asRegister(src, JavaKind.Float), asRegister(dst, JavaKind.Float));
+                masm.fitos(asFloatReg(src), asFloatReg(dst));
                 break;
             case F2D:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fstod(asRegister(src, JavaKind.Float), asRegister(dst, JavaKind.Double));
+                masm.fstod(asFloatReg(src), asDoubleReg(dst));
                 break;
             case F2L:
-                masm.fcmp(Fcc0, Fcmps, asRegister(src, JavaKind.Float), asRegister(src, JavaKind.Float));
+                masm.fcmp(Fcc0, Fcmps, asFloatReg(src), asFloatReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
-                masm.fstox(asRegister(src, JavaKind.Float), asRegister(dst, JavaKind.Double));
+                masm.fstox(asFloatReg(src), asDoubleReg(dst));
                 masm.fxtod(asRegister(dst), asRegister(dst));
-                masm.fsubd(asRegister(dst, JavaKind.Double), asRegister(dst, JavaKind.Double), asRegister(dst, JavaKind.Double));
+                masm.fsubd(asDoubleReg(dst), asDoubleReg(dst), asDoubleReg(dst));
                 masm.bind(notOrdered);
                 break;
             case F2I:
-                masm.fcmp(Fcc0, Fcmps, asRegister(src, JavaKind.Float), asRegister(src, JavaKind.Float));
+                masm.fcmp(Fcc0, Fcmps, asFloatReg(src), asFloatReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
-                masm.fstoi(asRegister(src, JavaKind.Float), asRegister(dst, JavaKind.Float));
-                masm.fitos(asRegister(dst, JavaKind.Float), asRegister(dst, JavaKind.Float));
-                masm.fsubs(asRegister(dst, JavaKind.Float), asRegister(dst, JavaKind.Float), asRegister(dst, JavaKind.Float));
+                masm.fstoi(asFloatReg(src), asFloatReg(dst));
+                masm.fitos(asFloatReg(dst), asFloatReg(dst));
+                masm.fsubs(asFloatReg(dst), asFloatReg(dst), asFloatReg(dst));
                 masm.bind(notOrdered);
                 break;
             case D2L:
-                masm.fcmp(Fcc0, Fcmpd, asRegister(src, JavaKind.Double), asRegister(src, JavaKind.Double));
+                masm.fcmp(Fcc0, Fcmpd, asDoubleReg(src), asDoubleReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
-                masm.fdtox(asRegister(src, JavaKind.Double), asRegister(dst, JavaKind.Double));
-                masm.fxtod(asRegister(dst, JavaKind.Double), asRegister(dst, JavaKind.Double));
-                masm.fsubd(asRegister(dst, JavaKind.Double), asRegister(dst, JavaKind.Double), asRegister(dst, JavaKind.Double));
+                masm.fdtox(asDoubleReg(src), asDoubleReg(dst));
+                masm.fxtod(asDoubleReg(dst), asDoubleReg(dst));
+                masm.fsubd(asDoubleReg(dst), asDoubleReg(dst), asDoubleReg(dst));
                 masm.bind(notOrdered);
                 break;
             case D2I:
-                masm.fcmp(Fcc0, Fcmpd, asRegister(src, JavaKind.Double), asRegister(src, JavaKind.Double));
+                masm.fcmp(Fcc0, Fcmpd, asDoubleReg(src), asDoubleReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
-                masm.fdtoi(asRegister(src, JavaKind.Double), asRegister(dst, JavaKind.Float));
-                masm.fitos(asRegister(dst, JavaKind.Float), asRegister(dst, JavaKind.Float));
-                masm.fsubs(asRegister(dst, JavaKind.Float), asRegister(dst, JavaKind.Float), asRegister(dst, JavaKind.Float));
+                masm.fdtoi(asDoubleReg(src), asFloatReg(dst));
+                masm.fitos(asFloatReg(dst), asFloatReg(dst));
+                masm.fsubs(asFloatReg(dst), asFloatReg(dst), asFloatReg(dst));
                 masm.bind(notOrdered);
                 break;
             case FNEG:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fnegs(asRegister(src, JavaKind.Float), asRegister(dst, JavaKind.Float));
+                masm.fnegs(asFloatReg(src), asFloatReg(dst));
                 break;
             case DNEG:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fnegd(asRegister(src, JavaKind.Double), asRegister(dst, JavaKind.Double));
+                masm.fnegd(asDoubleReg(src), asDoubleReg(dst));
                 break;
             default:
                 throw JVMCIError.shouldNotReachHere("missing: " + opcode);
@@ -797,12 +796,12 @@ public enum SPARCArithmetic {
         }
     }
 
-    private static void verifyKind(SPARCArithmetic opcode, PlatformKind result, PlatformKind x, PlatformKind y) {
-        JavaKind rk;
-        JavaKind xk;
-        JavaKind yk;
-        JavaKind xsk;
-        JavaKind ysk;
+    private static void verifyKind(SPARCArithmetic opcode, Value result, Value x, Value y) {
+        Kind rk;
+        Kind xk;
+        Kind yk;
+        Kind xsk;
+        Kind ysk;
 
         switch (opcode) {
             case IADD:
@@ -821,11 +820,11 @@ public enum SPARCArithmetic {
             case IUSHR:
             case IUDIV:
             case IUREM:
-                rk = ((JavaKind) result).getStackKind();
-                xsk = ((JavaKind) x).getStackKind();
-                ysk = ((JavaKind) y).getStackKind();
+                rk = result.getKind().getStackKind();
+                xsk = x.getKind().getStackKind();
+                ysk = y.getKind().getStackKind();
                 boolean valid = false;
-                for (JavaKind k : new JavaKind[]{JavaKind.Int, JavaKind.Short, JavaKind.Byte, JavaKind.Char}) {
+                for (Kind k : new Kind[]{Kind.Int, Kind.Short, Kind.Byte, Kind.Char}) {
                     valid |= rk == k && xsk == k && ysk == k;
                 }
                 assert valid : "rk: " + rk + " xsk: " + xsk + " ysk: " + ysk;
@@ -843,28 +842,28 @@ public enum SPARCArithmetic {
             case LXOR:
             case LUDIV:
             case LUREM:
-                rk = (JavaKind) result;
-                xk = (JavaKind) x;
-                yk = (JavaKind) y;
-                assert rk == JavaKind.Long && xk == JavaKind.Long && yk == JavaKind.Long;
+                rk = result.getKind();
+                xk = x.getKind();
+                yk = y.getKind();
+                assert rk == Kind.Long && xk == Kind.Long && yk == Kind.Long;
                 break;
             case LSHL:
             case LSHR:
             case LUSHR:
-                rk = (JavaKind) result;
-                xk = (JavaKind) x;
-                yk = (JavaKind) y;
-                assert rk == JavaKind.Long && xk == JavaKind.Long && (yk == JavaKind.Int || yk == JavaKind.Long);
+                rk = result.getKind();
+                xk = x.getKind();
+                yk = y.getKind();
+                assert rk == Kind.Long && xk == Kind.Long && (yk == Kind.Int || yk == Kind.Long);
                 break;
             case FADD:
             case FSUB:
             case FMUL:
             case FDIV:
             case FREM:
-                rk = (JavaKind) result;
-                xk = (JavaKind) x;
-                yk = (JavaKind) y;
-                assert (rk == JavaKind.Float || rk == JavaKind.Double) && xk == JavaKind.Float && yk == JavaKind.Float;
+                rk = result.getKind();
+                xk = x.getKind();
+                yk = y.getKind();
+                assert (rk == Kind.Float || rk == Kind.Double) && xk == Kind.Float && yk == Kind.Float;
                 break;
             case DAND:
             case DADD:
@@ -872,10 +871,10 @@ public enum SPARCArithmetic {
             case DMUL:
             case DDIV:
             case DREM:
-                rk = (JavaKind) result;
-                xk = (JavaKind) x;
-                yk = (JavaKind) y;
-                assert rk == JavaKind.Double && xk == JavaKind.Double && yk == JavaKind.Double : "opcode=" + opcode + ", result kind=" + rk + ", x kind=" + xk + ", y kind=" + yk;
+                rk = result.getKind();
+                xk = x.getKind();
+                yk = y.getKind();
+                assert rk == Kind.Double && xk == Kind.Double && yk == Kind.Double : "opcode=" + opcode + ", result kind=" + rk + ", x kind=" + xk + ", y kind=" + yk;
                 break;
             default:
                 throw JVMCIError.shouldNotReachHere("missing: " + opcode);
@@ -908,30 +907,30 @@ public enum SPARCArithmetic {
                 case IMUL:
                     masm.sra(asRegister(x), 0, asRegister(x));
                     masm.sra(asRegister(y), 0, asRegister(y));
-                    masm.mulx(asRegister(x, JavaKind.Int), asRegister(y, JavaKind.Int), asRegister(result, JavaKind.Int));
-                    masm.srax(asRegister(result, JavaKind.Int), 32, asRegister(result, JavaKind.Int));
+                    masm.mulx(asIntReg(x), asIntReg(y), asIntReg(result));
+                    masm.srax(asIntReg(result), 32, asIntReg(result));
                     break;
                 case IUMUL:
-                    assert !asRegister(scratch, JavaKind.Int).equals(asRegister(result, JavaKind.Int));
-                    masm.srl(asRegister(x, JavaKind.Int), 0, asRegister(scratch, JavaKind.Int));
-                    masm.srl(asRegister(y, JavaKind.Int), 0, asRegister(result, JavaKind.Int));
-                    masm.mulx(asRegister(result, JavaKind.Int), asRegister(scratch, JavaKind.Int), asRegister(result, JavaKind.Int));
-                    masm.srlx(asRegister(result, JavaKind.Int), 32, asRegister(result, JavaKind.Int));
+                    assert !asIntReg(scratch).equals(asIntReg(result));
+                    masm.srl(asIntReg(x), 0, asIntReg(scratch));
+                    masm.srl(asIntReg(y), 0, asIntReg(result));
+                    masm.mulx(asIntReg(result), asIntReg(scratch), asIntReg(result));
+                    masm.srlx(asIntReg(result), 32, asIntReg(result));
                     break;
                 case LMUL:
-                    assert !asRegister(scratch, JavaKind.Long).equals(asRegister(result, JavaKind.Long));
-                    masm.umulxhi(asRegister(x, JavaKind.Long), asRegister(y, JavaKind.Long), asRegister(result, JavaKind.Long));
+                    assert !asLongReg(scratch).equals(asLongReg(result));
+                    masm.umulxhi(asLongReg(x), asLongReg(y), asLongReg(result));
 
-                    masm.srlx(asRegister(x, JavaKind.Long), 63, asRegister(scratch, JavaKind.Long));
-                    masm.mulx(asRegister(scratch, JavaKind.Long), asRegister(y, JavaKind.Long), asRegister(scratch, JavaKind.Long));
-                    masm.sub(asRegister(result, JavaKind.Long), asRegister(scratch, JavaKind.Long), asRegister(result, JavaKind.Long));
+                    masm.srlx(asLongReg(x), 63, asLongReg(scratch));
+                    masm.mulx(asLongReg(scratch), asLongReg(y), asLongReg(scratch));
+                    masm.sub(asLongReg(result), asLongReg(scratch), asLongReg(result));
 
-                    masm.srlx(asRegister(y, JavaKind.Long), 63, asRegister(scratch, JavaKind.Long));
-                    masm.mulx(asRegister(scratch, JavaKind.Long), asRegister(x, JavaKind.Long), asRegister(scratch, JavaKind.Long));
-                    masm.sub(asRegister(result, JavaKind.Long), asRegister(scratch, JavaKind.Long), asRegister(result, JavaKind.Long));
+                    masm.srlx(asLongReg(y), 63, asLongReg(scratch));
+                    masm.mulx(asLongReg(scratch), asLongReg(x), asLongReg(scratch));
+                    masm.sub(asLongReg(result), asLongReg(scratch), asLongReg(result));
                     break;
                 case LUMUL:
-                    masm.umulxhi(asRegister(x, JavaKind.Long), asRegister(y, JavaKind.Long), asRegister(result, JavaKind.Long));
+                    masm.umulxhi(asLongReg(x), asLongReg(y), asLongReg(result));
                     break;
                 default:
                     throw JVMCIError.shouldNotReachHere();

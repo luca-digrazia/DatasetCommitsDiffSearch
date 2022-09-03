@@ -22,13 +22,9 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import jdk.internal.jvmci.meta.JavaConstant;
-
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * Convenience class to provide SPARCMacroAssembler for the {@link #emitCode} method.
@@ -55,15 +51,5 @@ public abstract class SPARCLIRInstruction extends LIRInstruction implements SPAR
 
     public SPARCLIRInstructionMixinStore getSPARCLIRInstructionStore() {
         return store;
-    }
-
-    protected static int asImmediate(JavaConstant value) {
-        if (value.isNull()) {
-            return 0;
-        } else {
-            long val = value.asLong();
-            assert NumUtil.isInt(val);
-            return (int) val;
-        }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,16 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
-import static jdk.internal.jvmci.code.ValueUtil.asRegister;
-import static jdk.internal.jvmci.sparc.SPARC.STACK_BIAS;
-import static jdk.internal.jvmci.sparc.SPARCKind.DWORD;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.meta.AllocatableValue;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.Value;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.sparc.SPARCAddress;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.sparc.SPARCLIRInstruction;
-import com.oracle.graal.lir.sparc.SPARCMove;
-import com.oracle.graal.lir.sparc.SPARCTailDelayedLIRInstruction;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.sparc.*;
 
 @Opcode("CRUNTIME_CALL_PROLOGUE")
 final class SPARCHotSpotCRuntimeCallPrologueOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
@@ -69,6 +61,6 @@ final class SPARCHotSpotCRuntimeCallPrologueOp extends SPARCLIRInstruction imple
         masm.stx(scratchRegister, new SPARCAddress(thread, threadLastJavaSpOffset));
 
         // Save the thread register when calling out to the runtime.
-        SPARCMove.move(crb, masm, threadTemp, thread.asValue(LIRKind.value(DWORD)), getDelayedControlTransfer());
+        SPARCMove.move(crb, masm, threadTemp, thread.asValue(LIRKind.value(Kind.Long)), getDelayedControlTransfer());
     }
 }

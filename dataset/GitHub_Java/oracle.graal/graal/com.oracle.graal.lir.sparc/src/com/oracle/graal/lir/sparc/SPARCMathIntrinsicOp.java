@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,21 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fsqrtd;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
-public class SPARCMathIntrinsicOp extends SPARCLIRInstruction {
+public final class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+    public static final LIRInstructionClass<SPARCMathIntrinsicOp> TYPE = LIRInstructionClass.create(SPARCMathIntrinsicOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(1);
 
     public enum IntrinsicOpcode {
-        SQRT, SIN, COS, TAN, LOG, LOG10
+        SQRT,
+        ABS
     }
 
     @Opcode private final IntrinsicOpcode opcode;
@@ -41,25 +44,44 @@ public class SPARCMathIntrinsicOp extends SPARCLIRInstruction {
     @Use protected Value input;
 
     public SPARCMathIntrinsicOp(IntrinsicOpcode opcode, Value result, Value input) {
+        super(TYPE, SIZE);
         this.opcode = opcode;
         this.result = result;
         this.input = input;
     }
 
     @Override
-    @SuppressWarnings("unused")
-    public void emitCode(TargetMethodAssembler tasm, SPARCAssembler asm) {
+    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+        Kind inputKind = (Kind) input.getLIRKind().getPlatformKind();
+        getDelayedControlTransfer().emitControlTransfer(crb, masm);
         switch (opcode) {
             case SQRT:
-                new Fsqrtd(asm, asDoubleReg(result), asDoubleReg(input));
+                switch (inputKind) {
+                    case Float:
+                        masm.fsqrts(asFloatReg(input), asFloatReg(result));
+                        break;
+                    case Double:
+                        masm.fsqrtd(asDoubleReg(input), asDoubleReg(result));
+                        break;
+                    default:
+                        JVMCIError.shouldNotReachHere();
+                }
                 break;
-            case LOG:
-            case LOG10:
-            case SIN:
-            case COS:
-            case TAN:
+            case ABS:
+                switch (inputKind) {
+                    case Float:
+                        masm.fabss(asFloatReg(input), asFloatReg(result));
+                        break;
+                    case Double:
+                        masm.fabsd(asDoubleReg(input), asDoubleReg(result));
+                        break;
+                    default:
+                        JVMCIError.shouldNotReachHere();
+                }
+                break;
             default:
-                throw GraalInternalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
+
 }
