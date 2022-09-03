@@ -149,6 +149,9 @@ import com.oracle.truffle.llvm.nodes.control.LLVMBrUnconditionalNodeGen;
 import com.oracle.truffle.llvm.nodes.control.LLVMConditionalBranchNodeFactory;
 import com.oracle.truffle.llvm.nodes.control.LLVMConditionalBranchNodeFactory.LLVMBrConditionalInjectionNodeGen;
 import com.oracle.truffle.llvm.nodes.control.LLVMConditionalPhiWriteNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI32SwitchNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI64SwitchNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI8SwitchNode;
 import com.oracle.truffle.llvm.nodes.exception.LLVMInvokeNode;
 import com.oracle.truffle.llvm.nodes.exception.LLVMLandingPadNode.LLVMAddressLandingPadNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMFunctionBodyNode;
@@ -1458,7 +1461,19 @@ public class LLVMVisitor implements LLVMParserRuntime {
             cases[i] = visitValueRef(caseConditions.get(i).getRef(), caseConditions.get(i).getType());
         }
         LLVMBaseType llvmType = getLLVMType(switchInstr.getComparisonValue().getType());
-        return factoryFacade.createSwitch(cond, defaultLabel, otherLabels, cases, llvmType);
+        switch (llvmType) {
+            case I8:
+                LLVMI8Node[] i8Cases = Arrays.copyOf(cases, cases.length, LLVMI8Node[].class);
+                return new LLVMI8SwitchNode((LLVMI8Node) cond, i8Cases, otherLabels, defaultLabel);
+            case I32:
+                LLVMI32Node[] i32Cases = Arrays.copyOf(cases, cases.length, LLVMI32Node[].class);
+                return new LLVMI32SwitchNode((LLVMI32Node) cond, i32Cases, otherLabels, defaultLabel);
+            case I64:
+                LLVMI64Node[] i64Cases = Arrays.copyOf(cases, cases.length, LLVMI64Node[].class);
+                return new LLVMI64SwitchNode((LLVMI64Node) cond, i64Cases, otherLabels, defaultLabel);
+            default:
+                throw new AssertionError(llvmType);
+        }
     }
 
     private LLVMStatementNode visitBr(Instruction_br brInstruction) {

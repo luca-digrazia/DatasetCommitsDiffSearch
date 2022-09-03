@@ -227,8 +227,4 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
         return new LLVMIndirectBranchNode((LLVMAddressNode) value, labelTargets);
     }
 
-    public LLVMStatementNode createSwitch(LLVMExpressionNode cond, int defaultLabel, int[] otherLabels, LLVMExpressionNode[] cases, LLVMBaseType llvmType) {
-        return LLVMSwitchFactory.createSwitch(cond, defaultLabel, otherLabels, cases, llvmType);
-    }
-
 }
