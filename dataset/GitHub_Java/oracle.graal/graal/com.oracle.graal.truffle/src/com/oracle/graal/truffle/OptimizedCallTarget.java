@@ -192,9 +192,9 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         replaceCount++;
 
         // delay compilation until tree is deemed stable enough
-        int replaceBackoff = TruffleReplaceReprofileCount.getValue();
-        if (loopAndInvokeCounter < replaceBackoff) {
-            loopAndInvokeCounter = replaceBackoff;
+        int replaceBackoff = Math.min(TruffleInvalidationReprofileCount.getValue(), TruffleCompilationThreshold.getValue());
+        if (invokeCounter < replaceBackoff) {
+            invokeCounter = replaceBackoff;
         }
     }
 
