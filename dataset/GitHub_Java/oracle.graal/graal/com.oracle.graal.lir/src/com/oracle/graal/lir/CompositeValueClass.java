@@ -165,10 +165,8 @@ public class CompositeValueClass extends LIRIntrospection {
         return getValueForPosition(obj, componentOffsets, directComponentCount, pos);
     }
 
-    CompositeValue createUpdatedValue(CompositeValue compValue, ValuePosition pos, Value value) {
-        CompositeValue newCompValue = compValue.clone();
-        setValueForPosition(newCompValue, componentOffsets, directComponentCount, pos, value);
-        return newCompValue;
+    void setValue(CompositeValue obj, ValuePosition pos, Value value) {
+        setValueForPosition(obj, componentOffsets, directComponentCount, pos, value);
     }
 
     EnumSet<OperandFlag> getFlags(ValuePosition pos) {
