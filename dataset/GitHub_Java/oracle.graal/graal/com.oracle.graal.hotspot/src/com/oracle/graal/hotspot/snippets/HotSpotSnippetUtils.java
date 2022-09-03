@@ -60,21 +60,6 @@ public class HotSpotSnippetUtils {
     }
 
     @Fold
-    public static int threadObjectOffset() {
-        return config().threadObjectOffset;
-    }
-
-    @Fold
-    public static int osThreadOffset() {
-        return config().osThreadOffset;
-    }
-
-    @Fold
-    public static int osThreadInterruptedOffset() {
-        return config().osThreadInterruptedOffset;
-    }
-
-    @Fold
     public static Kind wordKind() {
         return HotSpotGraalRuntime.getInstance().getTarget().wordKind;
     }
@@ -107,31 +92,6 @@ public class HotSpotSnippetUtils {
     @Fold
     public static long arrayPrototypeMarkWord() {
         return config().arrayPrototypeMarkWord;
-    }
-
-    @Fold
-    public static int klassAccessFlagsOffset() {
-        return config().klassAccessFlagsOffset;
-    }
-
-    @Fold
-    public static int klassLayoutHelperOffset() {
-        return config().klassLayoutHelperOffset;
-    }
-
-    @Fold
-    public static int arrayKlassLayoutHelperIdentifier() {
-        return config().arrayKlassLayoutHelperIdentifier;
-    }
-
-    @Fold
-    public static int arrayKlassComponentMirrorOffset() {
-        return config().arrayKlassComponentMirrorOffset;
-    }
-
-    @Fold
-    public static int klassSuperKlassOffset() {
-        return config().klassSuperKlassOffset;
     }
 
     @Fold
@@ -247,16 +207,6 @@ public class HotSpotSnippetUtils {
         return config().useBiasedLocking;
     }
 
-    @Fold
-    static int uninitializedIdentityHashCodeValue() {
-        return config().uninitializedIdentityHashCodeValue;
-    }
-
-    @Fold
-    static int identityHashCodeShift() {
-        return config().identityHashCodeShift;
-    }
-
     /**
      * Loads the hub from a object, null checking it first.
      */
@@ -292,10 +242,6 @@ public class HotSpotSnippetUtils {
 
     public static Word loadWordFromWord(Word address, int offset) {
         return loadWordFromWordIntrinsic(address, 0, offset, wordKind());
-    }
-
-    static Object loadObjectFromWord(Word address, int offset) {
-        return UnsafeLoadNode.load(address, 0, offset, Kind.Object);
     }
 
     public static Word loadWordFromObject(Object object, int offset) {
