@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.api.source;
 
-import com.oracle.truffle.api.profiles.SeparateClassloaderTestRunner;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -32,10 +31,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-@SuppressWarnings("deprecation")
-@RunWith(SeparateClassloaderTestRunner.class)
 public class LineLocationTest {
 
     @Test

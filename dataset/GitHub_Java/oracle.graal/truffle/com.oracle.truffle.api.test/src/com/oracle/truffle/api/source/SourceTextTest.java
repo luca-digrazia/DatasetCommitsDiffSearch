@@ -27,7 +27,6 @@ import static org.junit.Assert.assertNull;
 
 import org.junit.Test;
 
-@SuppressWarnings("deprecation")
 public class SourceTextTest {
 
     private final Source emptySource = Source.fromText("", null);
