@@ -61,7 +61,6 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
     private final HotSpotRegisterConfig globalStubRegConfig;
     private final HotSpotGraalRuntime graalRuntime;
     private CheckCastSnippets.Templates checkcastSnippets;
-    private InstanceOfSnippets.Templates instanceofSnippets;
     private NewObjectSnippets.Templates newObjectSnippets;
 
     public HotSpotRuntime(HotSpotVMConfig config, HotSpotGraalRuntime graalRuntime) {
@@ -78,10 +77,8 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
         installer.install(UnsafeSnippets.class);
         installer.install(ArrayCopySnippets.class);
         installer.install(CheckCastSnippets.class);
-        installer.install(InstanceOfSnippets.class);
         installer.install(NewObjectSnippets.class);
         checkcastSnippets = new CheckCastSnippets.Templates(this);
-        instanceofSnippets = new InstanceOfSnippets.Templates(this);
         newObjectSnippets = new NewObjectSnippets.Templates(this, graalRuntime.getTarget(), config.useTLAB);
     }
 
@@ -294,7 +291,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
             graph.replaceFixedWithFixed(storeField, memoryWrite);
 
             FixedWithNextNode last = memoryWrite;
-            if (field.kind() == Kind.Object && !memoryWrite.value().objectStamp().alwaysNull()) {
+            if (field.kind() == Kind.Object && !memoryWrite.value().isNullConstant()) {
                 FieldWriteBarrier writeBarrier = graph.add(new FieldWriteBarrier(memoryWrite.object()));
                 graph.addAfterFixed(memoryWrite, writeBarrier);
                 last = writeBarrier;
@@ -309,7 +306,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
             // Separate out GC barrier semantics
             CompareAndSwapNode cas = (CompareAndSwapNode) n;
             ValueNode expected = cas.expected();
-            if (expected.kind() == Kind.Object && !cas.newValue().objectStamp().alwaysNull()) {
+            if (expected.kind() == Kind.Object && !cas.newValue().isNullConstant()) {
                 ResolvedJavaType type = cas.object().objectStamp().type();
                 if (type != null && !type.isArrayClass() && type.toJava() != Object.class) {
                     // Use a field write barrier since it's not an array store
@@ -340,7 +337,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
             ValueNode value = storeIndexed.value();
             CheckCastNode checkcast = null;
             ValueNode array = storeIndexed.array();
-            if (elementKind == Kind.Object && !value.objectStamp().alwaysNull()) {
+            if (elementKind == Kind.Object && !value.isNullConstant()) {
                 // Store check!
                 ResolvedJavaType arrayType = array.objectStamp().type();
                 if (arrayType != null && array.objectStamp().isExactType()) {
@@ -369,7 +366,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
 
             graph.replaceFixedWithFixed(storeIndexed, memoryWrite);
 
-            if (elementKind == Kind.Object && !value.objectStamp().alwaysNull()) {
+            if (elementKind == Kind.Object && !value.isNullConstant()) {
                 graph.addAfterFixed(memoryWrite, graph.add(new ArrayWriteBarrier(array, arrayLocation)));
             }
         } else if (n instanceof UnsafeLoadNode) {
@@ -388,7 +385,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
             WriteNode write = graph.add(new WriteNode(object, store.value(), location));
             write.setStateAfter(store.stateAfter());
             graph.replaceFixedWithFixed(store, write);
-            if (write.value().kind() == Kind.Object && !write.value().objectStamp().alwaysNull()) {
+            if (write.value().kind() == Kind.Object && !write.value().isNullConstant()) {
                 ResolvedJavaType type = object.objectStamp().type();
                 WriteBarrier writeBarrier;
                 if (type != null && !type.isArrayClass() && type.toJava() != Object.class) {
@@ -409,10 +406,6 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
         } else if (n instanceof CheckCastNode) {
             if (matches(graph, GraalOptions.HIRLowerCheckcast)) {
                 checkcastSnippets.lower((CheckCastNode) n, tool);
-            }
-        } else if (n instanceof InstanceOfNode) {
-            if (matches(graph, GraalOptions.HIRLowerInstanceOf)) {
-                instanceofSnippets.lower((InstanceOfNode) n, tool);
             }
         } else if (n instanceof NewInstanceNode) {
             if (matches(graph, GraalOptions.HIRLowerNewInstance)) {

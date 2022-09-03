@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,30 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
 
-    @Input private final NodeInputList<ValueNode> arguments;
+    @Input protected final NodeInputList<ValueNode> arguments;
 
-    public CallTargetNode(ValueNode[] arguments) {
-        super(StampFactory.extension());
-        this.arguments = new NodeInputList<>(this, arguments);
+    /**
+     * The address computation for an indirect call (e.g., invokevirtual or invokeinterface).
+     */
+    @Input protected ValueNode computedAddress;
+
+    public ValueNode computedAddress() {
+        return computedAddress;
     }
 
-    public CallTargetNode(List<ValueNode> arguments) {
+    public void setComputedAddress(ValueNode address) {
+        updateUsages(this.computedAddress, address);
+        this.computedAddress = address;
+    }
+
+    public CallTargetNode(ValueNode[] arguments) {
         super(StampFactory.extension());
         this.arguments = new NodeInputList<>(this, arguments);
     }
@@ -46,12 +54,9 @@ public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
         return arguments;
     }
 
-    public abstract Stamp returnStamp();
+    public abstract JavaType returnType();
 
-    /**
-     * A human-readable representation of the target, used for debug printing only.
-     */
-    public abstract String targetName();
+    public abstract Kind returnKind();
 
     @Override
     public void generate(LIRGeneratorTool gen) {
