@@ -26,8 +26,13 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.runtime.*;
 
 class NameAndSignature {
+
+    public static final MetaAccessProvider metaAccess = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders().getMetaAccess();
+
     final String name;
     final Class returnType;
     final Class[] parameterTypes;
@@ -67,14 +72,14 @@ class NameAndSignature {
     public boolean signatureEquals(ResolvedJavaMethod m) {
         Signature s = m.getSignature();
         ResolvedJavaType declaringClass = m.getDeclaringClass();
-        if (!s.getReturnType(declaringClass).resolve(declaringClass).isClass(returnType)) {
+        if (!s.getReturnType(declaringClass).resolve(declaringClass).equals(metaAccess.lookupJavaType(returnType))) {
             return false;
         }
         if (s.getParameterCount(false) != parameterTypes.length) {
             return false;
         }
         for (int i = 0; i < parameterTypes.length; i++) {
-            if (!s.getParameterType(i, declaringClass).resolve(declaringClass).isClass(parameterTypes[i])) {
+            if (!s.getParameterType(i, declaringClass).resolve(declaringClass).equals(metaAccess.lookupJavaType(parameterTypes[i]))) {
                 return false;
             }
         }

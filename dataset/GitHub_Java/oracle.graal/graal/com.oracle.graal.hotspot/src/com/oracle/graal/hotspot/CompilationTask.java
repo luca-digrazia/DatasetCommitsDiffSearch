@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot;
 import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
 import static com.oracle.graal.phases.GraalOptions.*;
-import static com.oracle.graal.phases.common.InliningUtil.*;
 
 import java.lang.reflect.*;
 import java.util.concurrent.*;
@@ -34,15 +33,14 @@ import java.util.concurrent.atomic.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.CompilerThreadFactory.CompilerThread;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
-import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 
 public final class CompilationTask implements Runnable {
@@ -120,11 +118,6 @@ public final class CompilationTask implements Runnable {
          * no code must be outside this try/finally because it could happen otherwise that
          * clearQueuedForCompilation() is not executed
          */
-
-        HotSpotVMConfig config = backend.getRuntime().getConfig();
-        long previousInlinedBytecodes = InlinedBytecodes.getCurrentValue();
-        long previousCompilationTime = CompilationTime.getCurrentValue();
-        HotSpotInstalledCode installedCode = null;
         try (TimerCloseable a = CompilationTime.start()) {
             if (!tryToChangeStatus(CompilationStatus.Queued, CompilationStatus.Running) || method.hasCompiledCode()) {
                 return;
@@ -161,7 +154,7 @@ public final class CompilationTask implements Runnable {
                             // Compiling method substitution - must clone the graph
                             graph = graph.copy();
                         }
-                        InlinedBytecodes.add(method.getCodeSize());
+                        InliningUtil.InlinedBytecodes.add(method.getCodeSize());
                         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
                         Suites suites = providers.getSuites().getDefaultSuites();
                         return GraalCompiler.compileGraph(graph, cc, method, providers, backend, backend.getTarget(), graphCache, plan, optimisticOpts, method.getSpeculationLog(), suites,
@@ -179,7 +172,7 @@ public final class CompilationTask implements Runnable {
             }
 
             try (TimerCloseable b = CodeInstallationTime.start()) {
-                installedCode = installMethod(result);
+                installMethod(result);
             }
             stats.finish(method);
         } catch (BailoutException bailout) {
@@ -200,15 +193,6 @@ public final class CompilationTask implements Runnable {
                 System.exit(-1);
             }
         } finally {
-            if (config.ciTime && installedCode != null) {
-                long processedBytes = InlinedBytecodes.getCurrentValue() - previousInlinedBytecodes;
-                long time = CompilationTime.getCurrentValue() - previousCompilationTime;
-                TimeUnit timeUnit = CompilationTime.getTimeUnit();
-                long timeUnitsPerSecond = timeUnit.convert(1, TimeUnit.SECONDS);
-                CompilerToVM c2vm = backend.getRuntime().getCompilerToVM();
-                c2vm.notifyCompilationStatistics(id, method, entryBCI != INVOCATION_ENTRY_BCI, (int) processedBytes, time, timeUnitsPerSecond, installedCode);
-            }
-
             assert method.isQueuedForCompilation();
             method.clearQueuedForCompilation();
         }
@@ -229,12 +213,12 @@ public final class CompilationTask implements Runnable {
                         MetaUtil.format("%H::%n(%p)", method), isOSR ? "@ " + entryBCI + " " : "", method.getCodeSize()));
     }
 
-    private HotSpotInstalledCode installMethod(final CompilationResult compResult) {
+    private void installMethod(final CompilationResult compResult) {
         final HotSpotCodeCacheProvider codeCache = backend.getProviders().getCodeCache();
-        return Debug.scope("CodeInstall", new Object[]{new DebugDumpScope(String.valueOf(id), true), codeCache, method}, new Callable<HotSpotInstalledCode>() {
+        Debug.scope("CodeInstall", new Object[]{new DebugDumpScope(String.valueOf(id), true), codeCache, method}, new Runnable() {
 
             @Override
-            public HotSpotInstalledCode call() {
+            public void run() {
                 HotSpotInstalledCode installedCode = codeCache.installMethod(method, entryBCI, compResult);
                 if (Debug.isDumpEnabled()) {
                     Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
@@ -242,7 +226,6 @@ public final class CompilationTask implements Runnable {
                 if (Debug.isLogEnabled()) {
                     Debug.log("%s", backend.getProviders().getDisassembler().disassemble(installedCode));
                 }
-                return installedCode;
             }
 
         });

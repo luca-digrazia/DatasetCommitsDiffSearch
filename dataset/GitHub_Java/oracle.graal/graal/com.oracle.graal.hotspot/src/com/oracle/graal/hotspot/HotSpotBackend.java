@@ -80,13 +80,6 @@ public abstract class HotSpotBackend extends Backend {
         return runtime;
     }
 
-    /**
-     * Performs any remaining initialization that was deferred until the {@linkplain #getRuntime()
-     * runtime} object was initialized and this backend was registered with it.
-     */
-    public void completeInitialization() {
-    }
-
     @Override
     public HotSpotProviders getProviders() {
         return (HotSpotProviders) super.getProviders();

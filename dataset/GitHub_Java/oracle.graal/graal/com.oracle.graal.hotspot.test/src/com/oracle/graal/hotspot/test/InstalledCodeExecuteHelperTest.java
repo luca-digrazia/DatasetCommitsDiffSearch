@@ -88,10 +88,10 @@ public class InstalledCodeExecuteHelperTest extends GraalCompilerTest {
             JavaType[] parameterTypes = signatureToTypes(getMetaAccess().lookupJavaMethod(m));
             assert parameterTypes.length == args.length;
             for (int i = 0; i < argsToBind.length; i++) {
-                ParameterNode param = graph.getParameter(i);
+                LocalNode local = graph.getLocal(i);
                 Constant c = Constant.forBoxed(parameterTypes[i].getKind(), argsToBind[i]);
                 ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
-                param.replaceAtUsages(replacement);
+                local.replaceAtUsages(replacement);
             }
         }
         return graph;

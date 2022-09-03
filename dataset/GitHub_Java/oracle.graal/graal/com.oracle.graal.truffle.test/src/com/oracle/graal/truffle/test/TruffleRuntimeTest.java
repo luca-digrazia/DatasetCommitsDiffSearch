@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,14 @@
  */
 package com.oracle.graal.truffle.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.api.test.Graal;
-import com.oracle.graal.runtime.RuntimeProvider;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.impl.DefaultTruffleRuntime;
-import com.oracle.truffle.api.impl.TVMCI;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.runtime.*;
+import com.oracle.graal.truffle.*;
+import com.oracle.truffle.api.*;
 
 public class TruffleRuntimeTest {
 
@@ -51,25 +46,6 @@ public class TruffleRuntimeTest {
     @Test
     public void testRuntimeIsGraalRuntime() {
         TruffleRuntime runtime = Truffle.getRuntime();
-        assertTrue(runtime.getClass() != DefaultTruffleRuntime.class);
-    }
-
-    @Test
-    public void testGetTVMCI() {
-        TruffleRuntime runtime = Truffle.getRuntime();
-        TVMCI tvmci = runtime.getCapability(TVMCI.class);
-        assertNotNull("Truffle Virtual Machine Compiler Interface not found", tvmci);
-        assertEquals("GraalTVMCI", tvmci.getClass().getSimpleName());
-
-        abstract class TVMCISubclass extends TVMCI {
-        }
-        TVMCISubclass subclass = runtime.getCapability(TVMCISubclass.class);
-        assertNull("Expected null return value for TVMCI subclass", subclass);
-    }
-
-    @Test
-    public void testGetCapabilityObjectClass() {
-        Object object = Truffle.getRuntime().getCapability(Object.class);
-        assertNull("Expected null return value for Object.class", object);
+        assertEquals(GraalTruffleRuntime.class, runtime.getClass());
     }
 }

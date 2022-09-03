@@ -533,7 +533,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
         for (DebugValue value : debugValues) {
             long l = scope.map.getCurrentValue(value.getIndex());
-            if (l != 0 || !SuppressZeroDebugValues.getValue()) {
+            if (l != 0) {
                 scope.print();
                 printIndent(scope.level + 1);
                 TTY.println(value.getName() + "=" + value.toString(l));

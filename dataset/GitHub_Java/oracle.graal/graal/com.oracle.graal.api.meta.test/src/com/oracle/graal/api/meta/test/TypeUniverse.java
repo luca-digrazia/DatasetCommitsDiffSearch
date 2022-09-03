@@ -42,7 +42,6 @@ import com.oracle.graal.runtime.*;
 public class TypeUniverse {
 
     public final Unsafe unsafe;
-    public static final double JAVA_VERSION = Double.valueOf(System.getProperty("java.specification.version"));
 
     public final MetaAccessProvider metaAccess;
     public final ConstantReflectionProvider constantReflection;

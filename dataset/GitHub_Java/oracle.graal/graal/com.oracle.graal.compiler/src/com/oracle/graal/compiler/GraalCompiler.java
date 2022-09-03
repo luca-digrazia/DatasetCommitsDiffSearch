@@ -138,44 +138,32 @@ public class GraalCompiler {
         Debug.scope("GraalCompiler", new Object[]{graph, providers.getCodeCache()}, new Runnable() {
 
             public void run() {
-                compileGraphNoScope(graph, cc, installedCodeOwner, providers, backend, target, cache, plan, optimisticOpts, speculationLog, suites, compilationResult);
-            }
-        });
+                final Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
+                final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
 
-        return compilationResult;
-    }
+                    public LIR call() {
+                        try (TimerCloseable a = FrontEnd.start()) {
+                            return emitHIR(providers, target, graph, assumptions, cache, plan, optimisticOpts, speculationLog, suites);
+                        }
+                    }
+                });
+                try (TimerCloseable a = BackEnd.start()) {
+                    final LIRGenerator lirGen = Debug.scope("BackEnd", lir, new Callable<LIRGenerator>() {
 
-    /**
-     * Same as {@link #compileGraph} but without entering a
-     * {@linkplain Debug#scope(String, Object[], Runnable) debug scope}.
-     */
-    public static <T extends CompilationResult> T compileGraphNoScope(final StructuredGraph graph, final CallingConvention cc, final ResolvedJavaMethod installedCodeOwner, final Providers providers,
-                    final Backend backend, final TargetDescription target, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts,
-                    final SpeculationLog speculationLog, final Suites suites, final T compilationResult) {
-        final Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
-        final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
+                        public LIRGenerator call() {
+                            return emitLIR(backend, target, lir, graph, cc);
+                        }
+                    });
+                    Debug.scope("CodeGen", lirGen, new Runnable() {
 
-            public LIR call() {
-                try (TimerCloseable a = FrontEnd.start()) {
-                    return emitHIR(providers, target, graph, assumptions, cache, plan, optimisticOpts, speculationLog, suites);
+                        public void run() {
+                            emitCode(backend, getLeafGraphIdArray(graph), assumptions, lirGen, compilationResult, installedCodeOwner);
+                        }
+
+                    });
                 }
             }
         });
-        try (TimerCloseable a = BackEnd.start()) {
-            final LIRGenerator lirGen = Debug.scope("BackEnd", lir, new Callable<LIRGenerator>() {
-
-                public LIRGenerator call() {
-                    return emitLIR(backend, target, lir, graph, cc);
-                }
-            });
-            Debug.scope("CodeGen", lirGen, new Runnable() {
-
-                public void run() {
-                    emitCode(backend, getLeafGraphIdArray(graph), assumptions, lirGen, compilationResult, installedCodeOwner);
-                }
-
-            });
-        }
 
         return compilationResult;
     }
@@ -209,15 +197,12 @@ public class GraalCompiler {
 
         HighTierContext highTierContext = new HighTierContext(providers, assumptions, cache, plan, optimisticOpts);
         suites.getHighTier().apply(graph, highTierContext);
-        graph.maybeCompress();
 
         MidTierContext midTierContext = new MidTierContext(providers, assumptions, target, optimisticOpts);
         suites.getMidTier().apply(graph, midTierContext);
-        graph.maybeCompress();
 
         LowTierContext lowTierContext = new LowTierContext(providers, assumptions, target);
         suites.getLowTier().apply(graph, lowTierContext);
-        graph.maybeCompress();
 
         // we do not want to store statistics about OSR compilations because it may prevent inlining
         if (!graph.isOSR()) {

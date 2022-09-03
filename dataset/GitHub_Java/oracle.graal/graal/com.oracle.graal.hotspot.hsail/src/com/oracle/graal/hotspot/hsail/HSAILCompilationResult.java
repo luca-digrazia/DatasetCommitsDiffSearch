@@ -85,7 +85,6 @@ public class HSAILCompilationResult extends CompilationResult {
         if (b == null) {
             // Fall back to a new instance
             b = new HSAILHotSpotBackendFactory().createBackend(runtime(), runtime().getHostBackend());
-            b.completeInitialization();
         }
         backend = b;
     }

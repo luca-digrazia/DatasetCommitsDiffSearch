@@ -48,8 +48,11 @@ public abstract class PTXTestBase extends GraalCompilerTest {
 
     private StructuredGraph sg;
 
-    public static void printReport(String message) {
-        TTY.println(message);
+    public void printReport(String message) {
+        // CheckStyle: stop system..print check
+        System.out.println(message);
+        // CheckStyle: resume system..print check
+
     }
 
     public PTXTestBase() {
