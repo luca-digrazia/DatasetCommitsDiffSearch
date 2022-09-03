@@ -784,39 +784,15 @@ public class AMD64Assembler extends Assembler {
     }
 
     public final void idivl(Register src) {
-        int encode = prefixAndEncode(7, src.encoding);
+        int encode = prefixAndEncode(src.encoding);
         emitByte(0xF7);
-        emitByte(0xC0 | encode);
+        emitByte(0xF8 | encode);
     }
 
     public final void divl(Register src) {
-        int encode = prefixAndEncode(6, src.encoding);
+        int encode = prefixAndEncode(src.encoding);
         emitByte(0xF7);
-        emitByte(0xC0 | encode);
-    }
-
-    public final void mull(Register src) {
-        int encode = prefixAndEncode(4, src.encoding);
-        emitByte(0xF7);
-        emitByte(0xC0 | encode);
-    }
-
-    public final void mull(AMD64Address src) {
-        prefix(src);
-        emitByte(0xF7);
-        emitOperandHelper(4, src);
-    }
-
-    public final void imull(Register src) {
-        int encode = prefixAndEncode(5, src.encoding);
-        emitByte(0xF7);
-        emitByte(0xC0 | encode);
-    }
-
-    public final void imull(AMD64Address src) {
-        prefix(src);
-        emitByte(0xF7);
-        emitOperandHelper(5, src);
+        emitByte(0xF0 | encode);
     }
 
     public final void imull(Register dst, Register src) {
@@ -2370,39 +2346,15 @@ public class AMD64Assembler extends Assembler {
     }
 
     public final void divq(Register src) {
-        int encode = prefixqAndEncode(6, src.encoding);
+        int encode = prefixqAndEncode(src.encoding);
         emitByte(0xF7);
-        emitByte(0xC0 | encode);
+        emitByte(0xF0 | encode);
     }
 
     public final void idivq(Register src) {
-        int encode = prefixqAndEncode(7, src.encoding);
+        int encode = prefixqAndEncode(src.encoding);
         emitByte(0xF7);
-        emitByte(0xC0 | encode);
-    }
-
-    public final void mulq(Register src) {
-        int encode = prefixqAndEncode(4, src.encoding);
-        emitByte(0xF7);
-        emitByte(0xC0 | encode);
-    }
-
-    public final void mulq(AMD64Address src) {
-        prefixq(src);
-        emitByte(0xF7);
-        emitOperandHelper(4, src);
-    }
-
-    public final void imulq(Register src) {
-        int encode = prefixqAndEncode(5, src.encoding);
-        emitByte(0xF7);
-        emitByte(0xC0 | encode);
-    }
-
-    public final void imulq(AMD64Address src) {
-        prefixq(src);
-        emitByte(0xF7);
-        emitOperandHelper(5, src);
+        emitByte(0xF8 | encode);
     }
 
     public final void imulq(Register dst, Register src) {
