@@ -30,10 +30,13 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.KillException;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.Visualizer;
+import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.instrumentation.InstrumentationTestLanguage.BaseNode;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -250,23 +253,18 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         }
 
         @SuppressWarnings("deprecation")
-        @Deprecated
         @Override
-        protected com.oracle.truffle.api.instrument.Visualizer getVisualizer() {
+        protected Visualizer getVisualizer() {
             return null;
         }
 
-        @SuppressWarnings("deprecation")
-        @Deprecated
         @Override
         protected boolean isInstrumentable(Node node) {
             return false;
         }
 
-        @SuppressWarnings("deprecation")
-        @Deprecated
         @Override
-        protected com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(Node node) {
+        protected WrapperNode createWrapperNode(Node node) {
             return null;
         }
 
@@ -677,13 +675,13 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     @Test
     public void testKillExceptionOnEnter() throws IOException {
         engine.getInstruments().get("testKillQuitException").setEnabled(true);
-        TestKillQuitException.exceptionOnEnter = new MyKillException();
+        TestKillQuitException.exceptionOnEnter = new KillException();
         TestKillQuitException.exceptionOnReturnValue = null;
         TestKillQuitException.returnExceptionalCount = 0;
         try {
             run("STATEMENT");
             Assert.fail("KillException in onEnter() cancels engine execution");
-        } catch (MyKillException ex) {
+        } catch (KillException ex) {
         }
         Assert.assertEquals("KillException is not an execution event", 0, TestKillQuitException.returnExceptionalCount);
     }
@@ -692,12 +690,12 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public void testKillExceptionOnReturnValue() throws IOException {
         engine.getInstruments().get("testKillQuitException").setEnabled(true);
         TestKillQuitException.exceptionOnEnter = null;
-        TestKillQuitException.exceptionOnReturnValue = new MyKillException();
+        TestKillQuitException.exceptionOnReturnValue = new KillException();
         TestKillQuitException.returnExceptionalCount = 0;
         try {
             run("STATEMENT");
             Assert.fail("KillException in onReturnValue() cancels engine execution");
-        } catch (MyKillException ex) {
+        } catch (KillException ex) {
         }
         Assert.assertEquals("KillException is not an execution event", 0, TestKillQuitException.returnExceptionalCount);
     }
@@ -732,7 +730,4 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         }
     }
 
-    private static final class MyKillException extends ThreadDeath {
-        static final long serialVersionUID = 1;
-    }
 }
