@@ -39,7 +39,7 @@ import javax.tools.*;
  * retrieved as follows:
  *
  * <pre>
- * ServiceLoader&lt;Options&gt; sl = ServiceLoader.load(Options.class);
+ * ServiceLoader&lt;Options&gt; sl = ServiceLoader.loadInstalled(Options.class);
  * for (Options opts : sl) {
  *     for (OptionDescriptor desc : sl) {
  *         // use desc
@@ -326,3 +326,4 @@ public class OptionProcessor extends AbstractProcessor {
         return true;
     }
 }
+
