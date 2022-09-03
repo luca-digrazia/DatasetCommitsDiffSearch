@@ -151,7 +151,7 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
         public Object invokeReflect(Object receiver, Object[] arguments) throws Throwable {
             try {
                 return getReflectionMethod().invoke(receiver, arguments);
-            } catch (IllegalArgumentException | IllegalAccessException ex) {
+            } catch (IllegalArgumentException ex) {
                 throw UnsupportedTypeException.raise(ex, arguments);
             } catch (InvocationTargetException e) {
                 throw e.getCause();
@@ -199,7 +199,7 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
         public Object invokeReflect(Object receiver, Object[] arguments) throws Throwable {
             try {
                 return getReflectionMethod().newInstance(arguments);
-            } catch (IllegalArgumentException | IllegalAccessException | InstantiationException ex) {
+            } catch (IllegalArgumentException ex) {
                 throw UnsupportedTypeException.raise(ex, arguments);
             } catch (InvocationTargetException e) {
                 throw e.getCause();

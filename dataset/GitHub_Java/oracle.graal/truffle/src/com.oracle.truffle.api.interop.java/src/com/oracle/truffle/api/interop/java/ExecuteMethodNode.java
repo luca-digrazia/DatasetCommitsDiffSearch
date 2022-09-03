@@ -525,8 +525,8 @@ abstract class ExecuteMethodNode extends Node {
         Object ret;
         try {
             ret = method.invoke(obj, arguments);
-        } catch (Throwable e) {
-            throw JavaInteropReflect.rethrow(e);
+        } catch (Throwable ex) {
+            throw rethrow(ex);
         }
         return JavaInterop.toGuestValue(ret, languageContext);
     }
@@ -537,6 +537,11 @@ abstract class ExecuteMethodNode extends Node {
             sj.add(arg == null ? null : arg.toString() + " (" + arg.getClass().getSimpleName() + ")");
         }
         return sj.toString();
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
+        throw (E) ex;
     }
 
     static class JavaObjectType implements Type {
