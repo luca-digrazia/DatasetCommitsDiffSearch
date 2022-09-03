@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.TruffleLanguage.Env;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -41,10 +40,7 @@ import com.oracle.truffle.api.impl.FindContextNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
-import java.util.List;
 
 /**
  * <p>
@@ -81,10 +77,10 @@ public abstract class TruffleLanguage<C> {
     /**
      * The annotation to use to register your language to the
      * {@link com.oracle.truffle.api.vm.PolyglotEngine Truffle} system. By annotating your
-     * implementation of {@link TruffleLanguage} by this annotation you are just a <em>one JAR drop
-     * to the class path</em> away from your users. Once they include your JAR in their application,
-     * your language will be available to the {@link com.oracle.truffle.api.vm.PolyglotEngine
-     * Truffle virtual machine}.
+     * implementation of {@link TruffleLanguage} by this annotation you are just a
+     * <em>one JAR drop to the class path</em> away from your users. Once they include your JAR in
+     * their application, your language will be available to the
+     * {@link com.oracle.truffle.api.vm.PolyglotEngine Truffle virtual machine}.
      *
      * @since 0.8 or earlier
      */
@@ -131,38 +127,12 @@ public abstract class TruffleLanguage<C> {
      * insert it into own AST hierarchy - use {@link #createFindContextNode()} to obtain the
      * {@link Node findNode} and later {@link #findContext(com.oracle.truffle.api.nodes.Node)
      * findContext(findNode)} to get back your language context.
-     * <p>
-     * This method shouldn't perform any complex operations. The runtime system is just being
-     * initialized and for example making
-     * {@link Env#parse(com.oracle.truffle.api.source.Source, java.lang.String...) calls into other
-     * languages} and assuming your language is already initialized and others can see it would be
-     * wrong - until you return from this method, the initialization isn't over. Should there be a
-     * need to perform complex initializaton, do it by overriding the
-     * {@link #initializeContext(java.lang.Object)} method.
      *
      * @param env the environment the language is supposed to operate in
      * @return internal data of the language in given environment
      * @since 0.8 or earlier
      */
     protected abstract C createContext(Env env);
-
-    /**
-     * Perform any complex initialization. The
-     * {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env) } factory method shouldn't
-     * do any complex operations. Just create the instance of the context, let the runtime system
-     * register it properly. Should there be a need to perform complex initializaton, override this
-     * method and let the runtime call it <em>later</em> to finish any <em>post initialization</em>
-     * actions. Example:
-     *
-     * {@link TruffleLanguageSnippets.PostInitLanguage#createContext}
-     *
-     * @param context the context created by
-     *            {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env)}
-     * @throws java.lang.Exception if something goes wrong
-     * @since 0.17
-     */
-    protected void initializeContext(C context) throws Exception {
-    }
 
     /**
      * Disposes the context created by
@@ -195,12 +165,13 @@ public abstract class TruffleLanguage<C> {
      *            {@link CallTarget#call(java.lang.Object...)}
      * @return a call target to invoke which also keeps in memory the {@link Node} tree representing
      *         just parsed <code>code</code>
-     * @throws IOException thrown when I/O or parsing goes wrong. Here-in thrown exception is
-     *             propagate to the user who called one of <code>eval</code> methods of
+     * @throws Exception if parsing goes wrong. Here-in thrown exception is propagated to the user
+     *             who called one of <code>eval</code> methods of
      *             {@link com.oracle.truffle.api.vm.PolyglotEngine}
      * @since 0.8 or earlier
      */
-    protected abstract CallTarget parse(Source code, Node context, String... argumentNames) throws IOException;
+    protected abstract CallTarget parse(Source code, Node context, String... argumentNames)
+                    throws Exception;
 
     /**
      * Called when some other language is seeking for a global symbol. This method is supposed to do
@@ -251,6 +222,49 @@ public abstract class TruffleLanguage<C> {
      * @since 0.8 or earlier
      */
     protected abstract boolean isObjectOfLanguage(Object object);
+
+    /**
+     * Gets visualization services for language-specific information.
+     *
+     * @since 0.8 or earlier
+     */
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    protected com.oracle.truffle.api.instrument.Visualizer getVisualizer() {
+        return null;
+    }
+
+    /**
+     * Returns {@code true} for a node can be "instrumented" by
+     * {@linkplain com.oracle.truffle.api.instrument.Instrumenter#probe(Node) probing}.
+     * <p>
+     * <b>Note:</b> instrumentation requires a appropriate
+     * {@link com.oracle.truffle.api.instrument.WrapperNode}
+     *
+     * @since 0.8 or earlier
+     */
+    @Deprecated
+    protected boolean isInstrumentable(@SuppressWarnings("unused") Node node) {
+        return false;
+    }
+
+    /**
+     * For nodes in this language that are <em>instrumentable</em>, this method returns an
+     * {@linkplain Node AST node} that:
+     * <ol>
+     * <li>implements {@link com.oracle.truffle.api.instrument.WrapperNode};</li>
+     * <li>has the node argument as it's child; and</li>
+     * <li>whose type is safe for replacement of the node in the parent.</li>
+     * </ol>
+     *
+     * @return an appropriately typed {@link com.oracle.truffle.api.instrument.WrapperNode}
+     * @since 0.8 or earlier
+     */
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    protected com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(@SuppressWarnings("unused") Node node) {
+        throw new UnsupportedOperationException();
+    }
 
     /**
      * Runs source code in a halted execution context, or at top level.
@@ -342,16 +356,6 @@ public abstract class TruffleLanguage<C> {
             assert lang == language;
             return lang.toString(ctx, obj);
         }
-
-        void postInit() {
-            try {
-                lang.initializeContext(ctx);
-            } catch (RuntimeException ex) {
-                throw ex;
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
-            }
-        }
     }
 
     /**
@@ -369,18 +373,21 @@ public abstract class TruffleLanguage<C> {
         private final InputStream in;
         private final OutputStream err;
         private final OutputStream out;
-        private final List<Object> services;
+        private final Object[] services;
+        @SuppressWarnings("deprecation") private final com.oracle.truffle.api.instrument.Instrumenter instrumenter;
         private final Map<String, Object> config;
 
-        Env(Object vm, TruffleLanguage<?> lang, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config) {
+        @SuppressWarnings("deprecation")
+        Env(Object vm, TruffleLanguage<?> lang, OutputStream out, OutputStream err, InputStream in, Object instrumenter, Map<String, Object> config) {
             this.vm = vm;
             this.in = in;
             this.err = err;
             this.out = out;
             this.lang = lang;
+            this.instrumenter = (com.oracle.truffle.api.instrument.Instrumenter) instrumenter;
             LinkedHashSet<Object> collectedServices = new LinkedHashSet<>();
             AccessAPI.instrumentAccess().collectEnvServices(collectedServices, vm, lang, this);
-            this.services = new ArrayList<>(collectedServices);
+            this.services = collectedServices.toArray();
             this.config = config;
             this.langCtx = new LangCtx<>(lang, this);
         }
@@ -425,12 +432,16 @@ public abstract class TruffleLanguage<C> {
          * @param argumentNames the names of {@link CallTarget#call(java.lang.Object...)} arguments
          *            that can be referenced from the source
          * @return the call target representing the parsed result
-         * @throws IOException if the parsing or evaluation fails for some reason
+         * @throws Exception if the parsing or evaluation fails for some reason
          * @since 0.8 or earlier
          */
-        public CallTarget parse(Source source, String... argumentNames) throws IOException {
+        public CallTarget parse(Source source, String... argumentNames) {
             TruffleLanguage<?> language = AccessAPI.engineAccess().findLanguageImpl(vm, null, source.getMimeType());
-            return language.parse(source, null, argumentNames);
+            try {
+                return language.parse(source, null, argumentNames);
+            } catch (Exception ex) {
+                throw raise(RuntimeException.class, ex);
+            }
         }
 
         /**
@@ -464,6 +475,13 @@ public abstract class TruffleLanguage<C> {
          */
         public OutputStream err() {
             return err;
+        }
+
+        /** @since 0.8 or earlier */
+        @SuppressWarnings("deprecation")
+        @Deprecated
+        public com.oracle.truffle.api.instrument.Instrumenter instrumenter() {
+            return instrumenter;
         }
 
         /**
@@ -519,10 +537,6 @@ public abstract class TruffleLanguage<C> {
         public Map<String, Object> getConfig() {
             return config;
         }
-
-        void postInit() {
-            langCtx.postInit();
-        }
     }
 
     static final AccessAPI API = new AccessAPI();
@@ -548,27 +562,43 @@ public abstract class TruffleLanguage<C> {
 
     static final class LanguageImpl extends Accessor.LanguageSupport {
         @Override
-        public Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config) {
-            Env env = new Env(vm, language, stdOut, stdErr, stdIn, config);
+        public Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Object instrumenter, Map<String, Object> config) {
+            Env env = new Env(vm, language, stdOut, stdErr, stdIn, instrumenter, config);
             return env;
         }
 
         @Override
-        public void postInitEnv(Env env) {
-            env.postInit();
+        public CallTarget parse(TruffleLanguage<?> truffleLanguage, Source code, Node context, String... argumentNames) {
+            try {
+                return truffleLanguage.parse(code, context, argumentNames);
+            } catch (Exception ex) {
+                throw raise(RuntimeException.class, ex);
+            }
         }
 
         @Override
-        public CallTarget parse(TruffleLanguage<?> truffleLanguage, Source code, Node context, String... argumentNames) throws IOException {
-            return truffleLanguage.parse(code, context, argumentNames);
+        public Object eval(TruffleLanguage<?> language, Source source, Map<Source, CallTarget> cache) {
+            CallTarget target = cache.get(source);
+            if (target == null) {
+                try {
+                    target = language.parse(source, null);
+                } catch (Exception ex) {
+                    throw raise(RuntimeException.class, ex);
+                }
+                if (target == null) {
+                    throw new IllegalStateException("Parsing has not produced a CallTarget for " + source);
+                }
+                cache.put(source, target);
+            }
+            return target.call();
         }
 
         @Override
         @SuppressWarnings({"rawtypes"})
-        public Object evalInContext(Object sourceVM, String code, Node node, MaterializedFrame frame) throws IOException {
+        public Object evalInContext(Object vm, Object ev, String code, Node node, MaterializedFrame frame) throws IOException {
             RootNode rootNode = node.getRootNode();
             Class<? extends TruffleLanguage> languageType = AccessAPI.nodesAccess().findLanguage(rootNode);
-            final Env env = AccessAPI.engineAccess().findEnv(sourceVM, languageType);
+            final Env env = AccessAPI.engineAccess().findEnv(vm, languageType);
             final TruffleLanguage<?> lang = findLanguage(env);
             final Source source = Source.newBuilder(code).name("eval in context").mimeType("content/unknown").build();
             return lang.evalInContext(source, node, frame);
@@ -594,6 +624,19 @@ public abstract class TruffleLanguage<C> {
             return env.langCtx.ctx;
         }
 
+        @Deprecated
+        @Override
+        public boolean isInstrumentable(Node node, TruffleLanguage<?> language) {
+            return language.isInstrumentable(node);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Deprecated
+        @Override
+        public com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(Node node, TruffleLanguage<?> language) {
+            return language.createWrapperNode(node);
+        }
+
         @Override
         public void dispose(TruffleLanguage<?> impl, Env env) {
             assert impl == env.langCtx.lang;
@@ -604,30 +647,20 @@ public abstract class TruffleLanguage<C> {
         public String toString(TruffleLanguage<?> language, Env env, Object obj) {
             return env.langCtx.toString(language, obj);
         }
-
-        @Override
-        public Object getVM(Env env) {
-            return env.vm;
-        }
-
     }
 
+    @SuppressWarnings({"unchecked", "unused"})
+    static <E extends Throwable> E raise(Class<E> castTo, Throwable t) throws E {
+        throw (E) t;
+    }
 }
 
 class TruffleLanguageSnippets {
     class Context {
         final String[] args;
-        final Env env;
-        CallTarget mul;
 
         Context(String[] args) {
             this.args = args;
-            this.env = null;
-        }
-
-        Context(Env env) {
-            this.env = env;
-            this.args = null;
         }
     }
 
@@ -642,27 +675,4 @@ class TruffleLanguageSnippets {
         }
     }
     // END: TruffleLanguageSnippets.MyLanguage#createContext
-
-    abstract
-    // BEGIN: TruffleLanguageSnippets.PostInitLanguage#createContext
-    class PostInitLanguage extends TruffleLanguage<Context> {
-        @Override
-        protected Context createContext(Env env) {
-            // "quickly" create the context
-            return new Context(env);
-        }
-
-        @Override
-        protected void initializeContext(Context context) throws IOException {
-            // called "later" to finish the initialization
-            // for example call into another language
-            Source source =
-                Source.newBuilder("function mul(x, y) { return x * y }").
-                name("mul.js").
-                mimeType("text/javascript").
-                build();
-            context.mul = context.env.parse(source);
-        }
-    }
-    // END: TruffleLanguageSnippets.PostInitLanguage#createContext
 }
