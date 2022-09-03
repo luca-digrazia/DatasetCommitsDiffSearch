@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -266,15 +264,6 @@ class SafeSignedDivNode extends SignedDivNode {
          */
         super(TYPE, x, y, null);
     }
-
-    @Override
-    public boolean canDeoptimize() {
-        /*
-         * All checks have been done. Returning false is the indicator that no FrameState is
-         * necessary anymore for the node.
-         */
-        return false;
-    }
 }
 
 @NodeInfo
@@ -283,11 +272,6 @@ class SafeSignedRemNode extends SignedRemNode {
 
     protected SafeSignedRemNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y, null);
-    }
-
-    @Override
-    public boolean canDeoptimize() {
-        return false;
     }
 }
 
@@ -298,11 +282,6 @@ class SafeUnsignedDivNode extends UnsignedDivNode {
     protected SafeUnsignedDivNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y, null);
     }
-
-    @Override
-    public boolean canDeoptimize() {
-        return false;
-    }
 }
 
 @NodeInfo
@@ -311,10 +290,5 @@ class SafeUnsignedRemNode extends UnsignedRemNode {
 
     protected SafeUnsignedRemNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y, null);
-    }
-
-    @Override
-    public boolean canDeoptimize() {
-        return false;
     }
 }

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -114,9 +112,6 @@ public class SubstrateOptions {
 
     @Option(help = "Use heap base register. ")//
     public static final HostedOptionKey<Boolean> UseHeapBaseRegister = new HostedOptionKey<>(false);
-
-    @Option(help = "Use linear pointer compression (requires the use of heap base register).")//
-    public static final HostedOptionKey<Boolean> UseLinearPointerCompression = new HostedOptionKey<>(true);
 
     @Option(help = "Support multiple isolates (disable for legacy mode with a single isolate). ")//
     public static final HostedOptionKey<Boolean> SpawnIsolates = new HostedOptionKey<Boolean>(false) {

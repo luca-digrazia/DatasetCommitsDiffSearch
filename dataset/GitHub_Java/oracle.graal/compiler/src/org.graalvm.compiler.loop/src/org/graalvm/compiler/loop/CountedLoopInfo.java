@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -49,7 +47,7 @@ import org.graalvm.compiler.nodes.extended.GuardingNode;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.SpeculationLog;
+import jdk.vm.ci.meta.JavaConstant;
 
 public class CountedLoopInfo {
 
@@ -61,7 +59,6 @@ public class CountedLoopInfo {
     private IfNode ifNode;
 
     CountedLoopInfo(LoopEx loop, InductionVariable iv, IfNode ifNode, ValueNode end, boolean oneOff, AbstractBeginNode body) {
-        assert iv.direction() != null;
         this.loop = loop;
         this.iv = iv;
         this.end = end;
@@ -158,7 +155,6 @@ public class CountedLoopInfo {
             range = endValue - iv.constantInit();
             absStride = iv.constantStride();
         } else {
-            assert iv.direction() == Direction.Down;
             if (initValue < endValue) {
                 return 0;
             }
@@ -255,7 +251,7 @@ public class CountedLoopInfo {
             }
             assert graph.getGuardsStage().allowsFloatingGuards();
             overflowGuard = graph.unique(new GuardNode(cond, AbstractBeginNode.prevBegin(loop.entryPoint()), DeoptimizationReason.LoopLimitCheck, DeoptimizationAction.InvalidateRecompile, true,
-                            SpeculationLog.NO_SPECULATION, null)); // TODO gd: use speculation
+                            JavaConstant.NULL_POINTER, null)); // TODO gd: use speculation
             loop.loopBegin().setOverflowGuard(overflowGuard);
             return overflowGuard;
         }

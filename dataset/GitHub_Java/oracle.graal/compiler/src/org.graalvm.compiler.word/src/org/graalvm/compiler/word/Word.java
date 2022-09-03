@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +22,7 @@
  */
 package org.graalvm.compiler.word;
 
-import static org.graalvm.compiler.serviceprovider.GraalUnsafeAccess.getUnsafe;
+import static org.graalvm.compiler.word.UnsafeAccess.UNSAFE;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -48,7 +46,7 @@ import org.graalvm.compiler.nodes.calc.UnsignedDivNode;
 import org.graalvm.compiler.nodes.calc.UnsignedRemNode;
 import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
 import org.graalvm.compiler.nodes.calc.XorNode;
-import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.address.AddressNode.Address;
 import org.graalvm.word.ComparableWord;
 import org.graalvm.word.LocationIdentity;
@@ -59,11 +57,7 @@ import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 import org.graalvm.word.impl.WordBoxFactory;
 
-import sun.misc.Unsafe;
-
 public abstract class Word implements SignedWord, UnsignedWord, Pointer {
-
-    private static final Unsafe UNSAFE = getUnsafe();
 
     static {
         BoxFactoryImpl.initialize();
@@ -104,7 +98,6 @@ public abstract class Word implements SignedWord, UnsignedWord, Pointer {
         READ_BARRIERED,
         READ_HEAP,
         WRITE_POINTER,
-        WRITE_POINTER_SIDE_EFFECT_FREE,
         WRITE_OBJECT,
         WRITE_BARRIERED,
         CAS_POINTER,

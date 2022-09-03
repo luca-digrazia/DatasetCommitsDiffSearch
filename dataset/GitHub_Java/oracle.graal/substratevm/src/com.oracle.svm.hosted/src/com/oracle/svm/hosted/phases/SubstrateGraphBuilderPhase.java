@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -115,14 +113,14 @@ public class SubstrateGraphBuilderPhase extends SharedGraphBuilderPhase {
         private boolean curDeoptimizeOnException;
 
         @Override
-        protected void createHandleExceptionTarget(FixedWithNextNode afterExceptionLoaded, int bci, FrameStateBuilder dispatchState) {
+        protected void createHandleExceptionTarget(FixedWithNextNode finishedDispatch, int bci, FrameStateBuilder dispatchState) {
             if (curDeoptimizeOnException) {
                 DeoptimizeNode deoptimize = graph.add(new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.NotCompiledExceptionHandler));
-                VMError.guarantee(afterExceptionLoaded.next() == null);
-                afterExceptionLoaded.setNext(deoptimize);
+                VMError.guarantee(finishedDispatch.next() == null);
+                finishedDispatch.setNext(deoptimize);
 
             } else {
-                super.createHandleExceptionTarget(afterExceptionLoaded, bci, dispatchState);
+                super.createHandleExceptionTarget(finishedDispatch, bci, dispatchState);
             }
         }
 

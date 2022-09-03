@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -158,14 +156,6 @@ public class MethodTypeFlowBuilder {
         typeFlowGraphBuilder = new TypeFlowGraphBuilder(bb);
     }
 
-    public MethodTypeFlowBuilder(BigBang bb, StructuredGraph graph) {
-        this.bb = bb;
-        this.graph = graph;
-        this.method = (AnalysisMethod) graph.method();
-        this.methodFlow = method.getTypeFlow();
-        this.typeFlowGraphBuilder = null;
-    }
-
     @SuppressWarnings("try")
     private boolean parse() {
         OptionValues options = bb.getOptions();
@@ -209,12 +199,12 @@ public class MethodTypeFlowBuilder {
                 }
 
                 // Register used types and fields before canonicalization can optimize them.
-                registerUsedElements();
+                registerUsedElements(bb, graph, methodFlow);
 
                 new CanonicalizerPhase().apply(graph, new PhaseContext(bb.getProviders()));
 
                 // Do it again after canonicalization changed type checks and field accesses.
-                registerUsedElements();
+                registerUsedElements(bb, graph, methodFlow);
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
@@ -222,7 +212,7 @@ public class MethodTypeFlowBuilder {
         return true;
     }
 
-    public void registerUsedElements() {
+    public static void registerUsedElements(BigBang bb, StructuredGraph graph, MethodTypeFlow methodFlow) {
         for (Node n : graph.getNodes()) {
             if (n instanceof InstanceOfNode) {
                 InstanceOfNode node = (InstanceOfNode) n;
@@ -610,7 +600,7 @@ public class MethodTypeFlowBuilder {
                 BytecodeLocation location = BytecodeLocation.create(bciKey, method);
                 TypeFlowBuilder<?> instanceOfBuilder = TypeFlowBuilder.create(bb, node, InstanceOfTypeFlow.class, () -> {
                     InstanceOfTypeFlow instanceOf = new InstanceOfTypeFlow(node, location, declaredType);
-                    methodFlow.addInstanceOf(key, instanceOf);
+                    methodFlow.addInstanceOf(instanceOf);
                     return instanceOf;
                 });
                 /* InstanceOf must not be removed as it is reported by the analysis results. */
@@ -1292,7 +1282,13 @@ public class MethodTypeFlowBuilder {
                     AnalysisMethod targetMethod = (AnalysisMethod) target.targetMethod();
                     bb.isCallAllowed(bb, callerMethod, targetMethod, target.getNodeSourcePosition());
 
-                    Object key = uniqueKey(n);
+                    Object key;
+                    if (invoke.bci() >= 0) {
+                        key = invoke.bci();
+                    } else {
+                        shouldNotReachHere("InvokeTypeFlow has a negative BCI");
+                        key = new Object();
+                    }
                     BytecodeLocation location = BytecodeLocation.create(key, methodFlow.getMethod());
 
                     /*

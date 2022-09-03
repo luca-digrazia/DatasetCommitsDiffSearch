@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -186,7 +184,7 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
 
         ValueNode[] args = kit.loadArguments(parameterLoadTypes).toArray(new ValueNode[0]);
 
-        InvokeNode prologueInvoke = generatePrologue(providers, kit, parameterLoadTypes, targetMethod.getParameterAnnotations(), args);
+        InvokeNode prologueInvoke = generatePrologue(providers, kit, parameterLoadTypes, args);
 
         adaptArgumentValues(providers, kit, parameterTypes, parameterEnumInfos, args);
 
@@ -271,76 +269,42 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
         }
     }
 
-    private InvokeNode generatePrologue(HostedProviders providers, SubstrateGraphKit kit, JavaType[] parameterTypes, Annotation[][] parameterAnnotations, ValueNode[] args) {
+    private InvokeNode generatePrologue(HostedProviders providers, SubstrateGraphKit kit, JavaType[] parameterTypes, ValueNode[] args) {
         Class<?> prologueClass = entryPointData.getPrologue();
         if (prologueClass == NoPrologue.class) {
             UserError.guarantee(targetMethod.getAnnotation(Uninterruptible.class) != null, CEntryPointOptions.class.getSimpleName() + "." + NoPrologue.class.getSimpleName() +
                             " is allowed only for methods annotated with @" + Uninterruptible.class.getSimpleName() + ": " + targetMethod.format("%H.%n(%p)"));
             return null;
         }
-        if (prologueClass != CEntryPointOptions.AutomaticPrologue.class) {
-            ResolvedJavaType prologue = providers.getMetaAccess().lookupJavaType(prologueClass);
-            ResolvedJavaMethod[] prologueMethods = prologue.getDeclaredMethods();
-            UserError.guarantee(prologueMethods.length == 1 && prologueMethods[0].isStatic(),
-                            "Prologue class must declare exactly one static method: " + targetMethod.format("%H.%n(%p)") + " -> " + prologue.toJavaName());
-            ValueNode[] prologueArgs = matchPrologueParameters(providers, parameterTypes, args, prologueMethods[0]);
-            return kit.createInvoke(prologueMethods[0], InvokeKind.Static, kit.getFrameState(), kit.bci(), prologueArgs);
-        }
-
-        // Automatically choose prologue from signature and annotations and call
-        ResolvedJavaType isolateType = providers.getMetaAccess().lookupJavaType(Isolate.class);
-        ResolvedJavaType threadType = providers.getMetaAccess().lookupJavaType(IsolateThread.class);
-        int matchesCount = 0;
-        int lastMatchIndex = -1;
-        int designatedIndex = -1;
-        ResolvedJavaType designatedType = null;
-        for (int i = 0; i < parameterTypes.length; i++) {
-            ResolvedJavaType declaredType = (ResolvedJavaType) parameterTypes[i];
-            boolean isIsolate = isolateType.isAssignableFrom(declaredType);
-            boolean isThread = threadType.isAssignableFrom(declaredType);
-            boolean isLong = parameterTypes[i].getJavaKind() == JavaKind.Long;
-            boolean designated = false;
-            ResolvedJavaType actualType = declaredType;
-            for (Annotation an : parameterAnnotations[i]) {
-                if (an.annotationType() == CEntryPoint.IsolateContext.class) {
-                    UserError.guarantee(isIsolate || isLong, "@" + CEntryPoint.class.getSimpleName() + " parameter " + i + " is annotated with @" +
-                                    CEntryPoint.IsolateContext.class.getSimpleName() + ", but does not have type " +
-                                    Isolate.class.getSimpleName() + ": " + targetMethod.format("%H.%n(%p)"));
-                    designated = true;
-                    actualType = isLong ? isolateType : declaredType;
-                } else if (an.annotationType() == CEntryPoint.IsolateThreadContext.class) {
-                    UserError.guarantee(isThread || isLong, "@" + CEntryPoint.class.getSimpleName() + " parameter " + i + " is annotated with @" +
-                                    CEntryPoint.IsolateThreadContext.class.getSimpleName() + ", but does not have type " +
-                                    IsolateThread.class.getSimpleName() + ": " + targetMethod.format("%H.%n(%p)"));
-                    designated = true;
-                    actualType = isLong ? threadType : declaredType;
+        if (prologueClass == CEntryPointOptions.AutomaticPrologue.class) {
+            ResolvedJavaType isolateType = providers.getMetaAccess().lookupJavaType(Isolate.class);
+            ResolvedJavaType threadType = providers.getMetaAccess().lookupJavaType(IsolateThread.class);
+            ResolvedJavaType matchType = null;
+            int matchesCount = 0;
+            for (JavaType parameterType : parameterTypes) {
+                ResolvedJavaType type = (ResolvedJavaType) parameterType;
+                if (threadType.isAssignableFrom(type) || isolateType.isAssignableFrom(type)) {
+                    matchType = type;
+                    matchesCount++;
                 }
             }
-            if (isThread || isIsolate || designated) {
-                lastMatchIndex = i;
-                if (designated) {
-                    UserError.guarantee(designatedIndex == -1, "@" + CEntryPoint.class.getSimpleName() +
-                                    " has more than one designated execution context parameter: " + targetMethod.format("%H.%n(%p)"));
-                    designatedIndex = i;
-                    designatedType = actualType;
+            if (matchesCount == 1) {
+                if (threadType.isAssignableFrom(matchType)) {
+                    prologueClass = CEntryPointSetup.EnterPrologue.class;
+                } else {
+                    prologueClass = CEntryPointSetup.EnterIsolatePrologue.class;
                 }
-                matchesCount++;
+            } else {
+                throw UserError.abort("@" + CEntryPoint.class.getSimpleName() + " requires exactly one parameter of type " + IsolateThread.class.getSimpleName() +
+                                " or " + Isolate.class.getSimpleName() + ": " + targetMethod.format("%H.%n(%p)"));
             }
         }
-        if (designatedIndex == -1 && matchesCount != 1) {
-            throw UserError.abort("@" + CEntryPoint.class.getSimpleName() + " requires exactly one execution context parameter of type " +
-                            IsolateThread.class.getSimpleName() + " or " + Isolate.class.getSimpleName() + ": " + targetMethod.format("%H.%n(%p)"));
-        }
-        ValueNode contextValue = (designatedIndex != -1) ? args[designatedIndex] : args[lastMatchIndex];
-        ResolvedJavaType contextType = (designatedIndex != -1) ? designatedType : (ResolvedJavaType) parameterTypes[lastMatchIndex];
-        if (threadType.isAssignableFrom(contextType)) {
-            prologueClass = CEntryPointSetup.EnterPrologue.class;
-        } else {
-            prologueClass = CEntryPointSetup.EnterIsolatePrologue.class;
-        }
-        ResolvedJavaMethod[] prologueMethods = providers.getMetaAccess().lookupJavaType(prologueClass).getDeclaredMethods();
-        assert prologueMethods.length == 1 && prologueMethods[0].isStatic() : "Prologue class must declare exactly one static method";
-        return kit.createInvoke(prologueMethods[0], InvokeKind.Static, kit.getFrameState(), kit.bci(), contextValue);
+        ResolvedJavaType prologue = providers.getMetaAccess().lookupJavaType(prologueClass);
+        ResolvedJavaMethod[] prologueMethods = prologue.getDeclaredMethods();
+        UserError.guarantee(prologueMethods.length == 1 && prologueMethods[0].isStatic(),
+                        "Prologue class must declare exactly one static method: " + targetMethod.format("%H.%n(%p)") + " -> " + prologue.toJavaName());
+        ValueNode[] prologueArgs = matchPrologueParameters(providers, parameterTypes, args, prologueMethods[0]);
+        return kit.createInvoke(prologueMethods[0], InvokeKind.Static, kit.getFrameState(), kit.bci(), prologueArgs);
     }
 
     private ValueNode[] matchPrologueParameters(HostedProviders providers, JavaType[] types, ValueNode[] values, ResolvedJavaMethod prologueMethod) {

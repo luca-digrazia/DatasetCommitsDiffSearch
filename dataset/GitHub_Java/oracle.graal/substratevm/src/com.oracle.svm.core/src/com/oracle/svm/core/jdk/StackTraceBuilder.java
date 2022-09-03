@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,9 +27,7 @@ import java.util.ArrayList;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.Pointer;
 
-import com.oracle.svm.core.code.IsolateEnterStub;
-import com.oracle.svm.core.code.IsolateLeaveStub;
-import com.oracle.svm.core.JavaMainWrapper;
+import com.oracle.svm.core.code.CEntryPointCallStubs;
 import com.oracle.svm.core.code.CodeInfoQueryResult;
 import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.code.FrameInfoQueryResult;
@@ -52,61 +48,42 @@ public class StackTraceBuilder implements StackFrameVisitor {
     public boolean visitFrame(Pointer sp, CodePointer ip, DeoptimizedFrame deoptimizedFrame) {
         if (deoptimizedFrame != null) {
             for (DeoptimizedFrame.VirtualFrame frame = deoptimizedFrame.getTopFrame(); frame != null; frame = frame.getCaller()) {
-                if (!addToTrace(frame.getFrameInfo())) {
-                    return false;
-                }
+                addToTrace(frame.getFrameInfo());
             }
         } else {
             CodeInfoQueryResult codeInfo = CodeInfoTable.lookupCodeInfoQueryResult(ip);
             for (FrameInfoQueryResult frameInfo = codeInfo.getFrameInfo(); frameInfo != null; frameInfo = frameInfo.getCaller()) {
-                if (!addToTrace(frameInfo)) {
-                    return false;
-                }
+                addToTrace(frameInfo);
             }
         }
         return true;
     }
 
-    private boolean addToTrace(FrameInfoQueryResult frameInfo) {
-        Class<?> clazz = frameInfo.getSourceClass();
-        if (clazz != null) {
-            if (clazz == JavaMainWrapper.class && trace.size() > 0) {
-                /*
-                 * This frame and everything after it is our code to invoke the application's main()
-                 * method. Ignore this frame and stop the stack walking. Unless nothing is on the
-                 * stack trace yet, because e.g. an exception is thrown in JavaMainWrapper itself.
-                 */
-                return false;
-
-            } else if (clazz == IsolateEnterStub.class || clazz == IsolateLeaveStub.class) {
-                /*
-                 * Always ignore the frame. It is a synthetic frame for entering from C code /
-                 * exiting to C code.
-                 */
-                return true;
-
-            } else if (filterExceptions) {
-                if (trace.size() == 0 && Throwable.class.isAssignableFrom(clazz)) {
-                    /*
-                     * We are still in the constructor invocation chain at the beginning of the
-                     * stack trace, which is also filtered by the Java HotSpot VM.
-                     */
-                    return true;
-
-                } else if (clazz == ImplicitExceptions.class) {
-                    /*
-                     * ImplicitExceptions is the entry point for creating all exceptions thrown
-                     * implicitly by bytecodes. This class is SVM-specific, we do not need it in an
-                     * exception stack trace.
-                     */
-                    return true;
-                }
-            }
-        }
-
+    private void addToTrace(FrameInfoQueryResult frameInfo) {
         StackTraceElement sourceReference = frameInfo.getSourceReference();
-        trace.add(sourceReference);
-        return true;
+
+        /*
+         * We would prefer to do a Class check instead of a String comparison for the class name,
+         * but for now the SVM metadata only stores names as strings.
+         */
+        if (CEntryPointCallStubs.class.getName().equals(sourceReference.getClassName())) {
+            /*
+             * Always ignore the frame. It is the synthetic frame created for entry points from C
+             * code.
+             */
+
+        } else if (filterExceptions && ImplicitExceptions.class.getName().equals(sourceReference.getClassName())) {
+            /*
+             * ImplicitExceptions is the entry point for creating all exceptions thrown implicitly
+             * by bytecodes. This class is SVM-specific, we do not need it in an exception stack
+             * trace. Furthermore, we do not need the exception constructors beforehand (the HotSpot
+             * VM also filters exception constructors).
+             */
+            trace.clear();
+
+        } else {
+            trace.add(sourceReference);
+        }
     }
 
     public StackTraceElement[] getTrace() {

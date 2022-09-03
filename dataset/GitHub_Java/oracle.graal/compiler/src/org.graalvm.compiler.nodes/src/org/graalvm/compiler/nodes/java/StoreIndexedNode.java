@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -98,7 +96,7 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
             VirtualArrayNode virtual = (VirtualArrayNode) alias;
             if (idx >= 0 && idx < virtual.entryCount()) {
                 ResolvedJavaType componentType = virtual.type().getComponentType();
-                if (componentType.isPrimitive() || StampTool.isPointerAlwaysNull(value) || componentType.isJavaLangObject() ||
+                if (componentType.isPrimitive() || StampTool.isPointerAlwaysNull(value) || componentType.getSuperclass() == null ||
                                 (StampTool.typeReferenceOrNull(value) != null && componentType.isAssignableFrom(StampTool.typeOrNull(value)))) {
                     tool.setVirtualEntry(virtual, idx, value());
                     tool.delete();

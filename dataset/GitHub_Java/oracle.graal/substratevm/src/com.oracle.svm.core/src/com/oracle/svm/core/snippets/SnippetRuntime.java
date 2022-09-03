@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,8 +29,10 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
+import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation;
 import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -44,9 +44,13 @@ import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
-import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.code.CodeInfoQueryResult;
 import com.oracle.svm.core.code.CodeInfoTable;
+import com.oracle.svm.core.code.DeoptimizationSourcePositionDecoder;
+import com.oracle.svm.core.deopt.DeoptTester;
 import com.oracle.svm.core.deopt.DeoptimizedFrame;
+import com.oracle.svm.core.deopt.Deoptimizer;
+import com.oracle.svm.core.deopt.SubstrateInstalledCode;
 import com.oracle.svm.core.jdk.JDKUtils;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.stack.JavaStackWalker;
@@ -55,14 +59,19 @@ import com.oracle.svm.core.threadlocal.FastThreadLocalFactory;
 import com.oracle.svm.core.threadlocal.FastThreadLocalObject;
 import com.oracle.svm.core.util.VMError;
 
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
 
 public class SnippetRuntime {
 
     public static final SubstrateForeignCallDescriptor REPORT_TYPE_ASSERTION_ERROR = findForeignCall(SnippetRuntime.class, "reportTypeAssertionError", true, LocationIdentity.any());
     public static final SubstrateForeignCallDescriptor UNREACHED_CODE = findForeignCall(SnippetRuntime.class, "unreachedCode", true, LocationIdentity.any());
     public static final SubstrateForeignCallDescriptor UNRESOLVED = findForeignCall(SnippetRuntime.class, "unresolved", true, LocationIdentity.any());
+    public static final SubstrateForeignCallDescriptor DEOPTIMIZE = findForeignCall(SnippetRuntime.class, "deoptimize", true, LocationIdentity.any());
+    public static final SubstrateForeignCallDescriptor DEOPTTEST = findForeignCall(DeoptTester.class, "deoptTest", false, LocationIdentity.any());
 
     public static final SubstrateForeignCallDescriptor UNWIND_EXCEPTION = findForeignCall(SnippetRuntime.class, "unwindException", true, LocationIdentity.any());
 
@@ -194,8 +203,66 @@ public class SnippetRuntime {
         throw VMError.unsupportedFeature("Unresolved element found " + (sourcePosition != null ? sourcePosition : ""));
     }
 
+    /** Foreign call: {@link #DEOPTIMIZE}. */
+    @SubstrateForeignCallTarget
+    private static void deoptimize(long actionAndReason, SpeculationReason speculation) {
+        Pointer sp = KnownIntrinsics.readCallerStackPointer();
+        DeoptimizationAction action = Deoptimizer.decodeDeoptAction(actionAndReason);
+
+        if (Deoptimizer.Options.TraceDeoptimization.getValue()) {
+            Log log = Log.log().string("[Deoptimization initiated").newline();
+
+            CodePointer ip = KnownIntrinsics.readReturnAddress();
+            SubstrateInstalledCode installedCode = CodeInfoTable.lookupInstalledCode(ip);
+            if (installedCode != null) {
+                log.string("    name: ").string(installedCode.getName()).newline();
+            }
+            log.string("    sp: ").hex(sp).string("  ip: ").hex(ip).newline();
+
+            DeoptimizationReason reason = Deoptimizer.decodeDeoptReason(actionAndReason);
+            log.string("    reason: ").string(reason.toString()).string("  action: ").string(action.toString()).newline();
+
+            int debugId = Deoptimizer.decodeDebugId(actionAndReason);
+            log.string("    debugId: ").signed(debugId).string("  speculation: ").string(Objects.toString(speculation)).newline();
+
+            CodeInfoQueryResult info = CodeInfoTable.lookupCodeInfoQueryResult(ip);
+            if (info != null) {
+                NodeSourcePosition sourcePosition = DeoptimizationSourcePositionDecoder.decode(debugId, info);
+                if (sourcePosition != null) {
+                    log.string("    stack trace that triggered deoptimization:").newline();
+                    NodeSourcePosition cur = sourcePosition;
+                    while (cur != null) {
+                        log.string("        at ");
+                        if (cur.getMethod() != null) {
+                            StackTraceElement element = cur.getMethod().asStackTraceElement(cur.getBCI());
+                            if (element.getFileName() != null && element.getLineNumber() >= 0) {
+                                log.string(element.toString());
+                            } else {
+                                log.string(cur.getMethod().format("%H.%n(%p)")).string(" bci ").signed(cur.getBCI());
+                            }
+                        } else {
+                            log.string("[unknown method]");
+                        }
+                        log.newline();
+
+                        cur = cur.getCaller();
+                    }
+                }
+            }
+        }
+
+        if (action.doesInvalidateCompilation()) {
+            Deoptimizer.invalidateMethodOfFrame(sp, speculation);
+        } else {
+            Deoptimizer.deoptimizeFrame(sp, false, speculation);
+        }
+
+        if (Deoptimizer.Options.TraceDeoptimization.getValue()) {
+            Log.log().string("]").newline();
+        }
+    }
+
     static class ExceptionStackFrameVisitor implements StackFrameVisitor {
-        @Uninterruptible(reason = "Set currentException atomically with regard to the safepoint mechanism", calleeMustBe = false)
         @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate when unwinding the stack.")
         @Override
         public boolean visitFrame(Pointer sp, CodePointer ip, DeoptimizedFrame deoptFrame) {
@@ -234,14 +301,8 @@ public class SnippetRuntime {
 
     protected static final FastThreadLocalObject<Throwable> currentException = FastThreadLocalFactory.createObject(Throwable.class);
 
-    @Uninterruptible(reason = "Called from uninterruptible callers.", mayBeInlined = true)
-    public static boolean isUnwindingForException() {
-        return currentException.get() != null;
-    }
-
     /** Foreign call: {@link #UNWIND_EXCEPTION}. */
     @SubstrateForeignCallTarget
-    @Uninterruptible(reason = "Set currentException atomically with regard to the safepoint mechanism", calleeMustBe = false)
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate when unwinding the stack.")
     private static void unwindException(Throwable exception, Pointer callerSP, CodePointer callerIP) {
         if (currentException.get() != null) {

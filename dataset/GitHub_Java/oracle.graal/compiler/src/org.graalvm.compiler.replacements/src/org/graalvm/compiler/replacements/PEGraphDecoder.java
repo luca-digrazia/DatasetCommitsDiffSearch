@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,11 +22,11 @@
  */
 package org.graalvm.compiler.replacements;
 
+import java.net.URI;
 import static org.graalvm.compiler.debug.GraalError.unimplemented;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -37,7 +35,6 @@ import java.util.Map;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
-import org.graalvm.collections.UnmodifiableEconomicSet;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
@@ -847,11 +844,9 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         // Copy inlined methods from inlinee to caller
-        UnmodifiableEconomicSet<ResolvedJavaMethod> inlinedMethods = graphToInline.getInlinedMethods();
+        List<ResolvedJavaMethod> inlinedMethods = graphToInline.getInlinedMethods();
         if (inlinedMethods != null) {
-            for (ResolvedJavaMethod other : inlinedMethods) {
-                graph.recordMethod(other);
-            }
+            graph.getMethods().addAll(inlinedMethods);
         }
 
         if (graphToInline.getFields() != null) {

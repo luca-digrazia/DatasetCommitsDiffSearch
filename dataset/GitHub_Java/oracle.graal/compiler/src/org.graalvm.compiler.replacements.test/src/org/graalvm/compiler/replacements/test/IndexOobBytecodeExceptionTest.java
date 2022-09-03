@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,19 +25,47 @@ package org.graalvm.compiler.replacements.test;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
+import org.graalvm.compiler.api.directives.GraalDirectives;
+import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
+
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
 @RunWith(Parameterized.class)
 public class IndexOobBytecodeExceptionTest extends BytecodeExceptionTest {
 
-    public static void oobSnippet(Object[] empty, int idx, int length) {
-        GraalDirectives.blackhole(empty[idx]);
-        GraalDirectives.blackhole(length);
+    private static class Exceptions {
+
+        private static Object[] empty = new Object[0];
+
+        public static void throwOutOfBounds(int idx, int length) {
+            GraalDirectives.blackhole(empty[idx]);
+            GraalDirectives.blackhole(length);
+        }
+    }
+
+    @Override
+    protected void registerInvocationPlugins(InvocationPlugins invocationPlugins) {
+        invocationPlugins.register(new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode idx, ValueNode length) {
+                return throwBytecodeException(b, BytecodeExceptionKind.OUT_OF_BOUNDS, idx, length);
+            }
+        }, Exceptions.class, "throwOutOfBounds", int.class, int.class);
+        super.registerInvocationPlugins(invocationPlugins);
+    }
+
+    public static void oobSnippet(int idx, int length) {
+        Exceptions.throwOutOfBounds(idx, length);
     }
 
     @Parameter public int index;
@@ -57,7 +83,6 @@ public class IndexOobBytecodeExceptionTest extends BytecodeExceptionTest {
 
     @Test
     public void testOutOfBoundsException() {
-        Object[] empty = new Object[0];
-        test("oobSnippet", empty, index, empty.length);
+        test("oobSnippet", index, Exceptions.empty.length);
     }
 }

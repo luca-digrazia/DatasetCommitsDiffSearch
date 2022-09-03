@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,7 +24,6 @@ package org.graalvm.compiler.java;
 
 import static org.graalvm.compiler.bytecode.Bytecodes.AALOAD;
 import static org.graalvm.compiler.bytecode.Bytecodes.AASTORE;
-import static org.graalvm.compiler.bytecode.Bytecodes.ANEWARRAY;
 import static org.graalvm.compiler.bytecode.Bytecodes.ARETURN;
 import static org.graalvm.compiler.bytecode.Bytecodes.ARRAYLENGTH;
 import static org.graalvm.compiler.bytecode.Bytecodes.ATHROW;
@@ -79,8 +76,6 @@ import static org.graalvm.compiler.bytecode.Bytecodes.LDIV;
 import static org.graalvm.compiler.bytecode.Bytecodes.LOOKUPSWITCH;
 import static org.graalvm.compiler.bytecode.Bytecodes.LREM;
 import static org.graalvm.compiler.bytecode.Bytecodes.LRETURN;
-import static org.graalvm.compiler.bytecode.Bytecodes.MULTIANEWARRAY;
-import static org.graalvm.compiler.bytecode.Bytecodes.NEW;
 import static org.graalvm.compiler.bytecode.Bytecodes.PUTFIELD;
 import static org.graalvm.compiler.bytecode.Bytecodes.PUTSTATIC;
 import static org.graalvm.compiler.bytecode.Bytecodes.RET;
@@ -682,19 +677,10 @@ public final class BciBlockMapping {
                 case SALOAD:
                 case ARRAYLENGTH:
                 case CHECKCAST:
-                case NEW:
-                case ANEWARRAY:
-                case MULTIANEWARRAY:
                 case PUTSTATIC:
                 case GETSTATIC:
                 case PUTFIELD:
                 case GETFIELD: {
-                    /*
-                     * All bytecodes that can trigger lazy class initialization via a
-                     * ClassInitializationPlugin (allocations, static field access) must be listed
-                     * because the class initializer is allowed to throw an exception, which
-                     * requires proper exception handling.
-                     */
                     ExceptionDispatchBlock handler = handleExceptions(blockMap, bci);
                     if (handler != null) {
                         current = null;
