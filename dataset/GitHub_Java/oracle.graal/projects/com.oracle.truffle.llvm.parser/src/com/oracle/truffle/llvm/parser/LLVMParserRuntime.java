@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.parser;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -47,16 +46,16 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.datalayout.DataLayoutConverter.DataSpecConverterImpl;
-import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInformation;
+import com.oracle.truffle.llvm.parser.metadata.DebugInformation;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.ArrayConstant;
-import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.StructureConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.ArrayConstant;
+import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.StructureConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
@@ -86,8 +85,8 @@ public final class LLVMParserRuntime {
     private static final Comparator<Pair<Integer, ?>> ASCENDING_PRIORITY = (p1, p2) -> p1.getFirst() >= p2.getFirst() ? 1 : -1;
     private static final Comparator<Pair<Integer, ?>> DESCENDING_PRIORITY = (p1, p2) -> p1.getFirst() < p2.getFirst() ? 1 : -1;
 
-    public static LLVMParserResult parse(Source source, ByteBuffer bytes, LLVMLanguage language, LLVMContext context, NodeFactory nodeFactory) {
-        BitcodeParserResult parserResult = BitcodeParserResult.getFromSource(bytes);
+    public static LLVMParserResult parse(Source source, LLVMLanguage language, LLVMContext context, NodeFactory nodeFactory) {
+        BitcodeParserResult parserResult = BitcodeParserResult.getFromSource(source);
         ModelModule model = parserResult.getModel();
         StackAllocation stack = parserResult.getStackAllocation();
         LLVMPhiManager phiManager = parserResult.getPhis();
@@ -99,7 +98,6 @@ public final class LLVMParserRuntime {
         model.accept(module);
 
         DataLayoutConverter.DataSpecConverterImpl targetDataLayout = DataLayoutConverter.getConverter(layout.getDataLayout());
-        context.setNativeIntrinsicsFactory(nodeFactory.getNativeIntrinsicsFactory(language, context, targetDataLayout));
         LLVMParserRuntime runtime = new LLVMParserRuntime(source, language, context, stack, targetDataLayout, nodeFactory, module.getAliases());
 
         runtime.initializeFunctions(phiManager, labels, module.getFunctions());

@@ -88,6 +88,7 @@ import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
+import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 import java.math.BigInteger;
@@ -523,7 +524,7 @@ public final class LLVMSymbolReadResolver {
             ((GlobalValueSymbol) symbol).accept(visitor);
 
         } else if (symbol instanceof FunctionParameter) {
-            final FrameSlot slot = frame.findFrameSlot(((FunctionParameter) symbol).getName());
+            final FrameSlot slot = frame.findFrameSlot(((ValueSymbol) symbol).getName());
             resolvedNode = runtime.getNodeFactory().createFrameRead(runtime, symbol.getType(), slot);
 
         } else {

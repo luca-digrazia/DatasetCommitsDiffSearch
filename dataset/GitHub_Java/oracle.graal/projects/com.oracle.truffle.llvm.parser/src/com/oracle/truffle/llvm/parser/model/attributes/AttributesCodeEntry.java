@@ -31,11 +31,10 @@ package com.oracle.truffle.llvm.parser.model.attributes;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 public class AttributesCodeEntry {
 
-    public static final AttributesCodeEntry EMPTY = new AttributesCodeEntry(Collections.<AttributesGroup> emptyList());
+    public static final AttributesCodeEntry EMPTY = new AttributesCodeEntry(Collections.emptyList());
 
     private final List<AttributesGroup> codeEntry;
 
@@ -43,20 +42,35 @@ public class AttributesCodeEntry {
         this.codeEntry = codeEntry;
     }
 
-    public Optional<AttributesGroup> getFunctionAttributesGroup() {
-        return codeEntry.stream().filter(a -> a.isFunctionAttribute()).findAny();
+    public AttributesGroup getFunctionAttributesGroup() {
+        for (AttributesGroup entry : codeEntry) {
+            if (entry.isFunctionAttribute()) {
+                return entry;
+            }
+        }
+        return null;
     }
 
-    public Optional<AttributesGroup> getReturnAttributesGroup() {
-        return codeEntry.stream().filter(a -> a.isReturnValueAttribute()).findAny();
+    public AttributesGroup getReturnAttributesGroup() {
+        for (AttributesGroup entry : codeEntry) {
+            if (entry.isReturnValueAttribute()) {
+                return entry;
+            }
+        }
+        return null;
     }
 
-    public Optional<AttributesGroup> getParameterAttributesGroup(int idx) {
+    public AttributesGroup getParameterAttributesGroup(int idx) {
         /*
          * parameter index enumeration is starting with 1 in the code entry, which means we need to
          * increment index by one to find the correct attribution.
          */
-        return codeEntry.stream().filter(a -> a.isParameterAttribute() && a.getParamIdx() == idx + 1).findAny();
+        for (AttributesGroup entry : codeEntry) {
+            if (entry.isParameterAttribute() && entry.getParamIdx() == idx + 1) {
+                return entry;
+            }
+        }
+        return null;
     }
 
     @Override

@@ -29,12 +29,16 @@
  */
 package com.oracle.truffle.llvm.parser.datalayout;
 
-import com.oracle.truffle.llvm.parser.datalayout.DataLayoutParser.DataTypeSpecification;
-import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
-import com.oracle.truffle.llvm.runtime.types.LLVMBaseType;
-
 import java.util.Arrays;
 import java.util.List;
+
+import com.oracle.truffle.llvm.parser.datalayout.DataLayoutParser.DataTypeSpecification;
+import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
+import com.oracle.truffle.llvm.runtime.types.FunctionType;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
 
 public final class DataLayoutConverter {
 
@@ -47,78 +51,86 @@ public final class DataLayoutConverter {
         }
 
         @Override
-        public int getBitAlignment(LLVMBaseType baseType) {
-            if (baseType == LLVMBaseType.I_VAR_BITWIDTH) {
-                return 0;
+        public int getSize(Type type) {
+            return Math.max(1, getBitAlignment(type) / Byte.SIZE);
+        }
+
+        @Override
+        public int getBitAlignment(Type baseType) {
+            if (baseType instanceof VariableBitWidthType) {
+                /*
+                 * Handling of integer datatypes when the exact match not found
+                 * http://releases.llvm.org/3.9.0/docs/LangRef.html#data-layout
+                 */
+                DataTypeSpecification integerLayout = dataLayout.stream().filter(d -> d.getType() == DataLayoutType.INTEGER_WIDTHS).findFirst().orElseThrow(IllegalStateException::new);
+                int minPossibleSize = Arrays.stream(integerLayout.getValues()).max().orElseThrow(IllegalStateException::new);
+                int size = baseType.getBitSize();
+                for (int value : integerLayout.getValues()) {
+                    if (size < value && minPossibleSize > value) {
+                        minPossibleSize = value;
+                    }
+                }
+                if (minPossibleSize >= size) {
+                    return minPossibleSize;
+                } else {
+                    // is that correct?
+                    return ((size + 7) / 8) * 8;
+                }
             } else {
                 return getDataTypeSpecification(baseType).getValues()[1];
             }
         }
 
-        private DataTypeSpecification getDataTypeSpecification(LLVMBaseType baseType) {
-            // Checkstyle: stop magic number name check
-            switch (baseType) {
-                case I1:
-                    return locateDataTypeSpecification(DataLayoutType.INTEGER, 1);
-                case I8:
-                    return locateDataTypeSpecification(DataLayoutType.INTEGER, 8);
-                case I16:
-                    return locateDataTypeSpecification(DataLayoutType.INTEGER, 16);
-                case I32:
-                    return locateDataTypeSpecification(DataLayoutType.INTEGER, 32);
-                case I64:
-                    return locateDataTypeSpecification(DataLayoutType.INTEGER, 64);
-                case HALF:
-                    return locateDataTypeSpecification(DataLayoutType.FLOAT, 16);
-                case FLOAT:
-                    return locateDataTypeSpecification(DataLayoutType.FLOAT, 32);
-                case DOUBLE:
-                    return locateDataTypeSpecification(DataLayoutType.FLOAT, 64);
-                case X86_FP80:
-                    return locateDataTypeSpecification(DataLayoutType.FLOAT, 80);
-                case ADDRESS:
-                    return locateDataTypeSpecification(DataLayoutType.POINTER);
-                case FUNCTION_ADDRESS:
-                    return locateDataTypeSpecification(DataLayoutType.POINTER);
-                default:
-                    throw new AssertionError(baseType);
+        private DataTypeSpecification getDataTypeSpecification(Type baseType) {
+            if (baseType instanceof PointerType) {
+                return locateDataTypeSpecification(DataLayoutType.POINTER);
+            } else if (baseType instanceof FunctionType) {
+                return locateDataTypeSpecification(DataLayoutType.POINTER);
+            } else if (baseType instanceof PrimitiveType) {
+                PrimitiveType primitiveType = (PrimitiveType) baseType;
+                switch (primitiveType.getPrimitiveKind()) {
+                    case I1:
+                        return locateDataTypeSpecification(DataLayoutType.INTEGER, 8); // 1 is
+                                                                                       // rounded
+                                                                                       // up to
+                                                                                       // 8
+                    case I8:
+                        return locateDataTypeSpecification(DataLayoutType.INTEGER, 8);
+                    case I16:
+                        return locateDataTypeSpecification(DataLayoutType.INTEGER, 16);
+                    case I32:
+                        return locateDataTypeSpecification(DataLayoutType.INTEGER, 32);
+                    case I64:
+                        return locateDataTypeSpecification(DataLayoutType.INTEGER, 64);
+                    case HALF:
+                        return locateDataTypeSpecification(DataLayoutType.FLOAT, 16);
+                    case FLOAT:
+                        return locateDataTypeSpecification(DataLayoutType.FLOAT, 32);
+                    case DOUBLE:
+                        return locateDataTypeSpecification(DataLayoutType.FLOAT, 64);
+                    case X86_FP80:
+                        return locateDataTypeSpecification(DataLayoutType.FLOAT, 80);
+                }
             }
-            // Checkstyle: resume magic number name check
+            throw new AssertionError(baseType);
         }
 
-        private DataTypeSpecification locateDataTypeSpecification(DataLayoutType dataLayoutType, int... values) {
+        private DataTypeSpecification locateDataTypeSpecification(DataLayoutType dataLayoutType) {
             for (DataTypeSpecification spec : dataLayout) {
-                CONT: if (spec.getType().equals(dataLayoutType)) {
-                    for (int value : values) {
-                        if (value != spec.getValues()[0]) {
-                            break CONT;
-                        }
-                    }
+                if (spec.getType().equals(dataLayoutType)) {
                     return spec;
                 }
             }
+            throw new AssertionError(dataLayoutType);
+        }
 
-            if (dataLayoutType == DataLayoutType.INTEGER) {
-                /*
-                 * Handling of integer datatypes when the exact match not found
-                 * http://releases.llvm.org/3.9.0/docs/LangRef.html#data-layout
-                 */
-                int chosenIntTypeSize = 0;
-                DataTypeSpecification biggerIntegerTypeSepc = null;
-                OUT: for (DataTypeSpecification spec : dataLayout) {
-                    if (spec.getType() == DataLayoutType.INTEGER && spec.getValues()[0] > chosenIntTypeSize) {
-                        biggerIntegerTypeSepc = spec;
-                        chosenIntTypeSize = spec.getValues()[0];
-                        for (int value : values) {
-                            if (chosenIntTypeSize > value) {
-                                break OUT;
-                            }
-                        }
-                    }
+        private DataTypeSpecification locateDataTypeSpecification(DataLayoutType dataLayoutType, int size) {
+            for (DataTypeSpecification spec : dataLayout) {
+                if (spec.getType().equals(dataLayoutType) && size == spec.getValues()[0]) {
+                    return spec;
                 }
-                return biggerIntegerTypeSepc;
             }
-            throw new AssertionError(dataLayoutType + " " + Arrays.toString(values));
+            throw new AssertionError(dataLayoutType + " size: " + size);
         }
 
     }
