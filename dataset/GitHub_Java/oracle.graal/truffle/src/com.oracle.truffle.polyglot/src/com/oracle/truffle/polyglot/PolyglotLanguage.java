@@ -33,6 +33,7 @@ import java.util.Set;
 
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Language;
+import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractLanguageImpl;
 
 import com.oracle.truffle.api.Assumption;
@@ -71,6 +72,26 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
         this.host = host;
         this.profile = new ContextProfile(this);
         this.info = NODES.createLanguage(this, cache.getId(), cache.getName(), cache.getVersion(), cache.getMimeTypes(), cache.isInternal(), cache.isInteractive());
+    }
+
+    Object copyToJavaLand(Value value) {
+        if (value.isBoolean()) {
+            return value.asBoolean();
+        } else if (value.isString()) {
+            return value.asString();
+        } else if (value.isNumber()) {
+            return value.as(Number.class);
+        } else if (value.isHostObject()) {
+            return value.asHostObject();
+        } else if (value.isProxyObject()) {
+            return value.asProxyObject();
+        } else if (value.hasArrayElements()) {
+            Object[] array = new Object[(int) value.getArraySize()];
+            for (int i = 0; i < array.length; i++) {
+                array[i] = copyToJavaLand(value.getArrayElement(i));
+            }
+        }
+        throw new IllegalArgumentException("Cannot copy value " + value + ".");
     }
 
     PolyglotLanguageContext getCurrentLanguageContext() {
@@ -274,9 +295,6 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
 
         ContextProfile(PolyglotLanguage language) {
             this.language = language;
-            if (!language.engine.boundEngine) {
-                singleContext.invalidate();
-            }
         }
 
         Object get() {
@@ -310,11 +328,7 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
             if (!singleContext.isValid()) {
                 return true;
             }
-            Object verifyContext = lookupLanguageContext(context);
-            if (cachedSingle != verifyContext) {
-                throw new AssertionError(String.format("Expected %s but got %s.", cachedSingle, verifyContext));
-            }
-            return true;
+            return cachedSingle == lookupLanguageContext(context);
         }
 
         private Object lookupLanguageContext(PolyglotContextImpl context) {

@@ -52,11 +52,11 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.polyglot.HostLanguage.HostContext;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.polyglot.HostLanguage.HostContext;
 
 final class PolyglotContextImpl extends AbstractContextImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
@@ -557,7 +557,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             if (languageContext.isInitialized()) {
                 Object s = LANGUAGE.findExportedSymbol(languageContext.env, name, onlyExplicit);
                 if (s != null) {
-                    return languageContext.asValue(s);
+                    return languageContext.toHostValue(s);
                 }
             }
         }
@@ -703,7 +703,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             if (source.isInteractive()) {
                 printResult(languageContext, result);
             }
-            return languageContext.asValue(result);
+            return languageContext.toHostValue(result);
         } catch (Throwable e) {
             throw PolyglotImpl.wrapGuestException(languageContext, e);
         } finally {
@@ -765,24 +765,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         if (hostValue instanceof Value) {
             return (Value) hostValue;
         }
-        PolyglotLanguageContext context = null;
-        Object guestValue = null;
-        if (hostValue instanceof PolyglotList) {
-            context = ((PolyglotList<?>) hostValue).languageContext;
-            guestValue = ((PolyglotList<?>) hostValue).guestObject;
-        } else if (hostValue instanceof PolyglotMap) {
-            context = ((PolyglotMap<?, ?>) hostValue).languageContext;
-            guestValue = ((PolyglotMap<?, ?>) hostValue).guestObject;
-        } else if (hostValue instanceof PolyglotFunction) {
-            context = ((PolyglotFunction<?, ?>) hostValue).languageContext;
-            guestValue = ((PolyglotFunction<?, ?>) hostValue).guestObject;
-        }
-        if (context == null) {
-            context = getHostContext();
-            return context.asValue(context.toGuestValue(hostValue));
-        } else {
-            return context.asValue(guestValue);
-        }
+        PolyglotLanguageContext hostContext = getHostContext();
+        return hostContext.toHostValue(hostContext.toGuestValue(hostValue));
     }
 
     void waitForClose() {

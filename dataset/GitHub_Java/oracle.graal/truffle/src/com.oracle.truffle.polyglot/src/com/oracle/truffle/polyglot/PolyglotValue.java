@@ -338,16 +338,24 @@ abstract class PolyglotValue extends AbstractValueImpl {
     }
 
     protected final Value newValue(Object receiver) {
-        return languageContext.asValue(receiver);
+        return languageContext.toHostValue(receiver);
     }
 
     static CallTarget createTarget(PolyglotNode root) {
         CallTarget target = Truffle.getRuntime().createCallTarget(root);
         Class<?>[] types = root.getArgumentTypes();
         if (types != null) {
+            assert verifyTypes(types);
             VMAccessor.SPI.initializeProfile(target, types);
         }
         return target;
+    }
+
+    private static boolean verifyTypes(Class<?>[] types) {
+        for (Class<?> type : types) {
+            assert type != null;
+        }
+        return true;
     }
 
     static PolyglotValue createInteropValueCache(PolyglotLanguageContext languageContext, TruffleObject receiver, Class<?> receiverType) {
@@ -396,6 +404,8 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
     abstract static class BaseCache extends PolyglotValue {
 
+        final PolyglotImpl impl;
+
         final CallTarget asClassLiteral;
         final CallTarget asTypeLiteral;
 
@@ -403,6 +413,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
         BaseCache(PolyglotLanguageContext context, Class<?> receiverType) {
             super(context);
+            this.impl = context.getEngine().impl;
             this.receiverType = receiverType;
             this.asClassLiteral = createTarget(new AsClassLiteralNode(this));
             this.asTypeLiteral = createTarget(new AsTypeLiteralNode(this));
@@ -422,7 +433,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
         private static class AsClassLiteralNode extends PolyglotNode {
 
-            @Child ToHostNode toHost = ToHostNode.create();
+            @Child Node toJava = VMAccessor.JAVAINTEROP.createToJavaNode();
 
             protected AsClassLiteralNode(BaseCache interop) {
                 super(interop);
@@ -440,14 +451,14 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
             @Override
             protected Object executeImpl(Object receiver, Object[] args) {
-                return toHost.execute(args[0], (Class<?>) args[1], null, polyglot.languageContext);
+                return VMAccessor.JAVAINTEROP.toJava(toJava, (Class<?>) args[1], null, args[0], polyglot.languageContext);
             }
 
         }
 
         private static class AsTypeLiteralNode extends PolyglotNode {
 
-            @Child ToHostNode toHost = ToHostNode.create();
+            @Child Node toJava = VMAccessor.JAVAINTEROP.createToJavaNode();
 
             protected AsTypeLiteralNode(BaseCache interop) {
                 super(interop);
@@ -466,7 +477,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             @Override
             protected Object executeImpl(Object receiver, Object[] args) {
                 TypeLiteral<?> typeLiteral = (TypeLiteral<?>) args[1];
-                return toHost.execute(args[0], typeLiteral.getRawType(), typeLiteral.getType(), polyglot.languageContext);
+                return VMAccessor.JAVAINTEROP.toJava(toJava, typeLiteral.getRawType(), typeLiteral.getType(), args[0], polyglot.languageContext);
             }
 
         }
@@ -1209,7 +1220,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
         final CallTarget asPrimitive;
 
         final boolean isProxy;
-        final boolean isHost;
+        final boolean isJava;
 
         Interop(PolyglotLanguageContext context, TruffleObject receiver, Class<?> receiverType) {
             super(context, receiverType);
@@ -1236,7 +1247,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             this.hasMembers = createTarget(new HasMembersNode(this));
             this.asPrimitive = createTarget(new AsPrimitiveNode(this));
             this.isProxy = PolyglotProxy.isProxyGuestObject(receiver);
-            this.isHost = HostObject.isInstance(receiver);
+            this.isJava = VMAccessor.JAVAINTEROP.isHostObject(receiver);
         }
 
         @Override
@@ -1321,7 +1332,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
         @Override
         public boolean isHostObject(Object receiver) {
-            return isHost;
+            return isJava;
         }
 
         @Override
@@ -1340,8 +1351,8 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
         @Override
         public Object asHostObject(Object receiver) {
-            if (isHost) {
-                return ((HostObject) receiver).obj;
+            if (isJava) {
+                return VMAccessor.JAVAINTEROP.asHostObject(receiver);
             } else {
                 return super.asHostObject(receiver);
             }
@@ -1681,7 +1692,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
             @Override
             protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{polyglot.receiverType, Long.class, null};
+                return new Class<?>[]{polyglot.receiverType, Long.class, Object.class};
             }
 
             @Override
@@ -1872,7 +1883,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
             @Override
             protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{polyglot.receiverType, String.class, null};
+                return new Class<?>[]{polyglot.receiverType, String.class, Object.class};
             }
 
             @Override
