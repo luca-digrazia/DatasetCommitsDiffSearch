@@ -163,11 +163,6 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public boolean isJavaLangObject() {
-        return false;
-    }
-
-    @Override
     public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
         return null;
     }
