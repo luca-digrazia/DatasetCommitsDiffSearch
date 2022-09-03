@@ -203,7 +203,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
                 /*
                  * GuardingPiNode succeeds if payload null
                  */
-                ValueNode replacement = StampTool.isObjectAlwaysNull(payload) ? payload : reasoner.nonTrivialNull(payload);
+                ValueNode replacement = StampTool.isObjectAlwaysNull(payload) ? payload : reasoner.untrivialNull(payload);
                 if (replacement != null) {
                     // replacement == null means !isKnownNull(payload)
                     removeGuardingPiNode(envelope, replacement);
