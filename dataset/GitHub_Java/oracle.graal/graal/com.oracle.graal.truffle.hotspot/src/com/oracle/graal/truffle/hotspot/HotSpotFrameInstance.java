@@ -26,7 +26,6 @@ import java.lang.reflect.*;
 
 import com.oracle.graal.api.code.stack.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.truffle.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.SlowPath;
 import com.oracle.truffle.api.frame.*;
@@ -100,14 +99,14 @@ public abstract class HotSpotFrameInstance implements FrameInstance {
 
     /**
      * This class represents a frame that is taken from the
-     * {@link OptimizedCallNode#callProxy(MaterializedFrameNotify, OptimizedCallTarget, VirtualFrame, Object[], boolean)}
+     * {@link DefaultCallNode#callProxy(MaterializedFrameNotify, CallTarget, VirtualFrame, Object[])}
      * method.
      */
     public static final class CallNodeFrame extends HotSpotFrameInstance {
         public static final Method METHOD;
         static {
             try {
-                METHOD = OptimizedCallNode.class.getDeclaredMethod("callProxy", MaterializedFrameNotify.class, OptimizedCallTarget.class, VirtualFrame.class, Object[].class, boolean.class);
+                METHOD = DefaultCallNode.class.getDeclaredMethod("callProxy", MaterializedFrameNotify.class, CallTarget.class, VirtualFrame.class, Object[].class);
             } catch (NoSuchMethodException | SecurityException e) {
                 throw new GraalInternalError(e);
             }
