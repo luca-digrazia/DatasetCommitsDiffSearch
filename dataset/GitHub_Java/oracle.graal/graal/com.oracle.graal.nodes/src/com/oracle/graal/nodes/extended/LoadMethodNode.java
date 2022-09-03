@@ -22,34 +22,22 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.meta.Assumptions.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.type.StampTool;
-
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Assumptions.AssumptionResult;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Loads a method from the virtual method table of a given hub.
  */
-@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+@NodeInfo
 public final class LoadMethodNode extends FixedWithNextNode implements Lowerable, Canonicalizable {
 
     public static final NodeClass<LoadMethodNode> TYPE = NodeClass.create(LoadMethodNode.class);
@@ -69,7 +57,7 @@ public final class LoadMethodNode extends FixedWithNextNode implements Lowerable
         assert method.isConcrete() : "Cannot load abstract method from a hub";
         assert method.hasReceiver() : "Cannot load a static method from a hub";
         if (!method.isInVirtualMethodTable(receiverType)) {
-            throw new GraalError("%s does not have a vtable entry in type %s", method, receiverType);
+            throw new JVMCIError("%s does not have a vtable entry in type %s", method, receiverType);
         }
     }
 
@@ -82,15 +70,15 @@ public final class LoadMethodNode extends FixedWithNextNode implements Lowerable
     public Node canonical(CanonicalizerTool tool) {
         if (hub instanceof LoadHubNode) {
             ValueNode object = ((LoadHubNode) hub).getValue();
-            TypeReference type = StampTool.typeReferenceOrNull(object);
-            if (type != null) {
-                if (type.isExact()) {
-                    return resolveExactMethod(tool, type.getType());
-                }
-                Assumptions assumptions = graph().getAssumptions();
-                AssumptionResult<ResolvedJavaMethod> resolvedMethod = type.getType().findUniqueConcreteMethod(method);
-                if (resolvedMethod != null && resolvedMethod.canRecordTo(assumptions) && !type.getType().isInterface() && method.getDeclaringClass().isAssignableFrom(type.getType())) {
-                    resolvedMethod.recordTo(assumptions);
+            ResolvedJavaType type = StampTool.typeOrNull(object);
+            if (StampTool.isExactType(object)) {
+                return resolveExactMethod(tool, type);
+            }
+            Assumptions assumptions = graph().getAssumptions();
+            if (type != null && assumptions != null) {
+                AssumptionResult<ResolvedJavaMethod> resolvedMethod = type.findUniqueConcreteMethod(method);
+                if (resolvedMethod != null && !type.isInterface() && method.getDeclaringClass().isAssignableFrom(type)) {
+                    assumptions.record(resolvedMethod);
                     return ConstantNode.forConstant(stamp(), resolvedMethod.getResult().getEncoding(), tool.getMetaAccess());
                 }
             }
