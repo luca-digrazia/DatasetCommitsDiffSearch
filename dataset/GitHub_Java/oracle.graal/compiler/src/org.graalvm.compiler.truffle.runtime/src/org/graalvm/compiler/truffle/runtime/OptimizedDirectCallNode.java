@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +35,10 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.ValueProfile;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
+
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleExperimentalSplitting;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleTraceSplittingSummary;
 
 /**
  * A call node with a constant {@link CallTarget} that can be optimized by Graal.
@@ -55,8 +59,8 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
     public OptimizedDirectCallNode(OptimizedCallTarget target) {
         super(target);
         assert target.getSourceCallTarget() == null;
-        this.experimentalSplitting = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplitting);
-        this.traceSplittingSummary = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleTraceSplittingSummary);
+        this.experimentalSplitting = TruffleCompilerOptions.getValue(TruffleExperimentalSplitting);
+        this.traceSplittingSummary = TruffleCompilerOptions.getValue(TruffleTraceSplittingSummary);
     }
 
     @Override
@@ -166,12 +170,12 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
 
             if (callCount >= 1) {
                 currentTarget.decrementKnownCallSites();
-                if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplitting)) {
+                if (TruffleCompilerOptions.getValue(TruffleExperimentalSplitting)) {
                     currentTarget.removeKnownCallSite(this);
                 }
-                splitTarget.incrementKnownCallSites();
             }
-            if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplitting)) {
+            splitTarget.incrementKnownCallSites();
+            if (TruffleCompilerOptions.getValue(TruffleExperimentalSplitting)) {
                 splitTarget.addKnownCallNode(this);
             }
 

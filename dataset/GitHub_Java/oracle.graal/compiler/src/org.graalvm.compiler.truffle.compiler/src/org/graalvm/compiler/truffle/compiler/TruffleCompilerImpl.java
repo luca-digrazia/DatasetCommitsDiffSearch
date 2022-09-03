@@ -100,7 +100,8 @@ import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.Truffle
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleExcludeAssertions;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleInstrumentBoundaries;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleInstrumentBranches;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleFirstTierCompilation;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleLowGradeCompilation;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getValue;
 
 /**
@@ -116,9 +117,9 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
     protected final Suites suites;
     protected final GraphBuilderConfiguration config;
     protected final LIRSuites lirSuites;
-    protected final Providers firstTierProviders;
-    protected final Suites firstTierSuites;
-    protected final LIRSuites firstTierLirSuites;
+    protected final Providers lowGradeProviders;
+    protected final Suites lowGradeSuites;
+    protected final LIRSuites lowGradeLirSuites;
     protected final PartialEvaluator partialEvaluator;
     protected final Backend backend;
     protected final SnippetReflectionProvider snippetReflection;
@@ -130,8 +131,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
                     UseTypeCheckedInlining,
                     UseTypeCheckHints);
 
-    public TruffleCompilerImpl(TruffleCompilerRuntime runtime, Plugins plugins, Suites suites, LIRSuites lirSuites, Backend backend, Suites firstTierSuites, LIRSuites firstTierLirSuites,
-                               Providers firstTierProviders, SnippetReflectionProvider snippetReflection) {
+    public TruffleCompilerImpl(TruffleCompilerRuntime runtime, Plugins plugins, Suites suites, LIRSuites lirSuites, Backend backend, Suites lowGradeSuites, LIRSuites lowGradeLirSuites, Providers lowGradeProviders, SnippetReflectionProvider snippetReflection) {
         this.backend = backend;
         this.snippetReflection = snippetReflection;
         this.providers = backend.getProviders();
@@ -149,9 +149,9 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
                         BytecodeExceptionMode.ExplicitOnly);
 
         this.partialEvaluator = createPartialEvaluator();
-        this.firstTierProviders = firstTierProviders;
-        this.firstTierSuites = firstTierSuites;
-        this.firstTierLirSuites = firstTierLirSuites;
+        this.lowGradeProviders = lowGradeProviders;
+        this.lowGradeSuites = lowGradeSuites;
+        this.lowGradeLirSuites = lowGradeLirSuites;
     }
 
     private ResolvedJavaType[] getSkippedExceptionTypes(TruffleCompilerRuntime runtime) {
@@ -428,14 +428,14 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
             Suites selectedSuites = suites;
             LIRSuites selectedLirSuites = lirSuites;
             Providers selectedProviders = providers;
-            if (TruffleFirstTierCompilation.getValue(TruffleCompilerOptions.getOptions())) {
-                selectedSuites = firstTierSuites;
-                selectedLirSuites = firstTierLirSuites;
-                selectedProviders = firstTierProviders;
+            if (TruffleLowGradeCompilation.getValue(TruffleCompilerOptions.getOptions())) {
+                selectedSuites = lowGradeSuites;
+                selectedLirSuites = lowGradeLirSuites;
+                selectedProviders = lowGradeProviders;
             }
             CompilationResult compilationResult = createCompilationResult(name, graph.compilationId());
-            result = GraalCompiler.compileGraph(graph, graph.method(), selectedProviders, backend, graphBuilderSuite, Optimizations, graph.getProfilingInfo(), selectedSuites, selectedLirSuites,
-                            compilationResult, CompilationResultBuilderFactory.Default, false);
+            result = GraalCompiler.compileGraph(graph, graph.method(), selectedProviders, backend, graphBuilderSuite, Optimizations, graph.getProfilingInfo(), selectedSuites, selectedLirSuites, compilationResult,
+                            CompilationResultBuilderFactory.Default, false);
         } catch (Throwable e) {
             throw debug.handle(e);
         }
@@ -446,6 +446,11 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
 
         try (DebugCloseable a = CodeInstallationTime.start(debug); DebugCloseable c = CodeInstallationMemUse.start(debug)) {
             InstalledCode installedCode = createInstalledCode(compilable);
+
+            // Invalidate the old code if it was compiled in low tier, and this is a high tier compilation.
+            if (!TruffleLowGradeCompilation.getValue(getOptions())) {
+                compilable.invalidateCode();
+            }
 
             // Install the new code.
             backend.createInstalledCode(debug, graph.method(), compilationRequest, result, graph.getSpeculationLog(), installedCode, false);

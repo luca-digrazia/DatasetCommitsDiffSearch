@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -228,14 +228,8 @@ public final class SchedulePhase extends Phase {
                     } else {
                         Block latestBlock = null;
 
-                        if (currentBlock.getFirstDominated() == null && !(currentNode instanceof VirtualState)) {
-                            // This block doesn't dominate any other blocks =>
-                            // node must be scheduled in earliest block.
-                            latestBlock = currentBlock;
-                        }
-
                         LocationIdentity constrainingLocation = null;
-                        if (latestBlock == null && currentNode instanceof FloatingReadNode) {
+                        if (currentNode instanceof FloatingReadNode) {
                             // We are scheduling a floating read node => check memory
                             // anti-dependencies.
                             FloatingReadNode floatingReadNode = (FloatingReadNode) currentNode;

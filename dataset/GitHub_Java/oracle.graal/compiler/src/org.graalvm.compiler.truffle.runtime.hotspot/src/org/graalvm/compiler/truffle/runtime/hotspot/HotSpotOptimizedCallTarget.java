@@ -47,7 +47,6 @@ public class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     }
 
     public void setInstalledCode(HotSpotTruffleInstalledCode code) {
-        invalidateCode();
         installedCode = code;
     }
 
@@ -57,8 +56,8 @@ public class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     }
 
     @Override
-    public boolean isValidLastTier() {
-        return installedCode.isValid() && !installedCode.isFirstTier();
+    public boolean isValidHighGrade() {
+        return installedCode.isValid() && !installedCode.isLowGrade();
     }
 
     @Override

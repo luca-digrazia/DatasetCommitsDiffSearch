@@ -35,7 +35,8 @@ public interface TruffleInliningPolicy {
     double calculateScore(TruffleInliningProfile profile);
 
     static TruffleInliningPolicy getInliningPolicy(OptionValues options) {
-        if (TruffleCompilerOptions.TruffleFirstTierCompilation.getValue(options)) {
+        // TTY.println("inlining: " + TruffleCompilerOptions.TruffleLowGradeCompilation.getValue(TruffleCompilerOptions.getOptions()));
+        if (TruffleCompilerOptions.TruffleLowGradeCompilation.getValue(options)) {
             return new NoInliningPolicy();
         } else {
             return new DefaultInliningPolicy();
