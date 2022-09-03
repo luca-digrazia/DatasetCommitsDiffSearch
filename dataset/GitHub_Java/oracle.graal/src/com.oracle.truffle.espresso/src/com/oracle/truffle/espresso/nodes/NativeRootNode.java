@@ -1,28 +1,4 @@
-/*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
 package com.oracle.truffle.espresso.nodes;
-
-import java.util.Arrays;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -45,12 +21,8 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 public abstract class NativeRootNode extends RootNode implements LinkedNode {
 
     private final TruffleObject boundNative;
-    private Meta.Method originalMethod;
+    private final Meta.Method originalMethod;
     @Node.Child Node execute = Message.EXECUTE.createNode();
-
-    public NativeRootNode(TruffleLanguage<?> language, TruffleObject boundNative) {
-        this(language, boundNative, null);
-    }
 
     public NativeRootNode(TruffleLanguage<?> language, TruffleObject boundNative, Meta.Method originalMethod) {
         super(language);
@@ -81,7 +53,8 @@ public abstract class NativeRootNode extends RootNode implements LinkedNode {
             // constant.
             // Having a constant length would help PEA to skip the copying.
             Object[] argsWithEnv = preprocessArgs(frame.getArguments());
-            System.err.println("Calling native " + originalMethod.getName() + Arrays.toString(argsWithEnv));
+// System.err.println("Calling native " + originalMethod.getName() +
+// Arrays.toString(argsWithEnv));
             Object result = ForeignAccess.sendExecute(execute, boundNative, argsWithEnv);
             return processResult(result);
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
@@ -145,10 +118,6 @@ public abstract class NativeRootNode extends RootNode implements LinkedNode {
     @Override
     public Meta.Method getOriginalMethod() {
         return originalMethod;
-    }
-
-    public void setOriginalMethod(Meta.Method originalMethod) {
-        this.originalMethod = originalMethod;
     }
 
     public TruffleObject getBoundNative() {
