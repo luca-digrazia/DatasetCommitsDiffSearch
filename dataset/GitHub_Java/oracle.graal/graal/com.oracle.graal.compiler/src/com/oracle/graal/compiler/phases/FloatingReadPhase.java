@@ -24,6 +24,7 @@ package com.oracle.graal.compiler.phases;
 
 import java.util.*;
 
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.cfg.*;
@@ -115,7 +116,7 @@ public class FloatingReadPhase extends Phase {
                 Debug.log("Add new input to %s: %s.", original, newValue);
                 assert phi.valueCount() <= phi.merge().forwardEndCount() : phi.merge();
             } else {
-                PhiNode phi = m.graph().unique(new PhiNode(PhiType.Memory, m));
+                PhiNode phi = m.graph().unique(new PhiNode(CiKind.Illegal, m, PhiType.Memory));
                 // TODO(ls) how does this work? add documentation ...
                 for (int i = 0; i < mergeOperationCount + 1; ++i) {
                     phi.addInput((ValueNode) original);
@@ -152,12 +153,13 @@ public class FloatingReadPhase extends Phase {
             } else {
                 floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.location(), getLocationForRead(readNode), readNode.stamp(), readNode.dependencies()));
             }
+            floatingRead.setNullCheck(readNode.getNullCheck());
             ValueAnchorNode anchor = null;
             for (GuardNode guard : readNode.dependencies().filter(GuardNode.class)) {
                 if (anchor == null) {
                     anchor = graph.add(new ValueAnchorNode());
                 }
-                anchor.addAnchoredValue(guard);
+                anchor.addAnchoredNode(guard);
             }
             if (anchor != null) {
                 graph.addAfterFixed(readNode, anchor);
@@ -198,7 +200,7 @@ public class FloatingReadPhase extends Phase {
         }
 
         private void createLoopEntryPhi(Object modifiedLocation, Node other, Loop loop) {
-            PhiNode phi = other.graph().unique(new PhiNode(PhiType.Memory, (MergeNode) loop.header.getBeginNode()));
+            PhiNode phi = other.graph().unique(new PhiNode(CiKind.Illegal, (MergeNode) loop.header.getBeginNode(), PhiType.Memory));
             phi.addInput((ValueNode) other);
             map.put(modifiedLocation, phi);
             loopEntryMap.put(modifiedLocation, phi);
