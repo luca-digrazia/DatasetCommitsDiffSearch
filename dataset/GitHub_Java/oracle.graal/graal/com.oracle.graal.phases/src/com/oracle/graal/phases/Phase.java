@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.phases;
 
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 
 /**
  * Base class for compiler phases that don't need a context object.
@@ -30,6 +30,10 @@ import com.oracle.graal.nodes.StructuredGraph;
 public abstract class Phase extends BasePhase<Object> {
 
     protected Phase() {
+    }
+
+    protected Phase(String name) {
+        super(name);
     }
 
     public final void apply(final StructuredGraph graph) {
