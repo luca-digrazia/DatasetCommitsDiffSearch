@@ -30,6 +30,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin;
 import org.graalvm.compiler.options.OptionValues;
 
+import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -156,6 +157,8 @@ public interface TruffleCompilerRuntime {
 
     CompilableTruffleAST asCompilableTruffleAST(JavaConstant constant);
 
+    boolean enableInfopoints();
+
     GraalRuntime getGraalRuntime();
 
     /**
@@ -163,13 +166,7 @@ public interface TruffleCompilerRuntime {
      */
     JavaConstant getCallTargetForCallNode(JavaConstant callNode);
 
-    /**
-     * Registers a (pending) dependency on an assumption.
-     *
-     * @param optimizedAssumption compiler constant representing an {@code OptimizedAssumption}
-     * @return a consumer that will be supplied the dependency once it materializes
-     */
-    Consumer<OptimizedAssumptionDependency> registerOptimizedAssumptionDependency(JavaConstant optimizedAssumption);
+    Consumer<InstalledCode> registerInstalledCodeEntryForAssumption(JavaConstant optimizedAssumptionConstant);
 
     /**
      * {@linkplain #formatEvent(String, int, String, int, String, int, Map, int) Formats} a Truffle
@@ -272,11 +269,8 @@ public interface TruffleCompilerRuntime {
     /**
      * Gets an object describing whether and how a method can be inlined based on Truffle
      * directives.
-     *
-     * @param original candidate for inlining
-     * @param duringPartialEvaluation whether the info applies during partial evaluation
      */
-    InlineInfo getInlineInfo(ResolvedJavaMethod original, boolean duringPartialEvaluation);
+    InlineInfo getInlineInfo(ResolvedJavaMethod original);
 
     /**
      * Determines if {@code type} is a value type. Reference comparisons (==) between value type

@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,18 +22,17 @@
  */
 package org.graalvm.compiler.truffle.runtime.debug;
 
-import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.TraceInlining;
-import static org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions.TruffleFunctionInlining;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TraceTruffleInlining;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleFunctionInlining;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleInliningDecision;
 import org.graalvm.compiler.truffle.runtime.TruffleInliningProfile;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 
 public final class TraceInliningListener extends AbstractGraalTruffleRuntimeListener {
 
@@ -44,15 +41,17 @@ public final class TraceInliningListener extends AbstractGraalTruffleRuntimeList
     }
 
     public static void install(GraalTruffleRuntime runtime) {
-        runtime.addListener(new TraceInliningListener(runtime));
+        if (TruffleCompilerOptions.getValue(TraceTruffleInlining)) {
+            runtime.addListener(new TraceInliningListener(runtime));
+        }
     }
 
     @Override
     public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph) {
-        if (!target.getOptionValue(TraceInlining) || inliningDecision == null) {
+        if (inliningDecision == null) {
             return;
         }
-        if (TruffleRuntimeOptions.getValue(TruffleFunctionInlining)) {
+        if (TruffleCompilerOptions.getValue(TruffleFunctionInlining)) {
             runtime.logEvent(0, "inline start", target.toString(), target.getDebugProperties(null));
             logInliningDecisionRecursive(target, inliningDecision, 1);
             runtime.logEvent(0, "inline done", target.toString(), target.getDebugProperties(inliningDecision));

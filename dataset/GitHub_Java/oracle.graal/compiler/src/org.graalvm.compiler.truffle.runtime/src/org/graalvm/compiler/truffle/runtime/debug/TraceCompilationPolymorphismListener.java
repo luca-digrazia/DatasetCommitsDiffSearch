@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,15 +22,17 @@
  */
 package org.graalvm.compiler.truffle.runtime.debug;
 
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TraceTruffleCompilationPolymorphism;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 
 import com.oracle.truffle.api.nodes.Node;
@@ -46,21 +46,21 @@ public final class TraceCompilationPolymorphismListener extends AbstractGraalTru
     }
 
     public static void install(GraalTruffleRuntime runtime) {
-        runtime.addListener(new TraceCompilationPolymorphismListener(runtime));
+        if (TruffleCompilerOptions.getValue(TraceTruffleCompilationPolymorphism)) {
+            runtime.addListener(new TraceCompilationPolymorphismListener(runtime));
+        }
     }
 
     @Override
     public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
-        if (target.getOptionValue(PolyglotCompilerOptions.TraceCompilationPolymorphism)) {
-            for (Node node : target.nodeIterable(inliningDecision)) {
-                if (node != null && (node.getCost() == NodeCost.MEGAMORPHIC || node.getCost() == NodeCost.POLYMORPHIC)) {
-                    NodeCost cost = node.getCost();
-                    Map<String, Object> props = new LinkedHashMap<>();
-                    props.put("simpleName", node.getClass().getSimpleName());
-                    props.put("subtree", "\n" + NodeUtil.printCompactTreeToString(node));
-                    String msg = cost == NodeCost.MEGAMORPHIC ? "megamorphic" : "polymorphic";
-                    runtime.logEvent(0, msg, node.toString(), props);
-                }
+        for (Node node : target.nodeIterable(inliningDecision)) {
+            if (node != null && (node.getCost() == NodeCost.MEGAMORPHIC || node.getCost() == NodeCost.POLYMORPHIC)) {
+                NodeCost cost = node.getCost();
+                Map<String, Object> props = new LinkedHashMap<>();
+                props.put("simpleName", node.getClass().getSimpleName());
+                props.put("subtree", "\n" + NodeUtil.printCompactTreeToString(node));
+                String msg = cost == NodeCost.MEGAMORPHIC ? "megamorphic" : "polymorphic";
+                runtime.logEvent(0, msg, node.toString(), props);
             }
         }
     }

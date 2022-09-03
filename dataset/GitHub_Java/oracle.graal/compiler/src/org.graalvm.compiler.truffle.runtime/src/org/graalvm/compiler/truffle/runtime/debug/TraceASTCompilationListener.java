@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,14 +22,16 @@
  */
 package org.graalvm.compiler.truffle.runtime.debug;
 
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TraceTruffleCompilationAST;
+
 import java.util.List;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining.CallTreeNodeVisitor;
 
@@ -48,15 +48,15 @@ public final class TraceASTCompilationListener extends AbstractGraalTruffleRunti
     }
 
     public static void install(GraalTruffleRuntime runtime) {
-        runtime.addListener(new TraceASTCompilationListener(runtime));
+        if (TruffleCompilerOptions.getValue(TraceTruffleCompilationAST)) {
+            runtime.addListener(new TraceASTCompilationListener(runtime));
+        }
     }
 
     @Override
     public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graphInfo, CompilationResultInfo compilationResultInfo) {
-        if (target.getOptionValue(PolyglotCompilerOptions.TraceCompilationAST)) {
-            runtime.logEvent(0, "opt AST", target.toString(), target.getDebugProperties(inliningDecision));
-            printCompactTree(target, inliningDecision);
-        }
+        runtime.logEvent(0, "opt AST", target.toString(), target.getDebugProperties(inliningDecision));
+        printCompactTree(target, inliningDecision);
     }
 
     private void printCompactTree(OptimizedCallTarget target, TruffleInlining inliningDecision) {
