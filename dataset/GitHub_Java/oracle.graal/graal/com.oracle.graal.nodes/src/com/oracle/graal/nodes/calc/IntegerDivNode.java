@@ -25,7 +25,6 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -43,7 +42,7 @@ public class IntegerDivNode extends FixedBinaryNode implements Canonicalizable, 
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant() && y().isConstant()) {
             long yConst = y().asConstant().asLong();
             if (yConst == 0) {
@@ -79,7 +78,7 @@ public class IntegerDivNode extends FixedBinaryNode implements Canonicalizable, 
                     }
                     RightShiftNode sign = graph().unique(new RightShiftNode(kind(), x(), ConstantNode.forInt(bits - 1, graph())));
                     UnsignedRightShiftNode round = graph().unique(new UnsignedRightShiftNode(kind(), sign, ConstantNode.forInt(bits - log2, graph())));
-                    dividend = IntegerArithmeticNode.add(graph(), dividend, round);
+                    dividend = IntegerArithmeticNode.add(dividend, round);
                 }
                 RightShiftNode shift = graph().unique(new RightShiftNode(kind(), dividend, ConstantNode.forInt(log2, graph())));
                 if (c < 0) {
@@ -111,8 +110,8 @@ public class IntegerDivNode extends FixedBinaryNode implements Canonicalizable, 
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+    public void lower(LoweringTool tool, LoweringType loweringType) {
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override

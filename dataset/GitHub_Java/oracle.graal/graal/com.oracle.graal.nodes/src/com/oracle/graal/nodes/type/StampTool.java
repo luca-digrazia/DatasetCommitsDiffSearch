@@ -32,6 +32,9 @@ import com.oracle.graal.api.meta.*;
 public class StampTool {
 
     public static Stamp negate(Stamp stamp) {
+        if (true) {
+            return StampFactory.forKind(stamp.kind());
+        }
         Kind kind = stamp.kind();
         if (stamp instanceof IntegerStamp) {
             IntegerStamp integerStamp = (IntegerStamp) stamp;

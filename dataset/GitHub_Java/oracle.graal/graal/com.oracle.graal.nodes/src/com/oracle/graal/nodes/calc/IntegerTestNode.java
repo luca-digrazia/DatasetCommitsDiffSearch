@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -53,7 +51,7 @@ public class IntegerTestNode extends LogicNode implements Canonicalizable, LIRLo
      * @param y the instruction that produces the second input to this instruction
      */
     public IntegerTestNode(ValueNode x, ValueNode y) {
-        assert x != null && y != null && x.stamp().isCompatible(y.stamp());
+        assert (x == null && y == null) || x.kind() == y.kind();
         this.x = x;
         this.y = y;
     }
@@ -63,7 +61,7 @@ public class IntegerTestNode extends LogicNode implements Canonicalizable, LIRLo
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public LogicNode canonical(CanonicalizerTool tool) {
         if (x().isConstant() && y().isConstant()) {
             return LogicConstantNode.forBoolean((x().asConstant().asLong() & y().asConstant().asLong()) == 0, graph());
         }
