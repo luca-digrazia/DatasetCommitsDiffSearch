@@ -85,7 +85,7 @@ public class LLVMGlobalRootNode extends RootNode {
                 System.arraycopy(arguments, 0, realArgs, LLVMCallNode.ARG_START_INDEX, arguments.length);
                 result = main.call(frame, realArgs);
                 if (i != executionCount - 1) {
-                    executeStaticInits();
+                    executeDestructorsAndStaticInit();
                 }
             }
             return result;
@@ -99,7 +99,11 @@ public class LLVMGlobalRootNode extends RootNode {
     }
 
     @TruffleBoundary
-    private void executeStaticInits() {
+    private void executeDestructorsAndStaticInit() {
+        List<RootCallTarget> staticDestructors = context.getStaticDestructors();
+        for (RootCallTarget staticDestructor : staticDestructors) {
+            staticDestructor.call(staticDestructor);
+        }
         List<RootCallTarget> staticInits = context.getStaticInitializers();
         for (RootCallTarget callTarget : staticInits) {
             callTarget.call(staticInits);
