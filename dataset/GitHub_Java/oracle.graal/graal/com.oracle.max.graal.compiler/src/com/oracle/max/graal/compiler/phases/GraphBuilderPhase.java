@@ -680,7 +680,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genThrow(int bci) {
         Value exception = frameState.apop();
-        append(new FixedNullCheck(exception, graph));
+        append(new NullCheck(exception, graph));
 
         Instruction entry = handleException(exception, bci);
         if (entry != null) {
@@ -906,7 +906,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void appendInvoke(int opcode, RiMethod target, Value[] args, int cpi, RiConstantPool constantPool) {
         CiKind resultType = returnKind(target);
-        Invoke invoke = new Invoke(bci(), opcode, resultType.stackKind(), args, target, target.signature().returnType(method.holder()), method.typeProfile(bci()), graph);
+        Invoke invoke = new Invoke(bci(), opcode, resultType.stackKind(), args, target, target.signature().returnType(method.holder()), graph);
         Value result = appendWithBCI(invoke);
         invoke.setExceptionEdge(handleException(null, bci()));
         frameState.pushReturn(resultType, result);
