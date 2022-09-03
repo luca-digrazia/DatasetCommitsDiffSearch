@@ -237,13 +237,13 @@ public class VM extends NativeEnv {
 
     @VmImpl
     @JniImpl
-    public long JVM_CurrentTimeMillis(@SuppressWarnings("unused") StaticObject ignored) {
+    public long JVM_CurrentTimeMillis(StaticObject ignored) {
         return System.currentTimeMillis();
     }
 
     @VmImpl
     @JniImpl
-    public long JVM_NanoTime(@SuppressWarnings("unused") StaticObject ignored) {
+    public long JVM_NanoTime(StaticObject ignored) {
         return System.nanoTime();
     }
 
@@ -260,7 +260,7 @@ public class VM extends NativeEnv {
 
     @VmImpl
     @JniImpl
-    public void JVM_ArrayCopy(@SuppressWarnings("unused") Object ignored, Object src, int srcPos, Object dest, int destPos, int length) {
+    public void JVM_ArrayCopy(Object ignored, Object src, int srcPos, Object dest, int destPos, int length) {
         try {
             if (src instanceof StaticObjectArray && dest instanceof StaticObjectArray) {
                 System.arraycopy(((StaticObjectArray) src).getWrapped(), srcPos, ((StaticObjectArray) dest).getWrapped(), destPos, length);
@@ -312,18 +312,14 @@ public class VM extends NativeEnv {
     public Callback vmMethodWrapper(Method m) {
         int extraArg = (m.getAnnotation(JniImpl.class) != null) ? 1 : 0;
 
-        return new Callback(m.getParameterCount() + extraArg, rawArgs -> {
+        return new Callback(m.getParameterCount() + extraArg, args -> {
 
             boolean isJni = (m.getAnnotation(JniImpl.class) != null);
 
-            Object[] args;
             if (isJni) {
-                assert (long) rawArgs[0] == jniEnv.getNativePointer() : "Calling JVM_ method " + m + " from alien JniEnv";
-                args = Arrays.copyOfRange(rawArgs, 1, rawArgs.length); // Strip JNIEnv* pointer,
-                                                                       // replace
-                // by VM (this) receiver.
-            } else {
-                args = rawArgs;
+                assert (long) args[0] == jniEnv.getNativePointer() : "Calling JVM_ method " + m + " from alien JniEnv";
+                args = Arrays.copyOfRange(args, 1, args.length); // Strip JNIEnv* pointer, replace
+                                                                 // by VM (this) receiver.
             }
 
             Class<?>[] params = m.getParameterTypes();
@@ -347,7 +343,7 @@ public class VM extends NativeEnv {
                 // Substitute raw pointer by proper `this` reference.
                 // System.err.print("Call DEFINED method: " + m.getName() +
                 // Arrays.toString(shiftedArgs));
-                Object ret = m.invoke(this, rawArgs);
+                Object ret = m.invoke(this, args);
 
                 if (ret instanceof Boolean) {
                     return (boolean) ret ? (byte) 1 : (byte) 0;
@@ -465,7 +461,6 @@ public class VM extends NativeEnv {
         return JniEnv.JNI_OK;
     }
 
-    @SuppressWarnings("unused")
     @VmImpl
     public int AttachCurrentThread(long penvPtr, long argsPtr) {
         return JniEnv.JNI_OK;
@@ -479,7 +474,7 @@ public class VM extends NativeEnv {
     /**
      * <h3>jint GetEnv(JavaVM *vm, void **env, jint version);</h3>
      *
-     * @param vmPtr_ The virtual machine instance from which the interface will be retrieved.
+     * @param vmPtr The virtual machine instance from which the interface will be retrieved.
      * @param envPtr pointer to the location where the JNI interface pointer for the current thread
      *            will be placed.
      * @param version The requested JNI version.
@@ -489,16 +484,14 @@ public class VM extends NativeEnv {
      *          returns JNI_EVERSION. Otherwise, sets *env to the appropriate interface, and returns
      *          JNI_OK.
      */
-    @SuppressWarnings("unused")
     @VmImpl
-    public int GetEnv(long vmPtr_, long envPtr, int version) {
+    public int GetEnv(long vmPtr, long envPtr, int version) {
         // TODO(peterssen): Check the thread is attached, and that the VM pointer matches.
         LongBuffer buf = directByteBuffer(envPtr, 1, JavaKind.Long).asLongBuffer();
         buf.put(jniEnv.getNativePointer());
         return JniEnv.JNI_OK;
     }
 
-    @SuppressWarnings("unused")
     @VmImpl
     public int AttachCurrentThreadAsDaemon(long penvPtr, long argsPtr) {
         return JniEnv.JNI_OK;
@@ -508,7 +501,7 @@ public class VM extends NativeEnv {
 
     @VmImpl
     @JniImpl
-    public @Type(Throwable.class) StaticObject JVM_FillInStackTrace(@Type(Throwable.class) StaticObject self, @SuppressWarnings("unused") int dummy) {
+    public @Type(Throwable.class) StaticObject JVM_FillInStackTrace(@Type(Throwable.class) StaticObject self, int dummy) {
         final ArrayList<FrameInstance> frames = new ArrayList<>(16);
         Truffle.getRuntime().iterateFrames(frameInstance -> {
             frames.add(frameInstance);
@@ -557,22 +550,20 @@ public class VM extends NativeEnv {
 
     @VmImpl
     @JniImpl
-    public int JVM_ConstantPoolGetSize(@SuppressWarnings("unused") Object unused, StaticObjectClass jcpool) {
+    public int JVM_ConstantPoolGetSize(Object unused, StaticObjectClass jcpool) {
         return jcpool.getMirror().getConstantPool().length();
     }
 
     @VmImpl
     @JniImpl
-    public @Type(String.class) StaticObject JVM_ConstantPoolGetUTF8At(@SuppressWarnings("unused") Object unused, StaticObjectClass jcpool, int index) {
+    public @Type(String.class) StaticObject JVM_ConstantPoolGetUTF8At(Object unused, StaticObjectClass jcpool, int index) {
         Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         return meta.toGuest(jcpool.getMirror().getConstantPool().utf8At(index).getValue());
     }
 
     @VmImpl
     @JniImpl
-    public @Type(Class.class) StaticObject JVM_DefineClass(String name, @Type(ClassLoader.class) StaticObject loader, long bufPtr, int len,
-                    @SuppressWarnings("unused") @Type(ProtectionDomain.class) Object pd) {
-        // TODO(peterssen): The protection domain is unused.
+    public @Type(Class.class) StaticObject JVM_DefineClass(String name, @Type(ClassLoader.class) StaticObject loader, long bufPtr, int len, @Type(ProtectionDomain.class) Object pd) {
         ByteBuffer buf = JniEnv.directByteBuffer(bufPtr, len, JavaKind.Byte);
         final byte[] bytes = new byte[len];
         buf.get(bytes);
@@ -583,8 +574,8 @@ public class VM extends NativeEnv {
     @VmImpl
     @JniImpl
     public @Type(Class.class) StaticObject JVM_DefineClassWithSource(String name, @Type(ClassLoader.class) StaticObject loader, long bufPtr, int len,
-                    @Type(ProtectionDomain.class) Object pd, @SuppressWarnings("unused") String source) {
-        // FIXME(peterssen): Source is ignored.
+                    @Type(ProtectionDomain.class) Object pd, String source) {
+        // FIXME(peterssen): source is ignored.
         return JVM_DefineClass(name, loader, bufPtr, len, pd);
     }
 
@@ -599,20 +590,20 @@ public class VM extends NativeEnv {
         }
         StaticObject instance = klass.allocateInstance();
 
-        StaticObject args = StaticObject.isNull(args0) ? (StaticObject) meta.OBJECT.allocateArray(0) : args0;
-
-        StaticObject curInit = constructor;
+        if (StaticObject.isNull(args0)) {
+            args0 = (StaticObject) meta.OBJECT.allocateArray(0);
+        }
 
         // Find constructor root.
         MethodInfo target = null;
         while (target == null) {
-            target = (MethodInfo) ((StaticObjectImpl) curInit).getHiddenField("$$method_info");
+            target = (MethodInfo) ((StaticObjectImpl) constructor).getHiddenField("$$method_info");
             if (target == null) {
-                curInit = (StaticObject) meta(curInit).declaredField("root").get();
+                constructor = (StaticObject) meta(constructor).declaredField("root").get();
             }
         }
 
-        meta(target).invokeDirect(instance, ((StaticObjectArray) args).getWrapped());
+        meta(target).invokeDirect(instance, ((StaticObjectArray) args0).getWrapped());
         return instance;
     }
 
@@ -648,7 +639,7 @@ public class VM extends NativeEnv {
     }
 
     @VmImpl
-    public void JVM_UnloadLibrary(@SuppressWarnings("unused") long handle) {
+    public void JVM_UnloadLibrary(long handle) {
         // TODO(peterssen): Do unload the library.
         System.err.println("JVM_UnloadLibrary called but library was not unloaded!");
     }
@@ -752,7 +743,6 @@ public class VM extends NativeEnv {
         }
     }
 
-    @SuppressWarnings("unused")
     @VmImpl
     @JniImpl
     public boolean JVM_DesiredAssertionStatus(@Type(Class.class) StaticObject unused, @Type(Class.class) StaticObject cls) {
