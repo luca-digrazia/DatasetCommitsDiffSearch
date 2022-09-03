@@ -22,25 +22,16 @@
  */
 package com.oracle.graal.lir.dfa;
 
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.asStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.ValueConsumer;
-import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.lir.framemap.ReferenceMapBuilder;
-import com.oracle.graal.lir.util.IndexedValueMap;
-import com.oracle.graal.lir.util.ValueSet;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.*;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.util.*;
 
 final class RegStackValueSet extends ValueSet<RegStackValueSet> {
 
@@ -49,7 +40,7 @@ final class RegStackValueSet extends ValueSet<RegStackValueSet> {
     private final IndexedValueMap stack;
     private Set<Value> extraStack;
 
-    RegStackValueSet(FrameMap frameMap) {
+    public RegStackValueSet(FrameMap frameMap) {
         this.frameMap = frameMap;
         registers = new IndexedValueMap();
         stack = new IndexedValueMap();
@@ -75,7 +66,7 @@ final class RegStackValueSet extends ValueSet<RegStackValueSet> {
             return;
         }
         if (isRegister(v)) {
-            int index = asRegister(v).number;
+            int index = asRegister(v).getReferenceMapIndex();
             registers.put(index, v);
         } else if (isStackSlot(v)) {
             int index = frameMap.offsetForStackSlot(asStackSlot(v));
@@ -109,7 +100,7 @@ final class RegStackValueSet extends ValueSet<RegStackValueSet> {
             return;
         }
         if (isRegister(v)) {
-            int index = asRegister(v).number;
+            int index = asRegister(v).getReferenceMapIndex();
             registers.put(index, null);
         } else if (isStackSlot(v)) {
             int index = frameMap.offsetForStackSlot(asStackSlot(v));

@@ -22,22 +22,17 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.util.HashMap;
+import java.util.*;
 
-import org.junit.Test;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.calc.AbsNode;
-import com.oracle.graal.nodes.calc.ReinterpretNode;
-import com.oracle.graal.replacements.nodes.BitCountNode;
-import com.oracle.graal.replacements.nodes.BitScanForwardNode;
-import com.oracle.graal.replacements.nodes.BitScanReverseNode;
-import com.oracle.graal.replacements.nodes.ReverseBytesNode;
+import org.junit.*;
 
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.replacements.nodes.*;
 
 /**
  * Tests the VM independent {@link MethodSubstitution}s.
@@ -152,54 +147,6 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
             // Verify that the generated code and the original produce the same value
             assertDeepEquals(expected, executeVarargsSafe(code, l));
         }
-    }
-
-    @Test
-    public void testCharSubstitutions() {
-        Object[] args = new Character[]{Character.MIN_VALUE, (char) -1, (char) 0, (char) 1, Character.MAX_VALUE};
-
-        testSubstitution("charReverseBytes", ReverseBytesNode.class, Character.class, "reverseBytes", false, args);
-    }
-
-    public static char charReverseBytes(char value) {
-        return Character.reverseBytes(value);
-    }
-
-    @Test
-    public void testCharSubstitutionsNarrowing() {
-        Object[] args = new Integer[]{(int) Character.MIN_VALUE, -1, 0, 1, (int) Character.MAX_VALUE};
-
-        for (Object arg : args) {
-            test("charReverseBytesNarrowing", arg);
-        }
-    }
-
-    public static char charReverseBytesNarrowing(int value) {
-        return Character.reverseBytes((char) value);
-    }
-
-    @Test
-    public void testShortSubstitutions() {
-        Object[] args = new Short[]{Short.MIN_VALUE, -1, 0, 1, Short.MAX_VALUE};
-
-        testSubstitution("shortReverseBytes", ReverseBytesNode.class, Short.class, "reverseBytes", false, args);
-    }
-
-    public static short shortReverseBytes(short value) {
-        return Short.reverseBytes(value);
-    }
-
-    @Test
-    public void testShortSubstitutionsNarrowing() {
-        Object[] args = new Integer[]{(int) Short.MIN_VALUE, -1, 0, 1, (int) Short.MAX_VALUE};
-
-        for (Object arg : args) {
-            test("shortReverseBytesNarrowing", arg);
-        }
-    }
-
-    public static short shortReverseBytesNarrowing(int value) {
-        return Short.reverseBytes((short) value);
     }
 
     @Test

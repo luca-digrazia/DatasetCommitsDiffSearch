@@ -22,44 +22,20 @@
  */
 package com.oracle.graal.asm.amd64;
 
-import static com.oracle.graal.asm.NumUtil.isByte;
-import static com.oracle.graal.asm.NumUtil.isInt;
-import static com.oracle.graal.asm.NumUtil.isShiftCount;
-import static com.oracle.graal.asm.amd64.AMD64AsmOptions.UseAddressNop;
-import static com.oracle.graal.asm.amd64.AMD64AsmOptions.UseNormalNop;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.ADD;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.AND;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.CMP;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.SUB;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.XOR;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MOp.DEC;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MOp.INC;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.BYTE;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.DWORD;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.PD;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.PS;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.QWORD;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.SD;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.SS;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.WORD;
-import static jdk.vm.ci.amd64.AMD64.CPU;
-import static jdk.vm.ci.amd64.AMD64.XMM;
-import static jdk.vm.ci.amd64.AMD64.r12;
-import static jdk.vm.ci.amd64.AMD64.r13;
-import static jdk.vm.ci.amd64.AMD64.rbp;
-import static jdk.vm.ci.amd64.AMD64.rip;
-import static jdk.vm.ci.amd64.AMD64.rsp;
-import static jdk.vm.ci.code.MemoryBarriers.STORE_LOAD;
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.amd64.AMD64.CPUFeature;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.Register.RegisterCategory;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
+import jdk.internal.jvmci.amd64.*;
+import jdk.internal.jvmci.amd64.AMD64.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.Register.*;
 
-import com.oracle.graal.asm.Assembler;
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.asm.*;
+
+import static com.oracle.graal.asm.NumUtil.*;
+import static com.oracle.graal.asm.amd64.AMD64AsmOptions.*;
+import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.*;
+import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MOp.*;
+import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.*;
+import static jdk.internal.jvmci.amd64.AMD64.*;
+import static jdk.internal.jvmci.code.MemoryBarriers.*;
 
 /**
  * This class implements an assembler that can encode most X86 instructions.
@@ -2313,11 +2289,6 @@ public class AMD64Assembler extends Assembler {
 
     public final void int3() {
         emitByte(0xCC);
-    }
-
-    public final void pause() {
-        emitByte(0xF3);
-        emitByte(0x90);
     }
 
     private void emitx87(int b1, int b2, int i) {

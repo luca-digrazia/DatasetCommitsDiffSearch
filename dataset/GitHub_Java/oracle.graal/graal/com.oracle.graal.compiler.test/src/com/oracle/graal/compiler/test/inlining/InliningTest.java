@@ -23,10 +23,8 @@
 package com.oracle.graal.compiler.test.inlining;
 
 import jdk.internal.jvmci.code.*;
-
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.*;
-
 import jdk.internal.jvmci.meta.*;
 
 import org.junit.*;
@@ -230,7 +228,6 @@ public class InliningTest extends GraalCompilerTest {
         return superClass.protectedOverriddenMethod();
     }
 
-    @SuppressWarnings("try")
     private StructuredGraph getGraph(final String snippet, final boolean eagerInfopointMode) {
         try (Scope s = Debug.scope("InliningTest", new DebugDumpScope(snippet))) {
             ResolvedJavaMethod method = getResolvedJavaMethod(snippet);

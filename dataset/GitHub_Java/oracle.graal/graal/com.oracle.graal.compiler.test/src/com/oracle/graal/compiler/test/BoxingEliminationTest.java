@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,20 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.util.*;
-
 import org.junit.*;
 
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.debug.*;
+import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.virtual.phases.ea.*;
 
 /**
- * In the following tests, the usages of local variable "a" are replaced with the integer constant 0. Then boxing
- * elimination is applied and it is verified that the resulting graph is equal to the graph of the method that just has
- * a "return 1" statement in it.
+ * In the following tests, the usages of local variable "a" are replaced with the integer constant
+ * 0. Then boxing elimination is applied and it is verified that the resulting graph is equal to the
+ * graph of the method that just has a "return 1" statement in it.
  */
 public class BoxingEliminationTest extends GraalCompilerTest {
 
@@ -56,8 +55,16 @@ public class BoxingEliminationTest extends GraalCompilerTest {
         return 1;
     }
 
-    public static Object boxedObject() {
+    public static Object boxedObjectShort() {
         return (short) 1;
+    }
+
+    public static Object boxedObjectInteger() {
+        return 1;
+    }
+
+    public static Integer boxedInteger() {
+        return 2;
     }
 
     public static Short constantBoxedShort() {
@@ -66,7 +73,7 @@ public class BoxingEliminationTest extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        test("test1Snippet", "referenceSnippet1");
+        compareGraphs("test1Snippet", "referenceSnippet1");
     }
 
     @SuppressWarnings("all")
@@ -76,17 +83,17 @@ public class BoxingEliminationTest extends GraalCompilerTest {
 
     @Test
     public void test2() {
-        test("test2Snippet", "referenceSnippet1");
+        compareGraphs("test2Snippet", "referenceSnippet1");
     }
 
     @SuppressWarnings("all")
     public static short test2Snippet() {
-        return (Short) boxedObject();
+        return (Short) boxedObjectShort();
     }
 
     @Test
     public void test3() {
-        test("test3Snippet", "referenceSnippet1");
+        compareGraphs("test3Snippet", "referenceSnippet1");
     }
 
     @SuppressWarnings("all")
@@ -100,7 +107,7 @@ public class BoxingEliminationTest extends GraalCompilerTest {
 
     @Test
     public void test4() {
-        test("test4Snippet", "referenceSnippet2");
+        compareGraphs("test4Snippet", "referenceSnippet2");
     }
 
     @SuppressWarnings("all")
@@ -108,32 +115,226 @@ public class BoxingEliminationTest extends GraalCompilerTest {
         return constantBoxedShort();
     }
 
-    private void test(final String snippet, final String referenceSnippet) {
-        Debug.scope("BoxingEliminationTest", new DebugDumpScope(snippet), new Runnable() {
-            @Override
-            public void run() {
-                StructuredGraph graph = parse(snippet);
-                BoxingMethodPool pool = new BoxingMethodPool(runtime());
-                IdentifyBoxingPhase identifyBoxingPhase = new IdentifyBoxingPhase(pool);
-                PhasePlan phasePlan = getDefaultPhasePlan();
-                phasePlan.addPhase(PhasePosition.AFTER_PARSING, identifyBoxingPhase);
-                identifyBoxingPhase.apply(graph);
-                Collection<Invoke> hints = new ArrayList<>();
-                for (Invoke invoke : graph.getInvokes()) {
-                    hints.add(invoke);
-                }
+    @Ignore
+    @Test
+    public void testLoop() {
+        compareGraphs("testLoopSnippet", "referenceLoopSnippet", false, true);
+    }
 
-                new InliningPhase(null, runtime(), hints, null, null, phasePlan, OptimisticOptimizations.ALL).apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
-                Debug.dump(graph, "Graph");
-                new BoxingEliminationPhase().apply(graph);
-                Debug.dump(graph, "Graph");
-                new ExpandBoxingNodesPhase(pool).apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-                StructuredGraph referenceGraph = parse(referenceSnippet);
-                assertEquals(referenceGraph, graph);
+    public static int testLoopSnippet(int n, int a) {
+        Integer sum = a;
+        for (Integer i = 0; i < n; i++) {
+            sum += i;
+        }
+        return sum;
+    }
+
+    public static int referenceLoopSnippet(int n, int a) {
+        int sum = a;
+        for (int i = 0; i < n; i++) {
+            sum += i;
+        }
+        return sum;
+    }
+
+    @Test
+    public void testLoop2() {
+        compareGraphs("testLoop2Snippet", "referenceLoop2Snippet", true, true);
+    }
+
+    public static int testLoop2Snippet(int n, Integer a) {
+        Integer sum = a;
+        for (Integer i = 0; i < n; i++) {
+            sum += i;
+        }
+        return sum;
+    }
+
+    public static int referenceLoop2Snippet(int n, Integer a) {
+        Integer sum0;
+        if (n <= 0) {
+            sum0 = a;
+        } else {
+            int sum = a;
+            for (int i = 0; i < n; i++) {
+                sum += i;
             }
-        });
+            sum0 = sum;
+        }
+        return sum0;
+    }
+
+    public static int referenceIfSnippet(int a) {
+        int result;
+        if (a < 0) {
+            result = 2;
+        } else {
+            result = 1;
+        }
+        return result;
+    }
+
+    @Test
+    public void testIf() {
+        compareGraphs("testIfSnippet", "referenceIfSnippet");
+    }
+
+    public static int testIfSnippet(int a) {
+        Integer result;
+        if (a < 0) {
+            result = boxedInteger();
+        } else {
+            result = (Integer) boxedObjectInteger();
+        }
+        return result;
+    }
+
+    @Test
+    public void testComparison() {
+        compareGraphs("testComparison1Snippet", "referenceComparisonSnippet");
+        compareGraphs("testComparison2Snippet", "referenceComparisonSnippet");
+    }
+
+    @SuppressWarnings("cast")
+    public static boolean testComparison1Snippet(int a, int b) {
+        return ((Integer) a) == b;
+    }
+
+    public static boolean testComparison2Snippet(int a, int b) {
+        Integer x = a;
+        Integer y = b;
+        return x == y;
+    }
+
+    public static boolean referenceComparisonSnippet(int a, int b) {
+        return a == b;
+    }
+
+    @Test
+    public void testLateCanonicalization() {
+        compareGraphs("testLateCanonicalizationSnippet", "referenceLateCanonicalizationSnippet");
+    }
+
+    public static boolean testLateCanonicalizationSnippet(int a) {
+        Integer x = a;
+        Integer y = 1000;
+        return x == y;
+    }
+
+    public static boolean referenceLateCanonicalizationSnippet(int a) {
+        return a == 1000;
+    }
+
+    private StructuredGraph graph;
+
+    public static Integer materializeReferenceSnippet(int a) {
+        return Integer.valueOf(a);
+    }
+
+    public static Integer materializeTest1Snippet(int a) {
+        Integer v = a;
+
+        if (v == a) {
+            return v;
+        } else {
+            return null;
+        }
+    }
+
+    @Test
+    public void materializeTest1() {
+        test("materializeTest1Snippet", 1);
+    }
+
+    public static int intTest1Snippet() {
+        return Integer.valueOf(1);
+    }
+
+    @Test
+    public void intTest1() {
+        ValueNode result = getResult("intTest1Snippet");
+        Assert.assertTrue(result.isConstant());
+        Assert.assertEquals(1, result.asJavaConstant().asInt());
+    }
+
+    public static int mergeTest1Snippet(boolean d, int a, int b) {
+        Integer v;
+        if (d) {
+            v = a;
+        } else {
+            v = b;
+        }
+        return v;
+    }
+
+    @Test
+    public void mergeTest1() {
+        processMethod("mergeTest1Snippet");
+    }
+
+    public static boolean equalsTest1Snippet(int x, int y) {
+        Integer a = x;
+        Integer b = y;
+        return a == b;
+    }
+
+    @Test
+    public void equalsTest1() {
+        processMethod("equalsTest1Snippet");
+    }
+
+    public static int loopTest1Snippet(int n, int v) {
+        Integer sum = 0;
+        for (int i = 0; i < n; i++) {
+            sum += v;
+        }
+        return sum;
+    }
+
+    @Test
+    public void loopTest1() {
+        processMethod("loopTest1Snippet");
+
+    }
+
+    final ValueNode getResult(String snippet) {
+        processMethod(snippet);
+        assertDeepEquals(1, graph.getNodes(ReturnNode.TYPE).count());
+        return graph.getNodes(ReturnNode.TYPE).first().result();
+    }
+
+    private void processMethod(final String snippet) {
+        graph = parseEager(snippet, AllowAssumptions.NO);
+        HighTierContext context = getDefaultHighTierContext();
+        new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
+        new PartialEscapePhase(false, new CanonicalizerPhase()).apply(graph, context);
+    }
+
+    private void compareGraphs(final String snippet, final String referenceSnippet) {
+        compareGraphs(snippet, referenceSnippet, false, false);
+    }
+
+    private void compareGraphs(final String snippet, final String referenceSnippet, final boolean loopPeeling, final boolean excludeVirtual) {
+        graph = parseEager(snippet, AllowAssumptions.NO);
+        HighTierContext context = getDefaultHighTierContext();
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
+        canonicalizer.apply(graph, context);
+        new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
+        if (loopPeeling) {
+            new LoopPeelingPhase().apply(graph);
+        }
+        new DeadCodeEliminationPhase().apply(graph);
+        canonicalizer.apply(graph, context);
+        new PartialEscapePhase(false, canonicalizer).apply(graph, context);
+
+        new DeadCodeEliminationPhase().apply(graph);
+        canonicalizer.apply(graph, context);
+
+        StructuredGraph referenceGraph = parseEager(referenceSnippet, AllowAssumptions.YES);
+        new InliningPhase(new CanonicalizerPhase()).apply(referenceGraph, context);
+        new DeadCodeEliminationPhase().apply(referenceGraph);
+        new CanonicalizerPhase().apply(referenceGraph, context);
+
+        assertEquals(referenceGraph, graph, excludeVirtual, true);
     }
 }

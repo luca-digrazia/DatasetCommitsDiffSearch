@@ -36,10 +36,8 @@ import java.util.concurrent.atomic.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
-
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.*;
-
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.options.*;
 import jdk.internal.jvmci.options.OptionValue.*;
@@ -297,7 +295,6 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
     }
 
     @Override
-    @SuppressWarnings("try")
     public StructuredGraph getSnippet(ResolvedJavaMethod method, ResolvedJavaMethod recursiveEntry, Object[] args) {
         assert method.getAnnotation(Snippet.class) != null : "Snippet must be annotated with @" + Snippet.class.getSimpleName();
         assert method.hasBytecodes() : "Snippet must not be abstract or native";
@@ -450,7 +447,6 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
      * @param original the original method if {@code method} is a {@linkplain MethodSubstitution
      *            substitution} otherwise null
      */
-    @SuppressWarnings("try")
     public StructuredGraph makeGraph(ResolvedJavaMethod method, Object[] args, ResolvedJavaMethod original) {
         try (OverrideScope s = OptionValue.override(DeoptALot, false)) {
             return createGraphMaker(method, original).makeGraph(args);
@@ -489,7 +485,6 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
             this.substitutedMethod = substitutedMethod;
         }
 
-        @SuppressWarnings("try")
         public StructuredGraph makeGraph(Object[] args) {
             try (Scope s = Debug.scope("BuildSnippetGraph", method)) {
                 assert method.hasBytecodes() : method;
@@ -556,7 +551,6 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         /**
          * Builds the initial graph for a snippet.
          */
-        @SuppressWarnings("try")
         protected StructuredGraph buildInitialGraph(final ResolvedJavaMethod methodToParse, Object[] args) {
             // Replacements cannot have optimistic assumptions since they have
             // to be valid for the entire run of the VM.

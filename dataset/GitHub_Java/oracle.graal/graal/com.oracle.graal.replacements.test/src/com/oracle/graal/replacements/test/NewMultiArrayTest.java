@@ -25,10 +25,12 @@ package com.oracle.graal.replacements.test;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+
+import org.junit.*;
+
 import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.test.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 
@@ -47,7 +49,8 @@ public class NewMultiArrayTest extends GraalCompilerTest {
     }
 
     @Override
-    protected InstalledCode getCode(final ResolvedJavaMethod method, final StructuredGraph graph) {
+    protected InstalledCode getCode(final ResolvedJavaMethod method, StructuredGraph g) {
+        StructuredGraph graph = g == null ? parseForCompile(method) : g;
         boolean forceCompile = false;
         if (bottomType != null) {
             List<NewMultiArrayNode> snapshot = graph.getNodes().filter(NewMultiArrayNode.class).snapshot();
@@ -59,7 +62,7 @@ public class NewMultiArrayTest extends GraalCompilerTest {
             int rank = dimensions.length;
             ValueNode[] dimensionNodes = new ValueNode[rank];
             for (int i = 0; i < rank; i++) {
-                dimensionNodes[i] = graph.unique(ConstantNode.forInt(dimensions[i], graph));
+                dimensionNodes[i] = ConstantNode.forInt(dimensions[i], graph);
             }
 
             NewMultiArrayNode repl = graph.add(new NewMultiArrayNode(arrayType, dimensionNodes));
@@ -70,7 +73,7 @@ public class NewMultiArrayTest extends GraalCompilerTest {
     }
 
     @Override
-    protected Object referenceInvoke(Method method, Object receiver, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+    protected Object referenceInvoke(ResolvedJavaMethod method, Object receiver, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
         if (bottomType != null) {
             try {
                 return Array.newInstance(bottomClass, dimensions);
@@ -83,12 +86,12 @@ public class NewMultiArrayTest extends GraalCompilerTest {
 
     ResolvedJavaType arrayType;
     ResolvedJavaType bottomType;
-    Class bottomClass;
+    Class<?> bottomClass;
     int[] dimensions;
 
-    @LongTest
+    @Test
     public void test1() {
-        for (Class clazz : new Class[]{byte.class, char.class, short.class, int.class, float.class, long.class, double.class, String.class}) {
+        for (Class<?> clazz : new Class<?>[]{byte.class, char.class, short.class, int.class, float.class, long.class, double.class, String.class}) {
             bottomClass = clazz;
             bottomType = getMetaAccess().lookupJavaType(clazz);
             arrayType = bottomType;
@@ -117,7 +120,7 @@ public class NewMultiArrayTest extends GraalCompilerTest {
         return new Object[10][9][8];
     }
 
-    @LongTest
+    @Test
     public void test2() {
         test("newMultiArrayException");
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,12 @@
  */
 package com.oracle.graal.hotspot.test;
 
+import java.lang.invoke.*;
+
 import org.junit.*;
 
+import com.oracle.graal.api.directives.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.replacements.test.*;
 
 /**
@@ -35,18 +37,18 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
 
     @Test
     public void testObjectSubstitutions() {
-        test("getClass0");
-        test("objectHashCode");
+        TestClassA obj = new TestClassA();
 
-        Object obj = new Object();
+        testGraph("getClass0");
+        testGraph("objectHashCode");
 
-        assertEquals("a string".getClass(), ObjectSubstitutions.getClass("a string"));
-        assertEquals(obj.hashCode(), ObjectSubstitutions.hashCode(obj));
+        test("getClass0", "a string");
+        test("objectHashCode", obj);
     }
 
     @SuppressWarnings("all")
-    public static boolean getClass0(Object obj, Class<?> clazz) {
-        return obj.getClass() == clazz;
+    public static Class<?> getClass0(Object obj) {
+        return obj.getClass();
     }
 
     @SuppressWarnings("all")
@@ -56,35 +58,26 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
 
     @Test
     public void testClassSubstitutions() {
-        test("getModifiers");
-        test("isInstance");
-        test("isInterface");
-        test("isArray");
-        test("isPrimitive");
-        test("getSuperClass");
-        test("getComponentType");
+        testGraph("getModifiers");
+        testGraph("isInterface");
+        testGraph("isArray");
+        testGraph("isPrimitive");
+        testGraph("getSuperClass");
+        testGraph("getComponentType");
 
-        for (Class c : new Class[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
-            assertEquals(c.getModifiers(), ClassSubstitutions.getModifiers(c));
-            assertEquals(c.isInterface(), ClassSubstitutions.isInterface(c));
-            assertEquals(c.isArray(), ClassSubstitutions.isArray(c));
-            assertEquals(c.isPrimitive(), ClassSubstitutions.isPrimitive(c));
-            assertEquals(c.getSuperclass(), ClassSubstitutions.getSuperclass(c));
-            assertEquals(c.getComponentType(), ClassSubstitutions.getComponentType(c));
-            for (Object o : new Object[]{this, new int[5], new String[2][], new Object()}) {
-                assertEquals(c.isInstance(o), ClassSubstitutions.isInstance(c, o));
-            }
+        for (Class<?> c : new Class<?>[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
+            test("getModifiers", c);
+            test("isInterface", c);
+            test("isArray", c);
+            test("isPrimitive", c);
+            test("getSuperClass", c);
+            test("getComponentType", c);
         }
     }
 
     @SuppressWarnings("all")
     public static int getModifiers(Class<?> clazz) {
         return clazz.getModifiers();
-    }
-
-    @SuppressWarnings("all")
-    public static boolean isInstance(Class<?> clazz) {
-        return clazz.isInstance(Number.class);
     }
 
     @SuppressWarnings("all")
@@ -114,18 +107,18 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
 
     @Test
     public void testThreadSubstitutions() {
-        test("currentThread");
-        test("threadIsInterrupted");
-        test("threadInterrupted");
+        testGraph("currentThread");
+        testGraph("threadIsInterrupted");
+        testGraph("threadInterrupted");
 
         Thread currentThread = Thread.currentThread();
-        assertEquals(currentThread, ThreadSubstitutions.currentThread());
-        assertEquals(currentThread.isInterrupted(), ThreadSubstitutions.isInterrupted(currentThread, false));
+        test("currentThread", currentThread);
+        test("threadIsInterrupted", currentThread);
     }
 
     @SuppressWarnings("all")
-    public static Thread currentThread() {
-        return Thread.currentThread();
+    public static boolean currentThread(Thread other) {
+        return Thread.currentThread() == other;
     }
 
     @SuppressWarnings("all")
@@ -140,13 +133,11 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
 
     @Test
     public void testSystemSubstitutions() {
-        test("systemTime");
-        test("systemIdentityHashCode");
+        testGraph("systemTime");
+        testGraph("systemIdentityHashCode");
 
-        SystemSubstitutions.currentTimeMillis();
-        SystemSubstitutions.nanoTime();
         for (Object o : new Object[]{this, new int[5], new String[2][], new Object()}) {
-            assertEquals(System.identityHashCode(o), SystemSubstitutions.identityHashCode(o));
+            test("systemIdentityHashCode", o);
         }
     }
 
@@ -161,5 +152,68 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
     }
 
     private static class TestClassA {
+    }
+
+    public static String testCallSiteGetTargetSnippet(int i) throws Exception {
+        ConstantCallSite site;
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        switch (i) {
+            case 1:
+                site = GraalDirectives.opaque(new ConstantCallSite(lookup.findVirtual(String.class, "replace", MethodType.methodType(String.class, char.class, char.class))));
+                break;
+            default:
+                site = GraalDirectives.opaque(new ConstantCallSite(lookup.findStatic(java.util.Arrays.class, "asList", MethodType.methodType(java.util.List.class, Object[].class))));
+        }
+        return site.getTarget().toString();
+    }
+
+    public static String testCastSnippet(int i, Object obj) throws Exception {
+        Class<?> c;
+        switch (i) {
+            case 1:
+                c = GraalDirectives.opaque(Number.class);
+                break;
+            default:
+                c = GraalDirectives.opaque(Integer.class);
+                break;
+        }
+        return c.cast(obj).toString();
+    }
+
+    public static String testGetClassSnippet(int i) {
+        Object c;
+        switch (i) {
+            case 1:
+                c = GraalDirectives.opaque(new Object());
+                break;
+            default:
+                c = GraalDirectives.opaque("TEST");
+                break;
+        }
+        return c.getClass().toString();
+    }
+
+    /**
+     * Tests ambiguous receiver of CallSite.getTarget.
+     */
+    @Test
+    public void testCallSiteGetTarget() {
+        test("testCallSiteGetTargetSnippet", 1);
+    }
+
+    /**
+     * Tests ambiguous receiver of Class.cast.
+     */
+    @Test
+    public void testCast() {
+        test("testCastSnippet", 1, new Integer(1));
+    }
+
+    /**
+     * Tests ambiguous receiver of Object.getClass.
+     */
+    @Test
+    public void testGetClass() {
+        test("testGetClassSnippet", 1);
     }
 }

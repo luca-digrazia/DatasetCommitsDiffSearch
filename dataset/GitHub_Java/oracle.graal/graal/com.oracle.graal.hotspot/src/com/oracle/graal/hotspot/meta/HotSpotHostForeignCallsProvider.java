@@ -22,99 +22,50 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_COS;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_EXP;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG10;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_POW;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_SIN;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_TAN;
-import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT;
-import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_WITH_ORIGINAL_KEY;
-import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_BLOCK;
-import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_BLOCK_WITH_ORIGINAL_KEY;
-import static com.oracle.graal.hotspot.HotSpotBackend.ENCRYPT;
-import static com.oracle.graal.hotspot.HotSpotBackend.ENCRYPT_BLOCK;
-import static com.oracle.graal.hotspot.HotSpotBackend.EXCEPTION_HANDLER;
-import static com.oracle.graal.hotspot.HotSpotBackend.FETCH_UNROLL_INFO;
-import static com.oracle.graal.hotspot.HotSpotBackend.IC_MISS_HANDLER;
-import static com.oracle.graal.hotspot.HotSpotBackend.NEW_ARRAY;
-import static com.oracle.graal.hotspot.HotSpotBackend.NEW_INSTANCE;
-import static com.oracle.graal.hotspot.HotSpotBackend.NEW_MULTI_ARRAY;
-import static com.oracle.graal.hotspot.HotSpotBackend.UNCOMMON_TRAP;
-import static com.oracle.graal.hotspot.HotSpotBackend.UNPACK_FRAMES;
-import static com.oracle.graal.hotspot.HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER;
-import static com.oracle.graal.hotspot.HotSpotBackend.VM_ERROR;
-import static com.oracle.graal.hotspot.HotSpotBackend.Options.PreferGraalStubs;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.DESTROYS_REGISTERS;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.PRESERVES_REGISTERS;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.LEAF;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.LEAF_NOFP;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.NOT_LEAF;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.STACK_INSPECTABLE_LEAF;
-import static com.oracle.graal.hotspot.HotSpotHostBackend.DEOPTIMIZATION_HANDLER;
-import static com.oracle.graal.hotspot.HotSpotHostBackend.UNCOMMON_TRAP_HANDLER;
-import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.CREATE_NULL_POINTER_EXCEPTION;
-import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.CREATE_OUT_OF_BOUNDS_EXCEPTION;
-import static com.oracle.graal.hotspot.replacements.AssertionSnippets.ASSERTION_VM_MESSAGE_C;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.MARK_WORD_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.TLAB_END_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.TLAB_TOP_LOCATION;
-import static com.oracle.graal.hotspot.replacements.MonitorSnippets.MONITORENTER;
-import static com.oracle.graal.hotspot.replacements.MonitorSnippets.MONITOREXIT;
-import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.DYNAMIC_NEW_ARRAY;
-import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.DYNAMIC_NEW_INSTANCE;
-import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.INIT_LOCATION;
-import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.JAVA_TIME_MILLIS;
-import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.JAVA_TIME_NANOS;
-import static com.oracle.graal.hotspot.replacements.ThreadSubstitutions.THREAD_IS_INTERRUPTED;
-import static com.oracle.graal.hotspot.replacements.WriteBarrierSnippets.G1WBPOSTCALL;
-import static com.oracle.graal.hotspot.replacements.WriteBarrierSnippets.G1WBPRECALL;
-import static com.oracle.graal.hotspot.replacements.WriteBarrierSnippets.VALIDATE_OBJECT;
-import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.EXCEPTION_HANDLER_FOR_PC;
-import static com.oracle.graal.hotspot.stubs.NewArrayStub.NEW_ARRAY_C;
-import static com.oracle.graal.hotspot.stubs.NewInstanceStub.NEW_INSTANCE_C;
-import static com.oracle.graal.hotspot.stubs.StubUtil.VM_MESSAGE_C;
-import static com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub.EXCEPTION_HANDLER_FOR_RETURN_ADDRESS;
-import static com.oracle.graal.nodes.NamedLocationIdentity.any;
-import static com.oracle.graal.nodes.java.ForeignCallDescriptors.REGISTER_FINALIZER;
-import static com.oracle.graal.replacements.Log.LOG_OBJECT;
-import static com.oracle.graal.replacements.Log.LOG_PRIMITIVE;
-import static com.oracle.graal.replacements.Log.LOG_PRINTF;
-import static jdk.vm.ci.code.CallingConvention.Type.NativeCall;
+import static com.oracle.graal.compiler.target.Backend.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.Options.*;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.*;
+import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
+import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.*;
+import static com.oracle.graal.hotspot.replacements.AssertionSnippets.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.MonitorSnippets.*;
+import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.*;
+import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
+import static com.oracle.graal.hotspot.replacements.ThreadSubstitutions.*;
+import static com.oracle.graal.hotspot.replacements.WriteBarrierSnippets.*;
+import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
+import static com.oracle.graal.hotspot.stubs.NewArrayStub.*;
+import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
+import static com.oracle.graal.hotspot.stubs.StubUtil.*;
+import static com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub.*;
+import static com.oracle.graal.nodes.NamedLocationIdentity.*;
+import static com.oracle.graal.nodes.java.ForeignCallDescriptors.*;
+import static com.oracle.graal.replacements.Log.*;
+import static jdk.internal.jvmci.code.CallingConvention.Type.*;
 
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
-import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
-import com.oracle.graal.hotspot.stubs.ExceptionHandlerStub;
-import com.oracle.graal.hotspot.stubs.NewArrayStub;
-import com.oracle.graal.hotspot.stubs.NewInstanceStub;
-import com.oracle.graal.hotspot.stubs.Stub;
-import com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub;
-import com.oracle.graal.hotspot.stubs.VerifyOopStub;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.word.*;
 
 /**
  * HotSpot implementation of {@link ForeignCallsProvider}.
  */
 public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCallsProviderImpl {
 
-    public HotSpotHostForeignCallsProvider(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache) {
-        super(jvmciRuntime, runtime, metaAccess, codeCache);
+    public HotSpotHostForeignCallsProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache) {
+        super(runtime, metaAccess, codeCache);
     }
 
     protected static void link(Stub stub) {
@@ -125,20 +76,20 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         return checkcastArraycopyDescriptors[uninit ? 1 : 0];
     }
 
-    public static ForeignCallDescriptor lookupArraycopyDescriptor(JavaKind kind, boolean aligned, boolean disjoint, boolean uninit, boolean killAny) {
+    public static ForeignCallDescriptor lookupArraycopyDescriptor(Kind kind, boolean aligned, boolean disjoint, boolean uninit, boolean killAny) {
         if (uninit) {
-            assert kind == JavaKind.Object;
+            assert kind == Kind.Object;
             assert !killAny : "unsupported";
             return uninitObjectArraycopyDescriptors[aligned ? 1 : 0][disjoint ? 1 : 0];
         }
         if (killAny) {
-            assert kind == JavaKind.Object;
+            assert kind == Kind.Object;
             return objectArraycopyDescriptorsKillAny[aligned ? 1 : 0][disjoint ? 1 : 0];
         }
         return arraycopyDescriptors[aligned ? 1 : 0][disjoint ? 1 : 0].get(kind);
     }
 
-    @SuppressWarnings({"unchecked"}) private static final EnumMap<JavaKind, ForeignCallDescriptor>[][] arraycopyDescriptors = (EnumMap<JavaKind, ForeignCallDescriptor>[][]) new EnumMap<?, ?>[2][2];
+    @SuppressWarnings({"unchecked", "rawtypes"}) private static final EnumMap<Kind, ForeignCallDescriptor>[][] arraycopyDescriptors = new EnumMap[2][2];
 
     private static final ForeignCallDescriptor[][] uninitObjectArraycopyDescriptors = new ForeignCallDescriptor[2][2];
     private static final ForeignCallDescriptor[] checkcastArraycopyDescriptors = new ForeignCallDescriptor[2];
@@ -148,27 +99,27 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         // Populate the EnumMap instances
         for (int i = 0; i < arraycopyDescriptors.length; i++) {
             for (int j = 0; j < arraycopyDescriptors[i].length; j++) {
-                arraycopyDescriptors[i][j] = new EnumMap<>(JavaKind.class);
+                arraycopyDescriptors[i][j] = new EnumMap<>(Kind.class);
             }
         }
     }
 
-    private void registerArraycopyDescriptor(Map<Long, ForeignCallDescriptor> descMap, JavaKind kind, boolean aligned, boolean disjoint, boolean uninit, boolean killAny, long routine) {
+    private void registerArraycopyDescriptor(Map<Long, ForeignCallDescriptor> descMap, Kind kind, boolean aligned, boolean disjoint, boolean uninit, boolean killAny, long routine) {
         ForeignCallDescriptor desc = descMap.get(routine);
         if (desc == null) {
             desc = buildDescriptor(kind, aligned, disjoint, uninit, killAny, routine);
             descMap.put(routine, desc);
         }
         if (uninit) {
-            assert kind == JavaKind.Object;
+            assert kind == Kind.Object;
             uninitObjectArraycopyDescriptors[aligned ? 1 : 0][disjoint ? 1 : 0] = desc;
         } else {
             arraycopyDescriptors[aligned ? 1 : 0][disjoint ? 1 : 0].put(kind, desc);
         }
     }
 
-    private ForeignCallDescriptor buildDescriptor(JavaKind kind, boolean aligned, boolean disjoint, boolean uninit, boolean killAny, long routine) {
-        assert !killAny || kind == JavaKind.Object;
+    private ForeignCallDescriptor buildDescriptor(Kind kind, boolean aligned, boolean disjoint, boolean uninit, boolean killAny, long routine) {
+        assert !killAny || kind == Kind.Object;
         String name = kind + (aligned ? "Aligned" : "") + (disjoint ? "Disjoint" : "") + (uninit ? "Uninit" : "") + "Arraycopy" + (killAny ? "KillAny" : "");
         ForeignCallDescriptor desc = new ForeignCallDescriptor(name, void.class, Word.class, Word.class, Word.class);
         LocationIdentity killed = killAny ? LocationIdentity.any() : NamedLocationIdentity.getArrayLocation(kind);
@@ -186,16 +137,16 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         // c_rarg4 - oop ckval (super_klass)
         // return: 0 = success, n = number of copied elements xor'd with -1.
         ForeignCallDescriptor desc = new ForeignCallDescriptor(name, int.class, Word.class, Word.class, Word.class, Word.class, Word.class);
-        LocationIdentity killed = NamedLocationIdentity.getArrayLocation(JavaKind.Object);
+        LocationIdentity killed = NamedLocationIdentity.getArrayLocation(Kind.Object);
         registerForeignCall(desc, routine, NativeCall, DESTROYS_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, killed);
         checkcastArraycopyDescriptors[uninit ? 1 : 0] = desc;
     }
 
-    private void registerArrayCopy(JavaKind kind, long routine, long alignedRoutine, long disjointRoutine, long alignedDisjointRoutine) {
+    private void registerArrayCopy(Kind kind, long routine, long alignedRoutine, long disjointRoutine, long alignedDisjointRoutine) {
         registerArrayCopy(kind, routine, alignedRoutine, disjointRoutine, alignedDisjointRoutine, false);
     }
 
-    private void registerArrayCopy(JavaKind kind, long routine, long alignedRoutine, long disjointRoutine, long alignedDisjointRoutine, boolean uninit) {
+    private void registerArrayCopy(Kind kind, long routine, long alignedRoutine, long disjointRoutine, long alignedDisjointRoutine, boolean uninit) {
         /*
          * Sometimes the same function is used for multiple cases so share them when that's the case
          * but only within the same Kind. For instance short and char are the same copy routines but
@@ -207,7 +158,7 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         registerArraycopyDescriptor(descMap, kind, false, true, uninit, false, disjointRoutine);
         registerArraycopyDescriptor(descMap, kind, true, true, uninit, false, alignedDisjointRoutine);
 
-        if (kind == JavaKind.Object && !uninit) {
+        if (kind == Kind.Object && !uninit) {
             objectArraycopyDescriptorsKillAny[0][0] = buildDescriptor(kind, false, false, uninit, true, routine);
             objectArraycopyDescriptorsKillAny[1][0] = buildDescriptor(kind, true, false, uninit, true, alignedRoutine);
             objectArraycopyDescriptorsKillAny[0][1] = buildDescriptor(kind, false, true, uninit, true, disjointRoutine);
@@ -215,13 +166,13 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         }
     }
 
-    public void initialize(HotSpotProviders providers) {
-        HotSpotVMConfig c = jvmciRuntime.getConfig();
+    public void initialize(HotSpotProviders providers, HotSpotVMConfig c) {
+
         if (!PreferGraalStubs.getValue()) {
             registerForeignCall(DEOPTIMIZATION_HANDLER, c.handleDeoptStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
             registerForeignCall(UNCOMMON_TRAP_HANDLER, c.uncommonTrapStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
         }
-        registerForeignCall(IC_MISS_HANDLER, c.inlineCacheMissStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
+        registerForeignCall(IC_MISS_HANDLER, c.inlineCacheMissStub(), NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
 
         registerForeignCall(JAVA_TIME_MILLIS, c.javaTimeMillisAddress, NativeCall, DESTROYS_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
         registerForeignCall(JAVA_TIME_NANOS, c.javaTimeNanosAddress, NativeCall, DESTROYS_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
@@ -284,16 +235,16 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
 
         linkForeignCall(providers, TEST_DEOPTIMIZE_CALL_INT, c.testDeoptimizeCallInt, PREPEND_THREAD, NOT_LEAF, REEXECUTABLE, any());
 
-        registerArrayCopy(JavaKind.Byte, c.jbyteArraycopy, c.jbyteAlignedArraycopy, c.jbyteDisjointArraycopy, c.jbyteAlignedDisjointArraycopy);
-        registerArrayCopy(JavaKind.Boolean, c.jbyteArraycopy, c.jbyteAlignedArraycopy, c.jbyteDisjointArraycopy, c.jbyteAlignedDisjointArraycopy);
-        registerArrayCopy(JavaKind.Char, c.jshortArraycopy, c.jshortAlignedArraycopy, c.jshortDisjointArraycopy, c.jshortAlignedDisjointArraycopy);
-        registerArrayCopy(JavaKind.Short, c.jshortArraycopy, c.jshortAlignedArraycopy, c.jshortDisjointArraycopy, c.jshortAlignedDisjointArraycopy);
-        registerArrayCopy(JavaKind.Int, c.jintArraycopy, c.jintAlignedArraycopy, c.jintDisjointArraycopy, c.jintAlignedDisjointArraycopy);
-        registerArrayCopy(JavaKind.Float, c.jintArraycopy, c.jintAlignedArraycopy, c.jintDisjointArraycopy, c.jintAlignedDisjointArraycopy);
-        registerArrayCopy(JavaKind.Long, c.jlongArraycopy, c.jlongAlignedArraycopy, c.jlongDisjointArraycopy, c.jlongAlignedDisjointArraycopy);
-        registerArrayCopy(JavaKind.Double, c.jlongArraycopy, c.jlongAlignedArraycopy, c.jlongDisjointArraycopy, c.jlongAlignedDisjointArraycopy);
-        registerArrayCopy(JavaKind.Object, c.oopArraycopy, c.oopAlignedArraycopy, c.oopDisjointArraycopy, c.oopAlignedDisjointArraycopy);
-        registerArrayCopy(JavaKind.Object, c.oopArraycopyUninit, c.oopAlignedArraycopyUninit, c.oopDisjointArraycopyUninit, c.oopAlignedDisjointArraycopyUninit, true);
+        registerArrayCopy(Kind.Byte, c.jbyteArraycopy, c.jbyteAlignedArraycopy, c.jbyteDisjointArraycopy, c.jbyteAlignedDisjointArraycopy);
+        registerArrayCopy(Kind.Boolean, c.jbyteArraycopy, c.jbyteAlignedArraycopy, c.jbyteDisjointArraycopy, c.jbyteAlignedDisjointArraycopy);
+        registerArrayCopy(Kind.Char, c.jshortArraycopy, c.jshortAlignedArraycopy, c.jshortDisjointArraycopy, c.jshortAlignedDisjointArraycopy);
+        registerArrayCopy(Kind.Short, c.jshortArraycopy, c.jshortAlignedArraycopy, c.jshortDisjointArraycopy, c.jshortAlignedDisjointArraycopy);
+        registerArrayCopy(Kind.Int, c.jintArraycopy, c.jintAlignedArraycopy, c.jintDisjointArraycopy, c.jintAlignedDisjointArraycopy);
+        registerArrayCopy(Kind.Float, c.jintArraycopy, c.jintAlignedArraycopy, c.jintDisjointArraycopy, c.jintAlignedDisjointArraycopy);
+        registerArrayCopy(Kind.Long, c.jlongArraycopy, c.jlongAlignedArraycopy, c.jlongDisjointArraycopy, c.jlongAlignedDisjointArraycopy);
+        registerArrayCopy(Kind.Double, c.jlongArraycopy, c.jlongAlignedArraycopy, c.jlongDisjointArraycopy, c.jlongAlignedDisjointArraycopy);
+        registerArrayCopy(Kind.Object, c.oopArraycopy, c.oopAlignedArraycopy, c.oopDisjointArraycopy, c.oopAlignedDisjointArraycopy);
+        registerArrayCopy(Kind.Object, c.oopArraycopyUninit, c.oopAlignedArraycopyUninit, c.oopDisjointArraycopyUninit, c.oopAlignedDisjointArraycopyUninit, true);
 
         registerCheckcastArraycopyDescriptor(true, c.checkcastArraycopyUninit);
         registerCheckcastArraycopyDescriptor(false, c.checkcastArraycopy);
@@ -306,10 +257,8 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
              */
             try {
                 // These stubs do callee saving
-                registerForeignCall(ENCRYPT_BLOCK, c.aescryptEncryptBlockStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
-                registerForeignCall(DECRYPT_BLOCK, c.aescryptDecryptBlockStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
-                registerForeignCall(DECRYPT_BLOCK_WITH_ORIGINAL_KEY, c.aescryptDecryptBlockStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE,
-                                NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
+                registerForeignCall(ENCRYPT_BLOCK, c.aescryptEncryptBlockStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, NamedLocationIdentity.getArrayLocation(Kind.Byte));
+                registerForeignCall(DECRYPT_BLOCK, c.aescryptDecryptBlockStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, NamedLocationIdentity.getArrayLocation(Kind.Byte));
             } catch (JVMCIError e) {
                 if (!(e.getCause() instanceof ClassNotFoundException)) {
                     throw e;
@@ -317,12 +266,8 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
             }
             try {
                 // These stubs do callee saving
-                registerForeignCall(ENCRYPT, c.cipherBlockChainingEncryptAESCryptStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE,
-                                NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
-                registerForeignCall(DECRYPT, c.cipherBlockChainingDecryptAESCryptStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE,
-                                NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
-                registerForeignCall(DECRYPT_WITH_ORIGINAL_KEY, c.cipherBlockChainingDecryptAESCryptStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE,
-                                NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
+                registerForeignCall(ENCRYPT, c.cipherBlockChainingEncryptAESCryptStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, NamedLocationIdentity.getArrayLocation(Kind.Byte));
+                registerForeignCall(DECRYPT, c.cipherBlockChainingDecryptAESCryptStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, NamedLocationIdentity.getArrayLocation(Kind.Byte));
             } catch (JVMCIError e) {
                 if (!(e.getCause() instanceof ClassNotFoundException)) {
                     throw e;

@@ -22,56 +22,24 @@
  */
 package com.oracle.graal.loop;
 
-import static com.oracle.graal.graph.Node.newIdentityMap;
+import static com.oracle.graal.graph.Node.*;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
+import jdk.internal.jvmci.common.*;
+import com.oracle.graal.debug.*;
 
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.graph.iterators.NodePredicate;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.loop.InductionVariable.Direction;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedGuardNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.InfopointNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.calc.AddNode;
-import com.oracle.graal.nodes.calc.BinaryArithmeticNode;
-import com.oracle.graal.nodes.calc.CompareNode;
-import com.oracle.graal.nodes.calc.IntegerBelowNode;
-import com.oracle.graal.nodes.calc.IntegerEqualsNode;
-import com.oracle.graal.nodes.calc.IntegerLessThanNode;
-import com.oracle.graal.nodes.calc.LeftShiftNode;
-import com.oracle.graal.nodes.calc.MulNode;
-import com.oracle.graal.nodes.calc.NegateNode;
-import com.oracle.graal.nodes.calc.SignExtendNode;
-import com.oracle.graal.nodes.calc.SubNode;
-import com.oracle.graal.nodes.calc.ZeroExtendNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.nodes.extended.ValueAnchorNode;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.util.*;
 
 public class LoopEx {
 
@@ -258,6 +226,7 @@ public class LoopEx {
                     } else {
                         return false;
                     }
+                    oneOff = true;
                     break;
                 }
                 case LE:

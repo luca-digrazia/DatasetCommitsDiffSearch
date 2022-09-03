@@ -22,16 +22,14 @@
  */
 package com.oracle.graal.lir;
 
-import java.lang.reflect.Field;
-import java.util.Arrays;
-import java.util.EnumSet;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.Fields;
-import com.oracle.graal.compiler.common.FieldsScanner;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
@@ -100,7 +98,7 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
          */
         private FieldsScanner.FieldInfo opcodeField;
 
-        LIRInstructionFieldsScanner(FieldsScanner.CalcOffset calc) {
+        public LIRInstructionFieldsScanner(FieldsScanner.CalcOffset calc) {
             super(calc);
 
             valueAnnotations.put(LIRInstruction.Use.class, new OperandModeAnnotation());

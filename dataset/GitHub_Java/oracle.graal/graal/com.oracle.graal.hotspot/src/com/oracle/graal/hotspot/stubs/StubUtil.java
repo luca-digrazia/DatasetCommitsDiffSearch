@@ -22,36 +22,26 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.nodes.CStringNode.cstring;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.clearPendingException;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.config;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.getAndClearObjectResult;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.loadHubIntrinsic;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.verifyOops;
-import static com.oracle.graal.word.Word.unsigned;
-import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.hotspot.nodes.CStringNode.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.word.Word.*;
+import static jdk.internal.jvmci.meta.DeoptimizationReason.*;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.util.Arrays;
-import java.util.List;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.nodes.DeoptimizeCallerNode;
-import com.oracle.graal.hotspot.nodes.SnippetAnchorNode;
-import com.oracle.graal.hotspot.nodes.StubForeignCallNode;
-import com.oracle.graal.hotspot.nodes.VMErrorNode;
-import com.oracle.graal.hotspot.word.KlassPointer;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.replacements.Log;
-import com.oracle.graal.word.Pointer;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.word.*;
 
 //JaCoCo Exclude
 
@@ -105,7 +95,7 @@ public class StubUtil {
      */
     @Fold
     public static boolean cAssertionsEnabled() {
-        return config().cAssertions;
+        return runtime().getConfig().cAssertions;
     }
 
     @NodeIntrinsic(StubForeignCallNode.class)
@@ -242,7 +232,7 @@ public class StubUtil {
                     fatal("oop not in heap: %p", oop.rawValue());
                 }
 
-                KlassPointer klass = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
+                KlassPointer klass = loadHubIntrinsic(object, anchorNode);
                 if (klass.isNull()) {
                     fatal("klass for oop %p is null", oop.rawValue());
                 }
