@@ -36,13 +36,28 @@ public class MetadataConstantPointerType implements Type {
         this.symbolIndex = symbolIndex;
     }
 
+    @Override
+    public int getBits() {
+        return 0;
+    }
+
     public int getSymbolIndex() {
         return symbolIndex;
     }
 
     @Override
-    public int sizeof() {
-        return 0;
+    public int hashCode() {
+        int hash = 19;
+        hash = 37 * hash + symbolIndex;
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof MetadataConstantPointerType) {
+            return symbolIndex == ((MetadataConstantPointerType) obj).symbolIndex;
+        }
+        return false;
     }
 
     @Override

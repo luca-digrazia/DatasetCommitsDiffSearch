@@ -29,7 +29,10 @@
  */
 package com.oracle.truffle.llvm.parser.base.model.types;
 
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public final class IntegerType implements Type {
 
@@ -57,15 +60,20 @@ public final class IntegerType implements Type {
     }
 
     @Override
-    public int getAlignment() {
-        if (bits <= Byte.SIZE) {
-            return Byte.BYTES;
-        } else if (bits <= Short.SIZE) {
-            return Short.BYTES;
-        } else if (bits <= Integer.SIZE) {
-            return Integer.BYTES;
+    public FrameSlotKind getFrameSlotKind() {
+        switch (bits) {
+            case BOOLEAN_BITS:
+                return FrameSlotKind.Boolean;
+            case BYTE_BITS:
+                return FrameSlotKind.Byte;
+            case SHORT_BITS:
+            case INTEGER_BITS:
+                return FrameSlotKind.Int;
+            case LONG_BITS:
+                return FrameSlotKind.Long;
+            default:
+                return FrameSlotKind.Object;
         }
-        return Long.BYTES;
     }
 
     @Override
@@ -87,13 +95,50 @@ public final class IntegerType implements Type {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        return obj instanceof IntegerType && bits == ((IntegerType) obj).bits;
+    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        switch (bits) {
+            case BOOLEAN_BITS:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I1;
+            case BYTE_BITS:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I8;
+            case SHORT_BITS:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I16;
+            case INTEGER_BITS:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I32;
+            case LONG_BITS:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I64;
+            default:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I_VAR_BITWIDTH;
+        }
     }
 
     @Override
     public int getBits() {
         return bits;
+    }
+
+    @Override
+    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        if (targetDataLayout != null) {
+            return targetDataLayout.getBitAlignment(getLLVMBaseType()) / Byte.SIZE;
+
+        } else if (bits <= Byte.SIZE) {
+            return Byte.BYTES;
+
+        } else if (bits <= Short.SIZE) {
+            return Short.BYTES;
+
+        } else if (bits <= Integer.SIZE) {
+            return Integer.BYTES;
+
+        } else {
+            return Long.BYTES;
+        }
+    }
+
+    @Override
+    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return Math.max(1, bits / Byte.SIZE);
     }
 
     @Override
@@ -104,9 +149,8 @@ public final class IntegerType implements Type {
     }
 
     @Override
-    public int sizeof() {
-        int sizeof = bits / Byte.SIZE;
-        return (bits % Byte.SIZE) == 0 ? sizeof : sizeof + 1;
+    public boolean equals(Object obj) {
+        return obj instanceof IntegerType && bits == ((IntegerType) obj).bits;
     }
 
     @Override
