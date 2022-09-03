@@ -26,11 +26,13 @@ import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 
+import com.oracle.graal.graph.NodeInterface;
+
 /**
  * Shared interface to capture core methods of {@link AbstractFixedGuardNode} and {@link GuardNode}.
  *
  */
-public interface DeoptimizingGuard extends ValueNodeInterface {
+public interface DeoptimizingGuard extends NodeInterface {
 
     LogicNode getCondition();
 
@@ -43,4 +45,6 @@ public interface DeoptimizingGuard extends ValueNodeInterface {
     JavaConstant getSpeculation();
 
     boolean isNegated();
+
+    ValueNode asNode();
 }
