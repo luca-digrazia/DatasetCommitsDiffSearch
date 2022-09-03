@@ -384,7 +384,17 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
                 if (sourceSection == null) {
                     builder.append("(Unknown)");
                 } else {
-                    builder.append("(").append(formatPath(sourceSection)).append(":").append(sourceSection.getStartLine()).append(")");
+                    Path path = FileSystems.getDefault().getPath(".").toAbsolutePath();
+                    Path filePath = FileSystems.getDefault().getPath(sourceSection.getSource().getPath()).toAbsolutePath();
+
+                    String pathString;
+                    try {
+                        pathString = path.relativize(filePath).toString();
+                    } catch (IllegalArgumentException e) {
+                        // relativation failed
+                        pathString = sourceSection.getSource().getName();
+                    }
+                    builder.append("(").append(pathString).append(":").append(sourceSection.getStartLine()).append(")");
                 }
 
                 if (target instanceof OptimizedCallTarget) {
@@ -401,20 +411,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
                 builder.append(target.toString());
             }
             return builder.toString();
-        }
-
-        private static String formatPath(SourceSection sourceSection) {
-            Path path = FileSystems.getDefault().getPath(".").toAbsolutePath();
-            Path filePath = FileSystems.getDefault().getPath(sourceSection.getSource().getPath()).toAbsolutePath();
-
-            String pathString;
-            try {
-                pathString = path.relativize(filePath).toString();
-            } catch (IllegalArgumentException e) {
-                // relativization failed
-                pathString = sourceSection.getSource().getName();
-            }
-            return pathString;
         }
 
         private static void logTransferToInterpreter(final HotSpotTruffleRuntime runtime) {
