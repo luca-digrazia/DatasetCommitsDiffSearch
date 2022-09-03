@@ -30,10 +30,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 final class NativeAllocation extends PhantomReference<Object> {
 
-    private static final Queue globalQueue = new Queue();
-
-    public static Queue getGlobalQueue() {
-        return globalQueue;
+    public static void registerNativeAllocation(Object javaObject, Destructor destructor) {
+        add(new NativeAllocation(javaObject, destructor));
     }
 
     public abstract static class Destructor {
@@ -55,57 +53,25 @@ final class NativeAllocation extends PhantomReference<Object> {
         }
     }
 
-    public static final class Queue {
-
-        // cyclic double linked list with sentry element
-        private final NativeAllocation first = new NativeAllocation(this);
-
-        public void registerNativeAllocation(Object javaObject, Destructor destructor) {
-            add(new NativeAllocation(javaObject, destructor, this));
-        }
-
-        private synchronized void add(NativeAllocation allocation) {
-            assert allocation.prev == null && allocation.next == null;
-
-            NativeAllocation second = first.next;
-            allocation.prev = first;
-            allocation.next = second;
-
-            first.next = allocation;
-            second.prev = allocation;
-        }
-
-        private synchronized void remove(NativeAllocation allocation) {
-            assert allocation.queue == this;
-            allocation.prev.next = allocation.next;
-            allocation.next.prev = allocation.prev;
-
-            allocation.next = null;
-            allocation.prev = null;
-        }
-    }
-
-    private static final ReferenceQueue<Object> refQueue = new ReferenceQueue<>();
+    private static final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
     private final Destructor destructor;
 
+    // cyclic double linked list with sentry element
+    private static final NativeAllocation first = new NativeAllocation();
     private NativeAllocation prev;
     private NativeAllocation next;
 
-    private final Queue queue;
-
-    private NativeAllocation(Queue queue) {
+    private NativeAllocation() {
         super(null, null);
-        this.destructor = null;
-        this.prev = this;
-        this.next = this;
-        this.queue = queue;
+        destructor = null;
+        prev = this;
+        next = this;
     }
 
-    private NativeAllocation(Object referent, Destructor destructor, Queue queue) {
-        super(referent, refQueue);
+    private NativeAllocation(Object referent, Destructor destructor) {
+        super(referent, queue);
         this.destructor = destructor;
-        this.queue = queue;
     }
 
     private static final AtomicReference<Thread> gcThread = new AtomicReference<>(null);
@@ -119,8 +85,8 @@ final class NativeAllocation extends PhantomReference<Object> {
                 public void run() {
                     for (;;) {
                         try {
-                            NativeAllocation alloc = (NativeAllocation) refQueue.remove();
-                            alloc.queue.remove(alloc);
+                            NativeAllocation alloc = (NativeAllocation) queue.remove();
+                            remove(alloc);
                             alloc.destructor.destroy();
                         } catch (InterruptedException ex) {
                             // ignore
@@ -137,6 +103,25 @@ final class NativeAllocation extends PhantomReference<Object> {
                 assert other != null && other != thread;
             }
         }
+    }
+
+    private static synchronized void add(NativeAllocation allocation) {
+        assert allocation.prev == null && allocation.next == null;
+
+        NativeAllocation second = first.next;
+        allocation.prev = first;
+        allocation.next = second;
+
+        first.next = allocation;
+        second.prev = allocation;
+    }
+
+    private static synchronized void remove(NativeAllocation allocation) {
+        allocation.prev.next = allocation.next;
+        allocation.next.prev = allocation.prev;
+
+        allocation.next = null;
+        allocation.prev = null;
     }
 
     private static native void free(long pointer);
