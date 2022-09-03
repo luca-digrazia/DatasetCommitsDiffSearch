@@ -22,16 +22,12 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
-
 import java.io.Serializable;
 import java.util.function.Function;
 
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
@@ -47,9 +43,10 @@ import com.oracle.graal.nodes.ValuePhiNode;
 import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 import com.oracle.graal.nodes.spi.NodeValueMap;
 
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Constant;
 
-@NodeInfo(cycles = CYCLES_1, size = SIZE_1)
+@NodeInfo
 public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements ArithmeticOperation, ArithmeticLIRLowerable, Canonicalizable.Binary<ValueNode> {
 
     @SuppressWarnings("rawtypes") public static final NodeClass<BinaryArithmeticNode> TYPE = NodeClass.create(BinaryArithmeticNode.class);
@@ -70,7 +67,6 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
         return getOp.apply(table);
     }
 
-    @Override
     public final BinaryOp<OP> getArithmeticOp() {
         return getOp(getX(), getY());
     }
@@ -137,7 +133,7 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
                 case y:
                     return binary.getY();
                 default:
-                    throw GraalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
             }
         }
 
@@ -148,7 +144,7 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
                 case y:
                     return binary.getX();
                 default:
-                    throw GraalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
             }
         }
     }
@@ -259,7 +255,7 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
         } else if (node instanceof XorNode) {
             return new XorNode(a, new XorNode(m1, m2));
         } else {
-            throw GraalError.shouldNotReachHere();
+            throw JVMCIError.shouldNotReachHere();
         }
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,6 +22,10 @@
  */
 package com.oracle.graal.nodes;
 
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
@@ -29,10 +33,6 @@ import com.oracle.graal.graph.iterators.NodePredicate;
 import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.spi.NodeValueMap;
-
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
 
 /**
  * This class represents a value within the graph, including local variables, phis, and all other
@@ -59,7 +59,6 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
 
     public final void setStamp(Stamp stamp) {
         this.stamp = stamp;
-        assert !inferStamp() : "setStamp called on a node that overrides inferStamp: " + this;
     }
 
     @Override
@@ -109,7 +108,6 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
     }
 
     private static final NodePredicate IS_CONSTANT = new NodePredicate() {
-        @Override
         public boolean apply(Node n) {
             return n instanceof ConstantNode;
         }
