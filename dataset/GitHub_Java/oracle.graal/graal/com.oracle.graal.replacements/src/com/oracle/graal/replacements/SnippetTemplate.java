@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.debug.Debug.*;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
 import static com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates.*;
 import static java.util.FormattableFlags.*;
+import static jdk.internal.jvmci.debug.Debug.*;
 import static jdk.internal.jvmci.meta.LocationIdentity.*;
 
 import java.lang.reflect.*;
@@ -37,12 +37,12 @@ import java.util.stream.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.Scope;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node;
@@ -921,7 +921,7 @@ public class SnippetTemplate {
                 if (argument instanceof ValueNode) {
                     replacements.put((ParameterNode) parameter, (ValueNode) argument);
                 } else {
-                    Kind kind = ((ParameterNode) parameter).getStackKind();
+                    Kind kind = ((ParameterNode) parameter).getKind();
                     assert argument != null || kind == Kind.Object : this + " cannot accept null for non-object parameter named " + args.info.getParameterName(i);
                     JavaConstant constant = forBoxed(argument, kind);
                     replacements.put((ParameterNode) parameter, ConstantNode.forConstant(constant, metaAccess, replaceeGraph));
@@ -948,7 +948,7 @@ public class SnippetTemplate {
                     if (value instanceof ValueNode) {
                         replacements.put(param, (ValueNode) value);
                     } else {
-                        JavaConstant constant = forBoxed(value, param.getStackKind());
+                        JavaConstant constant = forBoxed(value, param.getKind());
                         ConstantNode element = ConstantNode.forConstant(constant, metaAccess, replaceeGraph);
                         replacements.put(param, element);
                     }
@@ -1404,10 +1404,10 @@ public class SnippetTemplate {
                 buf.append("<constant> ").append(name);
             } else if (value instanceof ParameterNode) {
                 ParameterNode param = (ParameterNode) value;
-                buf.append(param.getStackKind().getJavaName()).append(' ').append(name);
+                buf.append(param.getKind().getJavaName()).append(' ').append(name);
             } else {
                 ParameterNode[] params = (ParameterNode[]) value;
-                String kind = params.length == 0 ? "?" : params[0].getStackKind().getJavaName();
+                String kind = params.length == 0 ? "?" : params[0].getKind().getJavaName();
                 buf.append(kind).append('[').append(params.length).append("] ").append(name);
             }
         }
