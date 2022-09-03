@@ -36,10 +36,10 @@ import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMBuiltin;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 
 /**
@@ -222,7 +222,7 @@ public abstract class LLVMCMathsIntrinsics {
     public abstract static class LLVMModf extends LLVMIntrinsic {
 
         @Specialization
-        protected double doIntrinsic(double value, LLVMNativePointer integralAddr,
+        protected double doIntrinsic(double value, LLVMAddress integralAddr,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
             double fractional = Math.IEEEremainder(value, 1);
             double integral = value - fractional;
@@ -451,15 +451,6 @@ public abstract class LLVMCMathsIntrinsics {
         @Specialization
         protected double doDouble(double magnitude, double sign) {
             return Math.copySign(magnitude, sign);
-        }
-
-        @Specialization
-        protected LLVM80BitFloat doLLVM80BitFloat(LLVM80BitFloat magnitude, LLVM80BitFloat sign) {
-            if (magnitude.getSign() != sign.getSign()) {
-                return magnitude.negate();
-            } else {
-                return magnitude;
-            }
         }
     }
 }
