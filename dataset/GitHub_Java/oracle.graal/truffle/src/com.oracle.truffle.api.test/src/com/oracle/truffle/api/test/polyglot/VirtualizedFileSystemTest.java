@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,6 +22,13 @@
  */
 package com.oracle.truffle.api.test.polyglot;
 
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleFile;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.Closeable;
@@ -61,24 +66,16 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.io.FileSystem;
+import org.graalvm.polyglot.Engine;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleFile;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
+import org.graalvm.polyglot.io.FileSystem;
+import org.junit.Before;
 
 @RunWith(Parameterized.class)
 public class VirtualizedFileSystemTest {
@@ -183,6 +180,10 @@ public class VirtualizedFileSystemTest {
     public void setUp() {
         Optional.ofNullable(this.cfg.getBeforeAction()).ifPresent(Runnable::run);
         resetLanguageHomes();
+        // JUnit mixes test executions from different classes. There are still tests using the
+        // deprecated PolyglotEngine. For tests executed by Parametrized runner
+        // creating Context as a test parameter we need to ensure that correct SPI is used.
+        Engine.create().close();
     }
 
     @After
@@ -200,30 +201,6 @@ public class VirtualizedFileSystemTest {
             final TruffleFile file = cfg.needsURI() ? env.getTruffleFile(folderExisting.toUri()) : env.getTruffleFile(folderExisting.toString());
             try {
                 final String expected = path.resolve(FOLDER_EXISTING).resolve(FILE_EXISTING).toString();
-                final Collection<? extends TruffleFile> children = file.list();
-                Assert.assertTrue(cfg.formatErrorMessage("Expected SecurityException"), canRead);
-                final Optional<String> expectedFile = children.stream().map(TruffleFile::getAbsoluteFile).map(TruffleFile::getPath).filter(expected::equals).findAny();
-                Assert.assertTrue(cfg.formatErrorMessage("Expected child"), expectedFile.isPresent());
-            } catch (SecurityException se) {
-                Assert.assertFalse(cfg.formatErrorMessage("Unexpected SecurityException"), canRead);
-            } catch (IOException ioe) {
-                throw new AssertionError(cfg.formatErrorMessage(ioe.getMessage()), ioe);
-            }
-        };
-        ctx.eval(LANGAUGE_ID, "");
-    }
-
-    @Test
-    public void testListNonNormalized() {
-        final Context ctx = cfg.getContext();
-        final Path path = cfg.getPath();
-        final boolean canRead = cfg.canRead();
-        languageAction = (Env env) -> {
-            final Path folderExisting = path.resolve(FOLDER_EXISTING);
-            TruffleFile file = cfg.needsURI() ? env.getTruffleFile(folderExisting.toUri()) : env.getTruffleFile(folderExisting.toString());
-            file = file.resolve("lib/../.");
-            try {
-                final String expected = path.resolve(FOLDER_EXISTING).resolve("lib/../.").resolve(FILE_EXISTING).toString();
                 final Collection<? extends TruffleFile> children = file.list();
                 Assert.assertTrue(cfg.formatErrorMessage("Expected SecurityException"), canRead);
                 final Optional<String> expectedFile = children.stream().map(TruffleFile::getAbsoluteFile).map(TruffleFile::getPath).filter(expected::equals).findAny();
@@ -657,31 +634,6 @@ public class VirtualizedFileSystemTest {
             } catch (SecurityException se) {
                 Assert.assertFalse(cfg.formatErrorMessage("Unexpected SecurityException"), allowsUserDir);
             }
-        };
-        ctx.eval(LANGAUGE_ID, "");
-    }
-
-    @Test
-    public void testNormalize() {
-        final Context ctx = cfg.getContext();
-        final boolean allowsUserDir = cfg.allowsUserDir();
-        languageAction = (Env env) -> {
-            TruffleFile fileNormalized = env.getTruffleFile(FOLDER_EXISTING);
-            Assert.assertEquals(fileNormalized, fileNormalized.normalize());
-            Assert.assertSame(fileNormalized, fileNormalized.normalize());
-            TruffleFile fileNonNormalized = env.getTruffleFile(FOLDER_EXISTING + "/lib/../.");
-            Assert.assertEquals(fileNormalized.getPath() + "/lib/../.", fileNonNormalized.getPath());
-            Assert.assertEquals(fileNormalized.getPath(), fileNonNormalized.normalize().getPath());
-            Assert.assertEquals(fileNormalized, fileNonNormalized.normalize());
-            try {
-                Assert.assertEquals(fileNormalized.getAbsoluteFile().getPath() + "/lib/../.", fileNonNormalized.getAbsoluteFile().getPath());
-                Assert.assertEquals(fileNormalized.getAbsoluteFile().getPath(), fileNonNormalized.normalize().getAbsoluteFile().getPath());
-            } catch (SecurityException se) {
-                Assert.assertFalse(cfg.formatErrorMessage("Unexpected SecurityException"), allowsUserDir);
-            }
-            Assert.assertEquals(".", fileNonNormalized.getName());
-            Assert.assertEquals("..", fileNonNormalized.getParent().getName());
-            Assert.assertEquals("lib", fileNonNormalized.getParent().getParent().getName());
         };
         ctx.eval(LANGAUGE_ID, "");
     }
