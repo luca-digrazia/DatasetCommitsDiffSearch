@@ -24,14 +24,12 @@ package com.oracle.graal.compiler.test.ea;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
-import jdk.internal.jvmci.meta.*;
-
 import org.junit.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
@@ -148,7 +146,6 @@ public class EATestBase extends GraalCompilerTest {
         Assert.assertEquals(0, newInstanceCount);
     }
 
-    @SuppressWarnings("try")
     protected void prepareGraph(String snippet, boolean iterativeEscapeAnalysis) {
         ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
         try (Scope s = Debug.scope(getClass(), method, getCodeCache())) {
