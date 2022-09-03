@@ -23,6 +23,7 @@
 package com.oracle.graal.api.code;
 
 import com.oracle.graal.api.code.CompilationResult.DataPatch;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 
 /**
@@ -67,9 +68,9 @@ public interface CodeCacheProvider extends MetaAccessProvider {
     int getMinimumOutgoingSize();
 
     /**
-     * Gets the linkage for a foreign call.
+     * Gets the signature and linkage information for a runtime call.
      */
-    ForeignCallLinkage lookupForeignCall(ForeignCallDescriptor descriptor);
+    RuntimeCallTarget lookupRuntimeCall(Descriptor descriptor);
 
     /**
      * Encodes a deoptimization action and a deoptimization reason in an integer value.
@@ -89,12 +90,4 @@ public interface CodeCacheProvider extends MetaAccessProvider {
      * Gets a description of the target architecture.
      */
     TargetDescription getTarget();
-
-    /**
-     * Returns the register the runtime uses for maintaining the heap base address. This is mainly
-     * utilized by runtimes which support compressed pointers.
-     * 
-     * @return the register that keeps the heap base address
-     */
-    Register heapBaseRegister();
 }
