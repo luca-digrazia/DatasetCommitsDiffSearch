@@ -22,18 +22,15 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.AllocatableValue;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.sparc.SPARCAssembler;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.NoOp;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * Loads the constant section base into a register.
@@ -55,7 +52,7 @@ import com.oracle.graal.lir.asm.CompilationResultBuilder;
  * CodeInstaller::pd_patch_DataSectionReference
  *
  * @see SPARCMove#loadFromConstantTable(CompilationResultBuilder, SPARCMacroAssembler, int,
- *      Register, jdk.vm.ci.meta.Constant, Register, SPARCDelayedControlTransfer)
+ *      Register, Register, SPARCDelayedControlTransfer, Runnable)
  */
 public class SPARCLoadConstantTableBaseOp extends SPARCLIRInstruction {
     public static final LIRInstructionClass<SPARCLoadConstantTableBaseOp> TYPE = LIRInstructionClass.create(SPARCLoadConstantTableBaseOp.class);

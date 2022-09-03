@@ -107,7 +107,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public boolean canInlineConstant(JavaConstant c) {
-        switch (c.getJavaKind()) {
+        switch (c.getKind()) {
             case Boolean:
             case Byte:
             case Char:
@@ -234,18 +234,18 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             actualCondition = cond;
         }
         SPARCCompare opcode;
-        JavaKind actualCmpKind = (JavaKind) cmpKind;
+        Kind actualCmpKind = (Kind) cmpKind;
         switch (actualCmpKind) {
             case Byte:
                 left = emitSignExtend(left, 8, 32);
                 right = emitSignExtend(right, 8, 32);
-                actualCmpKind = JavaKind.Int;
+                actualCmpKind = Kind.Int;
                 opcode = ICMP;
                 break;
             case Short:
                 left = emitSignExtend(left, 16, 32);
                 right = emitSignExtend(right, 16, 32);
-                actualCmpKind = JavaKind.Int;
+                actualCmpKind = Kind.Int;
                 opcode = ICMP;
                 break;
             case Object:
@@ -271,18 +271,18 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpLIRKind, double overflowProbability) {
-        JavaKind cmpKind = (JavaKind) cmpLIRKind.getPlatformKind();
+        Kind cmpKind = (Kind) cmpLIRKind.getPlatformKind();
         append(new BranchOp(ConditionFlag.OverflowSet, overflow, noOverflow, cmpKind, overflowProbability));
     }
 
     @Override
     public void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
         emitIntegerTest(left, right);
-        append(new BranchOp(ConditionFlag.Equal, trueDestination, falseDestination, ((JavaKind) left.getPlatformKind()).getStackKind(), trueDestinationProbability));
+        append(new BranchOp(ConditionFlag.Equal, trueDestination, falseDestination, left.getKind().getStackKind(), trueDestinationProbability));
     }
 
     private void emitIntegerTest(Value a, Value b) {
-        assert ((JavaKind) a.getPlatformKind()).isNumericInteger();
+        assert a.getKind().isNumericInteger();
         if (LIRValueUtil.isVariable(b)) {
             append(new SPARCTestOp(load(b), loadNonConst(a)));
         } else {
@@ -307,7 +307,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         Value actualTrueValue = trueValue;
         Value actualFalseValue = falseValue;
         // TODO: (sa) Review this loadSimm11 if it is really necessary
-        switch ((JavaKind) left.getLIRKind().getPlatformKind()) {
+        switch ((Kind) left.getLIRKind().getPlatformKind()) {
             case Byte:
             case Short:
             case Char:
@@ -359,7 +359,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             right = loadNonConst(b);
             mirrored = false;
         }
-        switch ((JavaKind) cmpKind) {
+        switch ((Kind) cmpKind) {
             case Short:
             case Char:
                 append(new CompareOp(ICMP, emitSignExtend(left, 16, 32), emitSignExtend(right, 16, 32)));
@@ -392,7 +392,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
         emitIntegerTest(left, right);
         Variable result = newVariable(trueValue.getLIRKind());
-        JavaKind kind = ((JavaKind) left.getPlatformKind()).getStackKind();
+        Kind kind = left.getKind().getStackKind();
         CC conditionCode;
         switch (kind) {
             case Object:
@@ -426,19 +426,15 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
-        AllocatableValue scratchValue = newVariable(key.getLIRKind());
+        Value scratchValue = newVariable(key.getLIRKind());
         AllocatableValue base = AllocatableValue.ILLEGAL;
-        for (Constant c : strategy.getKeyConstants()) {
-            if (!(c instanceof JavaConstant) || !canInlineConstant((JavaConstant) c)) {
+        for (JavaConstant c : strategy.keyConstants) {
+            if (!canInlineConstant(c)) {
                 base = getConstantTableBase();
                 break;
             }
         }
-        append(createStrategySwitchOp(base, strategy, keyTargets, defaultTarget, key, scratchValue));
-    }
-
-    protected StrategySwitchOp createStrategySwitchOp(AllocatableValue base, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Variable key, AllocatableValue scratchValue) {
-        return new StrategySwitchOp(base, strategy, keyTargets, defaultTarget, key, scratchValue);
+        append(new StrategySwitchOp(base, strategy, keyTargets, defaultTarget, key, scratchValue));
     }
 
     @Override
@@ -452,29 +448,29 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitBitCount(Value operand) {
-        Variable result = newVariable(LIRKind.combine(operand).changeType(JavaKind.Int));
-        if (operand.getPlatformKind() == JavaKind.Long) {
-            append(new SPARCBitManipulationOp(LPOPCNT, result, asAllocatable(operand), this));
-        } else {
+        Variable result = newVariable(LIRKind.combine(operand).changeType(Kind.Int));
+        if (operand.getKind().getStackKind() == Kind.Int) {
             append(new SPARCBitManipulationOp(IPOPCNT, result, asAllocatable(operand), this));
+        } else {
+            append(new SPARCBitManipulationOp(LPOPCNT, result, asAllocatable(operand), this));
         }
         return result;
     }
 
     @Override
     public Variable emitBitScanForward(Value operand) {
-        Variable result = newVariable(LIRKind.combine(operand).changeType(JavaKind.Int));
+        Variable result = newVariable(LIRKind.combine(operand).changeType(Kind.Int));
         append(new SPARCBitManipulationOp(BSF, result, asAllocatable(operand), this));
         return result;
     }
 
     @Override
     public Variable emitBitScanReverse(Value operand) {
-        Variable result = newVariable(LIRKind.combine(operand).changeType(JavaKind.Int));
-        if (operand.getPlatformKind() == JavaKind.Long) {
-            append(new SPARCBitManipulationOp(LBSR, result, asAllocatable(operand), this));
-        } else {
+        Variable result = newVariable(LIRKind.combine(operand).changeType(Kind.Int));
+        if (operand.getKind().getStackKind() == Kind.Int) {
             append(new SPARCBitManipulationOp(IBSR, result, asAllocatable(operand), this));
+        } else {
+            append(new SPARCBitManipulationOp(LBSR, result, asAllocatable(operand), this));
         }
         return result;
     }
@@ -501,15 +497,15 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length) {
-        Variable result = newVariable(LIRKind.value(JavaKind.Int));
+    public Variable emitArrayEquals(Kind kind, Value array1, Value array2, Value length) {
+        Variable result = newVariable(LIRKind.value(Kind.Int));
         append(new SPARCArrayEqualsOp(this, kind, result, load(array1), load(array2), asAllocatable(length)));
         return result;
     }
 
     @Override
     public Value emitNegate(Value input) {
-        switch (((JavaKind) input.getPlatformKind()).getStackKind()) {
+        switch (input.getKind().getStackKind()) {
             case Long:
                 return emitUnary(LNEG, input);
             case Int:
@@ -525,7 +521,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitNot(Value input) {
-        switch (((JavaKind) input.getPlatformKind()).getStackKind()) {
+        switch (input.getKind().getStackKind()) {
             case Int:
                 return emitUnary(INOT, input);
             case Long:
@@ -587,7 +583,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitAdd(LIRKind resultKind, Value a, Value b, boolean setFlags) {
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(resultKind, setFlags ? IADDCC : IADD, true, a, b);
             case Long:
@@ -603,7 +599,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitSub(LIRKind resultKind, Value a, Value b, boolean setFlags) {
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(resultKind, setFlags ? ISUBCC : ISUB, false, a, b);
             case Long:
@@ -613,14 +609,14 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             case Double:
                 return emitBinary(resultKind, DSUB, false, a, b);
             default:
-                throw JVMCIError.shouldNotReachHere("missing: " + a.getPlatformKind());
+                throw JVMCIError.shouldNotReachHere("missing: " + a.getKind());
         }
     }
 
     @Override
     public Variable emitMul(Value a, Value b, boolean setFlags) {
         LIRKind resultKind = LIRKind.combine(a, b);
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(resultKind, setFlags ? IMULCC : IMUL, true, a, b);
             case Long:
@@ -636,13 +632,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             case Double:
                 return emitBinary(resultKind, DMUL, true, a, b);
             default:
-                throw JVMCIError.shouldNotReachHere("missing: " + a.getPlatformKind());
+                throw JVMCIError.shouldNotReachHere("missing: " + a.getKind());
         }
     }
 
     @Override
     public Value emitMulHigh(Value a, Value b) {
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitMulHigh(IMUL, a, b);
             case Long:
@@ -654,7 +650,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitUMulHigh(Value a, Value b) {
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitMulHigh(IUMUL, a, b);
             case Long:
@@ -674,7 +670,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public Value emitDiv(Value a, Value b, LIRFrameState state) {
         LIRKind resultKind = LIRKind.combine(a, b);
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(resultKind, IDIV, false, a, b, state);
             case Long:
@@ -684,7 +680,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             case Double:
                 return emitBinary(resultKind, DDIV, false, a, b, state);
             default:
-                throw JVMCIError.shouldNotReachHere("missing: " + a.getPlatformKind());
+                throw JVMCIError.shouldNotReachHere("missing: " + a.getKind());
         }
     }
 
@@ -695,7 +691,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         Variable q2;
         Variable q3;
         Variable q4;
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 append(new RemOp(IREM, result, load(a), loadNonConst(b), state, this));
                 break;
@@ -703,29 +699,29 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 append(new RemOp(LREM, result, load(a), loadNonConst(b), state, this));
                 break;
             case Float:
-                q1 = newVariable(LIRKind.value(JavaKind.Float));
+                q1 = newVariable(LIRKind.value(Kind.Float));
                 append(new BinaryRegReg(FDIV, q1, a, b, state));
-                q2 = newVariable(LIRKind.value(JavaKind.Float));
+                q2 = newVariable(LIRKind.value(Kind.Float));
                 append(new Unary2Op(F2I, q2, q1));
-                q3 = newVariable(LIRKind.value(JavaKind.Float));
+                q3 = newVariable(LIRKind.value(Kind.Float));
                 append(new Unary2Op(I2F, q3, q2));
-                q4 = newVariable(LIRKind.value(JavaKind.Float));
+                q4 = newVariable(LIRKind.value(Kind.Float));
                 append(new BinaryRegReg(FMUL, q4, q3, b));
                 append(new BinaryRegReg(FSUB, result, a, q4));
                 break;
             case Double:
-                q1 = newVariable(LIRKind.value(JavaKind.Double));
+                q1 = newVariable(LIRKind.value(Kind.Double));
                 append(new BinaryRegReg(DDIV, q1, a, b, state));
-                q2 = newVariable(LIRKind.value(JavaKind.Double));
+                q2 = newVariable(LIRKind.value(Kind.Double));
                 append(new Unary2Op(D2L, q2, q1));
-                q3 = newVariable(LIRKind.value(JavaKind.Double));
+                q3 = newVariable(LIRKind.value(Kind.Double));
                 append(new Unary2Op(L2D, q3, q2));
-                q4 = newVariable(LIRKind.value(JavaKind.Double));
+                q4 = newVariable(LIRKind.value(Kind.Double));
                 append(new BinaryRegReg(DMUL, q4, q3, b));
                 append(new BinaryRegReg(DSUB, result, a, q4));
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere("missing: " + a.getPlatformKind());
+                throw JVMCIError.shouldNotReachHere("missing: " + a.getKind());
         }
         return result;
     }
@@ -733,7 +729,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public Value emitURem(Value a, Value b, LIRFrameState state) {
         Variable result = newVariable(LIRKind.combine(a, b));
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 append(new RemOp(IUREM, result, load(a), load(b), state, this));
                 break;
@@ -752,7 +748,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         SPARCArithmetic op;
         Value actualA = a;
         Value actualB = b;
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 op = LUDIV;
                 actualA = emitZeroExtend(actualA, 32, 64);
@@ -770,34 +766,34 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public Variable emitAnd(Value a, Value b) {
         LIRKind resultKind = LIRKind.combine(a, b);
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(resultKind, IAND, true, a, b);
             case Long:
                 return emitBinary(resultKind, LAND, true, a, b);
 
             default:
-                throw JVMCIError.shouldNotReachHere("missing: " + a.getPlatformKind());
+                throw JVMCIError.shouldNotReachHere("missing: " + a.getKind());
         }
     }
 
     @Override
     public Variable emitOr(Value a, Value b) {
         LIRKind resultKind = LIRKind.combine(a, b);
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(resultKind, IOR, true, a, b);
             case Long:
                 return emitBinary(resultKind, LOR, true, a, b);
             default:
-                throw JVMCIError.shouldNotReachHere("missing: " + a.getPlatformKind());
+                throw JVMCIError.shouldNotReachHere("missing: " + a.getKind());
         }
     }
 
     @Override
     public Variable emitXor(Value a, Value b) {
         LIRKind resultKind = LIRKind.combine(a, b);
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(resultKind, IXOR, true, a, b);
             case Long:
@@ -819,7 +815,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitShl(Value a, Value b) {
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitShift(ISHL, a, b);
             case Long:
@@ -831,7 +827,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitShr(Value a, Value b) {
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitShift(ISHR, a, b);
             case Long:
@@ -843,7 +839,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitUShr(Value a, Value b) {
-        switch (((JavaKind) a.getPlatformKind()).getStackKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitShift(IUSHR, a, b);
             case Long:
@@ -870,11 +866,11 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         AllocatableValue input = asAllocatable(inputVal);
         switch (op) {
             case D2F:
-                return emitConvert2Op(LIRKind.combine(inputVal).changeType(JavaKind.Float), D2F, input);
+                return emitConvert2Op(LIRKind.combine(inputVal).changeType(Kind.Float), D2F, input);
             case F2D:
-                return emitConvert2Op(LIRKind.combine(inputVal).changeType(JavaKind.Double), F2D, input);
+                return emitConvert2Op(LIRKind.combine(inputVal).changeType(Kind.Double), F2D, input);
             case I2F: {
-                AllocatableValue intEncodedFloatReg = newVariable(LIRKind.combine(input).changeType(JavaKind.Float));
+                AllocatableValue intEncodedFloatReg = newVariable(LIRKind.combine(input).changeType(Kind.Float));
                 moveBetweenFpGp(intEncodedFloatReg, input);
                 AllocatableValue convertedFloatReg = newVariable(intEncodedFloatReg.getLIRKind());
                 append(new Unary2Op(I2F, convertedFloatReg, intEncodedFloatReg));
@@ -883,48 +879,48 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             case I2D: {
                 // Unfortunately we must do int -> float -> double because fitod has float
                 // and double encoding in one instruction
-                AllocatableValue convertedFloatReg = newVariable(LIRKind.combine(input).changeType(JavaKind.Float));
+                AllocatableValue convertedFloatReg = newVariable(LIRKind.combine(input).changeType(Kind.Float));
                 moveBetweenFpGp(convertedFloatReg, input);
-                AllocatableValue convertedDoubleReg = newVariable(LIRKind.combine(input).changeType(JavaKind.Double));
+                AllocatableValue convertedDoubleReg = newVariable(LIRKind.combine(input).changeType(Kind.Double));
                 append(new Unary2Op(I2D, convertedDoubleReg, convertedFloatReg));
                 return convertedDoubleReg;
             }
             case L2D: {
-                AllocatableValue longEncodedDoubleReg = newVariable(LIRKind.combine(input).changeType(JavaKind.Double));
+                AllocatableValue longEncodedDoubleReg = newVariable(LIRKind.combine(input).changeType(Kind.Double));
                 moveBetweenFpGp(longEncodedDoubleReg, input);
                 AllocatableValue convertedDoubleReg = newVariable(longEncodedDoubleReg.getLIRKind());
                 append(new Unary2Op(L2D, convertedDoubleReg, longEncodedDoubleReg));
                 return convertedDoubleReg;
             }
             case D2I: {
-                AllocatableValue convertedFloatReg = emitConvert2Op(LIRKind.combine(input).changeType(JavaKind.Float), D2I, input);
-                AllocatableValue convertedIntReg = newVariable(LIRKind.combine(convertedFloatReg).changeType(JavaKind.Int));
+                AllocatableValue convertedFloatReg = emitConvert2Op(LIRKind.combine(input).changeType(Kind.Float), D2I, input);
+                AllocatableValue convertedIntReg = newVariable(LIRKind.combine(convertedFloatReg).changeType(Kind.Int));
                 moveBetweenFpGp(convertedIntReg, convertedFloatReg);
                 return convertedIntReg;
             }
             case F2L: {
-                AllocatableValue convertedDoubleReg = emitConvert2Op(LIRKind.combine(input).changeType(JavaKind.Double), F2L, input);
-                AllocatableValue convertedLongReg = newVariable(LIRKind.combine(convertedDoubleReg).changeType(JavaKind.Long));
+                AllocatableValue convertedDoubleReg = emitConvert2Op(LIRKind.combine(input).changeType(Kind.Double), F2L, input);
+                AllocatableValue convertedLongReg = newVariable(LIRKind.combine(convertedDoubleReg).changeType(Kind.Long));
                 moveBetweenFpGp(convertedLongReg, convertedDoubleReg);
                 return convertedLongReg;
             }
             case F2I: {
-                AllocatableValue convertedFloatReg = emitConvert2Op(LIRKind.combine(input).changeType(JavaKind.Float), F2I, input);
-                AllocatableValue convertedIntReg = newVariable(LIRKind.combine(convertedFloatReg).changeType(JavaKind.Int));
+                AllocatableValue convertedFloatReg = emitConvert2Op(LIRKind.combine(input).changeType(Kind.Float), F2I, input);
+                AllocatableValue convertedIntReg = newVariable(LIRKind.combine(convertedFloatReg).changeType(Kind.Int));
                 moveBetweenFpGp(convertedIntReg, convertedFloatReg);
                 return convertedIntReg;
             }
             case D2L: {
-                AllocatableValue convertedDoubleReg = emitConvert2Op(LIRKind.combine(input).changeType(JavaKind.Double), D2L, input);
-                AllocatableValue convertedLongReg = newVariable(LIRKind.combine(convertedDoubleReg).changeType(JavaKind.Long));
+                AllocatableValue convertedDoubleReg = emitConvert2Op(LIRKind.combine(input).changeType(Kind.Double), D2L, input);
+                AllocatableValue convertedLongReg = newVariable(LIRKind.combine(convertedDoubleReg).changeType(Kind.Long));
                 moveBetweenFpGp(convertedLongReg, convertedDoubleReg);
                 return convertedLongReg;
             }
             case L2F: {
                 // long -> double -> float see above
-                AllocatableValue convertedDoubleReg = newVariable(LIRKind.combine(input).changeType(JavaKind.Double));
+                AllocatableValue convertedDoubleReg = newVariable(LIRKind.combine(input).changeType(Kind.Double));
                 moveBetweenFpGp(convertedDoubleReg, input);
-                AllocatableValue convertedFloatReg = newVariable(LIRKind.combine(input).changeType(JavaKind.Float));
+                AllocatableValue convertedFloatReg = newVariable(LIRKind.combine(input).changeType(Kind.Float));
                 append(new Unary2Op(L2F, convertedFloatReg, convertedDoubleReg));
                 return convertedFloatReg;
             }
@@ -938,7 +934,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         if (getArchitecture().getFeatures().contains(CPUFeature.VIS3)) {
             tempSlot = AllocatableValue.ILLEGAL;
         } else {
-            tempSlot = getTempSlot(LIRKind.value(JavaKind.Long));
+            tempSlot = getTempSlot(LIRKind.value(Kind.Long));
         }
         append(new MoveFpGp(dst, src, tempSlot));
     }
@@ -956,8 +952,8 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitNarrow(Value inputVal, int bits) {
-        if (inputVal.getPlatformKind() == JavaKind.Long && bits <= 32) {
-            return emitConvert2Op(LIRKind.combine(inputVal).changeType(JavaKind.Int), L2I, asAllocatable(inputVal));
+        if (inputVal.getKind() == Kind.Long && bits <= 32) {
+            return emitConvert2Op(LIRKind.combine(inputVal).changeType(Kind.Int), L2I, asAllocatable(inputVal));
         } else {
             return inputVal;
         }
@@ -972,11 +968,11 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             // sign extend to 64 bits
             switch (fromBits) {
                 case 8:
-                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(JavaKind.Long), B2L, asAllocatable(inputVal));
+                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(Kind.Long), B2L, asAllocatable(inputVal));
                 case 16:
-                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(JavaKind.Long), S2L, asAllocatable(inputVal));
+                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(Kind.Long), S2L, asAllocatable(inputVal));
                 case 32:
-                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(JavaKind.Long), I2L, asAllocatable(inputVal));
+                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(Kind.Long), I2L, asAllocatable(inputVal));
                 default:
                     throw JVMCIError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
             }
@@ -984,9 +980,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             // sign extend to 32 bits (smaller values are internally represented as 32 bit values)
             switch (fromBits) {
                 case 8:
-                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(JavaKind.Int), B2I, asAllocatable(inputVal));
+                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(Kind.Int), B2I, asAllocatable(inputVal));
                 case 16:
-                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(JavaKind.Int), S2I, asAllocatable(inputVal));
+                    return emitConvert2Op(LIRKind.combine(inputVal).changeType(Kind.Int), S2I, asAllocatable(inputVal));
                 case 32:
                     return inputVal;
                 default:
@@ -1001,15 +997,14 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         if (fromBits == toBits) {
             return inputVal;
         } else if (fromBits > 32) {
-            assert inputVal.getPlatformKind() == JavaKind.Long;
-            Variable result = newVariable(LIRKind.combine(inputVal).changeType(JavaKind.Long));
+            assert inputVal.getKind() == Kind.Long;
+            Variable result = newVariable(LIRKind.combine(inputVal).changeType(Kind.Long));
             long mask = CodeUtil.mask(fromBits);
             append(new BinaryRegConst(SPARCArithmetic.LAND, result, asAllocatable(inputVal), JavaConstant.forLong(mask), null));
             return result;
         } else {
-            assert inputVal.getPlatformKind() == JavaKind.Int || inputVal.getPlatformKind() == JavaKind.Short || inputVal.getPlatformKind() == JavaKind.Byte ||
-                            inputVal.getPlatformKind() == JavaKind.Char : inputVal.getPlatformKind();
-            Variable result = newVariable(LIRKind.combine(inputVal).changeType(JavaKind.Int));
+            assert inputVal.getKind() == Kind.Int || inputVal.getKind() == Kind.Short || inputVal.getKind() == Kind.Byte || inputVal.getKind() == Kind.Char : inputVal.getKind();
+            Variable result = newVariable(LIRKind.combine(inputVal).changeType(Kind.Int));
             long mask = CodeUtil.mask(fromBits);
             JavaConstant constant = JavaConstant.forInt((int) mask);
             if (fromBits == 32) {
@@ -1017,12 +1012,12 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             } else if (canInlineConstant(constant)) {
                 append(new BinaryRegConst(SPARCArithmetic.IAND, result, asAllocatable(inputVal), constant, null));
             } else {
-                Variable maskVar = newVariable(LIRKind.combine(inputVal).changeType(JavaKind.Int));
+                Variable maskVar = newVariable(LIRKind.combine(inputVal).changeType(Kind.Int));
                 emitMoveConstant(maskVar, constant);
                 append(new BinaryRegReg(IAND, result, maskVar, asAllocatable(inputVal)));
             }
             if (toBits > 32) {
-                Variable longResult = newVariable(LIRKind.combine(inputVal).changeType(JavaKind.Long));
+                Variable longResult = newVariable(LIRKind.combine(inputVal).changeType(Kind.Long));
                 emitMove(longResult, result);
                 return longResult;
             } else {
@@ -1033,11 +1028,11 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public AllocatableValue emitReinterpret(LIRKind to, Value inputVal) {
-        JavaKind from = (JavaKind) inputVal.getPlatformKind();
+        Kind from = inputVal.getKind();
         AllocatableValue input = asAllocatable(inputVal);
         Variable result = newVariable(to);
         // These cases require a move between CPU and FPU registers:
-        switch ((JavaKind) to.getPlatformKind()) {
+        switch ((Kind) to.getPlatformKind()) {
             case Int:
                 switch (from) {
                     case Float:
@@ -1101,12 +1096,12 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     public void emitNullCheck(Value address, LIRFrameState state) {
         PlatformKind kind = address.getPlatformKind();
-        assert kind == JavaKind.Object || kind == JavaKind.Long : address + " - " + kind + " not an object!";
+        assert kind == Kind.Object || kind == Kind.Long : address + " - " + kind + " not an object!";
         append(new NullCheckOp(asAddressValue(address), state));
     }
 
     public void emitLoadConstantTableBase() {
-        constantTableBase = newVariable(LIRKind.value(JavaKind.Long));
+        constantTableBase = newVariable(LIRKind.value(Kind.Long));
         int nextPosition = getResult().getLIR().getLIRforBlock(getCurrentBlock()).size();
         NoOp placeHolder = append(new NoOp(getCurrentBlock(), nextPosition));
         loadConstantTableBaseOp = new SPARCLoadConstantTableBaseOp(constantTableBase, placeHolder);
