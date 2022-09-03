@@ -877,11 +877,11 @@ public class GraphUtil {
         }
 
         @Override
-        public Integer smallestCompareWidth() {
+        public boolean supportSubwordCompare(int bits) {
             if (loweringProvider != null) {
-                return loweringProvider.smallestCompareWidth();
+                return loweringProvider.supportSubwordCompare(bits);
             } else {
-                return null;
+                return false;
             }
         }
     }

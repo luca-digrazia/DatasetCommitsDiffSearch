@@ -27,7 +27,6 @@ import static org.graalvm.compiler.core.common.cfg.AbstractControlFlowGraph.domi
 import static org.graalvm.compiler.lir.LIRValueUtil.isStackSlotValue;
 
 import java.util.Iterator;
-
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.DebugCounter;
@@ -37,12 +36,12 @@ import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LIRInstruction.OperandMode;
 import org.graalvm.compiler.lir.alloc.lsra.Interval.SpillState;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
-import org.graalvm.compiler.lir.phases.AllocationPhase.AllocationContext;
+import org.graalvm.compiler.lir.phases.AllocationPhase;
 
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.AllocatableValue;
 
-public final class LinearScanOptimizeSpillPositionPhase extends LinearScanAllocationPhase {
+public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase {
 
     private static final DebugCounter betterSpillPos = Debug.counter("BetterSpillPosition");
     private static final DebugCounter betterSpillPosWithLowerProbability = Debug.counter("BetterSpillPositionWithLowerProbability");

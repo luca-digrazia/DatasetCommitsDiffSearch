@@ -31,6 +31,7 @@ import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.DebugCounter;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.lir.LIR;
+import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.alloc.trace.TraceAllocationPhase.TraceAllocationContext;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool.MoveFactory;
@@ -63,6 +64,8 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         // @formatter:on
     }
 
+    private static final TraceGlobalMoveResolutionPhase TRACE_GLOBAL_MOVE_RESOLUTION_PHASE = new TraceGlobalMoveResolutionPhase();
+
     private static final DebugCounter tracesCounter = Debug.counter("TraceRA[traces]");
 
     public static final DebugCounter globalStackSlots = Debug.counter("TraceRA[GlobalStackSlots]");
@@ -86,6 +89,7 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         final TraceRegisterAllocationPolicy plan = DefaultTraceRegisterAllocationPolicy.allocationPolicy(target, lirGenRes, spillMoveFactory, registerAllocationConfig, cachedStackSlots, resultTraces,
                         neverSpillConstant, livenessInfo, lir.getOptions());
 
+        Debug.dump(Debug.INFO_LEVEL, lir, "Before TraceRegisterAllocation");
         try (Scope s0 = Debug.scope("AllocateTraces", resultTraces, livenessInfo)) {
             for (Trace trace : resultTraces.getTraces()) {
                 tracesCounter.increment();
@@ -97,8 +101,12 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
+        if (Debug.isDumpEnabled(Debug.INFO_LEVEL)) {
+            unnumberInstructions(lir);
+            Debug.dump(Debug.INFO_LEVEL, lir, "After trace allocation");
+        }
 
-        TraceGlobalMoveResolutionPhase.resolve(target, lirGenRes, traceContext);
+        TRACE_GLOBAL_MOVE_RESOLUTION_PHASE.apply(target, lirGenRes, traceContext);
         deconstructSSAForm(lir);
     }
 
@@ -116,4 +124,11 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         }
     }
 
+    private static void unnumberInstructions(LIR lir) {
+        for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
+            for (LIRInstruction op : lir.getLIRforBlock(block)) {
+                op.setId(-1);
+            }
+        }
+    }
 }

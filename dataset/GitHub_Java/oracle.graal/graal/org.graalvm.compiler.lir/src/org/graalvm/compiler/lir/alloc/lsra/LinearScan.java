@@ -750,7 +750,11 @@ public class LinearScan {
                 }
             }
         }
-        Debug.dump(Debug.VERBOSE_LEVEL, new LinearScanIntervalDumper(Arrays.copyOf(intervals, intervalsSize)), label);
+        Debug.dump(Debug.BASIC_LEVEL, new LinearScanIntervalDumper(Arrays.copyOf(intervals, intervalsSize)), label);
+    }
+
+    public void printLir(String label, @SuppressWarnings("unused") boolean hirValid) {
+        Debug.dump(Debug.INFO_LEVEL, ir, label);
     }
 
     boolean verify() {

@@ -26,7 +26,6 @@ import static org.graalvm.compiler.lir.LIRValueUtil.asVariable;
 import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.EnumSet;
 
@@ -41,7 +40,6 @@ import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LIRInstruction.OperandFlag;
 import org.graalvm.compiler.lir.LIRInstruction.OperandMode;
 import org.graalvm.compiler.lir.Variable;
-import org.graalvm.compiler.lir.alloc.trace.GlobalLivenessInfo;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.phases.AllocationPhase;
 import org.graalvm.compiler.lir.ssa.SSAUtil;
@@ -67,7 +65,7 @@ public final class GlobalLivenessAnalysisPhase extends AllocationPhase {
 
     private final class Analyser {
 
-        private static final int LOG_LEVEL = Debug.INFO_LOG_LEVEL;
+        private static final int LOG_LEVEL = Debug.INFO_LEVEL;
 
         /**
          * Bit map specifying which operands are live upon entry to this block. These are values
@@ -119,7 +117,6 @@ public final class GlobalLivenessAnalysisPhase extends AllocationPhase {
         }
 
         private void buildIntern() {
-            Debug.log(1, "SSIConstruction block order: %s", Arrays.asList(blocks));
             computeLiveness();
         }
 
@@ -293,10 +290,10 @@ public final class GlobalLivenessAnalysisPhase extends AllocationPhase {
                 liveInArray = predLiveOut.isEmpty() ? livenessInfoBuilder.emptySet : bitSetToIntArray(predLiveOut);
             }
 
-            livenessInfoBuilder.addIncoming(block, liveInArray);
+            livenessInfoBuilder.setIncoming(block, liveInArray);
             // reuse the same array for outgoing variables in predecessors
             for (AbstractBlockBase<?> pred : block.getPredecessors()) {
-                livenessInfoBuilder.addOutgoing(pred, liveInArray);
+                livenessInfoBuilder.setOutgoing(pred, liveInArray);
             }
         }
 
@@ -309,10 +306,10 @@ public final class GlobalLivenessAnalysisPhase extends AllocationPhase {
             }
             int[] liveOutArray = liveOut.isEmpty() ? livenessInfoBuilder.emptySet : bitSetToIntArray(liveOut);
 
-            livenessInfoBuilder.addOutgoing(block, liveOutArray);
+            livenessInfoBuilder.setOutgoing(block, liveOutArray);
             // reuse the same array for incoming variables in successors
             for (AbstractBlockBase<?> succ : block.getSuccessors()) {
-                livenessInfoBuilder.addIncoming(succ, liveOutArray);
+                livenessInfoBuilder.setIncoming(succ, liveOutArray);
             }
         }
 
