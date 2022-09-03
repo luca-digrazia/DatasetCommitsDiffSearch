@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,18 +24,35 @@ package org.graalvm.compiler.options;
 
 import java.util.EnumSet;
 
-import org.graalvm.collections.EconomicMap;
+import org.graalvm.util.EconomicMap;
 
 public class EnumOptionKey<T extends Enum<T>> extends OptionKey<T> {
     final Class<T> enumClass;
+    final ValueHelp<T> valueHelp;
+
+    /**
+     * Provides help text for enum values.
+     */
+    public interface ValueHelp<T extends Enum<T>> {
+        /**
+         * Gets help text for the enum {@code value} that includes the name of the value. If
+         * {@code null} is returned, {@code value.toString()} is used.
+         */
+        String getHelp(Object value);
+    }
+
+    public EnumOptionKey(T value) {
+        this(value, null);
+    }
 
     @SuppressWarnings("unchecked")
-    public EnumOptionKey(T value) {
+    public EnumOptionKey(T value, ValueHelp<T> help) {
         super(value);
+        this.valueHelp = help;
         if (value == null) {
             throw new IllegalArgumentException("Value must not be null");
         }
-        this.enumClass = (Class<T>) value.getDeclaringClass();
+        this.enumClass = (Class<T>) value.getClass();
     }
 
     /**
@@ -47,11 +62,15 @@ public class EnumOptionKey<T extends Enum<T>> extends OptionKey<T> {
         return EnumSet.allOf(enumClass);
     }
 
-    public Object valueOf(String name) {
+    public ValueHelp<T> getValueHelp() {
+        return valueHelp;
+    }
+
+    Object valueOf(String name) {
         try {
             return Enum.valueOf(enumClass, name);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("\"" + name + "\" is not a valid option for " + getName() + ". Valid values are " + getAllValues());
+            throw new IllegalArgumentException("\"" + name + "\" is not a valid option for " + getName() + ". Valid values are " + EnumSet.allOf(enumClass));
         }
     }
 

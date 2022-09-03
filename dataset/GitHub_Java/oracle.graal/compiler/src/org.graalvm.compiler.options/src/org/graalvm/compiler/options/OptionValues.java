@@ -52,7 +52,7 @@ public class OptionValues {
     public OptionValues(OptionValues initialValues, UnmodifiableEconomicMap<OptionKey<?>, Object> extraPairs) {
         EconomicMap<OptionKey<?>, Object> map = newOptionMap();
         if (initialValues != null) {
-            map.putAll(initialValues.getMap());
+            map.putAll(initialValues.values);
         }
         initMap(map, extraPairs);
         this.values = map;
