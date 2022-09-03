@@ -168,6 +168,7 @@ class NativeImage {
 
     private final Path workDir;
     private final Path rootDir;
+    private final Path homeDir;
     private final Map<String, String> userConfigProperties = new HashMap<>();
 
     private boolean verbose = Boolean.valueOf(System.getenv("VERBOSE_GRAALVM_LAUNCHERS"));
@@ -192,18 +193,21 @@ class NativeImage {
             }
             rootDir = rootDirCandidate;
         } else {
-            String rootDirProperty = "native-image.root";
-            String rootDirString = System.getProperty(rootDirProperty);
-            if (rootDirString == null) {
-                throw showError("Running on JVM requires setting " + rootDirProperty + " system property");
+            String graalvmHomePropertyName = "graalvm.home";
+            String graalvmHomeString = System.getProperty(graalvmHomePropertyName);
+            if (graalvmHomeString == null) {
+                throw showError("Running on JVM requires setting " + graalvmHomePropertyName + " system property");
             }
             try {
-                rootDir = canonicalize(Paths.get(rootDirString));
+                rootDir = canonicalize(Paths.get(graalvmHomeString).resolve("jre"));
             } catch (NativeImageError e) {
-                throw showError("Invalid " + rootDirProperty + " setting " + rootDirString + "\n" + e.getMessage());
+                throw showError("Invalid " + graalvmHomePropertyName + " setting " + graalvmHomeString + "\n" + e.getMessage());
             }
         }
         assert rootDir != null;
+        String homeDirString = System.getProperty("user.home");
+        homeDir = Paths.get(homeDirString);
+        assert homeDir != null;
 
         String configFileEnvVarKey = "NATIVE_IMAGE_CONFIG_FILE";
         String configFile = System.getenv(configFileEnvVarKey);
@@ -263,17 +267,16 @@ class NativeImage {
         return rootDir;
     }
 
+    protected Path getHomeDir() {
+        return homeDir;
+    }
+
     protected Map<String, String> getUserConfigProperties() {
         return userConfigProperties;
     }
 
     protected Path getUserConfigDir() {
-        String envVarKey = "NATIVE_IMAGE_USER_HOME";
-        String userHomeStr = System.getenv(envVarKey);
-        if (userHomeStr == null || userHomeStr.isEmpty()) {
-            return Paths.get(System.getProperty("user.home"), ".native-image");
-        }
-        return Paths.get(userHomeStr);
+        return getHomeDir().resolve(".native-image");
     }
 
     protected static void ensureDirectoryExists(Path dir) {
