@@ -236,6 +236,7 @@ public final class BytecodeStream {
         return length;
     }
 
+
     public BytecodeTableSwitch getBytecodeTableSwitch() {
         return bytecodeTableSwitch;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,36 +25,39 @@ package com.oracle.truffle.espresso.bytecode;
 /**
  * A utility for processing {@link Bytecodes#LOOKUPSWITCH} bytecodes.
  */
-public final class BytecodeLookupSwitch extends BytecodeSwitch {
+public class BytecodeLookupSwitch extends BytecodeSwitch {
 
     private static final int OFFSET_TO_NUMBER_PAIRS = 4;
     private static final int OFFSET_TO_FIRST_PAIR_MATCH = 8;
     private static final int OFFSET_TO_FIRST_PAIR_OFFSET = 12;
     private static final int PAIR_SIZE = 8;
 
-    public static final BytecodeLookupSwitch INSTANCE = new BytecodeLookupSwitch();
-
-    private BytecodeLookupSwitch() {
-        // singleton
+    /**
+     * Constructor for a {@link BytecodeStream}.
+     *
+     * @param stream the {@code BytecodeStream} containing the switch instruction
+     */
+    public BytecodeLookupSwitch(BytecodeStream stream) {
+        super(stream);
     }
 
     @Override
-    public int offsetAt(BytecodeStream stream, int bci, int i) {
+    public int offsetAt(int bci, int i) {
         return stream.readInt(getAlignedBci(bci) + OFFSET_TO_FIRST_PAIR_OFFSET + PAIR_SIZE * i);
     }
 
     @Override
-    public int keyAt(BytecodeStream stream, int bci, int i) {
+    public int keyAt(int bci, int i) {
         return stream.readInt(getAlignedBci(bci) + OFFSET_TO_FIRST_PAIR_MATCH + PAIR_SIZE * i);
     }
 
     @Override
-    public int numberOfCases(BytecodeStream stream, int bci) {
+    public int numberOfCases(int bci) {
         return stream.readInt(getAlignedBci(bci) + OFFSET_TO_NUMBER_PAIRS);
     }
 
     @Override
-    public int size(BytecodeStream stream, int bci) {
-        return getAlignedBci(bci) + OFFSET_TO_FIRST_PAIR_MATCH + PAIR_SIZE * numberOfCases(stream, bci) - bci;
+    public int size(int bci) {
+        return getAlignedBci(bci) + OFFSET_TO_FIRST_PAIR_MATCH + PAIR_SIZE * numberOfCases(bci) - bci;
     }
 }

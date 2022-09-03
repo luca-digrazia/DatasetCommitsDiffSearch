@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,17 +25,20 @@ package com.oracle.truffle.espresso.bytecode;
 /**
  * A utility for processing {@link Bytecodes#TABLESWITCH} bytecodes.
  */
-public final class BytecodeTableSwitch extends BytecodeSwitch {
+public class BytecodeTableSwitch extends BytecodeSwitch {
 
     private static final int OFFSET_TO_LOW_KEY = 4;
     private static final int OFFSET_TO_HIGH_KEY = 8;
     private static final int OFFSET_TO_FIRST_JUMP_OFFSET = 12;
     private static final int JUMP_OFFSET_SIZE = 4;
 
-    public static final BytecodeTableSwitch INSTANCE = new BytecodeTableSwitch();
-
-    private BytecodeTableSwitch() {
-        // singleton
+    /**
+     * Constructor for a {@link BytecodeStream}.
+     *
+     * @param stream the {@code BytecodeStream} containing the switch instruction
+     */
+    public BytecodeTableSwitch(BytecodeStream stream) {
+        super(stream);
     }
 
     /**
@@ -43,7 +46,7 @@ public final class BytecodeTableSwitch extends BytecodeSwitch {
      *
      * @return the low key
      */
-    public int lowKey(BytecodeStream stream, int bci) {
+    public int lowKey(int bci) {
         return stream.readInt(getAlignedBci(bci) + OFFSET_TO_LOW_KEY);
     }
 
@@ -52,27 +55,27 @@ public final class BytecodeTableSwitch extends BytecodeSwitch {
      *
      * @return the high key
      */
-    public int highKey(BytecodeStream stream, int bci) {
+    public int highKey(int bci) {
         return stream.readInt(getAlignedBci(bci) + OFFSET_TO_HIGH_KEY);
     }
 
     @Override
-    public int keyAt(BytecodeStream stream, int bci, int i) {
-        return lowKey(stream, bci) + i;
+    public int keyAt(int bci, int i) {
+        return lowKey(bci) + i;
     }
 
     @Override
-    public int offsetAt(BytecodeStream stream, int bci, int i) {
+    public int offsetAt(int bci, int i) {
         return stream.readInt(getAlignedBci(bci) + OFFSET_TO_FIRST_JUMP_OFFSET + JUMP_OFFSET_SIZE * i);
     }
 
     @Override
-    public int numberOfCases(BytecodeStream stream, int bci) {
-        return highKey(stream, bci) - lowKey(stream, bci) + 1;
+    public int numberOfCases(int bci) {
+        return highKey(bci) - lowKey(bci) + 1;
     }
 
     @Override
-    public int size(BytecodeStream stream, int bci) {
-        return getAlignedBci(bci) + OFFSET_TO_FIRST_JUMP_OFFSET + JUMP_OFFSET_SIZE * numberOfCases(stream, bci) - bci;
+    public int size(int bci) {
+        return getAlignedBci(bci) + OFFSET_TO_FIRST_JUMP_OFFSET + JUMP_OFFSET_SIZE * numberOfCases(bci) - bci;
     }
 }
