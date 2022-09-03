@@ -78,7 +78,6 @@ public class InliningPhase extends Phase implements InliningCallback {
 
         while (inliningPolicy.continueInlining(graph)) {
             final InlineInfo candidate = inliningPolicy.next();
-
             if (candidate != null) {
                 boolean isWorthInlining = inliningPolicy.isWorthInlining(candidate);
 
@@ -147,8 +146,7 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private abstract static class AbstractInliningDecision implements InliningDecision {
-        protected static boolean decideSizeBasedInlining(InlineInfo info, double maxSize) {
-            assert !Double.isNaN(info.weight()) && !Double.isNaN(maxSize);
+        public static boolean decideSizeBasedInlining(InlineInfo info, double maxSize) {
             boolean success = info.weight() <= maxSize;
             if (GraalOptions.Debug) {
                 String formatterString = success ? "(size %f <= %f)" : "(too large %f > %f)";
@@ -157,20 +155,12 @@ public class InliningPhase extends Phase implements InliningCallback {
             return success;
         }
 
-        protected static boolean checkCompiledCodeSize(InlineInfo info) {
+        public static boolean checkCompiledCodeSize(InlineInfo info) {
             if (GraalOptions.SmallCompiledCodeSize >= 0 && info.compiledCodeSize() > GraalOptions.SmallCompiledCodeSize) {
                 InliningUtil.logNotInlinedMethod(info, "(CompiledCodeSize %d > %d)", info.compiledCodeSize(), GraalOptions.SmallCompiledCodeSize);
                 return false;
             }
             return true;
-        }
-
-        protected static double getRelevance(Invoke invoke) {
-            if (GraalOptions.UseRelevanceBasedInlining) {
-                return invoke.inliningRelevance();
-            } else {
-                return invoke.probability();
-            }
         }
     }
 
@@ -190,7 +180,7 @@ public class InliningPhase extends Phase implements InliningCallback {
                 return false;
             }
 
-            double inlineWeight = Math.min(GraalOptions.RatioCapForInlining, getRelevance(info.invoke()));
+            double inlineWeight = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke().probability());
             double maxSize = Math.pow(GraalOptions.NestedInliningSizeRatio, info.level()) * GraalOptions.MaximumInlineSize * inlineWeight;
             maxSize = Math.max(GraalOptions.MaximumTrivialSize, maxSize);
 
@@ -206,8 +196,7 @@ public class InliningPhase extends Phase implements InliningCallback {
                 return false;
             }
 
-            double relevance = getRelevance(info.invoke());
-            double inlineBoost = Math.min(GraalOptions.RatioCapForInlining, relevance) + Math.log10(Math.max(1, relevance - GraalOptions.RatioCapForInlining + 1));
+            double inlineBoost = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke().probability()) + Math.log10(Math.max(1, info.invoke().probability() - GraalOptions.ProbabilityCapForInlining + 1));
             double maxSize = Math.pow(GraalOptions.NestedInliningSizeRatio, info.level()) * GraalOptions.MaximumInlineSize;
             maxSize = maxSize + maxSize * inlineBoost;
             maxSize = Math.min(GraalOptions.MaximumGreedyInlineSize, Math.max(GraalOptions.MaximumTrivialSize, maxSize));
@@ -234,7 +223,7 @@ public class InliningPhase extends Phase implements InliningCallback {
                 maxSize += transferredValues * GraalOptions.InliningBonusPerTransferredValue;
             }
 
-            double inlineRatio = Math.min(GraalOptions.RatioCapForInlining, getRelevance(info.invoke()));
+            double inlineRatio = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke().probability());
             maxSize = Math.pow(GraalOptions.NestedInliningSizeRatio, info.level()) * maxSize * inlineRatio;
             maxSize = Math.max(maxSize, GraalOptions.MaximumTrivialSize);
 
@@ -248,7 +237,7 @@ public class InliningPhase extends Phase implements InliningCallback {
             assert GraalOptions.ProbabilityAnalysis;
 
             double maxSize = GraalOptions.MaximumGreedyInlineSize;
-            double inlineRatio = Math.min(GraalOptions.RatioCapForInlining, getRelevance(info.invoke()));
+            double inlineRatio = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke().probability());
             maxSize = Math.pow(GraalOptions.NestedInliningSizeRatio, info.level()) * maxSize * inlineRatio;
             maxSize = Math.max(maxSize, GraalOptions.MaximumTrivialSize);
 
