@@ -39,9 +39,6 @@ import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.common.inlining.info.*;
-import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
-import com.oracle.graal.phases.common.inlining.info.elem.InlineableGraph;
-import com.oracle.graal.phases.common.inlining.info.elem.InlineableMacroNode;
 import com.oracle.graal.phases.common.inlining.policy.InliningPolicy;
 import com.oracle.graal.phases.graph.FixedNodeProbabilityCache;
 import com.oracle.graal.phases.tiers.HighTierContext;
@@ -52,7 +49,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.ToDoubleFunction;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.compiler.common.GraalOptions.MegamorphicInliningMinMethodProbability;
+import static com.oracle.graal.compiler.common.GraalOptions.OptCanonicalizer;
 
 /**
  * Holds the data for building the callee graphs recursively: graphs and invocations (each
@@ -91,36 +89,6 @@ public class InliningData {
         Assumptions rootAssumptions = context.getAssumptions();
         invocationQueue.push(new MethodInvocation(null, rootAssumptions, 1.0, 1.0));
         pushGraph(rootGraph, 1.0, 1.0);
-    }
-
-    private String checkTargetConditionsHelper(ResolvedJavaMethod method) {
-        if (method == null) {
-            return "the method is not resolved";
-        } else if (method.isNative() && (!Intrinsify.getValue() || !InliningUtil.canIntrinsify(context.getReplacements(), method))) {
-            return "it is a non-intrinsic native method";
-        } else if (method.isAbstract()) {
-            return "it is an abstract method";
-        } else if (!method.getDeclaringClass().isInitialized()) {
-            return "the method's class is not initialized";
-        } else if (!method.canBeInlined()) {
-            return "it is marked non-inlinable";
-        } else if (countRecursiveInlining(method) > MaximumRecursiveInlining.getValue()) {
-            return "it exceeds the maximum recursive inlining depth";
-        } else if (new OptimisticOptimizations(method.getProfilingInfo()).lessOptimisticThan(context.getOptimisticOptimizations())) {
-            return "the callee uses less optimistic optimizations than caller";
-        } else {
-            return null;
-        }
-    }
-
-    private boolean checkTargetConditions(Invoke invoke, ResolvedJavaMethod method) {
-        final String failureMessage = checkTargetConditionsHelper(method);
-        if (failureMessage == null) {
-            return true;
-        } else {
-            InliningUtil.logNotInlined(invoke, inliningDepth(), method, failureMessage);
-            return false;
-        }
     }
 
     /**
@@ -225,7 +193,7 @@ public class InliningData {
             ResolvedJavaType type = ptypes[0].getType();
             assert type.isArray() || !type.isAbstract();
             ResolvedJavaMethod concrete = type.resolveMethod(targetMethod, contextType);
-            if (!checkTargetConditions(invoke, concrete)) {
+            if (!InliningUtil.checkTargetConditions(this, context.getReplacements(), invoke, concrete, optimisticOpts)) {
                 return null;
             }
             return new TypeGuardInlineInfo(invoke, concrete, type);
@@ -313,7 +281,7 @@ public class InliningData {
             }
 
             for (ResolvedJavaMethod concrete : concreteMethods) {
-                if (!checkTargetConditions(invoke, concrete)) {
+                if (!InliningUtil.checkTargetConditions(this, context.getReplacements(), invoke, concrete, optimisticOpts)) {
                     InliningUtil.logNotInlined(invoke, inliningDepth(), targetMethod, "it is a polymorphic method call and at least one invoked method cannot be inlined");
                     return null;
                 }
@@ -324,7 +292,7 @@ public class InliningData {
 
     private InlineInfo getAssumptionInlineInfo(Invoke invoke, ResolvedJavaMethod concrete, Assumptions.Assumption takenAssumption) {
         assert !concrete.isAbstract();
-        if (!checkTargetConditions(invoke, concrete)) {
+        if (!InliningUtil.checkTargetConditions(this, context.getReplacements(), invoke, concrete, context.getOptimisticOptimizations())) {
             return null;
         }
         return new AssumptionInlineInfo(invoke, concrete, takenAssumption);
@@ -332,7 +300,7 @@ public class InliningData {
 
     private InlineInfo getExactInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod) {
         assert !targetMethod.isAbstract();
-        if (!checkTargetConditions(invoke, targetMethod)) {
+        if (!InliningUtil.checkTargetConditions(this, context.getReplacements(), invoke, targetMethod, context.getOptimisticOptimizations())) {
             return null;
         }
         return new ExactInlineInfo(invoke, targetMethod);
@@ -403,7 +371,7 @@ public class InliningData {
         Invoke invoke = callsiteHolder.popInvoke();
         MethodInvocation callerInvocation = currentInvocation();
         Assumptions parentAssumptions = callerInvocation.assumptions();
-        InlineInfo info = populateInlineInfo(invoke, parentAssumptions);
+        InlineInfo info = getInlineInfo(invoke, parentAssumptions);
 
         if (info != null) {
             double invokeProbability = callsiteHolder.invokeProbability(invoke);
@@ -411,21 +379,16 @@ public class InliningData {
             MethodInvocation calleeInvocation = pushInvocation(info, parentAssumptions, invokeProbability, invokeRelevance);
 
             for (int i = 0; i < info.numberOfMethods(); i++) {
-                Inlineable elem = Inlineable.getInlineableElement(info.methodAt(i), info.invoke(), context.replaceAssumptions(calleeInvocation.assumptions()), canonicalizer);
+                InliningUtil.Inlineable elem = DepthSearchUtil.getInlineableElement(info.methodAt(i), info.invoke(), context.replaceAssumptions(calleeInvocation.assumptions()), canonicalizer);
                 info.setInlinableElement(i, elem);
-                if (elem instanceof InlineableGraph) {
-                    pushGraph(((InlineableGraph) elem).getGraph(), invokeProbability * info.probabilityAt(i), invokeRelevance * info.relevanceAt(i));
+                if (elem instanceof InliningUtil.InlineableGraph) {
+                    pushGraph(((InliningUtil.InlineableGraph) elem).getGraph(), invokeProbability * info.probabilityAt(i), invokeRelevance * info.relevanceAt(i));
                 } else {
-                    assert elem instanceof InlineableMacroNode;
+                    assert elem instanceof InliningUtil.InlineableMacroNode;
                     pushDummyGraph();
                 }
             }
         }
-    }
-
-    private InlineInfo populateInlineInfo(Invoke invoke, Assumptions parentAssumptions) {
-        InlineInfo info = getInlineInfo(invoke, parentAssumptions);
-        return info;
     }
 
     public int graphCount() {
