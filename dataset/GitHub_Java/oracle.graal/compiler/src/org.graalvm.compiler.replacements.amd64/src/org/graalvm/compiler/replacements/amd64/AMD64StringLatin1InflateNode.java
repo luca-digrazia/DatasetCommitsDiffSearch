@@ -57,8 +57,6 @@ public final class AMD64StringLatin1InflateNode extends FixedWithNextNode
     @Input private ValueNode dst;
     @Input private ValueNode len;
 
-    private final JavaKind writeKind;
-
     @OptionalInput(Memory) private MemoryNode lla; // Last access location registered.
 
     // java.lang.StringLatin1.inflate([BI[CII)V
@@ -67,12 +65,11 @@ public final class AMD64StringLatin1InflateNode extends FixedWithNextNode
     //
     // Represented as a graph node by:
 
-    public AMD64StringLatin1InflateNode(ValueNode src, ValueNode dst, ValueNode len, JavaKind writeKind) {
+    public AMD64StringLatin1InflateNode(ValueNode src, ValueNode dst, ValueNode len) {
         super(TYPE, StampFactory.forVoid());
         this.src = src;
         this.dst = dst;
         this.len = len;
-        this.writeKind = writeKind;
     }
 
     @Override
@@ -84,7 +81,7 @@ public final class AMD64StringLatin1InflateNode extends FixedWithNextNode
     @Override
     public LocationIdentity[] getLocationIdentities() {
         // Model write access via 'dst' using:
-        return new LocationIdentity[]{NamedLocationIdentity.getArrayLocation(writeKind)};
+        return new LocationIdentity[]{NamedLocationIdentity.getArrayLocation(JavaKind.Char)};
     }
 
     @Override
@@ -105,5 +102,5 @@ public final class AMD64StringLatin1InflateNode extends FixedWithNextNode
     }
 
     @NodeIntrinsic
-    public static native void inflate(Pointer src, Pointer dst, int len, @ConstantNodeParameter JavaKind writeKind);
+    public static native void inflate(Pointer src, Pointer dst, int len);
 }
