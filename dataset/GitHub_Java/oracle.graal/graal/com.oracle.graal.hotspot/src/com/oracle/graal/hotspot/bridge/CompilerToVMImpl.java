@@ -23,8 +23,6 @@
 
 package com.oracle.graal.hotspot.bridge;
 
-import static com.oracle.graal.hotspot.InitTimer.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -33,17 +31,6 @@ import com.oracle.graal.hotspot.meta.*;
  * Entries into the HotSpot VM from Java code.
  */
 public class CompilerToVMImpl implements CompilerToVM {
-
-    /**
-     * Initializes the native part of the Graal runtime.
-     */
-    private static native void init();
-
-    static {
-        try (InitTimer t = timer("CompilerToVMImpl.init")) {
-            init();
-        }
-    }
 
     private native int installCode0(HotSpotCompiledCode compiledCode, InstalledCode code, SpeculationLog speculationLog);
 
@@ -84,10 +71,10 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native int lookupNameAndTypeRefIndexInPool(long metaspaceConstantPool, int cpi);
 
     @Override
-    public native String lookupNameRefInPool(long metaspaceConstantPool, int cpi);
+    public native long lookupNameRefInPool(long metaspaceConstantPool, int cpi);
 
     @Override
-    public native String lookupSignatureRefInPool(long metaspaceConstantPool, int cpi);
+    public native long lookupSignatureRefInPool(long metaspaceConstantPool, int cpi);
 
     @Override
     public native int lookupKlassRefIndexInPool(long metaspaceConstantPool, int cpi);
@@ -170,6 +157,8 @@ public class CompilerToVMImpl implements CompilerToVM {
     public synchronized native void notifyCompilationStatistics(int id, HotSpotResolvedJavaMethod method, boolean osr, int processedBytecodes, long time, long timeUnitsPerSecond,
                     InstalledCode installedCode);
 
+    public synchronized native void printCompilationStatistics(boolean perCompiler, boolean aggregate);
+
     public native void resetCompilationStatistics();
 
     public native long[] collectCounters();
@@ -191,8 +180,6 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native void materializeVirtualObjects(HotSpotStackFrameReference stackFrame, boolean invalidate);
 
     public native long getTimeStamp();
-
-    public native String getSymbol(long metaspaceSymbol);
 
     public native void resolveInvokeDynamic(long metaspaceConstantPool, int index);
 
