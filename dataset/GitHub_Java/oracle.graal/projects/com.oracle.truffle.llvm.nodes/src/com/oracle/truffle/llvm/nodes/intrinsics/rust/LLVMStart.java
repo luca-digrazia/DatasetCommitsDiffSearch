@@ -29,7 +29,7 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.rust;
 
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
@@ -37,6 +37,8 @@ import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.func.LLVMDispatchNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMDispatchNodeGen;
+import com.oracle.truffle.llvm.nodes.func.LLVMLookupDispatchNode;
+import com.oracle.truffle.llvm.nodes.func.LLVMLookupDispatchNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.nodes.intrinsics.rust.LLVMStartFactory.LLVMClosureDispatchNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
@@ -47,16 +49,16 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 public abstract class LLVMStart extends LLVMIntrinsic {
 
-    @TruffleBoundary
-    protected LLVMClosureDispatchNode createClosureDispatchNode() {
+    protected LLVMClosureDispatchNode getClosureDispatchNode() {
+        CompilerAsserts.neverPartOfCompilation();
         return LLVMClosureDispatchNodeGen.create();
     }
 
@@ -65,11 +67,20 @@ public abstract class LLVMStart extends LLVMIntrinsic {
 
         @Specialization
         @SuppressWarnings("unused")
-        protected long doOp(StackPointer stackPointer, LLVMPointer main, long argc, LLVMPointer argv,
-                        @Cached("createClosureDispatchNode()") LLVMClosureDispatchNode dispatchNode) {
+        protected long doOp(StackPointer stackPointer, LLVMNativePointer main, long argc, LLVMPointer argv,
+                        @Cached("getClosureDispatchNode()") LLVMClosureDispatchNode dispatchNode) {
             dispatchNode.executeDispatch(main, new Object[]{stackPointer});
             return 0;
         }
+
+        @Specialization
+        @SuppressWarnings("unused")
+        protected long doOp(StackPointer stackPointer, LLVMFunctionDescriptor main, long argc, LLVMPointer argv,
+                        @Cached("getClosureDispatchNode()") LLVMClosureDispatchNode dispatchNode) {
+            dispatchNode.executeDispatch(main, new Object[]{stackPointer});
+            return 0;
+        }
+
     }
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class),
@@ -84,15 +95,15 @@ public abstract class LLVMStart extends LLVMIntrinsic {
 
         @Specialization
         @SuppressWarnings("unused")
-        protected long doOp(StackPointer stackPointer, LLVMNativePointer mainPointer, LLVMNativePointer vtable, long argc, LLVMPointer argv,
+        protected long doOp(StackPointer stackPointer, LLVMNativePointer mainPointer, LLVMGlobal vtable, long argc, LLVMPointer argv,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
-                        @Cached("createClosureDispatchNode()") LLVMClosureDispatchNode fnDispatchNode,
-                        @Cached("createClosureDispatchNode()") LLVMClosureDispatchNode dropInPlaceDispatchNode) {
+                        @Cached("getClosureDispatchNode()") LLVMClosureDispatchNode fnDispatchNode,
+                        @Cached("getClosureDispatchNode()") LLVMClosureDispatchNode dropInPlaceDispatchNode) {
             LLVMMemory memory = getLLVMMemory();
-            LLVMGlobal vtableGlobal = getContextReference().get().findGlobal(vtable);
-            LangStartVtableType langStartVtable = createLangStartVtable(vtableGlobal.getPointeeType());
-            LLVMNativePointer fn = readFn(memory, vtable, langStartVtable);
-            LLVMNativePointer dropInPlace = readDropInPlace(memory, vtable, langStartVtable);
+            LangStartVtableType langStartVtable = createLangStartVtable(vtable.getPointeeType());
+            LLVMNativePointer vtablePointer = toNative.executeWithTarget(vtable);
+            LLVMNativePointer fn = readFn(memory, vtablePointer, langStartVtable);
+            LLVMNativePointer dropInPlace = readDropInPlace(memory, vtablePointer, langStartVtable);
             LLVMNativePointer main = derefMain(memory, mainPointer);
             Integer exitCode = (Integer) fnDispatchNode.executeDispatch(fn, new Object[]{stackPointer, main});
             dropInPlaceDispatchNode.executeDispatch(dropInPlace, new Object[]{stackPointer, mainPointer});
@@ -108,7 +119,7 @@ public abstract class LLVMStart extends LLVMIntrinsic {
         }
 
         protected LLVMNativePointer derefMain(LLVMMemory memory, LLVMNativePointer mainPointer) {
-            return memory.getPointer(mainPointer);
+            return LLVMNativePointer.create(memory.getFunctionPointer(mainPointer));
         }
 
         static final class LangStartVtableType {
@@ -119,12 +130,12 @@ public abstract class LLVMStart extends LLVMIntrinsic {
             }
 
             long readFn(LLVMMemory memory, long address) {
-                return memory.getPointer(address + offsetFn).asNative();
+                return memory.getFunctionPointer(LLVMNativePointer.create(address + offsetFn));
             }
 
             @SuppressWarnings("static-method")
             long readDropInPlace(LLVMMemory memory, long address) {
-                return memory.getPointer(address).asNative();
+                return memory.getFunctionPointer(LLVMNativePointer.create(address));
             }
 
             static LangStartVtableType create(DataLayout datalayout, Type vtableType) {
@@ -135,29 +146,36 @@ public abstract class LLVMStart extends LLVMIntrinsic {
     }
 
     abstract static class LLVMClosureDispatchNode extends LLVMNode {
+
         public abstract Object executeDispatch(Object closure, Object[] arguments);
 
-        @Specialization(guards = "pointer.asNative() == cachedAddress")
-        protected Object doHandleCached(@SuppressWarnings("unused") LLVMNativePointer pointer, Object[] arguments,
-                        @Cached("pointer.asNative()") @SuppressWarnings("unused") long cachedAddress,
-                        @Cached("getFunctionDescriptor(pointer)") LLVMFunctionDescriptor cachedDescriptor,
-                        @Cached("getDispatchNode(cachedDescriptor)") LLVMDispatchNode dispatchNode) {
-            return dispatchNode.executeDispatch(cachedDescriptor, arguments);
-        }
-
-        @Specialization(guards = {"isSameObject(pointer.getObject(), cachedDescriptor)", "cachedDescriptor != null", "pointer.getOffset() == 0"})
-        protected Object doDirectCached(@SuppressWarnings("unused") LLVMManagedPointer pointer, Object[] arguments,
-                        @Cached("asFunctionDescriptor(pointer.getObject())") LLVMFunctionDescriptor cachedDescriptor,
-                        @Cached("getDispatchNode(cachedDescriptor)") LLVMDispatchNode dispatchNode) {
-            return dispatchNode.executeDispatch(cachedDescriptor, arguments);
+        @Specialization(guards = "closure.asNative() == cachedClosure.asNative()")
+        @SuppressWarnings("unused")
+        protected Object doCached(LLVMNativePointer closure, Object[] arguments,
+                        @Cached("closure") LLVMNativePointer cachedClosure,
+                        @Cached("getFunctionDescriptor(cachedClosure)") LLVMFunctionDescriptor closureDescriptor,
+                        @Cached("getDispatchNode(closureDescriptor)") LLVMDispatchNode dispatchNode) {
+            return dispatchNode.executeDispatch(closureDescriptor, arguments);
         }
 
         @Specialization
-        protected Object doOther(@SuppressWarnings("unused") LLVMManagedPointer pointer, @SuppressWarnings("unused") Object[] arguments) {
-            // based on the usage of this node, we can safely assume that the inline cache is always
-            // big enough - so we don't have a fallback implementation
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException("Inline cache was not big enough");
+        protected Object doLookup(LLVMNativePointer closure, Object[] arguments,
+                        @Cached("getLookupDispatchNode(closure)") LLVMLookupDispatchNode dispatchNode) {
+            return dispatchNode.executeDispatch(closure, arguments);
+        }
+
+        @Specialization(guards = "closure == cachedClosure")
+        @SuppressWarnings("unused")
+        protected Object doCached(LLVMFunctionDescriptor closure, Object[] arguments,
+                        @Cached("closure") LLVMFunctionDescriptor cachedClosure,
+                        @Cached("getDispatchNode(cachedClosure)") LLVMDispatchNode dispatchNode) {
+            return dispatchNode.executeDispatch(closure, arguments);
+        }
+
+        @Specialization
+        protected Object doDirect(LLVMFunctionDescriptor closure, Object[] arguments,
+                        @Cached("getDispatchNode(closure)") LLVMDispatchNode dispatchNode) {
+            return dispatchNode.executeDispatch(closure, arguments);
         }
 
         @TruffleBoundary
@@ -165,9 +183,17 @@ public abstract class LLVMStart extends LLVMIntrinsic {
             return getContextReference().get().getFunctionDescriptor(fp);
         }
 
-        @TruffleBoundary
         protected LLVMDispatchNode getDispatchNode(LLVMFunctionDescriptor fd) {
+            CompilerAsserts.neverPartOfCompilation();
             return LLVMDispatchNodeGen.create(fd.getType());
         }
+
+        protected LLVMLookupDispatchNode getLookupDispatchNode(LLVMNativePointer fp) {
+            CompilerAsserts.neverPartOfCompilation();
+            FunctionType functionType = getContextReference().get().getFunctionDescriptor(fp).getType();
+            return LLVMLookupDispatchNodeGen.create(functionType);
+        }
+
     }
+
 }
