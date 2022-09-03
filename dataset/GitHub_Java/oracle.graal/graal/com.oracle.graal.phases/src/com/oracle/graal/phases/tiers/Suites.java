@@ -26,8 +26,7 @@ import static com.oracle.graal.phases.tiers.Suites.Options.*;
 
 import java.util.*;
 
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 
@@ -37,7 +36,7 @@ public final class Suites {
 
         // @formatter:off
         @Option(help = "The compiler configuration to use")
-        static final OptionValue<String> CompilerConfiguration = new OptionValue<>("");
+        static final OptionValue<String> CompilerConfiguration = new OptionValue<>("basic");
         // @formatter:on
     }
 
@@ -45,7 +44,6 @@ public final class Suites {
     private final PhaseSuite<MidTierContext> midTier;
     private final PhaseSuite<LowTierContext> lowTier;
 
-    private static final CompilerConfiguration defaultConfiguration;
     private static final Map<String, CompilerConfiguration> configurations;
 
     public PhaseSuite<HighTierContext> getHighTier() {
@@ -62,48 +60,12 @@ public final class Suites {
 
     static {
         configurations = new HashMap<>();
-        CompilerConfiguration basic = null;
-        CompilerConfiguration nonBasic = null;
-        int nonBasicCount = 0;
-
-        for (CompilerConfiguration config : Services.load(CompilerConfiguration.class)) {
+        for (CompilerConfiguration config : ServiceLoader.loadInstalled(CompilerConfiguration.class)) {
             String name = config.getClass().getSimpleName();
             if (name.endsWith("CompilerConfiguration")) {
                 name = name.substring(0, name.length() - "CompilerConfiguration".length());
             }
-            name = name.toLowerCase();
-
-            configurations.put(name, config);
-            if (name.equals("basic")) {
-                assert basic == null;
-                basic = config;
-            } else {
-                nonBasic = config;
-                nonBasicCount++;
-            }
-        }
-
-        if (CompilerConfiguration.getValue().equals("")) {
-            if (nonBasicCount == 1) {
-                /*
-                 * There is exactly one non-basic configuration. We use this one as default.
-                 */
-                defaultConfiguration = nonBasic;
-            } else {
-                /*
-                 * There is either no extended configuration available, or more than one. In that
-                 * case, default to "basic".
-                 */
-                defaultConfiguration = basic;
-                if (defaultConfiguration == null) {
-                    throw new GraalInternalError("unable to find basic compiler configuration");
-                }
-            }
-        } else {
-            defaultConfiguration = configurations.get(CompilerConfiguration.getValue());
-            if (defaultConfiguration == null) {
-                throw new GraalInternalError("unknown compiler configuration: " + CompilerConfiguration.getValue());
-            }
+            configurations.put(name.toLowerCase(), config);
         }
     }
 
@@ -114,7 +76,7 @@ public final class Suites {
     }
 
     public static Suites createDefaultSuites() {
-        return new Suites(defaultConfiguration);
+        return createSuites(CompilerConfiguration.getValue());
     }
 
     public static Suites createSuites(String name) {
