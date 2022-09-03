@@ -31,16 +31,18 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringReader;
+import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-@SuppressWarnings("deprecation")
 @RunWith(SeparateClassloaderTestRunner.class)
 public class SourceTest {
     @Test
@@ -220,15 +222,61 @@ public class SourceTest {
     }
 
     @Test
+    public void withName() throws Exception {
+        final String tmpName = "/tmp/hi.tmp";
+        final String realName = "/path/hi.txt";
+
+        Source orig = Source.fromText("Hi", tmpName);
+        assertEquals(tmpName, orig.getName());
+        Source foundOrig = Source.find(tmpName);
+        assertEquals(orig, foundOrig);
+
+        Source source = orig.withName(realName);
+        assertEquals(realName, source.getName());
+
+        Source foundSource = Source.find(realName);
+        assertSame(source, foundSource);
+
+        WeakReference<Source> refOrig = new WeakReference<>(orig);
+        orig = null;
+        foundOrig = null;
+
+        assertGC("The source can disappear", refOrig);
+
+        Source notFoundSource = Source.find(tmpName);
+        assertNull("Original source isn't there anymore", notFoundSource);
+    }
+
+    @Test
+    public void withShortName() throws Exception {
+        Source orig = Source.fromText("Hi", "/tmp/hi.tmp");
+        assertEquals("/tmp/hi.tmp", orig.getShortName());
+        Source source = orig.withShortName("hi.txt");
+        assertEquals("hi.txt", source.getShortName());
+    }
+
+    @Test
+    public void withPath() throws Exception {
+        Source orig = Source.fromText("Hi", "/tmp/hi.tmp");
+        assertEquals("Path is derived from name", "/tmp/hi.tmp", orig.getPath());
+        Source source = orig.withPath("c:\\temp\\hi.txt");
+        assertEquals("c:\\temp\\hi.txt", source.getPath());
+    }
+
+    /* Test currently fails on Sparc. */
+    @Ignore
+    @Test
     public void relativeURL() throws Exception {
         URL resource = SourceSnippets.class.getResource("sample.js");
         assertNotNull("Sample js file found", resource);
         SourceSnippets.fromURL();
     }
 
+    /* Test currently fails on Sparc. */
+    @Ignore
     @Test
     public void fileSample() throws Exception {
-        File sample = File.createTempFile("sample", ".java").getCanonicalFile();
+        File sample = File.createTempFile("sample", ".java");
         sample.deleteOnExit();
         SourceSnippets.fromFile(sample.getParentFile(), sample.getName());
         sample.delete();
@@ -280,6 +328,7 @@ public class SourceTest {
         assertEquals("Old source2 remains unchanged", text, still.getCode());
     }
 
+    @Test
     public void subSourceHashAndEquals() {
         Source src = Source.fromText("One Two Three", "counting.en");
         Source one = Source.subSource(src, 0, 3);
@@ -339,5 +388,16 @@ public class SourceTest {
         assertEquals(s1.getURI(), sub1.getURI());
         assertEquals(f2.toURI(), s2.getURI());
         assertEquals(s2.getURI(), sub2.getURI());
+    }
+
+    private static void assertGC(String msg, WeakReference<?> ref) {
+        for (int i = 0; i < 100; i++) {
+            if (ref.get() == null) {
+                return;
+            }
+            System.gc();
+            System.runFinalization();
+        }
+        fail(msg + " ref: " + ref.get());
     }
 }
