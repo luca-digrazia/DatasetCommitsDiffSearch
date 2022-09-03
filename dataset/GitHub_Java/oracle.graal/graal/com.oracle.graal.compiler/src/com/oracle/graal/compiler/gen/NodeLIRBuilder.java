@@ -40,6 +40,7 @@ import com.oracle.graal.compiler.match.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
@@ -193,6 +194,10 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         gen.append(op);
     }
 
+    private static NodeIterable<ValuePhiNode> valuePhis(AbstractMergeNode merge) {
+        return merge.usages().filter(ValuePhiNode.class).filter(merge::isPhiAtMerge);
+    }
+
     protected LIRKind getExactPhiKind(PhiNode phi) {
         ArrayList<Value> values = new ArrayList<>(phi.valueCount());
         for (int i = 0; i < phi.valueCount(); i++) {
@@ -218,7 +223,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
     private Value[] createPhiIn(AbstractMergeNode merge) {
         List<Value> values = new ArrayList<>();
-        for (ValuePhiNode phi : merge.valuePhis()) {
+        for (ValuePhiNode phi : valuePhis(merge)) {
             assert getOperand(phi) == null;
             Variable value = gen.newVariable(getExactPhiKind(phi));
             values.add(value);
@@ -229,7 +234,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
     private Value[] createPhiOut(AbstractMergeNode merge, AbstractEndNode pred) {
         List<Value> values = new ArrayList<>();
-        for (PhiNode phi : merge.valuePhis()) {
+        for (PhiNode phi : valuePhis(merge)) {
             Value value = operand(phi.valueAt(pred));
             assert value != null;
             values.add(value);
