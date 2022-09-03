@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,18 +26,14 @@ import static org.junit.Assert.*;
 
 import java.lang.management.*;
 
-import com.oracle.graal.debug.*;
-
 import org.junit.*;
+
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.internal.*;
 
 public class DebugTimerTest {
 
-    private static final ThreadMXBean threadMXBean = Management.getThreadMXBean();
-
-    @Before
-    public void checkCapabilities() {
-        Assume.assumeTrue("skipping management interface test", threadMXBean.isCurrentThreadCpuTimeSupported());
-    }
+    private static final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
 
     /**
      * Actively spins the current thread for at least a given number of milliseconds in such a way
@@ -67,9 +63,9 @@ public class DebugTimerTest {
             long spinA;
             long spinB;
 
-            try (DebugCloseable a1 = timerA.start()) {
+            try (TimerCloseable a1 = timerA.start()) {
                 spinA = spin(50);
-                try (DebugCloseable b1 = timerB.start()) {
+                try (TimerCloseable b1 = timerB.start()) {
                     spinB = spin(50);
                 }
             }
@@ -87,15 +83,15 @@ public class DebugTimerTest {
         DebugConfig debugConfig = Debug.fixedConfig(0, 0, false, false, true, false, null, null, System.out);
         try (DebugConfigScope dcs = new DebugConfigScope(debugConfig); Debug.Scope s = Debug.scope("DebugTimerTest")) {
             DebugTimer timerC = Debug.timer("TimerC");
-            try (DebugCloseable c1 = timerC.start()) {
+            try (TimerCloseable c1 = timerC.start()) {
                 spin(50);
-                try (DebugCloseable c2 = timerC.start()) {
+                try (TimerCloseable c2 = timerC.start()) {
                     spin(50);
-                    try (DebugCloseable c3 = timerC.start()) {
+                    try (TimerCloseable c3 = timerC.start()) {
                         spin(50);
-                        try (DebugCloseable c4 = timerC.start()) {
+                        try (TimerCloseable c4 = timerC.start()) {
                             spin(50);
-                            try (DebugCloseable c5 = timerC.start()) {
+                            try (TimerCloseable c5 = timerC.start()) {
                                 spin(50);
                             }
                         }
@@ -119,13 +115,13 @@ public class DebugTimerTest {
             long spinD1;
             long spinE;
 
-            try (DebugCloseable d1 = timerD.start()) {
+            try (TimerCloseable d1 = timerD.start()) {
                 spinD1 = spin(50);
-                try (DebugCloseable e1 = timerE.start()) {
+                try (TimerCloseable e1 = timerE.start()) {
                     spinE = spin(50);
-                    try (DebugCloseable d2 = timerD.start()) {
+                    try (TimerCloseable d2 = timerD.start()) {
                         spin(50);
-                        try (DebugCloseable d3 = timerD.start()) {
+                        try (TimerCloseable d3 = timerD.start()) {
                             spin(50);
                         }
                     }
