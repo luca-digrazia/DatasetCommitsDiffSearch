@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.alloc.trace.TraceUtil.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import java.util.*;
@@ -61,7 +60,7 @@ public class TraceGlobalMoveResolutionPhase extends AllocationPhase {
         TraceGlobalMoveResolver moveResolver = new TraceGlobalMoveResolver(lirGenRes, spillMoveFactory, arch);
         PhiValueVisitor visitor = (Value phiIn, Value phiOut) -> {
             if (!isIllegal(phiIn) && !TraceGlobalMoveResolver.isMoveToSelf(phiOut, phiIn)) {
-                moveResolver.addMapping(getFromValue(phiOut), (AllocatableValue) phiIn);
+                moveResolver.addMapping(phiOut, (AllocatableValue) phiIn);
             }
         };
 
@@ -93,9 +92,5 @@ public class TraceGlobalMoveResolutionPhase extends AllocationPhase {
                 }
             }
         }
-    }
-
-    private static Value getFromValue(Value from) {
-        return isShadowedRegisterValue(from) ? asShadowedRegisterValue(from).getRegister() : from;
     }
 }
