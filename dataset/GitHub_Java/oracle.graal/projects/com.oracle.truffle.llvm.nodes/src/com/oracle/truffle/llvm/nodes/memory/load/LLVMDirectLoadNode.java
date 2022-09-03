@@ -44,6 +44,7 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadObjectNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
@@ -199,23 +200,19 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        protected Object doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
+        protected Object doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
             if (addr.getValue() instanceof Long) {
-                return getLLVMMemoryCached().getAddress((long) addr.getValue());
+                return memory.getAddress((long) addr.getValue());
             } else {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalAccessError("Cannot access memory with address: " + addr.getValue());
             }
         }
 
-        @Specialization(guards = {"addr.isNative()", "!isAutoDerefHandle(addr.asNative())"})
+        @Specialization(guards = "addr.isNative()")
         protected Object doAddress(LLVMTruffleObject addr) {
             return doAddress(addr.asNative());
-        }
-
-        @Specialization(guards = {"addr.isNative()", "isAutoDerefHandle(addr.asNative())"})
-        protected Object doAddressDerefHandle(LLVMTruffleObject addr) {
-            return doAddressDerefHandle(addr.asNative());
         }
 
         @Specialization(guards = "addr.isManaged()")
