@@ -104,7 +104,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         super(rootNode.toString());
         assert sourceCallTarget == null || sourceCallTarget.sourceCallTarget == null : "Cannot create a clone of a cloned CallTarget";
         this.sourceCallTarget = sourceCallTarget;
-        this.speculationLog = sourceCallTarget != null ? sourceCallTarget.getSpeculationLog() : null;
         this.rootNode = rootNode;
         this.rootNode.adoptChildren();
         this.rootNode.applyInstrumentation();
