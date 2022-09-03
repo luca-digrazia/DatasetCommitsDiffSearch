@@ -392,13 +392,10 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
     @Override
     public void applyToNonVirtual(NodeClosure< ? super ValueNode> closure) {
         for (ValueNode value : values.nonNull()) {
-            closure.apply(this, value);
+            closure.apply(value);
         }
         for (VirtualObjectState state : virtualObjectMappings) {
             state.applyToNonVirtual(closure);
-        }
-        if (outerFrameState() != null) {
-            outerFrameState().applyToNonVirtual(closure);
         }
     }
 }
