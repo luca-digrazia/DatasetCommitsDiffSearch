@@ -230,7 +230,8 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
         }
         if (!node.isDeleted()) {
             GraphUtil.unlinkFixedNode((FixedWithNextNode) node);
-            node.replaceAtUsagesAndDelete(canonical);
+            node.replaceAtUsages(canonical);
+            node.safeDelete();
         }
         assert lookupNode(loopScope, nodeOrderId) == node;
         registerNode(loopScope, nodeOrderId, canonical, true, false);
