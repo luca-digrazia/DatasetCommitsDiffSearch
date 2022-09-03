@@ -23,7 +23,6 @@
 package com.oracle.graal.compiler.match;
 
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
-import static com.oracle.graal.graph.Edges.Type.*;
 
 import java.util.*;
 import java.util.Map.Entry;
@@ -39,25 +38,42 @@ import com.oracle.graal.nodes.*;
 public class MatchRuleRegistry {
 
     /**
+     * Helper interface for mapping between Class and NodeClass. In static compilation environments,
+     * the current NodeClass might not be the same NodeClass used in the target so this provides a
+     * level of indirection.
+     */
+    public static interface NodeClassLookup {
+        NodeClass get(Class<?> theClass);
+    }
+
+    static class DefaultNodeClassLookup implements NodeClassLookup {
+        public NodeClass get(Class<?> theClass) {
+            return NodeClass.get(theClass);
+        }
+    }
+
+    /**
      * Convert a list of field names into {@link com.oracle.graal.graph.Position} objects that can
      * be used to read them during a match. The names should already have been confirmed to exist in
      * the type.
      *
-     * @param nodeClass
+     * @param theClass
      * @param names
      * @return an array of Position objects corresponding to the named fields.
      */
-    public static Position[] findPositions(NodeClass<? extends ValueNode> nodeClass, String[] names) {
+    public static Position[] findPositions(NodeClassLookup lookup, Class<? extends ValueNode> theClass, String[] names) {
         Position[] result = new Position[names.length];
+        NodeClass nodeClass = lookup.get(theClass);
         for (int i = 0; i < names.length; i++) {
-            Edges edges = nodeClass.getEdges(Inputs);
-            for (int e = 0; e < edges.getDirectCount(); e++) {
-                if (names[i].equals(edges.getName(e))) {
-                    result[i] = new Position(edges, e, Node.NOT_ITERABLE);
+            for (Position position : nodeClass.getFirstLevelInputPositions()) {
+                String name = nodeClass.getName(position);
+                if (name.equals(names[i])) {
+                    result[i] = position;
+                    break;
                 }
             }
             if (result[i] == null) {
-                throw new GraalInternalError("unknown field \"%s\" in class %s", names[i], nodeClass);
+                throw new GraalInternalError("unknown field \"%s\" in class %s", names[i], theClass);
             }
         }
         return result;
@@ -71,11 +87,12 @@ public class MatchRuleRegistry {
      * @param theClass
      * @return the set of {@link MatchStatement}s applicable to theClass.
      */
-    public static synchronized Map<Class<? extends ValueNode>, List<MatchStatement>> lookup(Class<? extends NodeLIRBuilder> theClass) {
+    public synchronized static Map<Class<? extends ValueNode>, List<MatchStatement>> lookup(Class<? extends NodeLIRBuilder> theClass) {
         Map<Class<? extends ValueNode>, List<MatchStatement>> result = registry.get(theClass);
 
         if (result == null) {
-            Map<Class<? extends ValueNode>, List<MatchStatement>> rules = createRules(theClass);
+            NodeClassLookup lookup = new DefaultNodeClassLookup();
+            Map<Class<? extends ValueNode>, List<MatchStatement>> rules = createRules(theClass, lookup);
             registry.put(theClass, rules);
             assert registry.get(theClass) == rules;
             result = rules;
@@ -103,7 +120,7 @@ public class MatchRuleRegistry {
      * This is a separate, public method so that external clients can create rules with a custom
      * lookup and without the default caching behavior.
      */
-    public static Map<Class<? extends ValueNode>, List<MatchStatement>> createRules(Class<? extends NodeLIRBuilder> theClass) {
+    public static Map<Class<? extends ValueNode>, List<MatchStatement>> createRules(Class<? extends NodeLIRBuilder> theClass, NodeClassLookup lookup) {
         HashMap<Class<? extends NodeLIRBuilder>, MatchStatementSet> matchSets = new HashMap<>();
         Iterable<MatchStatementSet> sl = Services.load(MatchStatementSet.class);
         for (MatchStatementSet rules : sl) {
@@ -117,7 +134,7 @@ public class MatchRuleRegistry {
         do {
             MatchStatementSet matchSet = matchSets.get(currentClass);
             if (matchSet != null) {
-                List<MatchStatement> statements = matchSet.statements();
+                List<MatchStatement> statements = matchSet.statements(lookup);
                 for (MatchStatement statement : statements) {
                     Class<? extends ValueNode> nodeClass = statement.getPattern().nodeClass();
                     List<MatchStatement> current = rules.get(nodeClass);
