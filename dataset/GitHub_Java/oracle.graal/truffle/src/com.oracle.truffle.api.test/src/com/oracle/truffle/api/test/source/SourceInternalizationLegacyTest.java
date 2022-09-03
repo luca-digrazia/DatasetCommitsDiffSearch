@@ -51,7 +51,6 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.test.polyglot.PolyglotCachingTest;
 
 @SuppressWarnings("deprecation")
 public class SourceInternalizationLegacyTest {
@@ -182,7 +181,7 @@ public class SourceInternalizationLegacyTest {
 
         ReferenceQueue<Object> queue = new ReferenceQueue<>();
         List<WeakReference<Object>> sources = new ArrayList<>();
-        for (int i = 0; i < PolyglotCachingTest.GC_TEST_ITERATIONS; i++) {
+        for (int i = 0; i < 15; i++) {
             sources.add(new WeakReference<>(createTestSource(testString, i), queue));
             System.gc();
         }
