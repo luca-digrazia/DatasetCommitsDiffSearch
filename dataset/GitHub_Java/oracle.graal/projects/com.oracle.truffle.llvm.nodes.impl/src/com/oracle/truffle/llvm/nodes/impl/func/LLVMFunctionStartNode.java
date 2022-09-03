@@ -30,16 +30,16 @@
 package com.oracle.truffle.llvm.nodes.impl.func;
 
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
+import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
 public class LLVMFunctionStartNode extends RootNode {
 
@@ -47,23 +47,25 @@ public class LLVMFunctionStartNode extends RootNode {
     @Children private final LLVMNode[] beforeFunction;
     @Children private final LLVMNode[] afterFunction;
     private final String functionName;
-    private final FrameSlot stackSlot;
+    @CompilationFinal private LLVMStackFrameNuller[] nullers;
 
-    public LLVMFunctionStartNode(LLVMExpressionNode node, FrameSlot stackSlot, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, FrameDescriptor frameDescriptor, String functionName) {
-        super(LLVMLanguage.class, null, frameDescriptor);
+    public LLVMFunctionStartNode(LLVMExpressionNode node, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, SourceSection sourceSection, FrameDescriptor frameDescriptor, String functionName,
+                    LLVMStackFrameNuller[] initNullers) {
+        super(LLVMLanguage.class, sourceSection, frameDescriptor);
         this.node = node;
-        this.stackSlot = stackSlot;
         this.beforeFunction = beforeFunction;
         this.afterFunction = afterFunction;
         this.functionName = functionName;
+        this.nullers = initNullers;
     }
 
     @Override
     @ExplodeLoop
     public Object execute(VirtualFrame frame) {
+        for (LLVMStackFrameNuller nuller : nullers) {
+            nuller.nullifySlot(frame);
+        }
         CompilerAsserts.compilationConstant(beforeFunction);
-        final LLVMAddress stackPointer = LLVMStack.getStackPointer();
-        frame.setObject(stackSlot, stackPointer);
         for (LLVMNode before : beforeFunction) {
             before.executeVoid(frame);
         }
@@ -72,12 +74,20 @@ public class LLVMFunctionStartNode extends RootNode {
         for (LLVMNode after : afterFunction) {
             after.executeVoid(frame);
         }
-        LLVMStack.setStackPointer(stackPointer);
         return result;
     }
 
     @Override
     public String toString() {
+        return functionName;
+    }
+
+    public String getFunctionName() {
+        return functionName;
+    }
+
+    @Override
+    public String getName() {
         return functionName;
     }
 

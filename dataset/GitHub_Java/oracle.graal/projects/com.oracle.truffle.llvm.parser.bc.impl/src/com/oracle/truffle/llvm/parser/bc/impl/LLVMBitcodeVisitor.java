@@ -62,7 +62,6 @@ import com.oracle.truffle.llvm.nodes.impl.others.LLVMAccessGlobalVariableStorage
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMStaticInitsBlockNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
-import com.oracle.truffle.llvm.parser.base.LLVMParserResultImpl;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMConstantGenerator;
 import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
@@ -76,7 +75,7 @@ import com.oracle.truffle.llvm.parser.factories.LLVMMemoryReadWriteFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMRootNodeFactory;
 import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
@@ -121,7 +120,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         model.accept(module);
 
-        LLVMFunction mainFunction = module.getFunction("@main");
+        LLVMFunctionDescriptor mainFunction = module.getFunction("@main");
 
         FrameDescriptor frame = new FrameDescriptor();
         FrameSlot stack = frame.addFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID);
@@ -137,15 +136,15 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         final List<RootCallTarget> destructorFunctions = module.getStructor("@llvm.global_dtors", frame, stack);
 
         if (mainFunction == null) {
-            return new LLVMParserResultImpl(Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(stack)), globalVarInitsTarget, globalVarDeallocsTarget, constructorFunctions,
-                            destructorFunctions, module.getFunctions());
+            return new LLVMBitcodeParserResult(Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(stack)), globalVarInitsTarget, globalVarDeallocsTarget, module.getFunctions(),
+                            constructorFunctions, destructorFunctions);
         }
         RootCallTarget mainCallTarget = module.getFunctions().get(mainFunction);
         RootNode globalFunction = LLVMRootNodeFactory.createGlobalRootNode(context, stack, frame, mainCallTarget, context.getMainArguments(), source, mainFunction.getParameterTypes());
         RootCallTarget globalFunctionRoot = Truffle.getRuntime().createCallTarget(globalFunction);
         RootNode globalRootNode = LLVMFunctionFactory.createGlobalRootNodeWrapping(globalFunctionRoot, mainFunction.getReturnType());
         RootCallTarget wrappedCallTarget = Truffle.getRuntime().createCallTarget(globalRootNode);
-        return new LLVMParserResultImpl(wrappedCallTarget, globalVarInitsTarget, globalVarDeallocsTarget, constructorFunctions, destructorFunctions, module.getFunctions());
+        return new LLVMBitcodeParserResult(wrappedCallTarget, globalVarInitsTarget, globalVarDeallocsTarget, module.getFunctions(), constructorFunctions, destructorFunctions);
     }
 
     private final LLVMContext context;
@@ -160,7 +159,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     private final Map<GlobalAlias, Symbol> aliases = new HashMap<>();
 
-    private final Map<LLVMFunction, RootCallTarget> functions = new HashMap<>();
+    private final Map<LLVMFunctionDescriptor, RootCallTarget> functions = new HashMap<>();
 
     private final Map<GlobalValueSymbol, LLVMAddressNode> globals = new HashMap<>();
 
@@ -274,8 +273,8 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         return deallocations.toArray(new LLVMNode[deallocations.size()]);
     }
 
-    public LLVMFunction getFunction(String name) {
-        for (LLVMFunction function : functions.keySet()) {
+    public LLVMFunctionDescriptor getFunction(String name) {
+        for (LLVMFunctionDescriptor function : functions.keySet()) {
             if (function.getName().equals(name)) {
                 return function;
             }
@@ -283,7 +282,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         return null;
     }
 
-    public Map<LLVMFunction, RootCallTarget> getFunctions() {
+    public Map<LLVMFunctionDescriptor, RootCallTarget> getFunctions() {
         return functions;
     }
 
@@ -413,6 +412,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void visit(FunctionDefinition method) {
         FrameDescriptor frame = frames.getDescriptor(method.getName());
 
@@ -423,7 +423,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         LLVMNode[] beforeFunction = parameters.toArray(new LLVMNode[parameters.size()]);
         LLVMNode[] afterFunction = new LLVMNode[0];
 
-        final SourceSection sourceSection = source.createSection(1);
+        final SourceSection sourceSection = source.createSection(method.getName(), 1);
         LLVMFunctionStartNode rootNode = new LLVMFunctionStartNode(body, beforeFunction, afterFunction, sourceSection, frame, method.getName(), getInitNullers(frame));
         if (LLVMBaseOptionFacade.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
@@ -432,7 +432,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         LLVMRuntimeType llvmReturnType = LLVMBitcodeTypeHelper.toRuntimeType(method.getReturnType());
         LLVMRuntimeType[] llvmParamTypes = LLVMBitcodeTypeHelper.toRuntimeTypes(method.getArgumentTypes());
-        LLVMFunction function = context.getFunctionRegistry().createFunctionDescriptor(method.getName(), llvmReturnType, llvmParamTypes, method.isVarArg());
+        LLVMFunctionDescriptor function = context.getFunctionRegistry().createFunctionDescriptor(method.getName(), llvmReturnType, llvmParamTypes, method.isVarArg());
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         functions.put(function, callTarget);
     }

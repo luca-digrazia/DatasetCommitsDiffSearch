@@ -32,19 +32,24 @@ package com.oracle.truffle.llvm.nodes.impl.intrinsics.c;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
+import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
+import com.oracle.truffle.llvm.nodes.base.LLVMThread;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
@@ -52,8 +57,8 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode.LLVMUnresolvedCallNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.nodes.impl.literals.LLVMFunctionLiteralNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMI32LiteralNode;
 import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMAddressLiteralNode;
+import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMI32LiteralNode;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
@@ -91,20 +96,40 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
         }
     }
 
+    private static Lock globalSignalHandlerLock = new ReentrantLock();
+
     private static final Map<Integer, LLVMSignalHandler> registeredSignals = new HashMap<>();
+
+    @TruffleBoundary
+    public static int getNumberOfRegisteredSignals() {
+        return registeredSignals.size();
+    }
 
     @TruffleBoundary
     private static LLVMFunctionDescriptor setSignalHandler(Signal signal, LLVMFunctionDescriptor function) {
         int signalId = signal.getNumber();
         LLVMFunctionDescriptor returnFunction = LLVM_SIG_DFL;
 
-        if (registeredSignals.containsKey(signalId)) {
-            LLVMSignalHandler currentFunction = registeredSignals.get(signalId);
-            returnFunction = currentFunction.getFunction();
-        }
-
         try {
-            registeredSignals.put(signalId, new LLVMSignalHandler(signal, function));
+            LLVMSignalHandler newSignalHandler = new LLVMSignalHandler(signal, function);
+            synchronized (registeredSignals) {
+                if (registeredSignals.containsKey(signalId)) {
+
+                    LLVMSignalHandler currentFunction = registeredSignals.get(signalId);
+
+                    if (currentFunction.isRunning()) {
+                        returnFunction = currentFunction.getFunction();
+
+                        /*
+                         * the new signal handler already manages this signal, so we can safely
+                         * deactivate the old one.
+                         */
+                        currentFunction.setStopped();
+                    }
+                }
+
+                registeredSignals.put(signalId, newSignalHandler);
+            }
         } catch (IllegalArgumentException e) {
             LLVMLogger.error("could not register signal with id " + signalId + " (" + signal + ")");
             return LLVM_SIG_ERR;
@@ -114,61 +139,215 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
     }
 
     // TODO: stack handling should work without predefined sizes,...
-    private static final long TMP_SIGNAL_STACK_SIZE_KB = 512;
-    private static final long TMP_SIGNAL_STACK_SIZE_BYTE = TMP_SIGNAL_STACK_SIZE_KB * 1024;
+    private static final long SIGNAL_STACK_SIZE_KB = 512;
+    private static final long SIGNAL_STACK_SIZE_BYTE = SIGNAL_STACK_SIZE_KB * 1024;
 
-    private static final class LLVMSignalHandler implements SignalHandler {
+    /**
+     * Registers a signal handler using sun.misc.SignalHandler. Unfortunately, using signals in java
+     * leads to some problems which are not resolved in our implementation yet.
+     *
+     * One of this issue is, that signals are executed in an asynchronous way, which means raise()
+     * exits before the signal was handled. Another Issue is that Java already registered some
+     * signal handlers, which therefore cannot be used in sulong.
+     *
+     * Therefore, our implementation does not comply with the ANSI C standard and could lead to
+     * timing issues when calling multiple signals in a defined sequence, or when a program has to
+     * wait until the signal was handled (which is not guaranteed because of the asynchronous
+     * behavior in our implementation).
+     */
+    private static final class LLVMSignalHandler implements SignalHandler, LLVMThread {
 
+        private final Signal signal;
         private final LLVMFunctionDescriptor function;
+        private final LLVMContext context;
         private RootCallTarget callTarget;
         private final LLVMStack stack = new LLVMStack();
 
+        private final Lock lock = new ReentrantLock();
+        private final AtomicBoolean isRunning = new AtomicBoolean(false);
+
+        @TruffleBoundary
         private LLVMSignalHandler(Signal signal, LLVMFunctionDescriptor function) throws IllegalArgumentException {
+            this.signal = signal;
             this.function = function;
-            LLVMFunctionNode functionNode = LLVMFunctionLiteralNodeGen.create(function);
 
-            LLVMAddressLiteralNode signalStack = new LLVMAddressLiteralNode(stack.allocate(TMP_SIGNAL_STACK_SIZE_BYTE));
-            LLVMI32LiteralNode sigNumArg = new LLVMI32LiteralNode(signal.getNumber());
-            LLVMExpressionNode[] args = {signalStack, sigNumArg};
+            this.context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
 
-            LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
+            lock.lock();
+            try {
+                if (function.equals(LLVM_SIG_DFL)) {
+                    Signal.handle(signal, SignalHandler.SIG_DFL);
+                    isRunning.set(true);
+                    context.registerThread(this);
+                    return;
+                } else if (function.equals(LLVM_SIG_IGN)) {
+                    Signal.handle(signal, SignalHandler.SIG_IGN);
+                    isRunning.set(true);
+                    context.registerThread(this);
+                    return;
+                }
 
-            LLVMUnresolvedCallNode callNode = new LLVMUnresolvedCallNode(functionNode, args, LLVMRuntimeType.VOID, context);
-
-            callTarget = Truffle.getRuntime().createCallTarget(
-                            new LLVMFunctionStartNode(callNode,
-                                            new LLVMNode[]{},
-                                            new LLVMNode[]{},
-                                            SourceSection.createUnavailable("", null),
-                                            new FrameDescriptor(), ""));
-
-            if (function.equals(LLVM_SIG_DFL)) {
-                Signal.handle(signal, SignalHandler.SIG_DFL);
-            } else if (function.equals(LLVM_SIG_IGN)) {
-                Signal.handle(signal, SignalHandler.SIG_IGN);
-            } else {
                 Signal.handle(signal, this);
+
+                // only when we reach this point, the signal handler was registered successfully
+                LLVMAddressLiteralNode signalStack = new LLVMAddressLiteralNode(stack.allocate(SIGNAL_STACK_SIZE_BYTE));
+                LLVMI32LiteralNode sigNumArg = new LLVMI32LiteralNode(signal.getNumber());
+                LLVMExpressionNode[] args = {signalStack, sigNumArg};
+
+                LLVMFunctionNode functionNode = LLVMFunctionLiteralNodeGen.create(function);
+
+                LLVMUnresolvedCallNode callNode = new LLVMUnresolvedCallNode(functionNode, args, LLVMRuntimeType.VOID, context);
+
+                callTarget = Truffle.getRuntime().createCallTarget(
+                                new LLVMFunctionStartNode(callNode,
+                                                new LLVMNode[]{},
+                                                new LLVMNode[]{},
+                                                null,
+                                                new FrameDescriptor(), "", new LLVMStackFrameNuller[0]));
+
+                isRunning.set(true);
+                context.registerThread(this);
+            } catch (IllegalArgumentException e) {
+                throw e;
+            } finally {
+                lock.unlock();
             }
         }
 
+        public boolean isRunning() {
+            return isRunning.get();
+        }
+
+        @Override
+        @TruffleBoundary
+        protected void finalize() throws Throwable {
+            super.finalize();
+            stop();
+            unregisterFromContext();
+        }
+
+        private static final long HANDLE_MAX_WAITING_TIME = 250; // ms
+
         @Override
         public void handle(Signal arg0) {
-            /*
-             * https://en.wikipedia.org/wiki/Sigaction#Replacement_of_deprecated_signal.28.29
-             *
-             * Signal handlers installed by the signal() interface will be uninstalled immediately
-             * prior to execution of the handler.
-             *
-             * @note I made such a program, and I had to delete the handler manually, so this
-             * sentence is probably not true
-             */
-            callTarget.call();
+            try {
+                if (!globalSignalHandlerLock.tryLock(HANDLE_MAX_WAITING_TIME, TimeUnit.MILLISECONDS)) {
+                    LLVMLogger.error("could not execute signal handler. Sulong can currently only execute one signal at once!");
+                    return;
+                }
+            } catch (InterruptedException e) {
+                throw new AssertionError(e);
+            }
+            lock.lock();
+            try {
+                if (isRunning.get()) {
+                    callTarget.call();
+                }
+            } finally {
+                lock.unlock();
+                globalSignalHandlerLock.unlock();
+            }
+
+            // probably, this was our last turn for the signal handler
+            if (!isRunning.get()) {
+                unregisterFromContext();
+            }
         }
 
         public LLVMFunctionDescriptor getFunction() {
             return function;
         }
 
+        /**
+         * Required to call if a new LLVMSignalHandler take over the signal. Otherwise it would
+         * unregister the signal when this Object is going to be deallocated or stopped.
+         */
+        private void setStopped() {
+            isRunning.set(false);
+
+            /*
+             * Either no handler is currently running, or it would unregister after finishing it's
+             * execution.
+             */
+            tryUnregisterFromContext();
+        }
+
+        @Override
+        public void stop() {
+            if (isRunning.getAndSet(false)) {
+                /*
+                 * it seems like we don't want to catch this signal anymore, as well as there is no
+                 * other signal handler which want to catch it. So we simply reset it to look like
+                 * no signal handler was registered at all.
+                 */
+                Signal.handle(signal, SignalHandler.SIG_DFL);
+            }
+
+            /*
+             * Either no handler is currently running, or it would unregister after finishing it's
+             * execution.
+             */
+            tryUnregisterFromContext();
+        }
+
+        @Override
+        public void awaitFinish() {
+            stop();
+
+            // wait until handle is finished
+            lock.lock();
+            lock.unlock();
+
+            // this thread wouldn't start anymore, so we can assume it's stopped
+            unregisterFromContext();
+        }
+
+        /**
+         * Unregister this SignalHandler from context.
+         */
+        private void unregisterFromContext() {
+            assert !isRunning.get();
+
+            context.unregisterThread(this);
+
+            int signalId = signal.getNumber();
+            synchronized (registeredSignals) {
+                if (registeredSignals.get(signalId) == this) {
+                    registeredSignals.remove(signalId);
+                }
+            }
+
+            lock.lock();
+            try {
+                if (!stack.isFreed()) {
+                    stack.free();
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        /**
+         * Only unregister this SignalHandler, if there is currently no lock held.
+         */
+        private boolean tryUnregisterFromContext() {
+            assert !isRunning.get();
+
+            if (lock.tryLock()) {
+                try {
+                    unregisterFromContext();
+                } finally {
+                    lock.unlock();
+                }
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public String toString() {
+            return "LLVMSignalHandler [signal=" + signal + ", lock=" + lock + ", isRunning=" + isRunning + "]";
+        }
     }
 
     /**

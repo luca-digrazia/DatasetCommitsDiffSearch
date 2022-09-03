@@ -132,7 +132,6 @@ import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.LLVMType;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
-import com.oracle.truffle.llvm.parser.base.LLVMParserResultImpl;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.impl.LLVMPhiVisitor.Phi;
 import com.oracle.truffle.llvm.parser.impl.lifetime.LLVMLifeTimeAnalysisResult;
@@ -150,7 +149,7 @@ import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
 /**
@@ -169,7 +168,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     private FrameDescriptor globalFrameDescriptor;
     private List<LLVMNode> functionEpilogue;
     private Map<FunctionHeader, Map<String, Integer>> functionToLabelMapping;
-    private final Map<LLVMFunction, RootCallTarget> functionCallTargets = new HashMap<>();
+    private final Map<LLVMFunctionDescriptor, RootCallTarget> functionCallTargets = new HashMap<>();
     private Map<String, Object> globalVariableScope = new HashMap<>();
     private final Map<String, ResolvedType> variableTypes = new HashMap<>();
     private Map<String, Integer> labelList;
@@ -196,8 +195,62 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         typeHelper = new LLVMTypeHelper(this);
     }
 
-    private static LLVMFunction searchFunction(Map<LLVMFunction, RootCallTarget> parsedFunctions, String toSearch) {
-        for (LLVMFunction func : parsedFunctions.keySet()) {
+    private class ParserResult implements LLVMParserResult {
+
+        private final RootCallTarget mainFunction;
+        private final RootCallTarget globalVarInits;
+        private final RootCallTarget globalVarDeallocs;
+        private final List<RootCallTarget> constructorFunctions;
+        private final List<RootCallTarget> destructorFunctions;
+        private final Map<LLVMFunctionDescriptor, RootCallTarget> parsedFunctions;
+
+        ParserResult(RootCallTarget mainFunction,
+                        RootCallTarget globalVarInits,
+                        RootCallTarget globalVarDeallocs,
+                        List<RootCallTarget> constructorFunctions,
+                        List<RootCallTarget> destructorFunctions,
+                        Map<LLVMFunctionDescriptor, RootCallTarget> parsedFunctions) {
+            this.mainFunction = mainFunction;
+            this.globalVarInits = globalVarInits;
+            this.globalVarDeallocs = globalVarDeallocs;
+            this.constructorFunctions = constructorFunctions;
+            this.destructorFunctions = destructorFunctions;
+            this.parsedFunctions = parsedFunctions;
+        }
+
+        @Override
+        public RootCallTarget getMainFunction() {
+            return mainFunction;
+        }
+
+        @Override
+        public Map<LLVMFunctionDescriptor, RootCallTarget> getParsedFunctions() {
+            return parsedFunctions;
+        }
+
+        @Override
+        public RootCallTarget getGlobalVarInits() {
+            return globalVarInits;
+        }
+
+        @Override
+        public RootCallTarget getGlobalVarDeallocs() {
+            return globalVarDeallocs;
+        }
+
+        @Override
+        public List<RootCallTarget> getConstructorFunctions() {
+            return constructorFunctions;
+        }
+
+        @Override
+        public List<RootCallTarget> getDestructorFunctions() {
+            return destructorFunctions;
+        }
+    }
+
+    private static LLVMFunctionDescriptor searchFunction(Map<LLVMFunctionDescriptor, RootCallTarget> parsedFunctions, String toSearch) {
+        for (LLVMFunctionDescriptor func : parsedFunctions.keySet()) {
             if (func.getName().equals(toSearch)) {
                 return func;
             }
@@ -206,8 +259,8 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     }
 
     public LLVMParserResult getMain(Model model, NodeFactoryFacade facade) {
-        Map<LLVMFunction, RootCallTarget> parsedFunctions = visit(model, facade);
-        LLVMFunction mainFunction = searchFunction(parsedFunctions, "@main");
+        Map<LLVMFunctionDescriptor, RootCallTarget> parsedFunctions = visit(model, facade);
+        LLVMFunctionDescriptor mainFunction = searchFunction(parsedFunctions, "@main");
         LLVMNode[] globalVarInits = globalNodes.toArray(new LLVMNode[globalNodes.size()]);
         RootCallTarget globalVarInitsTarget = Truffle.getRuntime().createCallTarget(factoryFacade.createStaticInitsRootNode(globalVarInits));
         deallocations = globalDeallocations.toArray(new LLVMNode[globalDeallocations.size()]);
@@ -223,21 +276,21 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         List<RootCallTarget> constructorFunctionCallTargets = new ArrayList<>(1);
         constructorFunctionCallTargets.add(constructorFunctionsTarget);
         if (mainFunction == null) {
-            return new LLVMParserResultImpl(null, globalVarInitsTarget, globalVarDeallocsTarget, constructorFunctionCallTargets, destructorFunctionCallTargets, parsedFunctions);
+            return new ParserResult(null, globalVarInitsTarget, globalVarDeallocsTarget, constructorFunctionCallTargets, destructorFunctionCallTargets, parsedFunctions);
         }
         RootCallTarget mainCallTarget = parsedFunctions.get(mainFunction);
         RootNode globalFunction = factoryFacade.createGlobalRootNode(mainCallTarget, mainArgs, mainSourceFile, mainFunction.getParameterTypes());
         RootCallTarget globalFunctionRoot = Truffle.getRuntime().createCallTarget(globalFunction);
         RootNode globalRootNode = factoryFacade.createGlobalRootNodeWrapping(globalFunctionRoot, mainFunction.getReturnType());
         RootCallTarget wrappedCallTarget = Truffle.getRuntime().createCallTarget(globalRootNode);
-        return new LLVMParserResultImpl(wrappedCallTarget, globalVarInitsTarget, globalVarDeallocsTarget, constructorFunctionCallTargets, destructorFunctionCallTargets, parsedFunctions);
+        return new ParserResult(wrappedCallTarget, globalVarInitsTarget, globalVarDeallocsTarget, constructorFunctionCallTargets, destructorFunctionCallTargets, parsedFunctions);
     }
 
-    public Map<LLVMFunction, RootCallTarget> visit(Model model, NodeFactoryFacade facade) {
+    public Map<LLVMFunctionDescriptor, RootCallTarget> visit(Model model, NodeFactoryFacade facade) {
         this.factoryFacade = facade;
         this.nativeLookup = new NativeLookup(facade);
         List<EObject> objects = model.eContents();
-        List<LLVMFunction> functions = new ArrayList<>();
+        List<LLVMFunctionDescriptor> functions = new ArrayList<>();
         globalNodes = new ArrayList<>();
         List<GlobalVariable> staticVars = new ArrayList<>();
         functionToLabelMapping = new HashMap<>();
@@ -247,7 +300,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         for (EObject object : objects) {
             if (object instanceof FunctionDef) {
                 phiRefs = LLVMPhiVisitor.visit((FunctionDef) object);
-                LLVMFunction function = visitFunction((FunctionDef) object);
+                LLVMFunctionDescriptor function = visitFunction((FunctionDef) object);
                 Map<String, Integer> functionLabels = labelList;
                 functionToLabelMapping.put(((FunctionDef) object).getHeader(), functionLabels);
                 functions.add(function);
@@ -451,7 +504,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     }
 
     @SuppressWarnings("deprecation")
-    private LLVMFunction visitFunction(FunctionDef def) {
+    private LLVMFunctionDescriptor visitFunction(FunctionDef def) {
         this.containingFunctionDef = def;
         isGlobalScope = false;
         frameDescriptor = new FrameDescriptor();
@@ -472,7 +525,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         if (LLVMBaseOptionFacade.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
         }
-        LLVMFunction function = createLLVMFunctionFromHeader(def.getHeader());
+        LLVMFunctionDescriptor function = createLLVMFunctionFromHeader(def.getHeader());
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         functionCallTargets.put(function, callTarget);
         return function;
@@ -1005,7 +1058,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         } else {
             if (constant.getRef() instanceof FunctionHeader) {
                 FunctionHeader header = (FunctionHeader) constant.getRef();
-                LLVMFunction function = createLLVMFunctionFromHeader(header);
+                LLVMFunctionDescriptor function = createLLVMFunctionFromHeader(header);
                 return factoryFacade.createLiteral(function, LLVMBaseType.FUNCTION_ADDRESS);
             } else if (constant.getRef() instanceof GlobalVariable) {
                 GlobalVariable globalVariable = (GlobalVariable) constant.getRef();
@@ -1042,7 +1095,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         Aliasee aliasee = ref.getAliasee();
         GlobalValueDef aliaseeRef = aliasee.getRef();
         if (aliaseeRef instanceof FunctionHeader) {
-            LLVMFunction function = createLLVMFunctionFromHeader((FunctionHeader) aliaseeRef);
+            LLVMFunctionDescriptor function = createLLVMFunctionFromHeader((FunctionHeader) aliaseeRef);
             return factoryFacade.createLiteral(function, LLVMBaseType.FUNCTION_ADDRESS);
         } else if (aliaseeRef instanceof GlobalVariable) {
             GlobalVariable originalVar = (GlobalVariable) aliaseeRef;
@@ -1239,7 +1292,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         }
     }
 
-    private LLVMFunction createLLVMFunctionFromHeader(FunctionHeader header) {
+    private LLVMFunctionDescriptor createLLVMFunctionFromHeader(FunctionHeader header) {
         Type returnType = header.getRettype();
         Parameters parameters = header.getParameters();
         EList<Parameter> params = parameters.getParameters();
@@ -1249,7 +1302,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         for (int i = 0; i < params.size(); i++) {
             llvmParamTypes[i] = getLLVMType(params.get(i).getType().getType());
         }
-        return factoryFacade.createAndRegisterFunctionDescriptor(header.getName(), LLVMTypeHelper.convertType(llvmReturnType), varArgs, LLVMTypeHelper.convertTypes(llvmParamTypes));
+        return factoryFacade.createFunctionDescriptor(header.getName(), LLVMTypeHelper.convertType(llvmReturnType), LLVMTypeHelper.convertTypes(llvmParamTypes), varArgs);
     }
 
     private LLVMExpressionNode parseSimpleConstant(EObject type, SimpleConstant simpleConst) {
