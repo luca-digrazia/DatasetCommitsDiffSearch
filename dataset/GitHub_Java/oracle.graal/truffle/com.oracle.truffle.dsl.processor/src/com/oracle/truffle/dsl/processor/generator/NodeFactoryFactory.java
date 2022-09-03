@@ -22,30 +22,40 @@
  */
 package com.oracle.truffle.dsl.processor.generator;
 
-import static com.oracle.truffle.dsl.processor.java.ElementUtils.*;
-import static javax.lang.model.element.Modifier.*;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.modifiers;
+import static javax.lang.model.element.Modifier.PRIVATE;
+import static javax.lang.model.element.Modifier.PUBLIC;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
 
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.TypeMirror;
 
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.dsl.processor.*;
-import com.oracle.truffle.dsl.processor.java.*;
-import com.oracle.truffle.dsl.processor.java.model.*;
-import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.ArrayCodeTypeMirror;
-import com.oracle.truffle.dsl.processor.model.*;
+import com.oracle.truffle.api.dsl.NodeFactory;
+import com.oracle.truffle.dsl.processor.ProcessorContext;
+import com.oracle.truffle.dsl.processor.java.ElementUtils;
+import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationMirror;
+import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationValue;
+import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
+import com.oracle.truffle.dsl.processor.java.model.CodeNames;
+import com.oracle.truffle.dsl.processor.java.model.CodeTreeBuilder;
+import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
+import com.oracle.truffle.dsl.processor.java.model.CodeVariableElement;
+import com.oracle.truffle.dsl.processor.model.NodeData;
+import com.oracle.truffle.dsl.processor.model.NodeExecutionData;
 
 class NodeFactoryFactory {
-
-    static final String EMPTY_CLASS_ARRAY = "EMPTY_CLASS_ARRAY";
 
     private final ProcessorContext context;
     private final NodeData node;
     private final CodeTypeElement createdFactoryElement;
 
-    public NodeFactoryFactory(ProcessorContext context, NodeData node, CodeTypeElement createdClass) {
+    NodeFactoryFactory(ProcessorContext context, NodeData node, CodeTypeElement createdClass) {
         this.context = context;
         this.node = node;
         this.createdFactoryElement = createdClass;
@@ -57,7 +67,7 @@ class NodeFactoryFactory {
 
     public CodeTypeElement create() {
         Modifier visibility = ElementUtils.getVisibility(node.getTemplateType().getModifiers());
-        TypeMirror nodeFactory = ElementUtils.getDeclaredType(ElementUtils.fromTypeMirror(context.getTruffleTypes().getNodeFactoryBase()), node.getNodeType());
+        TypeMirror nodeFactory = ElementUtils.getDeclaredType(ElementUtils.fromTypeMirror(context.getType(NodeFactory.class)), node.getNodeType());
 
         CodeTypeElement clazz = GeneratorUtils.createClass(node, null, modifiers(), factoryClassName(node), null);
         if (visibility != null) {
@@ -66,8 +76,17 @@ class NodeFactoryFactory {
         clazz.getModifiers().add(Modifier.FINAL);
 
         if (createdFactoryElement != null) {
-            clazz.setSuperClass(nodeFactory);
+            clazz.getImplements().add(nodeFactory);
+
+            CodeAnnotationMirror supressWarnings = new CodeAnnotationMirror(context.getDeclaredType(SuppressWarnings.class));
+            supressWarnings.setElementValue(supressWarnings.findExecutableElement("value"),
+                            new CodeAnnotationValue(Arrays.asList(new CodeAnnotationValue("unchecked"), new CodeAnnotationValue("rawtypes"))));
+            clazz.getAnnotationMirrors().add(supressWarnings);
+
             clazz.add(createNodeFactoryConstructor());
+            clazz.add(createCreateGetNodeClass());
+            clazz.add(createCreateGetExecutionSignature());
+            clazz.add(createCreateGetNodeSignatures());
             clazz.add(createCreateNodeMethod());
             clazz.add(createGetInstanceMethod(visibility));
             clazz.add(createInstanceConstant(clazz.asType()));
@@ -79,47 +98,54 @@ class NodeFactoryFactory {
 
     private Element createNodeFactoryConstructor() {
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PRIVATE), null, factoryClassName(node));
+        return method;
+    }
+
+    private CodeExecutableElement createCreateGetNodeClass() {
+        TypeMirror returnValue = ElementUtils.getDeclaredType(ElementUtils.fromTypeMirror(context.getType(Class.class)), node.getNodeType());
+        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), returnValue, "getNodeClass");
+        method.createBuilder().startReturn().typeLiteral(node.getNodeType()).end();
+        return method;
+    }
+
+    private CodeExecutableElement createCreateGetNodeSignatures() {
+        TypeMirror returnValue = ElementUtils.getDeclaredType(ElementUtils.fromTypeMirror(context.getType(List.class)));
+        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), returnValue, "getNodeSignatures");
         CodeTreeBuilder builder = method.createBuilder();
-        builder.startStatement();
-        builder.startCall("super");
+        builder.startReturn();
 
-        // node type
-        builder.typeLiteral(node.getNodeType());
-
-        // execution signature
         builder.startGroup();
-        if (node.getChildExecutions().isEmpty()) {
-            builder.staticReference(context.getTruffleTypes().getDslMetadata(), EMPTY_CLASS_ARRAY);
-        } else {
-            builder.startNewArray(new ArrayCodeTypeMirror(context.getType(Class.class)), null);
-            for (NodeExecutionData execution : node.getChildExecutions()) {
-                builder.typeLiteral(execution.getNodeType());
-            }
-            builder.end();
-        }
-        builder.end();
-
-        // node signatures
-        builder.startGroup();
-        builder.startNewArray(new ArrayCodeTypeMirror(new ArrayCodeTypeMirror(context.getType(Class.class))), null);
+        builder.startStaticCall(context.getType(Arrays.class), "asList");
         List<ExecutableElement> constructors = GeneratorUtils.findUserConstructors(createdFactoryElement.asType());
         for (ExecutableElement constructor : constructors) {
             builder.startGroup();
-            if (constructor.getParameters().isEmpty()) {
-                builder.staticReference(context.getTruffleTypes().getDslMetadata(), EMPTY_CLASS_ARRAY);
-            } else {
-                builder.startNewArray(new ArrayCodeTypeMirror(context.getType(Class.class)), null);
-                for (VariableElement var : constructor.getParameters()) {
-                    builder.typeLiteral(var.asType());
-                }
-                builder.end();
+            builder.startStaticCall(context.getType(Arrays.class), "asList");
+            for (VariableElement var : constructor.getParameters()) {
+                builder.typeLiteral(var.asType());
             }
+            builder.end();
             builder.end();
         }
         builder.end();
         builder.end();
 
-        builder.end().end().end();
+        builder.end();
+        return method;
+    }
+
+    private CodeExecutableElement createCreateGetExecutionSignature() {
+        TypeMirror returnValue = ElementUtils.getDeclaredType(ElementUtils.fromTypeMirror(context.getType(List.class)));
+        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), returnValue, "getExecutionSignature");
+        CodeTreeBuilder builder = method.createBuilder();
+        builder.startReturn();
+
+        builder.startStaticCall(context.getType(Arrays.class), "asList");
+        for (NodeExecutionData execution : node.getChildExecutions()) {
+            builder.typeLiteral(execution.getNodeType());
+        }
+        builder.end();
+
+        builder.end();
         return method;
     }
 
@@ -140,6 +166,7 @@ class NodeFactoryFactory {
             int index = 0;
             for (VariableElement param : element.getParameters()) {
                 if (ElementUtils.isObject(param.asType())) {
+                    index++;
                     continue;
                 }
                 builder.string(" && ");
@@ -247,7 +274,7 @@ class NodeFactoryFactory {
         if (node.getSpecializations().isEmpty()) {
             body.nullLiteral();
         } else {
-            body.startNew(NodeGenFactory.nodeType(node));
+            body.startNew(NodeCodeGenerator.nodeType(node));
             for (VariableElement var : method.getParameters()) {
                 body.string(var.getSimpleName().toString());
             }
