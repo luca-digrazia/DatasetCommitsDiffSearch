@@ -51,9 +51,8 @@ public class CriticalEdgeFinder implements BlockClosure {
     }
 
     public void apply(BlockBegin block) {
-        BlockEnd end = block.end();
-        if (end.blockSuccessorCount() >= 2) {
-            for (BlockBegin succ : end.blockSuccessors()) {
+        if (block.numberOfSux() >= 2) {
+            for (BlockBegin succ : block.end().blockSuccessors()) {
                 if (succ.numberOfPreds() >= 2) {
                     // TODO: (tw) probably we don't have to make it a critical edge if succ only contains the _same_ predecessor multiple times.
                     recordCriticalEdge(block, succ);
@@ -71,9 +70,8 @@ public class CriticalEdgeFinder implements BlockClosure {
     }
 
     public void splitCriticalEdges() {
-        for (Map.Entry<BlockBegin, Set<BlockBegin>> entry : edges.entrySet()) {
-            BlockBegin from = entry.getKey();
-            for (BlockBegin to : entry.getValue()) {
+        for (BlockBegin from : edges.keySet()) {
+            for (BlockBegin to : edges.get(from)) {
                 BlockBegin split = ir.splitEdge(from, to);
                 if (C1XOptions.PrintHIR) {
                     TTY.println("Split edge between block %d and block %d, creating new block %d", from.blockID, to.blockID, split.blockID);

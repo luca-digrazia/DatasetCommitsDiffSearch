@@ -26,7 +26,7 @@ import com.sun.c1x.ir.*;
 
 public interface FrameStateAccess {
 
-    FrameState duplicate(int newBci);
+    FrameState duplicate();
 
     int localsSize();
 
