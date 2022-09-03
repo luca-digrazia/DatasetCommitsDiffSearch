@@ -22,19 +22,17 @@
  */
 package com.oracle.graal.api.code;
 
-import java.io.*;
+import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 
 /**
- * Represents a code position, that is, a chain of inlined methods with bytecode
- * locations, that is communicated from the compiler to the runtime system. A code position
- * can be used by the runtime system to reconstruct a source-level stack trace
- * for exceptions and to create {@linkplain BytecodeFrame frames} for deoptimization.
+ * Represents a code position, that is, a chain of inlined methods with bytecode locations, that is
+ * communicated from the compiler to the runtime system. A code position can be used by the runtime
+ * system to reconstruct a source-level stack trace for exceptions and to create
+ * {@linkplain BytecodeFrame frames} for deoptimization.
  */
-public abstract class BytecodePosition implements Serializable {
-
-    private static final long serialVersionUID = 8633885274526033515L;
+public class BytecodePosition {
 
     private final BytecodePosition caller;
     private final ResolvedJavaMethod method;
@@ -56,6 +54,7 @@ public abstract class BytecodePosition implements Serializable {
 
     /**
      * Converts this code position to a string representation.
+     *
      * @return a string representation of this code position
      */
     @Override
@@ -71,13 +70,10 @@ public abstract class BytecodePosition implements Serializable {
         if (obj == this) {
             return true;
         }
-        if (obj instanceof BytecodePosition) {
-            BytecodePosition other = (BytecodePosition) obj;
-            if (other.getMethod().equals(getMethod()) && other.getBCI() == getBCI()) {
-                if (getCaller() == null) {
-                    return other.getCaller() == null;
-                }
-                return getCaller().equals(other.getCaller());
+        if (obj != null && getClass() == obj.getClass()) {
+            BytecodePosition that = (BytecodePosition) obj;
+            if (this.bci == that.bci && Objects.equals(this.getMethod(), that.getMethod()) && Objects.equals(this.caller, that.caller)) {
+                return true;
             }
         }
         return false;
@@ -89,9 +85,9 @@ public abstract class BytecodePosition implements Serializable {
     }
 
     /**
-     * @return The location within the method, as a bytecode index. The constant
-     * {@code -1} may be used to indicate the location is unknown, for example
-     * within code synthesized by the compiler.
+     * @return The location within the method, as a bytecode index. The constant {@code -1} may be
+     *         used to indicate the location is unknown, for example within code synthesized by the
+     *         compiler.
      */
     public int getBCI() {
         return bci;
@@ -109,5 +105,16 @@ public abstract class BytecodePosition implements Serializable {
      */
     public BytecodePosition getCaller() {
         return caller;
+    }
+
+    /**
+     * Adds a caller to the current position returning the new position.
+     */
+    public BytecodePosition addCaller(BytecodePosition link) {
+        if (getCaller() == null) {
+            return new BytecodePosition(link, getMethod(), getBCI());
+        } else {
+            return new BytecodePosition(getCaller().addCaller(link), getMethod(), getBCI());
+        }
     }
 }
