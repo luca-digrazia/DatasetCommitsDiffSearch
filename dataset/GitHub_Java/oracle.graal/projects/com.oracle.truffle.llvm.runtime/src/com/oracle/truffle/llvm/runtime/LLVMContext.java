@@ -58,7 +58,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.NullFunction;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
+import com.oracle.truffle.llvm.runtime.datalayout.DataLayoutConverter.DataSpecConverterImpl;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.export.InteropNodeFactory;
@@ -68,7 +68,9 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
+import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -78,7 +80,7 @@ public final class LLVMContext {
     private final List<Path> libraryPaths = new ArrayList<>();
     private final List<ExternalLibrary> externalLibraries = new ArrayList<>();
 
-    private DataLayout dataLayout;
+    private DataSpecConverterImpl targetDataLayout;
 
     private final List<LLVMThread> runningThreads = new ArrayList<>();
     private final LLVMThreadingStack threadingStack;
@@ -105,7 +107,7 @@ public final class LLVMContext {
 
     // we are not able to clean up ThreadLocals properly, so we are using maps instead
     private final Map<Thread, Object> tls = new HashMap<>();
-    private final Map<Thread, LLVMNativePointer> clearChildTid = new HashMap<>();
+    private final Map<Thread, LLVMPointer> clearChildTid = new HashMap<>();
 
     // signals
     private final LLVMNativePointer sigDfl;
@@ -206,7 +208,6 @@ public final class LLVMContext {
         this.cleanupNecessary = false;
         this.defaultLibrariesLoaded = false;
 
-        this.dataLayout = new DataLayout();
         this.destructorFunctions = new ArrayList<>();
         this.globalStack = new LLVMGlobalsStack();
         this.nativeCallStatistics = SulongEngineOption.isTrue(env.getOptions().get(SulongEngineOption.NATIVE_CALL_STATS)) ? new HashMap<>() : null;
@@ -342,23 +343,23 @@ public final class LLVMContext {
     }
 
     public int getByteAlignment(Type type) {
-        return type.getAlignment(dataLayout);
+        return type.getAlignment(targetDataLayout);
     }
 
     public int getByteSize(Type type) {
-        return type.getSize(dataLayout);
+        return type.getSize(targetDataLayout);
     }
 
     public int getBytePadding(long offset, Type type) {
-        return Type.getPadding(offset, type, dataLayout);
+        return Type.getPadding(offset, type, targetDataLayout);
     }
 
     public long getIndexOffset(long index, AggregateType type) {
-        return type.getOffsetOf(index, dataLayout);
+        return type.getOffsetOf(index, targetDataLayout);
     }
 
-    public DataLayout getDataSpecConverter() {
-        return dataLayout;
+    public DataSpecConverter getDataSpecConverter() {
+        return targetDataLayout;
     }
 
     public ExternalLibrary addExternalLibrary(String lib, boolean isNative, boolean renameConflictingSymbols) {
@@ -440,8 +441,8 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public LLVMNativePointer getClearChildTid() {
-        LLVMNativePointer value = clearChildTid.get(Thread.currentThread());
+    public LLVMPointer getClearChildTid() {
+        LLVMPointer value = clearChildTid.get(Thread.currentThread());
         if (value != null) {
             return value;
         }
@@ -449,7 +450,7 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public void setClearChildTid(LLVMNativePointer value) {
+    public void setClearChildTid(LLVMPointer value) {
         clearChildTid.put(Thread.currentThread(), value);
     }
 
@@ -618,8 +619,8 @@ public final class LLVMContext {
         LLVMFunctionDescriptor create(int index);
     }
 
-    public void addDataLayout(DataLayout layout) {
-        this.dataLayout = this.dataLayout.merge(layout);
+    public void setDataLayoutConverter(DataSpecConverterImpl layout) {
+        this.targetDataLayout = layout;
     }
 
     public LLVMSourceContext getSourceContext() {
