@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.api.meta.Kind.*;
+import static com.oracle.max.cri.ci.CiKind.*;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -55,10 +55,10 @@ public final class ConvertNode extends FloatingNode implements Canonicalizable, 
         MOV_F2I(Float, Int),
         MOV_D2L(Double, Long);
 
-        public final Kind from;
-        public final Kind to;
+        public final CiKind from;
+        public final CiKind to;
 
-        private Op(Kind from, Kind to) {
+        private Op(CiKind from, CiKind to) {
             this.from = from;
             this.to = to;
         }
@@ -74,8 +74,10 @@ public final class ConvertNode extends FloatingNode implements Canonicalizable, 
 
     /**
      * Constructs a new Convert instance.
+     * @param kind the result type of this instruction
      * @param opcode the operation
      * @param value the instruction producing the input value
+     * @param graph
      */
     public ConvertNode(Op opcode, ValueNode value) {
         super(StampFactory.forKind(opcode.to.stackKind()));
@@ -87,7 +89,7 @@ public final class ConvertNode extends FloatingNode implements Canonicalizable, 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         if (value instanceof ConstantNode) {
-            Constant c = ((ConstantNode) value).asConstant();
+            CiConstant c = ((ConstantNode) value).asConstant();
             switch (opcode) {
                 case I2L: return ConstantNode.forLong(c.asInt(), graph());
                 case L2I: return ConstantNode.forInt((int) c.asLong(), graph());

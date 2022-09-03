@@ -31,31 +31,16 @@ import com.oracle.max.cri.ci.*;
 /**
  * Store of a value at a location specified as an offset relative to an object.
  */
-public class UnsafeStoreNode extends FixedWithNextNode implements StateSplit, Lowerable {
+public class UnsafeStoreNode extends AbstractStateSplit implements Lowerable {
 
     @Input private ValueNode object;
     @Input private ValueNode offset;
     @Input private ValueNode value;
     private final int displacement;
     private final CiKind storeKind;
-    @Input(notDataflow = true) private FrameState stateAfter;
-
-    public FrameState stateAfter() {
-        return stateAfter;
-    }
-
-    public void setStateAfter(FrameState x) {
-        assert x == null || x.isAlive() : "frame state must be in a graph";
-        updateUsages(stateAfter, x);
-        stateAfter = x;
-    }
-
-    public boolean hasSideEffect() {
-        return true;
-    }
 
     public UnsafeStoreNode(ValueNode object, int displacement, ValueNode offset, ValueNode value, CiKind kind) {
-        super(StampFactory.forVoid());
+        super(StampFactory.illegal());
         assert kind != CiKind.Void && kind != CiKind.Illegal;
         this.object = object;
         this.displacement = displacement;

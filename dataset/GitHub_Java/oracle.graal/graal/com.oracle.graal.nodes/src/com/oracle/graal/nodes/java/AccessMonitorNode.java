@@ -43,7 +43,7 @@ import com.oracle.graal.nodes.type.*;
  * {@link MonitorEnterNode}. Optimization phases are free to throw {@link CiBailout} if they detect such cases.
  * Otherwise, they are detected during LIR construction.
  */
-public abstract class AccessMonitorNode extends AbstractStateSplit implements StateSplit, MemoryCheckpoint {
+public abstract class AccessMonitorNode extends AbstractStateSplit implements MemoryCheckpoint {
 
     @Input private ValueNode object;
     private boolean eliminated;
@@ -66,7 +66,7 @@ public abstract class AccessMonitorNode extends AbstractStateSplit implements St
      * @param object the instruction producing the object
      */
     public AccessMonitorNode(ValueNode object) {
-        super(StampFactory.forVoid());
+        super(StampFactory.illegal());
         this.object = object;
     }
 }

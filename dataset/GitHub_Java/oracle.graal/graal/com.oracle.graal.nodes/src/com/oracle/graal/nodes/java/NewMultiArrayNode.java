@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -37,7 +38,7 @@ import com.oracle.graal.nodes.type.*;
 public final class NewMultiArrayNode extends FixedWithNextNode implements LIRLowerable, TypeFeedbackProvider {
 
     @Input private final NodeInputList<ValueNode> dimensions;
-    private final ResolvedJavaType type;
+    private final RiResolvedType type;
 
     public ValueNode dimension(int index) {
         return dimensions.get(index);
@@ -49,10 +50,12 @@ public final class NewMultiArrayNode extends FixedWithNextNode implements LIRLow
 
     /**
      * Constructs a new NewMultiArrayNode.
-     * @param type the element type of the array
+     * @param elementType the element type of the array
      * @param dimensions the node which produce the dimensions for this array
+     * @param cpi the constant pool index for resolution
+     * @param riConstantPool the constant pool for resolution
      */
-    public NewMultiArrayNode(ResolvedJavaType type, ValueNode[] dimensions) {
+    public NewMultiArrayNode(RiResolvedType type, ValueNode[] dimensions) {
         super(StampFactory.exactNonNull(type));
         this.type = type;
         this.dimensions = new NodeInputList<>(this, dimensions);
@@ -64,15 +67,15 @@ public final class NewMultiArrayNode extends FixedWithNextNode implements LIRLow
         gen.visitNewMultiArray(this);
     }
 
-    public ResolvedJavaType type() {
+    public RiResolvedType type() {
         return type;
     }
 
     @Override
     public void typeFeedback(TypeFeedbackTool tool) {
         for (ValueNode length : dimensions) {
-            assert length.kind() == Kind.Int;
-            tool.addScalar(length).constantBound(Condition.GE, Constant.INT_0);
+            assert length.kind() == CiKind.Int;
+            tool.addScalar(length).constantBound(Condition.GE, CiConstant.INT_0);
         }
     }
 }

@@ -25,14 +25,24 @@ package com.oracle.graal.nodes.extended;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
-public abstract class AccessNode extends FixedWithNextNode implements Access {
+public abstract class AccessNode extends AbstractStateSplit implements Access {
 
     @Input private ValueNode object;
+    @Input private GuardNode guard;
     @Input private LocationNode location;
     private boolean nullCheck;
 
     public ValueNode object() {
         return object;
+    }
+
+    public GuardNode guard() {
+        return guard;
+    }
+
+    public void setGuard(GuardNode x) {
+        updateUsages(guard, x);
+        guard = x;
     }
 
     public LocationNode location() {

@@ -24,8 +24,7 @@ package com.oracle.graal.nodes.java;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.cri.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -35,15 +34,15 @@ import com.oracle.graal.nodes.util.*;
 /**
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
  */
-public final class NewInstanceNode extends FixedWithNextNode implements EscapeAnalyzable, Lowerable, LIRLowerable, Node.IterableNodeType {
+public final class NewInstanceNode extends FixedWithNextNode implements EscapeAnalyzable, LIRLowerable, Node.IterableNodeType {
 
-    private final ResolvedJavaType instanceClass;
+    private final RiResolvedType instanceClass;
 
     /**
      * Constructs a NewInstanceNode.
      * @param type the class being allocated
      */
-    public NewInstanceNode(ResolvedJavaType type) {
+    public NewInstanceNode(RiResolvedType type) {
         super(StampFactory.exactNonNull(type));
         this.instanceClass = type;
     }
@@ -52,13 +51,8 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
      * Gets the instance class being allocated by this node.
      * @return the instance class allocated
      */
-    public ResolvedJavaType instanceClass() {
+    public RiResolvedType instanceClass() {
         return instanceClass;
-    }
-
-    @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
     }
 
     @Override
@@ -84,12 +78,12 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
             return true;
         }
 
-        private void fillEscapeFields(ResolvedJavaType type, List<EscapeField> escapeFields) {
+        private void fillEscapeFields(RiResolvedType type, List<EscapeField> escapeFields) {
             if (type != null) {
                 fillEscapeFields(type.superType(), escapeFields);
-                JavaField[] declaredFields = type.declaredFields();
+                RiField[] declaredFields = type.declaredFields();
                 assert declaredFields != null : "the runtime must specify the declared fields of that type";
-                for (JavaField field : declaredFields) {
+                for (RiField field : declaredFields) {
                     escapeFields.add(new EscapeField(field.name(), field, field.type()));
                 }
             }

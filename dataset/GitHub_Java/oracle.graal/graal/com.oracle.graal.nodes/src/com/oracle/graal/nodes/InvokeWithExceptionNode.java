@@ -145,10 +145,6 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         this.stateAfter = stateAfter;
     }
 
-    public boolean hasSideEffect() {
-        return true;
-    }
-
     public FrameState stateDuring() {
         FrameState tempStateAfter = stateAfter();
         FrameState stateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
@@ -170,6 +166,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         BeginNode exceptionEdge = exceptionEdge();
         setExceptionEdge(null);
         GraphUtil.killCFG(exceptionEdge);
+    }
+
+    @Override
+    public boolean needsStateAfter() {
+        return true;
     }
 
     @Override

@@ -22,27 +22,27 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.*;
 import com.oracle.graal.nodes.type.*;
 
 
-public final class BoxNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Canonicalizable {
+public final class BoxNode extends AbstractStateSplit implements Node.IterableNodeType {
 
     @Input private ValueNode source;
     private int bci;
-    private Kind sourceKind;
+    private CiKind sourceKind;
 
-    public BoxNode(ValueNode value, ResolvedJavaType type, Kind sourceKind, int bci) {
+    public BoxNode(ValueNode value, RiResolvedType type, CiKind sourceKind, int bci) {
         super(StampFactory.exactNonNull(type));
         this.source = value;
         this.bci = bci;
         this.sourceKind = sourceKind;
-        assert value.kind() != Kind.Object : "can only box from primitive type";
+        assert value.kind() != CiKind.Object : "can only box from primitive type";
     }
 
     public ValueNode source() {
@@ -50,27 +50,16 @@ public final class BoxNode extends AbstractStateSplit implements StateSplit, Nod
     }
 
 
-    public Kind getSourceKind() {
+    public CiKind getSourceKind() {
         return sourceKind;
     }
 
     public void expand(BoxingMethodPool pool) {
-        ResolvedJavaMethod boxingMethod = pool.getBoxingMethod(sourceKind);
-        MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(InvokeKind.Static, boxingMethod, new ValueNode[]{source}, boxingMethod.getSignature().getReturnType(boxingMethod.getDeclaringClass())));
+        RiResolvedMethod boxingMethod = pool.getBoxingMethod(sourceKind);
+        MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(InvokeKind.Static, boxingMethod, new ValueNode[]{source}, boxingMethod.signature().returnType(boxingMethod.holder())));
         InvokeNode invokeNode = graph().add(new InvokeNode(callTarget, bci, -1));
         invokeNode.setProbability(this.probability());
         invokeNode.setStateAfter(stateAfter());
         ((StructuredGraph) graph()).replaceFixedWithFixed(this, invokeNode);
-    }
-
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        for (Node usage : usages()) {
-            if (usage != stateAfter()) {
-                return this;
-            }
-        }
-        replaceAtUsages(null);
-        return null;
     }
 }

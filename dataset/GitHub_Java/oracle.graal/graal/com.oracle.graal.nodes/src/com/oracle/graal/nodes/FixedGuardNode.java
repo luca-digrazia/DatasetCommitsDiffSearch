@@ -84,7 +84,7 @@ public final class FixedGuardNode extends FixedWithNextNode implements Simplifia
     public void lower(CiLoweringTool tool) {
         AnchorNode newAnchor = graph().add(new AnchorNode());
         for (BooleanNode b : conditions) {
-            newAnchor.dependencies().add(tool.createGuard(b, deoptReason, action, leafGraphId));
+            newAnchor.addGuard((GuardNode) tool.createGuard(b, deoptReason, action, leafGraphId));
         }
         ((StructuredGraph) graph()).replaceFixedWithFixed(this, newAnchor);
     }

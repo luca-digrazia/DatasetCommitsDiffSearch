@@ -25,7 +25,6 @@ package com.oracle.graal.graph;
 import java.lang.annotation.*;
 import java.util.*;
 
-import com.oracle.graal.graph.Graph.InputChangedListener;
 import com.oracle.graal.graph.NodeClass.*;
 
 
@@ -192,9 +191,9 @@ public abstract class Node implements Cloneable, Formattable {
                 assert assertTrue(result, "not found in usages, old input: %s", oldInput);
             }
             if (newInput != null) {
-                InputChangedListener inputChanged = graph.inputChanged;
+                NodeWorkList inputChanged = graph.inputChanged;
                 if (inputChanged != null) {
-                    inputChanged.inputChanged(this);
+                    inputChanged.addAgain(this);
                 }
                 newInput.usages.add(this);
             }
@@ -252,9 +251,9 @@ public abstract class Node implements Cloneable, Formattable {
             boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
             assert assertTrue(result, "not found in inputs, usage: %s", usage);
             if (other != null) {
-                InputChangedListener inputChanged = graph.inputChanged;
+                NodeWorkList inputChanged = graph.inputChanged;
                 if (inputChanged != null) {
-                    inputChanged.inputChanged(usage);
+                    inputChanged.addAgain(usage);
                 }
                 other.usages.add(usage);
             }

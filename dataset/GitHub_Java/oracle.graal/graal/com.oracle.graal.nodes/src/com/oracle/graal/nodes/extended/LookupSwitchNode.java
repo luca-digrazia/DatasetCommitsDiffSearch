@@ -73,21 +73,24 @@ public final class LookupSwitchNode extends SwitchNode implements LIRLowerable, 
             ConstantNode constant = (ConstantNode) value();
             int value = constant.value.asInt();
 
+            BeginNode remainingSux = (BeginNode) defaultSuccessor();
             int remainingSuxIndex = blockSuccessorCount() - 1;
             for (int i = 0; i < keys.length; i++) {
                 if (value == keys[i]) {
+                    remainingSux = blockSuccessor(i);
                     remainingSuxIndex = i;
                     break;
                 }
             }
 
             for (int i = 0; i < blockSuccessorCount(); i++) {
-                if (i != remainingSuxIndex) {
-                    tool.deleteBranch(blockSuccessor(i));
+                BeginNode sux = blockSuccessor(i);
+                if (sux != remainingSux) {
+                    tool.deleteBranch(sux);
                 }
             }
 
-            tool.addToWorkList(blockSuccessor(remainingSuxIndex));
+            tool.addToWorkList(remainingSux);
             ((StructuredGraph) graph()).removeSplit(this, remainingSuxIndex);
         }
     }

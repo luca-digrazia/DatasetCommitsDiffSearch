@@ -49,7 +49,7 @@ public class VirtualObjectFieldNode extends ValueNode implements LIRLowerable {
     }
 
     public VirtualObjectFieldNode(VirtualObjectNode object, ValueNode lastState, ValueNode input, int index) {
-        super(StampFactory.virtual());
+        super(StampFactory.illegal());
         this.index = index;
         this.object = object;
         this.lastState = lastState;
