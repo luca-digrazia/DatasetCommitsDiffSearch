@@ -48,14 +48,13 @@ public final class TraceInliningListener extends AbstractDebugCompilationListene
         if (inliningDecision == null) {
             return;
         }
-        if (TruffleCompilerOptions.TruffleFunctionInlining.getValue()) {
-            log(0, "inline start", target.toString(), target.getDebugProperties(null));
-            logInliningDecisionRecursive(target, inliningDecision, 1);
-            log(0, "inline done", target.toString(), target.getDebugProperties(inliningDecision));
-        }else {
+        if (!TruffleCompilerOptions.TruffleFunctionInlining.getValue()) {
             log(0, "TruffleFunctionInlining is set to false", "", null);
             return;
         }
+        log(0, "inline start", target.toString(), target.getDebugProperties(null));
+        logInliningDecisionRecursive(target, inliningDecision, 1);
+        log(0, "inline done", target.toString(), target.getDebugProperties(inliningDecision));
     }
 
     private void logInliningDecisionRecursive(OptimizedCallTarget target, TruffleInlining inliningDecision, int depth) {
