@@ -30,11 +30,16 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo
 public class ReverseBytesNode extends UnaryNode implements LIRLowerable {
 
-    public ReverseBytesNode(ValueNode value) {
+    public static ReverseBytesNode create(ValueNode value) {
+        return USE_GENERATED_NODES ? new ReverseBytesNodeGen(value) : new ReverseBytesNode(value);
+    }
+
+    protected ReverseBytesNode(ValueNode value) {
         super(StampFactory.forKind(value.getKind()), value);
         assert getKind() == Kind.Int || getKind() == Kind.Long;
     }
@@ -45,9 +50,9 @@ public class ReverseBytesNode extends UnaryNode implements LIRLowerable {
         Stamp newStamp;
         if (getKind() == Kind.Int) {
             long mask = CodeUtil.mask(Kind.Int.getBitCount());
-            newStamp = IntegerStamp.stampForMask(valueStamp.getBits(), reverse((int) valueStamp.downMask()) & mask, reverse((int) valueStamp.upMask()) & mask);
+            newStamp = StampTool.stampForMask(valueStamp.getBits(), reverse((int) valueStamp.downMask()) & mask, reverse((int) valueStamp.upMask()) & mask);
         } else if (getKind() == Kind.Long) {
-            newStamp = IntegerStamp.stampForMask(valueStamp.getBits(), reverse(valueStamp.downMask()), reverse(valueStamp.upMask()));
+            newStamp = StampTool.stampForMask(valueStamp.getBits(), reverse(valueStamp.downMask()), reverse(valueStamp.upMask()));
         } else {
             return false;
         }
@@ -57,7 +62,7 @@ public class ReverseBytesNode extends UnaryNode implements LIRLowerable {
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            JavaConstant c = forValue.asJavaConstant();
+            Constant c = forValue.asConstant();
             return ConstantNode.forIntegerKind(getKind(), getKind() == Kind.Int ? reverse(c.asInt()) : reverse(c.asLong()));
         }
         return this;

@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 public class BitScanReverseNode extends UnaryNode implements LIRLowerable {
 
     public static BitScanReverseNode create(ValueNode value) {
-        return new BitScanReverseNode(value);
+        return USE_GENERATED_NODES ? new BitScanReverseNodeGen(value) : new BitScanReverseNode(value);
     }
 
     protected BitScanReverseNode(ValueNode value) {
@@ -55,8 +55,7 @@ public class BitScanReverseNode extends UnaryNode implements LIRLowerable {
         long mask = CodeUtil.mask(valueStamp.getBits());
         int lastAlwaysSetBit = scan(valueStamp.downMask() & mask);
         if (lastAlwaysSetBit == -1) {
-            int firstMaybeSetBit = BitScanForwardNode.scan(valueStamp.upMask() & mask);
-            min = firstMaybeSetBit;
+            min = -1;
         } else {
             min = lastAlwaysSetBit;
         }
@@ -68,7 +67,7 @@ public class BitScanReverseNode extends UnaryNode implements LIRLowerable {
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            JavaConstant c = forValue.asJavaConstant();
+            Constant c = forValue.asConstant();
             if (c.asLong() != 0) {
                 return ConstantNode.forInt(forValue.getKind() == Kind.Int ? scan(c.asInt()) : scan(c.asLong()));
             }

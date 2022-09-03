@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,6 @@ public class StampFactory {
     // JaCoCo Exclude
 
     private static final Stamp[] stampCache = new Stamp[Kind.values().length];
-    private static final Stamp[] pointerStampCache = new Stamp[PointerType.values().length];
     private static final Stamp[] illegalStampCache = new Stamp[Kind.values().length];
     private static final Stamp objectStamp = new ObjectStamp(null, false, false, false);
     private static final Stamp objectNonNullStamp = new ObjectStamp(null, false, true, false);
@@ -79,13 +78,6 @@ public class StampFactory {
                 illegalStampCache[k.ordinal()] = IllegalStamp.getInstance();
             }
         }
-
-        pointerStampCache[PointerType.Object.ordinal()] = objectStamp;
-        for (PointerType t : PointerType.values()) {
-            if (t != PointerType.Object) {
-                pointerStampCache[t.ordinal()] = new PointerStamp(t);
-            }
-        }
     }
 
     /**
@@ -94,14 +86,6 @@ public class StampFactory {
     public static Stamp forKind(Kind kind) {
         assert stampCache[kind.ordinal()] != null : "unexpected forKind(" + kind + ")";
         return stampCache[kind.ordinal()];
-    }
-
-    /**
-     * Return a stamp for a pointer.
-     */
-    public static Stamp forPointer(PointerType type) {
-        assert pointerStampCache[type.ordinal()] != null;
-        return pointerStampCache[type.ordinal()];
     }
 
     /**
@@ -183,7 +167,7 @@ public class StampFactory {
         return new FloatStamp(kind.getBitCount(), lowerBound, upperBound, nonNaN);
     }
 
-    public static Stamp forConstant(JavaConstant value) {
+    public static Stamp forConstant(Constant value) {
         Kind kind = value.getKind();
         switch (kind) {
             case Boolean:
@@ -211,7 +195,7 @@ public class StampFactory {
         }
     }
 
-    public static Stamp forConstant(JavaConstant value, MetaAccessProvider metaAccess) {
+    public static Stamp forConstant(Constant value, MetaAccessProvider metaAccess) {
         if (value.getKind() == Kind.Object) {
             ResolvedJavaType type = value.isNull() ? null : metaAccess.lookupJavaType(value);
             return new ObjectStamp(type, value.isNonNull(), value.isNonNull(), value.isNull());
@@ -232,69 +216,24 @@ public class StampFactory {
         return objectAlwaysNullStamp;
     }
 
-    /**
-     * Returns a {@link Stamp} for objects of type {@code type}, or one of its subtypes, or null.
-     */
     public static Stamp declared(ResolvedJavaType type) {
-        return object(type, false, false, false);
+        return declared(type, false);
     }
 
-    /**
-     * Returns a {@link Stamp} for objects of type {@code type}, or one of its subtypes, but not
-     * null.
-     */
     public static Stamp declaredNonNull(ResolvedJavaType type) {
-        return object(type, false, true, false);
+        return declared(type, true);
     }
 
-    /**
-     * Returns a {@link Stamp} for objects of type {@code type}, or one of its subtypes, or null.
-     * Contrary to {@link #declared(ResolvedJavaType)}, interface types will be preserved in the
-     * stamp.
-     *
-     * In general interface types are not verified at class loading or run-time so this should be
-     * used with care.
-     */
-    public static Stamp declaredTrusted(ResolvedJavaType type) {
-        return object(type, false, false, true);
+    public static Stamp declared(ResolvedJavaType type, boolean nonNull) {
+        return object(type, false, nonNull, false);
     }
 
-    /**
-     * Returns a {@link Stamp} for objects of type {@code type}, or one of its subtypes, but not
-     * null. Contrary to {@link #declaredNonNull(ResolvedJavaType)}, interface types will be
-     * preserved in the stamp.
-     *
-     * In general interface types are not verified at class loading or run-time so this should be
-     * used with care.
-     */
-    public static Stamp declaredTrustedNonNull(ResolvedJavaType type) {
-        return declaredTrusted(type, true);
+    public static Stamp declaredNonNull(ResolvedJavaType type, boolean trustInterfaces) {
+        return declared(type, true, trustInterfaces);
     }
 
-    public static Stamp declaredTrusted(ResolvedJavaType type, boolean nonNull) {
-        return object(type, false, nonNull, true);
-    }
-
-    /**
-     * Returns a {@link Stamp} for objects of exactly type {@code type}, or null.
-     */
-    public static Stamp exact(ResolvedJavaType type) {
-        if (ObjectStamp.isConcreteType(type)) {
-            return new ObjectStamp(type, true, false, false);
-        } else {
-            return illegal(Kind.Object);
-        }
-    }
-
-    /**
-     * Returns a {@link Stamp} for non-null objects of exactly type {@code type}.
-     */
-    public static Stamp exactNonNull(ResolvedJavaType type) {
-        if (ObjectStamp.isConcreteType(type)) {
-            return new ObjectStamp(type, true, true, false);
-        } else {
-            return illegal(Kind.Object);
-        }
+    public static Stamp declared(ResolvedJavaType type, boolean nonNull, boolean trustInterfaces) {
+        return object(type, false, nonNull, trustInterfaces);
     }
 
     private static ResolvedJavaType filterInterfaceTypesOut(ResolvedJavaType type) {
@@ -330,29 +269,19 @@ public class StampFactory {
         return new ObjectStamp(trustedtype, exactType, nonNull, false);
     }
 
-    public static Stamp[] createParameterStamps(ResolvedJavaMethod method) {
-        Signature sig = method.getSignature();
-        Stamp[] result = new Stamp[sig.getParameterCount(!method.isStatic())];
-        int index = 0;
-
-        if (!method.isStatic()) {
-            result[index++] = StampFactory.declaredNonNull(method.getDeclaringClass());
+    public static Stamp exactNonNull(ResolvedJavaType type) {
+        if (ObjectStamp.isConcreteType(type)) {
+            return new ObjectStamp(type, true, true, false);
+        } else {
+            return illegal(Kind.Object);
         }
+    }
 
-        int max = sig.getParameterCount(false);
-        ResolvedJavaType accessingClass = method.getDeclaringClass();
-        for (int i = 0; i < max; i++) {
-            JavaType type = sig.getParameterType(i, accessingClass);
-            Kind kind = type.getKind();
-            Stamp stamp;
-            if (kind == Kind.Object && type instanceof ResolvedJavaType) {
-                stamp = StampFactory.declared((ResolvedJavaType) type);
-            } else {
-                stamp = StampFactory.forKind(kind);
-            }
-            result[index++] = stamp;
+    public static Stamp exact(ResolvedJavaType type) {
+        if (ObjectStamp.isConcreteType(type)) {
+            return new ObjectStamp(type, true, false, false);
+        } else {
+            return illegal(Kind.Object);
         }
-
-        return result;
     }
 }

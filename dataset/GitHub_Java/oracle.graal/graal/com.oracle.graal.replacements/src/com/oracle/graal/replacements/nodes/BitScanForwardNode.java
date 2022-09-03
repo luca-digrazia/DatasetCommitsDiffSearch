@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 public class BitScanForwardNode extends UnaryNode implements LIRLowerable {
 
     public static BitScanForwardNode create(ValueNode value) {
-        return new BitScanForwardNode(value);
+        return USE_GENERATED_NODES ? new BitScanForwardNodeGen(value) : new BitScanForwardNode(value);
     }
 
     protected BitScanForwardNode(ValueNode value) {
@@ -54,12 +54,12 @@ public class BitScanForwardNode extends UnaryNode implements LIRLowerable {
         int max;
         long mask = CodeUtil.mask(valueStamp.getBits());
         int firstAlwaysSetBit = scan(valueStamp.downMask() & mask);
-        int firstMaybeSetBit = scan(valueStamp.upMask() & mask);
         if (firstAlwaysSetBit == -1) {
             int lastMaybeSetBit = BitScanReverseNode.scan(valueStamp.upMask() & mask);
-            min = firstMaybeSetBit;
+            min = -1;
             max = lastMaybeSetBit;
         } else {
+            int firstMaybeSetBit = scan(valueStamp.upMask() & mask);
             min = firstMaybeSetBit;
             max = firstAlwaysSetBit;
         }
@@ -69,7 +69,7 @@ public class BitScanForwardNode extends UnaryNode implements LIRLowerable {
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            JavaConstant c = forValue.asJavaConstant();
+            Constant c = forValue.asConstant();
             if (c.asLong() != 0) {
                 return ConstantNode.forInt(forValue.getKind() == Kind.Int ? scan(c.asInt()) : scan(c.asLong()));
             }
