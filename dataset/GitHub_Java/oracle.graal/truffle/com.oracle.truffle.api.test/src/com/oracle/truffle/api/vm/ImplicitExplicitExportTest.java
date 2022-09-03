@@ -46,6 +46,8 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.Visualizer;
+import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
@@ -197,23 +199,18 @@ public class ImplicitExplicitExportTest {
         }
 
         @SuppressWarnings("deprecation")
-        @Deprecated
         @Override
-        protected com.oracle.truffle.api.instrument.Visualizer getVisualizer() {
+        protected Visualizer getVisualizer() {
             return null;
         }
 
-        @SuppressWarnings("deprecation")
-        @Deprecated
         @Override
         protected boolean isInstrumentable(Node node) {
             return false;
         }
 
-        @SuppressWarnings("deprecation")
-        @Deprecated
         @Override
-        protected com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(Node node) {
+        protected WrapperNode createWrapperNode(Node node) {
             return null;
         }
 

@@ -88,7 +88,7 @@ public class AccessorTest {
      */
     @Test
     public void testAccessorInstrumentationHandlerNotInitialized() throws IllegalAccessException {
-        Object savedAccessor = instrumenthandler.get(null);
+        Accessor savedAccessor = (Accessor) instrumenthandler.get(null);
         instrumenthandler.set(null, null);
         try {
             CallTarget testCallTarget = Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(42));

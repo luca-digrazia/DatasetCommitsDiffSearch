@@ -68,10 +68,17 @@ import org.junit.runner.notification.RunNotifier;
 import org.junit.runners.ParentRunner;
 import org.junit.runners.model.InitializationError;
 
+import com.oracle.truffle.api.instrument.ASTProber;
+import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.instrument.StandardSyntaxTag;
+import com.oracle.truffle.api.instrument.impl.DefaultSimpleInstrumentListener;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.sl.nodes.instrument.SLStandardASTProber;
 import com.oracle.truffle.sl.nodes.local.SLWriteLocalVariableNode;
 import com.oracle.truffle.sl.test.SLTestRunner;
+import com.oracle.truffle.sl.test.instrument.SLInstrumentTestRunner.InstrumentTestCase;
 
 /**
  * This class builds and executes the tests for instrumenting SL. Although much of this class is
@@ -81,9 +88,7 @@ import com.oracle.truffle.sl.test.SLTestRunner;
  *
  * Testing is done via JUnit via comparing execution outputs with expected outputs.
  */
-@SuppressWarnings("deprecation")
-@Deprecated
-public final class SLInstrumentTestRunner extends ParentRunner<com.oracle.truffle.sl.test.instrument.SLInstrumentTestRunner.InstrumentTestCase> {
+public final class SLInstrumentTestRunner extends ParentRunner<InstrumentTestCase> {
 
     private static final String SOURCE_SUFFIX = ".sl";
     private static final String INPUT_SUFFIX = ".input";
@@ -229,7 +234,7 @@ public final class SLInstrumentTestRunner extends ParentRunner<com.oracle.truffl
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         PrintStream ps = new PrintStream(out);
-        final com.oracle.truffle.api.instrument.ASTProber prober = new com.oracle.truffle.sl.nodes.instrument.SLStandardASTProber();
+        final ASTProber prober = new SLStandardASTProber();
 
         PolyglotEngine vm = null;
         try {
@@ -240,14 +245,14 @@ public final class SLInstrumentTestRunner extends ParentRunner<com.oracle.truffl
 
                 final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
                 field.setAccessible(true);
-                final com.oracle.truffle.api.instrument.Instrumenter instrumenter = (com.oracle.truffle.api.instrument.Instrumenter) field.get(vm);
+                final Instrumenter instrumenter = (Instrumenter) field.get(vm);
                 instrumenter.registerASTProber(prober);
 
                 final String src = readAllLines(testCase.path);
                 vm.eval(Source.fromText(src, testCase.path.toString()).withMimeType("application/x-sl"));
 
                 // Attach an instrument to every probe tagged as an assignment
-                for (com.oracle.truffle.api.instrument.Probe probe : instrumenter.findProbesTaggedAs(com.oracle.truffle.api.instrument.StandardSyntaxTag.ASSIGNMENT)) {
+                for (Probe probe : instrumenter.findProbesTaggedAs(StandardSyntaxTag.ASSIGNMENT)) {
                     SLPrintAssigmentValueListener slPrintAssigmentValueListener = new SLPrintAssigmentValueListener(ps);
                     instrumenter.attach(probe, slPrintAssigmentValueListener, "SL print assignment value");
                 }
@@ -308,7 +313,7 @@ public final class SLInstrumentTestRunner extends ParentRunner<com.oracle.truffl
      * attached at {@link SLWriteLocalVariableNode}, but provides no guards to protect it from being
      * attached elsewhere.
      */
-    public final class SLPrintAssigmentValueListener extends com.oracle.truffle.api.instrument.impl.DefaultSimpleInstrumentListener {
+    public final class SLPrintAssigmentValueListener extends DefaultSimpleInstrumentListener {
         private final PrintStream output;
 
         public SLPrintAssigmentValueListener(PrintStream output) {
@@ -316,7 +321,7 @@ public final class SLInstrumentTestRunner extends ParentRunner<com.oracle.truffl
         }
 
         @Override
-        public void onReturnValue(com.oracle.truffle.api.instrument.Probe probe, Object result) {
+        public void onReturnValue(Probe probe, Object result) {
             output.println(result);
         }
     }

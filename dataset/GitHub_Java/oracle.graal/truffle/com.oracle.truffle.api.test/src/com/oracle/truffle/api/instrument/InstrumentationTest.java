@@ -29,7 +29,6 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.lang.reflect.Field;
 
-import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -37,11 +36,16 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrument.InstrumentationTestNodes.TestAdditionNode;
 import com.oracle.truffle.api.instrument.InstrumentationTestNodes.TestLanguageNode;
 import com.oracle.truffle.api.instrument.InstrumentationTestNodes.TestValueNode;
+import com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag;
+import com.oracle.truffle.api.instrument.impl.DefaultProbeListener;
+import com.oracle.truffle.api.instrument.impl.DefaultSimpleInstrumentListener;
+import com.oracle.truffle.api.instrument.impl.DefaultStandardInstrumentListener;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
+import org.junit.After;
 
 /**
  * <h3>AST Instrumentation</h3>
@@ -50,8 +54,6 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  * {@link WrapperNode} that propagate execution events through a {@link Probe} to any instances of
  * {@link ProbeInstrument} that might be attached to the particular probe by tools.
  */
-@Deprecated
-@SuppressWarnings("deprecation")
 public class InstrumentationTest {
 
     private PolyglotEngine vm;
@@ -72,14 +74,14 @@ public class InstrumentationTest {
         final Source source = InstrumentationTestingLanguage.createAdditionSource13("testProbing");
 
         final Probe[] probes = new Probe[3];
-        instrumenter.addProbeListener(new com.oracle.truffle.api.instrument.impl.DefaultProbeListener() {
+        instrumenter.addProbeListener(new DefaultProbeListener() {
 
             @Override
             public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
-                if (tag == com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.ADD_TAG) {
+                if (tag == InstrumentTestTag.ADD_TAG) {
                     assertEquals(probes[0], null);
                     probes[0] = probe;
-                } else if (tag == com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.VALUE_TAG) {
+                } else if (tag == InstrumentTestTag.VALUE_TAG) {
                     if (probes[1] == null) {
                         probes[1] = probe;
                     } else if (probes[2] == null) {
@@ -127,8 +129,8 @@ public class InstrumentationTest {
         assertEquals(probeListener.probeCount, 3);
         assertEquals(probeListener.tagCount, 3);
 
-        assertEquals(instrumenter.findProbesTaggedAs(com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.ADD_TAG).size(), 1);
-        assertEquals(instrumenter.findProbesTaggedAs(com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.VALUE_TAG).size(), 2);
+        assertEquals(instrumenter.findProbesTaggedAs(InstrumentTestTag.ADD_TAG).size(), 1);
+        assertEquals(instrumenter.findProbesTaggedAs(InstrumentTestTag.VALUE_TAG).size(), 2);
     }
 
     private static void checkCounters(Probe probe, PolyglotEngine vm, Source source, TestCounter counterA, TestCounter counterB, TestCounter counterC) throws IOException {
@@ -326,10 +328,10 @@ public class InstrumentationTest {
                 final TestLanguageNode testNode = (TestLanguageNode) node;
 
                 if (node instanceof TestValueNode) {
-                    instrumenter.probe(testNode).tagAs(com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.VALUE_TAG, null);
+                    instrumenter.probe(testNode).tagAs(InstrumentTestTag.VALUE_TAG, null);
 
                 } else if (node instanceof TestAdditionNode) {
-                    instrumenter.probe(testNode).tagAs(com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.ADD_TAG, null);
+                    instrumenter.probe(testNode).tagAs(InstrumentTestTag.ADD_TAG, null);
 
                 }
             }
@@ -345,7 +347,7 @@ public class InstrumentationTest {
     /**
      * Counts the number of "enter" events at probed nodes using the simplest AST listener.
      */
-    static final class TestSimpleInstrumentListener extends com.oracle.truffle.api.instrument.impl.DefaultSimpleInstrumentListener {
+    static final class TestSimpleInstrumentListener extends DefaultSimpleInstrumentListener {
 
         public int counter = 0;
 
@@ -358,7 +360,7 @@ public class InstrumentationTest {
     /**
      * Counts the number of "enter" events at probed nodes using the AST listener.
      */
-    static final class TestASTInstrumentListener extends com.oracle.truffle.api.instrument.impl.DefaultStandardInstrumentListener {
+    static final class TestASTInstrumentListener extends DefaultStandardInstrumentListener {
 
         public int counter = 0;
 
@@ -368,7 +370,7 @@ public class InstrumentationTest {
         }
     }
 
-    private static final class TestProbeListener extends com.oracle.truffle.api.instrument.impl.DefaultProbeListener {
+    private static final class TestProbeListener extends DefaultProbeListener {
 
         public int probeCount = 0;
         public int tagCount = 0;
