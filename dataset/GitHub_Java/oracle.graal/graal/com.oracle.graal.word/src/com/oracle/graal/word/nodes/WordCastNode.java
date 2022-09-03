@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,54 +22,117 @@
  */
 package com.oracle.graal.word.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.phases.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word.Opcode;
+
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.meta.ValueKind;
 
 /**
- * Cast between Word and Object that is introduced by the {@link WordTypeRewriterPhase}. It has an
- * impact on the pointer maps for the GC, so it must not be scheduled or optimized away.
+ * Casts between Word and Object exposed by the {@link Opcode#FROM_ADDRESS},
+ * {@link Opcode#OBJECT_TO_TRACKED}, {@link Opcode#OBJECT_TO_UNTRACKED} and {@link Opcode#TO_OBJECT}
+ * operations. It has an impact on the pointer maps for the GC, so it must not be scheduled or
+ * optimized away.
  */
+@NodeInfo(cycles = CYCLES_1, size = SIZE_1)
 public final class WordCastNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
 
-    public static WordCastNode wordToObject(ValueNode input, Kind wordKind) {
-        assert input.kind() == wordKind;
+    public static final NodeClass<WordCastNode> TYPE = NodeClass.create(WordCastNode.class);
+
+    @Input ValueNode input;
+    public final boolean trackedPointer;
+
+    public static WordCastNode wordToObject(ValueNode input, JavaKind wordKind) {
+        assert input.getStackKind() == wordKind;
         return new WordCastNode(StampFactory.object(), input);
     }
 
-    public static WordCastNode objectToWord(ValueNode input, Kind wordKind) {
-        assert input.kind() == Kind.Object;
+    public static WordCastNode addressToWord(ValueNode input, JavaKind wordKind) {
+        assert input.stamp() instanceof AbstractPointerStamp;
         return new WordCastNode(StampFactory.forKind(wordKind), input);
     }
 
-    @Input private ValueNode input;
+    public static WordCastNode objectToTrackedPointer(ValueNode input, JavaKind wordKind) {
+        assert input.stamp() instanceof ObjectStamp;
+        return new WordCastNode(StampFactory.forKind(wordKind), input, true);
+    }
 
-    private WordCastNode(Stamp stamp, ValueNode input) {
-        super(stamp);
+    public static WordCastNode objectToUntrackedPointer(ValueNode input, JavaKind wordKind) {
+        assert input.stamp() instanceof ObjectStamp;
+        return new WordCastNode(StampFactory.forKind(wordKind), input, false);
+    }
+
+    protected WordCastNode(Stamp stamp, ValueNode input) {
+        this(stamp, input, true);
+    }
+
+    protected WordCastNode(Stamp stamp, ValueNode input, boolean trackedPointer) {
+        super(TYPE, stamp);
         this.input = input;
+        this.trackedPointer = trackedPointer;
     }
 
     public ValueNode getInput() {
         return input;
     }
 
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (usages().count() == 0) {
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (tool.allUsagesAvailable() && hasNoUsages()) {
             /* If the cast is unused, it can be eliminated. */
             return input;
         }
+
+        assert !stamp().isCompatible(input.stamp());
+        if (input.isConstant()) {
+            /* Null pointers are uncritical for GC, so they can be constant folded. */
+            if (input.asJavaConstant().isNull()) {
+                return ConstantNode.forIntegerStamp(stamp(), 0);
+            } else if (input.asJavaConstant().getJavaKind().isNumericInteger() && input.asJavaConstant().asLong() == 0) {
+                return ConstantNode.forConstant(stamp(), JavaConstant.NULL_POINTER, tool.getMetaAccess());
+            }
+        }
+
         return this;
     }
 
     @Override
-    public void generate(LIRGeneratorTool generator) {
-        assert kind() != input.kind();
-        assert generator.target().arch.getSizeInBytes(kind()) == generator.target().arch.getSizeInBytes(input.kind());
+    public void generate(NodeLIRBuilderTool generator) {
+        Value value = generator.operand(input);
+        ValueKind<?> kind = generator.getLIRGeneratorTool().getLIRKind(stamp());
+        assert kind.getPlatformKind().getSizeInBytes() == value.getPlatformKind().getSizeInBytes();
 
-        AllocatableValue result = generator.newVariable(kind());
-        generator.emitMove(result, generator.operand(input));
-        generator.setResult(this, result);
+        if (trackedPointer && LIRKind.isValue(kind) && !LIRKind.isValue(value)) {
+            // just change the PlatformKind, but don't drop reference information
+            kind = value.getValueKind().changeType(kind.getPlatformKind());
+        }
+
+        if (kind.equals(value.getValueKind())) {
+            generator.setResult(this, value);
+        } else {
+            AllocatableValue result = generator.getLIRGeneratorTool().newVariable(kind);
+            generator.getLIRGeneratorTool().emitMove(result, value);
+            generator.setResult(this, result);
+        }
     }
 }
