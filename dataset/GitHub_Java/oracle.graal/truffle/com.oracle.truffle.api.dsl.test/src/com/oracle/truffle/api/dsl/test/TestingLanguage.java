@@ -26,11 +26,13 @@ import java.io.IOException;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.debug.DebugSupportProvider;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.ASTProber;
 import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
 import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
+import com.oracle.truffle.api.instrument.ToolSupportProvider;
 import com.oracle.truffle.api.instrument.Visualizer;
-import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 
@@ -67,13 +69,14 @@ public final class TestingLanguage extends TruffleLanguage<Object> {
     }
 
     @Override
-    protected boolean isInstrumentable(Node node) {
-        return false;
+    protected ASTProber getDefaultASTProber() {
+        return null;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
-    protected WrapperNode createWrapperNode(Node node) {
-        return null;
+    protected void enableASTProbing(ASTProber astProber) {
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -84,6 +87,18 @@ public final class TestingLanguage extends TruffleLanguage<Object> {
     @Override
     protected AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
         return null;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    protected ToolSupportProvider getToolSupport() {
+        throw new UnsupportedOperationException();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    protected DebugSupportProvider getDebugSupport() {
+        throw new UnsupportedOperationException();
     }
 
     @Override
