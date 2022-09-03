@@ -33,7 +33,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 import java.util.logging.Level;
 
 import org.graalvm.polyglot.Value;
@@ -119,7 +118,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     }
 
     private void checkThreadAccess(Env localEnv) {
-        Thread.holdsLock(context);
         boolean singleThreaded = context.isSingleThreaded();
         Thread firstFailingThread = null;
         for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
@@ -409,45 +407,38 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
 
     static final class ToGuestValuesNode {
 
+        @CompilationFinal private volatile int cachedLength = -1;
         @CompilationFinal(dimensions = 1) private volatile ToGuestValueNode[] toGuestValue;
         @CompilationFinal private volatile boolean needsCopy = false;
-        @CompilationFinal private volatile boolean generic = false;
 
         private ToGuestValuesNode() {
         }
 
         public Object[] apply(PolyglotLanguageContext languageContext, Object[] args) {
-            ToGuestValueNode[] nodes = this.toGuestValue;
-            if (nodes == null) {
+            if (cachedLength == -1) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                nodes = new ToGuestValueNode[args.length];
-                for (int i = 0; i < nodes.length; i++) {
-                    nodes[i] = createToGuestValue();
+                cachedLength = args.length;
+                toGuestValue = new ToGuestValueNode[cachedLength];
+                for (int i = 0; i < cachedLength; i++) {
+                    toGuestValue[i] = createToGuestValue();
                 }
-                toGuestValue = nodes;
             }
-            if (args.length == nodes.length) {
+            if (args.length == 0) {
+                return args;
+            } else if (cachedLength == args.length) {
                 // fast path
-                if (nodes.length == 0) {
-                    return args;
-                } else {
-                    Object[] newArgs = fastToGuestValuesUnroll(nodes, languageContext, args);
-                    return newArgs;
-                }
+                Object[] newArgs = fastToGuestValuesUnroll(languageContext, args);
+                return newArgs;
             } else {
-                if (!generic || nodes.length != 1) {
+                if (cachedLength != -2) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    nodes = Arrays.copyOf(nodes, 1);
-                    if (nodes[0] == null) {
-                        nodes[0] = createToGuestValue();
+                    cachedLength = -2;
+                    toGuestValue = Arrays.copyOf(toGuestValue, 1);
+                    if (toGuestValue[0] == null) {
+                        toGuestValue[0] = createToGuestValue();
                     }
-                    this.toGuestValue = nodes;
-                    this.generic = true;
                 }
-                if (args.length == 0) {
-                    return args;
-                }
-                return fastToGuestValues(nodes[0], languageContext, args);
+                return fastToGuestValues(languageContext, args);
             }
         }
 
@@ -455,11 +446,11 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
          * Specialization for constant number of arguments. Uses a profile for each argument.
          */
         @ExplodeLoop
-        private Object[] fastToGuestValuesUnroll(ToGuestValueNode[] nodes, PolyglotLanguageContext languageContext, Object[] args) {
-            Object[] newArgs = needsCopy ? new Object[nodes.length] : args;
-            for (int i = 0; i < nodes.length; i++) {
+        private Object[] fastToGuestValuesUnroll(PolyglotLanguageContext languageContext, Object[] args) {
+            Object[] newArgs = needsCopy ? new Object[toGuestValue.length] : args;
+            for (int i = 0; i < toGuestValue.length; i++) {
                 Object arg = args[i];
-                Object newArg = nodes[i].apply(languageContext, arg);
+                Object newArg = toGuestValue[i].apply(languageContext, arg);
                 if (needsCopy) {
                     newArgs[i] = newArg;
                 } else if (arg != newArg) {
@@ -476,12 +467,12 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
          * Specialization that supports multiple argument lengths but uses a single profile for all
          * arguments.
          */
-        private Object[] fastToGuestValues(ToGuestValueNode node, PolyglotLanguageContext languageContext, Object[] args) {
+        private Object[] fastToGuestValues(PolyglotLanguageContext languageContext, Object[] args) {
             assert toGuestValue[0] != null;
             Object[] newArgs = needsCopy ? new Object[args.length] : args;
             for (int i = 0; i < args.length; i++) {
                 Object arg = args[i];
-                Object newArg = node.apply(languageContext, arg);
+                Object newArg = toGuestValue[0].apply(languageContext, arg);
                 if (needsCopy) {
                     newArgs[i] = newArg;
                 } else if (arg != newArg) {
@@ -527,7 +518,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             }
             if (cachedClassLocal != Generic.class) {
                 assert cachedClassLocal != null;
-                if (receiver != null && cachedClassLocal == receiver.getClass()) {
+                if (cachedClassLocal.isInstance(receiver)) {
                     return languageContext.toGuestValue(cachedClassLocal.cast(receiver));
                 } else {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -560,18 +551,19 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         Object receiver = guestValue;
         PolyglotValue cache = lazy.valueCache.get(receiver.getClass());
         if (cache == null) {
-            cache = lookupValueCache(guestValue);
+            receiver = toGuestValue(receiver);
+            cache = lookupValueCache(receiver);
         }
         return getAPIAccess().newValue(receiver, cache);
     }
 
-    synchronized PolyglotValue lookupValueCache(Object guestValue) {
-        assert toGuestValue(guestValue) == guestValue : "Not a valid guest value: " + guestValue + ". Only interop values are allowed to be exported.";
-        PolyglotValue cache = lazy.valueCache.computeIfAbsent(guestValue.getClass(), new Function<Class<?>, PolyglotValue>() {
-            public PolyglotValue apply(Class<?> t) {
-                return PolyglotValue.createInteropValueCache(PolyglotLanguageContext.this, (TruffleObject) guestValue, guestValue.getClass());
-            }
-        });
+    synchronized PolyglotValue lookupValueCache(Object value) {
+        assert value instanceof TruffleObject;
+        PolyglotValue cache = lazy.valueCache.get(value.getClass());
+        if (cache == null) {
+            cache = PolyglotValue.createInteropValueCache(PolyglotLanguageContext.this, (TruffleObject) value, value.getClass());
+            lazy.valueCache.put(value.getClass(), cache);
+        }
         return cache;
     }
 
@@ -580,6 +572,8 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         final APIAccess apiAccess = context.engine.impl.getAPIAccess();
         @CompilationFinal volatile Class<?> cachedClass;
         @CompilationFinal volatile PolyglotValue cachedValue;
+        @CompilationFinal volatile Class<?> cachedFallbackClass;
+        @CompilationFinal volatile PolyglotValue cachedFallbackValue;
 
         private ToHostValueNode() {
         }
@@ -587,30 +581,37 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         Value execute(Object value) {
             Object receiver = value;
             Class<?> cachedClassLocal = cachedClass;
-            PolyglotValue cache;
-            if (cachedClassLocal != Generic.class) {
-                if (cachedClassLocal == null) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    cachedClass = receiver.getClass();
-                    cache = lazy.valueCache.get(receiver.getClass());
+            if (cachedClassLocal == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                cachedClass = receiver.getClass();
+                cachedValue = lazy.valueCache.get(cachedClass);
+                PolyglotValue cache = cachedValue;
+                if (cachedValue == null) {
+                    receiver = toGuestValue(receiver);
+                    cachedFallbackClass = receiver.getClass();
+                    cachedFallbackValue = lookupValueCache(receiver);
+                    cache = cachedFallbackValue;
+                }
+                return apiAccess.newValue(receiver, cache);
+            } else if (cachedClassLocal != Generic.class) {
+                if (cachedClassLocal.isInstance(value)) {
+                    receiver = cachedClassLocal.cast(receiver);
+                    PolyglotValue cache = cachedValue;
                     if (cache == null) {
-                        cache = lookupValueCache(receiver);
+                        receiver = toGuestValue(receiver);
+                        Class<?> cachedFallback = cachedFallbackClass;
+                        if (cachedFallback != null && cachedFallback.isInstance(receiver)) {
+                            cache = cachedFallbackValue;
+                        } else {
+                            CompilerDirectives.transferToInterpreterAndInvalidate();
+                            cachedClass = Generic.class;
+                            cache = lookupValueCache(receiver.getClass());
+                        }
                     }
-                    cachedValue = cache;
                     return apiAccess.newValue(receiver, cache);
-                } else if (value.getClass() == cachedClassLocal) {
-                    receiver = CompilerDirectives.inInterpreter() ? receiver : CompilerDirectives.castExact(receiver, cachedClassLocal);
-                    cache = cachedValue;
-                    if (cache == null) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        // invalid state retry next time for now do generic
-                    } else {
-                        return apiAccess.newValue(receiver, cache);
-                    }
                 } else {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     cachedClass = Generic.class; // switch to generic
-                    cachedValue = null;
                     // fall through to generic
                 }
             }
