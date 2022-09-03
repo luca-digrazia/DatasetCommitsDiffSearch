@@ -96,9 +96,4 @@ public interface HotSpotObjectConstant extends JavaValue, HotSpotConstant, VMCon
      * @return {@code null} if this constant does not represent a {@link Class} object
      */
     JavaConstant getCompositeValueClass();
-
-    /**
-     * Determines if this constant represents an {@linkplain String#intern() interned} string.
-     */
-    boolean isInternedString();
 }
