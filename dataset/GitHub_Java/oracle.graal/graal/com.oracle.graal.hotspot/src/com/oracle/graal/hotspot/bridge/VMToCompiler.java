@@ -37,17 +37,23 @@ public interface VMToCompiler {
     /**
      * Compiles a method to machine code. This method is called from the VM
      * (VMToCompiler::compileMethod).
+     * 
+     * @return true if the method is in the queue (either added to the queue or already in the
+     *         queue)
      */
-    void compileMethod(long metaspaceMethod, HotSpotResolvedObjectType holder, int entryBCI, boolean blocking, int priority) throws Throwable;
+    boolean compileMethod(long metaspaceMethod, HotSpotResolvedObjectType holder, int entryBCI, boolean blocking, int priority) throws Throwable;
 
     /**
      * Compiles a method to machine code.
+     * 
+     * @return true if the method is in the queue (either added to the queue or already in the
+     *         queue)
      */
-    void compileMethod(HotSpotResolvedJavaMethod method, int entryBCI, boolean blocking, int priority) throws Throwable;
+    boolean compileMethod(HotSpotResolvedJavaMethod method, int entryBCI, boolean blocking, int priority) throws Throwable;
 
     void shutdownCompiler() throws Throwable;
 
-    void startCompiler(boolean bootstrapEnabled) throws Throwable;
+    void startCompiler() throws Throwable;
 
     void bootstrap() throws Throwable;
 
