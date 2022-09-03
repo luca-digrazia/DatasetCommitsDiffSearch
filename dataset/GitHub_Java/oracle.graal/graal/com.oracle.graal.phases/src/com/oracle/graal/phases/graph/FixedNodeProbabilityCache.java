@@ -104,11 +104,7 @@ public class FixedNodeProbabilityCache implements ToDoubleFunction<FixedNode> {
             if (current instanceof MergeNode) {
                 MergeNode currentMerge = (MergeNode) current;
                 NodeInputList<AbstractEndNode> currentForwardEnds = currentMerge.forwardEnds();
-                /*
-                 * Use simple iteration instead of streams, since the stream infrastructure adds
-                 * many frames which causes the recursion to overflow the stack earlier than it
-                 * would otherwise.
-                 */
+                // Using simple iteration instead of lambda as the lambda blows up the stack
                 for (AbstractEndNode endNode : currentForwardEnds) {
                     probability += applyAsDouble(endNode);
                 }
