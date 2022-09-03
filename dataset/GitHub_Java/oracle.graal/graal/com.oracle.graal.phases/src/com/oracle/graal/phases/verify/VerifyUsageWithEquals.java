@@ -27,22 +27,23 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * For certain types object identity should not be used for object equality check. This phase checks
  * the correct usage of the given type. Equality checks with == or != (except null checks) results
  * in an {@link AssertionError}.
  */
-public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
+public class VerifyUsageWithEquals extends VerifyPhase {
 
-    private final Class<?> klass;
+    private MetaAccessProvider runtime;
+    private Class<?> klass;
 
-    public VerifyUsageWithEquals(Class<?> klass) {
+    public VerifyUsageWithEquals(MetaAccessProvider runtime, Class<?> klass) {
+        this.runtime = runtime;
         this.klass = klass;
     }
 
-    private boolean isAssignableType(ValueNode node, MetaAccessProvider runtime) {
+    private boolean isAssignableType(ValueNode node) {
         if (node.stamp() instanceof ObjectStamp) {
             ResolvedJavaType valueType = runtime.lookupJavaType(klass);
             ResolvedJavaType nodeType = node.objectStamp().type();
@@ -58,8 +59,8 @@ public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
         return node.isConstant() && node.asConstant().isNull();
     }
 
-    private boolean checkUsage(ValueNode x, ValueNode y, MetaAccessProvider runtime) {
-        return isAssignableType(x, runtime) && !isNullConstant(y);
+    private boolean checkUsage(ValueNode x, ValueNode y) {
+        return isAssignableType(x) && !isNullConstant(y);
     }
 
     private static boolean isEqualsMethod(StructuredGraph graph) {
@@ -68,12 +69,12 @@ public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
     }
 
     @Override
-    protected boolean verify(StructuredGraph graph, PhaseContext context) {
+    protected boolean verify(StructuredGraph graph) {
         for (ObjectEqualsNode cn : graph.getNodes().filter(ObjectEqualsNode.class)) {
             if (!isEqualsMethod(graph)) {
                 // bail out if we compare an object of type klass with == or != (except null checks)
-                assert !(checkUsage(cn.x(), cn.y(), context.getRuntime()) && checkUsage(cn.y(), cn.x(), context.getRuntime())) : "Verifcation of " + klass.getName() + " usage failed: Comparing " +
-                                cn.x() + " and" + cn.y() + " in " + graph.method() + " must use .equals() for object equality, not '==' or '!='";
+                assert !(checkUsage(cn.x(), cn.y()) && checkUsage(cn.y(), cn.x())) : "Verifcation of " + klass.getName() + " usage failed: Comparing " + cn.x() + " and" + cn.y() + " in " +
+                                graph.method() + " must use .equals() for object equality, not '==' or '!='";
             }
         }
         return true;
