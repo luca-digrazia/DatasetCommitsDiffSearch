@@ -781,13 +781,7 @@ public abstract class TruffleTCK {
     public void testInvalidTestMethod() throws Exception {
         String mime = mimeType();
         String code = invalidCode();
-        // @formatter:off
-        Source invalidCode = Source.newFromText(code).
-            name("Invalid code").
-            mimeType(mime).
-            build();
-        // @formatter:on
-        Object ret = vm().eval(invalidCode).get();
+        Object ret = vm().eval(Source.fromText(code, "Invalid code").withMimeType(mime)).get();
         fail("Should yield IOException, but returned " + ret);
     }
 
@@ -1205,12 +1199,7 @@ public abstract class TruffleTCK {
         final String firstVar = "var" + (char) ('A' + RANDOM.nextInt(24));
         final String secondVar = "var" + (char) ('0' + RANDOM.nextInt(10));
         String mulCode = multiplyCode(firstVar, secondVar);
-        // @formatter:off
-        Source source = Source.newFromText("TCK42:" + mimeType() + ":" + mulCode).
-            name("evaluate " + firstVar + " * " + secondVar).
-            mimeType("application/x-tck").
-            build();
-        // @formatter:on
+        Source source = Source.fromText("TCK42:" + mimeType() + ":" + mulCode, "evaluate " + firstVar + " * " + secondVar).withMimeType("application/x-tck");
         final PolyglotEngine.Value evalSource = vm().eval(source);
         final PolyglotEngine.Value invokeMul = evalSource.execute(firstVar, secondVar);
         Object result = invokeMul.get();
