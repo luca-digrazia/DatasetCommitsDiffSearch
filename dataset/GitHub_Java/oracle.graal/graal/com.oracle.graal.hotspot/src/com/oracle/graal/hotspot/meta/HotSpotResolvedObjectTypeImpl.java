@@ -38,7 +38,7 @@ import com.oracle.graal.hotspot.*;
 /**
  * Implementation of {@link JavaType} for resolved non-primitive HotSpot classes.
  */
-public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType implements HotSpotResolvedObjectType, Remote {
+public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType implements HotSpotResolvedObjectType {
 
     private static final long serialVersionUID = 3481514353553840471L;
 
@@ -69,9 +69,9 @@ public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType
      * @param metaspaceKlass a metaspace Klass object boxed in a {@link JavaConstant}
      * @return the {@link HotSpotResolvedObjectTypeImpl} corresponding to {@code klassConstant}
      */
-    public static ResolvedJavaType fromMetaspaceKlass(Constant metaspaceKlass) {
-        HotSpotMetaspaceConstant klass = (HotSpotMetaspaceConstant) metaspaceKlass;
-        return klass.asResolvedJavaType();
+    public static HotSpotResolvedObjectTypeImpl fromMetaspaceKlass(JavaConstant metaspaceKlass) {
+        assert metaspaceKlass.getKind() == Kind.Long;
+        return fromMetaspaceKlass(metaspaceKlass.asLong());
     }
 
     /**
@@ -93,7 +93,7 @@ public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType
      * <p>
      * <b>NOTE</b>: Creating an instance of this class does not install the mirror for the
      * {@link Class} type. Use {@link #fromObjectClass(Class)},
-     * {@link #fromMetaspaceKlass(Constant)} or {@link #fromMetaspaceKlass(long)} instead.
+     * {@link #fromMetaspaceKlass(JavaConstant)} or {@link #fromMetaspaceKlass(long)} instead.
      * </p>
      *
      * @param javaClass the Class to create the mirror for
@@ -278,13 +278,15 @@ public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType
     }
 
     @Override
-    public JavaConstant getJavaClass() {
-        return HotSpotObjectConstantImpl.forObject(mirror());
-    }
-
-    @Override
-    public JavaConstant getObjectHub() {
-        return klass();
+    public JavaConstant getEncoding(Representation r) {
+        switch (r) {
+            case JavaClass:
+                return HotSpotObjectConstantImpl.forObject(mirror());
+            case ObjectHub:
+                return klass();
+            default:
+                throw GraalInternalError.shouldNotReachHere("unexpected representation " + r);
+        }
     }
 
     @Override
@@ -833,7 +835,7 @@ public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType
         Constructor<?>[] constructors = mirror().getDeclaredConstructors();
         ResolvedJavaMethod[] result = new ResolvedJavaMethod[constructors.length];
         for (int i = 0; i < constructors.length; i++) {
-            result[i] = runtime().getHostProviders().getMetaAccess().lookupJavaMethod(constructors[i]);
+            result[i] = runtime().getHostProviders().getMetaAccess().lookupJavaConstructor(constructors[i]);
             assert result[i].isConstructor();
         }
         return result;
