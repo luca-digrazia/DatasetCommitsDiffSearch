@@ -371,7 +371,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         if (returnTypeAssumption == null) {
             if (TruffleReturnTypeSpeculation.getValue()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                profiledReturnType = classOf(result);
+                profiledReturnType = (result == null ? null : result.getClass());
                 profiledReturnTypeAssumption = Truffle.getRuntime().createAssumption("Profiled Return Type");
             }
         } else if (profiledReturnType != null) {
