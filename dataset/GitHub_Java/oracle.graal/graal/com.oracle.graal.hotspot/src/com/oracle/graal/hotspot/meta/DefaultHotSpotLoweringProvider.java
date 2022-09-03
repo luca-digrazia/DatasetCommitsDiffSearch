@@ -83,7 +83,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
         assert target == providers.getCodeCache().getTarget();
         checkcastDynamicSnippets = new CheckCastDynamicSnippets.Templates(providers, target);
-        instanceofSnippets = new InstanceOfSnippets.Templates(providers, target);
+        instanceofSnippets = new InstanceOfSnippets.Templates(providers, target, config.compileThreshold);
         newObjectSnippets = new NewObjectSnippets.Templates(providers, target);
         monitorSnippets = new MonitorSnippets.Templates(providers, target, config.useFastLocking);
         writeBarrierSnippets = new WriteBarrierSnippets.Templates(providers, target, config.useCompressedOops ? config.getOopEncoding() : null);
@@ -356,7 +356,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
             // mirroring the calculations in c1_GraphBuilder.cpp (setup_osr_entry_block)
             int localsOffset = (graph.method().getMaxLocals() - 1) * 8;
-            for (OSRLocalNode osrLocal : graph.getNodes(OSRLocalNode.TYPE)) {
+            for (OSRLocalNode osrLocal : graph.getNodes(OSRLocalNode.class)) {
                 int size = osrLocal.getKind().getSlotCount();
                 int offset = localsOffset - (osrLocal.index() + size - 1) * 8;
                 IndexedLocationNode location = graph.unique(new IndexedLocationNode(ANY_LOCATION, offset, ConstantNode.forLong(0, graph), 1));

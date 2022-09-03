@@ -621,21 +621,22 @@ public final class SchedulePhase extends Phase {
      * @param earliestBlock
      */
     private Block latestBlock(ValueNode node, SchedulingStrategy strategy, Block earliestBlock) {
-        Block block = null;
+        CommonDominatorBlockClosure cdbc = new CommonDominatorBlockClosure(null);
+        ensureScheduledUsages(node, strategy);
         for (Node usage : node.usages()) {
-            block = blocksForUsage(node, usage, block, earliestBlock, strategy);
-            if (block == earliestBlock) {
+            blocksForUsage(node, usage, cdbc, strategy);
+            if (cdbc.block == earliestBlock) {
                 break;
             }
         }
 
-        assert assertLatestBlockResult(node, block);
-        return block;
+        assert assertLatestBlockResult(node, cdbc);
+        return cdbc.block;
     }
 
-    private boolean assertLatestBlockResult(ValueNode node, Block block) throws SchedulingError {
-        if (block != null && !dominates(earliestBlock(node), block)) {
-            throw new SchedulingError("failed to find correct latest schedule for %s. cdbc: %s, earliest: %s", node, block, earliestBlock(node));
+    private boolean assertLatestBlockResult(ValueNode node, CommonDominatorBlockClosure cdbc) throws SchedulingError {
+        if (cdbc.block != null && !dominates(earliestBlock(node), cdbc.block)) {
+            throw new SchedulingError("failed to find correct latest schedule for %s. cdbc: %s, earliest: %s", node, cdbc.block, earliestBlock(node));
         }
         return true;
     }
@@ -670,34 +671,41 @@ public final class SchedulePhase extends Phase {
         if (earliest != null) {
             return earliest;
         }
-        return earliestBlockHelper(node, earliest);
-    }
-
-    private Block earliestBlockHelper(Node node, Block earliestStart) throws SchedulingError {
         /*
          * All inputs must be in a dominating block, otherwise the graph cannot be scheduled. This
          * implies that the inputs' blocks have a total ordering via their dominance relation. So in
          * order to find the earliest block placement for this node we need to find the input block
          * that is dominated by all other input blocks.
          */
-        Block earliest = earliestStart;
 
         if (node.predecessor() != null) {
             throw new SchedulingError();
         }
-        for (Node input : node.inputs()) {
-            if (input != null) {
-                assert input instanceof ValueNode;
-                Block inputEarliest;
-                if (input instanceof InvokeWithExceptionNode) {
-                    inputEarliest = cfg.getNodeToBlock().get(((InvokeWithExceptionNode) input).next());
-                } else {
-                    inputEarliest = earliestBlock(input);
-                }
-                if (earliest == null) {
-                    earliest = inputEarliest;
-                } else if (earliest != inputEarliest) {
-                    earliest = findEarlierBlock(earliest, inputEarliest);
+        for (Node input : node.inputs().nonNull()) {
+            assert input instanceof ValueNode;
+            Block inputEarliest;
+            if (input instanceof InvokeWithExceptionNode) {
+                inputEarliest = cfg.getNodeToBlock().get(((InvokeWithExceptionNode) input).next());
+            } else {
+                inputEarliest = earliestBlock(input);
+            }
+            if (earliest == null) {
+                earliest = inputEarliest;
+            } else if (earliest != inputEarliest) {
+                // Find out whether earliest or inputEarliest is earlier.
+                Block a = earliest.getDominator();
+                Block b = inputEarliest;
+                while (true) {
+                    if (a == inputEarliest || b == null) {
+                        // Nothing to change, the previous earliest block is still earliest.
+                        break;
+                    } else if (b == earliest || a == null) {
+                        // New earliest is the earliest.
+                        earliest = inputEarliest;
+                        break;
+                    }
+                    a = a.getDominator();
+                    b = b.getDominator();
                 }
             }
         }
@@ -706,23 +714,6 @@ public final class SchedulePhase extends Phase {
         }
         earliestCache.set(node, earliest);
         return earliest;
-    }
-
-    private static Block findEarlierBlock(Block earliest, Block inputEarliest) {
-        // Find out whether earliest or inputEarliest is earlier.
-        Block a = earliest.getDominator();
-        Block b = inputEarliest;
-        while (true) {
-            if (a == inputEarliest || b == null) {
-                // Nothing to change, the previous earliest block is still earliest.
-                return earliest;
-            } else if (b == earliest || a == null) {
-                // New earliest is the earliest.
-                return inputEarliest;
-            }
-            a = a.getDominator();
-            b = b.getDominator();
-        }
     }
 
     /**
@@ -757,11 +748,11 @@ public final class SchedulePhase extends Phase {
      *
      * @param node the node that needs to be scheduled
      * @param usage the usage whose blocks need to be considered
-     * @param earliestBlock
+     * @param closure the closure that will be called for each block
      */
-    private Block blocksForUsage(ValueNode node, Node usage, Block startCurrentBlock, Block earliestBlock, SchedulingStrategy strategy) {
+    private void blocksForUsage(ValueNode node, Node usage, CommonDominatorBlockClosure closure, SchedulingStrategy strategy) {
         assert !(node instanceof PhiNode);
-        Block currentBlock = startCurrentBlock;
+
         if (usage instanceof PhiNode) {
             // An input to a PhiNode is used at the end of the predecessor block that corresponds to
             // the PhiNode input.
@@ -772,10 +763,7 @@ public final class SchedulePhase extends Phase {
             Block mergeBlock = cfg.getNodeToBlock().get(merge);
             for (int i = 0; i < phi.valueCount(); ++i) {
                 if (phi.valueAt(i) == node) {
-                    currentBlock = AbstractControlFlowGraph.commonDominatorTyped(currentBlock, mergeBlock.getPredecessors().get(i));
-                    if (currentBlock == earliestBlock) {
-                        break;
-                    }
+                    closure.apply(mergeBlock.getPredecessors().get(i));
                 }
             }
         } else if (usage instanceof VirtualState) {
@@ -785,19 +773,19 @@ public final class SchedulePhase extends Phase {
                 if (unscheduledUsage instanceof VirtualState) {
                     // If a FrameState is an outer FrameState this method behaves as if the inner
                     // FrameState was the actual usage, by recursing.
-                    currentBlock = blocksForUsage(node, unscheduledUsage, currentBlock, earliestBlock, strategy);
+                    blocksForUsage(node, unscheduledUsage, closure, strategy);
                 } else if (unscheduledUsage instanceof AbstractBeginNode) {
                     // Only FrameStates can be connected to BeginNodes.
                     if (!(usage instanceof FrameState)) {
                         throw new SchedulingError(usage.toString());
                     }
                     if (unscheduledUsage instanceof StartNode) {
-                        currentBlock = AbstractControlFlowGraph.commonDominatorTyped(currentBlock, cfg.getNodeToBlock().get(unscheduledUsage));
+                        closure.apply(cfg.getNodeToBlock().get(unscheduledUsage));
                     } else {
                         // If a FrameState belongs to a BeginNode then it's inputs will be placed at
                         // the common dominator of all EndNodes.
                         for (Node pred : unscheduledUsage.cfgPredecessors()) {
-                            currentBlock = AbstractControlFlowGraph.commonDominatorTyped(currentBlock, cfg.getNodeToBlock().get(pred));
+                            closure.apply(cfg.getNodeToBlock().get(pred));
                         }
                     }
                 } else {
@@ -810,18 +798,21 @@ public final class SchedulePhase extends Phase {
                     }
                     // Otherwise: Put the input into the same block as the usage.
                     assignBlockToNode((ValueNode) unscheduledUsage, strategy);
-                    currentBlock = AbstractControlFlowGraph.commonDominatorTyped(currentBlock, cfg.getNodeToBlock().get(unscheduledUsage));
-                }
-                if (currentBlock == earliestBlock) {
-                    break;
+                    closure.apply(cfg.getNodeToBlock().get(unscheduledUsage));
                 }
             }
         } else {
             // All other types of usages: Put the input into the same block as the usage.
             assignBlockToNode((ValueNode) usage, strategy);
-            currentBlock = AbstractControlFlowGraph.commonDominatorTyped(currentBlock, cfg.getNodeToBlock().get(usage));
+            closure.apply(cfg.getNodeToBlock().get(usage));
         }
-        return currentBlock;
+    }
+
+    private void ensureScheduledUsages(Node node, SchedulingStrategy strategy) {
+        for (Node usage : node.usages().filter(ValueNode.class)) {
+            assignBlockToNode((ValueNode) usage, strategy);
+        }
+        // now true usages are ready
     }
 
     private void sortNodesWithinBlocks(StructuredGraph graph, SchedulingStrategy strategy) {
@@ -1080,16 +1071,20 @@ public final class SchedulePhase extends Phase {
             return;
         }
 
-        addToLatestSortingHelper(i, state);
-    }
-
-    private void addToLatestSortingHelper(ValueNode i, SortState state) {
         FrameState stateAfter = null;
         if (i instanceof StateSplit) {
             stateAfter = ((StateSplit) i).stateAfter();
         }
 
-        addInputsToLatestSorting(i, state, stateAfter);
+        for (Node input : i.inputs()) {
+            if (input instanceof FrameState) {
+                if (input != stateAfter) {
+                    addUnscheduledToLatestSorting((FrameState) input, state);
+                }
+            } else {
+                addToLatestSorting((ValueNode) input, state);
+            }
+        }
 
         if (state.readsSize() != 0) {
             if (i instanceof MemoryCheckpoint.Single) {
@@ -1114,18 +1109,6 @@ public final class SchedulePhase extends Phase {
 
         if (state.readsSize() != 0 && i instanceof FloatingReadNode) {
             state.removeRead(i);
-        }
-    }
-
-    private void addInputsToLatestSorting(ValueNode i, SortState state, FrameState stateAfter) {
-        for (Node input : i.inputs()) {
-            if (input instanceof FrameState) {
-                if (input != stateAfter) {
-                    addUnscheduledToLatestSorting((FrameState) input, state);
-                }
-            } else {
-                addToLatestSorting((ValueNode) input, state);
-            }
         }
     }
 

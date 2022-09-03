@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,20 +33,25 @@ import com.oracle.graal.replacements.test.*;
  */
 public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
 
+    /*
+     * We have to ignore this test for now because currently there is no way to read uncompressed
+     * pointers in a compressed world via JNI.
+     */
+    @Ignore
     @Test
     public void testObjectSubstitutions() {
-        TestClassA obj = new TestClassA();
-
         test("getClass0");
         test("objectHashCode");
 
-        test("getClass0", "a string");
-        test("objectHashCode", obj);
+        Object obj = new Object();
+
+        assertDeepEquals("a string".getClass(), ObjectSubstitutions.getClass("a string"));
+        assertDeepEquals(obj.hashCode(), ObjectSubstitutions.hashCode(obj));
     }
 
     @SuppressWarnings("all")
-    public static Class<?> getClass0(Object obj) {
-        return obj.getClass();
+    public static boolean getClass0(Object obj, Class<?> clazz) {
+        return obj.getClass() == clazz;
     }
 
     @SuppressWarnings("all")
@@ -54,6 +59,11 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
         return obj.hashCode();
     }
 
+    /*
+     * We have to ignore this test for now because currently there is no way to read uncompressed
+     * pointers in a compressed world via JNI.
+     */
+    @Ignore
     @Test
     public void testClassSubstitutions() {
         test("getModifiers");
@@ -64,12 +74,12 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
         test("getComponentType");
 
         for (Class<?> c : new Class[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
-            test("getModifiers", c);
-            test("isInterface", c);
-            test("isArray", c);
-            test("isPrimitive", c);
-            test("getSuperClass", c);
-            test("getComponentType", c);
+            assertDeepEquals(c.getModifiers(), HotSpotClassSubstitutions.getModifiers(c));
+            assertDeepEquals(c.isInterface(), HotSpotClassSubstitutions.isInterface(c));
+            assertDeepEquals(c.isArray(), HotSpotClassSubstitutions.isArray(c));
+            assertDeepEquals(c.isPrimitive(), HotSpotClassSubstitutions.isPrimitive(c));
+            assertDeepEquals(c.getSuperclass(), HotSpotClassSubstitutions.getSuperclass(c));
+            assertDeepEquals(c.getComponentType(), HotSpotClassSubstitutions.getComponentType(c));
         }
     }
 
@@ -103,6 +113,11 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
         return clazz.getComponentType();
     }
 
+    /*
+     * We have to ignore this test for now because currently there is no way to read uncompressed
+     * pointers in a compressed world via JNI.
+     */
+    @Ignore
     @Test
     public void testThreadSubstitutions() {
         test("currentThread");
@@ -110,13 +125,13 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
         test("threadInterrupted");
 
         Thread currentThread = Thread.currentThread();
-        test("currentThread", currentThread);
-        test("threadIsInterrupted", currentThread);
+        assertDeepEquals(currentThread, ThreadSubstitutions.currentThread());
+        assertDeepEquals(currentThread.isInterrupted(), ThreadSubstitutions.isInterrupted(currentThread, false));
     }
 
     @SuppressWarnings("all")
-    public static boolean currentThread(Thread other) {
-        return Thread.currentThread() == other;
+    public static Thread currentThread() {
+        return Thread.currentThread();
     }
 
     @SuppressWarnings("all")
@@ -137,7 +152,7 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
         SystemSubstitutions.currentTimeMillis();
         SystemSubstitutions.nanoTime();
         for (Object o : new Object[]{this, new int[5], new String[2][], new Object()}) {
-            test("systemIdentityHashCode", o);
+            assertDeepEquals(System.identityHashCode(o), SystemSubstitutions.identityHashCode(o));
         }
     }
 
