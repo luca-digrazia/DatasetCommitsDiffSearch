@@ -148,8 +148,7 @@ public class DiagnosticsOutputDirectory {
                         @Override
                         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                             if (attrs.isRegularFile()) {
-                                String name = dir.relativize(file).toString();
-                                ZipEntry ze = new ZipEntry(name);
+                                ZipEntry ze = new ZipEntry(file.toString());
                                 zos.putNextEntry(ze);
                                 zos.write(Files.readAllBytes(file));
                                 zos.closeEntry();
