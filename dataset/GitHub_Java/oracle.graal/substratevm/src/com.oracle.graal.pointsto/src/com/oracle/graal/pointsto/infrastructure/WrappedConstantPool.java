@@ -67,8 +67,7 @@ public class WrappedConstantPool implements ConstantPool {
 
     @Override
     public JavaField lookupField(int cpi, ResolvedJavaMethod method, int opcode) {
-        ResolvedJavaMethod substMethod = universe.resolveSubstitution(((WrappedJavaMethod) method).getWrapped());
-        return universe.lookupAllowUnresolved(wrapped.lookupField(cpi, substMethod, opcode));
+        return universe.lookupAllowUnresolved(wrapped.lookupField(cpi, method, opcode));
     }
 
     @Override

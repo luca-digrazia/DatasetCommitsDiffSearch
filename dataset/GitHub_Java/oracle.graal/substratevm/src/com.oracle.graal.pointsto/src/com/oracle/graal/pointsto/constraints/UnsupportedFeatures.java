@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -50,7 +48,7 @@ public class UnsupportedFeatures {
         Data(String key, AnalysisMethod method, String message, String trace, Throwable originalException) {
             this.key = key;
             this.method = method;
-            this.message = message != null ? message : "";
+            this.message = message;
             this.trace = trace;
             this.originalException = originalException;
         }
@@ -111,7 +109,7 @@ public class UnsupportedFeatures {
                     ShortestInvokeChainPrinter.print(bb, entry.method, printStream);
                     printStream.println();
                 }
-                if (entry.originalException != null && !(entry.originalException instanceof UnsupportedFeatureException)) {
+                if (entry.originalException != null) {
                     printStream.print("Original exception that caused the problem: ");
                     entry.originalException.printStackTrace(printStream);
                 }
