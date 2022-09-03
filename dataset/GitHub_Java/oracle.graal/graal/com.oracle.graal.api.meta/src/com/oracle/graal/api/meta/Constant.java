@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.api.meta;
 
-import static com.oracle.graal.api.meta.MetaUtil.*;
-
 /**
  * Represents a constant (boxed) value, such as an integer, floating point number, or object
  * reference, within the compiler and across the compiler/runtime interface. Exports a set of
@@ -112,24 +110,14 @@ public final class Constant extends Value {
         return object == null && primitive == 0;
     }
 
-    public long getPrimitive() {
-        assert getKind().isPrimitive();
-        return primitive;
-    }
-
     @Override
     public String toString() {
         if (getKind() == Kind.Illegal) {
             return "illegal";
         } else {
             String annotationSuffix = "";
-            Object primitiveAnnotation = getPrimitiveAnnotation();
-            if (getKind() != Kind.Object && primitiveAnnotation != null) {
-                try {
-                    annotationSuffix = "{" + primitiveAnnotation + "}";
-                } catch (Throwable t) {
-                    annotationSuffix = "{" + getSimpleName(primitiveAnnotation.getClass(), true) + "@" + System.identityHashCode(primitiveAnnotation) + "}";
-                }
+            if (getKind() != Kind.Object && getPrimitiveAnnotation() != null) {
+                annotationSuffix = "{" + getPrimitiveAnnotation() + "}";
             }
             return getKind().getJavaName() + "[" + getKind().format(asBoxedValue()) + (getKind() != Kind.Object ? "|0x" + Long.toHexString(primitive) : "") + "]" + annotationSuffix;
         }

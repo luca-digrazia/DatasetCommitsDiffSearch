@@ -75,6 +75,11 @@ public class Graph {
     NodeChangedListener usagesDroppedToZeroListener;
     private final HashMap<CacheEntry, Node> cachedNodes = new HashMap<>();
 
+    /**
+     * Determines if external nodes will use {@link Graph}'s canonicalization cache.
+     */
+    public static final boolean CacheExternalNodesInGraph = Boolean.parseBoolean(System.getProperty("graal.cacheExternalNodesInGraph", "false"));
+
     private static final class CacheEntry {
 
         private final Node node;
@@ -342,6 +347,24 @@ public class Graph {
         return uniqueHelper(node, true);
     }
 
+    /**
+     * Looks for a node <i>similar</i> to {@code node}. If not found, {@code node} is added to a
+     * cache in this graph used to canonicalize nodes.
+     * <p>
+     * Note that node must implement {@link ValueNumberable} and must be an
+     * {@linkplain Node#isExternal() external} node.
+     * 
+     * @return a node similar to {@code node} if one exists, otherwise {@code node}
+     */
+    public <T extends Node> T uniqueExternal(T node) {
+        assert node.isExternal() : node;
+        assert node instanceof ValueNumberable : node;
+        if (!CacheExternalNodesInGraph) {
+            return node;
+        }
+        return uniqueHelper(node, false);
+    }
+
     @SuppressWarnings("unchecked")
     <T extends Node> T uniqueHelper(T node, boolean addIfMissing) {
         assert node.getNodeClass().valueNumberable();
@@ -358,13 +381,14 @@ public class Graph {
     }
 
     void putNodeIntoCache(Node node) {
-        assert node.graph() == this || node.graph() == null;
+        assert node.isExternal() || node.graph() == this || node.graph() == null;
         assert node.getNodeClass().valueNumberable();
         assert node.getNodeClass().isLeafNode() : node.getClass();
         cachedNodes.put(new CacheEntry(node), node);
     }
 
     Node findNodeInCache(Node node) {
+        assert !node.isExternal() || CacheExternalNodesInGraph;
         CacheEntry key = new CacheEntry(node);
         Node result = cachedNodes.get(key);
         if (result != null && result.isDeleted()) {
@@ -761,6 +785,7 @@ public class Graph {
     }
 
     void register(Node node) {
+        assert !node.isExternal();
         assert node.id() == Node.INITIAL_ID;
         if (nodes.length == nodesSize) {
             nodes = Arrays.copyOf(nodes, (nodesSize * 2) + 1);
