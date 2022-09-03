@@ -26,16 +26,17 @@ import java.io.*;
 import java.net.*;
 import java.util.regex.*;
 
-import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.observer.*;
-import com.oracle.max.graal.compiler.schedule.*;
+import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ri.*;
 
 /**
  * Observes compilation events and uses {@link IdealGraphPrinter} to generate a graph representation that can be
  * inspected with the <a href="http://kenai.com/projects/igv">Ideal Graph Visualizer</a>.
+ *
+ * @author Peter Hofer
  */
 public class IdealGraphPrinterObserver implements CompilationObserver {
 
@@ -44,18 +45,9 @@ public class IdealGraphPrinterObserver implements CompilationObserver {
     private final String host;
     private final int port;
 
-    private static class PrintingContext {
-        public IdealGraphPrinter printer;
-        private OutputStream stream;
-        private Socket socket;
-
-    }
-    private final ThreadLocal<PrintingContext> context = new ThreadLocal<PrintingContext>() {
-        @Override
-        protected PrintingContext initialValue() {
-            return new PrintingContext();
-        }
-    };
+    private IdealGraphPrinter printer;
+    private OutputStream stream;
+    private Socket socket;
 
     /**
      * Creates a new {@link IdealGraphPrinterObserver} that writes output to a file named after the compiled method.
@@ -65,201 +57,124 @@ public class IdealGraphPrinterObserver implements CompilationObserver {
     }
 
     /**
-     * Creates a new {@link IdealGraphPrinterObserver} that sends output to a remote IdealGraphVisualizer instance.
+     * Creates a new {@link IdealGraphPrinterObserver} that sends output to a remove IdealGraphVisualizer instance.
      */
     public IdealGraphPrinterObserver(String host, int port) {
         this.host = host;
         this.port = port;
     }
 
-    private PrintingContext context() {
-        return context.get();
-    }
-
-    private IdealGraphPrinter printer() {
-        return context().printer;
-    }
-
-    private Socket socket() {
-        return context().socket;
-    }
-
     @Override
-    public void compilationStarted(GraalCompilation compilation) {
-        openPrinter(compilation, false);
-    }
+    public void compilationStarted(CompilationEvent event) {
+        assert (stream == null && printer == null);
 
-    private void openPrinter(GraalCompilation compilation, boolean error) {
-        assert (context().stream == null && printer() == null);
-        if ((!TTY.isSuppressed() && GraalOptions.Plot) || (GraalOptions.PlotOnError && error)) {
-            String name;
-            if (compilation != null) {
-                name = compilation.method.holder().name();
-                name = name.substring(1, name.length() - 1).replace('/', '.');
-                name = name + "." + compilation.method.name();
+        if ((!TTY.isSuppressed() && GraalOptions.Plot) || (GraalOptions.PlotOnError && event.isErrorEvent())) {
+            String name = event.getMethod().holder().name();
+            name = name.substring(1, name.length() - 1).replace('/', '.');
+            name = name + "." + event.getMethod().name();
+
+            if (host != null) {
+                openNetworkPrinter(name, event.getMethod());
             } else {
-                name = "null";
-            }
-
-            openPrinter(name, compilation == null ? null : compilation.method);
-        }
-    }
-
-    private void openPrinter(String title, RiResolvedMethod method) {
-        assert (context().stream == null && printer() == null);
-        if (!TTY.isSuppressed()) {
-            // Use a filter to suppress a recursive attempt to open a printer
-            TTY.Filter filter = new TTY.Filter();
-            try {
-                if (host != null) {
-                    openNetworkPrinter(title, method);
-                } else {
-                    openFilePrinter(title, method);
-                }
-            } finally {
-                filter.remove();
+                openFilePrinter(name, event.getMethod());
             }
         }
     }
 
-    private void openFilePrinter(String title, RiResolvedMethod method) {
-        String filename = title + ".igv.xml";
+    private void openFilePrinter(String name, RiMethod method) {
+        String filename = name + ".igv.xml";
         filename = INVALID_CHAR.matcher(filename).replaceAll("_");
 
         try {
-            context().stream = new FileOutputStream(filename);
-            context().printer = new IdealGraphPrinter(context().stream);
-            printer().begin();
-            printer().beginGroup(title, title, method, -1, "Graal");
+            stream = new FileOutputStream(filename);
+            printer = new IdealGraphPrinter(stream);
+            if (GraalOptions.OmitDOTFrameStates) {
+                printer.addOmittedClass(FrameState.class);
+            }
+            printer.begin();
+            printer.beginGroup(name, name, method, -1);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public boolean networkAvailable() {
+    private void openNetworkPrinter(String name, RiMethod method) {
         try {
-            Socket s = new Socket(host, port);
-            s.setSoTimeout(10);
-            s.close();
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    private void openNetworkPrinter(String title, RiResolvedMethod method) {
-        try {
-            context().socket = new Socket(host, port);
-            if (socket().getInputStream().read() == 'y') {
-                context().stream = new BufferedOutputStream(socket().getOutputStream(), 0x4000);
+            socket = new Socket(host, port);
+            if (socket.getInputStream().read() == 'y') {
+                stream = new BufferedOutputStream(socket.getOutputStream(), 0x4000);
             } else {
                 // server currently does not accept any input
-                socket().close();
-                context().socket = null;
+                socket.close();
+                socket = null;
                 return;
             }
 
-            context().printer = new IdealGraphPrinter(context().stream);
-            printer().begin();
-            printer().beginGroup(title, title, method, -1, "Graal");
-            printer().flush();
-            if (socket().getInputStream().read() != 'y') {
+            printer = new IdealGraphPrinter(new BufferedOutputStream(stream));
+            if (GraalOptions.OmitDOTFrameStates) {
+                printer.addOmittedClass(FrameState.class);
+            }
+            printer.begin();
+            printer.beginGroup(name, name, method, -1);
+            printer.flush();
+            if (socket.getInputStream().read() != 'y') {
                 // server declines input for this method
-                socket().close();
-                context().socket = null;
-                context().stream = null;
-                context().printer = null;
+                socket.close();
+                socket = null;
+                stream = null;
+                printer = null;
             }
         } catch (IOException e) {
-            System.err.println("Error opening connection to " + host + ":" + port + ": " + e);
+            e.printStackTrace();
 
-            if (socket() != null) {
+            if (socket != null) {
                 try {
-                    socket().close();
+                    socket.close();
                 } catch (IOException ioe) {
                 }
-                context().socket = null;
+                socket = null;
             }
-            context().stream = null;
-            context().printer = null;
+            stream = null;
+            printer = null;
         }
     }
 
     @Override
     public void compilationEvent(CompilationEvent event) {
         boolean lazyStart = false;
-        if (printer() == null && event.hasDebugObject(CompilationEvent.ERROR)) {
-            openPrinter(event.debugObject(GraalCompilation.class), true);
+        if (printer == null && event.isErrorEvent()) {
+            this.compilationStarted(event);
             lazyStart = true;
         }
-        Graph graph = event.debugObject(Graph.class);
-        if (printer() != null && graph != null) {
-            printer().print(graph, event.label, true, event.debugObject(IdentifyBlocksPhase.class));
+        if (printer != null && event.getGraph() != null && event.isHIRValid()) {
+            Graph graph = event.getGraph();
+            printer.print(graph, event.getLabel(), true, event.getDebugObjects());
         }
-        if (lazyStart && printer() != null) {
-            closePrinter();
+        if (lazyStart) {
+            this.compilationFinished(event);
         }
     }
 
     @Override
-    public void compilationFinished(GraalCompilation compilation) {
-        if (printer() != null) {
-            closePrinter();
-        }
-    }
+    public void compilationFinished(CompilationEvent event) {
+        if (printer != null) {
+            try {
+                printer.endGroup();
+                printer.end();
 
-    private void closePrinter() {
-        assert (printer() != null);
-
-        try {
-            printer().endGroup();
-            printer().end();
-
-            if (socket() != null) {
-                socket().close(); // also closes stream
-            } else {
-                context().stream.close();
+                if (socket != null) {
+                    socket.close(); // also closes stream
+                } else {
+                    stream.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                printer = null;
+                stream = null;
+                socket = null;
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            context().printer = null;
-            context().stream = null;
-            context().socket = null;
         }
     }
 
-    public void printGraphs(String groupTitle, Graph... graphs) {
-        openPrinter(groupTitle, null);
-        if (printer() != null) {
-            int i = 0;
-            for (Graph graph : graphs) {
-                printer().print(graph, "Graph " + i, true);
-                i++;
-            }
-            closePrinter();
-        }
-    }
-
-    public void compilationStarted(String groupTitle) {
-        openPrinter(groupTitle, null);
-    }
-
-    public void printGraph(String graphTitle, Graph graph) {
-        if (printer() != null) {
-            printer().print(graph, graphTitle, true);
-        }
-    }
-
-    public void printSingleGraph(String title, Graph graph) {
-        printSingleGraph(title, title, graph);
-    }
-
-    public void printSingleGraph(String groupTitle, String graphTitle, Graph graph) {
-        openPrinter(groupTitle, null);
-        if (printer() != null) {
-            printer().print(graph, graphTitle, true);
-            closePrinter();
-        }
-    }
 }
