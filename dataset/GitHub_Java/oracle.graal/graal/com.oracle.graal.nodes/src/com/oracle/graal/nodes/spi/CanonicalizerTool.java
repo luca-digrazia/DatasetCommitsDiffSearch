@@ -30,4 +30,10 @@ public interface CanonicalizerTool {
     TargetDescription target();
     Assumptions assumptions();
     MetaAccessProvider runtime();
+
+    /**
+     * Determines if a given constant is an object/array whose current
+     * fields/elements will never change.
+     */
+    boolean isImmutable(Constant objectConstant);
 }

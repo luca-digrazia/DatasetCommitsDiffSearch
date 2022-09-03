@@ -35,14 +35,9 @@ public interface JavaType {
      */
     public enum Representation {
         /**
-         * The runtime representation of the data structure containing the static primitive fields of this type.
+         * The runtime representation of the data structure containing the static fields of this type.
          */
-        StaticPrimitiveFields,
-
-        /**
-         * The runtime representation of the data structure containing the static object fields of this type.
-         */
-        StaticObjectFields,
+        StaticFields,
 
         /**
          * The runtime representation of the Java class object of this type.
@@ -71,7 +66,6 @@ public interface JavaType {
     /**
      * For array types, gets the type of the components.
      * This will be null if this is not an array type.
-     * This method is analogous to {@link Class#getComponentType()}.
      *
      * @return the component type of this type if it is an array type otherwise null
      */

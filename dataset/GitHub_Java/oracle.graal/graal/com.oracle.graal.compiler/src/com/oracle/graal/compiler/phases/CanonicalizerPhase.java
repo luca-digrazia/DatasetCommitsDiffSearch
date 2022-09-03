@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import java.util.*;
-import java.util.concurrent.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
@@ -48,15 +45,14 @@ public class CanonicalizerPhase extends Phase {
     private final int newNodesMark;
     private final TargetDescription target;
     private final Assumptions assumptions;
-    private final CodeCacheProvider runtime;
+    private final MetaAccessProvider runtime;
     private final IsImmutablePredicate immutabilityPredicate;
     private final Iterable<Node> initWorkingSet;
 
     private NodeWorkList workList;
     private Tool tool;
-    private List<Node> snapshotTemp;
 
-    public CanonicalizerPhase(TargetDescription target, CodeCacheProvider runtime, Assumptions assumptions) {
+    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions) {
         this(target, runtime, assumptions, null, 0, null);
     }
 
@@ -67,7 +63,7 @@ public class CanonicalizerPhase extends Phase {
      * @param workingSet the initial working set of nodes on which the canonicalizer works, should be an auto-grow node bitmap
      * @param immutabilityPredicate
      */
-    public CanonicalizerPhase(TargetDescription target, CodeCacheProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, IsImmutablePredicate immutabilityPredicate) {
+    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, IsImmutablePredicate immutabilityPredicate) {
         this(target, runtime, assumptions, workingSet, 0, immutabilityPredicate);
     }
 
@@ -75,18 +71,17 @@ public class CanonicalizerPhase extends Phase {
      * @param newNodesMark only the {@linkplain Graph#getNewNodes(int) new nodes} specified by
      *            this mark are processed otherwise all nodes in the graph are processed
      */
-    public CanonicalizerPhase(TargetDescription target, CodeCacheProvider runtime, Assumptions assumptions, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
+    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
         this(target, runtime, assumptions, null, newNodesMark, immutabilityPredicate);
     }
 
-    private CanonicalizerPhase(TargetDescription target, CodeCacheProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
+    private CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
         this.newNodesMark = newNodesMark;
         this.target = target;
         this.assumptions = assumptions;
         this.runtime = runtime;
         this.immutabilityPredicate = immutabilityPredicate;
         this.initWorkingSet = workingSet;
-        this.snapshotTemp = new ArrayList<>();
     }
 
     @Override
@@ -102,6 +97,14 @@ public class CanonicalizerPhase extends Phase {
         }
         tool = new Tool(workList, runtime, target, assumptions, immutabilityPredicate);
         processWorkSet(graph);
+
+        while (graph.getUsagesDroppedNodesCount() > 0) {
+            for (Node n : graph.getAndCleanUsagesDroppedNodes()) {
+                if (!n.isDeleted() && n.usages().size() == 0 && GraphUtil.isFloatingNode().apply(n)) {
+                    n.safeDelete();
+                }
+            }
+        }
     }
 
     public interface IsImmutablePredicate {
@@ -135,32 +138,13 @@ public class CanonicalizerPhase extends Phase {
                 return;
             }
             int mark = graph.getMark();
-            if (!tryKillUnused(node)) {
-                node.inputs().filter(GraphUtil.isFloatingNode()).snapshotTo(snapshotTemp);
-                if (!tryCanonicalize(node, graph, tool)) {
-                    tryInferStamp(node, graph);
-                } else {
-                    for (Node in : snapshotTemp) {
-                        if (in.isAlive() && in.usages().isEmpty()) {
-                            GraphUtil.killWithUnusedFloatingInputs(in);
-                        }
-                    }
-                }
-                snapshotTemp.clear();
-            }
+            tryCanonicalize(node, graph, tool);
+            tryInferStamp(node, graph);
 
             for (Node newNode : graph.getNewNodes(mark)) {
                 workList.add(newNode);
             }
         }
-    }
-
-    private static boolean tryKillUnused(Node node) {
-        if (node.isAlive() && GraphUtil.isFloatingNode().apply(node) && node.usages().isEmpty()) {
-            GraphUtil.killWithUnusedFloatingInputs(node);
-            return true;
-        }
-        return false;
     }
 
     public static boolean tryGlobalValueNumbering(Node node, StructuredGraph graph) {
@@ -178,11 +162,11 @@ public class CanonicalizerPhase extends Phase {
         return false;
     }
 
-    public static boolean tryCanonicalize(final Node node, final StructuredGraph graph, final SimplifierTool tool) {
+    public static void tryCanonicalize(final Node node, final StructuredGraph graph, final SimplifierTool tool) {
         if (node instanceof Canonicalizable) {
             METRIC_CANONICALIZATION_CONSIDERED_NODES.increment();
-            return Debug.scope("CanonicalizeNode", node, new Callable<Boolean>(){
-                public Boolean call() {
+            Debug.scope("CanonicalizeNode", node, new Runnable() {
+                public void run() {
                     ValueNode canonical = ((Canonicalizable) node).canonical(tool);
 //     cases:                                           original node:
 //                                         |Floating|Fixed-unconnected|Fixed-connected|
@@ -198,9 +182,9 @@ public class CanonicalizerPhase extends Phase {
 //       X: must not happen (checked with assertions)
                     if (canonical == node) {
                         Debug.log("Canonicalizer: work on %s", node);
-                        return false;
                     } else {
                         Debug.log("Canonicalizer: replacing %s with %s", node, canonical);
+
                         METRIC_CANONICALIZED_NODES.increment();
                         if (node instanceof FloatingNode) {
                             if (canonical == null) {
@@ -208,7 +192,7 @@ public class CanonicalizerPhase extends Phase {
                                 graph.removeFloating((FloatingNode) node);
                             } else {
                                 // case 2
-                                assert !(canonical instanceof FixedNode) || (canonical.predecessor() != null || canonical instanceof StartNode) : node + " -> " + canonical +
+                                assert !(canonical instanceof FixedNode) || canonical.predecessor() != null : node + " -> " + canonical +
                                                 " : replacement should be floating or fixed and connected";
                                 graph.replaceFloating((FloatingNode) node, canonical);
                             }
@@ -234,7 +218,6 @@ public class CanonicalizerPhase extends Phase {
                                 }
                             }
                         }
-                        return true;
                     }
                 }
             });
@@ -243,7 +226,6 @@ public class CanonicalizerPhase extends Phase {
             METRIC_SIMPLIFICATION_CONSIDERED_NODES.increment();
             ((Simplifiable) node).simplify(tool);
         }
-        return false;
     }
 
     /**
@@ -273,12 +255,12 @@ public class CanonicalizerPhase extends Phase {
     private static final class Tool implements SimplifierTool {
 
         private final NodeWorkList nodeWorkSet;
-        private final CodeCacheProvider runtime;
+        private final MetaAccessProvider runtime;
         private final TargetDescription target;
         private final Assumptions assumptions;
         private final IsImmutablePredicate immutabilityPredicate;
 
-        public Tool(NodeWorkList nodeWorkSet, CodeCacheProvider runtime, TargetDescription target, Assumptions assumptions, IsImmutablePredicate immutabilityPredicate) {
+        public Tool(NodeWorkList nodeWorkSet, MetaAccessProvider runtime, TargetDescription target, Assumptions assumptions, IsImmutablePredicate immutabilityPredicate) {
             this.nodeWorkSet = nodeWorkSet;
             this.runtime = runtime;
             this.target = target;
@@ -309,7 +291,7 @@ public class CanonicalizerPhase extends Phase {
         }
 
         @Override
-        public CodeCacheProvider runtime() {
+        public MetaAccessProvider runtime() {
             return runtime;
         }
 

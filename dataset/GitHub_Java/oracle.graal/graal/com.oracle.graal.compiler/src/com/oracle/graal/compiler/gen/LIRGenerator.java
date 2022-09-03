@@ -55,13 +55,13 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.max.asm.*;
-import com.oracle.max.cri.xir.XirAssembler.XirConstant;
-import com.oracle.max.cri.xir.XirAssembler.XirInstruction;
-import com.oracle.max.cri.xir.XirAssembler.XirMark;
-import com.oracle.max.cri.xir.XirAssembler.XirOperand;
-import com.oracle.max.cri.xir.XirAssembler.XirParameter;
-import com.oracle.max.cri.xir.XirAssembler.XirRegister;
-import com.oracle.max.cri.xir.XirAssembler.XirTemp;
+import com.oracle.max.cri.xir.CiXirAssembler.XirConstant;
+import com.oracle.max.cri.xir.CiXirAssembler.XirInstruction;
+import com.oracle.max.cri.xir.CiXirAssembler.XirMark;
+import com.oracle.max.cri.xir.CiXirAssembler.XirOperand;
+import com.oracle.max.cri.xir.CiXirAssembler.XirParameter;
+import com.oracle.max.cri.xir.CiXirAssembler.XirRegister;
+import com.oracle.max.cri.xir.CiXirAssembler.XirTemp;
 import com.oracle.max.cri.xir.*;
 import com.oracle.max.criutils.*;
 
@@ -78,7 +78,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     protected final LIR lir;
     protected final XirSupport xirSupport;
-    protected final XirGenerator xir;
+    protected final RiXirGenerator xir;
     private final DebugInfoBuilder debugInfoBuilder;
 
     private Block currentBlock;
@@ -142,7 +142,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     private LockScope curLocks;
 
 
-    public LIRGenerator(Graph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir, XirGenerator xir, Assumptions assumptions) {
+    public LIRGenerator(Graph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir, RiXirGenerator xir, Assumptions assumptions) {
         this.graph = graph;
         this.runtime = runtime;
         this.target = target;
@@ -343,7 +343,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             if (curLocks == null) {
                 curLocks = predLocks;
             } else if (curLocks != predLocks && (!pred.isLoopEnd() || predLocks != null)) {
-//                throw new GraalInternalError("cause: %s", predLocks);
                 throw new BailoutException("unbalanced monitors: predecessor blocks have different monitor states");
             }
         }
@@ -505,7 +504,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     private static boolean canBeNullCheck(LocationNode location) {
-        // TODO: Make this part of TargetDescription
+        // TODO: Make this part of CiTarget
         return !(location instanceof IndexedLocationNode) && location.displacement() < 4096;
     }
 
@@ -1057,7 +1056,11 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     private void emitSequentialSwitch(final SwitchNode x, Variable key, LabelRef defaultTarget) {
         int keyCount = x.keyCount();
-        Integer[] indexes = Util.createSortedPermutation(keyCount, new Comparator<Integer>() {
+        Integer[] indexes = new Integer[keyCount];
+        for (int i = 0; i < keyCount; i++) {
+            indexes[i] = i;
+        }
+        Arrays.sort(indexes, new Comparator<Integer>() {
             @Override
             public int compare(Integer o1, Integer o2) {
                 return x.keyProbability(o1) < x.keyProbability(o2) ? 1 : x.keyProbability(o1) > x.keyProbability(o2) ? -1 : 0;
