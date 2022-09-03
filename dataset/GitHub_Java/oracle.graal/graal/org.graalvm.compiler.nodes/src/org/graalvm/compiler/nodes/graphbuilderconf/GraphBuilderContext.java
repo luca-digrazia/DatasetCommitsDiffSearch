@@ -107,7 +107,7 @@ public interface GraphBuilderContext extends GraphBuilderTool {
             assert !(value instanceof StateSplit) || ((StateSplit) value).stateAfter() != null;
             return value;
         }
-        T equivalentValue = append(value);
+        T equivalentValue = recursiveAppend(value);
         if (equivalentValue instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) equivalentValue;
             if (stateSplit.stateAfter() == null && stateSplit.hasSideEffect()) {
