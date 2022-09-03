@@ -27,6 +27,7 @@ package org.graalvm.compiler.replacements.jdk9;
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.api.test.Graal;
 import org.graalvm.compiler.core.phases.HighTier;
 import org.graalvm.compiler.options.OptionValues;
@@ -39,6 +40,9 @@ import java.lang.reflect.Field;
 
 @AddExports("java.base/jdk.internal.misc")
 public class UnsafeReplacementsTest extends MethodSubstitutionTest {
+
+    // See GR-9819.
+    @SuppressWarnings("unused") ResolvedJavaMethod method = null;
 
     static class Container {
         public volatile boolean booleanField;
