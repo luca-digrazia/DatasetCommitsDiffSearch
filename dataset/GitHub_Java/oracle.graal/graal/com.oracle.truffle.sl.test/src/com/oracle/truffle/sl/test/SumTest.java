@@ -45,6 +45,6 @@ public class SumTest extends AbstractTest {
 
     @Test
     public void test() {
-        executeSL(INPUT, OUTPUT, false);
+        executeSL(INPUT, OUTPUT, true);
     }
 }
