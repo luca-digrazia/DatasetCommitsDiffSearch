@@ -24,41 +24,40 @@ package com.oracle.graal.hotspot.replacements;
 
 import java.lang.invoke.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
 
 @ServiceProvider(ReplacementsProvider.class)
 public class CallSiteSubstitutions implements ReplacementsProvider {
 
     @Override
-    public void registerReplacements(Replacements replacements) {
-        if (GraalOptions.IntrinsifyCallSiteTarget) {
-            replacements.registerSubstitutions(ConstantCallSiteSubstitutions.class);
-            replacements.registerSubstitutions(MutableCallSiteSubstitutions.class);
-            replacements.registerSubstitutions(VolatileCallSiteSubstitutions.class);
-        }
+    public void registerReplacements(MetaAccessProvider metaAccess, LoweringProvider loweringProvider, SnippetReflectionProvider snippetReflection, Replacements replacements, TargetDescription target) {
+        replacements.registerSubstitutions(ConstantCallSiteSubstitutions.class);
+        replacements.registerSubstitutions(MutableCallSiteSubstitutions.class);
+        replacements.registerSubstitutions(VolatileCallSiteSubstitutions.class);
     }
-}
 
-@ClassSubstitution(ConstantCallSite.class)
-class ConstantCallSiteSubstitutions {
+    @ClassSubstitution(ConstantCallSite.class)
+    private static class ConstantCallSiteSubstitutions {
 
-    @MacroSubstitution(isStatic = false, macro = CallSiteTargetNode.class)
-    public static native MethodHandle getTarget(ConstantCallSite callSite);
-}
+        @MacroSubstitution(isStatic = false, macro = CallSiteTargetNode.class)
+        public static native MethodHandle getTarget(ConstantCallSite callSite);
+    }
 
-@ClassSubstitution(MutableCallSite.class)
-class MutableCallSiteSubstitutions {
+    @ClassSubstitution(MutableCallSite.class)
+    private static class MutableCallSiteSubstitutions {
 
-    @MacroSubstitution(isStatic = false, macro = CallSiteTargetNode.class)
-    public static native MethodHandle getTarget(MutableCallSite callSite);
-}
+        @MacroSubstitution(isStatic = false, macro = CallSiteTargetNode.class)
+        public static native MethodHandle getTarget(MutableCallSite callSite);
+    }
 
-@ClassSubstitution(VolatileCallSite.class)
-class VolatileCallSiteSubstitutions {
+    @ClassSubstitution(VolatileCallSite.class)
+    private static class VolatileCallSiteSubstitutions {
 
-    @MacroSubstitution(isStatic = false, macro = CallSiteTargetNode.class)
-    public static native MethodHandle getTarget(VolatileCallSite callSite);
+        @MacroSubstitution(isStatic = false, macro = CallSiteTargetNode.class)
+        public static native MethodHandle getTarget(VolatileCallSite callSite);
+    }
 }
