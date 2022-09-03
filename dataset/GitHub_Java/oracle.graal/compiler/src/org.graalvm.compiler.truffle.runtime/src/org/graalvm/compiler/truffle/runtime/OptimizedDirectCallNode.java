@@ -38,6 +38,7 @@ import com.oracle.truffle.api.profiles.ValueProfile;
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleExperimentalSplitting;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleTraceSplittingSummary;
 
 /**
  * A call node with a constant {@link CallTarget} that can be optimized by Graal.
@@ -51,20 +52,20 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
     private boolean inliningForced;
     @CompilationFinal private ValueProfile exceptionProfile;
 
+    private final boolean experimentalSplitting;
+    private final boolean traceSplittingSummary;
     @CompilationFinal private OptimizedCallTarget splitCallTarget;
 
-    private final GraalTruffleRuntime runtime;
-
-    public OptimizedDirectCallNode(GraalTruffleRuntime runtime, OptimizedCallTarget target) {
+    public OptimizedDirectCallNode(OptimizedCallTarget target) {
         super(target);
         assert target.getSourceCallTarget() == null;
-        this.runtime = runtime;
+        this.experimentalSplitting = TruffleCompilerOptions.getValue(TruffleExperimentalSplitting);
+        this.traceSplittingSummary = TruffleCompilerOptions.getValue(TruffleTraceSplittingSummary);
     }
 
     @Override
     public Object call(Object[] arguments) {
-        if (CompilerDirectives.inInterpreterOrLowTier()) {
-            // TODO: See why enabling this for low-tier leads to terrible performance in high-tier compilations.
+        if (CompilerDirectives.inInterpreter()) {
             onInterpreterCall();
         }
         try {
@@ -144,14 +145,10 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
 
     private void onInterpreterCall() {
         int calls = ++callCount;
-        if (CompilerDirectives.inInterpreter()) {
-            if (calls == 1) {
-                getCurrentCallTarget().incrementKnownCallSites();
-            }
+        if (calls == 1) {
+            getCurrentCallTarget().incrementKnownCallSites();
         }
-        if (CompilerDirectives.inInterpreterOrLowTierWithProfiling()) {
-            TruffleSplittingStrategy.beforeCall(this, runtime.getTvmci());
-        }
+        TruffleSplittingStrategy.beforeCall(this, OptimizedCallTarget.runtime().getTvmci(), traceSplittingSummary, experimentalSplitting);
     }
 
     /** Used by the splitting strategy to install new targets. */
@@ -187,13 +184,13 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
                 replace(this, "Split call node");
             }
             splitCallTarget = splitTarget;
-            runtime.getListener().onCompilationSplit(this);
+            OptimizedCallTarget.runtime().getListener().onCompilationSplit(this);
         });
     }
 
     @Override
     public boolean cloneCallTarget() {
-        TruffleSplittingStrategy.forceSplitting(this, runtime.getTvmci());
+        TruffleSplittingStrategy.forceSplitting(this, OptimizedCallTarget.runtime().getTvmci(), traceSplittingSummary);
         return true;
     }
 }

@@ -132,7 +132,6 @@ import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.Truffle
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompileOnly;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilerThreads;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleLowTierCompilation;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleProfilingEnabled;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getValue;
@@ -253,7 +252,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     @Override
     public TruffleInliningPlan createInliningPlan(CompilableTruffleAST compilable) {
-        return new TruffleInlining((OptimizedCallTarget) compilable, TruffleInliningPolicy.getInliningPolicy(getInitialOptions()));
+        return new TruffleInlining((OptimizedCallTarget) compilable, new DefaultInliningPolicy());
     }
 
     @Override
@@ -478,7 +477,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     @Override
     public DirectCallNode createDirectCallNode(CallTarget target) {
         if (target instanceof OptimizedCallTarget) {
-            final OptimizedDirectCallNode directCallNode = new OptimizedDirectCallNode(this, (OptimizedCallTarget) target);
+            final OptimizedDirectCallNode directCallNode = new OptimizedDirectCallNode((OptimizedCallTarget) target);
             TruffleSplittingStrategy.newDirectCallNodeCreated(directCallNode);
             return directCallNode;
         } else {
@@ -707,7 +706,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     protected void doCompile(OptionValues options, OptimizedCallTarget callTarget, Cancellable task) {
         listeners.onCompilationStarted(callTarget);
         TruffleCompiler compiler = getTruffleCompiler();
-        TruffleInlining inlining = new TruffleInlining(callTarget, TruffleInliningPolicy.getInliningPolicy(options));
+        TruffleInlining inlining = new TruffleInlining(callTarget, new DefaultInliningPolicy());
         CompilationIdentifier compilationId = compiler.getCompilationIdentifier(callTarget);
         try (DebugContext debug = compilationId != null ? compiler.openDebugContext(options, compilationId, callTarget) : null) {
             try (Scope s = debug != null ? debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget)) : null) {
@@ -778,9 +777,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 if (callTarget != null) {
                     try (TruffleOptionsOverrideScope scope = optionOverrides != null ? overrideOptions(optionOverrides.getMap()) : null) {
                         OptionValues options = TruffleCompilerOptions.getOptions();
-                        if (!TruffleLowTierCompilation.getValue(options)) {
-                            TTY.println("Target: " + callTarget + ", " + TruffleCompilerOptions.TruffleLowTierCompilation.getValue(options));
-                        }
                         doCompile(options, callTarget, cancellable);
                     } finally {
                         callTarget.resetCompilationTask();
@@ -789,7 +785,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             }
         }));
         // task and future must never diverge from each other
-        assert cancellable.future != null;
+        assert cancellable.getFuture() != null;
         return cancellable;
     }
 

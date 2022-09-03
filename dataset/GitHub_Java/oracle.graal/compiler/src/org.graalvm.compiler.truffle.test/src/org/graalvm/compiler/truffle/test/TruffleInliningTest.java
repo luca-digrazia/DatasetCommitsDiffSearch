@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,14 +24,11 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.overrideOptions;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
-
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.DefaultInliningPolicy;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
@@ -39,16 +36,17 @@ import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleInliningDecision;
 import org.graalvm.compiler.truffle.runtime.TruffleInliningPolicy;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.overrideOptions;
 
 public abstract class TruffleInliningTest {
 
@@ -83,8 +81,8 @@ public abstract class TruffleInliningTest {
             }
         }
 
-        @ExplodeLoop
         @Override
+        @ExplodeLoop
         public Object execute(VirtualFrame frame) {
 
             int maxRecursionDepth = (int) frame.getArguments()[0];
@@ -200,7 +198,7 @@ public abstract class TruffleInliningTest {
         private void buildTargets() {
             for (String targetName : targetInstructions.keySet()) {
                 TargetInstruction instruction = targetInstructions.get(targetName);
-                OptimizedCallTarget newTarget = (OptimizedCallTarget) GraalTruffleRuntime.getRuntime().createCallTarget(new InlineTestRootNode(instruction.size, targetName));
+                OptimizedCallTarget newTarget = GraalTruffleRuntime.getRuntime().createOptimizedCallTarget(null, new InlineTestRootNode(instruction.size, targetName));
                 for (int i = 0; i < instruction.execCount; i++) {
                     newTarget.call(0);
                 }
@@ -220,7 +218,8 @@ public abstract class TruffleInliningTest {
                     OptimizedDirectCallNode callNode = new OptimizedDirectCallNode(target);
                     callSites.add(callNode);
                     for (int i = 0; i < instruction.count; i++) {
-                        callNode.call(0);
+                        Integer[] args = {0};
+                        callNode.call(args);
                     }
                 }
                 InlineTestRootNode rootNode = (InlineTestRootNode) caller.getRootNode();
@@ -267,11 +266,11 @@ public abstract class TruffleInliningTest {
         return count[0];
     }
 
-    private TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope scope = null;
+    private TruffleCompilerOptions.TruffleOptionsOverrideScope scope = null;
 
     @Before
     public void before() {
-        scope = overrideOptions(SharedTruffleRuntimeOptions.TruffleCompilation, false);
+        scope = overrideOptions(TruffleCompilerOptions.TruffleCompilation, false);
     }
 
     @After
