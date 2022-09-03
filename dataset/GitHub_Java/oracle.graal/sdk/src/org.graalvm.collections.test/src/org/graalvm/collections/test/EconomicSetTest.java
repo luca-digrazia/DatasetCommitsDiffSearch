@@ -100,7 +100,7 @@ public class EconomicSetTest {
     public void testToString() {
         EconomicSet<Integer> set = EconomicSet.create();
         set.addAll(Arrays.asList(0, 1));
-        Assert.assertEquals(set.toString(), "map(size=2, {(0,0),(1,1),})");
+        Assert.assertEquals(set.toString(), "set(size=2, {0,1})");
     }
 
     @Test(expected = UnsupportedOperationException.class)
@@ -142,7 +142,12 @@ public class EconomicSetTest {
         }
         Assert.assertEquals(initialList, removalList);
         Assert.assertEquals(1, finalList.size());
-        Assert.assertEquals(new Integer(9), finalList.get(0));
+        Assert.assertEquals(newInteger(9), finalList.get(0));
+    }
+
+    @SuppressWarnings({"deprecation", "unused"})
+    private static Integer newInteger(int value) {
+        return new Integer(value);
     }
 
 }

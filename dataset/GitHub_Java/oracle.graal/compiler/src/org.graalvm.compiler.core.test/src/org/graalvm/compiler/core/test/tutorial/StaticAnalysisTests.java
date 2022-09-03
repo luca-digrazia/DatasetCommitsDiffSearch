@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,18 +29,21 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
 
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+import org.junit.Assert;
+import org.junit.Test;
+
 import org.graalvm.compiler.api.test.Graal;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.core.test.tutorial.StaticAnalysis.MethodState;
 import org.graalvm.compiler.core.test.tutorial.StaticAnalysis.TypeFlow;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
+import org.graalvm.compiler.nodes.spi.StampProvider;
+import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.runtime.RuntimeProvider;
-import org.junit.Assert;
-import org.junit.Test;
-
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class StaticAnalysisTests {
 
@@ -65,11 +68,14 @@ public class StaticAnalysisTests {
         Object f;
     }
 
-    private final CoreProviders providers;
+    private final MetaAccessProvider metaAccess;
+    private final StampProvider stampProvider;
 
     public StaticAnalysisTests() {
         Backend backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
-        providers = backend.getProviders();
+        Providers providers = backend.getProviders();
+        this.metaAccess = providers.getMetaAccess();
+        this.stampProvider = providers.getStampProvider();
     }
 
     static void test01Entry() {
@@ -79,7 +85,7 @@ public class StaticAnalysisTests {
 
     @Test
     public void test01() {
-        StaticAnalysis sa = new StaticAnalysis(providers);
+        StaticAnalysis sa = new StaticAnalysis(metaAccess, stampProvider);
         sa.addMethod(findMethod(StaticAnalysisTests.class, "test01Entry"));
         sa.finish();
 
@@ -100,7 +106,7 @@ public class StaticAnalysisTests {
 
     @Test
     public void test02() {
-        StaticAnalysis sa = new StaticAnalysis(providers);
+        StaticAnalysis sa = new StaticAnalysis(metaAccess, stampProvider);
         sa.addMethod(findMethod(StaticAnalysisTests.class, "test02Entry"));
         sa.finish();
 
@@ -128,7 +134,7 @@ public class StaticAnalysisTests {
 
     @Test
     public void test03() {
-        StaticAnalysis sa = new StaticAnalysis(providers);
+        StaticAnalysis sa = new StaticAnalysis(metaAccess, stampProvider);
         sa.addMethod(findMethod(StaticAnalysisTests.class, "test03Entry"));
         sa.finish();
 
@@ -159,7 +165,7 @@ public class StaticAnalysisTests {
 
     @Test
     public void test04() {
-        StaticAnalysis sa = new StaticAnalysis(providers);
+        StaticAnalysis sa = new StaticAnalysis(metaAccess, stampProvider);
         sa.addMethod(findMethod(StaticAnalysisTests.class, "test04Entry"));
         sa.finish();
 
@@ -186,7 +192,7 @@ public class StaticAnalysisTests {
     }
 
     private ResolvedJavaType t(Class<?> clazz) {
-        return providers.getMetaAccess().lookupJavaType(clazz);
+        return metaAccess.lookupJavaType(clazz);
     }
 
     private ResolvedJavaMethod findMethod(Class<?> declaringClass, String name) {
@@ -198,7 +204,7 @@ public class StaticAnalysisTests {
             }
         }
         assert reflectionMethod != null : "No method with name " + name + " in class " + declaringClass.getName();
-        return providers.getMetaAccess().lookupJavaMethod(reflectionMethod);
+        return metaAccess.lookupJavaMethod(reflectionMethod);
     }
 
     private ResolvedJavaField findField(Class<?> declaringClass, String name) {
@@ -208,6 +214,6 @@ public class StaticAnalysisTests {
         } catch (NoSuchFieldException | SecurityException ex) {
             throw new AssertionError(ex);
         }
-        return providers.getMetaAccess().lookupJavaField(reflectionField);
+        return metaAccess.lookupJavaField(reflectionField);
     }
 }
