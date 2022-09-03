@@ -86,8 +86,7 @@ public class Witness implements Cloneable {
         CLUELESS,
         NN,
         CC,
-        IO,
-        DN
+        IO
     }
 
     private boolean atNonNull() {
@@ -100,10 +99,6 @@ public class Witness implements Cloneable {
 
     private boolean atInstanceOf() {
         return level == LEVEL.IO;
-    }
-
-    private boolean atDefinitelyNull() {
-        return level == LEVEL.DN;
     }
 
     private void transition(LEVEL to, GuardingNode newAnchor) {
@@ -127,39 +122,35 @@ public class Witness implements Cloneable {
     public Witness(ObjectStamp stamp, GuardingNode anchor) {
         assert stamp.isLegal();
         assert anchor != null;
-        if (stamp.alwaysNull()) {
-            // seen left null
-            transition(LEVEL.DN, anchor);
-        } else {
-            boolean isNonIface = (stamp.type() != null && !stamp.type().isInterface());
-            if (stamp.nonNull()) {
-                if (isNonIface) {
-                    seen = stamp.type();
-                    transition(LEVEL.IO, anchor);
-                } else {
-                    seen = null;
-                    transition(LEVEL.NN, anchor);
-                }
+        boolean isNonIface = (stamp.type() != null && !stamp.type().isInterface());
+        if (stamp.nonNull()) {
+            if (isNonIface) {
+                seen = stamp.type();
+                transition(LEVEL.IO, anchor);
             } else {
-                if (isNonIface) {
-                    seen = stamp.type();
-                    transition(LEVEL.CC, anchor);
-                } else {
-                    seen = null;
-                    transition(LEVEL.CLUELESS, null);
-                    assert clueless();
-                }
+                seen = null;
+                transition(LEVEL.NN, anchor);
+            }
+        } else {
+            if (isNonIface) {
+                seen = stamp.type();
+                transition(LEVEL.CC, anchor);
+            } else {
+                seen = null;
+                transition(LEVEL.CLUELESS, null);
+                assert clueless();
             }
         }
         assert repOK();
     }
 
+    /**
+     * Type-witnesses aren't tracked for known-to-be-null. Therefore, although method
+     * {@link #isNonNull() isNonNull()} can be found in this class there's on purpose no companion
+     * <code>isNull()</code> .
+     */
     public boolean isNonNull() {
         return atNonNull() || atInstanceOf();
-    }
-
-    public boolean isNull() {
-        return atDefinitelyNull();
     }
 
     /**
@@ -172,7 +163,7 @@ public class Witness implements Cloneable {
 
     public ObjectStamp asStamp() {
         boolean isKnownExact = (seen != null && seen.equals(seen.asExactType()));
-        return new ObjectStamp(seen, isKnownExact, isNonNull(), isNull());
+        return new ObjectStamp(seen, isKnownExact, isNonNull(), false);
     }
 
     private LEVEL level = LEVEL.CLUELESS;
@@ -228,14 +219,15 @@ public class Witness implements Cloneable {
             assert level == LEVEL.CLUELESS;
             return true;
         }
-        if (atNonNull() || atDefinitelyNull()) {
+        if (level == LEVEL.NN) {
             assert seen == null;
         }
         if (seen != null) {
             assert !seen.isInterface();
             assert !seen.isPrimitive();
         }
-        assert gn instanceof BeginNode || gn instanceof LoopExitNode || gn instanceof MergeNode || gn instanceof FixedGuardNode;
+        boolean gnOK = gn instanceof BeginNode || gn instanceof LoopExitNode || gn instanceof MergeNode || gn instanceof FixedGuardNode;
+        assert gnOK;
         return true;
     }
 
@@ -243,7 +235,7 @@ public class Witness implements Cloneable {
      * Helper method for readability in complex conditions.
      */
     public boolean clueless() {
-        return cluelessAboutType() && cluelessAboutNullity();
+        return cluelessAboutType() && cluelessAboutNonNullness();
     }
 
     /**
@@ -257,8 +249,8 @@ public class Witness implements Cloneable {
     /**
      * Helper method for readability in complex conditions.
      */
-    public boolean cluelessAboutNullity() {
-        return !atNonNull() && !atInstanceOf() && !atDefinitelyNull();
+    public boolean cluelessAboutNonNullness() {
+        return !atNonNull() && !atInstanceOf();
     }
 
     /**
@@ -284,9 +276,6 @@ public class Witness implements Cloneable {
      * @return whether the state was updated (iff the observation adds any new information)
      */
     private boolean refinesSeenType(ResolvedJavaType observed) {
-        if (isNull()) {
-            return false;
-        }
         if (cluelessAboutType() || FlowUtil.isMorePrecise(observed, seen)) {
             seen = observed;
             return true;
@@ -305,7 +294,6 @@ public class Witness implements Cloneable {
      */
     public boolean trackNN(GuardingNode anchor) {
         assert repOK();
-        assert !isNull();
         try {
             if (atInstanceOf()) {
                 return false;
@@ -319,29 +307,6 @@ public class Witness implements Cloneable {
                 return true;
             }
             return false;
-        } finally {
-            assert repOK();
-        }
-    }
-
-    /**
-     * Updates this {@link Witness Witness} to account for an observation about the scrutinee being
-     * null.
-     *
-     * @return whether this {@link Witness Witness} was updated (iff the observation adds any new
-     *         information)
-     */
-    public boolean trackDN(GuardingNode anchor) {
-        assert repOK();
-        assert !isNonNull();
-        try {
-            if (atDefinitelyNull()) {
-                return false;
-            }
-            assert level == LEVEL.CLUELESS || atCheckCast();
-            seen = null;
-            transition(LEVEL.DN, anchor);
-            return true;
         } finally {
             assert repOK();
         }
@@ -401,7 +366,6 @@ public class Witness implements Cloneable {
      */
     public boolean trackIO(ResolvedJavaType observed, GuardingNode anchor) {
         assert repOK();
-        assert !isNull();
         try {
             boolean gotMorePreciseType = refinesSeenType(observed);
             if (!atInstanceOf() || gotMorePreciseType) {
@@ -441,61 +405,11 @@ public class Witness implements Cloneable {
             return;
         }
 
-        // preserve guarding node only if matches other, otherwise settle on `merge`
-        final GuardingNode resultGuard = (guard() == that.guard()) ? guard() : merge;
-
-        if (isNull()) {
-            switch (that.level) {
-                case CLUELESS:
-                case NN:
-                    // lose is-null status, gain nothing
-                    level = LEVEL.CLUELESS;
-                    seen = null;
-                    break;
-                case CC:
-                case IO:
-                    // demote to check-cast
-                    level = LEVEL.CC;
-                    seen = that.seen;
-                    break;
-                case DN:
-                    // keep is-null status
-            }
-            gn = resultGuard;
-            return;
-        }
-
-        if (that.isNull()) {
-            /*
-             * Same decisions as above (based on this-being-null and that-level) are now made based
-             * on (that-being-null and this-level). Because merge is commutative.
-             */
-            switch (level) {
-                case CLUELESS:
-                case NN:
-                    // lose is-null status, gain nothing
-                    level = LEVEL.CLUELESS;
-                    seen = null;
-                    break;
-                case CC:
-                    break;
-                case IO:
-                    // demote to check-cast
-                    level = LEVEL.CC;
-                    // keep this.seen as-is
-                    break;
-                case DN:
-                    // keep is-null status
-            }
-            gn = resultGuard;
-            return;
-        }
-
-        // by now we know neither this nor that are known-to-be-null
-        assert !isNull() && !that.isNull();
-
         // umbrella type over the observations from both witnesses
         ResolvedJavaType newSeen = (seen == null || that.seen == null) ? null : FlowUtil.widen(seen, that.seen);
+
+        // preserve guarding node only if matches other, otherwise settle on `merge`
+        final GuardingNode resultGuard = guard() == that.guard() ? guard() : merge;
 
         /*
          * guarantee on (both conformance and non-nullness) required from each input in order for
