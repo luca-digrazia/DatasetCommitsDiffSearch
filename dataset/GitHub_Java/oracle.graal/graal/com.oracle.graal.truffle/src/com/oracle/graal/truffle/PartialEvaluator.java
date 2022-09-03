@@ -125,7 +125,7 @@ public class PartialEvaluator {
         }
 
         this.configForParsing = createGraphBuilderConfig(configForRoot, true);
-        this.decodingInvocationPlugins = createDecodingInvocationPlugins(configForRoot.getPlugins());
+        this.decodingInvocationPlugins = createDecodingInvocationPlugins();
     }
 
     public Providers getProviders() {
@@ -383,9 +383,9 @@ public class PartialEvaluator {
         }
     }
 
-    protected InvocationPlugins createDecodingInvocationPlugins(Plugins parent) {
+    protected InvocationPlugins createDecodingInvocationPlugins() {
         @SuppressWarnings("hiding")
-        InvocationPlugins decodingInvocationPlugins = new InvocationPlugins(parent.getInvocationPlugins());
+        InvocationPlugins decodingInvocationPlugins = new InvocationPlugins(providers.getMetaAccess());
         registerTruffleInvocationPlugins(decodingInvocationPlugins, false);
         decodingInvocationPlugins.closeRegistration();
         return decodingInvocationPlugins;

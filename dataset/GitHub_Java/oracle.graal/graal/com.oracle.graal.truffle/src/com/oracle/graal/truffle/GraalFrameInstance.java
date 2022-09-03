@@ -60,9 +60,15 @@ public final class GraalFrameInstance implements FrameInstance {
     private InspectedFrame callNodeFrame;
     private final boolean currentFrame;
 
-    public GraalFrameInstance(boolean currentFrame, InspectedFrame callTargetFrame, InspectedFrame callNodeFrame) {
+    public GraalFrameInstance(boolean currentFrame) {
         this.currentFrame = currentFrame;
+    }
+
+    void setCallTargetFrame(InspectedFrame callTargetFrame) {
         this.callTargetFrame = callTargetFrame;
+    }
+
+    void setCallNodeFrame(InspectedFrame callNodeFrame) {
         this.callNodeFrame = callNodeFrame;
     }
 
