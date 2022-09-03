@@ -145,7 +145,7 @@ public class UniverseBuilder {
             buildVTables();
             buildHubs();
 
-            processFieldLocations();
+            setConstantFieldValues();
 
             hUniverse.orderedMethods = new ArrayList<>(hUniverse.methods.values());
             Collections.sort(hUniverse.orderedMethods);
@@ -787,7 +787,7 @@ public class UniverseBuilder {
         List<HostedField>[] fieldsOfTypes = (List<HostedField>[]) new ArrayList<?>[hUniverse.orderedTypes.size()];
 
         for (HostedField field : fields) {
-            if (!field.wrapped.isWritten() && !MaterializedConstantFields.singleton().contains(field.wrapped)) {
+            if (!field.wrapped.isWritten()) {
                 // Constant, does not require memory.
             } else if (field.getStorageKind() == JavaKind.Object) {
                 field.setLocation(NumUtil.safeToInt(layout.getArrayElementOffset(JavaKind.Object, nextObjectField)));
@@ -1202,15 +1202,15 @@ public class UniverseBuilder {
         return referenceMap;
     }
 
-    private void processFieldLocations() {
+    private void setConstantFieldValues() {
         for (HostedField hField : hUniverse.fields.values()) {
             AnalysisField aField = hField.wrapped;
             if (aField.wrapped instanceof ComputedValueField) {
                 ((ComputedValueField) aField.wrapped).processSubstrate(hMetaAccess);
             }
 
-            if (!hField.hasLocation() && Modifier.isStatic(hField.getModifiers()) && !aField.isWritten()) {
-                hField.setUnmaterializedStaticConstant();
+            if (Modifier.isStatic(hField.getModifiers()) && !aField.isWritten()) {
+                hField.setConstantValue();
             }
         }
     }
