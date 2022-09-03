@@ -22,16 +22,16 @@
  */
 package com.oracle.graal.lir.phases;
 
-import com.oracle.jvmci.code.TargetDescription;
 import java.util.*;
 import java.util.regex.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
-import com.oracle.jvmci.options.*;
+import com.oracle.graal.options.*;
 
 /**
  * Base class for all {@link LIR low-level} phases. Subclasses should be stateless. There will be
@@ -84,14 +84,7 @@ public abstract class LIRPhase<C> {
         }
     };
 
-    @SuppressWarnings("all")
-    private static boolean assertionsEnabled() {
-        boolean enabled = false;
-        assert enabled = true;
-        return enabled;
-    }
-
-    private static final Pattern NAME_PATTERN = assertionsEnabled() ? Pattern.compile("[A-Z][A-Za-z0-9]+") : null;
+    private static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
 
     private static boolean checkName(String name) {
         assert name == null || NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
@@ -121,7 +114,7 @@ public abstract class LIRPhase<C> {
             try (DebugCloseable a = timer.start(); DebugCloseable c = memUseTracker.start()) {
                 run(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
                 if (dumpLIR && Debug.isDumpEnabled(PHASE_DUMP_LEVEL)) {
-                    Debug.dump(PHASE_DUMP_LEVEL, lirGenRes.getLIR(), "%s", getName());
+                    Debug.dump(PHASE_DUMP_LEVEL, lirGenRes.getLIR(), "After phase %s", getName());
                 }
             }
         } catch (Throwable e) {

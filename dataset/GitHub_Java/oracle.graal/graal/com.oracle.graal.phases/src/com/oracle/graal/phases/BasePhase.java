@@ -24,10 +24,10 @@ package com.oracle.graal.phases;
 
 import java.util.regex.*;
 
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
 
 /**
  * Base class for all compiler phases. Subclasses should be stateless. There will be one global
@@ -62,14 +62,7 @@ public abstract class BasePhase<C> {
      */
     private final DebugMemUseTracker memUseTracker;
 
-    @SuppressWarnings("all")
-    private static boolean assertionsEnabled() {
-        boolean enabled = false;
-        assert enabled = true;
-        return enabled;
-    }
-
-    private static final Pattern NAME_PATTERN = assertionsEnabled() ? Pattern.compile("[A-Z][A-Za-z0-9]+") : null;
+    private static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
 
     private static boolean checkName(String name) {
         assert NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
@@ -131,11 +124,15 @@ public abstract class BasePhase<C> {
         inputNodesCount = statistics.inputNodesCount;
     }
 
+    protected CharSequence getDetailedName() {
+        return getName();
+    }
+
     public final void apply(final StructuredGraph graph, final C context) {
         apply(graph, context, true);
     }
 
-    protected final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
+    public final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
         try (DebugCloseable a = timer.start(); Scope s = Debug.scope(getClass(), this); DebugCloseable c = memUseTracker.start()) {
             if (dumpGraph && Debug.isDumpEnabled(BEFORE_PHASE_DUMP_LEVEL)) {
                 Debug.dump(BEFORE_PHASE_DUMP_LEVEL, graph, "Before phase %s", getName());
@@ -144,14 +141,14 @@ public abstract class BasePhase<C> {
             executionCount.increment();
             inputNodesCount.add(graph.getNodeCount());
             if (dumpGraph && Debug.isDumpEnabled(PHASE_DUMP_LEVEL)) {
-                Debug.dump(PHASE_DUMP_LEVEL, graph, "%s", getName());
+                Debug.dump(PHASE_DUMP_LEVEL, graph, "After phase %s", getName());
             }
             if (Fingerprint.ENABLED) {
                 String graphDesc = graph.method() == null ? graph.name : graph.method().format("%H.%n(%p)");
                 Fingerprint.submit("After phase %s nodes in %s are %s", getName(), graphDesc, graph.getNodes().snapshot());
             }
             if (Debug.isVerifyEnabled()) {
-                Debug.verify(graph, "%s", getName());
+                Debug.verify(graph, "After phase %s", getName());
             }
             assert graph.verify();
         } catch (Throwable t) {
