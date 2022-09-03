@@ -397,17 +397,13 @@ public class PTXAssembler extends AbstractPTXAssembler {
     }
 
     // Checkstyle: stop method name check
-    /*
-     * Emit conditional branch to target 'tgt' guarded by predicate register 'pred' whose state is
-     * tested to be 'predCheck'.
-     */
-    public final void bra(String tgt, int pred, boolean predCheck) {
+    public final void bra(String tgt, int pred) {
         assert pred >= 0;
 
         if (tgt.equals("?")) {
             Thread.dumpStack();
         }
-        emitString("@" + (predCheck ? "%p" : "!%p") + pred + " " + "bra" + " " + tgt + ";");
+        emitString("@%p" + pred + " " + "bra" + " " + tgt + ";");
     }
 
     public final void bra(String src) {
