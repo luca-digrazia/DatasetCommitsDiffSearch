@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.compiler;
 
+import static com.oracle.graal.compiler.GraalCompiler.Options.*;
+import static com.oracle.graal.compiler.MethodFilter.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
@@ -41,6 +43,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
@@ -55,6 +58,68 @@ public class GraalCompiler {
 
     private static final DebugTimer FrontEnd = Debug.timer("FrontEnd");
     private static final DebugTimer BackEnd = Debug.timer("BackEnd");
+
+    /**
+     * The set of positive filters specified by the {@code -G:IntrinsificationsEnabled} option. To
+     * enable a fast path in {@link #shouldIntrinsify(JavaMethod)}, this field is {@code null} when
+     * no enabling/disabling filters are specified.
+     */
+    private static final MethodFilter[] positiveIntrinsificationFilter;
+
+    /**
+     * The set of negative filters specified by the {@code -G:IntrinsificationsDisabled} option.
+     */
+    private static final MethodFilter[] negativeIntrinsificationFilter;
+
+    static class Options {
+
+        // @formatter:off
+        /**
+         * @see MethodFilter
+         */
+        @Option(help = "Pattern for method(s) to which intrinsification (if available) will be applied. " +
+                       "By default, all available intrinsifications are applied except for methods matched " +
+                       "by IntrinsificationsDisabled. See MethodFilter class for pattern syntax.")
+        public static final OptionValue<String> IntrinsificationsEnabled = new OptionValue<>(null);
+        /**
+         * @see MethodFilter
+         */
+        @Option(help = "Pattern for method(s) to which intrinsification will not be applied. " +
+                       "See MethodFilter class for pattern syntax.")
+        public static final OptionValue<String> IntrinsificationsDisabled = new OptionValue<>(null);
+        // @formatter:on
+
+    }
+
+    static {
+        if (IntrinsificationsDisabled.getValue() != null) {
+            negativeIntrinsificationFilter = parse(IntrinsificationsDisabled.getValue());
+        } else {
+            negativeIntrinsificationFilter = null;
+        }
+
+        if (Options.IntrinsificationsEnabled.getValue() != null) {
+            positiveIntrinsificationFilter = parse(IntrinsificationsEnabled.getValue());
+        } else if (negativeIntrinsificationFilter != null) {
+            positiveIntrinsificationFilter = new MethodFilter[0];
+        } else {
+            positiveIntrinsificationFilter = null;
+        }
+    }
+
+    /**
+     * Determines if a given method should be intrinsified based on the values of
+     * {@link Options#IntrinsificationsEnabled} and {@link Options#IntrinsificationsDisabled}.
+     */
+    public static boolean shouldIntrinsify(JavaMethod method) {
+        if (positiveIntrinsificationFilter == null) {
+            return true;
+        }
+        if (positiveIntrinsificationFilter.length == 0 || matches(positiveIntrinsificationFilter, method)) {
+            return negativeIntrinsificationFilter == null || !matches(negativeIntrinsificationFilter, method);
+        }
+        return false;
+    }
 
     /**
      * Requests compilation of a given graph.
@@ -164,7 +229,7 @@ public class GraalCompiler {
                 List<Block> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock, nodeProbabilities);
                 List<Block> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock, nodeProbabilities);
 
-                LIR lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder, speculationLog);
+                LIR lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder);
                 Debug.dump(lir, "After linear scan order");
                 return lir;
 
@@ -173,7 +238,7 @@ public class GraalCompiler {
 
     }
 
-    public static LIRGenerator emitLIR(Backend backend, final TargetDescription target, final LIR lir, StructuredGraph graph, CallingConvention cc) {
+    public static LIRGenerator emitLIR(final Backend backend, final TargetDescription target, final LIR lir, StructuredGraph graph, CallingConvention cc) {
         final FrameMap frameMap = backend.newFrameMap();
         final LIRGenerator lirGen = backend.newLIRGenerator(graph, frameMap, cc, lir);
 
@@ -204,7 +269,9 @@ public class GraalCompiler {
         Debug.scope("Allocator", new Runnable() {
 
             public void run() {
-                new LinearScan(target, lir, lirGen, frameMap).allocate();
+                if (backend.shouldAllocateRegisters()) {
+                    new LinearScan(target, lir, lirGen, frameMap).allocate();
+                }
             }
         });
         return lirGen;
