@@ -52,19 +52,16 @@ public class LLVMOptions {
 
     private static void initializeOptions() {
         if (!initialized) {
-            try {
-                registerOptions();
-                parseOptions();
-                checkForInvalidOptionNames();
-                checkForObsoleteOptionPrefix();
-            } finally {
-                initialized = true;
-            }
+            registerOptions();
+            parseOptions();
+            checkForInvalidOptionNames();
+            checkForObsoleteOptionPrefix();
+            initialized = true;
         }
     }
 
     public static void main(String[] args) {
-        registerOptions();
+        initializeOptions();
         List<String> categoryLabels = registeredProperties.stream().map(option -> option.getCategoryLabel()).distinct().collect(Collectors.toList());
         for (String category : categoryLabels) {
             List<LLVMOption> props = registeredProperties.stream().filter(option -> option.getCategoryLabel().equals(category)).collect(Collectors.toList());
@@ -135,12 +132,10 @@ public class LLVMOptions {
     }
 
     private static void registerOptions() {
-        if (registeredProperties.isEmpty()) {
-            registeredProperties.addAll(Arrays.asList(LLVMBaseOption.values()));
-            ServiceLoader<LLVMOptionServiceProvider> loader = ServiceLoader.load(LLVMOptionServiceProvider.class);
-            for (LLVMOptionServiceProvider definitions : loader) {
-                registeredProperties.addAll(definitions.getOptions());
-            }
+        registeredProperties.addAll(Arrays.asList(LLVMBaseOption.values()));
+        ServiceLoader<LLVMOptionServiceProvider> loader = ServiceLoader.load(LLVMOptionServiceProvider.class);
+        for (LLVMOptionServiceProvider definitions : loader) {
+            registeredProperties.addAll(definitions.getOptions());
         }
     }
 
