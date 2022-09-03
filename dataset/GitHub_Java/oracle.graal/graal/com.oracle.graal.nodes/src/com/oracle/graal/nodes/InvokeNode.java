@@ -42,9 +42,9 @@ public class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRL
     @Input(InputType.Extension) CallTargetNode callTarget;
     @OptionalInput(InputType.State) FrameState stateDuring;
     @OptionalInput(InputType.Guard) GuardingNode guard;
-    protected int bci;
-    protected boolean polymorphic;
-    protected boolean useForInlining;
+    private final int bci;
+    private boolean polymorphic;
+    private boolean useForInlining;
 
     /**
      * Constructs a new Invoke instruction.
