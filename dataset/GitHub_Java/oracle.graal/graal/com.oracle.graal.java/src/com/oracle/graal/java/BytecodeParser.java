@@ -226,6 +226,7 @@ import static com.oracle.graal.bytecode.Bytecodes.SWAP;
 import static com.oracle.graal.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.graal.bytecode.Bytecodes.nameOf;
 import static com.oracle.graal.compiler.common.GraalOptions.DeoptALot;
+import static com.oracle.graal.compiler.common.GraalOptions.NewInfopoints;
 import static com.oracle.graal.compiler.common.GraalOptions.PrintProfilingInformation;
 import static com.oracle.graal.compiler.common.GraalOptions.ResolveClassBeforeStaticInvoke;
 import static com.oracle.graal.compiler.common.GraalOptions.StressInvokeWithExceptionNode;
@@ -255,8 +256,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.oracle.graal.compiler.common.type.TypeReference;
+
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.site.InfopointReason;
 import jdk.vm.ci.common.JVMCIError;
@@ -295,7 +299,6 @@ import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
@@ -304,7 +307,6 @@ import com.oracle.graal.debug.Indent;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeSourcePosition;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
@@ -341,6 +343,7 @@ import com.oracle.graal.nodes.MergeNode;
 import com.oracle.graal.nodes.ParameterNode;
 import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.SimpleInfopointNode;
 import com.oracle.graal.nodes.StartNode;
 import com.oracle.graal.nodes.StateSplit;
 import com.oracle.graal.nodes.StructuredGraph;
@@ -377,7 +380,6 @@ import com.oracle.graal.nodes.extended.GuardedNode;
 import com.oracle.graal.nodes.extended.GuardingNode;
 import com.oracle.graal.nodes.extended.IntegerSwitchNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
 import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
 import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo;
@@ -385,6 +387,7 @@ import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
 import com.oracle.graal.nodes.graphbuilderconf.NodePlugin;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
 import com.oracle.graal.nodes.java.ArrayLengthNode;
 import com.oracle.graal.nodes.java.ExceptionObjectNode;
 import com.oracle.graal.nodes.java.InstanceOfNode;
@@ -597,7 +600,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
         assert method.getCode() != null : "method must contain bytecodes: " + method;
 
-        if (graphBuilderConfig.insertFullInfopoints() && !parsingIntrinsic()) {
+        if (graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
             lnt = method.getLineNumberTable();
             previousLineNumber = -1;
         }
@@ -705,7 +708,9 @@ public class BytecodeParser implements GraphBuilderContext {
 
             finishPrepare(lastInstr);
 
-            genInfoPointNode(InfopointReason.METHOD_START, null);
+            if (GraalOptions.OldInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
+                genInfoPointNode(InfopointReason.METHOD_START, null);
+            }
 
             currentBlock = blockMap.getStartBlock();
             setEntryState(startBlock, frameState);
@@ -1118,7 +1123,9 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected void genThrow() {
-        genInfoPointNode(InfopointReason.BYTECODE_POSITION, null);
+        if (GraalOptions.OldInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
+            genInfoPointNode(InfopointReason.BYTECODE_POSITION, null);
+        }
 
         ValueNode exception = frameState.pop(JavaKind.Object);
         FixedGuardNode nullCheck = append(new FixedGuardNode(graph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
@@ -1744,7 +1751,9 @@ public class BytecodeParser implements GraphBuilderContext {
                 append(new RegisterFinalizerNode(receiver));
             }
         }
-        genInfoPointNode(InfopointReason.METHOD_END, x);
+        if (GraalOptions.OldInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
+            genInfoPointNode(InfopointReason.METHOD_END, x);
+        }
 
         synchronizedEpilogue(BytecodeFrame.AFTER_BCI, x, kind);
     }
@@ -2262,13 +2271,13 @@ public class BytecodeParser implements GraphBuilderContext {
         BytecodesParsed.add(block.endBci - bci);
 
         /* Reset line number for new block */
-        if (graphBuilderConfig.insertFullInfopoints()) {
+        if (graphBuilderConfig.insertSimpleDebugInfo()) {
             previousLineNumber = -1;
         }
 
         while (bci < endBCI) {
-            if (graphBuilderConfig.insertFullInfopoints() && !parsingIntrinsic()) {
-                currentLineNumber = lnt != null ? lnt.getLineNumber(bci) : -1;
+            if (GraalOptions.OldInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
+                currentLineNumber = lnt != null ? lnt.getLineNumber(bci) : (graphBuilderConfig.insertFullDebugInfo() ? -1 : bci);
                 if (currentLineNumber != previousLineNumber) {
                     genInfoPointNode(InfopointReason.BYTECODE_POSITION, null);
                     previousLineNumber = currentLineNumber;
@@ -2320,8 +2329,8 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private DebugCloseable openNodeContext() {
-        if (graphBuilderConfig.trackNodeSourcePosition() && !parsingIntrinsic()) {
-            return graph.withNodeSourcePosition(createBytecodePosition());
+        if (NewInfopoints.getValue() && graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
+            return graph.withNodeContext(createBytecodePosition());
         }
         return null;
     }
@@ -2377,8 +2386,20 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private void genInfoPointNode(InfopointReason reason, ValueNode escapedReturnValue) {
-        if (!parsingIntrinsic() && graphBuilderConfig.insertFullInfopoints()) {
-            append(new FullInfopointNode(reason, createFrameState(bci(), null), escapedReturnValue));
+        if (!parsingIntrinsic()) {
+            if (graphBuilderConfig.insertFullDebugInfo()) {
+                append(new FullInfopointNode(reason, createFrameState(bci(), null), escapedReturnValue));
+            } else {
+                BytecodePosition position = createBytecodePosition();
+                // Update the previous infopoint position if no new fixed nodes were inserted
+                if (lastInstr instanceof SimpleInfopointNode) {
+                    SimpleInfopointNode lastInfopoint = (SimpleInfopointNode) lastInstr;
+                    if (lastInfopoint.getReason() == reason) {
+                        lastInfopoint.setPosition(position);
+                    }
+                }
+                append(new SimpleInfopointNode(reason, position));
+            }
         }
     }
 
@@ -2653,7 +2674,7 @@ public class BytecodeParser implements GraphBuilderContext {
         sideEffect.setStateAfter(stateAfter);
     }
 
-    protected NodeSourcePosition createBytecodePosition() {
+    protected BytecodePosition createBytecodePosition() {
         return frameState.createBytecodePosition(bci());
     }
 
