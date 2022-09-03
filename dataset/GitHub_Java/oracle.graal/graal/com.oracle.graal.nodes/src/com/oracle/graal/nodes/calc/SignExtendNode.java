@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,42 +22,50 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.Narrow;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.SignExtend;
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.PrimitiveStamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * The {@code SignExtendNode} converts an integer to a wider integer using sign extension.
  */
-public class SignExtendNode extends IntegerConvertNode implements Canonicalizable {
+@NodeInfo(cycles = CYCLES_1)
+public final class SignExtendNode extends IntegerConvertNode<SignExtend, Narrow> {
+
+    public static final NodeClass<SignExtendNode> TYPE = NodeClass.create(SignExtendNode.class);
 
     public SignExtendNode(ValueNode input, int resultBits) {
-        super(StampTool.signExtend(input.stamp(), resultBits), input, resultBits);
+        this(input, PrimitiveStamp.getBits(input.stamp()), resultBits);
+        assert 0 < PrimitiveStamp.getBits(input.stamp()) && PrimitiveStamp.getBits(input.stamp()) <= resultBits;
     }
 
-    public static long signExtend(long value, int inputBits) {
-        if (inputBits < 64) {
-            if ((value >>> (inputBits - 1) & 1) == 1) {
-                return value | (-1L << inputBits);
-            } else {
-                return value & ~(-1L << inputBits);
-            }
+    public SignExtendNode(ValueNode input, int inputBits, int resultBits) {
+        super(TYPE, ArithmeticOpTable::getSignExtend, ArithmeticOpTable::getNarrow, inputBits, resultBits, input);
+    }
+
+    public static ValueNode create(ValueNode input, int resultBits) {
+        return create(input, PrimitiveStamp.getBits(input.stamp()), resultBits);
+    }
+
+    public static ValueNode create(ValueNode input, int inputBits, int resultBits) {
+        IntegerConvertOp<SignExtend> signExtend = ArithmeticOpTable.forStamp(input.stamp()).getSignExtend();
+        ValueNode synonym = findSynonym(signExtend, input, inputBits, resultBits, signExtend.foldStamp(inputBits, resultBits, input.stamp()));
+        if (synonym != null) {
+            return synonym;
         } else {
-            return value;
+            return new SignExtendNode(input, inputBits, resultBits);
         }
-    }
-
-    @Override
-    public Constant convert(Constant c) {
-        return Constant.forPrimitiveInt(getResultBits(), signExtend(c.asLong(), getInputBits()));
-    }
-
-    @Override
-    public Constant reverse(Constant c) {
-        return Constant.forPrimitiveInt(getInputBits(), NarrowNode.narrow(c.asLong(), getInputBits()));
     }
 
     @Override
@@ -66,32 +74,32 @@ public class SignExtendNode extends IntegerConvertNode implements Canonicalizabl
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
-        ValueNode ret = canonicalConvert();
-        if (ret != null) {
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        ValueNode ret = super.canonical(tool, forValue);
+        if (ret != this) {
             return ret;
         }
 
-        if (getInput() instanceof SignExtendNode) {
+        if (forValue instanceof SignExtendNode) {
             // sxxx -(sign-extend)-> ssss sxxx -(sign-extend)-> ssssssss sssssxxx
             // ==> sxxx -(sign-extend)-> ssssssss sssssxxx
-            SignExtendNode other = (SignExtendNode) getInput();
-            return graph().unique(new SignExtendNode(other.getInput(), getResultBits()));
-        } else if (getInput() instanceof ZeroExtendNode) {
-            ZeroExtendNode other = (ZeroExtendNode) getInput();
+            SignExtendNode other = (SignExtendNode) forValue;
+            return new SignExtendNode(other.getValue(), other.getInputBits(), getResultBits());
+        } else if (forValue instanceof ZeroExtendNode) {
+            ZeroExtendNode other = (ZeroExtendNode) forValue;
             if (other.getResultBits() > other.getInputBits()) {
                 // sxxx -(zero-extend)-> 0000 sxxx -(sign-extend)-> 00000000 0000sxxx
                 // ==> sxxx -(zero-extend)-> 00000000 0000sxxx
-                return graph().unique(new ZeroExtendNode(other.getInput(), getResultBits()));
+                return new ZeroExtendNode(other.getValue(), other.getInputBits(), getResultBits());
             }
         }
 
-        if (getInput().stamp() instanceof IntegerStamp) {
-            IntegerStamp inputStamp = (IntegerStamp) getInput().stamp();
+        if (forValue.stamp() instanceof IntegerStamp) {
+            IntegerStamp inputStamp = (IntegerStamp) forValue.stamp();
             if ((inputStamp.upMask() & (1L << (getInputBits() - 1))) == 0L) {
                 // 0xxx -(sign-extend)-> 0000 0xxx
                 // ==> 0xxx -(zero-extend)-> 0000 0xxx
-                return graph().unique(new ZeroExtendNode(getInput(), getResultBits()));
+                return new ZeroExtendNode(forValue, getInputBits(), getResultBits());
             }
         }
 
@@ -99,12 +107,7 @@ public class SignExtendNode extends IntegerConvertNode implements Canonicalizabl
     }
 
     @Override
-    public boolean inferStamp() {
-        return updateStamp(StampTool.signExtend(getInput().stamp(), getResultBits()));
-    }
-
-    @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        gen.setResult(this, gen.emitSignExtend(gen.operand(getInput()), getInputBits(), getResultBits()));
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitSignExtend(nodeValueMap.operand(getValue()), getInputBits(), getResultBits()));
     }
 }

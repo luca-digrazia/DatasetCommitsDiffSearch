@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,38 +22,54 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+
+import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.Narrow;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.ZeroExtend;
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.PrimitiveStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.code.CodeUtil;
 
 /**
  * The {@code ZeroExtendNode} converts an integer to a wider integer using zero extension.
  */
-public class ZeroExtendNode extends IntegerConvertNode implements Canonicalizable {
+@NodeInfo(cycles = CYCLES_1)
+public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow> {
+
+    public static final NodeClass<ZeroExtendNode> TYPE = NodeClass.create(ZeroExtendNode.class);
 
     public ZeroExtendNode(ValueNode input, int resultBits) {
-        super(StampTool.zeroExtend(input.stamp(), resultBits), input, resultBits);
+        this(input, PrimitiveStamp.getBits(input.stamp()), resultBits);
+        assert 0 < PrimitiveStamp.getBits(input.stamp()) && PrimitiveStamp.getBits(input.stamp()) <= resultBits;
     }
 
-    public static long zeroExtend(long value, int inputBits) {
-        if (inputBits < 64) {
-            return value & ~(-1L << inputBits);
+    public ZeroExtendNode(ValueNode input, int inputBits, int resultBits) {
+        super(TYPE, ArithmeticOpTable::getZeroExtend, ArithmeticOpTable::getNarrow, inputBits, resultBits, input);
+    }
+
+    public static ValueNode create(ValueNode input, int resultBits) {
+        return create(input, PrimitiveStamp.getBits(input.stamp()), resultBits);
+    }
+
+    public static ValueNode create(ValueNode input, int inputBits, int resultBits) {
+        IntegerConvertOp<ZeroExtend> signExtend = ArithmeticOpTable.forStamp(input.stamp()).getZeroExtend();
+        ValueNode synonym = findSynonym(signExtend, input, inputBits, resultBits, signExtend.foldStamp(inputBits, resultBits, input.stamp()));
+        if (synonym != null) {
+            return synonym;
         } else {
-            return value;
+            return new ZeroExtendNode(input, inputBits, resultBits);
         }
-    }
-
-    @Override
-    public Constant convert(Constant c) {
-        return Constant.forPrimitiveInt(getResultBits(), zeroExtend(c.asLong(), getInputBits()));
-    }
-
-    @Override
-    public Constant reverse(Constant c) {
-        return Constant.forPrimitiveInt(getInputBits(), NarrowNode.narrow(c.asLong(), getInputBits()));
     }
 
     @Override
@@ -62,29 +78,50 @@ public class ZeroExtendNode extends IntegerConvertNode implements Canonicalizabl
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
-        ValueNode ret = canonicalConvert();
-        if (ret != null) {
+    public boolean preservesOrder(Condition cond) {
+        switch (cond) {
+            case GE:
+            case GT:
+            case LE:
+            case LT:
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        ValueNode ret = super.canonical(tool, forValue);
+        if (ret != this) {
             return ret;
         }
 
-        if (getInput() instanceof ZeroExtendNode) {
+        if (forValue instanceof ZeroExtendNode) {
             // xxxx -(zero-extend)-> 0000 xxxx -(zero-extend)-> 00000000 0000xxxx
             // ==> xxxx -(zero-extend)-> 00000000 0000xxxx
-            ZeroExtendNode other = (ZeroExtendNode) getInput();
-            return graph().unique(new ZeroExtendNode(other.getInput(), getResultBits()));
+            ZeroExtendNode other = (ZeroExtendNode) forValue;
+            return new ZeroExtendNode(other.getValue(), other.getInputBits(), getResultBits());
+        }
+        if (forValue instanceof NarrowNode) {
+            NarrowNode narrow = (NarrowNode) forValue;
+            Stamp inputStamp = narrow.getValue().stamp();
+            if (inputStamp instanceof IntegerStamp && inputStamp.isCompatible(stamp())) {
+                IntegerStamp istamp = (IntegerStamp) inputStamp;
+                long mask = CodeUtil.mask(PrimitiveStamp.getBits(narrow.stamp()));
+                if (((istamp.upMask() | istamp.downMask()) & ~mask) == 0) {
+                    // The original value is in the range of the masked zero extended result so
+                    // simply return the original input.
+                    return narrow.getValue();
+                }
+            }
         }
 
         return this;
     }
 
     @Override
-    public boolean inferStamp() {
-        return updateStamp(StampTool.zeroExtend(getInput().stamp(), getResultBits()));
-    }
-
-    @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        gen.setResult(this, gen.emitZeroExtend(gen.operand(getInput()), getInputBits(), getResultBits()));
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitZeroExtend(nodeValueMap.operand(getValue()), getInputBits(), getResultBits()));
     }
 }
