@@ -25,7 +25,6 @@
 package com.oracle.truffle.api.utilities;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.nodes.*;
 
 /**
  * Abstract utility class to speculate on conditions. Condition profiles are intended to be used as
@@ -51,7 +50,7 @@ import com.oracle.truffle.api.nodes.*;
  * @see #createCountingProfile()
  * @see #createBinaryProfile()
  */
-public abstract class ConditionProfile implements NodeCloneable {
+public abstract class ConditionProfile {
 
     public abstract boolean profile(boolean value);
 
@@ -66,27 +65,19 @@ public abstract class ConditionProfile implements NodeCloneable {
      * @see ConditionProfile
      * @see #createBinaryProfile()
      */
-    public static ConditionProfile createCountingProfile() {
+    public static CountingConditionProfile createCountingProfile() {
         return new CountingConditionProfile();
     }
 
     /**
-     * Returns a {@link ConditionProfile} that speculates on conditions to be never true or to be
+     * REturns a {@link ConditionProfile} that speculates on conditions to be never true or to be
      * never false. Condition profiles are intended to be used as part of if conditions.
      *
      * @see ConditionProfile
-     * @see ConditionProfile#createCountingProfile()
+     * @see ConditionProfile#createBinaryProfile()
      */
-    public static ConditionProfile createBinaryProfile() {
+    public static BinaryConditionProfile createBinaryProfile() {
         return new BinaryConditionProfile();
     }
 
-    @Override
-    public final Object clone() {
-        try {
-            return super.clone();
-        } catch (CloneNotSupportedException e) {
-            throw new AssertionError(e);
-        }
-    }
 }

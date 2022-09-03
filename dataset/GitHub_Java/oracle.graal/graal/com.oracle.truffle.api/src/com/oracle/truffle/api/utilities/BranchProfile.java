@@ -26,7 +26,6 @@ package com.oracle.truffle.api.utilities;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.nodes.*;
 
 /**
  * Utility class to speculate on branches to be never visited. If the {@link #enter()} method is
@@ -37,12 +36,9 @@ import com.oracle.truffle.api.nodes.*;
  * All {@code BranchProfile} instances must be held in {@code final} fields for compiler
  * optimizations to take effect.
  */
-public final class BranchProfile implements NodeCloneable {
+public final class BranchProfile {
 
     @CompilationFinal private boolean visited;
-
-    private BranchProfile() {
-    }
 
     public void enter() {
         if (!visited) {
@@ -55,21 +51,9 @@ public final class BranchProfile implements NodeCloneable {
         return visited;
     }
 
-    public static BranchProfile create() {
-        return new BranchProfile();
-    }
-
     @Override
     public String toString() {
         return String.format("%s(%s)@%x", getClass().getSimpleName(), visited ? "visited" : "not-visited", hashCode());
     }
 
-    @Override
-    public Object clone() {
-        try {
-            return super.clone();
-        } catch (CloneNotSupportedException e) {
-            throw new AssertionError(e);
-        }
-    }
 }
