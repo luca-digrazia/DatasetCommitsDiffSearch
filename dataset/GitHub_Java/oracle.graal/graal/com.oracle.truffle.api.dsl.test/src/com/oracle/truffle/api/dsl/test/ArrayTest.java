@@ -109,12 +109,12 @@ public class ArrayTest {
             return newArray;
         }
 
-        @TypeCheck(int[].class)
-        public static boolean isIntArray2(Object array) {
+        @TypeCheck
+        public static boolean isIntArray(Object array) {
             return array instanceof int[];
         }
 
-        @TypeCast(int[].class)
+        @TypeCast
         public static int[] asIntArray(Object array) {
             return (int[]) array;
         }
