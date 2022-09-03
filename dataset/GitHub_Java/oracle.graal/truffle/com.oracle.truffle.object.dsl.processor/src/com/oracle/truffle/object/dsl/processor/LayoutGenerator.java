@@ -47,11 +47,7 @@ public class LayoutGenerator {
         stream.println();
         stream.println("import java.util.EnumSet;");
         stream.println("import com.oracle.truffle.api.object.*;");
-
-        if (!layout.getShapeProperties().isEmpty()) {
-            stream.println("import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;");
-        }
-
+        stream.println("import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;");
         stream.println("import com.oracle.truffle.api.CompilerAsserts;");
         stream.println("import java.util.concurrent.atomic.*;");
         stream.printf("import %s;%n", layout.getInterfaceFullName());
