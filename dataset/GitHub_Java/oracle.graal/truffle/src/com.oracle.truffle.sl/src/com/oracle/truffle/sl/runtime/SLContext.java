@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -94,7 +94,7 @@ import com.oracle.truffle.sl.nodes.local.SLReadArgumentNode;
 public final class SLContext {
 
     private static final Source BUILTIN_SOURCE = Source.newBuilder(SLLanguage.ID, "", "SL builtin").build();
-    static final Layout LAYOUT = Layout.createLayout();
+    private static final Layout LAYOUT = Layout.createLayout();
 
     private final Env env;
     private final BufferedReader input;
@@ -220,6 +220,7 @@ public final class SLContext {
     /*
      * Methods for object creation / object property access.
      */
+
     public AllocationReporter getAllocationReporter() {
         return allocationReporter;
     }
@@ -228,15 +229,15 @@ public final class SLContext {
      * Allocate an empty object. All new objects initially have no properties. Properties are added
      * when they are first stored, i.e., the store triggers a shape change of the object.
      */
-    public DynamicObject createObject(AllocationReporter reporter) {
+    public DynamicObject createObject() {
         DynamicObject object = null;
-        reporter.onEnter(null, 0, AllocationReporter.SIZE_UNKNOWN);
+        allocationReporter.onEnter(null, 0, AllocationReporter.SIZE_UNKNOWN);
         object = emptyShape.newInstance();
-        reporter.onReturnValue(object, 0, AllocationReporter.SIZE_UNKNOWN);
+        allocationReporter.onReturnValue(object, 0, AllocationReporter.SIZE_UNKNOWN);
         return object;
     }
 
-    public static boolean isSLObject(Object value) {
+    public static boolean isSLObject(TruffleObject value) {
         /*
          * LAYOUT.getType() returns a concrete implementation class, i.e., a class that is more
          * precise than the base class DynamicObject. This makes the type check faster.
