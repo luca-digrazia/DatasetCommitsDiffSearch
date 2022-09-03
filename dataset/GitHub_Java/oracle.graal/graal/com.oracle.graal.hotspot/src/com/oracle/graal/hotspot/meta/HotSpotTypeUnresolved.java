@@ -23,6 +23,7 @@
 package com.oracle.graal.hotspot.meta;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 
 /**
@@ -86,5 +87,10 @@ public class HotSpotTypeUnresolved extends HotSpotJavaType {
     @Override
     public ResolvedJavaType resolve(ResolvedJavaType accessingClass) {
         return (ResolvedJavaType) HotSpotGraalRuntime.getInstance().lookupType(getName(), (HotSpotResolvedJavaType) accessingClass, true);
+    }
+
+    @Override
+    public Constant klass() {
+        throw GraalInternalError.shouldNotReachHere("HotSpotTypeUnresolved.klass()");
     }
 }
