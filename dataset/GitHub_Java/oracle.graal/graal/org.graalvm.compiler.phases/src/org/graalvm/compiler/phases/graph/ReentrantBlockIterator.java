@@ -28,6 +28,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.function.Predicate;
 
+import org.graalvm.compiler.common.PermanentBailoutException;
 import org.graalvm.compiler.common.RetryableBailoutException;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.util.CompilationAlarm;
@@ -35,9 +36,9 @@ import org.graalvm.compiler.nodes.AbstractEndNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
+import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.cfg.Block;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.CompareStrategy;
+import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
 public final class ReentrantBlockIterator {
@@ -99,14 +100,21 @@ public final class ReentrantBlockIterator {
         /*
          * States are stored on EndNodes before merges, and on BeginNodes after ControlSplitNodes.
          */
-        EconomicMap<FixedNode, StateT> states = CollectionFactory.newMap(CompareStrategy.IDENTITY);
+        EconomicMap<FixedNode, StateT> states = EconomicMap.create(Equivalence.IDENTITY);
 
         StateT state = initialState;
         Block current = start;
 
+        StructuredGraph graph = start.getBeginNode().graph();
+        CompilationAlarm compilationAlarm = CompilationAlarm.current();
         while (true) {
-            if (CompilationAlarm.hasExpired()) {
-                throw new RetryableBailoutException("Compilation exceeded %d seconds during CFG traversal", CompilationAlarm.Options.CompilationExpirationPeriod.getValue());
+            if (compilationAlarm.hasExpired()) {
+                int period = CompilationAlarm.Options.CompilationExpirationPeriod.getValue(graph.getOptions());
+                if (period > 120) {
+                    throw new PermanentBailoutException("Compilation exceeded %d seconds during CFG traversal", period);
+                } else {
+                    throw new RetryableBailoutException("Compilation exceeded %d seconds during CFG traversal", period);
+                }
             }
             Block next = null;
             if (stopAtBlock != null && stopAtBlock.test(current)) {

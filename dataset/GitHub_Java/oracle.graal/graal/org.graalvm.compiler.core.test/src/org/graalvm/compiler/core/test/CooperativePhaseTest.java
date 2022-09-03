@@ -68,7 +68,7 @@ public class CooperativePhaseTest extends GraalCompilerTest {
 
     }
 
-    private static class PartiallyCooperativePhase extends Phase {
+    private static class ParlyCooperativePhase extends Phase {
 
         @Override
         protected void run(StructuredGraph graph) {
@@ -107,7 +107,7 @@ public class CooperativePhaseTest extends GraalCompilerTest {
         initializeForTimeout();
         OptionValues initialOptions = getInitialOptions();
         OptionValues options = new OptionValues(initialOptions, CompilationExpirationPeriod, 1/* sec */);
-        try (CompilationAlarm c1 = CompilationAlarm.trackCompilationPeriod(options)) {
+        try (CompilationAlarm c1 = CompilationAlarm.trackCompilationPeriod(initialOptions)) {
             StructuredGraph g = parseEager("snippet", AllowAssumptions.NO, options);
             new CooperativePhase().apply(g);
         }
@@ -119,7 +119,7 @@ public class CooperativePhaseTest extends GraalCompilerTest {
         initializeForTimeout();
         OptionValues initialOptions = getInitialOptions();
         OptionValues options = new OptionValues(initialOptions, CompilationExpirationPeriod, 1/* sec */);
-        try (CompilationAlarm c1 = CompilationAlarm.trackCompilationPeriod(options)) {
+        try (CompilationAlarm c1 = CompilationAlarm.trackCompilationPeriod(initialOptions)) {
             StructuredGraph g = parseEager("snippet", AllowAssumptions.NO, options);
             new UnCooperativePhase().apply(g);
         }
@@ -132,9 +132,9 @@ public class CooperativePhaseTest extends GraalCompilerTest {
         // 0 disables alarm utility
         OptionValues initialOptions = getInitialOptions();
         OptionValues options = new OptionValues(initialOptions, CompilationExpirationPeriod, 0);
-        try (CompilationAlarm c1 = CompilationAlarm.trackCompilationPeriod(options)) {
+        try (CompilationAlarm c1 = CompilationAlarm.trackCompilationPeriod(initialOptions)) {
             StructuredGraph g = parseEager("snippet", AllowAssumptions.NO, options);
-            new PartiallyCooperativePhase().apply(g);
+            new ParlyCooperativePhase().apply(g);
         }
     }
 
