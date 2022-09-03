@@ -179,9 +179,5 @@ public class CompilerToVMImpl implements CompilerToVM {
 
     public native boolean hasCompiledCodeForOSR(long metaspaceMethod, int entryBCI, int level);
 
-    public native HotSpotStackFrameReference getNextStackFrame(HotSpotStackFrameReference frame, HotSpotResolvedJavaMethod method);
-
-    public native void materializeVirtualObjects(HotSpotStackFrameReference stackFrame, boolean invalidate);
-
     public native long getTimeStamp();
 }

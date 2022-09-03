@@ -33,15 +33,16 @@ import com.oracle.graal.word.*;
 public class HotSpotNodeSubstitutions {
 
     /**
-     * Gets the value of the {@code InstanceKlass::_graal_node_class} field from the InstanceKlass
-     * pointed to by {@code node}'s header.
+     * Partial substitution of {@link Node#getNodeClass()} that returns the value of the
+     * {@code InstanceKlass::_graal_node_class} field if it is non-null.
      */
     @MethodSubstitution(isStatic = false)
-    public static NodeClass getNodeClass(final Node node) {
-        // HotSpot creates the NodeClass for each Node subclass while initializing it
-        // so we are guaranteed to read a non-null value here. As long as NodeClass
-        // is final, the stamp of the PiNode below will automatically be exact.
-        Word klass = loadHub(node);
-        return piCastNonNull(klass.readObject(Word.signed(klassNodeClassOffset()), KLASS_NODE_CLASS), NodeClass.class);
+    public static NodeClass getNodeClass(final Node thisObj) {
+        Word klass = loadHub(thisObj);
+        NodeClass nc = piCastExact(klass.readObject(Word.signed(klassNodeClassOffset()), KLASS_NODE_CLASS), NodeClass.class);
+        if (nc != null) {
+            return nc;
+        }
+        return getNodeClass(thisObj);
     }
 }

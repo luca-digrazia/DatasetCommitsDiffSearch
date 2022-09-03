@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,33 +20,31 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
 package com.oracle.graal.hotspot.bridge;
 
-import java.io.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.replacements.*;
 
 /**
- * Calls from HotSpot into Java.
+ * Updates the {@code InstanceKlass::_graal_node_class} field when a {@link NodeClass} is created so
+ * that the {@link HotSpotNodeClassSubstitutions} and {@link HotSpotNodeSubstitutions}
+ * intrinsifications can read it.
  */
-public interface VMToCompiler {
+class FastNodeClassRegistry extends NodeClass.Registry {
 
-    /**
-     * Compiles a method to machine code. This method is called from the VM
-     * (VMToCompiler::compileMethod).
-     */
-    void compileMethod(long metaspaceMethod, int entryBCI, boolean blocking);
+    private final CompilerToVM vm;
 
-    void shutdownCompiler() throws Exception;
+    public FastNodeClassRegistry(CompilerToVM vm) {
+        this.vm = vm;
+    }
 
-    /**
-     * @param hostedOnly specifies if the Graal compiler is only being used in hosted mode (i.e., it
-     *            will never compile itself)
-     */
-    void startCompiler(boolean bootstrapEnabled, boolean hostedOnly) throws Throwable;
+    @SuppressWarnings("unused")
+    static void initialize(CompilerToVM vm) {
+        new FastNodeClassRegistry(vm);
+    }
 
-    void bootstrap() throws Throwable;
-
-    void compileTheWorld() throws Throwable;
-
-    PrintStream log();
+    @Override
+    protected void registered(Class<? extends Node> key, NodeClass value) {
+        vm.setNodeClass(key, value);
+    }
 }
