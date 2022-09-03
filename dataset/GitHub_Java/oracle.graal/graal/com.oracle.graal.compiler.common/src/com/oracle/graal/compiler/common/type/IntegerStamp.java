@@ -86,7 +86,7 @@ public class IntegerStamp extends PrimitiveStamp {
     }
 
     @Override
-    public Stamp empty() {
+    public Stamp illegal() {
         return new IntegerStamp(getBits(), CodeUtil.maxValue(getBits()), CodeUtil.minValue(getBits()), CodeUtil.mask(getBits()), 0);
     }
 
@@ -118,7 +118,7 @@ public class IntegerStamp extends PrimitiveStamp {
     }
 
     @Override
-    public boolean hasValues() {
+    public boolean isLegal() {
         return lowerBound <= upperBound;
     }
 
@@ -238,7 +238,7 @@ public class IntegerStamp extends PrimitiveStamp {
     private Stamp createStamp(IntegerStamp other, long newUpperBound, long newLowerBound, long newDownMask, long newUpMask) {
         assert getBits() == other.getBits();
         if (newLowerBound > newUpperBound || (newDownMask & (~newUpMask)) != 0 || (newUpMask == 0 && (newLowerBound > 0 || newUpperBound < 0))) {
-            return empty();
+            return illegal();
         } else if (newLowerBound == lowerBound && newUpperBound == upperBound && newDownMask == downMask && newUpMask == upMask) {
             return this;
         } else if (newLowerBound == other.lowerBound && newUpperBound == other.upperBound && newDownMask == other.downMask && newUpMask == other.upMask) {

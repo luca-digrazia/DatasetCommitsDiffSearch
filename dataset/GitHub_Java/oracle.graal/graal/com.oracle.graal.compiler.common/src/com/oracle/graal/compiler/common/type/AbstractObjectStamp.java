@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,7 +48,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
     }
 
     @Override
-    public Stamp empty() {
+    public Stamp illegal() {
         return copyWith(null, true, true, false);
     }
 
@@ -60,7 +60,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
     }
 
     @Override
-    public boolean hasValues() {
+    public boolean isLegal() {
         return !exactType || (type != null && (isConcreteType(type)));
     }
 
@@ -86,8 +86,8 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
     }
 
     protected void appendString(StringBuilder str) {
-        if (this.isEmpty()) {
-            str.append(" empty");
+        if (this.isIllegal()) {
+            str.append(" illegal");
         } else {
             str.append(nonNull() ? "!" : "").append(exactType ? "#" : "").append(' ').append(type == null ? "-" : type.getName()).append(alwaysNull() ? " NULL" : "");
         }
@@ -99,9 +99,9 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             return this;
         }
         AbstractObjectStamp other = (AbstractObjectStamp) otherStamp;
-        if (isEmpty()) {
+        if (isIllegal()) {
             return other;
-        } else if (other.isEmpty()) {
+        } else if (other.isIllegal()) {
             return this;
         }
         ResolvedJavaType meetType;
@@ -168,9 +168,9 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             return this;
         }
         AbstractObjectStamp other = (AbstractObjectStamp) otherStamp;
-        if (isEmpty()) {
+        if (isIllegal()) {
             return this;
-        } else if (other.isEmpty()) {
+        } else if (other.isIllegal()) {
             return other;
         }
 
@@ -215,12 +215,12 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             joinExactType = false;
         }
         if (joinExactType && joinType == null) {
-            return StampFactory.empty(Kind.Object);
+            return StampFactory.illegal(Kind.Object);
         }
         if (joinAlwaysNull && joinNonNull) {
-            return StampFactory.empty(Kind.Object);
+            return StampFactory.illegal(Kind.Object);
         } else if (joinExactType && !isConcreteType(joinType)) {
-            return StampFactory.empty(Kind.Object);
+            return StampFactory.illegal(Kind.Object);
         }
         if (Objects.equals(joinType, type) && joinExactType == exactType && joinNonNull == nonNull() && joinAlwaysNull == alwaysNull()) {
             return this;

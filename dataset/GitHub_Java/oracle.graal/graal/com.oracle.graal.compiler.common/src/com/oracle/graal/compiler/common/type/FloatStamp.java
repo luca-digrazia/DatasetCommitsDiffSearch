@@ -59,7 +59,7 @@ public class FloatStamp extends PrimitiveStamp {
     }
 
     @Override
-    public Stamp empty() {
+    public Stamp illegal() {
         return new FloatStamp(getBits(), Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, true);
     }
 
@@ -83,7 +83,7 @@ public class FloatStamp extends PrimitiveStamp {
     }
 
     @Override
-    public boolean hasValues() {
+    public boolean isLegal() {
         return lowerBound <= upperBound || !nonNaN;
     }
 
