@@ -331,15 +331,10 @@ public class BasicHSAILTest extends GraalCompilerTest {
         out[gid] = val;
     }
 
-    private void test(final String snippet) {
-        Debug.scope("HSAILTestCode", new Runnable() {
-            StructuredGraph graph = parse(snippet);
-
-            public void run() {
-                HSAILCompilationResult compResult = HSAILCompilationResult.getHSAILCompilationResult(graph);
-                Debug.log("HSAIL code generated for %s:%n%s", snippet, compResult.getHSAILCode());
-            }
-        });
+    private void test(String snippet) {
+        StructuredGraph graph = parse(snippet);
+        HSAILCompilationResult compResult = HSAILCompilationResult.getHSAILCompilationResult(graph);
+        TTY.println("code generated for " + snippet + ":\n" + compResult.getHSAILCode());
     }
 
     public static void nBodySpill(float[] inxyz, float[] outxyz, float[] invxyz, float[] outvxyz, int gid) {

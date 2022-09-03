@@ -23,13 +23,14 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
-import org.junit.Test;
+import org.junit.*;
+
+import com.oracle.graal.compiler.hsail.test.infra.*;
 
 /**
- * Tests codegen for a java 7 style object array stream kernel, with one int and one float capture.
+ * Tests codegen for a java 7 style object array stream kernel, no captures.
  */
-public class Vec3ObjStreamIntFloatCaptureTest extends GraalKernelTester {
+public class Vec3ObjStreamTest extends GraalKernelTester {
 
     static final int NUM = 20;
 
@@ -45,14 +46,14 @@ public class Vec3ObjStreamIntFloatCaptureTest extends GraalKernelTester {
      * The "kernel" method we will be testing. For Array Stream, an object from the array will be
      * the last parameter
      */
-    public void run(int adjustment, float multiplier, Vec3 vec3) {
-        vec3.z = (vec3.x + vec3.y - adjustment) * multiplier;
+    public void run(Vec3 vec3) {
+        vec3.z = vec3.x + vec3.y;
     }
 
     @Override
     public void runTest() {
         setupArrays();
-        dispatchMethodKernel(inArray, 7, 0.5f);
+        dispatchMethodKernel(inArray);
     }
 
     @Test

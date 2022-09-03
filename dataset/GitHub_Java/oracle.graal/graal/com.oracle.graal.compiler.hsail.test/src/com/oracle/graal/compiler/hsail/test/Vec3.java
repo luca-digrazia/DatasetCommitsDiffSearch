@@ -23,41 +23,42 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
-import org.junit.Test;
-
 /**
- * Tests codegen for a java 7 style object array stream kernel, with one int and one float capture.
+ * A simple 3 element Vector object used in some junit tests.
  */
-public class Vec3ObjStreamIntFloatCaptureTest extends GraalKernelTester {
+public class Vec3 {
 
-    static final int NUM = 20;
-
-    @Result public Vec3[] inArray = new Vec3[NUM];
-
-    void setupArrays() {
-        for (int i = 0; i < NUM; i++) {
-            inArray[i] = new Vec3(i, i + 1, -1);
-        }
+    public Vec3(float x, float y, float z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
     }
 
-    /**
-     * The "kernel" method we will be testing. For Array Stream, an object from the array will be
-     * the last parameter
-     */
-    public void run(int adjustment, float multiplier, Vec3 vec3) {
-        vec3.z = (vec3.x + vec3.y - adjustment) * multiplier;
+    public float x;
+    public float y;
+    public float z;
+
+    public static Vec3 add(Vec3 a, Vec3 b) {
+        return new Vec3(a.x + b.x, a.y + b.y, a.z + b.z);
     }
 
     @Override
-    public void runTest() {
-        setupArrays();
-        dispatchMethodKernel(inArray, 7, 0.5f);
+    public boolean equals(Object other) {
+        if (!(other instanceof Vec3)) {
+            return false;
+        }
+        Vec3 oth = (Vec3) other;
+        return (oth.x == x && oth.y == y && oth.z == z);
     }
 
-    @Test
-    public void test() {
-        testGeneratedHsail();
+    @Override
+    public String toString() {
+        return ("Vec3[" + x + ", " + y + ", " + z + "]");
+    }
+
+    @Override
+    public int hashCode() {
+        return (int) (x + y + z);
     }
 
 }
