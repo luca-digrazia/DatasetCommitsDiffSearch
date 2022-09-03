@@ -73,7 +73,7 @@ public class ProxyTest {
         }
 
         @Resolve(message = "EXECUTE")
-        public abstract static class ExecuteNode extends Node {
+        public static abstract class ExecuteNode extends Node {
             Object access(TestFunction receiver, Object[] arguments) {
                 Object firstArg = arguments.length > 0 ? arguments[0] : null;
                 Object result = receiver.f.apply((TruffleObject) firstArg);

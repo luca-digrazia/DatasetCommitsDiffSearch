@@ -31,14 +31,11 @@ import static com.oracle.truffle.api.vm.VMAccessor.NODES;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
-import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.graalvm.options.OptionValues;
@@ -56,8 +53,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.impl.Accessor.EngineSupport;
 import com.oracle.truffle.api.impl.DispatchOutputStream;
 import com.oracle.truffle.api.impl.TruffleLocator;
@@ -65,10 +60,8 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.LanguageInfo;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
-import java.util.concurrent.atomic.AtomicReference;
 
 /*
  * This class is exported to the Graal SDK. Keep that in mind when changing its class or package name.
@@ -87,7 +80,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
     private final PolyglotSource sourceImpl = new PolyglotSource(this);
     private final PolyglotSourceSection sourceSectionImpl = new PolyglotSourceSection(this);
-    private final AtomicReference<PolyglotEngineImpl> preInitializedEngineRef = new AtomicReference<>();
 
     private static void ensureInitialized() {
         if (VMAccessor.SPI == null || !(VMAccessor.SPI.engineSupport() instanceof EngineImpl)) {
@@ -140,33 +132,11 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         DispatchOutputStream dispatchOut = INSTRUMENT.createDispatchOutput(resolvedOut);
         DispatchOutputStream dispatchErr = INSTRUMENT.createDispatchOutput(resolvedErr);
         ClassLoader contextClassLoader = TruffleOptions.AOT ? null : Thread.currentThread().getContextClassLoader();
-
-        PolyglotEngineImpl impl = preInitializedEngineRef.getAndSet(null);
-        if (impl != null) {
-            if (!impl.patch(dispatchErr, dispatchErr, resolvedIn, arguments, timeout, timeoutUnit, sandbox, useSystemProperties, contextClassLoader, boundEngine)) {
-                impl.ensureClosed(false, true);
-                impl = null;
-            }
-        }
-        if (impl == null) {
-            impl = new PolyglotEngineImpl(this, dispatchOut, dispatchErr, resolvedIn, arguments, timeout, timeoutUnit, sandbox, useSystemProperties,
-                            contextClassLoader, boundEngine);
-        }
+        PolyglotEngineImpl impl = new PolyglotEngineImpl(this, dispatchOut, dispatchErr, resolvedIn, arguments, timeout, timeoutUnit, sandbox, useSystemProperties,
+                        contextClassLoader, boundEngine);
         Engine engine = getAPIAccess().newEngine(impl);
         impl.api = engine;
         return engine;
-    }
-
-    @Override
-    public void preInitializeEngine() {
-        ensureInitialized();
-        final PolyglotEngineImpl preInitializedEngine = PolyglotEngineImpl.preInitialize(
-                        this,
-                        INSTRUMENT.createDispatchOutput(System.out),
-                        INSTRUMENT.createDispatchOutput(System.err),
-                        System.in,
-                        TruffleOptions.AOT ? null : Thread.currentThread().getContextClassLoader());
-        preInitializedEngineRef.set(preInitializedEngine);
     }
 
     /**
@@ -296,14 +266,14 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         public Env getEnvForLanguage(Object vmObject, String languageId, String mimeType) {
             PolyglotLanguageContext languageContext = (PolyglotLanguageContext) vmObject;
             PolyglotLanguageContext context = languageContext.context.findLanguageContext(languageId, mimeType, true);
-            context.ensureInitialized(languageContext.language);
+            context.ensureInitialized();
             return context.env;
         }
 
         @Override
         public Env getEnvForInstrument(Object vmObject, String languageId, String mimeType) {
             PolyglotLanguageContext context = PolyglotContextImpl.requireContext().findLanguageContext(languageId, mimeType, true);
-            context.ensureInitialized(null);
+            context.ensureInitialized();
             return context.env;
         }
 
@@ -366,14 +336,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         public Env getEnvForInstrument(LanguageInfo info) {
             PolyglotLanguage language = (PolyglotLanguage) NODES.getEngineObject(info);
             PolyglotLanguageContext languageContext = PolyglotContextImpl.requireContext().contexts[language.index];
-            languageContext.ensureInitialized(null);
-            return languageContext.env;
-        }
-
-        @Override
-        public Env getExistingEnvForInstrument(LanguageInfo info) {
-            PolyglotLanguage language = (PolyglotLanguage) NODES.getEngineObject(info);
-            PolyglotLanguageContext languageContext = PolyglotContextImpl.requireContext().contexts[language.index];
+            languageContext.ensureInitialized();
             return languageContext.env;
         }
 
@@ -490,34 +453,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             context.context.exportSymbolFromLanguage(context, symbolName, value);
         }
 
-        @Override
-        public Map<String, ? extends Object> getExportedSymbols(Object vmObject) {
-            PolyglotContextImpl currentContext = PolyglotContextImpl.current();
-            if (currentContext == null) {
-                return Collections.emptyMap();
-            }
-            Set<Map.Entry<String, Object>> entries = new LinkedHashSet<>();
-            synchronized (currentContext) {
-                for (Map.Entry<String, ?> symbol : currentContext.polyglotScope.entrySet()) {
-                    Object value = toGuestValue(symbol.getValue(), vmObject);
-                    entries.add(new AbstractMap.SimpleImmutableEntry<>(symbol.getKey(), value));
-                }
-            }
-            Set<Map.Entry<String, Object>> mapEntries = Collections.unmodifiableSet(entries);
-            return new AbstractMap<String, Object>() {
-
-                @Override
-                public Set<Map.Entry<String, Object>> entrySet() {
-                    return mapEntries;
-                }
-
-                @Override
-                public Object remove(Object key) {
-                    throw new UnsupportedOperationException();
-                }
-            };
-        }
-
         @SuppressWarnings("deprecation")
         @Override
         public <C> com.oracle.truffle.api.impl.FindContextNode<C> createFindContextNode(TruffleLanguage<C> lang) {
@@ -621,25 +556,8 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public Object toGuestValue(Object obj, Object context) {
-            PolyglotLanguageContext languageContext;
-            if (context instanceof VMObject && obj instanceof Value) {
-                PolyglotValue valueImpl = (PolyglotValue) ((VMObject) context).getAPIAccess().getImpl((Value) obj);
-                languageContext = valueImpl.languageContext;
-            } else {
-                languageContext = (PolyglotLanguageContext) context;
-            }
-            return languageContext.toGuestValue(obj);
-        }
-
-        @Override
-        public Iterable<Scope> createDefaultLexicalScope(Node node, Frame frame) {
-            return DefaultScope.lexicalScope(node, frame);
-        }
-
-        @Override
-        public Iterable<Scope> createDefaultTopScope(TruffleLanguage<?> language, Object context, Object global) {
-            return DefaultScope.topScope(language, context, global);
+        public Object toGuestValue(Object obj, Object languageContext) {
+            return ((PolyglotLanguageContext) languageContext).toGuestValue(obj);
         }
 
         @Override
