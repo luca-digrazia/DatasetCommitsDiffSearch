@@ -37,6 +37,7 @@ import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.lir.ConstantValue;
 import org.graalvm.compiler.lir.InstructionValueProcedure;
+import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LIRInstruction.OperandFlag;
 import org.graalvm.compiler.lir.LIRInstruction.OperandMode;
@@ -114,7 +115,14 @@ public class LinearScanAssignLocationsPhase extends LinearScanAllocationPhase {
         return interval.location();
     }
 
-    private Value debugInfoProcedure(LIRInstruction op, Value operand) {
+    /**
+     * @param op
+     * @param operand
+     * @param valueMode
+     * @param flags
+     * @see InstructionValueProcedure#doValue(LIRInstruction, Value, OperandMode, EnumSet)
+     */
+    private Value debugInfoProcedure(LIRInstruction op, Value operand, OperandMode valueMode, EnumSet<OperandFlag> flags) {
         if (isVirtualStackSlot(operand)) {
             return operand;
         }
@@ -149,6 +157,10 @@ public class LinearScanAssignLocationsPhase extends LinearScanAllocationPhase {
         return result;
     }
 
+    private void computeDebugInfo(final LIRInstruction op, LIRFrameState info) {
+        info.forEachState(op, this::debugInfoProcedure);
+    }
+
     private void assignLocations(ArrayList<LIRInstruction> instructions) {
         int numInst = instructions.size();
         boolean hasDead = false;
@@ -172,22 +184,6 @@ public class LinearScanAssignLocationsPhase extends LinearScanAllocationPhase {
         }
     }
 
-    private final InstructionValueProcedure assignProc = new InstructionValueProcedure() {
-        @Override
-        public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
-            if (isVariable(value)) {
-                return colorLirOperand(instruction, (Variable) value, mode);
-            }
-            return value;
-        }
-    };
-    private final InstructionValueProcedure debugInfoProc = new InstructionValueProcedure() {
-        @Override
-        public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
-            return debugInfoProcedure(instruction, value);
-        }
-    };
-
     /**
      * Assigns the operand of an {@link LIRInstruction}.
      *
@@ -197,6 +193,7 @@ public class LinearScanAssignLocationsPhase extends LinearScanAllocationPhase {
     protected boolean assignLocations(LIRInstruction op) {
         assert op != null;
 
+        InstructionValueProcedure assignProc = (inst, operand, mode, flags) -> isVariable(operand) ? colorLirOperand(inst, (Variable) operand, mode) : operand;
         // remove useless moves
         if (op instanceof MoveOp) {
             AllocatableValue result = ((MoveOp) op).getResult();
@@ -216,7 +213,7 @@ public class LinearScanAssignLocationsPhase extends LinearScanAllocationPhase {
         op.forEachOutput(assignProc);
 
         // compute reference map and debug information
-        op.forEachState(debugInfoProc);
+        op.forEachState((inst, state) -> computeDebugInfo(inst, state));
 
         // remove useless moves
         if (op instanceof ValueMoveOp) {

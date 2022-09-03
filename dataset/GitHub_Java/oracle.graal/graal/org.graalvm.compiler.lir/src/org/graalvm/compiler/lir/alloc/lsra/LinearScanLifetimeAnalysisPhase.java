@@ -84,7 +84,7 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
     @Override
     protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
         numberInstructions();
-        Debug.dump(Debug.VERBOSE_LEVEL, lirGenRes.getLIR(), "Before register allocation");
+        allocator.printLir("Before register allocation", true);
         computeLocalLiveSets();
         computeGlobalLiveSets();
         buildIntervals(DetailedAsserts.getValue(allocator.getOptions()));
