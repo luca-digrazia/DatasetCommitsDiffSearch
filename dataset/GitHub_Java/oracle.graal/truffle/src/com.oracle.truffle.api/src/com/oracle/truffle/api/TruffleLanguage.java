@@ -376,7 +376,6 @@ public abstract class TruffleLanguage<C> {
      * {@link #createContext(Env) created}. To construct option descriptors from a list then
      * {@link OptionDescriptors#create(List)} can be used.
      *
-     * @see Option For an example of declaring the option descriptor using an annotation.
      * @since 0.27
      */
     protected OptionDescriptors getOptionDescriptors() {
@@ -668,10 +667,6 @@ public abstract class TruffleLanguage<C> {
      * A programmatic {@link #toString(java.lang.Object, java.lang.Object) textual representation}
      * should be provided for meta-objects, when possible. The meta-object may have properties
      * describing their structure.
-     * <p>
-     * NOTE: Allocating the meta object must not be treated as or cause any
-     * {@link com.oracle.truffle.api.instrumentation.AllocationListener reported guest language
-     * value allocations}
      * <p>
      * When no meta-object is known, return <code>null</code>. The default implementation returns
      * <code>null</code>.
@@ -1465,7 +1460,8 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         @SuppressWarnings("rawtypes")
-        public LanguageInfo getLegacyLanguageInfo(Object vm, Class<? extends TruffleLanguage> languageClass) {
+        public LanguageInfo getLegacyLanguageInfo(Class<? extends TruffleLanguage> languageClass) {
+            Object vm = AccessAPI.engineAccess().getCurrentVM();
             if (vm == null) {
                 return null;
             }
