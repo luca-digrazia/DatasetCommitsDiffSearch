@@ -22,11 +22,16 @@
  */
 package com.oracle.truffle.api.dsl.test.examples;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.utilities.*;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.api.utilities.CyclicAssumption;
 
 /**
  * This example is based on the SLDispatchNode of SimpleLanguage. It shows how to implement a simple
@@ -41,16 +46,16 @@ public class StableDispatch {
     public static class StableDispatchNode extends ExampleNode {
 
         @Specialization(guards = "function == cachedFunction", assumptions = "cachedFunction.getCallTargetStable()")
-        protected static Object directDispatch(VirtualFrame frame, SLFunction function, Object[] arguments, //
+        protected static Object directDispatch(SLFunction function, Object[] arguments, //
                         @Cached("function") SLFunction cachedFunction, //
                         @Cached("create(cachedFunction.getCallTarget())") DirectCallNode callNode) {
-            return callNode.call(frame, arguments);
+            return callNode.call(arguments);
         }
 
-        @Specialization(contains = "directDispatch")
-        protected static Object indirectDispatch(VirtualFrame frame, SLFunction function, Object[] arguments, //
+        @Specialization(replaces = "directDispatch")
+        protected static Object indirectDispatch(SLFunction function, Object[] arguments, //
                         @Cached("create()") IndirectCallNode callNode) {
-            return callNode.call(frame, function.getCallTarget(), arguments);
+            return callNode.call(function.getCallTarget(), arguments);
         }
     }
 

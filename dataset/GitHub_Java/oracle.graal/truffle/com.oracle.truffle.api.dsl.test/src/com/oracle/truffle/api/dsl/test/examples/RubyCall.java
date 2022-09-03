@@ -22,23 +22,30 @@
  */
 package com.oracle.truffle.api.dsl.test.examples;
 
-import static com.oracle.truffle.api.dsl.test.examples.ExampleNode.*;
-import static org.junit.Assert.*;
+import static com.oracle.truffle.api.dsl.test.examples.ExampleNode.createArguments;
+import static com.oracle.truffle.api.dsl.test.examples.ExampleNode.createTarget;
+import static org.junit.Assert.assertEquals;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.ImportStatic;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.internal.SpecializedNode;
 import com.oracle.truffle.api.dsl.test.examples.RubyCallFactory.RubyDispatchNodeGen;
 import com.oracle.truffle.api.dsl.test.examples.RubyCallFactory.RubyHeadNodeGen;
 import com.oracle.truffle.api.dsl.test.examples.RubyCallFactory.RubyLookupNodeGen;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.utilities.*;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.utilities.CyclicAssumption;
 
 /**
  * This example illustrates a simplified version of a Ruby function call semantics (RubyHeadNode).
@@ -124,7 +131,7 @@ public class RubyCall {
             return cachedLookup;
         }
 
-        @Specialization(contains = "cachedLookup")
+        @Specialization(replaces = "cachedLookup")
         protected static InternalMethod genericLookup(RubyObject receiver, Object name) {
             return receiver.getRubyClass().lookup(name);
         }
@@ -141,10 +148,10 @@ public class RubyCall {
          * instantiation. It is never executed on the fast path.
          */
         @Specialization(guards = {"method == cachedMethod", "cachedMethod != METHOD_MISSING"})
-        protected static Object directCall(VirtualFrame frame, InternalMethod method, Object[] arguments, //
+        protected static Object directCall(InternalMethod method, Object[] arguments, //
                         @Cached("method") InternalMethod cachedMethod, //
                         @Cached("create(cachedMethod.getTarget())") DirectCallNode callNode) {
-            return callNode.call(frame, arguments);
+            return callNode.call(arguments);
         }
 
         /*
@@ -152,15 +159,15 @@ public class RubyCall {
          * returning the constant METHOD_MISSING.
          */
         @Specialization(guards = "method == METHOD_MISSING")
-        protected static Object methodMissing(VirtualFrame frame, InternalMethod method, Object[] arguments) {
+        protected static Object methodMissing(InternalMethod method, Object[] arguments) {
             // a real implementation would do a call to a method named method_missing here
             return RubyObject.NIL;
         }
 
-        @Specialization(contains = "directCall", guards = "method != METHOD_MISSING")
-        protected static Object indirectCall(VirtualFrame frame, InternalMethod method, Object[] arguments, //
+        @Specialization(replaces = "directCall", guards = "method != METHOD_MISSING")
+        protected static Object indirectCall(InternalMethod method, Object[] arguments, //
                         @Cached("create()") IndirectCallNode callNode) {
-            return callNode.call(frame, method.getTarget(), arguments);
+            return callNode.call(method.getTarget(), arguments);
         }
 
         @Override
@@ -190,7 +197,7 @@ public class RubyCall {
 
     }
 
-    public static final class RubyClass /* this would extend RubyModule */{
+    public static final class RubyClass /* this would extend RubyModule */ {
 
         private final String name;
         private final RubyClass parent; // this would be a RubyModule
