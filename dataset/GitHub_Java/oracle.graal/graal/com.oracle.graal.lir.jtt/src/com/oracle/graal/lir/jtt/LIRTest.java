@@ -31,6 +31,7 @@ import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
 import com.oracle.graal.jtt.*;
@@ -48,26 +49,26 @@ import com.oracle.graal.nodes.spi.*;
  */
 public abstract class LIRTest extends JTTTest {
 
-    public abstract static class LIRTestSpecification {
+    protected abstract static class LIRTestSpecification {
         private Value result;
 
-        public void generate(LIRGeneratorTool gen, Value arg0) {
+        void generate(LIRGeneratorTool gen, Value arg0) {
             defaultHandler(gen, arg0);
         }
 
-        public void generate(LIRGeneratorTool gen, Value arg0, Value arg1) {
+        void generate(LIRGeneratorTool gen, Value arg0, Value arg1) {
             defaultHandler(gen, arg0, arg1);
         }
 
-        public void generate(LIRGeneratorTool gen, Value arg0, Value arg1, Value arg2) {
+        void generate(LIRGeneratorTool gen, Value arg0, Value arg1, Value arg2) {
             defaultHandler(gen, arg0, arg1, arg2);
         }
 
-        public void generate(LIRGeneratorTool gen, Value arg0, Value arg1, Value arg2, Value arg3) {
+        void generate(LIRGeneratorTool gen, Value arg0, Value arg1, Value arg2, Value arg3) {
             defaultHandler(gen, arg0, arg1, arg2, arg3);
         }
 
-        public void generate(LIRGeneratorTool gen, Value arg0, Value arg1, Value arg2, Value arg3, Value arg4) {
+        void generate(LIRGeneratorTool gen, Value arg0, Value arg1, Value arg2, Value arg3, Value arg4) {
             defaultHandler(gen, arg0, arg1, arg2, arg3, arg4);
         }
 
@@ -141,7 +142,7 @@ public abstract class LIRTest extends JTTTest {
     }
 
     @NodeInfo
-    private static final class FloatingLIRTestNode extends FloatingNode implements LIRLowerable {
+    private static final class FloatingLIRTestNode extends FloatingNode implements LIRLowerable, Simplifiable {
 
         public static final NodeClass<FloatingLIRTestNode> TYPE = NodeClass.create(FloatingLIRTestNode.class);
         @Input protected ValueNode opsNode;
@@ -161,6 +162,13 @@ public abstract class LIRTest extends JTTTest {
 
         public ValueNode getLIROpsNode() {
             return opsNode;
+        }
+
+        @Override
+        public void simplify(SimplifierTool tool) {
+            if (tool.allUsagesAvailable() && getLIROpsNode().isConstant()) {
+                getLIROpsNode().asConstant();
+            }
         }
 
         @Override
