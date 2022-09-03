@@ -154,5 +154,5 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native String getFileName(HotSpotResolvedJavaType method);
 
     @Override
-    public native void reprofile(long metaspaceMethod);
+    public native void clearQueuedForCompilation(HotSpotResolvedJavaMethod method);
 }
