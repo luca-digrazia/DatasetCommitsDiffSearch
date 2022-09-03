@@ -44,11 +44,13 @@ import org.graalvm.nativeimage.Platforms;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionKey;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
-import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.ImageClassLoader;
 
 public class HostedOptionParser implements HostedOptionProvider {
+
+    public static final String HOSTED_OPTION_PREFIX = "-H:";
+    public static final String RUNTIME_OPTION_PREFIX = "-R:";
 
     private EconomicMap<OptionKey<?>, Object> hostedValues = OptionValues.newOptionMap();
     private EconomicMap<OptionKey<?>, Object> runtimeValues = OptionValues.newOptionMap();
@@ -97,25 +99,12 @@ public class HostedOptionParser implements HostedOptionProvider {
 
         List<String> remainingArgs = new ArrayList<>();
         Set<String> errors = new HashSet<>();
-        InterruptImageBuilding interrupt = null;
         for (String arg : args) {
-            boolean isImageBuildOption = false;
-            try {
-                isImageBuildOption |= SubstrateOptionsParser.parseHostedOption(SubstrateOptionsParser.HOSTED_OPTION_PREFIX, allHostedOptions, hostedValues, PLUS_MINUS, errors, arg, System.out);
-            } catch (InterruptImageBuilding e) {
-                interrupt = e;
-            }
-            try {
-                isImageBuildOption |= SubstrateOptionsParser.parseHostedOption(SubstrateOptionsParser.RUNTIME_OPTION_PREFIX, allRuntimeOptions, runtimeValues, PLUS_MINUS, errors, arg, System.out);
-            } catch (InterruptImageBuilding e) {
-                interrupt = e;
-            }
+            boolean isImageBuildOption = SubstrateOptionsParser.parseHostedOption(HOSTED_OPTION_PREFIX, allHostedOptions, hostedValues, PLUS_MINUS, errors, arg, System.out) ||
+                            SubstrateOptionsParser.parseHostedOption(RUNTIME_OPTION_PREFIX, allRuntimeOptions, runtimeValues, PLUS_MINUS, errors, arg, System.out);
             if (!isImageBuildOption) {
                 remainingArgs.add(arg);
             }
-        }
-        if (interrupt != null) {
-            throw interrupt;
         }
         if (!errors.isEmpty()) {
             throw UserError.abort(errors);
@@ -149,5 +138,21 @@ public class HostedOptionParser implements HostedOptionProvider {
         EconomicSet<String> res = EconomicSet.create(allRuntimeOptions.size());
         allRuntimeOptions.keySet().forEach(res::add);
         return res;
+    }
+
+    /**
+     * Returns a string to be used on command line to set the option to a desirable value.
+     *
+     * @param option for which the command line argument is created
+     * @return recommendation for setting a option value (e.g., for option 'Name' and value 'file'
+     *         it returns "-H:Name=file")
+     */
+    public static String commandArgument(OptionKey<?> option, String value) {
+        if (option.getDescriptor().getType() == Boolean.class) {
+            assert value.equals("+") || value.equals("-") || value.equals("[+|-]") : "Boolean option can be only + or - or [+|-].";
+            return HOSTED_OPTION_PREFIX + value + option;
+        } else {
+            return HOSTED_OPTION_PREFIX + option.getName() + "=" + value;
+        }
     }
 }
