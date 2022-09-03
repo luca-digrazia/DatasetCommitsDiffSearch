@@ -22,6 +22,9 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -29,9 +32,6 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
 
 @NodeInfo
 public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable {
@@ -175,7 +175,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
              * interface methods calls.
              */
             if (declaredReceiverType.isInterface()) {
-                tryCheckCastSingleImplementor(graph().getAssumptions(), receiver, declaredReceiverType);
+                tryCheckCastSingleImplementor(receiver, declaredReceiverType);
             }
 
             if (receiver instanceof UncheckedInterfaceProvider) {
@@ -184,22 +184,14 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                 if (uncheckedStamp != null) {
                     ResolvedJavaType uncheckedReceiverType = StampTool.typeOrNull(uncheckedStamp);
                     if (uncheckedReceiverType.isInterface()) {
-                        tryCheckCastSingleImplementor(graph().getAssumptions(), receiver, uncheckedReceiverType);
+                        tryCheckCastSingleImplementor(receiver, uncheckedReceiverType);
                     }
                 }
             }
         }
     }
 
-    private void tryCheckCastSingleImplementor(Assumptions assumptions, ValueNode receiver, ResolvedJavaType declaredReceiverType) {
-        if (assumptions == null) {
-            /*
-             * Even though we are not registering an assumption (see comment below), the
-             * optimization is only valid when speculative optimizations are enabled.
-             */
-            return;
-        }
-
+    private void tryCheckCastSingleImplementor(ValueNode receiver, ResolvedJavaType declaredReceiverType) {
         ResolvedJavaType singleImplementor = declaredReceiverType.getSingleImplementor();
         if (singleImplementor != null && !singleImplementor.equals(declaredReceiverType)) {
             ResolvedJavaMethod singleImplementorMethod = singleImplementor.resolveMethod(targetMethod(), invoke().getContextType(), true);
@@ -215,7 +207,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                  * an assumption but as we need an instanceof check anyway we can verify both
                  * properties by checking of the receiver is an instance of the single implementor.
                  */
-                LogicNode condition = graph().unique(InstanceOfNode.create(singleImplementor, receiver, getProfile()));
+                LogicNode condition = graph().unique(new InstanceOfNode(singleImplementor, receiver, getProfile()));
                 FixedGuardNode guard = graph().add(new FixedGuardNode(condition, DeoptimizationReason.OptimizedTypeCheckViolated, DeoptimizationAction.InvalidateRecompile, false));
                 graph().addBeforeFixed(invoke().asNode(), guard);
                 PiNode piNode = graph().unique(new PiNode(receiver, StampFactory.declaredNonNull(singleImplementor), guard));
