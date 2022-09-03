@@ -41,6 +41,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
@@ -59,14 +60,23 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.graalvm.collections.EconomicSet;
+import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
+import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.VMError;
 
 public final class ImageClassLoader {
+
+    /* { GR-8964: Add an option to control tracing. */
+    static class Options {
+        @Option(help = "Verbose tracing of image class loading for GR-8964.")//
+        public static final HostedOptionKey<Boolean> GR8964Tracing = new HostedOptionKey<>(false);
+    }
+    /* } GR-8964: Add an option to control tracing. */
 
     private static final String CLASS_EXTENSION = ".class";
     private static final int CLASS_EXTENSION_LENGTH = CLASS_EXTENSION.length();
@@ -124,10 +134,49 @@ public final class ImageClassLoader {
         final ForkJoinPool executor = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
 
         Set<Path> uniquePaths = new TreeSet<>(Comparator.comparing(ImageClassLoader::toRealPath));
-        uniquePaths.addAll(
-                        Arrays.stream(classpath)
-                                        .flatMap(ImageClassLoader::toClassPathEntries)
-                                        .collect(Collectors.toList()));
+        final boolean debugGR8964 = Boolean.valueOf(System.getProperty("debug_gr_8964", "false"));
+        if (debugGR8964) {
+            System.err.println("[ImageClassLoader.initAllClasses");
+            List<Path> pathList = new ArrayList<>();
+            for (String classPathEntry : classpath) {
+                System.err.println("  [classPathEntry: " + classPathEntry);
+                toClassPathEntries(classPathEntry).forEach(path -> {
+                    pathList.add(path);
+                    final Path absolutePath;
+                    System.err.print("    [        path: " + path.toString());
+                    if (!path.isAbsolute()) {
+                        absolutePath = path.toAbsolutePath();
+                        System.err.println();
+                        System.err.print("     absolutePath: " + path.toString());
+                    } else {
+                        absolutePath = path;
+                    }
+                    System.err.print(path.isAbsolute() ? "  absolute" : "");
+                    final boolean exists = Files.exists(absolutePath);
+                    System.err.print(exists ? "  exists" : "");
+                    if (exists) {
+                        System.err.print(Files.isDirectory(absolutePath) ? "  directory" : "");
+                        System.err.print(Files.isRegularFile(absolutePath, LinkOption.NOFOLLOW_LINKS) ? "  file" : "");
+                        System.err.print(Files.isSymbolicLink(absolutePath) ? "  symlink" : "");
+                        System.err.print(Files.isReadable(absolutePath) ? "  readable" : "");
+                        try {
+                            System.err.print("  " + Files.getLastModifiedTime(absolutePath).toString());
+                        } catch (IOException ioe) {
+                            System.err.print("  n/a");
+                        }
+                    }
+                    System.err.println(" ]");
+                });
+                System.err.println("  ]");
+            }
+            System.err.println("]");
+            uniquePaths.addAll(pathList);
+        } else {
+            uniquePaths.addAll(
+                            Arrays.stream(classpath)
+                                            .flatMap(ImageClassLoader::toClassPathEntries)
+                                            .collect(Collectors.toList()));
+        }
         uniquePaths.parallelStream().forEach(path -> loadClassesFromPath(executor, path));
 
         executor.awaitQuiescence(CLASS_LOADING_TIMEOUT_IN_MINUTES, TimeUnit.MINUTES);
@@ -153,7 +202,9 @@ public final class ImageClassLoader {
         if (Files.exists(path)) {
             if (Files.isRegularFile(path)) {
                 try {
-                    URI jarURI = new URI("jar:" + path.toAbsolutePath().toUri());
+                    String name = path.toAbsolutePath().toString();
+                    name = name.replace('\\', '/');
+                    URI jarURI = new URI("jar:file:///" + name);
                     try (FileSystem jarFileSystem = FileSystems.newFileSystem(jarURI, Collections.emptyMap())) {
                         initAllClasses(jarFileSystem.getPath("/"), Collections.emptySet(), executor);
                     }
