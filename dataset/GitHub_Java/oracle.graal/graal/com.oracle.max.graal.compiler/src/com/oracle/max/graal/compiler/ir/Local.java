@@ -35,7 +35,8 @@ import com.sun.cri.ri.*;
  */
 public final class Local extends FloatingNode {
 
-    @Input    private StartNode start;
+    @NodeInput
+    private StartNode start;
 
     public StartNode start() {
         return start;

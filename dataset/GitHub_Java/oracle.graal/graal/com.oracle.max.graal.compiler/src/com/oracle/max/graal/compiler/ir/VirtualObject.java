@@ -71,4 +71,10 @@ public class VirtualObject extends FloatingNode {
     public void print(LogStream out) {
         out.print("virtualobject ").print(type.name());
     }
+
+    @Override
+    public Node copy(Graph into) {
+        VirtualObject x = new VirtualObject(type, fields, into);
+        return x;
+    }
 }

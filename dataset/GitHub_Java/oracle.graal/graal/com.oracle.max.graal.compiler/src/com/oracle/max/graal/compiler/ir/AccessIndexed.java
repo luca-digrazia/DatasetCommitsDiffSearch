@@ -31,9 +31,11 @@ import com.sun.cri.ci.*;
  */
 public abstract class AccessIndexed extends AccessArray {
 
-    @Input    private Value index;
+    @NodeInput
+    private Value index;
 
-    @Input    private Value length;
+    @NodeInput
+    private Value length;
 
     public Value index() {
         return index;

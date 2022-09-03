@@ -36,9 +36,11 @@ import com.sun.cri.ri.*;
  */
 public final class Invoke extends AbstractMemoryCheckpointNode implements ExceptionEdgeInstruction {
 
-    @Successor    private FixedNode exceptionEdge;
+    @NodeSuccessor
+    private FixedNode exceptionEdge;
 
-    @Input    private final NodeInputList<Value> arguments;
+    @NodeInput
+    private final NodeInputList<Value> arguments;
 
     @Override
     public FixedNode exceptionEdge() {

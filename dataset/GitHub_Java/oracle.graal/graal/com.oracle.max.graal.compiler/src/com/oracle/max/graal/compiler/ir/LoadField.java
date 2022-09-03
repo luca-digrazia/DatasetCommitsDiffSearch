@@ -25,7 +25,6 @@ package com.oracle.max.graal.compiler.ir;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
 import com.oracle.max.graal.compiler.phases.*;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.compiler.phases.LoweringPhase.LoweringOp;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -37,9 +36,6 @@ import com.sun.cri.ri.*;
 public final class LoadField extends AccessField {
     private static final LoadFieldCanonicalizerOp CANONICALIZER = new LoadFieldCanonicalizerOp();
 
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
-
     /**
      * Creates a new LoadField instance.
      * @param object the receiver object
@@ -50,7 +46,7 @@ public final class LoadField extends AccessField {
      * @param isLoaded indicates if the class is loaded
      */
     public LoadField(Value object, RiField field, Graph graph) {
-        super(field.kind().stackKind(), object, field, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(field.kind().stackKind(), object, field, graph);
     }
 
     /**
@@ -128,7 +124,7 @@ public final class LoadField extends AccessField {
 
     private static class LoadFieldCanonicalizerOp implements CanonicalizerOp {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             LoadField loadField = (LoadField) node;
             Graph graph = node.graph();
             CiConstant constant = null;

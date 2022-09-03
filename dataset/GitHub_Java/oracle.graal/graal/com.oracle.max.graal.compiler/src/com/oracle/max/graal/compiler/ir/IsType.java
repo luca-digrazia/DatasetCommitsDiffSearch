@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
@@ -38,30 +37,16 @@ import com.sun.cri.ri.*;
  */
 public final class IsType extends BooleanNode {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_OBJECT = 0;
+    @NodeInput
+    private Value object;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value object() {
+        return object;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The instruction that produces the object tested against null.
-     */
-     public Value object() {
-        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
-    }
-
-    public Value setObject(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
+    public void setObject(Value x) {
+        updateUsages(object, x);
+        object = x;
     }
 
     private final RiType type;
@@ -72,7 +57,7 @@ public final class IsType extends BooleanNode {
      * @param graph
      */
     public IsType(Value object, RiType type, Graph graph) {
-        super(CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Object, graph);
         assert type.isResolved();
         assert object == null || object.kind == CiKind.Object;
         this.type = type;
@@ -141,7 +126,7 @@ public final class IsType extends BooleanNode {
 
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             IsType isType = (IsType) node;
             Value object = isType.object();
             RiType exactType = object.exactType();

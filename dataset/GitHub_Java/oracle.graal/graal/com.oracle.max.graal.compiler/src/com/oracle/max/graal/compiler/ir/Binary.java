@@ -32,9 +32,11 @@ import com.sun.cri.ci.*;
  */
 public abstract class Binary extends FloatingNode {
 
-    @Input    private Value x;
+    @NodeInput
+    private Value x;
 
-    @Input    private Value y;
+    @NodeInput
+    private Value y;
 
     public Value x() {
         return x;

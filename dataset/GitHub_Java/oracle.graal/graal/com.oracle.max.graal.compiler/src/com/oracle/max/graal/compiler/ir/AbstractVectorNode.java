@@ -29,7 +29,9 @@ import com.sun.cri.ci.*;
 
 
 public abstract class AbstractVectorNode extends StateSplit {
-    @Input private AbstractVectorNode vector;
+
+    @NodeInput
+    private AbstractVectorNode vector;
 
     public AbstractVectorNode vector() {
         return vector;

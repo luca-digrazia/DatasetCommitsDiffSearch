@@ -28,7 +28,9 @@ import com.sun.cri.ci.*;
 
 
 public final class WriteNode extends AccessNode {
-    @Input private Value value;
+
+    @NodeInput
+    private Value value;
 
     public Value value() {
         return value;

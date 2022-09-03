@@ -24,15 +24,15 @@ package com.oracle.max.graal.runtime.nodes;
 
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.gen.*;
-import com.oracle.max.graal.compiler.gen.LIRGenerator.LIRGeneratorOp;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 
 public final class FPConversionNode extends FloatingNode {
-    @Input private Value value;
+
+    @NodeInput
+    private Value value;
 
     public Value value() {
         return value;
@@ -52,11 +52,17 @@ public final class FPConversionNode extends FloatingNode {
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {
-        if (clazz == LIRGeneratorOp.class) {
-            return (T) LIRGEN;
-        }
-        if (clazz == CanonicalizerOp.class) {
-            return (T) CANON;
+        if (clazz == LIRGenerator.LIRGeneratorOp.class) {
+            return (T) new LIRGenerator.LIRGeneratorOp() {
+                @Override
+                public void generate(Node n, LIRGenerator generator) {
+                    FPConversionNode conv = (FPConversionNode) n;
+                    CiValue reg = generator.createResultVariable(conv);
+                    CiValue value = generator.load(conv.value());
+                    CiValue tmp = generator.forceToSpill(value, conv.kind, false);
+                    generator.lir().move(tmp, reg);
+                }
+            };
         }
         return super.lookup(clazz);
     }
@@ -75,37 +81,4 @@ public final class FPConversionNode extends FloatingNode {
     public Node copy(Graph into) {
         return new FPConversionNode(kind, null, into);
     }
-
-    private static final CanonicalizerOp CANON = new CanonicalizerOp() {
-        @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
-            FPConversionNode conv = (FPConversionNode) node;
-            Value value = conv.value();
-            if (value instanceof Constant) {
-                CiKind toKind = conv.kind;
-                CiKind fromKind = value.kind;
-                if (toKind == CiKind.Int && fromKind == CiKind.Float) {
-                    return Constant.forInt(Float.floatToRawIntBits(((Constant) value).asConstant().asFloat()), node.graph());
-                } else if (toKind == CiKind.Long && fromKind == CiKind.Double) {
-                    return Constant.forLong(Double.doubleToRawLongBits(((Constant) value).asConstant().asDouble()), node.graph());
-                } else if (toKind == CiKind.Float && fromKind == CiKind.Int) {
-                    return Constant.forFloat(Float.intBitsToFloat(((Constant) value).asConstant().asInt()), node.graph());
-                } else if (toKind == CiKind.Double && fromKind == CiKind.Long) {
-                    return Constant.forDouble(Double.longBitsToDouble(((Constant) value).asConstant().asLong()), node.graph());
-                }
-            }
-            return conv;
-        }
-    };
-
-    private static final LIRGeneratorOp LIRGEN = new LIRGeneratorOp() {
-        @Override
-        public void generate(Node n, LIRGenerator generator) {
-            FPConversionNode conv = (FPConversionNode) n;
-            CiValue reg = generator.createResultVariable(conv);
-            CiValue value = generator.load(conv.value());
-            CiValue tmp = generator.forceToSpill(value, conv.kind, false);
-            generator.lir().move(tmp, reg);
-        }
-    };
 }

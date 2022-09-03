@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import java.util.*;
-
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
@@ -34,9 +32,6 @@ import com.sun.cri.ci.*;
  */
 public final class NormalizeCompare extends Binary {
 
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
-
     /**
      * Creates a new compare operation.
      * @param opcode the bytecode opcode
@@ -45,12 +40,12 @@ public final class NormalizeCompare extends Binary {
      * @param y the second input
      */
     public NormalizeCompare(int opcode, CiKind kind, Value x, Value y, Graph graph) {
-        super(kind, opcode, x, y, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(kind, opcode, x, y, graph);
     }
 
     @Override
     public void accept(ValueVisitor v) {
-        v.visitNormalizeCompare(this);
+        v.visitMaterialize(this);
     }
 
     @Override
@@ -65,13 +60,6 @@ public final class NormalizeCompare extends Binary {
     @Override
     public Node copy(Graph into) {
         return new NormalizeCompare(opcode, kind, null, null, into);
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("isUnorderedLess", isUnorderedLess());
-        return properties;
     }
 
     public boolean isUnorderedLess() {

@@ -24,25 +24,23 @@ package com.oracle.max.graal.compiler.schedule;
 
 import java.util.*;
 
+import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
-import com.oracle.max.graal.nodes.java.*;
+import com.oracle.max.graal.graph.collections.*;
 
 
 public class Block {
 
     private int blockID;
-    protected final List<Block> successors = new ArrayList<Block>();
-    protected final List<Block> predecessors = new ArrayList<Block>();
-    private final List<Block> dominated = new ArrayList<Block>();
+    private final List<Block> successors = new ArrayList<Block>();
+    private final List<Block> predecessors = new ArrayList<Block>();
     private List<Node> instructions = new ArrayList<Node>();
-    private Block alwaysReachedBlock;
     private Block dominator;
-    private FixedNode anchor;
-    private EndNode end;
+    private Block javaBlock;
+    private final List<Block> dominators = new ArrayList<Block>();
+    private Anchor anchor;
     private int loopDepth = 0;
     private int loopIndex = -1;
-    private double probability;
 
     private Node firstNode;
     private Node lastNode;
@@ -56,25 +54,12 @@ public class Block {
         this.anchor = null;
     }
 
-    public Block alwaysReachedBlock() {
-        return alwaysReachedBlock;
+    public Block javaBlock() {
+        return javaBlock;
     }
 
-    public boolean isExceptionBlock() {
-        return firstNode() instanceof ExceptionObjectNode;
-    }
-
-    public void setAlwaysReachedBlock(Block alwaysReachedBlock) {
-        assert alwaysReachedBlock != this;
-        this.alwaysReachedBlock = alwaysReachedBlock;
-    }
-
-    public EndNode end() {
-        return end;
-    }
-
-    public void setEnd(EndNode end) {
-        this.end = end;
+    public void setJavaBlock(Block javaBlock) {
+        this.javaBlock = javaBlock;
     }
 
     public Node lastNode() {
@@ -97,19 +82,43 @@ public class Block {
         loopIndex = i;
     }
 
-    public double probability() {
-        return probability;
-    }
-
-
-    public void setProbability(double probability) {
-        if (probability > this.probability) {
-            this.probability = probability;
+    public Anchor createAnchor() {
+        if (anchor == null) {
+            if (firstNode instanceof Anchor) {
+                this.anchor = (Anchor) firstNode;
+            } else if (firstNode == firstNode.graph().start()) {
+                StartNode start = (StartNode) firstNode;
+                if (start.next() instanceof Anchor) {
+                    this.anchor = (Anchor) start.next();
+                } else {
+                    Anchor a = new Anchor(firstNode.graph());
+                    FixedNode oldStart = (FixedNode) firstNode.graph().start().next();
+                    firstNode.graph().start().setNext(a);
+                    a.setNext(oldStart);
+                    this.anchor = a;
+                }
+            } else if (firstNode instanceof Merge || firstNode instanceof ExceptionObject) {
+                FixedNodeWithNext fixedNode = (FixedNodeWithNext) firstNode;
+                if (fixedNode.next() instanceof Anchor) {
+                    this.anchor = (Anchor) fixedNode.next();
+                } else {
+                    Anchor a = new Anchor(firstNode.graph());
+                    FixedNode next = fixedNode.next();
+                    fixedNode.setNext(a);
+                    a.setNext(next);
+                    this.anchor = a;
+                }
+            } else {
+                assert !(firstNode instanceof Anchor);
+                Anchor a = new Anchor(firstNode.graph());
+                assert firstNode.predecessor() != null : firstNode;
+                Node pred = firstNode.predecessor();
+                pred.replaceFirstSuccessor(firstNode, a);
+                a.setNext((FixedNode) firstNode);
+                this.anchor = a;
+            }
         }
-    }
-
-    public BeginNode createAnchor() {
-        return (BeginNode) firstNode;
+        return anchor;
     }
 
     public void setLastNode(Node node) {
@@ -124,11 +133,11 @@ public class Block {
         assert this.dominator == null;
         assert dominator != null;
         this.dominator = dominator;
-        dominator.dominated.add(this);
+        dominator.dominators.add(this);
     }
 
-    public List<Block> getDominated() {
-        return Collections.unmodifiableList(dominated);
+    public List<Block> getDominators() {
+        return Collections.unmodifiableList(dominators);
     }
 
     public List<Node> getInstructions() {
@@ -158,7 +167,7 @@ public class Block {
      * @param closure the closure to apply to each block
      */
     public void iteratePreOrder(BlockClosure closure) {
-        // TODO: identity hash map might be too slow, consider a boolean array or a mark field
+        // XXX: identity hash map might be too slow, consider a boolean array or a mark field
         iterate(new IdentityHashMap<Block, Block>(), closure);
     }
 
@@ -183,11 +192,11 @@ public class Block {
     }
 
     public boolean isLoopHeader() {
-        return firstNode instanceof LoopBeginNode;
+        return firstNode instanceof LoopBegin;
     }
 
     public boolean isLoopEnd() {
-        return lastNode instanceof LoopEndNode;
+        return lastNode instanceof LoopEnd;
     }
 
     public Block dominator() {
@@ -225,7 +234,7 @@ public class Block {
                 if (!visited.get(succ.blockID())) {
                     boolean delay = false;
                     for (Block pred : succ.getPredecessors()) {
-                        if (!visited.get(pred.blockID()) && !(pred.lastNode instanceof LoopEndNode)) {
+                        if (!visited.get(pred.blockID()) && !(pred.lastNode instanceof LoopEnd)) {
                             delay = true;
                             break;
                         }

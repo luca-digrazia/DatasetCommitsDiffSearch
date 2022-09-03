@@ -25,17 +25,19 @@ package com.oracle.max.graal.compiler.phases;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.schedule.*;
-import com.oracle.max.graal.graph.Graph;
+import com.oracle.max.graal.graph.*;
 
 public abstract class Phase {
 
     private final String name;
+    private String detailedName;
     private static final ThreadLocal<Phase> currentPhase = new ThreadLocal<Phase>();
     private final boolean shouldVerify;
 
     protected Phase() {
         this.name = this.getClass().getSimpleName();
         this.shouldVerify = GraalOptions.Verify;
+        this.detailedName = name;
     }
 
     protected Phase(String name) {
@@ -45,10 +47,11 @@ public abstract class Phase {
     protected Phase(String name, boolean shouldVerify) {
         this.name = name;
         this.shouldVerify = shouldVerify;
+        this.detailedName = name;
     }
 
-    protected String getDetailedName() {
-        return getName();
+    protected void setDetailedName(String detailedName) {
+        this.detailedName = detailedName;
     }
 
     public final void apply(Graph graph) {
@@ -75,17 +78,16 @@ public abstract class Phase {
         } catch (AssertionError t) {
             GraalCompilation compilation = GraalCompilation.compilation();
             if (compilation.compiler.isObserved() && plotOnError) {
-                compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "AssertionError in " + getDetailedName(), graph, true, false, true));
+                compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "AssertionError in " + detailedName, graph, true, false, true));
             }
             throw t;
         } catch (RuntimeException t) {
             GraalCompilation compilation = GraalCompilation.compilation();
             if (compilation.compiler.isObserved() && plotOnError) {
-                compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "RuntimeException in " + getDetailedName(), graph, true, false, true));
+                compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "RuntimeException in " + detailedName, graph, true, false, true));
             }
             throw t;
         }
-        //System.out.println("Finished Phase " + getName());
         if (GraalOptions.Time) {
             GraalTimers.get(getName()).stop();
             if (oldCurrentPhase != null) {
@@ -102,7 +104,7 @@ public abstract class Phase {
         }
         GraalCompilation compilation = GraalCompilation.compilation();
         if (compilation.compiler.isObserved() && this.getClass() != IdentifyBlocksPhase.class && (plot || GraalOptions.PlotVerbose)) {
-            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After " + getDetailedName(), graph, true, false));
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After " + detailedName, graph, true, false));
         }
 
         assert !shouldVerify || graph.verify();

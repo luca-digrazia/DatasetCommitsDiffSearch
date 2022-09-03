@@ -51,4 +51,7 @@ public abstract class Shift extends Binary {
     public void print(LogStream out) {
         out.print(x()).print(' ').print(this.shortName()).print(' ').print(y());
     }
+
+    @Override
+    public abstract String shortName();
 }

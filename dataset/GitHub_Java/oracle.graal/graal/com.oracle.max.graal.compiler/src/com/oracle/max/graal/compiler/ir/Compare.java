@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import java.util.*;
-
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.graph.*;
@@ -41,46 +39,32 @@ import com.sun.cri.ci.*;
  */
 public final class Compare extends BooleanNode {
 
-    private static final int INPUT_COUNT = 2;
-    private static final int INPUT_X = 0;
-    private static final int INPUT_Y = 1;
+    @NodeInput
+    private Value x;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    @NodeInput
+    private Value y;
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value x() {
+        return x;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public void setX(Value x) {
+        updateUsages(this.x, x);
+        this.x = x;
     }
 
-    /**
-     * The instruction that produces the first input to this comparison.
-     */
-     public Value x() {
-        return (Value) inputs().get(super.inputCount() + INPUT_X);
-    }
-
-    public Value setX(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_X, n);
-    }
-
-    /**
-     * The instruction that produces the second input to this comparison.
-     */
     public Value y() {
-        return (Value) inputs().get(super.inputCount() + INPUT_Y);
+        return y;
     }
 
-    public Value setY(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_Y, n);
+    public void setY(Value x) {
+        updateUsages(y, x);
+        this.y = x;
     }
 
-    private Condition condition;
-    private boolean unorderedIsTrue;
+    Condition condition;
+    boolean unorderedIsTrue;
 
     /**
      * Constructs a new Compare instruction.
@@ -90,7 +74,7 @@ public final class Compare extends BooleanNode {
      * @param graph
      */
     public Compare(Value x, Condition condition, Value y, Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Illegal, graph);
         assert (x == null && y == null) || Util.archKindsEqual(x, y);
         this.condition = condition;
         setX(x);
@@ -133,11 +117,6 @@ public final class Compare extends BooleanNode {
         setY(t);
     }
 
-    public void negate() {
-        condition = condition.negate();
-        unorderedIsTrue = !unorderedIsTrue;
-    }
-
     @Override
     public void accept(ValueVisitor v) {
     }
@@ -167,13 +146,6 @@ public final class Compare extends BooleanNode {
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("unorderedIsTrue", unorderedIsTrue());
-        return properties;
-    }
-
-    @Override
     public Node copy(Graph into) {
         Compare x = new Compare(null, condition, null, into);
         x.unorderedIsTrue = unorderedIsTrue;
@@ -182,14 +154,12 @@ public final class Compare extends BooleanNode {
 
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             Compare compare = (Compare) node;
-            if (compare.x().isConstant() && !compare.y().isConstant()) { // move constants to the left (y)
-                compare.swapOperands();
-            } else if (compare.x().isConstant() && compare.y().isConstant()) {
+            if (compare.x().isConstant() && compare.y().isConstant()) {
                 CiConstant constX = compare.x().asConstant();
                 CiConstant constY = compare.y().asConstant();
-                Boolean result = compare.condition().foldCondition(constX, constY, ((CompilerGraph) node.graph()).runtime(), compare.unorderedIsTrue());
+                Boolean result = compare.condition().foldCondition(constX, constY, ((CompilerGraph) node.graph()).runtime());
                 if (result != null) {
                     if (GraalOptions.TraceCanonicalizer) {
                         TTY.println("folded condition " + constX + " " + compare.condition() + " " + constY);
@@ -200,49 +170,17 @@ public final class Compare extends BooleanNode {
                         TTY.println("if not removed %s %s %s (%s %s)", constX, compare.condition(), constY, constX.kind, constY.kind);
                     }
                 }
+            } else if (compare.x().isConstant() && compare.y() instanceof MaterializeNode) {
+                return optimizeMaterialize(compare, compare.x().asConstant(), (MaterializeNode) compare.y());
+            } else if (compare.y().isConstant() && compare.x() instanceof MaterializeNode) {
+                return optimizeMaterialize(compare, compare.y().asConstant(), (MaterializeNode) compare.x());
+            } else if (compare.x().isConstant() && compare.y() instanceof NormalizeCompare) {
+                return optimizeNormalizeCmp(compare, compare.x().asConstant(), (NormalizeCompare) compare.y());
+            } else if (compare.y().isConstant() && compare.x() instanceof NormalizeCompare) {
+                return optimizeNormalizeCmp(compare, compare.y().asConstant(), (NormalizeCompare) compare.x());
             }
-
-            if (compare.y().isConstant()) {
-                if (compare.x() instanceof MaterializeNode) {
-                    return optimizeMaterialize(compare, compare.y().asConstant(), (MaterializeNode) compare.x());
-                } else if (compare.x() instanceof NormalizeCompare) {
-                    return optimizeNormalizeCmp(compare, compare.y().asConstant(), (NormalizeCompare) compare.x());
-                }
-            }
-
-            if (compare.x() == compare.y() && compare.x().kind != CiKind.Float && compare.x().kind != CiKind.Double) {
+            if ((compare.x() == compare.y() || compare.x().valueEqual(compare.y())) && compare.x().kind != CiKind.Float && compare.x().kind != CiKind.Double) {
                 return Constant.forBoolean(compare.condition().check(1, 1), compare.graph());
-            }
-            if ((compare.condition == Condition.NE || compare.condition == Condition.EQ) && compare.x().kind == CiKind.Object) {
-                Value object = null;
-                if (compare.x().isNullConstant()) {
-                    object = compare.y();
-                } else if (compare.y().isNullConstant()) {
-                    object = compare.x();
-                }
-                if (object != null) {
-                    IsNonNull nonNull =  new IsNonNull(object, compare.graph());
-                    if (compare.condition == Condition.NE) {
-                        return nonNull;
-                    } else {
-                        assert compare.condition == Condition.EQ;
-                        return new NegateBooleanNode(nonNull, compare.graph());
-                    }
-                }
-            }
-            boolean allUsagesNegate = true;
-            List<Node> usages = new ArrayList<Node>(compare.usages());
-            for (Node usage : usages) {
-                if (!(usage instanceof NegateBooleanNode)) {
-                    allUsagesNegate = false;
-                    break;
-                }
-            }
-            if (allUsagesNegate) {
-                compare.negate();
-                for (Node usage : usages) {
-                    usage.replaceAtUsages(compare);
-                }
             }
             return compare;
         }
@@ -254,7 +192,7 @@ public final class Compare extends BooleanNode {
                     if (compare.condition == Condition.NE) {
                         isFalseCheck = !isFalseCheck;
                     }
-                    BooleanNode result = materializeNode.condition();
+                    Value result = materializeNode.value();
                     if (isFalseCheck) {
                         result = new NegateBooleanNode(result, compare.graph());
                     }

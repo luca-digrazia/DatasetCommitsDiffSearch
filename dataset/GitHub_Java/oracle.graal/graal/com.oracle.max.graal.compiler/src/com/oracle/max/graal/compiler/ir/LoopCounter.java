@@ -29,11 +29,14 @@ import com.sun.cri.ci.*;
 
 public final class LoopCounter extends FloatingNode {
 
-    @Input    private Value init;
+    @NodeInput
+    private Value init;
 
-    @Input    private Value stride;
+    @NodeInput
+    private Value stride;
 
-    @Input    private LoopBegin loopBegin;
+    @NodeInput
+    private LoopBegin loopBegin;
 
     public Value init() {
         return init;

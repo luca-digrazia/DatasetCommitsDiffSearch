@@ -24,14 +24,18 @@ package com.oracle.max.graal.compiler.util;
 
 import java.util.*;
 
-import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
 import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * The {@code Util} class contains a motley collection of utility methods used throughout the compiler.
+ *
+ * @author Ben L. Titzer
+ * @author Doug Simon
  */
 public class Util {
 
@@ -41,19 +45,19 @@ public class Util {
     public static final char SEPERATOR_CHARACTER = '-';
 
     public static RuntimeException unimplemented() {
-        throw new GraalInternalError("unimplemented");
+        throw new InternalError("unimplemented");
     }
 
-    public static RuntimeException unimplemented(String msg, Object... args) {
-        throw new GraalInternalError("unimplemented: " + msg, args);
+    public static RuntimeException unimplemented(String msg) {
+        throw new InternalError("unimplemented:" + msg);
     }
 
     public static RuntimeException shouldNotReachHere() {
-        throw new GraalInternalError("should not reach here");
+        throw new InternalError("should not reach here");
     }
 
-    public static RuntimeException shouldNotReachHere(String msg, Object... args) {
-        throw new GraalInternalError("should not reach here: " + msg, args);
+    public static RuntimeException shouldNotReachHere(String msg) {
+        throw new InternalError("Should not reach here: " + msg);
     }
 
     public static <T> boolean replaceInList(T a, T b, List<T> list) {
@@ -284,6 +288,23 @@ public class Util {
         }
     }
 
+    public static CiKind[] signatureToKinds(RiSignature signature, CiKind receiverKind) {
+        int args = signature.argumentCount(false);
+        CiKind[] result;
+        int i = 0;
+        if (receiverKind != null) {
+            result = new CiKind[args + 1];
+            result[0] = receiverKind;
+            i = 1;
+        } else {
+            result = new CiKind[args];
+        }
+        for (int j = 0; j < args; j++) {
+            result[i + j] = signature.argumentKindAt(j);
+        }
+        return result;
+    }
+
     public static boolean isShiftCount(int x) {
         return 0 <= x && x < 32;
     }
@@ -349,8 +370,8 @@ public class Util {
      * Determines if the kinds of two given IR nodes are equal at the {@linkplain #archKind(CiKind) architecture}
      * level in the context of the {@linkplain GraalCompilation#compilation()} compilation.
      */
-    public static boolean archKindsEqual(ValueNode i, ValueNode other) {
-        return archKindsEqual(i.kind(), other.kind());
+    public static boolean archKindsEqual(Value i, Value other) {
+        return archKindsEqual(i.kind, other.kind);
     }
 
     /**
@@ -358,8 +379,19 @@ public class Util {
      * in the context of the {@linkplain GraalCompilation#compilation()} compilation.
      */
     public static boolean archKindsEqual(CiKind k1, CiKind k2) {
-        // TODO(cwi): I think that implementation should do it with the new handling of Word types.
-        return k1 == k2;
+        GraalCompilation compilation = GraalCompilation.compilation();
+        assert compilation != null : "missing compilation context";
+        return compilation.archKindsEqual(k1, k2);
+    }
+
+    /**
+     * Translates a given kind to a {@linkplain GraalCompilation#archKind(CiKind) canonical architecture}
+     * kind in the context of the {@linkplain GraalCompilation#compilation() current} compilation.
+     */
+    public static CiKind archKind(CiKind kind) {
+        GraalCompilation compilation = GraalCompilation.compilation();
+        assert compilation != null : "missing compilation context";
+        return compilation.archKind(kind);
     }
 
 
@@ -370,7 +402,7 @@ public class Util {
      * @param compareConstants {@code true} if equivalent constants should be considered equivalent
      * @return {@code true} if the instructions are equivalent; {@code false} otherwise
      */
-    public static boolean equivalent(FixedWithNextNode x, FixedWithNextNode y, boolean compareConstants) {
+    public static boolean equivalent(FixedNodeWithNext x, FixedNodeWithNext y, boolean compareConstants) {
         if (x == y) {
             return true;
         }
@@ -380,5 +412,28 @@ public class Util {
             }
         }
         return false;
+    }
+
+    /**
+     * Converts a given instruction to a value string. The representation of an instruction as
+     * a value is formed by concatenating the {@linkplain com.sun.cri.ci.CiKind#typeChar character} denoting its
+     * {@linkplain Value#kind kind} and its {@linkplain Value#id()}. For example, {@code "i13"}.
+     *
+     * @param value the instruction to convert to a value string. If {@code value == null}, then "-" is returned.
+     * @return the instruction representation as a string
+     */
+    public static String valueString(Value value) {
+        return (value == null) ? "-" : ("" + value.kind.typeChar + value.id());
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Node> Collection<T> filter(Iterable<Node> nodes, Class<T> clazz) {
+        ArrayList<T> phis = new ArrayList<T>();
+        for (Node node : nodes) {
+            if (clazz.isInstance(node)) {
+                phis.add((T) node);
+            }
+        }
+        return phis;
     }
 }

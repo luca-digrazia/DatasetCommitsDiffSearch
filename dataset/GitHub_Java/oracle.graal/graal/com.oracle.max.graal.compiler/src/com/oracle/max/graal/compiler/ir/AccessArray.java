@@ -30,7 +30,8 @@ import com.sun.cri.ci.*;
  */
 public abstract class AccessArray extends StateSplit {
 
-    @Input    private Value array;
+    @NodeInput
+    private Value array;
 
     public Value array() {
         return array;

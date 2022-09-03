@@ -37,7 +37,8 @@ import com.sun.cri.ci.*;
  */
 public class Merge extends StateSplit{
 
-    @Input    private final NodeInputList<Node> ends = new NodeInputList<Node>(this);
+    @NodeInput
+    private final NodeInputList<Node> ends = new NodeInputList<Node>(this);
 
     public Merge(Graph graph) {
         super(CiKind.Illegal, graph);

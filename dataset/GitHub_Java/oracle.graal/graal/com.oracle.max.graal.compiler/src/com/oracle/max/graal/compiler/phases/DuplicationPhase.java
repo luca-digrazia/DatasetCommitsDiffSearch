@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,15 +36,20 @@ public class DuplicationPhase extends Phase {
     protected void run(Graph graph) {
 
         // Create duplicate graph.
-        CompilerGraph duplicate = new CompilerGraph();
+        CompilerGraph duplicate = new CompilerGraph(((CompilerGraph) graph).runtime());
         Map<Node, Node> replacements = new HashMap<Node, Node>();
         replacements.put(graph.start(), duplicate.start());
         duplicate.addDuplicate(graph.getNodes(), replacements);
 
         // Delete nodes in original graph.
         for (Node n : graph.getNodes()) {
-            if (n != null && n != graph.start()) {
-                n.forceDelete();
+            if (n != graph.start()) {
+                n.clearEdges();
+            }
+        }
+        for (Node n : graph.getNodes()) {
+            if (n != graph.start()) {
+                n.delete();
             }
         }
 

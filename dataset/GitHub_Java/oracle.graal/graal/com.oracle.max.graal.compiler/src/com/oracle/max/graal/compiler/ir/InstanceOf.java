@@ -24,7 +24,6 @@ package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
@@ -36,9 +35,6 @@ import com.sun.cri.ri.*;
  */
 public final class InstanceOf extends TypeCheck {
 
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
-
     private boolean nullIsTrue;
 
     /**
@@ -48,7 +44,7 @@ public final class InstanceOf extends TypeCheck {
      * @param graph
      */
     public InstanceOf(Constant targetClassInstruction, Value object, boolean nullIsTrue, Graph graph) {
-        super(targetClassInstruction, object, CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(targetClassInstruction, object, CiKind.Illegal, graph);
     }
 
     @Override
@@ -86,7 +82,7 @@ public final class InstanceOf extends TypeCheck {
 
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             InstanceOf isInstance = (InstanceOf) node;
             Value object = isInstance.object();
             RiType exactType = object.exactType();

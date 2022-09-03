@@ -33,7 +33,9 @@ import com.sun.cri.ci.*;
 
 
 public final class CreateVectorNode extends AbstractVectorNode {
-    @Input private Value length;
+
+    @NodeInput
+    private Value length;
 
     public Value length() {
         return length;

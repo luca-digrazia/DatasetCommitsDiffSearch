@@ -24,39 +24,25 @@ package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 public final class NegateBooleanNode extends BooleanNode {
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_NODE = 0;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    @NodeInput
+    private Value value;
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value value() {
+        return value;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public void setValue(Value x) {
+        updateUsages(value, x);
+        value = x;
     }
 
-    /**
-     * The instruction that produces the array object.
-     */
-     public BooleanNode value() {
-        return (BooleanNode) inputs().get(super.inputCount() + INPUT_NODE);
-    }
-
-    public BooleanNode setValue(BooleanNode n) {
-        return (BooleanNode) inputs().set(super.inputCount() + INPUT_NODE, n);
-    }
-
-    public NegateBooleanNode(BooleanNode value, Graph graph) {
-        super(CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public NegateBooleanNode(Value value, Graph graph) {
+        super(CiKind.Int, graph);
         setValue(value);
     }
 
@@ -90,7 +76,7 @@ public final class NegateBooleanNode extends BooleanNode {
 
     private static final CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             NegateBooleanNode negateNode = (NegateBooleanNode) node;
             Value value = negateNode.value();
             if (value instanceof NegateBooleanNode) {
