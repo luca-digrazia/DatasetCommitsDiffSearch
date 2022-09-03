@@ -56,7 +56,7 @@ public final class LLVMBeginCatchNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongGetThrownObjectNode getGetThrownObject() {
         if (getThrownObject == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMContext context = getContextReference().get();
+            LLVMContext context = getContext();
             NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
             this.getThrownObject = insert(nfiContextExtension.getNativeSulongFunctions().createGetThrownObject(context));
         }
@@ -66,7 +66,7 @@ public final class LLVMBeginCatchNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongIncrementHandlerCountNode getHandlerCount() {
         if (handlerCount == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMContext context = getContextReference().get();
+            LLVMContext context = getContext();
             NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
             this.handlerCount = insert(nfiContextExtension.getNativeSulongFunctions().createIncrementHandlerCount(context));
         }
@@ -76,7 +76,7 @@ public final class LLVMBeginCatchNode extends LLVMExpressionNode {
     public LinkedList<LLVMAddress> getCaughtExceptionStack() {
         if (caughtExceptionStack == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.caughtExceptionStack = getContextReference().get().getCaughtExceptionStack();
+            this.caughtExceptionStack = getContext().getCaughtExceptionStack();
         }
         return caughtExceptionStack;
     }

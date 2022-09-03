@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -51,11 +51,6 @@ public abstract class LLVMIntrinsicRootNode extends RootNode {
     public abstract LLVMExpressionNode getNode();
 
     @Override
-    public boolean isInternal() {
-        return true;
-    }
-
-    @Override
     public String toString() {
         return name;
     }
@@ -68,8 +63,9 @@ public abstract class LLVMIntrinsicRootNode extends RootNode {
         }
 
         @Specialization
-        protected Object doOp(Object val) {
+        public Object execute(Object val) {
             return val;
         }
     }
+
 }

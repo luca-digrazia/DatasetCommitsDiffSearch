@@ -33,7 +33,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -72,7 +71,7 @@ public abstract class LLVMNativeDispatchNode extends LLVMNode {
 
     @TruffleBoundary
     protected TruffleObject identityFunction() {
-        LLVMContext context = getContextReference().get();
+        LLVMContext context = getContext();
         NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
         String signature;
         try {
@@ -96,10 +95,10 @@ public abstract class LLVMNativeDispatchNode extends LLVMNode {
 
     @CompilationFinal private LLVMThreadingStack threadingStack = null;
 
-    private LLVMThreadingStack getThreadingStack(ContextReference<LLVMContext> context) {
+    private LLVMThreadingStack getThreadingStack(LLVMContext context) {
         if (threadingStack == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            threadingStack = context.get().getThreadingStack();
+            threadingStack = context.getThreadingStack();
         }
         return threadingStack;
     }
@@ -129,7 +128,7 @@ public abstract class LLVMNativeDispatchNode extends LLVMNode {
 
     @Specialization(guards = "function.getFunctionPointer() == cachedFunction.getFunctionPointer()")
     public Object doCached(VirtualFrame frame, LLVMFunctionHandle function, Object[] arguments,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> context,
+                    @Cached("getContext()") LLVMContext context,
                     @Cached("function") LLVMFunctionHandle cachedFunction,
                     @Cached("identityFunction()") TruffleObject identity,
                     @Cached("dispatchIdentity(identity, cachedFunction.getFunctionPointer())") TruffleObject nativeFunctionHandle,
@@ -147,7 +146,7 @@ public abstract class LLVMNativeDispatchNode extends LLVMNode {
 
     @Specialization
     public Object doGeneric(VirtualFrame frame, LLVMFunctionHandle function, Object[] arguments,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> context,
+                    @Cached("getContext()") LLVMContext context,
                     @Cached("identityFunction()") TruffleObject identity,
                     @Cached("createToNativeNodes()") LLVMNativeConvertNode[] toNative,
                     @Cached("createFromNativeNode()") LLVMNativeConvertNode fromNative,

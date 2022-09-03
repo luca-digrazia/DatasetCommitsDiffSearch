@@ -62,7 +62,7 @@ public final class LLVMThrowExceptionNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongThrowNode getExceptionInitializaton() {
         if (exceptionInitializaton == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMContext context = getContextReference().get();
+            LLVMContext context = getContext();
             NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
             this.exceptionInitializaton = insert(nfiContextExtension.getNativeSulongFunctions().createSulongThrow(context));
         }
