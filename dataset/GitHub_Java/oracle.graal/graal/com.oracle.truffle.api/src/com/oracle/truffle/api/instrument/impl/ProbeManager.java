@@ -26,6 +26,7 @@ package com.oracle.truffle.api.instrument.impl;
 
 import java.util.*;
 
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.instrument.impl.InstrumentationNode.ProbeCallback;
 import com.oracle.truffle.api.instrument.impl.InstrumentationNode.ProbeImpl;
@@ -46,7 +47,7 @@ public final class ProbeManager {
     /**
      * Map: Source line ==> probes associated with source sections starting on the line.
      */
-    private final Map<LineLocation, Collection<Probe>> lineToProbes = new HashMap<>();
+    private final Map<SourceLineLocation, Collection<Probe>> lineToProbes = new HashMap<>();
 
     private final List<ProbeListener> probeListeners = new ArrayList<>();
 
@@ -103,7 +104,7 @@ public final class ProbeManager {
 
         // Register new probe by source line, there may be more than one
         // Create line location for map key
-        final LineLocation lineLocation = sourceSection.getLineLocation();
+        final SourceLineLocation lineLocation = new SourceLineLocation(sourceSection.getSource(), sourceSection.getStartLine());
 
         Collection<Probe> probes = lineToProbes.get(lineLocation);
         if (probes == null) {
@@ -119,11 +120,6 @@ public final class ProbeManager {
         return probe;
     }
 
-    public boolean hasProbe(SourceSection sourceSection) {
-        assert sourceSection != null;
-        return srcToProbe.get(sourceSection) != null;
-    }
-
     public Collection<Probe> findProbesTaggedAs(PhylumTag tag) {
         final List<Probe> probes = new ArrayList<>();
         for (Probe probe : srcToProbe.values()) {
@@ -134,7 +130,7 @@ public final class ProbeManager {
         return probes;
     }
 
-    public Collection<Probe> findProbesByLine(LineLocation lineLocation) {
+    public Collection<Probe> findProbesByLine(SourceLineLocation lineLocation) {
         final Collection<Probe> probes = lineToProbes.get(lineLocation);
         if (probes == null) {
             return Collections.emptyList();
