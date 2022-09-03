@@ -34,53 +34,41 @@ public final class LLVMUnsupportedException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public enum UnsupportedReason {
-        OTHER_TYPE_NOT_IMPLEMENTED("other type not implemented"),
+        OTHER_TYPE_NOT_IMPLEMENTED,
         /**
          * We cannot let Truffle LLVM function pointeres escape to native functions.
          */
-        FUNCTION_POINTER_ESCAPES_TO_NATIVE("function pointer escapes to native"),
+        FUNCTION_POINTER_ESCAPES_TO_NATIVE,
         /**
          * Inline assembler calls.
          */
-        INLINE_ASSEMBLER("inline assembler"),
+        INLINE_ASSEMBLER,
         /**
          * "@llvm.va_start" and other intrinsic.
          */
-        VA_COPY("va_copy"),
+        VA_COPY,
         /**
          * Clang fails to produce the correct IR.
          */
-        CLANG_ERROR("clang error"),
+        CLANG_ERROR,
         /**
          * Vector cast.
          */
-        VECTOR_CAST("vector cast"),
+        VECTOR_CAST,
         /**
          * setjmp and longjmp intrinsic.
          */
-        SET_JMP_LONG_JMP("setjmp/longjmp"),
-        FLOAT_OTHER_TYPE_NOT_IMPLEMENTED("float other type not implemented"),
-        CONSTANT_EXPRESSION("constant expression"),
-        PARSER_ERROR_VOID_SLOT("parser error void slot"),
-        MULTITHREADING("multithreading"),
-        VOID_NOT_VOID_FUNCTION_CALL_MISMATCH("void / not void function call mismatch");
-
-        private final String description;
-
-        UnsupportedReason(String description) {
-            this.description = description;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-
+        SET_JMP_LONG_JMP,
+        FLOAT_OTHER_TYPE_NOT_IMPLEMENTED,
+        CONSTANT_EXPRESSION,
+        PARSER_ERROR_VOID_SLOT,
+        MULTITHREADING,
+        VOID_NOT_VOID_FUNCTION_CALL_MISMATCH,
     }
 
     private final UnsupportedReason reason;
 
     public LLVMUnsupportedException(UnsupportedReason reason) {
-        super(reason.getDescription());
         this.reason = reason;
     }
 

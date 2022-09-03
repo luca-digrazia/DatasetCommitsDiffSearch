@@ -29,9 +29,6 @@
  */
 package com.oracle.truffle.llvm.types.memory;
 
-import com.oracle.nfi.NativeFunctionInterfaceRuntime;
-import com.oracle.nfi.api.NativeFunctionHandle;
-import com.oracle.nfi.api.NativeFunctionInterface;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 
 public final class LLVMHeap extends LLVMMemory {
@@ -74,26 +71,31 @@ public final class LLVMHeap extends LLVMMemory {
         memCopy(target, source, length);
     }
 
-    public static void memSet(LLVMAddress target, int value, long length) {
+    public static void memSet(LLVMAddress target, byte value, long length) {
         long targetAddress = LLVMMemory.extractAddr(target);
-        memSetHandle.call(targetAddress, value, length);
+        UNSAFE.setMemory(targetAddress, length, value);
     }
 
     public static void memSet(LLVMAddress target, byte value, long length, @SuppressWarnings("unused") int align, @SuppressWarnings("unused") boolean isVolatile) {
         memSet(target, value, length);
     }
 
-    private static final NativeFunctionHandle memMoveHandle;
-    private static final NativeFunctionHandle memSetHandle;
-
-    static {
-        final NativeFunctionInterface nfi = NativeFunctionInterfaceRuntime.getNativeFunctionInterface();
-        memMoveHandle = nfi.getFunctionHandle("memmove", void.class, long.class, long.class, long.class);
-        memSetHandle = nfi.getFunctionHandle("memset", void.class, long.class, int.class, long.class);
+    public static void memMove(LLVMAddress dest, LLVMAddress source, long length, @SuppressWarnings("unused") int align, @SuppressWarnings("unused") boolean isVolatile) {
+        memMove(dest, source, length);
     }
 
-    public static void memMove(LLVMAddress dest, LLVMAddress source, long length) {
-        memMoveHandle.call(dest.getVal(), source.getVal(), length);
+    private static void memMove(LLVMAddress dest, LLVMAddress source, long length) {
+        byte[] bytes = new byte[(int) length];
+        LLVMAddress currentSourceAddress = source;
+        for (int i = 0; i < length; i++) {
+            bytes[i] = LLVMMemory.getI8(currentSourceAddress);
+            currentSourceAddress.increment(1);
+        }
+        LLVMAddress currentTargetAddress = dest;
+        for (int i = 0; i < length; i++) {
+            LLVMMemory.putI8(currentTargetAddress, bytes[i]);
+            currentTargetAddress.increment(Byte.SIZE);
+        }
     }
 
     // current hack: we cannot directly store the LLVMFunction in the native memory due to GC

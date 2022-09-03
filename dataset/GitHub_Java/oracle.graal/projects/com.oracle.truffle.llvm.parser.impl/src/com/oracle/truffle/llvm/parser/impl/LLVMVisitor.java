@@ -520,10 +520,8 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         }
         for (BasicBlock basicBlock : def.getBasicBlocks()) {
             FrameSlot[] deadSlots = deadSlotsAfterBlock.get(basicBlock);
-            if (deadSlots != null) {
-                LLVMParserAsserts.assertNoNullElement(deadSlots);
-                indexToSlotNuller[basicBlockIndices[i++]] = getSlotNullerNode(deadSlots);
-            }
+            LLVMParserAsserts.assertNoNullElement(deadSlots);
+            indexToSlotNuller[basicBlockIndices[i++]] = getSlotNullerNode(deadSlots);
         }
         return factoryFacade.createFunctionBlockNode(retSlot, allFunctionNodes, indexToSlotNuller);
     }

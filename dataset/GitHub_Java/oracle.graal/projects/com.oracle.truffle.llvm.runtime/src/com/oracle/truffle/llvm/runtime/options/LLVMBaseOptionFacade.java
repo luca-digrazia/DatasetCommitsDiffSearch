@@ -31,9 +31,6 @@ package com.oracle.truffle.llvm.runtime.options;
 
 public final class LLVMBaseOptionFacade {
 
-    private LLVMBaseOptionFacade() {
-    }
-
     public static boolean debugEnabled() {
         return LLVMOptions.getParsedProperty(LLVMBaseOption.DEBUG);
     }

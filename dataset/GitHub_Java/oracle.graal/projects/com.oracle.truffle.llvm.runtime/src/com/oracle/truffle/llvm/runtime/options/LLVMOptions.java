@@ -125,15 +125,6 @@ public final class LLVMOptions {
         }
     }
 
-    public static long parseLong(LLVMOption prop) {
-        String longProperty = System.getProperty(prop.getKey());
-        if (longProperty == null) {
-            return (long) prop.getDefaultValue();
-        } else {
-            return Long.parseLong(longProperty);
-        }
-    }
-
     public static String[] parseDynamicLibraryPath(LLVMOption prop) {
         String property = System.getProperty(prop.getKey());
         if (property == null) {
