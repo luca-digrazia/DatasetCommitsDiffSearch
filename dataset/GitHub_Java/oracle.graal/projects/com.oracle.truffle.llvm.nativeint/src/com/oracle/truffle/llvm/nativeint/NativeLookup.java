@@ -44,7 +44,6 @@ import com.oracle.nfi.api.NativeLibraryHandle;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
@@ -128,7 +127,9 @@ public class NativeLookup {
                 return LOOKUP_FAILURE;
             }
         } catch (Exception e) {
-            LLVMLogger.info("external symbol " + name + " could not be resolved!");
+            if (LLVMOptions.debugEnabled()) {
+                System.err.println("external symbol " + name + " could not be resolved!");
+            }
             return LOOKUP_FAILURE;
         }
     }
