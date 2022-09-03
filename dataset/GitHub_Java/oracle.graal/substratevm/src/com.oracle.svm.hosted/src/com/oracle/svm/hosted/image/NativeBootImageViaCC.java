@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,10 +26,8 @@
 package com.oracle.svm.hosted.image;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.function.Function;
@@ -55,8 +53,8 @@ import com.oracle.svm.hosted.meta.HostedUniverse;
 public abstract class NativeBootImageViaCC extends NativeBootImage {
 
     public NativeBootImageViaCC(NativeImageKind k, HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap, NativeImageCodeCache codeCache,
-                    List<HostedMethod> entryPoints, HostedMethod mainEntryPoint, ClassLoader imageClassLoader) {
-        super(k, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, mainEntryPoint, imageClassLoader);
+                    List<HostedMethod> entryPoints, ClassLoader imageClassLoader) {
+        super(k, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, imageClassLoader);
     }
 
     public NativeImageKind getOutputKind() {
@@ -112,68 +110,11 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         }
     }
 
-    class WindowsCCLinkerInvocation extends CCLinkerInvocation {
-
-        WindowsCCLinkerInvocation() {
-            setCompilerCommand("CL");
-        }
-
-        @Override
-        protected void addOneSymbolAliasOption(List<String> cmd, Entry<String, String> ent) {
-            // cmd.add("-Wl,-alias," + ent.getValue() + "," + ent.getKey());
-        }
-
-        @Override
-        protected void setOutputKind(List<String> cmd) {
-            switch (kind) {
-                case EXECUTABLE:
-                case STATIC_EXECUTABLE:
-                    cmd.add("/MT");
-                    break;
-                case SHARED_LIBRARY:
-                    cmd.add("/MD");
-                    break;
-                default:
-                    VMError.shouldNotReachHere();
-            }
-        }
-
-        @Override
-        public List<String> getCommand() {
-            ArrayList<String> cmd = new ArrayList<>();
-            cmd.add(compilerCommand);
-
-            // Add debugging info
-            cmd.add("/Zi");
-
-            cmd.add("/Fe" + outputFile.toString());
-
-            cmd.addAll(inputFilenames);
-
-            // We could add a .drectve section instead of doing this
-            cmd.add("/link /DEFAULTLIB:LIBCMT /DEFAULTLIB:OLDNAMES");
-            return cmd;
-        }
-    }
-
     LinkerInvocation getLinkerInvocation(Path outputDirectory, Path tempDirectory, String imageName) {
         String relocatableFileName = tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()).toString();
 
-        CCLinkerInvocation inv;
-
-        switch (ObjectFile.getNativeFormat()) {
-            case MACH_O:
-                inv = new DarwinCCLinkerInvocation();
-                break;
-            case PECOFF:
-                inv = new WindowsCCLinkerInvocation();
-                break;
-            case ELF:
-            default:
-                inv = new BinutilsCCLinkerInvocation();
-                break;
-        }
-
+        // HACK: guess which compiler from the native object file format
+        CCLinkerInvocation inv = (ObjectFile.getNativeFormat() == ObjectFile.Format.MACH_O) ? new DarwinCCLinkerInvocation() : new BinutilsCCLinkerInvocation();
         Path outputFile = outputDirectory.resolve(imageName + getBootImageKind().getFilenameSuffix());
         UserError.guarantee(!Files.isDirectory(outputFile), "Cannot write image to %s. Path exists as directory. (Use -H:Name=<image name>)", outputFile);
         inv.setOutputFile(outputFile);
@@ -183,7 +124,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         for (String libraryPath : nativeLibs.getLibraryPaths()) {
             inv.addLibPath(libraryPath);
         }
-        for (String rPath : SubstrateOptions.LinkerRPath.getValue()) {
+        for (String rPath : SubstrateOptions.LinkerRPath.getValue().split(",")) {
             inv.addRPath(rPath);
         }
 
@@ -203,21 +144,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         String outputstr = "";
         try (Indent indent = debug.logAndIndent("Writing native image")) {
             // 1. write the relocatable file
-
-            // Since we're using FileChannel.map, and we can't unmap the file,
-            // we have to copy the file or the linker will fail to open it.
-            if (OS.getCurrent() == OS.WINDOWS) {
-                Path tempFile = tempDirectory.resolve(imageName + ".tmp");
-                write(tempFile);
-                try {
-                    Files.copy(tempFile, tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
-                    // Files.delete(tempFile);
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to create Object file " + e);
-                }
-            } else {
-                write(tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
-            }
+            write(tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
             // 2. run a command to make an executable of it
             int status;
             try {
@@ -245,11 +172,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                     if (NativeImageOptions.MachODebugInfoTesting.getValue()) {
                         System.out.printf("Testing Mach-O debuginfo generation - SKIP %s%n", cmdstr);
                     } else {
-                        ProcessBuilder pb = new ProcessBuilder().command(cmd);
-                        pb.directory(tempDirectory.toFile());
-                        pb.redirectErrorStream(true);
-                        Process p = pb.start();
-
+                        Process p = new ProcessBuilder().command(cmd).redirectErrorStream(true).start();
                         ByteArrayOutputStream output = new ByteArrayOutputStream();
                         FileUtils.drainInputStream(p.getInputStream(), output);
                         status = p.waitFor();
