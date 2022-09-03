@@ -30,15 +30,14 @@
 package com.oracle.truffle.llvm.nodes.literals;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public class LLVMSimpleLiteralNode {
 
-    public static final class LLVMIVarBitLiteralNode extends LLVMExpressionNode {
+    public static class LLVMIVarBitLiteralNode extends LLVMExpressionNode {
 
         private final LLVMIVarBit literal;
 
@@ -55,9 +54,10 @@ public class LLVMSimpleLiteralNode {
         public Object executeGeneric(VirtualFrame frame) {
             return executeLLVMIVarBit(frame);
         }
+
     }
 
-    public static final class LLVMI1LiteralNode extends LLVMExpressionNode {
+    public static class LLVMI1LiteralNode extends LLVMExpressionNode {
 
         private final boolean literal;
 
@@ -74,9 +74,10 @@ public class LLVMSimpleLiteralNode {
         public Object executeGeneric(VirtualFrame frame) {
             return executeI1(frame);
         }
+
     }
 
-    public static final class LLVMI8LiteralNode extends LLVMExpressionNode {
+    public static class LLVMI8LiteralNode extends LLVMExpressionNode {
 
         private final byte literal;
 
@@ -93,9 +94,10 @@ public class LLVMSimpleLiteralNode {
         public Object executeGeneric(VirtualFrame frame) {
             return executeI8(frame);
         }
+
     }
 
-    public static final class LLVMI16LiteralNode extends LLVMExpressionNode {
+    public static class LLVMI16LiteralNode extends LLVMExpressionNode {
 
         private final short literal;
 
@@ -112,9 +114,10 @@ public class LLVMSimpleLiteralNode {
         public Object executeGeneric(VirtualFrame frame) {
             return executeI16(frame);
         }
+
     }
 
-    public static final class LLVMI32LiteralNode extends LLVMExpressionNode {
+    public static class LLVMI32LiteralNode extends LLVMExpressionNode {
 
         private final int literal;
 
@@ -131,9 +134,10 @@ public class LLVMSimpleLiteralNode {
         public Object executeGeneric(VirtualFrame frame) {
             return executeI32(frame);
         }
+
     }
 
-    public static final class LLVMI64LiteralNode extends LLVMExpressionNode {
+    public static class LLVMI64LiteralNode extends LLVMExpressionNode {
 
         private final long literal;
 
@@ -150,9 +154,10 @@ public class LLVMSimpleLiteralNode {
         public Object executeGeneric(VirtualFrame frame) {
             return executeI64(frame);
         }
+
     }
 
-    public static final class LLVMFloatLiteralNode extends LLVMExpressionNode {
+    public static class LLVMFloatLiteralNode extends LLVMExpressionNode {
 
         private final float literal;
 
@@ -171,7 +176,7 @@ public class LLVMSimpleLiteralNode {
         }
     }
 
-    public static final class LLVMDoubleLiteralNode extends LLVMExpressionNode {
+    public static class LLVMDoubleLiteralNode extends LLVMExpressionNode {
 
         private final double literal;
 
@@ -188,9 +193,10 @@ public class LLVMSimpleLiteralNode {
         public Object executeGeneric(VirtualFrame frame) {
             return executeDouble(frame);
         }
+
     }
 
-    public static final class LLVM80BitFloatLiteralNode extends LLVMExpressionNode {
+    public static class LLVM80BitFloatLiteralNode extends LLVMExpressionNode {
 
         private final boolean sign;
         private final int exponent;
@@ -213,36 +219,23 @@ public class LLVMSimpleLiteralNode {
         }
     }
 
-    public static final class LLVMManagedPointerLiteralNode extends LLVMExpressionNode {
-
-        private final LLVMManagedPointer address;
-
-        public LLVMManagedPointerLiteralNode(LLVMManagedPointer address) {
-            this.address = address;
-        }
-
-        @Override
-        public Object executeGeneric(VirtualFrame frame) {
-            return address.copy();
-        }
-    }
-
-    public static final class LLVMNativePointerLiteralNode extends LLVMExpressionNode {
+    public static class LLVMAddressLiteralNode extends LLVMExpressionNode {
 
         private final long address;
 
-        public LLVMNativePointerLiteralNode(LLVMNativePointer address) {
-            this.address = address.asNative();
+        public LLVMAddressLiteralNode(LLVMAddress address) {
+            this.address = address.getVal();
         }
 
         @Override
-        public LLVMNativePointer executeLLVMNativePointer(VirtualFrame frame) {
-            return LLVMNativePointer.create(address);
+        public LLVMAddress executeLLVMAddress(VirtualFrame frame) {
+            return LLVMAddress.fromLong(address);
         }
 
         @Override
         public Object executeGeneric(VirtualFrame frame) {
-            return executeLLVMNativePointer(frame);
+            return executeLLVMAddress(frame);
         }
+
     }
 }

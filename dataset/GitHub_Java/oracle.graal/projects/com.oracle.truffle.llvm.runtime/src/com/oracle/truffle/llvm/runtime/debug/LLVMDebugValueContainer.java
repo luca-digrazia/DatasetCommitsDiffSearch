@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.debug;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
-import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,78 +44,12 @@ public final class LLVMDebugValueContainer extends LLVMDebugObject {
             return this;
         }
     };
-    private static final LLVMDebugValueProvider valueProvider = new LLVMDebugValueProvider() {
-        @Override
-        public String describeValue(long bitOffset, int bitSize) {
-            return "Debug Value Container";
-        }
-
-        @Override
-        public boolean canRead(long bitOffset, int bits) {
-            return true;
-        }
-
-        @Override
-        public Object readBoolean(long bitOffset) {
-            return false;
-        }
-
-        @Override
-        public Object readFloat(long bitOffset) {
-            return null;
-        }
-
-        @Override
-        public Object readDouble(long bitOffset) {
-            return null;
-        }
-
-        @Override
-        public Object read80BitFloat(long bitOffset) {
-            return null;
-        }
-
-        @Override
-        public Object readAddress(long bitOffset) {
-            return null;
-        }
-
-        @Override
-        public Object readUnknown(long bitOffset, int bitSize) {
-            return null;
-        }
-
-        @Override
-        public Object computeAddress(long bitOffset) {
-            return null;
-        }
-
-        @Override
-        public BigInteger readBigInteger(long bitOffset, int bitSize, boolean signed) {
-            return null;
-        }
-
-        @Override
-        public LLVMDebugValueProvider dereferencePointer(long bitOffset) {
-            return null;
-        }
-
-        @Override
-        public boolean isInteropValue() {
-            return false;
-        }
-
-        @Override
-        public Object asInteropValue() {
-            return null;
-        }
-    };
 
     private final Map<Object, Object> members;
 
     @TruffleBoundary
     private LLVMDebugValueContainer() {
-        super(valueProvider, 0, TYPE);
+        super(null, 0, TYPE);
         members = new HashMap<>();
     }
 
@@ -127,18 +60,18 @@ public final class LLVMDebugValueContainer extends LLVMDebugObject {
 
     @Override
     @TruffleBoundary
-    public Object[] getKeysSafe() {
+    public Object[] getKeys() {
         return members.keySet().toArray();
     }
 
     @Override
     @TruffleBoundary
-    public Object getMemberSafe(Object identifier) {
+    public Object getMember(Object identifier) {
         return members.get(identifier);
     }
 
     @Override
-    protected Object getValueSafe() {
+    protected Object getValue() {
         return "";
     }
 
