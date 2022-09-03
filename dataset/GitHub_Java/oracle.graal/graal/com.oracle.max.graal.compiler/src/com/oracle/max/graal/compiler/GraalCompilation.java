@@ -55,7 +55,7 @@ public final class GraalCompilation {
     public final CiAssumptions assumptions = new CiAssumptions();
     public final FrameState placeholderState;
 
-    public CompilerGraph graph = new CompilerGraph(this);
+    public CompilerGraph graph = new CompilerGraph();
 
     private boolean hasExceptionHandlers;
     private final GraalCompilation parent;
@@ -205,7 +205,7 @@ public final class GraalCompilation {
             emitLIR();
             targetMethod = emitCode();
 
-            if (GraalOptions.Meter) {
+            if (GraalOptions.PrintMetrics) {
                 GraalMetrics.BytecodesCompiled += method.code().length;
             }
         } catch (CiBailout b) {
@@ -214,7 +214,11 @@ public final class GraalCompilation {
             if (GraalOptions.BailoutOnException) {
                 return new CiResult(null, new CiBailout("Exception while compiling: " + method, t), stats);
             } else {
-                throw new RuntimeException(t);
+                if (t instanceof RuntimeException) {
+                    throw (RuntimeException) t;
+                } else {
+                    throw new RuntimeException(t);
+                }
             }
         } finally {
             if (compiler.isObserved()) {
@@ -237,7 +241,7 @@ public final class GraalCompilation {
 
     private void emitLIR() {
         if (GraalOptions.GenLIR) {
-            if (GraalOptions.Time) {
+            if (GraalOptions.PrintTimers) {
                 GraalTimers.LIR_CREATE.start();
             }
 
@@ -249,7 +253,7 @@ public final class GraalCompilation {
                 lirGenerator.doBlock(begin);
             }
 
-            if (GraalOptions.Time) {
+            if (GraalOptions.PrintTimers) {
                 GraalTimers.LIR_CREATE.stop();
             }
 
@@ -289,7 +293,7 @@ public final class GraalCompilation {
                 compiler.fireCompilationEvent(new CompilationEvent(this, "After code generation", graph, false, true, targetMethod));
             }
 
-            if (GraalOptions.Time) {
+            if (GraalOptions.PrintTimers) {
                 GraalTimers.CODE_CREATE.stop();
             }
             return targetMethod;

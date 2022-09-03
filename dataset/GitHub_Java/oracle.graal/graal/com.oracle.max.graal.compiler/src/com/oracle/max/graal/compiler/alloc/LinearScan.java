@@ -2019,7 +2019,7 @@ public final class LinearScan {
     }
 
     public void allocate() {
-        if (GraalOptions.Time) {
+        if (GraalOptions.PrintTimers) {
             GraalTimers.LIFETIME_ANALYSIS.start();
         }
 
@@ -2033,7 +2033,7 @@ public final class LinearScan {
         buildIntervals();
         sortIntervalsBeforeAllocation();
 
-        if (GraalOptions.Time) {
+        if (GraalOptions.PrintTimers) {
             GraalTimers.LIFETIME_ANALYSIS.stop();
             GraalTimers.LINEAR_SCAN.start();
         }
@@ -2042,14 +2042,14 @@ public final class LinearScan {
 
         allocateRegisters();
 
-        if (GraalOptions.Time) {
+        if (GraalOptions.PrintTimers) {
             GraalTimers.LINEAR_SCAN.stop();
             GraalTimers.RESOLUTION.start();
         }
 
         resolveDataFlow();
 
-        if (GraalOptions.Time) {
+        if (GraalOptions.PrintTimers) {
             GraalTimers.RESOLUTION.stop();
             GraalTimers.DEBUG_INFO.start();
         }
@@ -2075,7 +2075,7 @@ public final class LinearScan {
             verifyIntervals();
         }
 
-        if (GraalOptions.Time) {
+        if (GraalOptions.PrintTimers) {
             GraalTimers.DEBUG_INFO.stop();
             GraalTimers.CODE_CREATE.start();
         }
@@ -2122,7 +2122,7 @@ public final class LinearScan {
         }
 
         if (compilation.compiler.isObserved()) {
-            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, label, /*compilation.graph*/ null, hirValid, true));
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, label, compilation.graph, hirValid, true));
         }
     }
 
