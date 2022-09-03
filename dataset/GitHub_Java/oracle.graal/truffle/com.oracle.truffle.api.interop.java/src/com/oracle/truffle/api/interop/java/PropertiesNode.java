@@ -24,6 +24,7 @@
  */
 package com.oracle.truffle.api.interop.java;
 
+
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.AcceptMessage;
 import com.oracle.truffle.api.nodes.Node.Child;
