@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.InputType.Association;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
-
 import java.util.Collections;
 
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
@@ -37,7 +34,7 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
  * LoopEnd nodes represent a loop back-edge. When a LoopEnd is reached, execution continues at the
  * {@linkplain #loopBegin() loop header}.
  */
-@NodeInfo(cycles = CYCLES_1, cyclesRationale = "Backedge jmp", size = SIZE_1, sizeRationale = "Backedge jmp")
+@NodeInfo
 public final class LoopEndNode extends AbstractEndNode {
 
     public static final NodeClass<LoopEndNode> TYPE = NodeClass.create(LoopEndNode.class);
@@ -47,7 +44,7 @@ public final class LoopEndNode extends AbstractEndNode {
      * evaluation can temporarily assign a non-loop begin. This node will then be deleted shortly
      * after - but we still must not have type system violations for that short amount of time.
      */
-    @Input(Association) AbstractBeginNode loopBegin;
+    @Input(InputType.Association) AbstractBeginNode loopBegin;
     protected int endIndex;
 
     /**
