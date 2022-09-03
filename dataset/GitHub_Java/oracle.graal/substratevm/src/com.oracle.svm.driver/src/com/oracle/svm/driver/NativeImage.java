@@ -176,17 +176,17 @@ public class NativeImage {
     final Registry optionRegistry;
     private LinkedHashSet<EnabledOption> enabledLanguages;
 
-    public interface PathsProvider {
+    public interface PathFactory {
         Path getWorkDir();
 
         Path getRootDir();
     }
 
-    private static class DefaultPathsProvider implements PathsProvider {
+    private static class DefaultPathFactory implements PathFactory {
         private final Path workDir;
         private final Path rootDir;
 
-        DefaultPathsProvider() {
+        DefaultPathFactory() {
             workDir = Paths.get(".").toAbsolutePath().normalize();
             if (IS_AOT) {
                 Path executablePath = Paths.get((String) Compiler.command(new Object[]{PosixExecutableName.getKey()}));
@@ -221,12 +221,12 @@ public class NativeImage {
         }
     }
 
-    protected NativeImage(PathsProvider pathsProvider) {
-        workDir = pathsProvider.getWorkDir();
+    protected NativeImage(PathFactory pathFactory) {
+        workDir = pathFactory.getWorkDir();
         try {
-            rootDir = canonicalize(pathsProvider.getRootDir());
+            rootDir = canonicalize(pathFactory.getRootDir());
         } catch (NativeImageError e) {
-            throw showError("PathsProvider provides invalid rootDir " + pathsProvider.getRootDir() + "\n" + e.getMessage());
+            throw showError("PathFactory provides invalid rootDir " + pathFactory.getRootDir() + "\n" + e.getMessage());
         }
 
         String configFileEnvVarKey = "NATIVE_IMAGE_CONFIG_FILE";
@@ -619,7 +619,7 @@ public class NativeImage {
 
     public static void main(String[] args) {
         try {
-            build(new DefaultPathsProvider(), args);
+            build(new DefaultPathFactory(), args);
         } catch (NativeImageError e) {
             boolean verbose = Boolean.valueOf(System.getenv("VERBOSE_GRAALVM_LAUNCHERS"));
             NativeImage.show(System.err::println, "Error: " + e.getMessage());
@@ -635,8 +635,8 @@ public class NativeImage {
         }
     }
 
-    public static void build(PathsProvider pathsProvider, String[] args) {
-        NativeImage nativeImage = IS_AOT ? new NativeImageServer(pathsProvider) : new NativeImage(pathsProvider);
+    public static void build(PathFactory pathFactory, String[] args) {
+        NativeImage nativeImage = IS_AOT ? new NativeImageServer(pathFactory) : new NativeImage(pathFactory);
         if (args.length == 0) {
             nativeImage.showMessage(usageText);
         } else {
