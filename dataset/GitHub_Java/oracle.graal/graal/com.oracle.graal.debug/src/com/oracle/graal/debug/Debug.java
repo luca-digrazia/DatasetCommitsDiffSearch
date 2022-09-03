@@ -330,7 +330,7 @@ public class Debug {
 
     public static DebugMetric metric(String name) {
         if (ENABLED) {
-            return new MetricImpl(name, true);
+            return new MetricImpl(name);
         } else {
             return VOID_METRIC;
         }
@@ -405,19 +405,11 @@ public class Debug {
 
         public void add(long value) {
         }
-
-        public void setConditional(boolean flag) {
-            throw new InternalError("Cannot make void metric conditional");
-        }
-
-        public boolean isConditional() {
-            return false;
-        }
     };
 
     public static DebugTimer timer(String name) {
         if (ENABLED) {
-            return new TimerImpl(name, true);
+            return new TimerImpl(name);
         } else {
             return VOID_TIMER;
         }
@@ -427,14 +419,6 @@ public class Debug {
 
         public TimerCloseable start() {
             return TimerImpl.VOID_CLOSEABLE;
-        }
-
-        public void setConditional(boolean flag) {
-            throw new InternalError("Cannot make void timer conditional");
-        }
-
-        public boolean isConditional() {
-            return false;
         }
     };
 }

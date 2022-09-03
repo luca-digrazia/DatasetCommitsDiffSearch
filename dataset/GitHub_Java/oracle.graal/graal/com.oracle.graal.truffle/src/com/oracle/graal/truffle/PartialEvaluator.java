@@ -66,8 +66,9 @@ import com.oracle.truffle.api.nodes.*;
 public class PartialEvaluator {
 
     private final MetaAccessProvider metaAccessProvider;
+    private final ResolvedJavaType nodeClass;
     private final ResolvedJavaMethod executeHelperMethod;
-    private final CanonicalizerPhase canonicalizer;
+    private final CustomCanonicalizer customCanonicalizer;
     private final ResolvedJavaType[] skippedExceptionTypes;
     private final Replacements replacements;
     private Set<Constant> constantReceivers;
@@ -76,8 +77,8 @@ public class PartialEvaluator {
 
     public PartialEvaluator(MetaAccessProvider metaAccessProvider, Replacements replacements, TruffleCache truffleCache) {
         this.metaAccessProvider = metaAccessProvider;
-        CustomCanonicalizer customCanonicalizer = new PartialEvaluatorCanonicalizer(metaAccessProvider);
-        this.canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue(), customCanonicalizer);
+        this.nodeClass = metaAccessProvider.lookupJavaType(com.oracle.truffle.api.nodes.Node.class);
+        this.customCanonicalizer = new PartialEvaluatorCanonicalizer(metaAccessProvider, nodeClass);
         this.skippedExceptionTypes = TruffleCompilerImpl.getSkippedExceptionTypes(metaAccessProvider);
         this.replacements = replacements;
         this.cache = HotSpotGraalRuntime.graalRuntime().getCache();
@@ -113,7 +114,6 @@ public class PartialEvaluator {
 
         Debug.scope("createGraph", graph, new Runnable() {
 
-            @SuppressWarnings("deprecation")
             @Override
             public void run() {
                 new GraphBuilderPhase(metaAccessProvider, config, TruffleCompilerImpl.Optimizations).apply(graph);
@@ -123,8 +123,8 @@ public class PartialEvaluator {
                 thisNode.replaceAndDelete(ConstantNode.forObject(node, metaAccessProvider, graph));
 
                 // Canonicalize / constant propagate.
-                PhaseContext baseContext = new PhaseContext(metaAccessProvider, assumptions, replacements);
-                canonicalizer.apply(graph, baseContext);
+                CanonicalizerPhase.Instance canonicalizerPhase = new CanonicalizerPhase.Instance(metaAccessProvider, assumptions, !AOTCompilation.getValue(), null, customCanonicalizer);
+                canonicalizerPhase.apply(graph);
 
                 // Intrinsify methods.
                 new ReplaceIntrinsicsPhase(replacements).apply(graph);
@@ -138,8 +138,6 @@ public class PartialEvaluator {
 
                 // Make sure frame does not escape.
                 expandTree(config, graph, newFrameNode, assumptions);
-
-                new VerifyFrameDoesNotEscapePhase().apply(graph, false);
 
                 if (TruffleInlinePrinter.getValue()) {
                     InlinePrinterProcessor.printTree();
@@ -158,16 +156,22 @@ public class PartialEvaluator {
                 final PhasePlan plan = new PhasePlan();
                 GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(metaAccessProvider, config, TruffleCompilerImpl.Optimizations);
                 plan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-                canonicalizer.addToPhasePlan(plan, baseContext);
+                plan.addPhase(PhasePosition.AFTER_PARSING, canonicalizerPhase);
                 plan.addPhase(PhasePosition.AFTER_PARSING, new ReplaceIntrinsicsPhase(replacements));
 
                 new ConvertDeoptimizeToGuardPhase().apply(graph);
-                canonicalizer.apply(graph, baseContext);
+                canonicalizerPhase.apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
 
                 HighTierContext context = new HighTierContext(metaAccessProvider, assumptions, replacements, cache, plan, OptimisticOptimizations.NONE);
-                InliningPhase inliningPhase = new InliningPhase(canonicalizer);
+                InliningPhase inliningPhase = new InliningPhase(customCanonicalizer);
                 inliningPhase.apply(graph, context);
+
+                // Convert deopt to guards.
+                new ConvertDeoptimizeToGuardPhase().apply(graph);
+
+                // Canonicalize / constant propagate.
+                canonicalizerPhase.apply(graph);
 
                 for (NeverPartOfCompilationNode neverPartOfCompilationNode : graph.getNodes(NeverPartOfCompilationNode.class)) {
                     Throwable exception = new VerificationError(neverPartOfCompilationNode.getMessage());
@@ -175,7 +179,8 @@ public class PartialEvaluator {
                 }
 
                 // EA frame and clean up.
-                new PartialEscapePhase(false, canonicalizer).apply(graph, context);
+                new VerifyFrameDoesNotEscapePhase().apply(graph, false);
+                new PartialEscapePhase(false).apply(graph, context);
                 new VerifyNoIntrinsicsLeftPhase().apply(graph, false);
                 for (MaterializeFrameNode materializeNode : graph.getNodes(MaterializeFrameNode.class).snapshot()) {
                     materializeNode.replaceAtUsages(materializeNode.getFrame());
@@ -193,6 +198,12 @@ public class PartialEvaluator {
                         }
                     }
                 }
+
+                // Convert deopt to guards.
+                new ConvertDeoptimizeToGuardPhase().apply(graph);
+
+                // Canonicalize / constant propagate.
+                canonicalizerPhase.apply(graph);
             }
         });
 
@@ -218,7 +229,7 @@ public class PartialEvaluator {
                         StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTargetNode.targetMethod());
                         NewFrameNode otherNewFrame = null;
                         if (inlineGraph == null) {
-                            inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions);
+                            inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, !AOTCompilation.getValue());
                             otherNewFrame = inlineGraph.getNodes(NewFrameNode.class).first();
                         }
 
@@ -246,13 +257,25 @@ public class PartialEvaluator {
         } while (changed && newFrameNode.isAlive() && newFrameNode.usages().isNotEmpty());
     }
 
-    private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions) {
+    private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final boolean canonicalizeReads) {
 
-        final StructuredGraph graph = truffleCache.lookup(targetMethod, arguments, assumptions, canonicalizer);
+        final StructuredGraph graph = truffleCache.lookup(targetMethod, arguments, assumptions);
         Debug.scope("parseGraph", targetMethod, new Runnable() {
 
             @Override
             public void run() {
+
+                // Canonicalize / constant propagate.
+                new CanonicalizerPhase.Instance(metaAccessProvider, assumptions, canonicalizeReads, null, customCanonicalizer).apply(graph);
+
+                // Intrinsify methods.
+                new ReplaceIntrinsicsPhase(replacements).apply(graph);
+
+                // Inline trivial getter methods
+                new InlineTrivialGettersPhase(metaAccessProvider, assumptions, customCanonicalizer).apply(graph);
+
+                // Convert deopt to guards.
+                new ConvertDeoptimizeToGuardPhase().apply(graph);
 
                 if (graph.hasLoops()) {
                     boolean unrolled;
@@ -264,9 +287,9 @@ public class PartialEvaluator {
                             if (ex.counted().isConstantMaxTripCount()) {
                                 long constant = ex.counted().constantMaxTripCount();
                                 if (constant <= TruffleConstantUnrollLimit.getValue() || targetMethod.getAnnotation(ExplodeLoop.class) != null) {
-                                    PhaseContext context = new PhaseContext(metaAccessProvider, assumptions, replacements);
-                                    LoopTransformations.fullUnroll(ex, context, canonicalizer);
+                                    LoopTransformations.fullUnroll(ex, metaAccessProvider, assumptions, canonicalizeReads);
                                     Debug.dump(graph, "After loop unrolling %d times", constant);
+                                    new CanonicalizerPhase.Instance(metaAccessProvider, assumptions, canonicalizeReads, null, customCanonicalizer).apply(graph);
                                     unrolled = true;
                                     break;
                                 }
