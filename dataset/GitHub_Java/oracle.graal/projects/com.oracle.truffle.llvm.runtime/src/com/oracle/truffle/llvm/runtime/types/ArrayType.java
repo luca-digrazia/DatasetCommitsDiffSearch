@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,53 +29,57 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
-import java.util.Objects;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.types.metadata.MetadataBlock;
-import com.oracle.truffle.llvm.runtime.types.metadata.MetadataBlock.MetadataReference;
+public final class ArrayType extends AggregateType {
 
-public class ArrayType implements AggregateType {
-
-    private final Type elementType;
-
+    @CompilationFinal private Assumption elementTypeAssumption;
+    @CompilationFinal private Type elementType;
     private final int length;
 
-    private MetadataReference metadata = MetadataBlock.voidRef;
-
-    public ArrayType(Type type, int size) {
-        super();
+    public ArrayType(Type type, int length) {
+        this.elementTypeAssumption = Truffle.getRuntime().createAssumption("ArrayType.elementType");
         this.elementType = type;
-        this.length = size;
+        this.length = length;
+    }
+
+    public void setElementType(Type elementType) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        this.elementTypeAssumption.invalidate();
+        this.elementType = elementType;
+        this.elementTypeAssumption = Truffle.getRuntime().createAssumption("ArrayType.elementType");
     }
 
     @Override
-    public int getBits() {
-        return getElementType().getBits() * length;
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
+    }
+
+    @Override
+    public int getBitSize() {
+        return getElementType().getBitSize() * getNumberOfElements();
     }
 
     public Type getElementType() {
+        if (!elementTypeAssumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+        }
         return elementType;
     }
 
     @Override
-    public Type getElementType(int idx) {
-        return getElementType();
-    }
-
-    @Override
-    public int getLength() {
+    public int getNumberOfElements() {
         return length;
     }
 
     @Override
-    public LLVMBaseType getLLVMBaseType() {
-        return LLVMBaseType.ARRAY;
-    }
-
-    @Override
-    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
-        return LLVMFunctionDescriptor.LLVMRuntimeType.ARRAY;
+    public Type getElementType(long index) {
+        return getElementType();
     }
 
     @Override
@@ -89,44 +93,54 @@ public class ArrayType implements AggregateType {
     }
 
     @Override
-    public int getIndexOffset(int index, DataSpecConverter targetDataLayout) {
+    public Type shallowCopy() {
+        final ArrayType copy = new ArrayType(getElementType(), length);
+        copy.setSourceType(getSourceType());
+        return copy;
+    }
+
+    @Override
+    public long getOffsetOf(long index, DataSpecConverter targetDataLayout) {
         return getElementType().getSize(targetDataLayout) * index;
     }
 
     @Override
-    public void setMetadataReference(MetadataReference metadata) {
-        this.metadata = metadata;
-    }
-
-    @Override
-    public MetadataReference getMetadataReference() {
-        return metadata;
+    @TruffleBoundary
+    public String toString() {
+        return String.format("[%d x %s]", getNumberOfElements(), getElementType());
     }
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 67 * hash + Objects.hashCode(this.getElementType());
-        hash = 67 * hash + this.length;
-        return hash;
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((getElementType() == null) ? 0 : getElementType().hashCode());
+        result = prime * result + length;
+        return result;
     }
 
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
-
-        } else if (obj instanceof ArrayType) {
-            final ArrayType other = (ArrayType) obj;
-            return length == other.length && Objects.equals(getElementType(), other.getElementType());
-
-        } else {
+        }
+        if (obj == null) {
             return false;
         }
-    }
-
-    @Override
-    public String toString() {
-        return String.format("[%d x %s]", getLength(), getElementType());
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        ArrayType other = (ArrayType) obj;
+        if (getElementType() == null) {
+            if (other.getElementType() != null) {
+                return false;
+            }
+        } else if (!getElementType().equals(other.getElementType())) {
+            return false;
+        }
+        if (length != other.length) {
+            return false;
+        }
+        return true;
     }
 }

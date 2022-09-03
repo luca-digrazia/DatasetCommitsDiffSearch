@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,47 +31,65 @@ package com.oracle.truffle.llvm.runtime.types;
 
 import java.util.Arrays;
 
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
-public class FunctionType implements Type, ValueSymbol {
+public final class FunctionType extends Type {
 
-    private final Type type;
+    @CompilationFinal private Assumption returnTypeAssumption;
+    @CompilationFinal private Type returnType;
 
-    private final Type[] args;
+    private final Type[] argumentTypes;
+    private final boolean isVarargs;
 
-    private final boolean isVarArg;
-
-    private String name = ValueSymbol.UNKNOWN;
-
-    public FunctionType(Type type, Type[] args, boolean isVarArg) {
-        this.type = type;
-        this.args = args;
-        this.isVarArg = isVarArg;
+    public FunctionType(Type returnType, Type[] argumentTypes, boolean isVarargs) {
+        this.returnTypeAssumption = Truffle.getRuntime().createAssumption("FunctionType.returnType");
+        this.returnType = returnType;
+        this.argumentTypes = argumentTypes;
+        this.isVarargs = isVarargs;
     }
 
     public Type[] getArgumentTypes() {
-        return args;
-    }
-
-    @Override
-    public LLVMBaseType getLLVMBaseType() {
-        return LLVMBaseType.FUNCTION_ADDRESS;
-    }
-
-    @Override
-    public Type getType() {
-        return new PointerType(Type.super.getType());
+        return argumentTypes;
     }
 
     public Type getReturnType() {
-        return type;
+        if (!returnTypeAssumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+        }
+        return returnType;
+    }
+
+    public void setReturnType(Type returnType) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        this.returnTypeAssumption.invalidate();
+        this.returnType = returnType;
+        this.returnTypeAssumption = Truffle.getRuntime().createAssumption("FunctionType.returnType");
+    }
+
+    public boolean isVarargs() {
+        return isVarargs;
+    }
+
+    @Override
+    public int getBitSize() {
+        return 0;
+    }
+
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
     }
 
     @Override
     public int getAlignment(DataSpecConverter targetDataLayout) {
         if (targetDataLayout != null) {
-            return targetDataLayout.getBitAlignment(getLLVMBaseType()) / Byte.SIZE;
+            return targetDataLayout.getBitAlignment(this) / Byte.SIZE;
         } else {
             return Long.BYTES;
         }
@@ -79,71 +97,32 @@ public class FunctionType implements Type, ValueSymbol {
 
     @Override
     public int getSize(DataSpecConverter targetDataLayout) {
-        return 0;
-    }
-
-    public boolean isVarArg() {
-        return isVarArg;
+        return LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
     }
 
     @Override
-    public int getBits() {
-        return 0;
+    public Type shallowCopy() {
+        final FunctionType copy = new FunctionType(getReturnType(), argumentTypes, isVarargs);
+        copy.setSourceType(getSourceType());
+        return copy;
     }
 
     @Override
-    public void setName(String name) {
-        this.name = "@" + name;
-    }
-
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
-        return LLVMFunctionDescriptor.LLVMRuntimeType.FUNCTION_ADDRESS;
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 29;
-        hash = 17 * hash + Arrays.hashCode(args);
-        hash = 17 * hash + (isVarArg ? 1231 : 1237);
-        hash = 17 * hash + ((getReturnType() == null) ? 0 : getReturnType().hashCode());
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-
-        } else if (obj instanceof FunctionType) {
-            final FunctionType other = (FunctionType) obj;
-            return getReturnType().equals(other.getReturnType()) && Arrays.equals(args, other.args) && isVarArg == other.isVarArg && name.equals(other.name);
-
-        } else {
-            return false;
-        }
-    }
-
-    @Override
+    @TruffleBoundary
     public String toString() {
         StringBuilder sb = new StringBuilder();
 
         sb.append(getReturnType()).append(" (");
 
-        for (int i = 0; i < args.length; i++) {
+        for (int i = 0; i < argumentTypes.length; i++) {
             if (i > 0) {
                 sb.append(", ");
             }
-            sb.append(args[i]);
+            sb.append(argumentTypes[i]);
         }
 
-        if (isVarArg) {
-            if (args.length > 0) {
+        if (isVarargs) {
+            if (argumentTypes.length > 0) {
                 sb.append(", ");
             }
             sb.append("...");
@@ -151,5 +130,43 @@ public class FunctionType implements Type, ValueSymbol {
         sb.append(")");
 
         return sb.toString();
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + Arrays.hashCode(argumentTypes);
+        result = prime * result + (isVarargs ? 1231 : 1237);
+        result = prime * result + ((getReturnType() == null) ? 0 : getReturnType().hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        FunctionType other = (FunctionType) obj;
+        if (!Arrays.equals(argumentTypes, other.argumentTypes)) {
+            return false;
+        }
+        if (isVarargs != other.isVarargs) {
+            return false;
+        }
+        if (getReturnType() == null) {
+            if (other.getReturnType() != null) {
+                return false;
+            }
+        } else if (!getReturnType().equals(other.getReturnType())) {
+            return false;
+        }
+        return true;
     }
 }

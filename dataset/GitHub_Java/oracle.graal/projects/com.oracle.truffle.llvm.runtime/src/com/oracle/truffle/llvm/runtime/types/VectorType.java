@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,7 +34,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class VectorType extends AggregateType {
@@ -95,31 +94,31 @@ public final class VectorType extends AggregateType {
     }
 
     @Override
-    public int getAlignment(DataLayout targetDataLayout) {
+    public int getAlignment(DataSpecConverter targetDataLayout) {
         return getElementType().getAlignment(targetDataLayout);
     }
 
     @Override
-    public int getSize(DataLayout targetDataLayout) {
+    public int getSize(DataSpecConverter targetDataLayout) {
         return getElementType().getSize(targetDataLayout) * length;
     }
 
     @Override
     public Type shallowCopy() {
         final VectorType copy = new VectorType(getElementType(), length);
-        copy.setInteropType(getInteropType());
+        copy.setSourceType(getSourceType());
         return copy;
     }
 
     @Override
-    public long getOffsetOf(long index, DataLayout targetDataLayout) {
+    public long getOffsetOf(long index, DataSpecConverter targetDataLayout) {
         return getElementType().getSize(targetDataLayout) * index;
     }
 
     @Override
     @TruffleBoundary
     public String toString() {
-        return String.format("< %d x %s >", getNumberOfElements(), getElementType());
+        return String.format("<%d x %s>", getNumberOfElements(), getElementType());
     }
 
     @Override
