@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.Iterator;
+import java.util.*;
 
 /**
  * Iterates over the nodes in a given graph.
@@ -32,11 +32,11 @@ class GraphNodeIterator implements Iterator<Node> {
     private final Graph graph;
     private int index;
 
-    GraphNodeIterator(Graph graph) {
+    public GraphNodeIterator(Graph graph) {
         this(graph, 0);
     }
 
-    GraphNodeIterator(Graph graph, int index) {
+    public GraphNodeIterator(Graph graph, int index) {
         this.graph = graph;
         this.index = index - 1;
         forward();
