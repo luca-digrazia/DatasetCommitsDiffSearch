@@ -22,18 +22,13 @@
  */
 package com.oracle.graal.truffle;
 
-import java.lang.reflect.Field;
-import java.util.Arrays;
+import java.lang.reflect.*;
+import java.util.*;
 
-import sun.misc.Unsafe;
+import sun.misc.*;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.frame.FrameSlotTypeException;
-import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.frame.*;
 
 /**
  * More efficient implementation of the Truffle frame that has no safety checks for frame accesses
@@ -388,57 +383,57 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     @SuppressWarnings({"unchecked", "unused"})
-    private static <T> T unsafeCast(Object value, Class<T> type, boolean condition, boolean nonNull) {
+    static <T> T unsafeCast(Object value, Class<T> type, boolean condition, boolean nonNull) {
         return (T) value;
     }
 
     @SuppressWarnings("unused")
-    private static int unsafeGetInt(Object receiver, long offset, boolean condition, Object locationIdentity) {
+    static int unsafeGetInt(Object receiver, long offset, boolean condition, Object locationIdentity) {
         return UNSAFE.getInt(receiver, offset);
     }
 
     @SuppressWarnings("unused")
-    private static long unsafeGetLong(Object receiver, long offset, boolean condition, Object locationIdentity) {
+    static long unsafeGetLong(Object receiver, long offset, boolean condition, Object locationIdentity) {
         return UNSAFE.getLong(receiver, offset);
     }
 
     @SuppressWarnings("unused")
-    private static float unsafeGetFloat(Object receiver, long offset, boolean condition, Object locationIdentity) {
+    static float unsafeGetFloat(Object receiver, long offset, boolean condition, Object locationIdentity) {
         return UNSAFE.getFloat(receiver, offset);
     }
 
     @SuppressWarnings("unused")
-    private static double unsafeGetDouble(Object receiver, long offset, boolean condition, Object locationIdentity) {
+    static double unsafeGetDouble(Object receiver, long offset, boolean condition, Object locationIdentity) {
         return UNSAFE.getDouble(receiver, offset);
     }
 
     @SuppressWarnings("unused")
-    private static Object unsafeGetObject(Object receiver, long offset, boolean condition, Object locationIdentity) {
+    static Object unsafeGetObject(Object receiver, long offset, boolean condition, Object locationIdentity) {
         return UNSAFE.getObject(receiver, offset);
     }
 
     @SuppressWarnings("unused")
-    private static void unsafePutInt(Object receiver, long offset, int value, Object locationIdentity) {
+    static void unsafePutInt(Object receiver, long offset, int value, Object locationIdentity) {
         UNSAFE.putInt(receiver, offset, value);
     }
 
     @SuppressWarnings("unused")
-    private static void unsafePutLong(Object receiver, long offset, long value, Object locationIdentity) {
+    static void unsafePutLong(Object receiver, long offset, long value, Object locationIdentity) {
         UNSAFE.putLong(receiver, offset, value);
     }
 
     @SuppressWarnings("unused")
-    private static void unsafePutFloat(Object receiver, long offset, float value, Object locationIdentity) {
+    static void unsafePutFloat(Object receiver, long offset, float value, Object locationIdentity) {
         UNSAFE.putFloat(receiver, offset, value);
     }
 
     @SuppressWarnings("unused")
-    private static void unsafePutDouble(Object receiver, long offset, double value, Object locationIdentity) {
+    static void unsafePutDouble(Object receiver, long offset, double value, Object locationIdentity) {
         UNSAFE.putDouble(receiver, offset, value);
     }
 
     @SuppressWarnings("unused")
-    private static void unsafePutObject(Object receiver, long offset, Object value, Object locationIdentity) {
+    static void unsafePutObject(Object receiver, long offset, Object value, Object locationIdentity) {
         UNSAFE.putObject(receiver, offset, value);
     }
 

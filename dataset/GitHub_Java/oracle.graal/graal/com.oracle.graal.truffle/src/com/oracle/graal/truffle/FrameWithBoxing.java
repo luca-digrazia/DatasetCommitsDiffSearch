@@ -22,14 +22,10 @@
  */
 package com.oracle.graal.truffle;
 
-import java.util.Arrays;
+import java.util.*;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotTypeException;
-import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.frame.*;
 
 /**
  * More efficient implementation of the Truffle frame that has no safety checks for frame accesses
@@ -234,7 +230,7 @@ public final class FrameWithBoxing implements VirtualFrame, MaterializedFrame {
     }
 
     @SuppressWarnings({"unchecked", "unused"})
-    private static <T> T unsafeCast(Object value, Class<T> type, boolean condition, boolean nonNull) {
+    static <T> T unsafeCast(Object value, Class<T> type, boolean condition, boolean nonNull) {
         return (T) value;
     }
 }
