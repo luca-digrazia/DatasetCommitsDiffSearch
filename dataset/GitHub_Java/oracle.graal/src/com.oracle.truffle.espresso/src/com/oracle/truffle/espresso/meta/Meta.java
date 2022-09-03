@@ -111,6 +111,34 @@ public final class Meta {
         return new Meta.Klass(klass);
     }
 
+    public Klass meta(Object obj) {
+        assert StaticObject.notNull(obj);
+        if (obj instanceof StaticObject) {
+            assert ((StaticObject) obj).getKlass().getContext() == context;
+            return meta(((StaticObject) obj).getKlass());
+        }
+
+        if (obj instanceof int[]) {
+            return INT.array();
+        } else if (obj instanceof byte[]) {
+            return BYTE.array();
+        } else if (obj instanceof boolean[]) {
+            return BOOLEAN.array();
+        } else if (obj instanceof long[]) {
+            return LONG.array();
+        } else if (obj instanceof float[]) {
+            return FLOAT.array();
+        } else if (obj instanceof double[]) {
+            return DOUBLE.array();
+        } else if (obj instanceof char[]) {
+            return CHAR.array();
+        } else if (obj instanceof short[]) {
+            return SHORT.array();
+        }
+
+        throw EspressoError.shouldNotReachHere();
+    }
+
     public final Klass OBJECT;
     public final Klass STRING;
     public final Klass CLASS;
@@ -206,11 +234,11 @@ public final class Meta {
     }
 
     @CompilerDirectives.TruffleBoundary
-    public static String toHostString(StaticObject str) {
+    public static String toHost(StaticObject str) {
         if (StaticObject.isNull(str)) {
             return null;
         }
-        char[] value = ((StaticObjectArray) meta(str).declaredField("value").get()).unwrap();
+        char[] value = (char[]) meta(str).declaredField("value").get();
         return createString(value);
     }
 
@@ -229,7 +257,7 @@ public final class Meta {
         final int hash = getStringHash(str);
 
         StaticObject result = meta.STRING.metaNew().fields(
-                        Field.set("value", StaticObjectArray.wrap(value)),
+                        Field.set("value", value),
                         Field.set("hash", hash)).getInstance();
 
         // String.hashCode must be equivalent for host and guest.
@@ -279,39 +307,52 @@ public final class Meta {
         throw EspressoError.shouldNotReachHere(hostObject + " cannot be converted to guest world");
     }
 
-    public Object toHostBoxed(Object object, JavaKind kind) {
-        assert object != null;
-        if (object instanceof StaticObject) {
-            StaticObject guestObject = (StaticObject) object;
-            if (StaticObject.isNull(guestObject)) {
-                return null;
-            }
-            if (guestObject == StaticObject.VOID) {
-                return null;
-            }
-            if (guestObject instanceof StaticObjectArray) {
-                return ((StaticObjectArray) guestObject).unwrap();
-            }
-            if (guestObject.getKlass() == STRING.klass) {
-                return toHostString(guestObject);
-            }
+    public Object toHostBoxed(Object guestObject, JavaKind kind) {
+        if (guestObject == null) {
+            return null;
         }
-        return object;
-    }
-
-    public Object toHost(StaticObject guestObject) {
         if (StaticObject.isNull(guestObject)) {
             return null;
         }
         if (guestObject == StaticObject.VOID) {
             return null;
         }
+
         // primitive array
         if (guestObject.getClass().isArray() && guestObject.getClass().getComponentType().isPrimitive()) {
             return guestObject;
         }
-        if (guestObject.getKlass() == STRING.klass) {
-            return toHost(guestObject);
+        if (guestObject instanceof StaticObject) {
+            assert kind.isObject();
+            if (((StaticObject) guestObject).getKlass() == STRING.klass) {
+                return toHost((StaticObject) guestObject);
+            }
+        }
+
+        return guestObject;
+    }
+
+    public Object toHost(Object guestObject) {
+        // guestObject can be null for void.
+        // assert guestObject != null;
+        if (guestObject == null) {
+            return null;
+        }
+        if (StaticObject.isNull(guestObject)) {
+            return null;
+        }
+        if (guestObject == StaticObject.VOID) {
+            return null;
+        }
+
+        // primitive array
+        if (guestObject.getClass().isArray() && guestObject.getClass().getComponentType().isPrimitive()) {
+            return guestObject;
+        }
+        if (guestObject instanceof StaticObject) {
+            if (((StaticObject) guestObject).getKlass() == STRING.klass) {
+                return toHost((StaticObject) guestObject);
+            }
         }
         throw EspressoError.shouldNotReachHere(guestObject + " cannot be converted to host world");
     }
@@ -473,13 +514,14 @@ public final class Meta {
         }
 
         @CompilerDirectives.TruffleBoundary
-        public Object allocateArray(int length, IntFunction<StaticObject> generator) {
+        public Object allocateArray(int length, IntFunction<Object> generator) {
+            StaticObjectArray arr = (StaticObjectArray) klass.getContext().getInterpreterToVM().newArray(klass, length);
             // TODO(peterssen): Store check is missing.
-            StaticObject[] array = new StaticObject[length];
+            Object[] array = arr.getWrapped();
             for (int i = 0; i < array.length; ++i) {
                 array[i] = generator.apply(i);
             }
-            return new StaticObjectArray(klass.getArrayClass(), array);
+            return arr;
         }
 
         public Optional<Method.WithInstance> getClassInitializer() {
@@ -584,7 +626,7 @@ public final class Meta {
             }
 
             public String guestToString() {
-                return toHostString((StaticObject) method("toString", String.class).invokeDirect());
+                return toHost((StaticObject) method("toString", String.class).invokeDirect());
             }
 
             public Meta getMeta() {
@@ -660,6 +702,7 @@ public final class Meta {
                     filteredArgs[i] = meta.toGuestBoxed(args[i - 1]);
                 }
             }
+
             return meta.toHostBoxed(method.getCallTarget().call(filteredArgs), method.getSignature().resultKind());
         }
 
@@ -845,7 +888,7 @@ public final class Meta {
                     vm.setFieldDouble((double) value, self, field);
                     break;
                 case Object:
-                    vm.setFieldObject((StaticObject) value, self, field);
+                    vm.setFieldObject(value, self, field);
                     break;
                 default:
                     throw EspressoError.shouldNotReachHere();
