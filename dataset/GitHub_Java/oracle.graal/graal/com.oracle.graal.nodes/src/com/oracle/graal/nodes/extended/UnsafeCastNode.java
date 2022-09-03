@@ -23,30 +23,25 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * The {@code UnsafeCastNode} produces the same value as its input, but with a different type. It
- * allows unsafe casts "sideways" in the type hierarchy. It does not allow to "drop" type
- * information, i.e., an unsafe cast is removed if the input object has a more precise or equal type
- * than the type this nodes casts to.
+ * The {@code UnsafeCastNode} produces the same value as its input, but with a different type.
  */
-public class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, GuardingNode, IterableNodeType, Canonicalizable, ValueProxy {
-
-    @Input private ValueNode object;
+public class UnsafeCastNode extends PiNode implements Canonicalizable, LIRLowerable {
 
     public UnsafeCastNode(ValueNode object, Stamp stamp) {
-        super(stamp);
-        this.object = object;
+        super(object, stamp);
+    }
+
+    public UnsafeCastNode(ValueNode object, Stamp stamp, GuardingNode anchor) {
+        super(object, stamp, anchor);
     }
 
     public UnsafeCastNode(ValueNode object, Stamp stamp, ValueNode anchor) {
-        super(stamp, (GuardingNode) anchor);
-        this.object = object;
+        this(object, stamp, (GuardingNode) anchor);
     }
 
     public UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
@@ -54,52 +49,66 @@ public class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable,
     }
 
     @Override
-    public ValueNode getOriginalValue() {
-        return object;
+    public boolean inferStamp() {
+        if (stamp() == StampFactory.forNodeIntrinsic()) {
+            return false;
+        }
+        if (stamp() instanceof ObjectStamp && object().stamp() instanceof ObjectStamp) {
+            return updateStamp(((ObjectStamp) object().stamp()).castTo((ObjectStamp) stamp()));
+        }
+        return false;
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
-        assert kind() == Kind.Object && object.kind() == Kind.Object;
+    public ValueNode canonical(CanonicalizerTool tool) {
+        if (kind() != object().kind()) {
+            return this;
+        }
 
-        ObjectStamp my = (ObjectStamp) stamp();
-        ObjectStamp other = (ObjectStamp) object.stamp();
+        if (stamp() instanceof ObjectStamp && object().stamp() instanceof ObjectStamp) {
+            ObjectStamp my = (ObjectStamp) stamp();
+            ObjectStamp other = (ObjectStamp) object().stamp();
 
-        if (my.type() == null || other.type() == null) {
-            return this;
+            if (my.type() == null || other.type() == null) {
+                return this;
+            }
+            if (my.isExactType() && !other.isExactType()) {
+                return this;
+            }
+            if (my.nonNull() && !other.nonNull()) {
+                return this;
+            }
+            if (!my.type().isAssignableFrom(other.type())) {
+                return this;
+            }
         }
-        if (my.isExactType() && !other.isExactType()) {
-            return this;
-        }
-        if (my.nonNull() && !other.nonNull()) {
-            return this;
-        }
-        if (!my.type().isAssignableFrom(other.type())) {
-            return this;
-        }
-        /*
-         * The unsafe cast does not add any new type information, so it can be removed. Note that
-         * this means that the unsafe cast cannot be used to "drop" type information (in which case
-         * it must not be canonicalized in any case).
-         */
-        return object;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object);
-        if (state != null && state.getState() == EscapeState.Virtual && ObjectStamp.typeOrNull(this).isAssignableFrom(state.getVirtualObject().type())) {
-            tool.replaceWithVirtual(state.getVirtualObject());
-        }
+        return object();
     }
 
     @Override
     public void generate(LIRGeneratorTool generator) {
-        assert kind() == Kind.Object && object.kind() == Kind.Object;
-        /*
-         * The LIR only cares about the kind of an operand, not the actual type of an object. So we
-         * do not have to introduce a new operand.
-         */
-        generator.setResult(this, generator.operand(object));
+        if (kind() != object().kind()) {
+            assert generator.target().arch.getSizeInBytes(kind()) == generator.target().arch.getSizeInBytes(object().kind()) : "unsafe cast cannot be used to change the size of a value";
+            AllocatableValue result = generator.newVariable(kind());
+            generator.emitMove(result, generator.operand(object()));
+            generator.setResult(this, result);
+        } else {
+            // The LIR only cares about the kind of an operand, not the actual type of an object. So
+            // we do not have to
+            // introduce a new operand when the kind is the same.
+            generator.setResult(this, generator.operand(object()));
+        }
+    }
+
+    @NodeIntrinsic
+    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter Stamp stamp);
+
+    @NodeIntrinsic
+    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter Stamp stamp, GuardingNode anchor);
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static <T> T unsafeCast(Object object, @ConstantNodeParameter Class<T> toType, @ConstantNodeParameter boolean exactType, @ConstantNodeParameter boolean nonNull) {
+        return toType.cast(object);
     }
 }

@@ -28,7 +28,7 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public final class TypeCastNode extends FixedWithNextNode implements Lowerable, com.oracle.graal.graph.Node.IterableNodeType, ValueProxy {
+public final class TypeCastNode extends FixedWithNextNode implements Lowerable, com.oracle.graal.graph.Node.IterableNodeType {
 
     @Input private ValueNode receiver;
     @Input private ValueNode object;
@@ -66,9 +66,5 @@ public final class TypeCastNode extends FixedWithNextNode implements Lowerable, 
             this.replaceAtUsages(unsafeCast);
             graph().replaceFixedWithFixed(this, valueAnchorNode);
         }
-    }
-
-    public ValueNode getOriginalValue() {
-        return object;
     }
 }
