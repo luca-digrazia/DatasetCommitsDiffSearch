@@ -24,6 +24,7 @@ package com.oracle.max.graal.nodes.java;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
+import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
@@ -50,7 +51,7 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         RiResolvedType declaredType = object.declaredType();
         RiResolvedType exactType = object.exactType();
         if (exactType == null && declaredType != null) {
@@ -71,7 +72,7 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
         }
 
         if (!needsCheck) {
-            return null;
+            return next();
         }
 
         return this;

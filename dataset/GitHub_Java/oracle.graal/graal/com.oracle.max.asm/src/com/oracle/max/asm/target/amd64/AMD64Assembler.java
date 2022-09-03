@@ -46,60 +46,34 @@ public class AMD64Assembler extends AbstractAssembler {
      * The x86 condition codes used for conditional jumps/moves.
      */
     public enum ConditionFlag {
-        zero(0x4, "|zero|"),
-        notZero(0x5, "|nzero|"),
-        equal(0x4, "="),
-        notEqual(0x5, "!="),
-        less(0xc, "<"),
-        lessEqual(0xe, "<="),
-        greater(0xf, ">"),
-        greaterEqual(0xd, ">="),
-        below(0x2, "|<|"),
-        belowEqual(0x6, "|<=|"),
-        above(0x7, "|>|"),
-        aboveEqual(0x3, "|>=|"),
-        overflow(0x0, "|of|"),
-        noOverflow(0x1, "|nof|"),
-        carrySet(0x2, "|carry|"),
-        carryClear(0x3, "|ncarry|"),
-        negative(0x8, "|neg|"),
-        positive(0x9, "|pos|"),
-        parity(0xa, "|par|"),
-        noParity(0xb, "|npar|");
+        zero(0x4),
+        notZero(0x5),
+        equal(0x4),
+        notEqual(0x5),
+        less(0xc),
+        lessEqual(0xe),
+        greater(0xf),
+        greaterEqual(0xd),
+        below(0x2),
+        belowEqual(0x6),
+        above(0x7),
+        aboveEqual(0x3),
+        overflow(0x0),
+        noOverflow(0x1),
+        carrySet(0x2),
+        carryClear(0x3),
+        negative(0x8),
+        positive(0x9),
+        parity(0xa),
+        noParity(0xb);
 
         public final int value;
-        public final String operator;
 
-        private ConditionFlag(int value, String operator) {
+        private ConditionFlag(int value) {
             this.value = value;
-            this.operator = operator;
         }
 
-        public ConditionFlag negate() {
-            switch(this) {
-                case zero: return notZero;
-                case notZero: return zero;
-                case equal: return notEqual;
-                case notEqual: return equal;
-                case less: return greaterEqual;
-                case lessEqual: return greater;
-                case greater: return lessEqual;
-                case greaterEqual: return less;
-                case below: return aboveEqual;
-                case belowEqual: return above;
-                case above: return belowEqual;
-                case aboveEqual: return below;
-                case overflow: return noOverflow;
-                case noOverflow: return overflow;
-                case carrySet: return carryClear;
-                case carryClear: return carrySet;
-                case negative: return positive;
-                case positive: return negative;
-                case parity: return noParity;
-                case noParity: return parity;
-            }
-            throw new IllegalArgumentException();
-        }
+        public static final ConditionFlag[] values = values();
     }
 
     /**
@@ -785,7 +759,6 @@ public class AMD64Assembler extends AbstractAssembler {
         }
     }
 
-    @Override
     public final void jmp(Label l) {
         if (l.isBound()) {
             jmp(l.position(), false);
@@ -2903,7 +2876,6 @@ public class AMD64Assembler extends AbstractAssembler {
         testl(AMD64.rax, new CiAddress(Word, r.asValue(Word), 0));
     }
 
-    @Override
     public void align(int modulus) {
         if (codeBuffer.position() % modulus != 0) {
             nop(modulus - (codeBuffer.position() % modulus));
@@ -3010,10 +2982,5 @@ public class AMD64Assembler extends AbstractAssembler {
 
     public void fstp(int i) {
         emitx87(0xDD, 0xD8, i);
-    }
-
-    @Override
-    public void bangStack(int disp) {
-        movq(new CiAddress(target.wordKind, AMD64.RSP, -disp), AMD64.rax);
     }
 }

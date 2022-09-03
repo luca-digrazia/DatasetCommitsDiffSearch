@@ -28,11 +28,11 @@ import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.phases.*;
-import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.graph.Node.Verbosity;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
+import com.oracle.max.graal.nodes.loop.*;
 import com.oracle.max.graal.nodes.virtual.*;
 
 
@@ -179,8 +179,15 @@ public class IdentifyBlocksPhase extends Phase {
         }
 
         if (n instanceof MergeNode) {
-            for (PhiNode phi : ((MergeNode) n).phis()) {
-                nodeToBlock.set(phi, b);
+            for (Node usage : n.usages()) {
+                if (usage instanceof PhiNode) {
+                    nodeToBlock.set(usage, b);
+                }
+            }
+            if (n instanceof LoopBeginNode) {
+                for (InductionVariableNode iv : ((LoopBeginNode) n).inductionVariables()) {
+                    nodeToBlock.set(iv, b);
+                }
             }
         }
         if (n instanceof EndNode) {
@@ -197,6 +204,10 @@ public class IdentifyBlocksPhase extends Phase {
         }
 
         return b;
+    }
+
+    public static boolean isFixed(Node n) {
+        return n != null && n instanceof FixedNode && !(n instanceof AccessNode && n.predecessor() == null);
     }
 
     public static boolean isBlockEnd(Node n) {
@@ -227,8 +238,7 @@ public class IdentifyBlocksPhase extends Phase {
                     }
                     prev = currentNode;
                     currentNode = currentNode.predecessor();
-                    // FIX(ls) what's the meaning of this assert?
-//                    assert !(currentNode instanceof AccessNode && ((AccessNode) currentNode).next() != prev) : currentNode;
+                    assert !(currentNode instanceof AccessNode && ((AccessNode) currentNode).next() != prev) : currentNode;
                     assert !currentNode.isDeleted() : prev + " " + currentNode;
                 }
             }
@@ -245,7 +255,7 @@ public class IdentifyBlocksPhase extends Phase {
                 }
             } else {
                 if (n.predecessor() != null) {
-                    if (Util.isFixed(n.predecessor())) {
+                    if (isFixed(n.predecessor())) {
                         Block predBlock = nodeToBlock.get(n.predecessor());
                         predBlock.addSuccessor(block);
                     }
@@ -446,6 +456,12 @@ public class IdentifyBlocksPhase extends Phase {
                 block = getCommonDominator(block, nodeToBlock.get(pred));
             }
             closure.apply(block);
+        } else if (usage instanceof LinearInductionVariableNode) {
+            LinearInductionVariableNode liv = (LinearInductionVariableNode) usage;
+            if (liv.isLinearInductionVariableInput(node)) {
+                Block mergeBlock = nodeToBlock.get(liv.loopBegin());
+                closure.apply(mergeBlock.dominator());
+            }
         } else {
             assignBlockToNode(usage);
             closure.apply(nodeToBlock.get(usage));
@@ -517,7 +533,7 @@ public class IdentifyBlocksPhase extends Phase {
     }
 
     private void addToSorting(Block b, Node i, List<Node> sortedInstructions, NodeBitMap map) {
-        if (i == null || map.isMarked(i) || nodeToBlock.get(i) != b || i instanceof PhiNode || i instanceof LocalNode) {
+        if (i == null || map.isMarked(i) || nodeToBlock.get(i) != b || i instanceof PhiNode || i instanceof LocalNode || i instanceof InductionVariableNode) {
             return;
         }
 
@@ -630,7 +646,7 @@ public class IdentifyBlocksPhase extends Phase {
         }
         int i = 0;
         for (Node s : n.successors()) {
-            if (Util.isFixed(s)) {
+            if (isFixed(s)) {
                 i++;
             }
         }

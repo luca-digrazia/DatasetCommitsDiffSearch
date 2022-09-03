@@ -67,6 +67,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private StructuredGraph currentGraph;
 
+    private final CiStatistics stats;
     private final RiRuntime runtime;
     private RiConstantPool constantPool;
     private RiExceptionHandler[] exceptionHandlers;
@@ -103,12 +104,17 @@ public final class GraphBuilderPhase extends Phase {
     private final GraphBuilderConfiguration config;
 
     public GraphBuilderPhase(RiRuntime runtime) {
-        this(runtime, GraphBuilderConfiguration.getDefault());
+        this(runtime, null);
     }
 
-    public GraphBuilderPhase(RiRuntime runtime, GraphBuilderConfiguration config) {
+    public GraphBuilderPhase(RiRuntime runtime, CiStatistics stats) {
+        this(runtime, stats, GraphBuilderConfiguration.getDefault());
+    }
+
+    public GraphBuilderPhase(RiRuntime runtime, CiStatistics stats, GraphBuilderConfiguration config) {
         this.config = config;
         this.runtime = runtime;
+        this.stats = stats;
         this.log = GraalOptions.TraceBytecodeParserLevel > 0 ? new LogStream(TTY.out()) : null;
     }
 
@@ -137,7 +143,9 @@ public final class GraphBuilderPhase extends Phase {
     private BlockMap createBlockMap() {
         BlockMap map = new BlockMap(method, config.useBranchPrediction());
         map.build();
-        currentContext.metrics.bytecodeCount += method.code().length;
+        if (stats != null) {
+            stats.bytecodeCount += method.code().length;
+        }
 
         if (currentContext.isObserved()) {
             String label = CiUtil.format("BlockListBuilder %f %R %H.%n(%P)", method);
@@ -157,8 +165,9 @@ public final class GraphBuilderPhase extends Phase {
         this.canTrapBitSet = blockMap.canTrap;
 
         exceptionHandlers = blockMap.exceptionHandlers();
-        currentContext.metrics.blockCount += blockMap.blocks.size();
-
+        if (stats != null) {
+            stats.blockCount += blockMap.blocks.size();
+        }
         nextBlockNumber = blockMap.blocks.size();
 
         lastInstr = currentGraph.start();
@@ -183,7 +192,7 @@ public final class GraphBuilderPhase extends Phase {
 
         // remove Placeholders (except for loop exits)
         for (PlaceholderNode n : currentGraph.getNodes(PlaceholderNode.class)) {
-            currentGraph.removeFixed(n);
+            n.replaceAndDelete(n.next());
         }
 
         // remove dead FrameStates
@@ -199,7 +208,9 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private int nextBlockNumber() {
-        currentContext.metrics.blockCount++;
+        if (stats != null) {
+            stats.blockCount++;
+        }
         return nextBlockNumber++;
     }
 
@@ -611,14 +622,10 @@ public final class GraphBuilderPhase extends Phase {
             probability = 0.5;
         }
 
-        CompareNode condition = currentGraph.unique(new CompareNode(x, cond, y));
-        FixedNode trueSuccessor = createTarget(currentBlock.successors.get(0), frameState);
-        FixedNode falseSuccessor = createTarget(currentBlock.successors.get(1), frameState);
-        if (trueSuccessor == falseSuccessor) {
-            appendGoto(trueSuccessor);
-        } else {
-            append(currentGraph.add(new IfNode(condition, trueSuccessor, falseSuccessor, probability)));
-        }
+        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new CompareNode(x, cond, y)), probability));
+        append(ifNode);
+        ifNode.setTrueSuccessor(BeginNode.begin(createTarget(currentBlock.successors.get(0), frameState)));
+        ifNode.setFalseSuccessor(BeginNode.begin(createTarget(currentBlock.successors.get(1), frameState)));
 
         assert currentBlock.normalSuccessors == 2 : currentBlock.normalSuccessors;
     }
@@ -1330,8 +1337,8 @@ public final class GraphBuilderPhase extends Phase {
                 EndNode loopEntryEnd = begin.forwardEdge();
                 FixedNode beginSucc = begin.next();
                 FrameState stateAfter = begin.stateAfter();
+                stateAfter.delete();
                 begin.safeDelete();
-                stateAfter.safeDelete();
                 loopEntryEnd.replaceAndDelete(beginSucc);
             }
         }

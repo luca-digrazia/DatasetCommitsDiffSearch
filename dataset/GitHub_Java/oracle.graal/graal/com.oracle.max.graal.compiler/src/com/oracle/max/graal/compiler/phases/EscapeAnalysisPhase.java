@@ -29,7 +29,6 @@ import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.PhiNode.PhiType;
@@ -224,7 +223,7 @@ public class EscapeAnalysisPhase extends Phase {
 
         public void apply() {
             if (node.usages().isEmpty()) {
-                graph.removeFixed(node);
+                node.replaceAndDelete(node.next());
             } else {
                 process();
                 removeAllocation();
@@ -241,8 +240,8 @@ public class EscapeAnalysisPhase extends Phase {
                 TTY.println("new virtual object: " + virtual);
             }
             node.replaceAtUsages(virtual);
-            FixedNode next = node.next();
-            graph.removeFixed(node);
+            final FixedNode next = node.next();
+            node.replaceAndDelete(next);
 
             if (virtual.fieldsCount() > 0) {
                 final BlockExitState startState = new BlockExitState(escapeFields, virtual);
@@ -429,10 +428,21 @@ public class EscapeAnalysisPhase extends Phase {
             }
             if (invokes.size() == 0) {
 
-                Debug.dump(graph, "Before escape %s", node);
-                Debug.log("!!!!!!!! non-escaping object: %s (%s)", node, node.exactType());
-                removeAllocation(node, op);
-                Debug.dump(graph, "After escape", graph);
+                if (currentContext.isObserved()) {
+                    currentContext.observable.fireCompilationEvent("Before escape " + node, graph);
+                }
+                if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
+                    TTY.println("%n!!!!!!!! non-escaping object: %s (%s)", node, node.exactType());
+                }
+                try {
+                    currentContext.timers.startScope("Escape Analysis Fixup");
+                    removeAllocation(node, op);
+                } finally {
+                    currentContext.timers.endScope();
+                }
+                if (currentContext.isObserved()) {
+                    currentContext.observable.fireCompilationEvent("After escape", graph);
+                }
                 break;
             }
             if (weight < minimumWeight) {
@@ -447,8 +457,8 @@ public class EscapeAnalysisPhase extends Phase {
             if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
                 TTY.println("Trying inlining to get a non-escaping object for %s", node);
             }
-            new InliningPhase(target, runtime, invokes, assumptions, plan).apply(graph);
-            new DeadCodeEliminationPhase().apply(graph);
+            new InliningPhase(target, runtime, invokes, assumptions, plan).apply(graph, currentContext);
+            new DeadCodeEliminationPhase().apply(graph, currentContext);
             if (node.isDeleted()) {
                 if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
                     TTY.println("%n!!!!!!!! object died while performing escape analysis: %s (%s)", node, node.exactType());
@@ -476,7 +486,7 @@ public class EscapeAnalysisPhase extends Phase {
                 }
             }
             if (!required) {
-                ((StructuredGraph) node.graph()).replaceFloating(phi, simpleValue);
+                phi.replaceAndDelete(simpleValue);
             }
         }
     }
@@ -504,7 +514,9 @@ public class EscapeAnalysisPhase extends Phase {
                     }
                 } else {
                     exits.add(usage);
-                    break;
+                    if (!GraalOptions.TraceEscapeAnalysis) {
+                        break;
+                    }
                 }
             } else {
                 if (GraalOptions.ProbabilityAnalysis && usage instanceof FixedNode) {
