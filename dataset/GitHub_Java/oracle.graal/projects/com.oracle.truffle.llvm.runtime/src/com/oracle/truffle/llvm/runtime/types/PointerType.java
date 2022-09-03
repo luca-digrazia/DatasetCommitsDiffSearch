@@ -43,7 +43,7 @@ public final class PointerType extends AggregateType {
     @CompilationFinal private Assumption pointeeTypeAssumption;
 
     public PointerType(Type pointeeType) {
-        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption("PointerType.pointeeType");
+        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption();
         this.pointeeType = pointeeType;
     }
 
@@ -58,7 +58,7 @@ public final class PointerType extends AggregateType {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         this.pointeeTypeAssumption.invalidate();
         this.pointeeType = type;
-        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption("PointerType.pointeeType");
+        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption();
     }
 
     @Override

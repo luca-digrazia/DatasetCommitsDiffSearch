@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime.types;
 
 import java.util.Arrays;
-import java.util.stream.Collectors;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -118,7 +117,7 @@ public final class StructureType extends AggregateType {
     @Override
     public Type shallowCopy() {
         final StructureType copy = new StructureType(name, isPacked, types);
-        copy.setInteropType(getInteropType());
+        copy.setSourceType(getSourceType());
         return copy;
     }
 
@@ -148,13 +147,8 @@ public final class StructureType extends AggregateType {
     }
 
     @Override
-    @TruffleBoundary
     public String toString() {
-        if (LLVMIdentifier.UNKNOWN.equals(name)) {
-            return Arrays.stream(types).map(String::valueOf).collect(Collectors.joining(", ", "%{", "}"));
-        } else {
-            return name;
-        }
+        return name;
     }
 
     @Override
