@@ -29,7 +29,7 @@ public final class FrameSlotImpl implements FrameSlot {
     private final FrameDescriptor descriptor;
     private final Object identifier;
     private final int index;
-    @com.oracle.truffle.api.CompilerDirectives.CompilationFinal private FrameSlotKind kind;
+    private FrameSlotKind kind;
 
     public FrameSlotImpl(FrameDescriptor descriptor, Object identifier, int index, FrameSlotKind kind) {
         this.descriptor = descriptor;
@@ -51,10 +51,9 @@ public final class FrameSlotImpl implements FrameSlot {
     }
 
     public void setKind(final FrameSlotKind kind) {
-        if (this.kind != kind) {
-            this.kind = kind;
-            this.descriptor.updateVersion();
-        }
+        assert this.kind != kind;
+        this.kind = kind;
+        this.descriptor.updateVersion();
     }
 
     @Override

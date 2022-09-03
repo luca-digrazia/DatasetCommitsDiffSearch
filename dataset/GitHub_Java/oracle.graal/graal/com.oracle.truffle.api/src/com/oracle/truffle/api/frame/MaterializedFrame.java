@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,10 +25,12 @@
 package com.oracle.truffle.api.frame;
 
 /**
- * Represents a materialized frame containing values of local variables of the guest language. It can be created using
- * the {@link VirtualFrame#materialize()} method. Instances of this type are the only frame instances that may be stored
- * in fields or cast to {@link java.lang.Object}. In contrast to a {@link VirtualFrame}, a {@link MaterializedFrame} can
- * no longer be packed and it also does not provide access to the caller frame.
+ * Represents a materialized frame containing values of local variables of the guest language. It
+ * can be created using the {@link VirtualFrame#materialize()} method. Instances of this type are
+ * the only frame instances that may be stored in fields or cast to {@link java.lang.Object}. In
+ * contrast to a {@link VirtualFrame}, a {@link MaterializedFrame} can no longer be packed and it
+ * also does not provide access to the caller frame.
  */
 public interface MaterializedFrame extends Frame {
+
 }

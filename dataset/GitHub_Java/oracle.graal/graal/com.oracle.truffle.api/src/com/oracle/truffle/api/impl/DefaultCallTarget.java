@@ -50,10 +50,6 @@ public class DefaultCallTarget extends CallTarget {
         return rootNode.execute(frame);
     }
 
-    public FrameDescriptor getFrameDescriptor() {
-        return frameDescriptor;
-    }
-
     public RootNode getRootNode() {
         return rootNode;
     }

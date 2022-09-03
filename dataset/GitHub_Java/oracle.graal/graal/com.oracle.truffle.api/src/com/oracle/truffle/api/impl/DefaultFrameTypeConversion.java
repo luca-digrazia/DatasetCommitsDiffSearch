@@ -40,10 +40,7 @@ public class DefaultFrameTypeConversion implements FrameTypeConversion {
 
     @Override
     public void updateFrameSlot(Frame frame, FrameSlot slot, Object value) {
-        if (slot.getKind() != FrameSlotKind.Object) {
-            slot.setKind(FrameSlotKind.Object);
-        }
-        frame.setObject(slot, value);
+        FrameUtil.setObjectSafe(frame, slot, value);
     }
 
     public static DefaultFrameTypeConversion getInstance() {

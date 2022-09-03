@@ -36,12 +36,6 @@ public class ControlFlowException extends RuntimeException {
      * Creates an exception thrown to model control flow.
      */
     public ControlFlowException() {
-        /*
-         * We use the super constructor that initializes the cause to null. Without that, the cause
-         * would be this exception itself. This helps escape analysis: it avoids the circle of an
-         * object pointing to itself.
-         */
-        super((Throwable) null);
     }
 
     /**

@@ -40,19 +40,8 @@ public @interface NodeInfo {
      */
     String shortName() default "";
 
-    NodeCost cost() default NodeCost.MONOMORPHIC;
-
-    /**
-     * @deprecated use {@link NodeInfo#cost()} instead.
-     */
-    @Deprecated
     Kind kind() default Kind.SPECIALIZED;
 
-    /**
-     * 
-     * @deprecated use {@link NodeCost} instead.
-     */
-    @Deprecated
     public enum Kind {
         UNINITIALIZED, SPECIALIZED, POLYMORPHIC, GENERIC
     }

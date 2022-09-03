@@ -38,12 +38,21 @@ public interface NodeFactory<T> {
      * Instantiates the node using the arguments array. The arguments length and types must suffice
      * one of the returned signatures in {@link #getNodeSignatures()}. If the arguments array does
      * not suffice one of the node signatures an {@link IllegalArgumentException} is thrown.
-     *
+     * 
      * @param arguments the argument values
      * @return the instantiated node
      * @throws IllegalArgumentException
      */
     T createNode(Object... arguments);
+
+    /**
+     * Instantiates a new generic variant of the node. This is an optional method and throws an
+     * {@link UnsupportedOperationException} if not supported.
+     * 
+     * @param thisNode the current node
+     * @return the specialized node
+     */
+    T createNodeGeneric(T thisNode);
 
     /**
      * Returns the node class that will get created by {@link #createNode(Object...)}. The node

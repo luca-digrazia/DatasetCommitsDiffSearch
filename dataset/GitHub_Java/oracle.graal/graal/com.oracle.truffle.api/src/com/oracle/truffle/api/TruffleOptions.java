@@ -32,53 +32,31 @@ import com.oracle.truffle.api.nodes.NodeInfo.Kind;
  */
 public class TruffleOptions {
 
-    /**
-     * Enables/disables the rewriting of traces in the truffle runtime to stdout.
-     * <p>
-     * Can be set with {@code -Dtruffle.TraceRewrites=true}.
-     */
-    public static boolean TraceRewrites = Boolean.getBoolean("truffle.TraceRewrites");
+    /** Enables/disables the rewriting of traces in the truffle runtime to stdout. */
+    public static boolean TraceRewrites = false;
 
     /**
      * Enables the generation of detailed rewrite reasons. Enabling this may introduce some overhead
      * for rewriting nodes.
-     * <p>
-     * Can be set with {@code -Dtruffle.DetailedRewriteReasons=true}.
      */
-    public static final boolean DetailedRewriteReasons = Boolean.getBoolean("truffle.DetailedRewriteReasons");
+    public static final boolean DetailedRewriteReasons = false;
 
     /**
      * Filters rewrites that do not contain the given string in the qualified name of the source or
      * target class hierarchy.
-     * <p>
-     * Can be set with {@code -Dtruffle.TraceRewritesFilterClass=name}.
      */
-    public static String TraceRewritesFilterClass = System.getProperty("truffle.TraceRewritesFilterClass");
+    public static String TraceRewritesFilterClass = null;
 
     /**
      * Filters rewrites which does not contain the {@link Kind} in its source {@link NodeInfo}. If
      * no {@link NodeInfo} is defined the element is filtered if the filter value is set.
-     * <p>
-     * Can be set with
-     * {@code -Dtruffle.TraceRewritesFilterFromKind=UNINITIALIZED|SPECIALIZED|POLYMORPHIC|GENERIC}.
      */
-    public static NodeInfo.Kind TraceRewritesFilterFromKind = parseNodeInfoKind(System.getProperty("truffle.TraceRewritesFilterFromKind"));
+    public static NodeInfo.Kind TraceRewritesFilterFromKind = null;
 
     /**
      * Filters rewrites which does not contain the {@link Kind} in its target {@link NodeInfo}. If
      * no {@link NodeInfo} is defined the element is filtered if the filter value is set.
-     * <p>
-     * Can be set with
-     * {@code -Dtruffle.TraceRewritesFilterToKind=UNINITIALIZED|SPECIALIZED|POLYMORPHIC|GENERIC}.
      */
-    public static NodeInfo.Kind TraceRewritesFilterToKind = parseNodeInfoKind(System.getProperty("truffle.TraceRewritesFilterToKind"));
-
-    private static NodeInfo.Kind parseNodeInfoKind(String kind) {
-        if (kind == null) {
-            return null;
-        }
-
-        return NodeInfo.Kind.valueOf(kind);
-    }
+    public static NodeInfo.Kind TraceRewritesFilterToKind = null;
 
 }

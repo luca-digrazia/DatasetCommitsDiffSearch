@@ -74,6 +74,7 @@ import com.oracle.truffle.api.nodes.*;
  * }
  * </pre>
  * 
+ * </p>
  * 
  * @see TypeCast
  * @see TypeCheck
@@ -85,6 +86,6 @@ public @interface TypeSystem {
     /**
      * The list of types as child elements of the {@link TypeSystem}. Each precedes its super type.
      */
-    Class<?>[] value();
+    Class[] value();
 
 }

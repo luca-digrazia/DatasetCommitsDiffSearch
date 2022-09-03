@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,15 +25,17 @@
 package com.oracle.truffle.api.frame;
 
 /**
- * Represents a packed frame that represents a virtual frame. A packed frame instance can be retrieved with the
- * {@link VirtualFrame#pack()} method. It can be converted back into a virtual frame using {@link PackedFrame#unpack()}.
- * Instances of this type must not be stored in a field or cast to {@link java.lang.Object}.
+ * Represents a packed frame that represents a virtual frame. A packed frame instance can be
+ * retrieved with the {@link VirtualFrame#pack()} method. It can be converted back into a virtual
+ * frame using {@link PackedFrame#unpack()}. Instances of this type must not be stored in a field or
+ * cast to {@link java.lang.Object}.
  */
 public interface PackedFrame {
 
     /**
      * Unpacks this frame and converts it back to a virtual frame.
+     * 
      * @return the virtual frame that was the content of this packed frame
      */
-    VirtualFrame unpack();
+    Frame unpack();
 }

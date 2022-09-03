@@ -24,16 +24,11 @@
  */
 package com.oracle.truffle.api.impl;
 
-import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
 
-/**
- * This is an implementation-specific class. Do not use or instantiate it. Instead, use
- * {@link TruffleRuntime#createAssumption()} to create an {@link Assumption}.
- */
-final class DefaultAssumption extends AbstractAssumption {
+public final class DefaultAssumption extends AbstractAssumption {
 
-    DefaultAssumption(String name) {
+    public DefaultAssumption(String name) {
         super(name);
     }
 
