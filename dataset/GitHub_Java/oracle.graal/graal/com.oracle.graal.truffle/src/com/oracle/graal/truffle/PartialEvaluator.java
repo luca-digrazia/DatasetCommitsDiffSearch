@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.PrintTruffleExpansionHistogram;
 
 import java.lang.invoke.MethodHandle;
@@ -41,7 +40,10 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.services.Services;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionType;
+import jdk.vm.ci.options.OptionValue;
+import jdk.vm.ci.service.Services;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -67,9 +69,6 @@ import com.oracle.graal.nodes.java.InstanceOfNode;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
 import com.oracle.graal.nodes.virtual.VirtualInstanceNode;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
@@ -165,7 +164,7 @@ public class PartialEvaluator {
             throw Debug.handle(e);
         }
 
-        final StructuredGraph graph = new StructuredGraph(callTarget.toString(), callRootMethod, allowAssumptions, callTarget.getSpeculationLog(), NO_PROFILING_INFO);
+        final StructuredGraph graph = new StructuredGraph(callTarget.toString(), callRootMethod, allowAssumptions, callTarget.getSpeculationLog());
         assert graph != null : "no graph for root method";
 
         try (Scope s = Debug.scope("CreateGraph", graph); Indent indent = Debug.logAndIndent("createGraph %s", graph)) {
@@ -334,6 +333,7 @@ public class PartialEvaluator {
     protected void doFastPE(OptimizedCallTarget callTarget, StructuredGraph graph) {
         GraphBuilderConfiguration newConfig = configForPartialEvaluation.copy();
 
+        newConfig.setUseProfiling(false);
         Plugins plugins = newConfig.getPlugins();
         plugins.prependParameterPlugin(new InterceptReceiverPlugin(callTarget));
         callTarget.setInlining(new TruffleInlining(callTarget, new DefaultInliningPolicy()));
@@ -362,6 +362,7 @@ public class PartialEvaluator {
 
         LoopExplosionPlugin loopExplosionPlugin = new PELoopExplosionPlugin();
 
+        newConfig.setUseProfiling(false);
         Plugins plugins = newConfig.getPlugins();
         ReplacementsImpl replacements = (ReplacementsImpl) providers.getReplacements();
         plugins.clearInlineInvokePlugins();
