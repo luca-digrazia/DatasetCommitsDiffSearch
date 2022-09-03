@@ -22,11 +22,18 @@
  */
 package com.oracle.graal.replacements;
 
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+
+import java.lang.reflect.*;
+import java.util.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
+import com.oracle.graal.options.*;
 
 /**
  * Method substitutions that are VM-independent.
@@ -34,19 +41,37 @@ import com.oracle.graal.phases.*;
 @ServiceProvider(ReplacementsProvider.class)
 public class GraalMethodSubstitutions implements ReplacementsProvider {
 
-    public void registerReplacements(MetaAccessProvider runtime, Replacements replacements, TargetDescription target) {
-        for (Class<?> clazz : BoxingSubstitutions.getClasses()) {
-            replacements.registerSubstitutions(clazz);
-        }
+    static class Options {
+        @Option(help = "") public static final OptionValue<Boolean> UseBlackholeSubstitution = new OptionValue<>(true);
+    }
 
-        if (GraalOptions.Intrinsify) {
-            replacements.registerSubstitutions(MathSubstitutionsX86.class);
-            replacements.registerSubstitutions(DoubleSubstitutions.class);
-            replacements.registerSubstitutions(FloatSubstitutions.class);
-            replacements.registerSubstitutions(NodeClassSubstitutions.class);
-            replacements.registerSubstitutions(LongSubstitutions.class);
-            replacements.registerSubstitutions(IntegerSubstitutions.class);
-            replacements.registerSubstitutions(UnsignedMathSubstitutions.class);
+    public void registerReplacements(MetaAccessProvider metaAccess, LoweringProvider loweringProvider, SnippetReflectionProvider snippetReflection, Replacements replacements, TargetDescription target) {
+        BoxingSubstitutions.registerReplacements(replacements);
+        if (Intrinsify.getValue()) {
+            replacements.registerSubstitutions(Arrays.class, ArraysSubstitutions.class);
+            replacements.registerSubstitutions(Array.class, ArraySubstitutions.class);
+            replacements.registerSubstitutions(String.class, StringSubstitutions.class);
+            replacements.registerSubstitutions(Math.class, MathSubstitutionsX86.class);
+            replacements.registerSubstitutions(Double.class, DoubleSubstitutions.class);
+            replacements.registerSubstitutions(Float.class, FloatSubstitutions.class);
+            replacements.registerSubstitutions(Long.class, LongSubstitutions.class);
+            replacements.registerSubstitutions(Integer.class, IntegerSubstitutions.class);
+            replacements.registerSubstitutions(Character.class, CharacterSubstitutions.class);
+            replacements.registerSubstitutions(Short.class, ShortSubstitutions.class);
+            replacements.registerSubstitutions(UnsignedMath.class, UnsignedMathSubstitutions.class);
+            replacements.registerSubstitutions(Edges.class, EdgesSubstitutions.class);
+            if (Options.UseBlackholeSubstitution.getValue()) {
+                replacements.registerSubstitutions(new Type() {
+                    public String getTypeName() {
+                        return "org.openjdk.jmh.infra.Blackhole";
+                    }
+                }, BlackholeSubstitutions.class);
+                replacements.registerSubstitutions(new Type() {
+                    public String getTypeName() {
+                        return "org.openjdk.jmh.logic.BlackHole";
+                    }
+                }, BlackholeSubstitutions.class);
+            }
         }
     }
 }

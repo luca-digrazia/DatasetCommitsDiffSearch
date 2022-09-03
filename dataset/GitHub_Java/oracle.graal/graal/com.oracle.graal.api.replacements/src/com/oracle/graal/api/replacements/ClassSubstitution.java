@@ -22,10 +22,7 @@
  */
 package com.oracle.graal.api.replacements;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 
 /**
  * Denotes a class that substitutes methods of another specified class. The substitute methods are
@@ -60,4 +57,10 @@ public @interface ClassSubstitution {
      * Substitutions for such classes are omitted if the original classes cannot be found.
      */
     boolean optional() default false;
+
+    /**
+     * Determines if the substitutions in a class are globally enabled. Individual
+     * MethodSubstitutions can also have guards and those override this guard.
+     */
+    Class<? extends SubstitutionGuard> defaultGuard() default SubstitutionGuard.class;
 }

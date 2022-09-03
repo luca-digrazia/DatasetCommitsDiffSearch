@@ -113,13 +113,11 @@ public class ReplacementsImpl implements Replacements {
                         }
                         String originalName = originalName(substituteMethod, methodSubstitution.value());
                         JavaSignature originalSignature = originalSignature(substituteMethod, methodSubstitution.signature(), methodSubstitution.isStatic());
-                        Executable[] originalMethods = originalMethods(classSubstitution, methodSubstitution.optional(), originalName, originalSignature);
-                        for (Executable originalMethod : originalMethods) {
-                            if (originalMethod != null && (guard == null || guard.execute())) {
-                                ResolvedJavaMethod original = registerMethodSubstitution(this, originalMethod, substituteMethod);
-                                if (original != null && methodSubstitution.forced() && shouldIntrinsify(original)) {
-                                    forcedSubstitutions.add(original);
-                                }
+                        Executable originalMethod = originalMethod(classSubstitution, methodSubstitution.optional(), originalName, originalSignature);
+                        if (originalMethod != null && (guard == null || guard.execute())) {
+                            ResolvedJavaMethod original = registerMethodSubstitution(this, originalMethod, substituteMethod);
+                            if (original != null && methodSubstitution.forced() && shouldIntrinsify(original)) {
+                                forcedSubstitutions.add(original);
                             }
                         }
                     }
@@ -128,13 +126,11 @@ public class ReplacementsImpl implements Replacements {
                     if (macroSubstitution != null && (defaultGuard == null || defaultGuard.execute())) {
                         String originalName = originalName(substituteMethod, macroSubstitution.value());
                         JavaSignature originalSignature = originalSignature(substituteMethod, macroSubstitution.signature(), macroSubstitution.isStatic());
-                        Executable[] originalMethods = originalMethods(classSubstitution, macroSubstitution.optional(), originalName, originalSignature);
-                        for (Executable originalMethod : originalMethods) {
-                            if (originalMethod != null) {
-                                ResolvedJavaMethod original = registerMacroSubstitution(this, originalMethod, macroSubstitution.macro());
-                                if (original != null && macroSubstitution.forced() && shouldIntrinsify(original)) {
-                                    forcedSubstitutions.add(original);
-                                }
+                        Executable originalMethod = originalMethod(classSubstitution, macroSubstitution.optional(), originalName, originalSignature);
+                        if (originalMethod != null) {
+                            ResolvedJavaMethod original = registerMacroSubstitution(this, originalMethod, macroSubstitution.macro());
+                            if (original != null && macroSubstitution.forced() && shouldIntrinsify(original)) {
+                                forcedSubstitutions.add(original);
                             }
                         }
                     }
@@ -163,30 +159,20 @@ public class ReplacementsImpl implements Replacements {
             return new JavaSignature(returnType, parameters);
         }
 
-        private Executable[] originalMethods(ClassSubstitution classSubstitution, boolean optional, String name, JavaSignature signature) {
+        private Executable originalMethod(ClassSubstitution classSubstitution, boolean optional, String name, JavaSignature signature) {
             Class<?> originalClass = classSubstitution.value();
             if (originalClass == ClassSubstitution.class) {
-                ArrayList<Executable> result = new ArrayList<>();
                 for (String className : classSubstitution.className()) {
                     originalClass = resolveClass(className, classSubstitution.optional());
                     if (originalClass != null) {
-                        result.add(lookupOriginalMethod(originalClass, name, signature, optional));
+                        break;
                     }
                 }
-                if (result.size() == 0) {
+                if (originalClass == null) {
                     // optional class was not found
                     return null;
                 }
-                return result.toArray(new Executable[result.size()]);
             }
-            Executable original = lookupOriginalMethod(originalClass, name, signature, optional);
-            if (original != null) {
-                return new Executable[]{original};
-            }
-            return null;
-        }
-
-        private Executable lookupOriginalMethod(Class<?> originalClass, String name, JavaSignature signature, boolean optional) throws GraalInternalError {
             try {
                 if (name.equals("<init>")) {
                     assert signature.returnType.equals(void.class) : signature;
@@ -619,8 +605,7 @@ public class ReplacementsImpl implements Replacements {
                 if (MethodsElidedInSnippets != null && methodToParse.getSignature().getReturnKind() == Kind.Void && MethodFilter.matches(MethodsElidedInSnippets, methodToParse)) {
                     graph.addAfterFixed(graph.start(), graph.add(new ReturnNode(null)));
                 } else {
-                    createGraphBuilder(metaAccess, replacements.providers.getStampProvider(), replacements.assumptions, replacements.providers.getConstantReflection(),
-                                    GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(graph);
+                    createGraphBuilder(metaAccess, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(graph);
                 }
                 afterParsing(graph);
 
@@ -633,9 +618,8 @@ public class ReplacementsImpl implements Replacements {
             return graph;
         }
 
-        protected Instance createGraphBuilder(MetaAccessProvider metaAccess, StampProvider stampProvider, Assumptions assumptions, ConstantReflectionProvider constantReflectionProvider,
-                        GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
-            return new GraphBuilderPhase.Instance(metaAccess, stampProvider, assumptions, constantReflectionProvider, graphBuilderConfig, optimisticOpts);
+        protected Instance createGraphBuilder(MetaAccessProvider metaAccess, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
+            return new GraphBuilderPhase.Instance(metaAccess, graphBuilderConfig, optimisticOpts);
         }
 
         protected void afterParsing(StructuredGraph graph) {
