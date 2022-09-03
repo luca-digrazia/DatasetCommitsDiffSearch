@@ -22,49 +22,77 @@
  */
 package com.oracle.graal.loop.phases;
 
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+
+import java.util.*;
+
 import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.*;
 
 public class LoopTransformLowPhase extends Phase {
+
     private static final DebugMetric UNSWITCHED = Debug.metric("Unswitched");
+    private static final DebugMetric UNSWITCH_CANDIDATES = Debug.metric("UnswitchCandidates");
 
     @Override
     protected void run(StructuredGraph graph) {
         if (graph.hasLoops()) {
-            if (GraalOptions.ReassociateInvariants) {
+            if (ReassociateInvariants.getValue()) {
                 final LoopsData dataReassociate = new LoopsData(graph);
-                Debug.scope("ReassociateInvariants", new Runnable() {
-                    @Override
-                    public void run() {
-                        for (LoopEx loop : dataReassociate.loops()) {
-                            loop.reassociateInvariants();
-                        }
+                try (Scope s = Debug.scope("ReassociateInvariants")) {
+                    for (LoopEx loop : dataReassociate.loops()) {
+                        loop.reassociateInvariants();
                     }
-                });
+                } catch (Throwable e) {
+                    throw Debug.handle(e);
+                }
+                dataReassociate.deleteUnusedNodes();
             }
-            if (GraalOptions.LoopUnswitch) {
+            if (LoopUnswitch.getValue()) {
                 boolean unswitched;
                 do {
                     unswitched = false;
                     final LoopsData dataUnswitch = new LoopsData(graph);
                     for (LoopEx loop : dataUnswitch.loops()) {
                         if (LoopPolicies.shouldTryUnswitch(loop)) {
-                            IfNode ifNode = LoopTransformations.findUnswitchableIf(loop);
-                            if (ifNode != null && LoopPolicies.shouldUnswitch(loop, ifNode)) {
-                                Debug.log("Unswitching %s at %s [%f - %f]", loop, ifNode, ifNode.probability(0), ifNode.probability(1));
-                                LoopTransformations.unswitch(loop, ifNode);
-                                UNSWITCHED.increment();
-                                Debug.dump(graph, "After unswitch %s", loop);
-                                unswitched = true;
-                                break;
+                            List<ControlSplitNode> controlSplits = LoopTransformations.findUnswitchable(loop);
+                            if (controlSplits != null) {
+                                UNSWITCH_CANDIDATES.increment();
+                                if (LoopPolicies.shouldUnswitch(loop, controlSplits)) {
+                                    if (Debug.isLogEnabled()) {
+                                        logUnswitch(loop, controlSplits);
+                                    }
+                                    LoopTransformations.unswitch(loop, controlSplits);
+                                    UNSWITCHED.increment();
+                                    unswitched = true;
+                                    break;
+                                }
                             }
                         }
                     }
-                } while(unswitched);
+                } while (unswitched);
             }
         }
+    }
+
+    private static void logUnswitch(LoopEx loop, List<ControlSplitNode> controlSplits) {
+        StringBuilder sb = new StringBuilder("Unswitching ");
+        sb.append(loop).append(" at ");
+        for (ControlSplitNode controlSplit : controlSplits) {
+            sb.append(controlSplit).append(" [");
+            NodeClassIterator it = controlSplit.successors().iterator();
+            while (it.hasNext()) {
+                sb.append(controlSplit.probability((BeginNode) it.next()));
+                if (it.hasNext()) {
+                    sb.append(", ");
+                }
+            }
+            sb.append("]");
+        }
+        Debug.log("%s", sb);
     }
 }
