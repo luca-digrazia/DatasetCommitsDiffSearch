@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}")
-public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke, MemoryCheckpoint.Single, LIRLowerable {
+public class InvokeWithExceptionNode extends ControlSplitNode implements IterableNodeType, Invoke, MemoryCheckpoint.Single, LIRLowerable {
 
     private static final double EXCEPTION_PROBA = 1e-5;
 
@@ -121,7 +121,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     @Override
     public void setNext(FixedNode x) {
         if (x != null) {
-            this.setNext(KillingBeginNode.begin(x, getLocationIdentity()));
+            this.setNext(AbstractBeginNode.begin(x));
         } else {
             this.setNext(null);
         }
@@ -129,7 +129,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override

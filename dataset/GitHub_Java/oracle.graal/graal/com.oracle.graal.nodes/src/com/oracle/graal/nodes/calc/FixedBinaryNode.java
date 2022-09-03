@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,26 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 
 public abstract class FixedBinaryNode extends DeoptimizingFixedWithNextNode {
 
     @Input private ValueNode x;
     @Input private ValueNode y;
 
-    public FixedBinaryNode(Stamp stamp, ValueNode x, ValueNode y) {
-        super(stamp);
-        this.x = x;
-        this.y = y;
-    }
-
-    public ValueNode getX() {
+    public ValueNode x() {
         return x;
     }
 
-    public ValueNode getY() {
+    public ValueNode y() {
         return y;
+    }
+
+    public FixedBinaryNode(Kind kind, ValueNode x, ValueNode y) {
+        super(StampFactory.forKind(kind));
+        this.x = x;
+        this.y = y;
     }
 }

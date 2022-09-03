@@ -109,7 +109,7 @@ public final class InvokeNode extends AbstractStateSplit implements Invoke, LIRL
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
@@ -185,7 +185,7 @@ public final class InvokeNode extends AbstractStateSplit implements Invoke, LIRL
 
     @Override
     public void setDeoptimizationState(FrameState f) {
-        throw new IllegalStateException("Cannot set deoptimization state " + f + " for invoke " + this);
+        throw new IllegalStateException();
     }
 
     @Override

@@ -23,16 +23,15 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code NewMultiArrayNode} represents an allocation of a multi-dimensional object array.
  */
-@NodeInfo
-public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements Lowerable, ArrayLengthProvider {
+public final class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements Lowerable {
 
     @Input private final NodeInputList<ValueNode> dimensions;
     private final ResolvedJavaType type;
@@ -51,7 +50,7 @@ public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements 
 
     /**
      * Constructs a new NewMultiArrayNode.
-     *
+     * 
      * @param type the element type of the array
      * @param dimensions the node which produce the dimensions for this array
      */
@@ -64,7 +63,7 @@ public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements 
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        tool.getRuntime().lower(this, tool);
     }
 
     public ResolvedJavaType type() {
@@ -74,9 +73,5 @@ public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements 
     @Override
     public boolean canDeoptimize() {
         return true;
-    }
-
-    public ValueNode length() {
-        return dimension(0);
     }
 }

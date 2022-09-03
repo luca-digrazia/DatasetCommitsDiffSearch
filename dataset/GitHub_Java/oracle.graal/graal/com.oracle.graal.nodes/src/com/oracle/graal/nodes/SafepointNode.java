@@ -35,7 +35,7 @@ public class SafepointNode extends DeoptimizingFixedWithNextNode implements LIRL
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
         gen.visitSafepointNode(this);
     }
 

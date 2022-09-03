@@ -619,7 +619,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimize(Value actionAndReason, DeoptimizingNode deopting) {
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, DeoptimizingNode deopting) {
         append(new ReturnOp(Value.ILLEGAL));
     }
 

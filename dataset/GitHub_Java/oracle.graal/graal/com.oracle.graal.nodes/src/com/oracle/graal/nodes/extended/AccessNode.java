@@ -25,28 +25,30 @@ package com.oracle.graal.nodes.extended;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
-public abstract class AccessNode extends AbstractStateSplit implements Access {
+/**
+ * Accesses a value at an memory address specified by an {@linkplain #object object} and a
+ * {@linkplain #nullCheckLocation() location}. The access does not include a null check on the
+ * object.
+ */
+public abstract class AccessNode extends DeoptimizingFixedWithNextNode implements Access, GuardingNode {
 
+    @Input private GuardingNode guard;
     @Input private ValueNode object;
-    @Input private GuardNode guard;
-    @Input private LocationNode location;
-    @Data private boolean nullCheck;
+    @Input private ValueNode location;
+    private boolean nullCheck;
+    private BarrierType barrierType;
+    private boolean compressible;
 
     public ValueNode object() {
         return object;
     }
 
-    public GuardNode guard() {
-        return guard;
-    }
-
-    public void setGuard(GuardNode x) {
-        updateUsages(guard, x);
-        guard = x;
-    }
-
     public LocationNode location() {
-        return location;
+        return (LocationNode) location;
+    }
+
+    public LocationNode nullCheckLocation() {
+        return (LocationNode) location;
     }
 
     public boolean getNullCheck() {
@@ -57,9 +59,46 @@ public abstract class AccessNode extends AbstractStateSplit implements Access {
         this.nullCheck = check;
     }
 
-    public AccessNode(ValueNode object, LocationNode location, Stamp stamp) {
+    public AccessNode(ValueNode object, ValueNode location, Stamp stamp) {
+        this(object, location, stamp, null, BarrierType.NONE, false);
+    }
+
+    public AccessNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType, boolean compressible) {
+        this(object, location, stamp, null, barrierType, compressible);
+    }
+
+    public AccessNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean compressible) {
         super(stamp);
         this.object = object;
         this.location = location;
+        this.guard = guard;
+        this.barrierType = barrierType;
+        this.compressible = compressible;
+    }
+
+    @Override
+    public boolean canDeoptimize() {
+        return nullCheck;
+    }
+
+    @Override
+    public GuardingNode getGuard() {
+        return guard;
+    }
+
+    @Override
+    public void setGuard(GuardingNode guard) {
+        updateUsages(this.guard == null ? null : this.guard.asNode(), guard == null ? null : guard.asNode());
+        this.guard = guard;
+    }
+
+    @Override
+    public BarrierType getBarrierType() {
+        return barrierType;
+    }
+
+    @Override
+    public boolean isCompressible() {
+        return compressible;
     }
 }

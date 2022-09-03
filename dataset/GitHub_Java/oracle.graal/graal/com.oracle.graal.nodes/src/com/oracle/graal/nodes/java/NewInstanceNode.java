@@ -22,11 +22,8 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.lang.ref.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -36,7 +33,7 @@ import com.oracle.graal.nodes.virtual.*;
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
  */
 @NodeInfo(nameTemplate = "New {p#instanceClass/s}")
-public class NewInstanceNode extends DeoptimizingFixedWithNextNode implements Canonicalizable, Lowerable, VirtualizableAllocation {
+public final class NewInstanceNode extends DeoptimizingFixedWithNextNode implements Canonicalizable, Lowerable, VirtualizableAllocation {
 
     private final ResolvedJavaType instanceClass;
     private final boolean fillContents;
@@ -50,7 +47,6 @@ public class NewInstanceNode extends DeoptimizingFixedWithNextNode implements Ca
      */
     public NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
         super(StampFactory.exactNonNull(type));
-        assert !type.isArray();
         this.instanceClass = type;
         this.fillContents = fillContents;
     }
@@ -72,7 +68,7 @@ public class NewInstanceNode extends DeoptimizingFixedWithNextNode implements Ca
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (usages().isEmpty()) {
             return null;
         } else {
@@ -82,30 +78,22 @@ public class NewInstanceNode extends DeoptimizingFixedWithNextNode implements Ca
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        /*
-         * Reference objects can escape into their ReferenceQueue at any safepoint, therefore
-         * they're excluded from escape analysis.
-         */
-        if (!tool.getMetaAccessProvider().lookupJavaType(Reference.class).isAssignableFrom(instanceClass)) {
+        if (instanceClass != null) {
+            assert !instanceClass().isArray();
             VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass(), true);
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {
-                state[i] = defaultFieldValue(fields[i]);
+                state[i] = ConstantNode.defaultForKind(fields[i].getType().getKind(), graph());
             }
             tool.createVirtualObject(virtualObject, state, null);
             tool.replaceWithVirtual(virtualObject);
         }
-    }
-
-    /* Factored out in a separate method so that subclasses can override it. */
-    protected ConstantNode defaultFieldValue(ResolvedJavaField field) {
-        return ConstantNode.defaultForKind(field.getType().getKind(), graph());
     }
 
     @Override
