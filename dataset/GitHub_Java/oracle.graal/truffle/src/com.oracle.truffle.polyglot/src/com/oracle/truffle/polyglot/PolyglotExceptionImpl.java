@@ -63,7 +63,6 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractExceptionImpl;
 import org.graalvm.polyglot.proxy.Proxy;
 
 import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.TruffleStackTraceElement;
 
 final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
@@ -413,8 +412,6 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
                         HOST_INTEROP_PACKAGE + "FunctionProxyHandler",
                         HOST_INTEROP_PACKAGE + "ObjectProxyHandler"
         };
-        private static final String SUN_REFLECT_INVOKE = "sun.reflect.NativeMethodAccessorImpl";
-        private static final String SVM_REFLECT_INVOKE = "java.lang.reflect.Method";
 
         final PolyglotExceptionImpl impl;
         final Iterator<TruffleStackTraceElement> guestFrames;
@@ -567,17 +564,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
             if (isLazyStackTraceElement(element)) {
                 return false;
             }
-
-            String className = element.getClassName();
-            if (className.startsWith(PROXY_PACKAGE) || className.startsWith(HOST_INTEROP_PACKAGE)) {
-                return true;
-            }
-
-            if (TruffleOptions.AOT) {
-                return className.equals(SVM_REFLECT_INVOKE) && element.getMethodName().equals("invoke");
-            } else {
-                return className.equals(SUN_REFLECT_INVOKE);
-            }
+            return element.getClassName().startsWith(PROXY_PACKAGE) || element.getClassName().startsWith(HOST_INTEROP_PACKAGE);
         }
 
         private void traceStackTraceElement(StackTraceElement element) {

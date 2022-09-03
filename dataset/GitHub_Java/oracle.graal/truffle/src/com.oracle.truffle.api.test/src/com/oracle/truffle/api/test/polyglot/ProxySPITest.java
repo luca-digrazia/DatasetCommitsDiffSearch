@@ -40,10 +40,6 @@
  */
 package com.oracle.truffle.api.test.polyglot;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -63,10 +59,12 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.KeyInfo;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 
@@ -75,9 +73,7 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
  */
 public class ProxySPITest extends AbstractPolyglotTest {
 
-    static final InteropLibrary INTEROP = InteropLibrary.getFactory().getUncached();
-
-    static class TestFunction extends ProxyLegacyInteropObject {
+    static class TestFunction extends ProxyInteropObject {
 
         TruffleObject lastFunction;
 
@@ -109,38 +105,39 @@ public class ProxySPITest extends AbstractPolyglotTest {
     public void testSimpleProxy() throws Throwable {
         Proxy proxyOuter = new Proxy() {
         };
-        Object proxyInner = toInnerProxy(proxyOuter);
+        TruffleObject proxyInner = toInnerProxy(proxyOuter);
 
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.asPointer(proxyInner));
-        assertUnsupported(() -> INTEROP.getArraySize(proxyInner));
-        assertUnsupported(() -> INTEROP.getMembers(proxyInner));
-        assertUnsupported(() -> INTEROP.readMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.writeMember(proxyInner, "", ""));
-        assertUnsupported(() -> INTEROP.removeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.readArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.removeArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.writeArrayElement(proxyInner, 0, ""));
-        INTEROP.toNative(proxyInner);
-        assertUnsupported(() -> INTEROP.invokeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.instantiate(proxyInner));
-
-        assertFalse(INTEROP.isNumber(proxyInner));
-        assertFalse(INTEROP.isExecutable(proxyInner));
-        assertFalse(INTEROP.isInstantiable(proxyInner));
-        assertFalse(INTEROP.isNull(proxyInner));
-        assertFalse(INTEROP.hasMembers(proxyInner));
-        assertFalse(INTEROP.hasArrayElements(proxyInner));
-        assertFalse(INTEROP.isPointer(proxyInner));
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.AS_POINTER, proxyInner);
+        assertUnsupported(Message.GET_SIZE, proxyInner);
+        assertEmpty(Message.KEYS, proxyInner);
+        assertUnsupported(Message.READ, proxyInner);
+        assertUnsupported(Message.WRITE, proxyInner);
+        assertUnsupported(Message.REMOVE, proxyInner);
+        assertUnsupported(Message.TO_NATIVE, proxyInner);
+        assertUnsupported(Message.UNBOX, proxyInner);
+        assertUnsupported(Message.INVOKE, proxyInner);
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.NEW, proxyInner);
+        assertEquals(false, Message.IS_BOXED, proxyInner);
+        assertEquals(false, Message.IS_EXECUTABLE, proxyInner);
+        assertEquals(false, Message.IS_INSTANTIABLE, proxyInner);
+        assertEquals(false, Message.IS_NULL, proxyInner);
+        assertEquals(false, Message.HAS_KEYS, proxyInner);
+        assertEquals(false, Message.HAS_SIZE, proxyInner);
+        assertEquals(false, Message.IS_POINTER, proxyInner);
+        assertEquals(0, Message.KEY_INFO, proxyInner);
     }
+
+    private static final int EXISTING_KEY = KeyInfo.READABLE | KeyInfo.MODIFIABLE | KeyInfo.REMOVABLE;
+    private static final int NO_KEY = KeyInfo.INSERTABLE;
 
     @Test
     public void testArrayProxy() throws Throwable {
 
-        final long size = 42;
+        final int size = 42;
         ProxyArray proxyOuter = new ProxyArray() {
-            int[] array = new int[(int) size];
+            int[] array = new int[size];
             {
                 Arrays.fill(array, 42);
             }
@@ -157,122 +154,107 @@ public class ProxySPITest extends AbstractPolyglotTest {
                 return size;
             }
         };
-        Object proxyInner = toInnerProxy(proxyOuter);
+        TruffleObject proxyInner = toInnerProxy(proxyOuter);
 
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.asPointer(proxyInner));
-        assertUnsupported(() -> INTEROP.getMembers(proxyInner));
-        assertUnsupported(() -> INTEROP.readMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.writeMember(proxyInner, "", ""));
-        assertUnsupported(() -> INTEROP.removeMember(proxyInner, ""));
-        INTEROP.toNative(proxyInner);
-        assertUnsupported(() -> INTEROP.invokeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.instantiate(proxyInner));
-
-        assertFalse(INTEROP.isNumber(proxyInner));
-        assertFalse(INTEROP.isExecutable(proxyInner));
-        assertFalse(INTEROP.isInstantiable(proxyInner));
-        assertFalse(INTEROP.isNull(proxyInner));
-        assertFalse(INTEROP.hasMembers(proxyInner));
-        assertFalse(INTEROP.isPointer(proxyInner));
-
-        assertTrue(INTEROP.hasArrayElements(proxyInner));
-
-        assertEquals(size, INTEROP.getArraySize(proxyInner));
+        assertEquals(size, Message.GET_SIZE, proxyInner);
         for (int i = 0; i < size; i++) {
-            assertEquals(42, INTEROP.readArrayElement(proxyInner, i));
+            assertEquals(42, Message.READ, proxyInner, i);
         }
         for (int i = 0; i < size; i++) {
-            INTEROP.writeArrayElement(proxyInner, i, 41);
+            assertEquals(41, Message.WRITE, proxyInner, i, 41);
         }
         for (int i = 0; i < size; i++) {
-            assertEquals(41, INTEROP.readArrayElement(proxyInner, i));
+            assertEquals(41, Message.READ, proxyInner, i);
         }
+        assertUnknownIdentifier(Message.READ, proxyInner, 42);
+        assertUnknownIdentifier(Message.READ, proxyInner, -1);
+        assertUnknownIdentifier(Message.READ, proxyInner, Integer.MAX_VALUE);
+        assertUnknownIdentifier(Message.READ, proxyInner, Integer.MIN_VALUE);
+        assertEquals(true, Message.HAS_SIZE, proxyInner);
 
-        assertInvalidArrayIndex(() -> INTEROP.readArrayElement(proxyInner, 42));
-        assertInvalidArrayIndex(() -> INTEROP.readArrayElement(proxyInner, -1));
-        assertInvalidArrayIndex(() -> INTEROP.readArrayElement(proxyInner, Integer.MAX_VALUE));
-        assertInvalidArrayIndex(() -> INTEROP.readArrayElement(proxyInner, Integer.MIN_VALUE));
+        assertEquals(EXISTING_KEY, Message.KEY_INFO, proxyInner, 41);
+        assertEquals(NO_KEY, Message.KEY_INFO, proxyInner, 42);
 
-        assertTrue(INTEROP.isArrayElementReadable(proxyInner, 41));
-        assertTrue(INTEROP.isArrayElementModifiable(proxyInner, 41));
-        assertTrue(INTEROP.isArrayElementRemovable(proxyInner, 41));
-        assertFalse(INTEROP.isArrayElementInsertable(proxyInner, 41));
-
-        assertFalse(INTEROP.isArrayElementReadable(proxyInner, 42));
-        assertFalse(INTEROP.isArrayElementModifiable(proxyInner, 42));
-        assertFalse(INTEROP.isArrayElementRemovable(proxyInner, 42));
-        assertTrue(INTEROP.isArrayElementInsertable(proxyInner, 42));
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.AS_POINTER, proxyInner);
+        assertEquals(false, Message.HAS_KEYS, proxyInner);
+        assertEmpty(Message.KEYS, proxyInner);
+        assertUnsupported(Message.READ, proxyInner, "");
+        assertUnsupported(Message.WRITE, proxyInner, "");
+        assertUnsupported(Message.TO_NATIVE, proxyInner);
+        assertUnsupported(Message.UNBOX, proxyInner);
+        assertUnsupported(Message.INVOKE, proxyInner);
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.NEW, proxyInner);
+        assertEquals(false, Message.IS_BOXED, proxyInner);
+        assertEquals(false, Message.IS_EXECUTABLE, proxyInner);
+        assertEquals(false, Message.IS_INSTANTIABLE, proxyInner);
+        assertEquals(false, Message.IS_NULL, proxyInner);
+        assertEquals(false, Message.IS_POINTER, proxyInner);
+        assertEquals(0, Message.KEY_INFO, proxyInner);
     }
 
     @Test
     public void testArrayElementRemove() throws Throwable {
+
         final int size = 42;
         ArrayList<Object> list = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             list.add(i);
         }
         ProxyArray proxyOuter = ProxyArray.fromList(list);
-        Object proxyInner = toInnerProxy(proxyOuter);
 
-        assertTrue(INTEROP.hasArrayElements(proxyInner));
-        assertEquals(size, INTEROP.getArraySize(proxyInner));
-        INTEROP.removeArrayElement(proxyInner, 10);
-        assertEquals(size - 1, INTEROP.getArraySize(proxyInner));
+        TruffleObject proxyInner = toInnerProxy(proxyOuter);
+
+        assertEquals(size, Message.GET_SIZE, proxyInner);
+        assertEquals(true, Message.REMOVE, proxyInner, 10);
+        assertEquals(size - 1, Message.GET_SIZE, proxyInner);
     }
 
     @Test
     public void testProxyObject() throws Throwable {
+
         Map<String, Object> values = new HashMap<>();
         ProxyObject proxyOuter = ProxyObject.fromMap(values);
 
         TruffleObject proxyInner = toInnerProxy(proxyOuter);
 
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.asPointer(proxyInner));
-        assertUnsupported(() -> INTEROP.getArraySize(proxyInner));
-        assertUnsupported(() -> INTEROP.readArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.removeArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.writeArrayElement(proxyInner, 0, ""));
-        INTEROP.toNative(proxyInner);
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.instantiate(proxyInner));
+        assertEquals(true, Message.HAS_KEYS, proxyInner);
+        assertEmpty(Message.KEYS, proxyInner);
 
-        assertFalse(INTEROP.isNumber(proxyInner));
-        assertFalse(INTEROP.isExecutable(proxyInner));
-        assertFalse(INTEROP.isInstantiable(proxyInner));
-        assertFalse(INTEROP.isNull(proxyInner));
-        assertFalse(INTEROP.hasArrayElements(proxyInner));
-        assertFalse(INTEROP.isPointer(proxyInner));
+        assertUnknownIdentifier(Message.READ, proxyInner, "");
+        assertEquals(NO_KEY, Message.KEY_INFO, proxyInner, "");
 
-        assertTrue(INTEROP.hasMembers(proxyInner));
-        assertEmpty(INTEROP.getMembers(proxyInner));
+        assertEquals(42, Message.WRITE, proxyInner, "a", 42);
+        assertEquals(42, Message.READ, proxyInner, "a");
+        assertEquals(EXISTING_KEY, Message.KEY_INFO, proxyInner, "a");
+        assertEquals(NO_KEY, Message.KEY_INFO, proxyInner, "");
 
-        INTEROP.writeMember(proxyInner, "a", 42);
-        assertEquals(42, INTEROP.readMember(proxyInner, "a"));
-        assertUnsupported(() -> INTEROP.invokeMember(proxyInner, "a"));
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.GET_SIZE, proxyInner);
+        assertUnsupported(Message.READ, proxyInner, 0);
+        assertUnsupported(Message.WRITE, proxyInner, 1);
+        assertUnsupported(Message.UNBOX, proxyInner);
+        assertUnsupported(Message.TO_NATIVE, proxyInner);
+        assertUnsupported(Message.AS_POINTER, proxyInner);
+        assertUnsupported(Message.INVOKE, proxyInner);
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.NEW, proxyInner);
+        assertEquals(false, Message.IS_BOXED, proxyInner);
+        assertEquals(false, Message.IS_EXECUTABLE, proxyInner);
+        assertEquals(false, Message.IS_INSTANTIABLE, proxyInner);
+        assertEquals(false, Message.IS_NULL, proxyInner);
+        assertEquals(false, Message.HAS_SIZE, proxyInner);
+        assertEquals(false, Message.IS_POINTER, proxyInner);
+        assertEquals(0, Message.KEY_INFO, proxyInner);
 
-        assertTrue(INTEROP.isMemberReadable(proxyInner, "a"));
-        assertTrue(INTEROP.isMemberModifiable(proxyInner, "a"));
-        assertTrue(INTEROP.isMemberRemovable(proxyInner, "a"));
-        assertFalse(INTEROP.isMemberInsertable(proxyInner, "a"));
-        assertFalse(INTEROP.isMemberInvokable(proxyInner, "a"));
-        assertFalse(INTEROP.isMemberInternal(proxyInner, "a"));
-
-        assertFalse(INTEROP.isMemberReadable(proxyInner, ""));
-        assertFalse(INTEROP.isMemberModifiable(proxyInner, ""));
-        assertFalse(INTEROP.isMemberRemovable(proxyInner, ""));
-        assertTrue(INTEROP.isMemberInsertable(proxyInner, ""));
-        assertFalse(INTEROP.isMemberInvokable(proxyInner, ""));
-        assertFalse(INTEROP.isMemberInternal(proxyInner, ""));
-
-        INTEROP.removeMember(proxyInner, "a");
-        assertEmpty(INTEROP.getMembers(proxyInner));
+        assertEquals(true, Message.REMOVE, proxyInner, "a");
+        assertEmpty(Message.KEYS, proxyInner);
     }
 
     @Test
     public void testProxyObjectUnsupported() throws Throwable {
+
         ProxyObject proxyOuter = new ProxyObject() {
 
             public void putMember(String key, Value value) {
@@ -294,29 +276,61 @@ public class ProxySPITest extends AbstractPolyglotTest {
 
         TruffleObject proxyInner = toInnerProxy(proxyOuter);
 
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.asPointer(proxyInner));
-        assertUnsupported(() -> INTEROP.getArraySize(proxyInner));
-        assertEmpty(INTEROP.getMembers(proxyInner));
-        assertUnsupported(() -> INTEROP.readMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.writeMember(proxyInner, "", ""));
-        assertUnsupported(() -> INTEROP.removeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.readArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.removeArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.writeArrayElement(proxyInner, 0, ""));
-        INTEROP.toNative(proxyInner);
-        assertUnsupported(() -> INTEROP.invokeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.instantiate(proxyInner));
-        assertUnsupported(() -> INTEROP.asPointer(proxyInner));
+        assertEmpty(Message.KEYS, proxyInner);
+        assertUnsupported(Message.READ, proxyInner, "");
+        assertUnsupported(Message.WRITE, proxyInner, "", 42);
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.GET_SIZE, proxyInner);
+        assertUnsupported(Message.READ, proxyInner, 0);
+        assertUnsupported(Message.WRITE, proxyInner, 1);
+        assertUnsupported(Message.UNBOX, proxyInner);
+        assertUnsupported(Message.TO_NATIVE, proxyInner);
+        assertUnsupported(Message.AS_POINTER, proxyInner);
+        assertUnsupported(Message.INVOKE, proxyInner);
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.NEW, proxyInner);
+        assertEquals(false, Message.IS_BOXED, proxyInner);
+        assertEquals(false, Message.IS_EXECUTABLE, proxyInner);
+        assertEquals(false, Message.IS_INSTANTIABLE, proxyInner);
+        assertEquals(false, Message.IS_NULL, proxyInner);
+        assertEquals(true, Message.HAS_KEYS, proxyInner);
+        assertEquals(false, Message.HAS_SIZE, proxyInner);
+        assertEquals(false, Message.IS_POINTER, proxyInner);
+        assertEquals(0, Message.KEY_INFO, proxyInner);
+    }
 
-        assertFalse(INTEROP.isNumber(proxyInner));
-        assertFalse(INTEROP.isExecutable(proxyInner));
-        assertFalse(INTEROP.isInstantiable(proxyInner));
-        assertFalse(INTEROP.isNull(proxyInner));
-        assertTrue(INTEROP.hasMembers(proxyInner));
-        assertFalse(INTEROP.hasArrayElements(proxyInner));
-        assertFalse(INTEROP.isPointer(proxyInner));
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testProxyPrimitive() throws Throwable {
+
+        org.graalvm.polyglot.proxy.ProxyPrimitive proxyOuter = new org.graalvm.polyglot.proxy.ProxyPrimitive() {
+            public Object asPrimitive() {
+                return 42;
+            }
+        };
+
+        TruffleObject proxyInner = toInnerProxy(proxyOuter);
+
+        assertEquals(true, Message.IS_BOXED, proxyInner);
+        assertEquals(42, Message.UNBOX, proxyInner);
+
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.AS_POINTER, proxyInner);
+        assertUnsupported(Message.GET_SIZE, proxyInner);
+        assertEmpty(Message.KEYS, proxyInner);
+        assertUnsupported(Message.READ, proxyInner);
+        assertUnsupported(Message.WRITE, proxyInner);
+        assertUnsupported(Message.TO_NATIVE, proxyInner);
+        assertUnsupported(Message.INVOKE, proxyInner);
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.NEW, proxyInner);
+        assertEquals(false, Message.IS_EXECUTABLE, proxyInner);
+        assertEquals(false, Message.IS_INSTANTIABLE, proxyInner);
+        assertEquals(false, Message.IS_NULL, proxyInner);
+        assertEquals(false, Message.HAS_KEYS, proxyInner);
+        assertEquals(false, Message.HAS_SIZE, proxyInner);
+        assertEquals(false, Message.IS_POINTER, proxyInner);
+        assertEquals(0, Message.KEY_INFO, proxyInner);
     }
 
     @Test
@@ -330,29 +344,27 @@ public class ProxySPITest extends AbstractPolyglotTest {
 
         TruffleObject proxyInner = toInnerProxy(proxyOuter);
 
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.getArraySize(proxyInner));
-        assertUnsupported(() -> INTEROP.getMembers(proxyInner));
-        assertUnsupported(() -> INTEROP.readMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.writeMember(proxyInner, "", ""));
-        assertUnsupported(() -> INTEROP.removeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.readArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.removeArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.writeArrayElement(proxyInner, 0, ""));
-        INTEROP.toNative(proxyInner);
-        assertUnsupported(() -> INTEROP.invokeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.instantiate(proxyInner));
+        assertEquals(true, Message.IS_POINTER, proxyInner);
+        assertEquals(42L, Message.AS_POINTER, proxyInner);
 
-        assertFalse(INTEROP.isNumber(proxyInner));
-        assertFalse(INTEROP.isExecutable(proxyInner));
-        assertFalse(INTEROP.isInstantiable(proxyInner));
-        assertFalse(INTEROP.isNull(proxyInner));
-        assertFalse(INTEROP.hasMembers(proxyInner));
-        assertFalse(INTEROP.hasArrayElements(proxyInner));
-
-        assertTrue(INTEROP.isPointer(proxyInner));
-        assertEquals(42L, INTEROP.asPointer(proxyInner));
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.UNBOX, proxyInner);
+        assertUnsupported(Message.GET_SIZE, proxyInner);
+        assertEmpty(Message.KEYS, proxyInner);
+        assertUnsupported(Message.READ, proxyInner);
+        assertUnsupported(Message.WRITE, proxyInner);
+        assertUnsupported(Message.TO_NATIVE, proxyInner);
+        assertUnsupported(Message.UNBOX, proxyInner);
+        assertUnsupported(Message.INVOKE, proxyInner);
+        assertUnsupported(Message.EXECUTE, proxyInner);
+        assertUnsupported(Message.NEW, proxyInner);
+        assertEquals(false, Message.IS_EXECUTABLE, proxyInner);
+        assertEquals(false, Message.IS_INSTANTIABLE, proxyInner);
+        assertEquals(false, Message.IS_NULL, proxyInner);
+        assertEquals(false, Message.HAS_KEYS, proxyInner);
+        assertEquals(false, Message.HAS_SIZE, proxyInner);
+        assertEquals(false, Message.IS_BOXED, proxyInner);
+        assertEquals(0, Message.KEY_INFO, proxyInner);
     }
 
     @Test
@@ -365,28 +377,25 @@ public class ProxySPITest extends AbstractPolyglotTest {
         };
         TruffleObject proxyInner = toInnerProxy(proxyOuter);
 
-        assertUnsupported(() -> INTEROP.asPointer(proxyInner));
-        assertUnsupported(() -> INTEROP.getArraySize(proxyInner));
-        assertUnsupported(() -> INTEROP.getMembers(proxyInner));
-        assertUnsupported(() -> INTEROP.readMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.writeMember(proxyInner, "", ""));
-        assertUnsupported(() -> INTEROP.removeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.readArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.removeArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.writeArrayElement(proxyInner, 0, ""));
-        INTEROP.toNative(proxyInner);
-        assertUnsupported(() -> INTEROP.invokeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.instantiate(proxyInner));
+        assertEquals(true, Message.IS_EXECUTABLE, proxyInner);
+        assertEquals(42, Message.EXECUTE, proxyInner, 42);
+        assertUnsupported(Message.NEW, proxyInner, 42);
 
-        assertFalse(INTEROP.isNumber(proxyInner));
-        assertFalse(INTEROP.isInstantiable(proxyInner));
-        assertFalse(INTEROP.isNull(proxyInner));
-        assertFalse(INTEROP.hasMembers(proxyInner));
-        assertFalse(INTEROP.hasArrayElements(proxyInner));
-        assertFalse(INTEROP.isPointer(proxyInner));
-
-        assertTrue(INTEROP.isExecutable(proxyInner));
-        assertEquals(42, INTEROP.execute(proxyInner, 42));
+        assertUnsupported(Message.AS_POINTER, proxyInner);
+        assertUnsupported(Message.GET_SIZE, proxyInner);
+        assertEmpty(Message.KEYS, proxyInner);
+        assertUnsupported(Message.READ, proxyInner);
+        assertUnsupported(Message.WRITE, proxyInner);
+        assertUnsupported(Message.TO_NATIVE, proxyInner);
+        assertUnsupported(Message.UNBOX, proxyInner);
+        assertUnsupported(Message.INVOKE, proxyInner);
+        assertEquals(false, Message.IS_INSTANTIABLE, proxyInner);
+        assertEquals(false, Message.IS_BOXED, proxyInner);
+        assertEquals(false, Message.IS_NULL, proxyInner);
+        assertEquals(false, Message.HAS_KEYS, proxyInner);
+        assertEquals(false, Message.HAS_SIZE, proxyInner);
+        assertEquals(false, Message.IS_POINTER, proxyInner);
+        assertEquals(0, Message.KEY_INFO, proxyInner);
     }
 
     @Test
@@ -395,35 +404,30 @@ public class ProxySPITest extends AbstractPolyglotTest {
         ProxyInstantiable proxyOuter = new ProxyInstantiable() {
             @Override
             public Object newInstance(Value... t) {
-                return t[0].asInt();
+                return t[0].newInstance();
             }
         };
 
         TruffleObject proxyInner = toInnerProxy(proxyOuter);
 
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
-        assertUnsupported(() -> INTEROP.asPointer(proxyInner));
-        assertUnsupported(() -> INTEROP.getArraySize(proxyInner));
-        assertUnsupported(() -> INTEROP.getMembers(proxyInner));
-        assertUnsupported(() -> INTEROP.readMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.writeMember(proxyInner, "", ""));
-        assertUnsupported(() -> INTEROP.removeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.readArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.removeArrayElement(proxyInner, 0));
-        assertUnsupported(() -> INTEROP.writeArrayElement(proxyInner, 0, ""));
-        INTEROP.toNative(proxyInner);
-        assertUnsupported(() -> INTEROP.invokeMember(proxyInner, ""));
-        assertUnsupported(() -> INTEROP.execute(proxyInner));
+        assertEquals(true, Message.IS_INSTANTIABLE, proxyInner);
+        assertEquals(false, Message.IS_EXECUTABLE, proxyInner);
 
-        assertFalse(INTEROP.isNumber(proxyInner));
-        assertFalse(INTEROP.isExecutable(proxyInner));
-        assertFalse(INTEROP.isNull(proxyInner));
-        assertFalse(INTEROP.hasMembers(proxyInner));
-        assertFalse(INTEROP.hasArrayElements(proxyInner));
-        assertFalse(INTEROP.isPointer(proxyInner));
-
-        assertTrue(INTEROP.isInstantiable(proxyInner));
-        assertEquals(42, INTEROP.instantiate(proxyInner, 42));
+        assertUnsupported(Message.EXECUTE, proxyInner, 42);
+        assertUnsupported(Message.AS_POINTER, proxyInner);
+        assertUnsupported(Message.GET_SIZE, proxyInner);
+        assertEmpty(Message.KEYS, proxyInner);
+        assertUnsupported(Message.READ, proxyInner);
+        assertUnsupported(Message.WRITE, proxyInner);
+        assertUnsupported(Message.TO_NATIVE, proxyInner);
+        assertUnsupported(Message.UNBOX, proxyInner);
+        assertUnsupported(Message.INVOKE, proxyInner);
+        assertEquals(false, Message.IS_BOXED, proxyInner);
+        assertEquals(false, Message.IS_NULL, proxyInner);
+        assertEquals(false, Message.HAS_KEYS, proxyInner);
+        assertEquals(false, Message.HAS_SIZE, proxyInner);
+        assertEquals(false, Message.IS_POINTER, proxyInner);
+        assertEquals(0, Message.KEY_INFO, proxyInner);
     }
 
     @SuppressWarnings("serial")
@@ -436,7 +440,7 @@ public class ProxySPITest extends AbstractPolyglotTest {
     }
 
     @SuppressWarnings("deprecation")
-    private static class AllProxy implements ProxyArray, ProxyObject, ProxyNativeObject, ProxyExecutable, ProxyInstantiable {
+    private static class AllProxy implements ProxyArray, ProxyObject, org.graalvm.polyglot.proxy.ProxyPrimitive, ProxyNativeObject, ProxyExecutable, ProxyInstantiable {
 
         public Object execute(Value... t) {
             throw new TestError();
@@ -448,6 +452,10 @@ public class ProxySPITest extends AbstractPolyglotTest {
         }
 
         public long asPointer() {
+            throw new TestError();
+        }
+
+        public Object asPrimitive() {
             throw new TestError();
         }
 
@@ -498,54 +506,51 @@ public class ProxySPITest extends AbstractPolyglotTest {
 
         TruffleObject proxyInner = toInnerProxy(proxyOuter);
 
-        assertHostError(() -> INTEROP.execute(proxyInner));
-        assertHostError(() -> INTEROP.asPointer(proxyInner));
-        assertHostError(() -> INTEROP.getArraySize(proxyInner));
-        assertHostError(() -> INTEROP.getMembers(proxyInner));
-        assertHostError(() -> INTEROP.readMember(proxyInner, ""));
-        assertHostError(() -> INTEROP.writeMember(proxyInner, "", ""));
-        assertHostError(() -> INTEROP.removeMember(proxyInner, ""));
-        assertHostError(() -> INTEROP.readArrayElement(proxyInner, 0));
-        assertHostError(() -> INTEROP.removeArrayElement(proxyInner, 0));
-        assertHostError(() -> INTEROP.writeArrayElement(proxyInner, 0, ""));
-        INTEROP.toNative(proxyInner);
-        assertHostError(() -> INTEROP.invokeMember(proxyInner, ""));
-        assertHostError(() -> INTEROP.execute(proxyInner));
-        assertHostError(() -> INTEROP.instantiate(proxyInner));
-
-        assertHostError(() -> INTEROP.isMemberReadable(proxyInner, ""));
-        assertHostError(() -> INTEROP.isMemberModifiable(proxyInner, ""));
-        assertHostError(() -> INTEROP.isMemberInsertable(proxyInner, ""));
-        assertHostError(() -> INTEROP.isMemberRemovable(proxyInner, ""));
-        assertHostError(() -> INTEROP.isMemberInvokable(proxyInner, ""));
-        assertFalse(INTEROP.isMemberInternal(proxyInner, ""));
-
-        assertHostError(() -> INTEROP.isArrayElementReadable(proxyInner, 0L));
-        assertHostError(() -> INTEROP.isArrayElementModifiable(proxyInner, 0L));
-        assertHostError(() -> INTEROP.isArrayElementInsertable(proxyInner, 0L));
-        assertHostError(() -> INTEROP.isArrayElementRemovable(proxyInner, 0L));
-
-        assertFalse(INTEROP.isNumber(proxyInner));
-        assertTrue(INTEROP.isExecutable(proxyInner));
-        assertTrue(INTEROP.isInstantiable(proxyInner));
-        assertFalse(INTEROP.isNull(proxyInner));
-        assertTrue(INTEROP.hasMembers(proxyInner));
-        assertTrue(INTEROP.hasArrayElements(proxyInner));
-        assertTrue(INTEROP.isPointer(proxyInner));
+        assertHostError(Message.AS_POINTER, proxyInner);
+        assertHostError(Message.GET_SIZE, proxyInner);
+        assertHostError(Message.KEYS, proxyInner);
+        assertHostError(Message.READ, proxyInner, "");
+        assertHostError(Message.READ, proxyInner, 42);
+        assertHostError(Message.WRITE, proxyInner, "", 42);
+        assertHostError(Message.WRITE, proxyInner, 42, 42);
+        assertHostError(Message.REMOVE, proxyInner, 10);
+        assertHostError(Message.UNBOX, proxyInner);
+        assertHostError(Message.INVOKE, proxyInner, "");
+        assertHostError(Message.EXECUTE, proxyInner);
+        assertHostError(Message.NEW, proxyInner);
+        assertHostError(Message.KEY_INFO, proxyInner, "");
+        assertHostError(Message.KEY_INFO, proxyInner, 42);
+        assertUnsupported(Message.TO_NATIVE, proxyInner);
+        assertEquals(true, Message.IS_BOXED, proxyInner);
+        assertEquals(true, Message.IS_EXECUTABLE, proxyInner);
+        assertEquals(true, Message.IS_INSTANTIABLE, proxyInner);
+        assertEquals(false, Message.IS_NULL, proxyInner);
+        assertEquals(true, Message.HAS_KEYS, proxyInner);
+        assertEquals(true, Message.HAS_SIZE, proxyInner);
+        assertEquals(true, Message.IS_POINTER, proxyInner);
     }
 
-    private static void assertEmpty(Object proxyInner) {
+    private static void assertEmpty(Message message, TruffleObject proxyInner) {
         try {
-            assertTrue(INTEROP.hasArrayElements(proxyInner));
-            assertEquals(0L, INTEROP.getArraySize(proxyInner));
+            TruffleObject values = (TruffleObject) ForeignAccess.send(message.createNode(), proxyInner);
+            Assert.assertEquals(true, ForeignAccess.sendHasSize(Message.HAS_SIZE.createNode(), values));
+            Assert.assertEquals(0, ((Number) ForeignAccess.sendGetSize(Message.GET_SIZE.createNode(), values)).intValue());
         } catch (InteropException e) {
             Assert.fail();
         }
     }
 
-    private void assertHostError(InteropCallable r) {
+    private static void assertEquals(Object expected, Message message, TruffleObject proxyInner, Object... args) {
         try {
-            r.call();
+            Assert.assertEquals(expected, ForeignAccess.send(message.createNode(), proxyInner, args));
+        } catch (InteropException e) {
+            Assert.fail();
+        }
+    }
+
+    private void assertHostError(Message message, TruffleObject proxyInner, Object... args) {
+        try {
+            ForeignAccess.send(message.createNode(), proxyInner, args);
             Assert.fail();
         } catch (InteropException e) {
             Assert.fail();
@@ -560,29 +565,24 @@ public class ProxySPITest extends AbstractPolyglotTest {
         }
     }
 
-    interface InteropCallable {
-
-        void call() throws InteropException;
-
-    }
-
-    private static void assertUnsupported(InteropCallable r) throws Exception {
+    private static void assertUnsupported(Message message, TruffleObject proxyInner, Object... args) {
         try {
-            r.call();
+            ForeignAccess.send(message.createNode(), proxyInner, args);
             Assert.fail();
         } catch (UnsupportedMessageException e) {
         } catch (InteropException e) {
-            throw e;
+            Assert.fail();
         }
     }
 
-    private static void assertInvalidArrayIndex(InteropCallable r) throws Exception {
+    private static void assertUnknownIdentifier(Message message, TruffleObject proxyInner, Object... args) {
         try {
-            r.call();
+            ForeignAccess.send(message.createNode(), proxyInner, args);
             Assert.fail();
-        } catch (InvalidArrayIndexException e) {
+        } catch (UnknownIdentifierException e) {
         } catch (InteropException e) {
-            throw e;
+            e.printStackTrace();
+            Assert.fail();
         }
     }
 
