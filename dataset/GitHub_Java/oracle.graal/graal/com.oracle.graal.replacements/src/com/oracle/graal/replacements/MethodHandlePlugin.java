@@ -22,20 +22,14 @@
  */
 package com.oracle.graal.replacements;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MethodHandleAccessProvider;
-import jdk.vm.ci.meta.MethodHandleAccessProvider.IntrinsicMethod;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.meta.MethodHandleAccessProvider.*;
 
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.nodes.CallTargetNode;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.NodePlugin;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.replacements.nodes.MethodHandleNode;
+import com.oracle.graal.replacements.nodes.*;
 
 public class MethodHandlePlugin implements NodePlugin {
     private final MethodHandleAccessProvider methodHandleAccess;
@@ -54,15 +48,14 @@ public class MethodHandlePlugin implements NodePlugin {
             if (invokeKind != InvokeKind.Static) {
                 args[0] = b.nullCheckedValue(args[0]);
             }
-            StampPair invokeReturnStamp = b.getInvokeReturnStamp(b.getAssumptions());
-            InvokeNode invoke = MethodHandleNode.tryResolveTargetInvoke(b.getAssumptions(), b.getConstantReflection().getMethodHandleAccess(), intrinsicMethod, method, b.bci(), invokeReturnStamp,
-                            args);
+            JavaType invokeReturnType = b.getInvokeReturnType();
+            InvokeNode invoke = MethodHandleNode.tryResolveTargetInvoke(b.getAssumptions(), b.getConstantReflection().getMethodHandleAccess(), intrinsicMethod, method, b.bci(), invokeReturnType, args);
             if (invoke == null) {
-                MethodHandleNode methodHandleNode = new MethodHandleNode(intrinsicMethod, invokeKind, method, b.bci(), invokeReturnStamp, args);
-                if (invokeReturnStamp.getTrustedStamp().getStackKind() == JavaKind.Void) {
+                MethodHandleNode methodHandleNode = new MethodHandleNode(intrinsicMethod, invokeKind, method, b.bci(), invokeReturnType, args);
+                if (invokeReturnType.getKind() == Kind.Void) {
                     b.add(methodHandleNode);
                 } else {
-                    b.addPush(invokeReturnStamp.getTrustedStamp().getStackKind(), methodHandleNode);
+                    b.addPush(invokeReturnType.getKind(), methodHandleNode);
                 }
             } else {
                 CallTargetNode callTarget = invoke.callTarget();
