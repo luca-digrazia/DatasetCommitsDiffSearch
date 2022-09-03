@@ -30,7 +30,6 @@ import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.Compi
 import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
 
 import org.graalvm.compiler.bytecode.BytecodeProvider;
-import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.Invoke;
@@ -188,35 +187,28 @@ public class IntrinsicContext {
         void addSideEffect(StateSplit sideEffect);
     }
 
-    public FrameState createFrameState(StructuredGraph graph, SideEffectsState sideEffects, StateSplit forStateSplit, NodeSourcePosition sourcePosition) {
+    public FrameState createFrameState(StructuredGraph graph, SideEffectsState sideEffects, StateSplit forStateSplit) {
         assert forStateSplit != graph.start();
         if (forStateSplit.hasSideEffect()) {
             if (sideEffects.isAfterSideEffect()) {
                 // Only the last side effect on any execution path in a replacement
                 // can inherit the stateAfter of the replaced node
                 FrameState invalid = graph.add(new FrameState(INVALID_FRAMESTATE_BCI));
-                invalid.setNodeSourcePosition(sourcePosition);
                 for (StateSplit lastSideEffect : sideEffects.sideEffects()) {
                     lastSideEffect.setStateAfter(invalid);
                 }
             }
             sideEffects.addSideEffect(forStateSplit);
-            FrameState frameState = graph.add(new FrameState(AFTER_BCI));
-            frameState.setNodeSourcePosition(sourcePosition);
-            return frameState;
+            return graph.add(new FrameState(AFTER_BCI));
         } else {
             if (forStateSplit instanceof AbstractMergeNode) {
                 // Merge nodes always need a frame state
                 if (sideEffects.isAfterSideEffect()) {
                     // A merge after one or more side effects
-                    FrameState frameState = graph.add(new FrameState(AFTER_BCI));
-                    frameState.setNodeSourcePosition(sourcePosition);
-                    return frameState;
+                    return graph.add(new FrameState(AFTER_BCI));
                 } else {
                     // A merge before any side effects
-                    FrameState frameState = graph.add(new FrameState(BEFORE_BCI));
-                    frameState.setNodeSourcePosition(sourcePosition);
-                    return frameState;
+                    return graph.add(new FrameState(BEFORE_BCI));
                 }
             } else {
                 // Other non-side-effects do not need a state
