@@ -88,7 +88,7 @@ public abstract class LLVMOffsetToNameNode extends Node {
         }
 
         static boolean noTypeInfo(LLVMSourceType type) {
-            return type == null || type == LLVMSourceType.UNKNOWN || type == LLVMSourceType.VOID || type == LLVMSourceType.UNSUPPORTED;
+            return type == null || type == LLVMSourceType.UNKNOWN_TYPE || type == LLVMSourceType.VOID_TYPE;
         }
 
         @Specialization(guards = "noTypeInfo(type)")
@@ -109,13 +109,8 @@ public abstract class LLVMOffsetToNameNode extends Node {
             return findMember.execute(type.getBaseType(), offset, elementSize);
         }
 
-        @Specialization
+        @Specialization(guards = "!dereferencedPointer")
         protected int doArray(@SuppressWarnings("unused") LLVMSourceArrayLikeType type, long offset, int elementSize) {
-            /*
-             * Here we don't care whether dereferencedPointer is true or false. A pointer to an
-             * array is the same as a flat multi-dimensional array, which is the same as a
-             * one-dimensional array.
-             */
             return (int) (offset / elementSize);
         }
 
