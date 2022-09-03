@@ -28,7 +28,7 @@ import com.oracle.truffle.api.interop.AcceptMessage;
 @AcceptMessage(value = "WRITE", receiverType = ValidTruffleObject.class, language = TestTruffleLanguage.class)
 public final class WriteNode extends BaseWriteNode {
 
-    @Override
+    @SuppressWarnings({"static-method", "unused"})
     @ExpectError({"The first argument must be a com.oracle.truffle.api.frame.VirtualFrame- but is java.lang.String"})
     protected int access(String string, Object receiver, Object name, Object value) {
         return 0;
