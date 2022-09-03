@@ -22,8 +22,6 @@
  */
 package org.graalvm.compiler.debug.internal.method;
 
-import static org.graalvm.compiler.options.OptionValues.GLOBAL;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -35,9 +33,11 @@ import java.util.List;
 
 import org.graalvm.compiler.debug.DebugMethodMetrics;
 import org.graalvm.compiler.debug.TTY;
+import org.graalvm.compiler.debug.internal.DebugScope;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
+import org.graalvm.compiler.options.OptionValues;
 
 /**
  * Interface for printing a collection of method metrics (e.g. during shutdown).
@@ -53,8 +53,8 @@ public interface MethodMetricsPrinter {
         // @formatter:on
     }
 
-    static boolean methodMetricsDumpingEnabled() {
-        return MethodMetricsPrinter.Options.MethodMeterPrintAscii.getValue(GLOBAL) || MethodMetricsPrinter.Options.MethodMeterFile.getValue(GLOBAL) != null;
+    static boolean methodMetricsDumpingEnabled(OptionValues options) {
+        return MethodMetricsPrinter.Options.MethodMeterPrintAscii.getValue(options) || MethodMetricsPrinter.Options.MethodMeterFile.getValue(options) != null;
     }
 
     /**
@@ -112,9 +112,9 @@ public interface MethodMetricsPrinter {
 
         public MethodMetricsCSVFilePrinter() {
             try {
-                fw = new FileOutputStream(new File(Options.MethodMeterFile.getValue(GLOBAL)));
+                fw = new FileOutputStream(new File(Options.MethodMeterFile.getValue(DebugScope.getConfig().getOptions())));
             } catch (IOException e) {
-                TTY.println("Cannot create file %s for method metrics dumping:%s", Options.MethodMeterFile.getValue(GLOBAL), e);
+                TTY.println("Cannot create file %s for method metrics dumping:%s", Options.MethodMeterFile.getValue(DebugScope.getConfig().getOptions()), e);
                 throw new Error(e);
             }
         }
