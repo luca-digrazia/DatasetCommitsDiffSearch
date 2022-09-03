@@ -39,12 +39,10 @@ import com.oracle.graal.phases.common.InliningUtil.InliningCallback;
 import com.oracle.graal.phases.common.InliningUtil.InliningPolicy;
 
 public class InliningPhase extends Phase implements InliningCallback {
-
     /*
-     * - Detect method which only call another method with some parameters set to constants: void
-     * foo(a) -> void foo(a, b) -> void foo(a, b, c) ... These should not be taken into account when
-     * determining inlining depth. - honor the result of overrideInliningDecision(0, caller,
-     * invoke.bci, method, true);
+     * - Detect method which only call another method with some parameters set to constants: void foo(a) -> void foo(a, b) -> void foo(a, b, c) ...
+     *   These should not be taken into account when determining inlining depth.
+     * - honor the result of overrideInliningDecision(0, caller, invoke.bci, method, true);
      */
 
     private final TargetDescription target;
@@ -63,8 +61,7 @@ public class InliningPhase extends Phase implements InliningCallback {
     private static final DebugMetric metricInliningStoppedByMaxDesiredSize = Debug.metric("InliningStoppedByMaxDesiredSize");
     private static final DebugMetric metricInliningRuns = Debug.metric("Runs");
 
-    public InliningPhase(TargetDescription target, GraalCodeCacheProvider runtime, Collection<Invoke> hints, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts) {
+    public InliningPhase(TargetDescription target, GraalCodeCacheProvider runtime, Collection<Invoke> hints, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
         this(target, runtime, assumptions, cache, plan, createInliningPolicy(runtime, assumptions, optimisticOpts, hints), optimisticOpts);
     }
 
@@ -72,8 +69,7 @@ public class InliningPhase extends Phase implements InliningCallback {
         this.customCanonicalizer = customCanonicalizer;
     }
 
-    public InliningPhase(TargetDescription target, GraalCodeCacheProvider runtime, Assumptions assumptions, GraphCache cache, PhasePlan plan, InliningPolicy inliningPolicy,
-                    OptimisticOptimizations optimisticOpts) {
+    public InliningPhase(TargetDescription target, GraalCodeCacheProvider runtime, Assumptions assumptions, GraphCache cache, PhasePlan plan, InliningPolicy inliningPolicy, OptimisticOptimizations optimisticOpts) {
         this.target = target;
         this.runtime = runtime;
         this.assumptions = assumptions;
@@ -155,12 +151,10 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private interface InliningDecision {
-
         boolean isWorthInlining(InlineInfo info);
     }
 
     private static class GreedySizeBasedInliningDecision implements InliningDecision {
-
         private final GraalCodeCacheProvider runtime;
         private final Collection<Invoke> hints;
 
@@ -171,31 +165,27 @@ public class InliningPhase extends Phase implements InliningCallback {
 
         @Override
         public boolean isWorthInlining(InlineInfo info) {
-// assert GraalOptions.ProbabilityAnalysis;
-// if (compiledCodeSize(info) > GraalOptions.SmallCompiledCodeSize) {
-// return false;
-// }
+//            assert GraalOptions.ProbabilityAnalysis;
+//            if (compiledCodeSize(info) > GraalOptions.SmallCompiledCodeSize) {
+//                return false;
+//            }
 //
-// double maxSize = GraalOptions.NormalComplexity;
-// Signature signature = info.invoke().methodCallTarget().targetMethod().getSignature();
-// int transferredValues =
-// signature.getParameterCount(!Modifier.isStatic(info.invoke().methodCallTarget().targetMethod().getModifiers()));
-// if (signature.getReturnKind() != Kind.Void) {
-// transferredValues++;
-// }
-// maxSize += transferredValues * 10;
+//            double maxSize = GraalOptions.NormalComplexity;
+//            Signature signature = info.invoke().methodCallTarget().targetMethod().getSignature();
+//            int transferredValues = signature.getParameterCount(!Modifier.isStatic(info.invoke().methodCallTarget().targetMethod().getModifiers()));
+//            if (signature.getReturnKind() != Kind.Void) {
+//                transferredValues++;
+//            }
+//            maxSize += transferredValues * 10;
 //
-// maxSize = Math.min(GraalOptions.RelevanceCapForInlining, info.invoke().inliningRelevance()) *
-// maxSize;
-// maxSize = Math.max(maxSize, GraalOptions.TrivialComplexity);
+//            maxSize = Math.min(GraalOptions.RelevanceCapForInlining, info.invoke().inliningRelevance()) * maxSize;
+//            maxSize = Math.max(maxSize, GraalOptions.TrivialComplexity);
 //
-// return compilationComplexity(info) < maxSize;
+//            return compilationComplexity(info) < maxSize;
 
             assert GraalOptions.ProbabilityAnalysis;
-            // TODO (chaeubl): invoked methods that are on important paths but not yet compiled ->
-// will be compiled anyways and it is likely that we are the only caller...
-            // might be useful to inline those methods but increases bootstrap time (maybe those
-// methods are also getting queued in the compilation queue concurrently)
+            // TODO (chaeubl): invoked methods that are on important paths but not yet compiled -> will be compiled anyways and it is likely that we are the only caller...
+            //       might be useful to inline those methods but increases bootstrap time (maybe those methods are also getting queued in the compilation queue concurrently)
 
             if (GraalOptions.AlwaysInlineIntrinsics && onlyIntrinsics(info)) {
                 return InliningUtil.logInlinedMethod(info, "intrinsic");
@@ -206,8 +196,7 @@ public class InliningPhase extends Phase implements InliningCallback {
             int compiledCodeSize = compiledCodeSize(info);
             double relevance = info.invoke().inliningRelevance();
 
-            // as long as the compiled code size is small enough (or the method was not yet
-// compiled), we can do a pretty general inlining that suits most situations
+            // as long as the compiled code size is small enough (or the method was not yet compiled), we can do a pretty general inlining that suits most situations
             if (compiledCodeSize < GraalOptions.SmallCompiledCodeSize) {
                 if (isTrivialInlining(bytecodeSize, complexity, compiledCodeSize)) {
                     return InliningUtil.logInlinedMethod(info, "trivial (bytecodes=%d, complexity=%d, codeSize=%d)", bytecodeSize, complexity, compiledCodeSize);
@@ -218,8 +207,7 @@ public class InliningPhase extends Phase implements InliningCallback {
                 }
             }
 
-            // the normal inlining did not fit this invoke, so check if we have any reason why we
-// should still do the inlining
+            // the normal inlining did not fit this invoke, so check if we have any reason why we should still do the inlining
             double probability = info.invoke().probability();
             int transferredValues = numberOfTransferredValues(info);
             int invokeUsages = countInvokeUsages(info);
@@ -227,33 +215,31 @@ public class InliningPhase extends Phase implements InliningCallback {
             int level = info.level();
             boolean preferredInvoke = hints != null && hints.contains(info.invoke());
 
-            // TODO (chaeubl): compute metric that is used to check if this method should be inlined
-// anyways. also use the relevance somehow...
-// double metric = (moreSpecificArguments * 5 + transferredValues + invokeUsages) * (preferredInvoke
-// ? 1 : GraalOptions.BoostInliningForEscapeAnalysis);
-// if (metric > 50) {
-// // TEMP:
-// TTY.println("Inlined special method (relevance=%f, bytecodes=%d, complexity=%d, codeSize=%d, probability=%f, transferredValues=%d, invokeUsages=%d, moreSpecificArguments=%d, level=%d, preferred=%b)",
-// relevance, bytecodeSize, complexity, compiledCodeSize, probability, transferredValues,
-// invokeUsages, moreSpecificArguments, level, preferredInvoke);
-// return InliningUtil.logInlinedMethod(info,
-// "(relevance=%f, bytecodes=%d, complexity=%d, codeSize=%d, probability=%f, transferredValues=%d, invokeUsages=%d, moreSpecificArguments=%d, level=%d, preferred=%b)",
-// relevance, bytecodeSize, complexity, compiledCodeSize, probability, transferredValues,
-// invokeUsages, moreSpecificArguments, level, preferredInvoke);
-// }
+            // TODO (chaeubl): compute metric that is used to check if this method should be inlined anyways. also use the relevance somehow...
+//            double metric = (moreSpecificArguments * 5 + transferredValues + invokeUsages) * (preferredInvoke ? 1 : GraalOptions.BoostInliningForEscapeAnalysis);
+//            if (metric > 50) {
+//                // TEMP:
+//                TTY.println("Inlined special method (relevance=%f, bytecodes=%d, complexity=%d, codeSize=%d, probability=%f, transferredValues=%d, invokeUsages=%d, moreSpecificArguments=%d, level=%d, preferred=%b)",
+//                                relevance, bytecodeSize, complexity, compiledCodeSize, probability, transferredValues, invokeUsages, moreSpecificArguments, level, preferredInvoke);
+//                return InliningUtil.logInlinedMethod(info, "(relevance=%f, bytecodes=%d, complexity=%d, codeSize=%d, probability=%f, transferredValues=%d, invokeUsages=%d, moreSpecificArguments=%d, level=%d, preferred=%b)",
+//                                relevance, bytecodeSize, complexity, compiledCodeSize, probability, transferredValues, invokeUsages, moreSpecificArguments, level, preferredInvoke);
+//            }
 
-            return InliningUtil.logNotInlinedMethod(info,
-                            "(relevance=%f, bytecodes=%d, complexity=%d, codeSize=%d, probability=%f, transferredValues=%d, invokeUsages=%d, moreSpecificArguments=%d, level=%d, preferred=%b)",
+
+            return InliningUtil.logNotInlinedMethod(info, "(relevance=%f, bytecodes=%d, complexity=%d, codeSize=%d, probability=%f, transferredValues=%d, invokeUsages=%d, moreSpecificArguments=%d, level=%d, preferred=%b)",
                             relevance, bytecodeSize, complexity, compiledCodeSize, probability, transferredValues, invokeUsages, moreSpecificArguments, level, preferredInvoke);
         }
 
         private static boolean isTrivialInlining(int bytecodeSize, int complexity, int compiledCodeSize) {
-            return bytecodeSize < GraalOptions.TrivialBytecodeSize || complexity < GraalOptions.TrivialComplexity || compiledCodeSize > 0 && compiledCodeSize < GraalOptions.TrivialCompiledCodeSize;
+            return bytecodeSize < GraalOptions.TrivialBytecodeSize ||
+                   complexity < GraalOptions.TrivialComplexity ||
+                   compiledCodeSize > 0 && compiledCodeSize < GraalOptions.TrivialCompiledCodeSize;
         }
 
         private static boolean canInlineRelevanceBased(double relevance, int bytecodeSize, int complexity, int compiledCodeSize) {
-            return bytecodeSize < computeMaximumSize(relevance, GraalOptions.NormalBytecodeSize) || complexity < computeMaximumSize(relevance, GraalOptions.NormalComplexity) || compiledCodeSize > 0 &&
-                            compiledCodeSize < computeMaximumSize(relevance, GraalOptions.NormalCompiledCodeSize);
+            return bytecodeSize < computeMaximumSize(relevance, GraalOptions.NormalBytecodeSize) ||
+                   complexity < computeMaximumSize(relevance, GraalOptions.NormalComplexity) ||
+                   compiledCodeSize > 0 && compiledCodeSize < computeMaximumSize(relevance, GraalOptions.NormalCompiledCodeSize);
         }
 
         private static double computeMaximumSize(double relevance, int configuredMaximum) {
@@ -273,7 +259,7 @@ public class InliningPhase extends Phase implements InliningCallback {
         private static int countInvokeUsages(InlineInfo info) {
             // inlining calls with lots of usages simplifies the caller
             int usages = 0;
-            for (Node n : info.invoke().node().usages()) {
+            for (Node n: info.invoke().node().usages()) {
                 if (!(n instanceof FrameState)) {
                     usages++;
                 }
@@ -282,8 +268,7 @@ public class InliningPhase extends Phase implements InliningCallback {
         }
 
         private int countMoreSpecificArgumentInfo(InlineInfo info) {
-            // inlining invokes where the caller has very specific information about the passed
-// argument simplifies the callee
+            // inlining invokes where the caller has very specific information about the passed argument simplifies the callee
             int moreSpecificArgumentInfo = 0;
             boolean isStatic = info.invoke().methodCallTarget().isStatic();
             int signatureOffset = isStatic ? 0 : 1;
@@ -309,7 +294,6 @@ public class InliningPhase extends Phase implements InliningCallback {
                         moreSpecificArgumentInfo++;
                     }
                 }
-
             }
 
             return moreSpecificArgumentInfo;
@@ -350,7 +334,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class CFInliningPolicy implements InliningPolicy {
-
         private final InliningDecision inliningDecision;
         private final Collection<Invoke> hints;
         private final Assumptions assumptions;
@@ -359,7 +342,8 @@ public class InliningPhase extends Phase implements InliningCallback {
         private NodeBitMap visitedFixedNodes;
         private FixedNode invokePredecessor;
 
-        public CFInliningPolicy(InliningDecision inliningPolicy, Collection<Invoke> hints, Assumptions assumptions, OptimisticOptimizations optimisticOpts) {
+        public CFInliningPolicy(InliningDecision inliningPolicy, Collection<Invoke> hints,
+                        Assumptions assumptions, OptimisticOptimizations optimisticOpts) {
             this.inliningDecision = inliningPolicy;
             this.hints = hints;
             this.assumptions = assumptions;
@@ -413,7 +397,6 @@ public class InliningPhase extends Phase implements InliningCallback {
                 Invoke invoke = invokes.get(i);
                 assert !sortedInvokes.contains(invoke);
                 sortedInvokes.addFirst(invoke);
-
             }
 
             return invokes.size();
@@ -421,7 +404,7 @@ public class InliningPhase extends Phase implements InliningCallback {
 
         private static int countInvokes(Iterable<? extends Node> nodes) {
             int count = 0;
-            for (Node n : nodes) {
+            for (Node n: nodes) {
                 if (n instanceof Invoke) {
                     count++;
                 }
@@ -431,7 +414,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static class InliningIterator {
-
         private final FixedNode start;
         private final Deque<FixedNode> nodeQueue;
         private final NodeBitMap queuedNodes;
