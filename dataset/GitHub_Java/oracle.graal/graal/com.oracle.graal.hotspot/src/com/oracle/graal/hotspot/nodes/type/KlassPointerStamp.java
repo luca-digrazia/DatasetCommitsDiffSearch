@@ -22,21 +22,14 @@
  */
 package com.oracle.graal.hotspot.nodes.type;
 
-import java.util.Objects;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.compiler.common.spi.LIRKindTool;
-import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.hotspot.CompressEncoding;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig.*;
+import jdk.internal.jvmci.meta.*;
 
-import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
-import jdk.vm.ci.hotspot.HotSpotMemoryAccessProvider;
-import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.MemoryAccessProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.type.*;
 
 public final class KlassPointerStamp extends MetaspacePointerStamp {
 
@@ -54,10 +47,6 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
 
     public static KlassPointerStamp klassNonNull() {
         return KLASS_NON_NULL;
-    }
-
-    public static KlassPointerStamp klassAlwaysNull() {
-        return KLASS_ALWAYS_NULL;
     }
 
     private KlassPointerStamp(boolean nonNull, boolean alwaysNull) {
@@ -84,15 +73,6 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
             return Objects.equals(this.encoding, other.encoding);
         }
         return false;
-    }
-
-    @Override
-    public boolean isCompatible(Constant constant) {
-        if (constant instanceof HotSpotMetaspaceConstant) {
-            return ((HotSpotMetaspaceConstant) constant).asResolvedJavaType() != null;
-        } else {
-            return super.isCompatible(constant);
-        }
     }
 
     @Override
@@ -159,7 +139,7 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
     public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
         HotSpotMemoryAccessProvider hsProvider = (HotSpotMemoryAccessProvider) provider;
         if (isCompressed()) {
-            return hsProvider.readNarrowKlassPointerConstant(base, displacement);
+            return hsProvider.readNarrowKlassPointerConstant(base, displacement, encoding);
         } else {
             return hsProvider.readKlassPointerConstant(base, displacement);
         }

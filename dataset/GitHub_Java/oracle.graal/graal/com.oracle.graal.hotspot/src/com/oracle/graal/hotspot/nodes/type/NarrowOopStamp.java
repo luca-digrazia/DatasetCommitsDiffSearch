@@ -22,22 +22,12 @@
  */
 package com.oracle.graal.hotspot.nodes.type;
 
-import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
-import jdk.vm.ci.hotspot.HotSpotConstant;
-import jdk.vm.ci.hotspot.HotSpotMemoryAccessProvider;
-import jdk.vm.ci.hotspot.HotSpotObjectConstant;
-import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.MemoryAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.spi.LIRKindTool;
-import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.type.*;
 
 public class NarrowOopStamp extends AbstractObjectStamp {
 
@@ -97,15 +87,6 @@ public class NarrowOopStamp extends AbstractObjectStamp {
     }
 
     @Override
-    public Constant readConstantArrayElementForOffset(ConstantReflectionProvider constantReflection, JavaConstant constant, long displacement) {
-        Constant result = super.readConstantArrayElementForOffset(constantReflection, constant, displacement);
-        if (result != null) {
-            result = ((HotSpotConstant) result).compress();
-        }
-        return result;
-    }
-
-    @Override
     public int hashCode() {
         final int prime = 31;
         int result = super.hashCode();
@@ -135,13 +116,5 @@ public class NarrowOopStamp extends AbstractObjectStamp {
         } else {
             return null;
         }
-    }
-
-    @Override
-    public boolean isCompatible(Constant other) {
-        if (other instanceof HotSpotObjectConstant) {
-            return ((HotSpotObjectConstant) other).isCompressed();
-        }
-        return true;
     }
 }

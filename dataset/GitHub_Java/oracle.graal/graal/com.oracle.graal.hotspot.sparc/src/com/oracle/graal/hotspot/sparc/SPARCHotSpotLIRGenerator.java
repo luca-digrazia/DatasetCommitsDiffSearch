@@ -24,6 +24,8 @@ package com.oracle.graal.hotspot.sparc;
 
 import static com.oracle.graal.hotspot.HotSpotBackend.FETCH_UNROLL_INFO;
 import static com.oracle.graal.hotspot.HotSpotBackend.UNCOMMON_TRAP;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.getHostWordKind;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.runtime;
 import static com.oracle.graal.lir.LIRValueUtil.asConstant;
 import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
@@ -131,7 +133,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     private LIRFrameState currentRuntimeCallInfo;
 
     public SPARCHotSpotLIRGenerator(HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        this(new DefaultHotSpotLIRKindTool(providers.getCodeCache().getTarget().arch.getWordKind()), providers, config, cc, lirGenRes);
+        this(new DefaultHotSpotLIRKindTool(providers.getCodeCache().getTarget().wordKind), providers, config, cc, lirGenRes);
     }
 
     protected SPARCHotSpotLIRGenerator(LIRKindTool lirKindTool, HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
@@ -212,7 +214,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
             Register thread = registers.getThreadRegister();
             Value threadTemp = newVariable(LIRKind.value(JavaKind.Long));
             Register stackPointer = registers.getStackPointerRegister();
-            Variable spScratch = newVariable(LIRKind.value(target().arch.getWordKind()));
+            Variable spScratch = newVariable(LIRKind.value(target().wordKind));
             append(new SPARCHotSpotCRuntimeCallPrologueOp(config.threadLastJavaSpOffset(), thread, stackPointer, threadTemp, spScratch));
             result = super.emitForeignCall(hotspotLinkage, debugInfo, args);
             append(new SPARCHotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaPcOffset(), config.threadJavaFrameAnchorFlagsOffset(), thread, threadTemp));
@@ -230,7 +232,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
             operand = resultOperandFor(javaKind, input.getLIRKind());
             emitMove(operand, input);
         }
-        append(new SPARCHotSpotReturnOp(operand, getStub() != null, config, getSafepointAddressValue()));
+        append(new SPARCHotSpotReturnOp(operand, getStub() != null, runtime().getConfig(), getSafepointAddressValue()));
     }
 
     @Override
@@ -254,7 +256,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     }
 
     private void moveValueToThread(Value v, int offset) {
-        LIRKind wordKind = LIRKind.value(target().arch.getWordKind());
+        LIRKind wordKind = LIRKind.value(getProviders().getCodeCache().getTarget().wordKind);
         RegisterValue thread = getProviders().getRegisters().getThreadRegister().asValue(wordKind);
         SPARCAddressValue pendingDeoptAddress = new SPARCImmediateAddressValue(wordKind, thread, offset);
         append(new StoreOp(v.getPlatformKind(), pendingDeoptAddress, load(v), null));
@@ -263,7 +265,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @Override
     public void emitDeoptimize(Value actionAndReason, Value speculation, LIRFrameState state) {
         moveDeoptValuesToThread(actionAndReason, speculation);
-        append(new SPARCDeoptimizeOp(state, target().arch.getWordKind()));
+        append(new SPARCDeoptimizeOp(state, target().wordKind));
     }
 
     @Override
@@ -277,7 +279,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @Override
     public Variable emitLoad(LIRKind kind, Value address, LIRFrameState state) {
         SPARCAddressValue loadAddress = asAddressValue(address);
-        Variable result = newVariable(toRegisterKind(kind));
+        Variable result = newVariable(toStackKind(kind));
         append(new LoadOp(kind.getPlatformKind(), result, loadAddress, state));
         return result;
     }
@@ -469,9 +471,9 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         Register thread = getProviders().getRegisters().getThreadRegister();
         Variable framePcVariable = load(framePc);
         Variable senderSpVariable = load(senderSp);
-        Variable scratchVariable = newVariable(LIRKind.value(target().arch.getWordKind()));
+        Variable scratchVariable = newVariable(LIRKind.value(getHostWordKind()));
         append(new SPARCHotSpotEnterUnpackFramesStackFrameOp(thread, config.threadLastJavaSpOffset(), config.threadLastJavaPcOffset(), framePcVariable, senderSpVariable, scratchVariable,
-                        target().arch.getWordKind()));
+                        target().wordKind));
     }
 
     public void emitLeaveUnpackFramesStackFrame(SaveRegistersOp saveRegisterOp) {
@@ -491,11 +493,11 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         ForeignCallLinkage linkage = getForeignCalls().lookupForeignCall(UNCOMMON_TRAP);
 
         Register threadRegister = getProviders().getRegisters().getThreadRegister();
-        Value threadTemp = newVariable(LIRKind.value(target().arch.getWordKind()));
+        Value threadTemp = newVariable(LIRKind.value(target().wordKind));
         Register stackPointerRegister = getProviders().getRegisters().getStackPointerRegister();
-        Variable spScratch = newVariable(LIRKind.value(target().arch.getWordKind()));
+        Variable spScratch = newVariable(LIRKind.value(target().wordKind));
         append(new SPARCHotSpotCRuntimeCallPrologueOp(config.threadLastJavaSpOffset(), threadRegister, stackPointerRegister, threadTemp, spScratch));
-        Variable result = super.emitForeignCall(linkage, null, threadRegister.asValue(LIRKind.value(target().arch.getWordKind())), trapRequest);
+        Variable result = super.emitForeignCall(linkage, null, threadRegister.asValue(LIRKind.value(target().wordKind)), trapRequest);
         append(new SPARCHotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaPcOffset(), config.threadJavaFrameAnchorFlagsOffset(), threadRegister, threadTemp));
 
         Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = ((SPARCHotSpotLIRGenerationResult) getResult()).getCalleeSaveInfo();
@@ -511,11 +513,11 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         ForeignCallLinkage linkage = getForeignCalls().lookupForeignCall(FETCH_UNROLL_INFO);
 
         Register threadRegister = getProviders().getRegisters().getThreadRegister();
-        Value threadTemp = newVariable(LIRKind.value(target().arch.getWordKind()));
+        Value threadTemp = newVariable(LIRKind.value(target().wordKind));
         Register stackPointerRegister = getProviders().getRegisters().getStackPointerRegister();
-        Variable spScratch = newVariable(LIRKind.value(target().arch.getWordKind()));
+        Variable spScratch = newVariable(LIRKind.value(target().wordKind));
         append(new SPARCHotSpotCRuntimeCallPrologueOp(config.threadLastJavaSpOffset(), threadRegister, stackPointerRegister, threadTemp, spScratch));
-        Variable result = super.emitForeignCall(linkage, null, threadRegister.asValue(LIRKind.value(target().arch.getWordKind())));
+        Variable result = super.emitForeignCall(linkage, null, threadRegister.asValue(LIRKind.value(target().wordKind)));
         append(new SPARCHotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaPcOffset(), config.threadJavaFrameAnchorFlagsOffset(), threadRegister, threadTemp));
 
         Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = ((SPARCHotSpotLIRGenerationResult) getResult()).getCalleeSaveInfo();
@@ -558,7 +560,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     public AllocatableValue getSafepointAddressValue() {
         if (this.safepointAddressValue == null) {
-            this.safepointAddressValue = newVariable(LIRKind.value(target().arch.getWordKind()));
+            this.safepointAddressValue = newVariable(LIRKind.value(target().wordKind));
         }
         return this.safepointAddressValue;
     }
