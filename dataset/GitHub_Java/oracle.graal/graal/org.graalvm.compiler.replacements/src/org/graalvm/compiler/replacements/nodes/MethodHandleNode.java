@@ -335,8 +335,8 @@ public final class MethodHandleNode extends MacroStateSplitNode implements Simpl
                             adder.add(new ValueAnchorNode(newGuard));
                             guard = newGuard;
                         }
-                        ValueNode valueNode = adder.add(PiNode.create(argument, StampFactory.object(targetType), guard.asNode()));
-                        arguments[index] = valueNode;
+                        PiNode piNode = adder.add(new PiNode(argument, StampFactory.object(targetType), guard.asNode()));
+                        arguments[index] = piNode;
                     } else {
                         inst.safeDelete();
                     }
