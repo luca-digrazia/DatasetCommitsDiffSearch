@@ -135,7 +135,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                 @Override
                 public void run() {
                     Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
-                    SnippetInstaller installer = new SnippetInstaller(runtime, assumptions, runtime.getGraalRuntime().getTarget());
+                    SnippetInstaller installer = new SnippetInstaller(runtime, runtime.getGraalRuntime().getTarget(), HotSpotGraalRuntime.wordStamp(), assumptions);
                     GraalIntrinsics.installIntrinsics(installer);
                     runtime.installSnippets(installer, assumptions);
                 }
@@ -527,6 +527,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             // lost the race - return the existing value instead
             type = (HotSpotResolvedJavaType) unsafe.getObject(javaMirror, offset);
         }
+        AddressMap.log(metaspaceKlass, type.toJava().getName());
         return type;
     }
 

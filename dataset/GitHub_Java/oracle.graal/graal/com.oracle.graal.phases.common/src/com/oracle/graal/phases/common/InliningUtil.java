@@ -718,8 +718,7 @@ public class InliningUtil {
             double weight = inliningPolicy.inliningWeight(caller, concrete, invoke);
             return new TypeGuardInlineInfo(invoke, weight, concrete, type);
         } else {
-            invoke.setPolymorphic(true);
-
+            invoke.setMegamorphic(true);
 
             if (!optimisticOpts.inlinePolymorphicCalls() && notRecordedTypeProbability == 0) {
                 return logNotInlinedMethodAndReturnNull(invoke, targetMethod, "inlining polymorphic calls is disabled");
@@ -969,8 +968,13 @@ public class InliningUtil {
             returnDuplicate.replaceAndDelete(n);
         }
 
+        invoke.node().clearInputs();
         invoke.node().replaceAtUsages(null);
         GraphUtil.killCFG(invoke.node());
+
+        if (stateAfter.usages().isEmpty()) {
+            stateAfter.safeDelete();
+        }
     }
 
     public static void receiverNullCheck(Invoke invoke) {
