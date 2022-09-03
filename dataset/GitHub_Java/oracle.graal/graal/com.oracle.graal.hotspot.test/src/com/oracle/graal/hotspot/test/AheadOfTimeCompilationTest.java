@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.graal.api.code.Assumptions.*;
 import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
@@ -40,7 +39,6 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.options.*;
@@ -205,17 +203,15 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
     }
 
     private StructuredGraph compile(String test, boolean compileAOT) {
-        StructuredGraph graph = parseEager(test, ALLOW_OPTIMISTIC_ASSUMPTIONS);
+        StructuredGraph graph = parseEager(test);
         ResolvedJavaMethod method = graph.method();
 
         try (OverrideScope s = OptionValue.override(ImmutableCode, compileAOT)) {
             CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
             // create suites everytime, as we modify options for the compiler
-            SuitesProvider suitesProvider = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites();
-            final Suites suitesLocal = suitesProvider.createSuites();
-            final LIRSuites lirSuitesLocal = suitesProvider.createLIRSuites();
-            final CompilationResult compResult = compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(),
-                            OptimisticOptimizations.ALL, getProfilingInfo(graph), getSpeculationLog(), suitesLocal, lirSuitesLocal, new CompilationResult(), CompilationResultBuilderFactory.Default);
+            final Suites suitesLocal = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites().createSuites();
+            final CompilationResult compResult = compileGraph(graph, null, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(),
+                            OptimisticOptimizations.ALL, getProfilingInfo(graph), getSpeculationLog(), suitesLocal, new CompilationResult(), CompilationResultBuilderFactory.Default);
             addMethod(method, compResult);
         }
 
