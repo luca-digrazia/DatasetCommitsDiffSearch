@@ -98,7 +98,6 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
         this.originalIsStatic = originalIsStatic;
     }
 
-    @Override
     public boolean inlineOnly() {
         // Conservatively assume MacroNodes may be used in a substitution
         return true;
@@ -169,10 +168,12 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
     @Override
     public boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode[] argsIncludingReceiver) {
         ResolvedJavaMethod subst = getSubstitute(b.getMetaAccess());
-        return b.intrinsify(targetMethod, subst, receiver, argsIncludingReceiver);
+        if (receiver != null) {
+            receiver.get();
+        }
+        return b.intrinsify(targetMethod, subst, argsIncludingReceiver);
     }
 
-    @Override
     public StackTraceElement getApplySourceLocation(MetaAccessProvider metaAccess) {
         Class<?> c = getClass();
         for (Method m : c.getDeclaredMethods()) {

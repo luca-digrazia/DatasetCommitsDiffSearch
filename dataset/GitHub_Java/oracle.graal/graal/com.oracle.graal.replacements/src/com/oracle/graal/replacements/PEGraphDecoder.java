@@ -46,7 +46,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.graph.Node;
@@ -479,7 +478,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         GraphBuilderContext graphBuilderContext = new PENonAppendGraphBuilderContext(methodScope, invokeData.invoke);
 
         for (InlineInvokePlugin plugin : methodScope.inlineInvokePlugins) {
-            InlineInfo inlineInfo = plugin.shouldInlineInvoke(graphBuilderContext, targetMethod, arguments);
+            InlineInfo inlineInfo = plugin.shouldInlineInvoke(graphBuilderContext, targetMethod, arguments, callTarget.returnType());
             if (inlineInfo != null) {
                 if (inlineInfo.getMethodToInline() == null) {
                     return false;
@@ -664,16 +663,14 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         PEMethodScope methodScope = (PEMethodScope) s;
 
         if (node instanceof ParameterNode) {
-            ParameterNode param = (ParameterNode) node;
             if (methodScope.arguments != null) {
-                Node result = methodScope.arguments[param.index()];
+                Node result = methodScope.arguments[((ParameterNode) node).index()];
                 assert result != null;
                 return result;
 
             } else if (methodScope.parameterPlugin != null) {
                 GraphBuilderContext graphBuilderContext = new PENonAppendGraphBuilderContext(methodScope, null);
-                Node result = methodScope.parameterPlugin.interceptParameter(graphBuilderContext, param.index(),
-                                StampPair.create(param.stamp(), param.uncheckedStamp()));
+                Node result = methodScope.parameterPlugin.interceptParameter(graphBuilderContext, ((ParameterNode) node).index(), ((ParameterNode) node).stamp());
                 if (result != null) {
                     return result;
                 }

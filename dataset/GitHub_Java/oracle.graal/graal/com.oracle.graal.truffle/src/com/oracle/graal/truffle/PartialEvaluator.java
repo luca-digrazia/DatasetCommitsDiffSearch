@@ -125,7 +125,7 @@ public class PartialEvaluator {
         }
 
         this.configForParsing = createGraphBuilderConfig(configForRoot, true);
-        this.decodingInvocationPlugins = createDecodingInvocationPlugins();
+        this.decodingInvocationPlugins = createDecodingInvocationPlugins(configForRoot.getPlugins());
     }
 
     public Providers getProviders() {
@@ -383,9 +383,9 @@ public class PartialEvaluator {
         }
     }
 
-    protected InvocationPlugins createDecodingInvocationPlugins() {
+    protected InvocationPlugins createDecodingInvocationPlugins(Plugins parent) {
         @SuppressWarnings("hiding")
-        InvocationPlugins decodingInvocationPlugins = new InvocationPlugins(providers.getMetaAccess());
+        InvocationPlugins decodingInvocationPlugins = new InvocationPlugins(parent.getInvocationPlugins());
         registerTruffleInvocationPlugins(decodingInvocationPlugins, false);
         decodingInvocationPlugins.closeRegistration();
         return decodingInvocationPlugins;
@@ -446,10 +446,10 @@ public class PartialEvaluator {
         HashMap<String, ArrayList<ValueNode>> groupedByType;
         groupedByType = new HashMap<>();
         for (CheckCastNode cast : graph.getNodes().filter(CheckCastNode.class)) {
-            if (!cast.type().isExactType()) {
+            if (cast.type().findLeafConcreteSubtype() == null) {
                 warnings.add(cast);
-                groupedByType.putIfAbsent(cast.type().getType().getName(), new ArrayList<>());
-                groupedByType.get(cast.type().getType().getName()).add(cast);
+                groupedByType.putIfAbsent(cast.type().getName(), new ArrayList<>());
+                groupedByType.get(cast.type().getName()).add(cast);
             }
         }
         for (Map.Entry<String, ArrayList<ValueNode>> entry : groupedByType.entrySet()) {
@@ -458,10 +458,10 @@ public class PartialEvaluator {
 
         groupedByType = new HashMap<>();
         for (InstanceOfNode instanceOf : graph.getNodes().filter(InstanceOfNode.class)) {
-            if (!instanceOf.type().isExactType()) {
+            if (instanceOf.type().findLeafConcreteSubtype() == null) {
                 warnings.add(instanceOf);
-                groupedByType.putIfAbsent(instanceOf.type().getType().getName(), new ArrayList<>());
-                groupedByType.get(instanceOf.type().getType().getName()).add(instanceOf);
+                groupedByType.putIfAbsent(instanceOf.type().getName(), new ArrayList<>());
+                groupedByType.get(instanceOf.type().getName()).add(instanceOf);
             }
         }
         for (Map.Entry<String, ArrayList<ValueNode>> entry : groupedByType.entrySet()) {
