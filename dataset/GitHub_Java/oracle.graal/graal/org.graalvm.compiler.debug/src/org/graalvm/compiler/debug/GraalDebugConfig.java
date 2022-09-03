@@ -41,6 +41,12 @@ import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.meta.JavaMethod;
 
 public class GraalDebugConfig implements DebugConfig {
+    @SuppressWarnings("all")
+    private static boolean assertionsEnabled() {
+        boolean assertionsEnabled = false;
+        assert assertionsEnabled = true;
+        return assertionsEnabled;
+    }
 
     public static class Options {
         // @formatter:off
