@@ -40,6 +40,7 @@ import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
+import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
@@ -65,7 +66,7 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
     @Platforms(Platform.HOSTED_ONLY.class)
     @Override
     protected PartialEvaluator createPartialEvaluator() {
-        return TruffleFeature.getSupport().createPartialEvaluator(lastTierProviders, config, snippetReflection, backend.getTarget().arch);
+        return TruffleFeature.getSupport().createPartialEvaluator(providers, config, snippetReflection, backend.getTarget().arch);
     }
 
     @Override
@@ -79,7 +80,7 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
     }
 
     @Override
-    protected CompilationResult createCompilationResult(String name, CompilationIdentifier compilationIdentifier, CompilableTruffleAST compilable) {
+    protected CompilationResult createCompilationResult(String name, CompilationIdentifier compilationIdentifier) {
         return new SubstrateCompilationResult(compilationIdentifier, name);
     }
 
@@ -104,7 +105,7 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
     }
 
     @Override
-    protected InstalledCode createInstalledCode(CompilableTruffleAST compilable) {
+    protected InstalledCode createInstalledCode(CompilableTruffleAST compilable, TruffleCompilationTask task) {
         return new SubstrateTruffleInstalledCodeBridge((SubstrateOptimizedCallTarget) compilable);
     }
 }

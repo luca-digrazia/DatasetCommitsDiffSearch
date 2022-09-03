@@ -77,6 +77,8 @@ import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.SpeculationLog;
 
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
+
 /**
  * Call target that is optimized by Graal upon surpassing a specific invocation threshold. That is,
  * this is a Truffle AST that can be optimized via partial evaluation and compiled to machine code.
@@ -109,7 +111,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      * When this field is not null, this {@link OptimizedCallTarget} is {@linkplain #isCompiling()
      * being compiled}.<br/>
      *
-     * It is only set to non-null in {@link #compile(boolean)} in a synchronized block. It is only
+     * It is only set to non-null in {@link #compile()} in a synchronized block. It is only
      * {@linkplain #resetCompilationTask() set to null} by the compilation thread once the
      * compilation is over.<br/>
      *
@@ -336,7 +338,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      * the background. Use {@link #isCompiling()} to find out whether it is actually compiling.
      */
     public final boolean compile(boolean lastTierCompilation) {
-        if (!needsCompile(lastTierCompilation)) {
+        if (isValid() && !isCurrentCompilationOverriding(lastTierCompilation)) {
             return true;
         }
         if (!isCompiling()) {
@@ -348,7 +350,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             // Do not try to compile this target concurrently,
             // but do not block other threads if compilation is not asynchronous.
             synchronized (this) {
-                if (!needsCompile(lastTierCompilation)) {
+                if (isValid() && !isCurrentCompilationOverriding(lastTierCompilation)) {
                     return true;
                 }
                 if (this.compilationProfile == null) {
@@ -369,8 +371,8 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return false;
     }
 
-    private final boolean needsCompile(boolean isLastTierCompilation) {
-        return !isValid() || (isLastTierCompilation && !isValidLastTier());
+    private boolean isCurrentCompilationOverriding(boolean lastTierCompilation) {
+        return lastTierCompilation && !isValidLastTier();
     }
 
     public final boolean isCompiling() {
@@ -391,8 +393,8 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     public abstract boolean isValid();
 
     /**
-     * Determines if this call target has valid machine code attached to it, and that this code was
-     * compiled in the last tier.
+     * Determines if this call target has valid machine code attached to it, and that this code
+     * was compiled in the last tier.
      */
     public abstract boolean isValidLastTier();
 
@@ -687,8 +689,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     /**
      * This marks the end of the compilation.
      *
-     * It may only ever be called by the thread that performed the compilation, and after the
-     * compilation is completely done (either successfully or not successfully).
+     * It should only ever be called by the thread that performed the compilation.
      */
     public void resetCompilationTask() {
         /*

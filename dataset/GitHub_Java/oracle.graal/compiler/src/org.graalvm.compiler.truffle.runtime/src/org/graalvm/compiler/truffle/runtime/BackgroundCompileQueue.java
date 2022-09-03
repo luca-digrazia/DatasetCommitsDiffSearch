@@ -25,7 +25,6 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import org.graalvm.compiler.core.CompilerThreadFactory;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
@@ -61,7 +60,7 @@ public class BackgroundCompileQueue {
             this.optionOverrides = optionOverrides;
             this.weakCallTarget = new WeakReference<>(callTarget);
             this.task = task;
-            this.isFirstTier = !task.isLastTier();
+            this.isFirstTier = optionOverrides != null && !task.isLastTier();
         }
 
         @SuppressWarnings("try")
