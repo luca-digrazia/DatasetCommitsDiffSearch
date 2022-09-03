@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_EXP;
 import static com.oracle.graal.hotspot.HotSpotBackend.Options.GraalArithmeticStubs;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_COS_STUB;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_LOG10_STUB;
@@ -86,9 +85,6 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
                 case TAN:
                     return ARITHMETIC_TAN_STUB;
             }
-        }
-        if (operation == UnaryOperation.EXP) {
-            return ARITHMETIC_EXP;
         }
         // Lower only using LIRGenerator
         return null;
