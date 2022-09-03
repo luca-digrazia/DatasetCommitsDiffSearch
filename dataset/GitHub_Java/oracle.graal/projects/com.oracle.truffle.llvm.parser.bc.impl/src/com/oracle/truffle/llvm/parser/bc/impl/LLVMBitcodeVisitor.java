@@ -258,7 +258,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
             }
             return address;
         } else {
-            return LLVMBitcodeHelper.toConstantNode(g, 0, this::getGlobalVariable, context, null);
+            throw new IllegalArgumentException(global.getClass().getSimpleName() + " is not a global variable");
         }
     }
 
