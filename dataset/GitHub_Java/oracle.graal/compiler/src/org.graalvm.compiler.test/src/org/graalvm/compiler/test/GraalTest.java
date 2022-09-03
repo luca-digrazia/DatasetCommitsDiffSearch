@@ -240,10 +240,8 @@ public class GraalTest {
         assertDeepEquals(message, expected, actual, equalFloatsOrDoublesDelta());
     }
 
-    /**
-     * @see "https://bugs.openjdk.java.net/browse/JDK-8076557"
-     */
-    public static void assumeManagementLibraryIsLoadable() {
+    /** @see <a href="https://bugs.openjdk.java.net/browse/JDK-8076557">JDK-8076557</a> */
+    protected static void assumeManagementLibraryIsLoadable() {
         try {
             /* Trigger loading of the management library using the bootstrap class loader. */
             GraalServices.getCurrentThreadAllocatedBytes();
