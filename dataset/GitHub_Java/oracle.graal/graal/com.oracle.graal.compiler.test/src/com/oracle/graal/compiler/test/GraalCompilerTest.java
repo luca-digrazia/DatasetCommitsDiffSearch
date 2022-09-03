@@ -83,20 +83,10 @@ public abstract class GraalCompilerTest extends GraalTest {
     private final Backend backend;
     private final Suites suites;
 
-    private static boolean substitutionsInstalled;
-
-    private void installSubstitutions() {
-        if (!substitutionsInstalled) {
-            this.providers.getReplacements().registerSubstitutions(InjectProfileDataSubstitutions.class);
-            substitutionsInstalled = true;
-        }
-    }
-
     public GraalCompilerTest() {
         this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         this.providers = getBackend().getProviders();
         this.suites = backend.getSuites().createSuites();
-        installSubstitutions();
     }
 
     /**
@@ -116,7 +106,6 @@ public abstract class GraalCompilerTest extends GraalTest {
         }
         this.providers = backend.getProviders();
         this.suites = backend.getSuites().createSuites();
-        installSubstitutions();
     }
 
     @BeforeClass
@@ -183,8 +172,8 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected void assertConstantReturn(StructuredGraph graph, int value) {
         String graphString = getCanonicalGraphString(graph, false);
-        Assert.assertEquals("unexpected number of ReturnNodes: " + graphString, graph.getNodes(ReturnNode.class).count(), 1);
-        ValueNode result = graph.getNodes(ReturnNode.class).first().result();
+        Assert.assertEquals("unexpected number of ReturnNodes: " + graphString, graph.getNodes().filter(ReturnNode.class).count(), 1);
+        ValueNode result = graph.getNodes().filter(ReturnNode.class).first().result();
         Assert.assertTrue("unexpected ReturnNode result node: " + graphString, result.isConstant());
         Assert.assertEquals("unexpected ReturnNode result kind: " + graphString, result.asConstant().getKind(), Kind.Int);
         Assert.assertEquals("unexpected ReturnNode result: " + graphString, result.asConstant().asInt(), value);
@@ -589,11 +578,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     protected CompilationResult compile(ResolvedJavaMethod method, final StructuredGraph graph) {
         CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
         return compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph),
-                        getSpeculationLog(), getSuites(), true, new CompilationResult(), CompilationResultBuilderFactory.Default);
-    }
-
-    protected SpeculationLog getSpeculationLog() {
-        return null;
+                        new SpeculationLog(), getSuites(), true, new CompilationResult(), CompilationResultBuilderFactory.Default);
     }
 
     protected InstalledCode addMethod(final ResolvedJavaMethod method, final CompilationResult compResult) {
@@ -653,28 +638,5 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected Replacements getReplacements() {
         return getProviders().getReplacements();
-    }
-
-    /**
-     * Inject a probability for a branch condition into the profiling information of this test case.
-     * 
-     * @param p the probability that cond is true
-     * @param cond the condition of the branch
-     * @return cond
-     */
-    protected static boolean branchProbability(double p, boolean cond) {
-        return cond;
-    }
-
-    /**
-     * Inject an iteration count for a loop condition into the profiling information of this test
-     * case.
-     * 
-     * @param i the iteration count of the loop
-     * @param cond the condition of the loop
-     * @return cond
-     */
-    protected static boolean iterationCount(double i, boolean cond) {
-        return cond;
     }
 }

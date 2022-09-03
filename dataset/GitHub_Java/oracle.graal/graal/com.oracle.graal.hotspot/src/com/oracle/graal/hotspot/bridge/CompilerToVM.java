@@ -258,8 +258,6 @@ public interface CompilerToVM {
      */
     long[] collectCounters();
 
-    boolean isMature(long metaspaceMethodData);
-
     /**
      * Generate a unique id to identify the result of the compile.
      */

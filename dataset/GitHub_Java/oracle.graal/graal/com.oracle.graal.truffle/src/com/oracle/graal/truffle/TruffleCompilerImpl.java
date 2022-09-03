@@ -36,6 +36,7 @@ import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.CompilerThreadFactory.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -64,7 +65,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
     private final Suites suites;
     private final PartialEvaluator partialEvaluator;
     private final Backend backend;
-    private final GraphBuilderConfiguration config;
+    private final ResolvedJavaType[] skippedExceptionTypes;
     private final RuntimeProvider runtime;
     private final TruffleCache truffleCache;
     private final ThreadPoolExecutor compileQueue;
@@ -80,9 +81,10 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         Replacements truffleReplacements = ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements();
         this.providers = backend.getProviders().copyWith(truffleReplacements);
         this.suites = backend.getSuites().getDefaultSuites();
+        this.skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
 
         // Create compilation queue.
-        CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread", new CompilerThreadFactory.DebugConfigAccess() {
+        CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread", new DebugConfigAccess() {
             public GraalDebugConfig getDebugConfig() {
                 if (Debug.isEnabled()) {
                     GraalDebugConfig debugConfig = DebugEnvironment.initialize(TTY.out().out());
@@ -95,21 +97,18 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         });
         compileQueue = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), factory);
 
-        ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
-        GraphBuilderConfiguration eagerConfig = GraphBuilderConfiguration.getEagerDefault();
-        eagerConfig.setSkippedExceptionTypes(skippedExceptionTypes);
-        this.truffleCache = new TruffleCache(providers, eagerConfig, TruffleCompilerImpl.Optimizations);
+        final GraphBuilderConfiguration config = GraphBuilderConfiguration.getEagerDefault();
+        config.setSkippedExceptionTypes(skippedExceptionTypes);
+        this.truffleCache = new TruffleCache(providers, config, TruffleCompilerImpl.Optimizations);
 
-        this.config = GraphBuilderConfiguration.getDefault();
-        this.config.setSkippedExceptionTypes(skippedExceptionTypes);
-        this.partialEvaluator = new PartialEvaluator(runtime, providers, truffleCache, config);
+        this.partialEvaluator = new PartialEvaluator(runtime, providers, truffleCache);
 
         if (Debug.isEnabled()) {
             DebugEnvironment.initialize(System.out);
         }
     }
 
-    private static ResolvedJavaType[] getSkippedExceptionTypes(MetaAccessProvider metaAccess) {
+    static ResolvedJavaType[] getSkippedExceptionTypes(MetaAccessProvider metaAccess) {
         ResolvedJavaType[] skippedExceptionTypes = new ResolvedJavaType[SKIPPED_EXCEPTION_CLASSES.length];
         for (int i = 0; i < SKIPPED_EXCEPTION_CLASSES.length; i++) {
             skippedExceptionTypes[i] = metaAccess.lookupJavaType(SKIPPED_EXCEPTION_CLASSES[i]);
@@ -136,6 +135,8 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
     private InstalledCode compileMethodImpl(final OptimizedCallTarget compilable) {
         final StructuredGraph graph;
+        final GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault();
+        config.setSkippedExceptionTypes(skippedExceptionTypes);
         GraphCache graphCache = runtime.getGraphCache();
         if (graphCache != null) {
             graphCache.removeStaleGraphs();
@@ -155,7 +156,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         }
         long timePartialEvaluationFinished = System.nanoTime();
         int nodeCountPartialEval = graph.getNodeCount();
-        InstalledCode compiledMethod = compileMethodHelper(graph, assumptions, compilable.toString(), compilable.getSpeculationLog());
+        InstalledCode compiledMethod = compileMethodHelper(graph, config, assumptions);
         long timeCompilationFinished = System.nanoTime();
         int nodeCountLowered = graph.getNodeCount();
 
@@ -207,7 +208,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         }
     }
 
-    public InstalledCode compileMethodHelper(StructuredGraph graph, Assumptions assumptions, String name, SpeculationLog speculationLog) {
+    public InstalledCode compileMethodHelper(StructuredGraph graph, GraphBuilderConfiguration config, Assumptions assumptions) {
         try (Scope s = Debug.scope("TruffleFinal")) {
             Debug.dump(graph, "After TruffleTier");
         } catch (Throwable e) {
@@ -218,9 +219,9 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         try (TimerCloseable a = CompilationTime.start(); Scope s = Debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache())) {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
-            CompilationResult compilationResult = new CompilationResult(name);
-            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, createGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph),
-                            speculationLog, suites, false, compilationResult, CompilationResultBuilderFactory.Default);
+            CompilationResult compilationResult = new CompilationResult(graph.method().toString());
+            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, createGraphBuilderSuite(config), OptimisticOptimizations.ALL, getProfilingInfo(graph),
+                            new SpeculationLog(), suites, false, compilationResult, CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -243,7 +244,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         InstalledCode installedCode = null;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); TimerCloseable a = CodeInstallationTime.start()) {
-            installedCode = providers.getCodeCache().addMethod(graph.method(), result, speculationLog);
+            installedCode = providers.getCodeCache().addMethod(graph.method(), result, null);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -258,7 +259,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         return installedCode;
     }
 
-    private PhaseSuite<HighTierContext> createGraphBuilderSuite() {
+    private PhaseSuite<HighTierContext> createGraphBuilderSuite(GraphBuilderConfiguration config) {
         PhaseSuite<HighTierContext> suite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
         ListIterator<BasePhase<? super HighTierContext>> iterator = suite.findPhase(GraphBuilderPhase.class);
         iterator.remove();
@@ -275,9 +276,5 @@ public class TruffleCompilerImpl implements TruffleCompiler {
                 newAssumptions.record(assumption);
             }
         }
-    }
-
-    public PartialEvaluator getPartialEvaluator() {
-        return partialEvaluator;
     }
 }
