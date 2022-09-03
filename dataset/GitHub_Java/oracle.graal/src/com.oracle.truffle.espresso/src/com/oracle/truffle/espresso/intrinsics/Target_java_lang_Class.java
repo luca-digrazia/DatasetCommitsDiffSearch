@@ -31,6 +31,7 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 
 import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.classfile.ClassConstant;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
@@ -51,7 +52,6 @@ import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 import com.oracle.truffle.espresso.types.TypeDescriptors;
-import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 @EspressoIntrinsics
 public class Target_java_lang_Class {
