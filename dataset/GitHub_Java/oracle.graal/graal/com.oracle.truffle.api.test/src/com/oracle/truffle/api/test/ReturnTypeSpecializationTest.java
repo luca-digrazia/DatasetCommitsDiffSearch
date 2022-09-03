@@ -122,7 +122,12 @@ public class ReturnTypeSpecializationTest {
         Object execute(VirtualFrame frame) {
             try {
                 int result = value.executeInt(frame);
-                frame.setInt(slot, result);
+                try {
+                    frame.setInt(slot, result);
+                } catch (FrameSlotTypeException e) {
+                    frame.setObject(slot, result);
+                    replace(new ObjectAssignLocal(slot, value));
+                }
             } catch (UnexpectedResultException e) {
                 frame.setObject(slot, e.getResult());
                 replace(new ObjectAssignLocal(slot, value));
