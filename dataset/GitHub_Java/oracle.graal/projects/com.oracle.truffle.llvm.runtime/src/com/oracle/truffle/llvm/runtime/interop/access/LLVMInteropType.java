@@ -180,10 +180,6 @@ public abstract class LLVMInteropType {
             return type;
         }
 
-        public Struct getStruct() {
-            return struct;
-        }
-
         public long getStartOffset() {
             return startOffset;
         }

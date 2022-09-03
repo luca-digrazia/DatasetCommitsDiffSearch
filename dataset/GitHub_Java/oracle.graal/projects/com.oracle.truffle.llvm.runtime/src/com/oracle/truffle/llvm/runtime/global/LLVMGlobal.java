@@ -74,7 +74,7 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
 
     public static LLVMGlobal external(LLVMContext context, Object symbol, String name, Type type, LLVMAddress pointer, LLVMSourceSymbol sourceSymbol) {
         LLVMGlobal global = new LLVMGlobal(name, context.getGlobalFrameSlot(symbol, type), type, sourceSymbol);
-        global.setFrame(context, pointer);
+        global.setFrame(context, new Native(pointer.getVal()));
         return global;
     }
 
@@ -127,11 +127,23 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         context.getGlobalFrame().setObject(slot, object);
     }
 
-    @SuppressWarnings("unused")
-    public abstract static class IsNative extends Node {
-        public abstract boolean execute(LLVMContext context, LLVMGlobal global);
+    static final class Native {
+        private final long pointer;
 
-        public static IsNative create() {
+        private Native(long pointer) {
+            this.pointer = pointer;
+        }
+
+        long getPointer() {
+            return pointer;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    abstract static class IsNative extends Node {
+        abstract boolean execute(LLVMContext context, LLVMGlobal global);
+
+        static IsNative create() {
             return IsNativeNodeGen.create();
         }
 
@@ -139,26 +151,26 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
             return context.getGlobalFrame();
         }
 
-        Assumption getSingleContextAssumption() {
+        Assumption getSingleContextAsssumption() {
             return LLVMLanguage.SINGLE_CONTEXT_ASSUMPTION;
         }
 
-        @Specialization(assumptions = "getSingleContextAssumption()", guards = {"global == cachedGlobal"})
+        @Specialization(assumptions = "getSingleContextAsssumption()", guards = {"global == cachedGlobal"})
         boolean doCachedSingleThread(LLVMContext context, LLVMGlobal global,
                         @Cached("global") LLVMGlobal cachedGlobal,
                         @Cached("getFrame(context)") MaterializedFrame frame) {
-            return frame.getValue(cachedGlobal.slot) instanceof LLVMAddress;
+            return frame.getValue(cachedGlobal.slot) instanceof Native;
         }
 
-        @Specialization(assumptions = "getSingleContextAssumption()", replaces = "doCachedSingleThread")
+        @Specialization(assumptions = "getSingleContextAsssumption()", replaces = "doCachedSingleThread")
         boolean doSingleThread(LLVMContext context, LLVMGlobal global,
                         @Cached("getFrame(context)") MaterializedFrame frame) {
-            return frame.getValue(global.slot) instanceof LLVMAddress;
+            return frame.getValue(global.slot) instanceof Native;
         }
 
         @Specialization(replaces = {"doCachedSingleThread", "doSingleThread"})
         boolean generic(LLVMContext context, LLVMGlobal global) {
-            return getFrame(context).getValue(global.slot) instanceof LLVMAddress;
+            return getFrame(context).getValue(global.slot) instanceof Native;
         }
     }
 
@@ -171,7 +183,7 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         }
 
         long getValue(LLVMContext context, LLVMGlobal global) {
-            return ((LLVMAddress) context.getGlobalFrame().getValue(global.slot)).getVal();
+            return ((Native) context.getGlobalFrame().getValue(global.slot)).getPointer();
         }
 
         MaterializedFrame getFrame(LLVMContext context) {
@@ -189,18 +201,18 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
 
         @Specialization(assumptions = "getSingleContextAsssumption()", replaces = "doCachedSingleThread")
         long doSingleThread(LLVMContext context, LLVMGlobal global, @Cached("getFrame(context)") MaterializedFrame frame) {
-            return ((LLVMAddress) frame.getValue(global.slot)).getVal();
+            return ((Native) frame.getValue(global.slot)).getPointer();
         }
 
         @Specialization(replaces = {"doCachedSingleThread", "doSingleThread"})
         long generic(LLVMContext context, LLVMGlobal global) {
-            return ((LLVMAddress) getFrame(context).getValue(global.slot)).getVal();
+            return ((Native) getFrame(context).getValue(global.slot)).getPointer();
         }
     }
 
     @SuppressWarnings("unused")
-    public abstract static class GetFrame extends Node {
-        public abstract MaterializedFrame execute(LLVMContext context);
+    abstract static class GetFrame extends Node {
+        abstract MaterializedFrame execute(LLVMContext context);
 
         public static GetFrame create() {
             return GetFrameNodeGen.create();
@@ -210,13 +222,12 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
             return context.getGlobalFrame();
         }
 
-        Assumption getSingleContextAssumption() {
+        Assumption getSingleContextAsssumption() {
             return LLVMLanguage.SINGLE_CONTEXT_ASSUMPTION;
         }
 
-        @Specialization(assumptions = "getSingleContextAssumption()")
-        MaterializedFrame doSingleThread(LLVMContext context,
-                        @Cached("getFrame(context)") MaterializedFrame frame) {
+        @Specialization(assumptions = "getSingleContextAsssumption()")
+        MaterializedFrame doSingleThread(LLVMContext context, @Cached("getFrame(context)") MaterializedFrame frame) {
             return frame;
         }
 
@@ -227,8 +238,8 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
     }
 
     @SuppressWarnings("unused")
-    public abstract static class GetSlot extends Node {
-        public abstract FrameSlot execute(LLVMGlobal global);
+    abstract static class GetSlot extends Node {
+        abstract FrameSlot execute(LLVMGlobal global);
 
         public static GetSlot create() {
             return GetSlotNodeGen.create();
@@ -250,7 +261,7 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
     }
 
     public static LLVMAddress toNative(LLVMContext context, LLVMMemory memory, LLVMGlobal global) {
-        return global.getAsNative(memory, context);
+        return LLVMAddress.fromLong(global.getAsNative(memory, context).getPointer());
     }
 
     @Override
@@ -291,8 +302,7 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         public boolean isPointer(Object obj) {
             LLVMGlobal global = (LLVMGlobal) obj;
             Object value = getContext().getGlobalFrame().getValue(global.slot);
-            // TODO deleagate
-            return value instanceof LLVMAddress;
+            return value instanceof Native;
         }
 
         @Override
@@ -303,26 +313,25 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         @Override
         public long asPointer(Object obj) throws InteropException {
             LLVMGlobal global = (LLVMGlobal) obj;
-            LLVMAddress value = (LLVMAddress) getContext().getGlobalFrame().getValue(global.slot);
-            // TODO deleagate
-            return value.getVal();
+            Native value = (Native) getContext().getGlobalFrame().getValue(global.slot);
+            return value.getPointer();
         }
     }
 
-    LLVMAddress getAsNative(LLVMMemory memory, LLVMContext context) {
+    Native getAsNative(LLVMMemory memory, LLVMContext context) {
         Object value = context.getGlobalFrame().getValue(slot);
-        if (value instanceof LLVMAddress) {
-            return (LLVMAddress) value;
+        if (value instanceof Native) {
+            return (Native) value;
         }
 
         return transformToNative(memory, context, value);
     }
 
     @TruffleBoundary
-    private LLVMAddress transformToNative(LLVMMemory memory, LLVMContext context, Object value) {
+    private Native transformToNative(LLVMMemory memory, LLVMContext context, Object value) {
         int byteSize = context.getByteSize(globalType);
         long a = context.getGlobalsStack().allocateStackMemory(byteSize);
-        LLVMAddress n = LLVMAddress.fromLong(a);
+        Native n = new Native(a);
         context.getGlobalFrame().setObject(slot, n);
 
         if (value == null) {
@@ -371,7 +380,7 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         } else if (managedValue instanceof LLVMAddress) {
             memory.putAddress(address, (LLVMAddress) managedValue);
         } else if (managedValue instanceof LLVMGlobal) {
-            memory.putAddress(address, ((LLVMGlobal) managedValue).getAsNative(memory, context).getVal());
+            memory.putAddress(address, ((LLVMGlobal) managedValue).getAsNative(memory, context).getPointer());
         } else if (managedValue instanceof LLVMTruffleObject) {
             try {
                 Object nativized = ForeignAccess.sendToNative(Message.TO_NATIVE.createNode(), ((LLVMTruffleObject) managedValue).getObject());
