@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,18 @@
  */
 package com.oracle.graal.hotspot.server;
 
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
+
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.logging.*;
 
 public class ReplacingStreams {
 
-    private IdentityHashMap<Object, Placeholder> objectMap = new IdentityHashMap<>();
+    private Map<Object, Placeholder> objectMap = newIdentityMap();
     private ArrayList<Object> objectList = new ArrayList<>();
 
     private ReplacingOutputStream output;
@@ -42,13 +43,13 @@ public class ReplacingStreams {
 
     public ReplacingStreams(OutputStream outputStream, InputStream inputStream) throws IOException {
         output = new ReplacingOutputStream(new BufferedOutputStream(outputStream));
-        // required, because creating an ObjectOutputStream writes a header, but doesn't flush the stream
+        // required, because creating an ObjectOutputStream writes a header, but doesn't flush the
+        // stream
         output.flush();
         input = new ReplacingInputStream(new BufferedInputStream(inputStream));
         invocation = new InvocationSocket(output, input);
 
-        addStaticObject(Value.IllegalValue);
-        addStaticObject(HotSpotProxy.DUMMY_CONSTANT_OBJ);
+        addStaticObject(Value.ILLEGAL);
     }
 
     public void setInvocationSocket(InvocationSocket invocation) {
@@ -99,6 +100,7 @@ public class ReplacingStreams {
     }
 
     public static class NewDummyPlaceholder implements Serializable {
+
         private static final long serialVersionUID = 2692666726573532288L;
     }
 
@@ -114,7 +116,8 @@ public class ReplacingStreams {
 
         @Override
         protected Object resolveObject(Object obj) throws IOException {
-            // see ReplacingInputStream.replaceObject for details on when these types of objects are created
+            // see ReplacingInputStream.replaceObject for details on when these types of objects are
+            // created
 
             if (obj instanceof Placeholder) {
                 Placeholder placeholder = (Placeholder) obj;
@@ -143,7 +146,7 @@ public class ReplacingStreams {
     }
 
     /**
-     * Replaces certain cir objects that cannot easily be made Serializable.
+     * Replaces certain objects that cannot easily be made Serializable.
      */
     public class ReplacingOutputStream extends ObjectOutputStream {
 
@@ -165,43 +168,18 @@ public class ReplacingStreams {
                 return createRemoteCallPlaceholder(obj);
             }
 
-            // is the object a constant of object type?
-            if (obj.getClass() == Constant.class) {
-                Constant constant = (Constant) obj;
-                if (constant.kind != Kind.Object) {
-                    return obj;
-                }
-                Object contents = constant.asObject();
-                if (contents == null) {
-                    return obj;
-                }
-                // don't replace if the object already is a placeholder
-                if (contents instanceof Placeholder || contents instanceof Long) {
-                    return obj;
-                }
-                placeholder = objectMap.get(contents);
-                if (placeholder != null) {
-                    return Constant.forObject(placeholder);
-                }
-                if (contents instanceof Remote) {
-                    return Constant.forObject(createRemoteCallPlaceholder(contents));
-                }
-                return Constant.forObject(createDummyPlaceholder(contents));
-            }
+            // Remote object constants must implement Remote
+            assert !(obj instanceof JavaConstant) || ((JavaConstant) obj).getKind() != Kind.Object;
+
             return obj;
         }
     }
 
     private Object createRemoteCallPlaceholder(Object obj) {
-        // collect all interfaces that this object's class implements (proxies only support interfaces)
+        // collect all interfaces that this object's class implements (proxies only support
+        // interfaces)
         objectMap.put(obj, new Placeholder(objectList.size()));
         objectList.add(obj);
         return new NewRemoteCallPlaceholder(ProxyUtil.getAllInterfaces(obj.getClass()));
-    }
-
-    public Object createDummyPlaceholder(Object obj) {
-        objectMap.put(obj, new Placeholder(objectList.size()));
-        objectList.add(obj);
-        return new NewDummyPlaceholder();
     }
 }

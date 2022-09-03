@@ -32,7 +32,6 @@ import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.phases.*;
@@ -67,10 +66,10 @@ public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
             if (c != null) {
                 MetaAccessProvider metaAccess = context.getMetaAccess();
                 ResolvedJavaType type = c;
-                Constant klass;
+                JavaConstant klass;
                 LocationNode location;
                 if (type instanceof HotSpotResolvedObjectType) {
-                    location = graph.unique(new ConstantLocationNode(CLASS_MIRROR_LOCATION, classMirrorOffset));
+                    location = ConstantLocationNode.create(CLASS_MIRROR_LOCATION, Kind.Object, classMirrorOffset, graph);
                     klass = ((HotSpotResolvedObjectType) type).klass();
                 } else {
                     /*
@@ -91,12 +90,12 @@ public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
                     if (typeField == null) {
                         throw new GraalInternalError("Can't find TYPE field in class");
                     }
-                    location = graph.unique(new ConstantLocationNode(FINAL_LOCATION, typeField.offset()));
+                    location = ConstantLocationNode.create(FINAL_LOCATION, Kind.Object, typeField.offset(), graph);
                 }
-                ConstantNode klassNode = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), klass, metaAccess, graph);
+                ConstantNode klassNode = ConstantNode.forConstant(klass, metaAccess, graph);
 
                 Stamp stamp = StampFactory.exactNonNull(metaAccess.lookupJavaType(Class.class));
-                FloatingReadNode freadNode = graph.unique(new FloatingReadNode(klassNode, location, null, stamp));
+                FloatingReadNode freadNode = graph.unique(FloatingReadNode.create(klassNode, location, null, stamp));
 
                 if (((HotSpotObjectConstant) constant).isCompressed()) {
                     return CompressionNode.compress(freadNode, oopEncoding);

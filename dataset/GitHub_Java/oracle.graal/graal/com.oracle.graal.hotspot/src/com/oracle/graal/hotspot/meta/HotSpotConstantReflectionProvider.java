@@ -65,7 +65,7 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
         Object base;
         long displacement;
         if (baseConstant.getKind() == Kind.Object) {
-            base = baseConstant.isNull() ? null : ((HotSpotObjectConstantImpl) baseConstant).object();
+            base = ((HotSpotObjectConstantImpl) baseConstant).object();
             displacement = initialDisplacement;
             if (base == null) {
                 return null;
@@ -132,7 +132,7 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
         Object base;
         long displacement;
         if (baseConstant.getKind() == Kind.Object) {
-            base = baseConstant.isNull() ? null : ((HotSpotObjectConstantImpl) baseConstant).object();
+            base = ((HotSpotObjectConstantImpl) baseConstant).object();
             displacement = initialDisplacement;
             if (base == null) {
                 return null;
@@ -221,9 +221,6 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
     @Override
     public JavaConstant unboxPrimitive(JavaConstant source) {
         if (!source.getKind().isObject()) {
-            return null;
-        }
-        if (source.isNull()) {
             return null;
         }
         return JavaConstant.forBoxedPrimitive(((HotSpotObjectConstantImpl) source).object());

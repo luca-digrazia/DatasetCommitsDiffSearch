@@ -48,7 +48,6 @@ public class HSAILHotSpotAssembler extends HSAILAssembler {
         try {
             if (objectField == null) {
                 objectField = HotSpotObjectConstantImpl.class.getDeclaredField("object");
-                objectField.setAccessible(true);
             }
             return objectField.get(src);
         } catch (Exception e) {

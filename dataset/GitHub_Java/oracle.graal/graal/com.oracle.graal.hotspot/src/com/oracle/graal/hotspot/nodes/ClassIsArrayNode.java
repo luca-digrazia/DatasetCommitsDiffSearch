@@ -38,7 +38,11 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ClassIsArrayNode extends MacroNode implements Canonicalizable {
 
-    public ClassIsArrayNode(Invoke invoke) {
+    public static ClassIsArrayNode create(Invoke invoke) {
+        return new ClassIsArrayNode(invoke);
+    }
+
+    protected ClassIsArrayNode(Invoke invoke) {
         super(invoke);
     }
 
@@ -51,7 +55,7 @@ public class ClassIsArrayNode extends MacroNode implements Canonicalizable {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
             ConstantReflectionProvider constantReflection = tool.getConstantReflection();
-            ResolvedJavaType type = constantReflection.asJavaType(javaClass.asConstant());
+            ResolvedJavaType type = constantReflection.asJavaType(javaClass.asJavaConstant());
             if (type != null) {
                 return ConstantNode.forBoolean(type.isArray());
             }

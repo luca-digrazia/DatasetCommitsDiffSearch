@@ -38,7 +38,11 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ClassGetModifiersNode extends MacroNode implements Canonicalizable {
 
-    public ClassGetModifiersNode(Invoke invoke) {
+    public static ClassGetModifiersNode create(Invoke invoke) {
+        return new ClassGetModifiersNode(invoke);
+    }
+
+    protected ClassGetModifiersNode(Invoke invoke) {
         super(invoke);
     }
 
@@ -51,7 +55,7 @@ public class ClassGetModifiersNode extends MacroNode implements Canonicalizable 
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
             ConstantReflectionProvider constantReflection = tool.getConstantReflection();
-            ResolvedJavaType type = constantReflection.asJavaType(javaClass.asConstant());
+            ResolvedJavaType type = constantReflection.asJavaType(javaClass.asJavaConstant());
             if (type != null) {
                 return ConstantNode.forInt(type.getModifiers());
             }

@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.compiler.common.UnsafeAccess.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.meta.HotSpotResolvedJavaType.*;
 import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectTypeImpl.*;
 
@@ -41,9 +40,15 @@ import com.oracle.graal.hotspot.replacements.*;
 public class HotSpotMetaAccessProvider implements MetaAccessProvider {
 
     protected final HotSpotGraalRuntime runtime;
+    protected final HotSpotMethodHandleAccessProvider methodHandleAccess;
 
     public HotSpotMetaAccessProvider(HotSpotGraalRuntime runtime) {
         this.runtime = runtime;
+        methodHandleAccess = new HotSpotMethodHandleAccessProvider();
+    }
+
+    public MethodHandleAccessProvider getMethodHandleAccess() {
+        return methodHandleAccess;
     }
 
     public HotSpotResolvedJavaType lookupJavaType(Class<?> clazz) {
@@ -85,11 +90,21 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
         }
     }
 
-    public ResolvedJavaMethod lookupJavaMethod(Executable reflectionMethod) {
+    public ResolvedJavaMethod lookupJavaMethod(Method reflectionMethod) {
         try {
             Class<?> holder = reflectionMethod.getDeclaringClass();
-            Field slotField = reflectionMethod instanceof Constructor ? reflectionConstructorSlot : reflectionMethodSlot;
-            final int slot = slotField.getInt(reflectionMethod);
+            final int slot = reflectionMethodSlot.getInt(reflectionMethod);
+            final long metaspaceMethod = runtime.getCompilerToVM().getMetaspaceMethod(holder, slot);
+            return HotSpotResolvedJavaMethodImpl.fromMetaspace(metaspaceMethod);
+        } catch (IllegalArgumentException | IllegalAccessException e) {
+            throw new GraalInternalError(e);
+        }
+    }
+
+    public ResolvedJavaMethod lookupJavaConstructor(Constructor<?> reflectionConstructor) {
+        try {
+            Class<?> holder = reflectionConstructor.getDeclaringClass();
+            final int slot = reflectionConstructorSlot.getInt(reflectionConstructor);
             final long metaspaceMethod = runtime.getCompilerToVM().getMetaspaceMethod(holder, slot);
             return HotSpotResolvedJavaMethodImpl.fromMetaspace(metaspaceMethod);
         } catch (IllegalArgumentException | IllegalAccessException e) {
@@ -296,7 +311,7 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
                     int length = Array.getLength(((HotSpotObjectConstantImpl) constant).object());
                     ResolvedJavaType elementType = lookupJavaType.getComponentType();
                     Kind elementKind = elementType.getKind();
-                    final int headerSize = runtime().getArrayBaseOffset(elementKind);
+                    final int headerSize = HotSpotGraalRuntime.getArrayBaseOffset(elementKind);
                     int sizeOfElement = HotSpotGraalRuntime.runtime().getTarget().getSizeInBytes(elementKind);
                     int alignment = HotSpotGraalRuntime.runtime().getTarget().wordSize;
                     int log2ElementSize = CodeUtil.log2(sizeOfElement);
