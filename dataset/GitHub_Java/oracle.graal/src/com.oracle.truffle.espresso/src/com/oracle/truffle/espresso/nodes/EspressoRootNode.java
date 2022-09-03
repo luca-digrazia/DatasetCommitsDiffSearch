@@ -922,13 +922,13 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
                     case IRETURN:
                         return exitMethodAndReturn(stack.popInt());
                     case LRETURN:
-                        return exitMethodAndReturnObject(stack.popLong());
+                        return exitMethodAndReturn(stack.popLong());
                     case FRETURN:
-                        return exitMethodAndReturnObject(stack.popFloat());
+                        return exitMethodAndReturn(stack.popFloat());
                     case DRETURN:
-                        return exitMethodAndReturnObject(stack.popDouble());
+                        return exitMethodAndReturn(stack.popDouble());
                     case ARETURN:
-                        return exitMethodAndReturnObject(stack.popObject());
+                        return exitMethodAndReturn(stack.popObject());
                     case RETURN:
                         return exitMethodAndReturn();
                     case GETSTATIC:
@@ -1247,11 +1247,17 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         // When a method is intrinsified it will obey Java types, so we need to convert the
         // (boolean, byte, char, short) result back to int.
         // (pop)Arguments have proper Java types.
-        Object[] arguments = popArguments(stack, hasReceiver, signature);
-        assert receiver == null || arguments[0] == receiver;
-        JavaKind resultKind = signature.getReturnTypeDescriptor().toKind();
-        Object result = callTarget.call(arguments);
-        pushKind(stack, result, resultKind);
+        if (targetMethod.isIntrinsified()) {
+            CompilerDirectives.transferToInterpreter();
+            invokeRedirectedMethodViaVM(stack, targetMethod, callTarget);
+        } else {
+            Object[] arguments = popArguments(stack, hasReceiver, signature);
+
+            assert receiver == null || arguments[0] == receiver;
+            JavaKind resultKind = signature.getReturnTypeDescriptor().toKind();
+            Object result = callTarget.call(arguments);
+            pushKind(stack, result, resultKind);
+        }
     }
 
     private void resolveAndInvoke(OperandStack stack, MethodInfo originalMethod) {
@@ -1269,6 +1275,12 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     private MethodInfo methodLookup(MethodInfo originalMethod, Object receiver) {
         StaticObjectClass clazz = (StaticObjectClass) EspressoLanguage.getCurrentContext().getJNI().GetObjectClass(receiver);
         return clazz.getMirror().findConcreteMethod(originalMethod.getName(), originalMethod.getSignature());
+    }
+
+    private void invokeRedirectedMethodViaVM(OperandStack stack, MethodInfo originalMethod, CallTarget intrinsic) {
+        Object[] originalCalleeParameters = popArguments(stack, !originalMethod.isStatic(), originalMethod.getSignature());
+        Object returnValue = call(intrinsic, originalCalleeParameters);
+        pushKindIntrinsic(stack, returnValue, originalMethod.getSignature().resultKind());
     }
 
     private StaticObject allocateArray(Klass componentType, int length) {
@@ -1313,24 +1325,8 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         return vm.instanceOf(instance, typeToCheck);
     }
 
-    private Object exitMethodAndReturn(int result) {
-        switch (method.getReturnType().getJavaKind()) {
-            case Boolean:
-                return result != 0;
-            case Byte:
-                return (byte) result;
-            case Short:
-                return (short) result;
-            case Char:
-                return (char) result;
-            case Int:
-                return result;
-            default:
-                throw EspressoError.shouldNotReachHere();
-        }
-    }
-
-    private Object exitMethodAndReturnObject(Object result) {
+    private static Object exitMethodAndReturn(Object result) {
+        // do something
         return result;
     }
 
@@ -1346,8 +1342,8 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         }
     }
 
-    private Object exitMethodAndReturn() {
-        return exitMethodAndReturnObject(StaticObject.VOID);
+    private static Object exitMethodAndReturn() {
+        return exitMethodAndReturn(StaticObject.VOID);
     }
 
     private static int divInt(int divisor, int dividend) {
@@ -1666,9 +1662,36 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         return arguments;
     }
 
-    // This follows bytecode types, everything < int is pushed as int.
-    // The may not be spec compliant, but the spec is not soft
     private static void pushKind(OperandStack stack, Object returnValue, JavaKind kind) {
+        switch (kind) {
+            case Boolean:
+            case Byte:
+            case Short:
+            case Char:
+            case Int:
+                stack.pushInt((int) returnValue);
+                break;
+            case Float:
+                stack.pushFloat((float) returnValue);
+                break;
+            case Long:
+                stack.pushLong((long) returnValue);
+                break;
+            case Double:
+                stack.pushDouble((double) returnValue);
+                break;
+            case Object:
+                stack.pushObject(returnValue);
+                break;
+            case Void:
+                // do not push
+                break;
+            case Illegal:
+                throw EspressoError.shouldNotReachHere();
+        }
+    }
+
+    private static void pushKindIntrinsic(OperandStack stack, Object returnValue, JavaKind kind) {
         switch (kind) {
             case Boolean:
                 stack.pushInt(((boolean) returnValue) ? 1 : 0);
