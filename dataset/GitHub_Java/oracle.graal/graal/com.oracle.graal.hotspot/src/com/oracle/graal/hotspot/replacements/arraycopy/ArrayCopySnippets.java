@@ -62,7 +62,6 @@ import com.oracle.graal.nodes.DeoptimizeNode;
 import com.oracle.graal.nodes.Invoke;
 import com.oracle.graal.nodes.InvokeNode;
 import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.extended.UnsafeLoadNode;
@@ -174,8 +173,8 @@ public class ArrayCopySnippets implements Snippets {
     public static void arraycopyPredictedObjectWork(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, KlassPointer objectArrayKlass,
                     @ConstantParameter SnippetCounter counter, @ConstantParameter SnippetCounter copiedCounter) {
         if (length > 0) {
-            KlassPointer srcHub = loadHub(PiNode.asNonNullObject(nonNullSrc));
-            KlassPointer destHub = loadHub(PiNode.asNonNullObject(nonNullDest));
+            KlassPointer srcHub = loadHub(nonNullSrc);
+            KlassPointer destHub = loadHub(nonNullDest);
             if (probability(FAST_PATH_PROBABILITY, srcHub == destHub || destHub == objectArrayKlass)) {
                 counter.inc();
                 copiedCounter.add(length);
