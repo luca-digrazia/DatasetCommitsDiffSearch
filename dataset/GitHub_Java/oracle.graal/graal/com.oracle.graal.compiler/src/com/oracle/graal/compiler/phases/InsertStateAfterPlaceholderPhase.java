@@ -29,9 +29,9 @@ import com.oracle.graal.nodes.type.*;
 
 public class InsertStateAfterPlaceholderPhase extends Phase {
 
-    private static class PlaceholderNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, LIRLowerable {
+    private static class PlaceholderNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, LIRLowerable, Canonicalizable {
         public PlaceholderNode() {
-            super(StampFactory.illegal());
+            super(StampFactory.forVoid());
         }
 
         @Override
@@ -43,13 +43,21 @@ public class InsertStateAfterPlaceholderPhase extends Phase {
         public boolean hasSideEffect() {
             return false;
         }
+
+        @Override
+        public ValueNode canonical(CanonicalizerTool tool) {
+            if (stateAfter() == null) {
+                return null;
+            }
+            return this;
+        }
     }
 
     @Override
     protected void run(StructuredGraph graph) {
         for (ReturnNode ret : graph.getNodes(ReturnNode.class)) {
             PlaceholderNode p = graph.add(new PlaceholderNode());
-            p.setStateAfter(graph.add(new FrameState(null, FrameState.AFTER_BCI, 0, 0, false, false)));
+            p.setStateAfter(graph.add(new FrameState(FrameState.AFTER_BCI)));
             graph.addBeforeFixed(ret, p);
         }
     }

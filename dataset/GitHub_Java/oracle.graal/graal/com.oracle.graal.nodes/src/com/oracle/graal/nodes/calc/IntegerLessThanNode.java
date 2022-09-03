@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "<")
 public final class IntegerLessThanNode extends CompareNode {
@@ -78,7 +77,7 @@ public final class IntegerLessThanNode extends CompareNode {
         } else if (x().integerStamp().lowerBound() >= y().integerStamp().upperBound()) {
             return ConstantNode.forBoolean(false, graph());
         }
-        if (IntegerStamp.sameSign(x().integerStamp(), y().integerStamp())) {
+        if (x().integerStamp().lowerBound() >= 0 && y().integerStamp().lowerBound() >= 0) {
             return graph().unique(new IntegerBelowThanNode(x(), y()));
         }
         return super.canonical(tool);
