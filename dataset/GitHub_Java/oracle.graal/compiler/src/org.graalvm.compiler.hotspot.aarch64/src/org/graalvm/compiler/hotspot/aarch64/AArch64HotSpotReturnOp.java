@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,10 +22,10 @@
  */
 package org.graalvm.compiler.hotspot.aarch64;
 
-import static jdk.vm.ci.aarch64.AArch64.lr;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.ILLEGAL;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.vm.ci.aarch64.AArch64.lr;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
@@ -48,11 +46,9 @@ public final class AArch64HotSpotReturnOp extends AArch64HotSpotEpilogueOp {
 
     @Use({REG, ILLEGAL}) private Value result;
     private final boolean isStub;
-    private final boolean requiresReservedStackAccessCheck;
 
-    public AArch64HotSpotReturnOp(Value result, boolean isStub, GraalHotSpotVMConfig config, Register thread, boolean requiresReservedStackAccessCheck) {
+    public AArch64HotSpotReturnOp(Value result, boolean isStub, GraalHotSpotVMConfig config, Register thread) {
         super(TYPE, config, thread);
-        this.requiresReservedStackAccessCheck = requiresReservedStackAccessCheck;
         assert validReturnValue(result);
         this.result = result;
         this.isStub = isStub;
@@ -68,7 +64,7 @@ public final class AArch64HotSpotReturnOp extends AArch64HotSpotEpilogueOp {
     @Override
     public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
         final boolean emitSafepoint = !isStub;
-        leaveFrame(crb, masm, emitSafepoint, requiresReservedStackAccessCheck);
+        leaveFrame(crb, masm, emitSafepoint);
         masm.ret(lr);
     }
 }
