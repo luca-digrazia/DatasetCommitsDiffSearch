@@ -64,6 +64,8 @@ public class StandardOp {
     public static final class LabelOp extends LIRInstruction {
         public static final LIRInstructionClass<LabelOp> TYPE = LIRInstructionClass.create(LabelOp.class);
 
+        private static final Value[] NO_VALUES = new Value[0];
+
         /**
          * In the LIR, every register and variable must be defined before it is used. For method
          * parameters that are passed in fixed registers, exception objects passed to the exception
@@ -81,7 +83,7 @@ public class StandardOp {
             super(TYPE);
             this.label = label;
             this.align = align;
-            this.incomingValues = Value.NO_VALUES;
+            this.incomingValues = NO_VALUES;
         }
 
         public void setIncomingValues(Value[] values) {
@@ -99,7 +101,7 @@ public class StandardOp {
         }
 
         public void clearIncomingValues() {
-            incomingValues = Value.NO_VALUES;
+            incomingValues = NO_VALUES;
         }
 
         @Override
@@ -128,6 +130,8 @@ public class StandardOp {
     public static class JumpOp extends LIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<JumpOp> TYPE = LIRInstructionClass.create(JumpOp.class);
 
+        private static final Value[] NO_VALUES = new Value[0];
+
         @Alive({REG, STACK, CONST}) private Value[] outgoingValues;
 
         private final LabelRef destination;
@@ -139,7 +143,7 @@ public class StandardOp {
         protected JumpOp(LIRInstructionClass<? extends JumpOp> c, LabelRef destination) {
             super(c);
             this.destination = destination;
-            this.outgoingValues = Value.NO_VALUES;
+            this.outgoingValues = NO_VALUES;
         }
 
         public void setOutgoingValues(Value[] values) {
@@ -157,7 +161,7 @@ public class StandardOp {
         }
 
         public void clearOutgoingValues() {
-            outgoingValues = Value.NO_VALUES;
+            outgoingValues = NO_VALUES;
         }
 
         @Override
