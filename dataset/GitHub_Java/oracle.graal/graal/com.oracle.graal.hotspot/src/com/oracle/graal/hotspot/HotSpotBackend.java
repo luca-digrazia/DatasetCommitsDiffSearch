@@ -40,10 +40,8 @@ import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.options.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.word.*;
 
@@ -51,16 +49,6 @@ import com.oracle.graal.word.*;
  * HotSpot specific backend.
  */
 public abstract class HotSpotBackend extends Backend {
-
-    public static class Options {
-        // @formatter:off
-        @Option(help = "Use Graal stubs instead of HotSpot stubs where possible")
-        public static final OptionValue<Boolean> PreferGraalStubs = new OptionValue<>(false);
-        @Option(help = "Enables instruction profiling on assembler level. Valid values are a comma separated list of supported instructions." +
-                        " Compare with subclasses of Assembler.InstructionCounter.", type = OptionType.Debug)
-        public static final OptionValue<String> ASMInstructionProfiling = new OptionValue<>(null);
-        // @formatter:on
-    }
 
     /**
      * Descriptor for {@link ExceptionHandlerStub}. This stub is called by the
@@ -123,17 +111,17 @@ public abstract class HotSpotBackend extends Backend {
     public static final ForeignCallDescriptor VM_ERROR = new ForeignCallDescriptor("vm_error", void.class, Object.class, Object.class, long.class);
 
     /**
-     * New multi array stub call.
+     * @see NewMultiArrayStubCall
      */
     public static final ForeignCallDescriptor NEW_MULTI_ARRAY = new ForeignCallDescriptor("new_multi_array", Object.class, Word.class, int.class, Word.class);
 
     /**
-     * New array stub.
+     * @see NewArrayStubCall
      */
     public static final ForeignCallDescriptor NEW_ARRAY = new ForeignCallDescriptor("new_array", Object.class, Word.class, int.class);
 
     /**
-     * New insstance stub.
+     * @see NewInstanceStubCall
      */
     public static final ForeignCallDescriptor NEW_INSTANCE = new ForeignCallDescriptor("new_instance", Object.class, Word.class);
 
@@ -176,7 +164,7 @@ public abstract class HotSpotBackend extends Backend {
                 }
             }
         };
-        for (AbstractBlockBase<?> block : lir.codeEmittingOrder()) {
+        for (AbstractBlock<?> block : lir.codeEmittingOrder()) {
             for (LIRInstruction op : lir.getLIRforBlock(block)) {
                 if (op instanceof LabelOp) {
                     // Don't consider this as a definition
@@ -238,11 +226,5 @@ public abstract class HotSpotBackend extends Backend {
     @Override
     public DisassemblerProvider getDisassembler() {
         return getProviders().getDisassembler();
-    }
-
-    protected void profileInstructions(LIR lir, CompilationResultBuilder crb) {
-        if (HotSpotBackend.Options.ASMInstructionProfiling.getValue() != null) {
-            HotSpotInstructionProfiling.countInstructions(lir, crb.asm);
-        }
     }
 }

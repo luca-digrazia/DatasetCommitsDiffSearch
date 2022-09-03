@@ -33,7 +33,8 @@ import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 
 /**
- * Server side of the client/server compilation model. The server listens for connections on the hardcoded port 1199.
+ * Server side of the client/server compilation model. The server listens for connections on the
+ * hardcoded port 1199.
  */
 public class CompilationServer implements Runnable {
 
@@ -43,24 +44,24 @@ public class CompilationServer implements Runnable {
 
     public interface ConnectionObserver {
 
-        void connectionStarted(HotSpotGraalRuntime compiler);
+        void connectionStarted(HotSpotGraalRuntimeProvider compiler);
 
-        void connectionFinished(HotSpotGraalRuntime compiler);
+        void connectionFinished(HotSpotGraalRuntimeProvider compiler);
     }
 
     private final boolean multiple;
     private final ArrayList<ConnectionObserver> observers = new ArrayList<>();
 
     /**
-     * Creates a new Compilation server. The server is activated by calling {@link #run()} directly or via a new
-     * {@link Thread}.
+     * Creates a new Compilation server. The server is activated by calling {@link #run()} directly
+     * or via a new {@link Thread}.
      *
-     * @param multiple true if the server should server should serve an infinite amount of consecutive connections,
-     *            false if it should terminate after the first connection ends.
+     * @param multiple true if the server should server should serve an infinite amount of
+     *            consecutive connections, false if it should terminate after the first connection
+     *            ends.
      */
     public CompilationServer(boolean multiple) {
         this.multiple = multiple;
-        HotSpotOptions.setDefaultOptions();
     }
 
     public void addConnectionObserver(ConnectionObserver observer) {
@@ -91,8 +92,7 @@ public class CompilationServer implements Runnable {
                 CompilerToVM toVM = (CompilerToVM) streams.getInvocation().waitForResult(false);
 
                 // return the initialized compiler to the client
-                HotSpotGraalRuntime compiler = initializeServer(toVM);
-                compiler.getCompiler();
+                HotSpotGraalRuntimeProvider compiler = initializeServer(toVM);
                 streams.getInvocation().sendResult(compiler);
 
                 for (ConnectionObserver observer : observers) {
@@ -120,7 +120,7 @@ public class CompilationServer implements Runnable {
     }
 
     @SuppressWarnings("unused")
-    private static HotSpotGraalRuntime initializeServer(CompilerToVM toVM) {
+    private static HotSpotGraalRuntimeProvider initializeServer(CompilerToVM toVM) {
         // TODO(thomaswue): Fix creation of compiler instances on server side.
         return null;
     }

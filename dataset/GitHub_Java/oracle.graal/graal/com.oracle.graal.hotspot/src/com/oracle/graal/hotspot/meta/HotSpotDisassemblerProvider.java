@@ -22,22 +22,24 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.service.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.hotspot.*;
 
 /**
  * HotSpot implementation of {@link DisassemblerProvider}.
  */
-@ServiceProvider(DisassemblerProvider.class)
 public class HotSpotDisassemblerProvider implements DisassemblerProvider {
+
+    protected final HotSpotGraalRuntimeProvider runtime;
+
+    public HotSpotDisassemblerProvider(HotSpotGraalRuntimeProvider runtime) {
+        this.runtime = runtime;
+    }
 
     public String disassemble(InstalledCode code) {
         if (code.isValid()) {
             long codeBlob = ((HotSpotInstalledCode) code).getAddress();
-            return runtime().getCompilerToVM().disassembleCodeBlob(codeBlob);
+            return runtime.getCompilerToVM().disassembleCodeBlob(codeBlob);
         }
         return null;
     }

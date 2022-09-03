@@ -24,38 +24,43 @@ package com.oracle.graal.hotspot.hsail;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 
-public class HSAILHotSpotForeignCallsProvider implements HotSpotForeignCallsProvider {
+public class HSAILHotSpotForeignCallsProvider extends HotSpotForeignCallsProviderImpl {
 
-    private final ForeignCallsProvider host;
-
-    public HSAILHotSpotForeignCallsProvider(ForeignCallsProvider host) {
-        this.host = host;
+    public HSAILHotSpotForeignCallsProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache) {
+        super(runtime, metaAccess, codeCache);
     }
 
+    @Override
+    public HotSpotForeignCallLinkage lookupForeignCall(ForeignCallDescriptor descriptor) {
+        // we don't really support foreign calls yet, but we do want to generate dummy code for them
+        // so we lazily create dummy linkages here.
+        if (foreignCalls.get(descriptor) == null) {
+            return register(new HotSpotForeignCallLinkageImpl(descriptor, 0x12345678, null, null, null, null, false, new LocationIdentity[0]));
+        } else {
+            return super.lookupForeignCall(descriptor);
+        }
+    }
+
+    @Override
     public boolean isReexecutable(ForeignCallDescriptor descriptor) {
-        return host.isReexecutable(descriptor);
+        return lookupForeignCall(descriptor).isReexecutable();
     }
 
+    @Override
     public LocationIdentity[] getKilledLocations(ForeignCallDescriptor descriptor) {
-        return host.getKilledLocations(descriptor);
+        return lookupForeignCall(descriptor).getKilledLocations();
     }
 
+    @Override
     public boolean canDeoptimize(ForeignCallDescriptor descriptor) {
-        return host.canDeoptimize(descriptor);
-    }
-
-    public ForeignCallLinkage lookupForeignCall(ForeignCallDescriptor descriptor) {
-        return host.lookupForeignCall(descriptor);
+        return lookupForeignCall(descriptor).canDeoptimize();
     }
 
     public Value[] getNativeABICallerSaveRegisters() {
-        throw GraalInternalError.unimplemented();
-    }
-
-    public void initialize(HotSpotProviders providers, HotSpotVMConfig config) {
+        // TODO is this correct?
+        return new Value[0];
     }
 }

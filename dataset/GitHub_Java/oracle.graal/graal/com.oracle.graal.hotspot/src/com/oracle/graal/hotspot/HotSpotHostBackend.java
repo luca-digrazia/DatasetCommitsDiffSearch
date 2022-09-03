@@ -31,7 +31,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -66,12 +65,6 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
         HotSpotHostForeignCallsProvider foreignCalls = (HotSpotHostForeignCallsProvider) providers.getForeignCalls();
         final HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
 
-        try (InitTimer st = timer("graphBuilderPlugins.initialize")) {
-            GraphBuilderPhase phase = (GraphBuilderPhase) providers.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
-            InvocationPlugins plugins = phase.getGraphBuilderConfig().getInvocationPlugins();
-            registerGraphBuilderPlugins(providers.getMetaAccess(), plugins);
-        }
-
         try (InitTimer st = timer("foreignCalls.initialize")) {
             foreignCalls.initialize(providers, config);
         }
@@ -99,10 +92,6 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
                 throw Debug.handle(e);
             }
         }
-    }
 
-    protected void registerGraphBuilderPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
-        StandardGraphBuilderPlugins.registerPlugins(metaAccess, plugins);
-        HotSpotGraphBuilderPlugins.registerPlugins(metaAccess, plugins);
     }
 }

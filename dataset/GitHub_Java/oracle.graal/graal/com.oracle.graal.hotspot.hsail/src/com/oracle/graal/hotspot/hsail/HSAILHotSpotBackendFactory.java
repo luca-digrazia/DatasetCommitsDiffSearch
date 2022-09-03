@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,27 +26,43 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.hsail.replacements.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hsail.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
 
 @ServiceProvider(HotSpotBackendFactory.class)
 public class HSAILHotSpotBackendFactory implements HotSpotBackendFactory {
 
+    protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
+                    TargetDescription target) {
+        return new HSAILHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, target);
+    }
+
     @Override
-    public HSAILHotSpotBackend createBackend(HotSpotGraalRuntime runtime, HotSpotBackend hostBackend) {
+    public HSAILHotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, HotSpotBackend hostBackend) {
         HotSpotProviders host = hostBackend.getProviders();
 
-        HotSpotMetaAccessProvider metaAccess = host.getMetaAccess();
-        HSAILHotSpotCodeCacheProvider codeCache = new HSAILHotSpotCodeCacheProvider(runtime, createTarget());
+        HotSpotRegisters registers = new HotSpotRegisters(HSAIL.threadRegister, Register.None, Register.None);
+        MetaAccessProvider metaAccess = host.getMetaAccess();
+        TargetDescription target = createTarget();
+        HSAILHotSpotCodeCacheProvider codeCache = new HSAILHotSpotCodeCacheProvider(runtime, target);
         ConstantReflectionProvider constantReflection = host.getConstantReflection();
-        HotSpotForeignCallsProvider foreignCalls = new HSAILHotSpotForeignCallsProvider(host.getForeignCalls());
-        LoweringProvider lowerer = new HSAILHotSpotLoweringProvider(host.getLowerer());
-        Replacements replacements = host.getReplacements();
+        HotSpotForeignCallsProvider foreignCalls = new HSAILHotSpotForeignCallsProvider(runtime, metaAccess, codeCache);
+        HotSpotLoweringProvider lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers, target);
+        // Replacements cannot have speculative optimizations since they have
+        // to be valid for the entire run of the VM.
+        Assumptions assumptions = new Assumptions(false);
+        Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, new HotSpotStampProvider());
+        Replacements replacements = new HSAILHotSpotReplacementsImpl(p, host.getSnippetReflection(), assumptions, codeCache.getTarget(), host.getReplacements());
         HotSpotDisassemblerProvider disassembler = host.getDisassembler();
-        HotSpotSuitesProvider suites = host.getSuites();
-        HotSpotRegisters registers = new HotSpotRegisters(Register.None, Register.None, Register.None);
-        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers);
+        SuitesProvider suites = new HotSpotSuitesProvider(runtime);
+        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, host.getSnippetReflection());
+
+        // pass registers info down to ReplacementsUtil (maybe a better way to do this?)
+        HSAILHotSpotReplacementsUtil.initialize(providers.getRegisters());
 
         return new HSAILHotSpotBackend(runtime, providers);
     }
@@ -55,7 +71,7 @@ public class HSAILHotSpotBackendFactory implements HotSpotBackendFactory {
         final int stackFrameAlignment = 8;
         final int implicitNullCheckLimit = 0;
         final boolean inlineObjects = true;
-        return new TargetDescription(new HSAIL(), true, stackFrameAlignment, implicitNullCheckLimit, inlineObjects);
+        return new HotSpotTargetDescription(new HSAIL(), true, stackFrameAlignment, implicitNullCheckLimit, inlineObjects);
     }
 
     public String getArchitecture() {

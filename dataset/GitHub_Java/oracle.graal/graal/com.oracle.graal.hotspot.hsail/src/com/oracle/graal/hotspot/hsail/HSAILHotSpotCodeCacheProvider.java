@@ -22,20 +22,22 @@
  */
 package com.oracle.graal.hotspot.hsail;
 
+import java.util.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hsail.*;
 
 public class HSAILHotSpotCodeCacheProvider extends HotSpotCodeCacheProvider {
 
-    public HSAILHotSpotCodeCacheProvider(HotSpotGraalRuntime graalRuntime) {
-        super(graalRuntime);
+    public HSAILHotSpotCodeCacheProvider(HotSpotGraalRuntimeProvider runtime, TargetDescription target) {
+        super(runtime, target, new HSAILHotSpotRegisterConfig());
 
     }
 
     @Override
-    protected RegisterConfig createRegisterConfig() {
-        return new HSAILRegisterConfig();
+    public String disassemble(CompilationResult compResult, InstalledCode installedCode) {
+        byte[] code = installedCode == null ? Arrays.copyOf(compResult.getTargetCode(), compResult.getTargetCodeSize()) : installedCode.getCode();
+        return new String(code);
     }
 }

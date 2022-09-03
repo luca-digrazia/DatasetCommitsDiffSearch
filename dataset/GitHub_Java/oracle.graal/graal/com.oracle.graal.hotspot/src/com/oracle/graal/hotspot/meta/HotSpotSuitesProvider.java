@@ -73,7 +73,7 @@ public class HotSpotSuitesProvider implements SuitesProvider, Supplier<Suites> {
             }
         }
 
-        ret.getMidTier().appendPhase(new WriteBarrierAdditionPhase(runtime.getConfig()));
+        ret.getMidTier().appendPhase(new WriteBarrierAdditionPhase());
         if (VerifyPhases.getValue()) {
             ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase());
         }
