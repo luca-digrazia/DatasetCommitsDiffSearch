@@ -85,7 +85,7 @@ public final class NewInstanceNode extends DeoptimizingFixedWithNextNode impleme
     public void virtualize(VirtualizerTool tool) {
         if (instanceClass != null) {
             assert !instanceClass().isArray();
-            VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass(), true);
+            VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass());
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {

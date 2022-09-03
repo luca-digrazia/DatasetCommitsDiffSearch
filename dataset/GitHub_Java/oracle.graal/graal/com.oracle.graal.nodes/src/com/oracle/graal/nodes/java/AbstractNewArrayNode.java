@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code AbstractNewArrayNode} is used for all 1-dimensional array allocations.
  */
-public class AbstractNewArrayNode extends DeoptimizingFixedWithNextNode implements Canonicalizable, Lowerable, ArrayLengthProvider, IterableNodeType {
+public class AbstractNewArrayNode extends DeoptimizingFixedWithNextNode implements Canonicalizable, Lowerable, ArrayLengthProvider, Node.IterableNodeType {
 
     @Input private ValueNode length;
     private final boolean fillContents;
@@ -78,17 +78,15 @@ public class AbstractNewArrayNode extends DeoptimizingFixedWithNextNode implemen
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (usages().isEmpty()) {
-            Stamp stamp = length.stamp();
-            if (stamp instanceof IntegerStamp && ((IntegerStamp) stamp).isPositive()) {
-                return null;
-            }
+        if (usages().isEmpty() && length.integerStamp().isPositive()) {
+            return null;
+        } else {
+            return this;
         }
-        return this;
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         tool.getRuntime().lower(this, tool);
     }
 
