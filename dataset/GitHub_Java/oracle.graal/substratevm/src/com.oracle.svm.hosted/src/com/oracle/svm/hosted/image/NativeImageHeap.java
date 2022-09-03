@@ -246,13 +246,7 @@ public final class NativeImageHeap {
              * not seen - so this check actually protects against much more than just missing class
              * initialization information.
              */
-            throw VMError.shouldNotReachHere("Image heap writing found a class not seen as instantiated during static analysis. " +
-                            "Did a static field or an object referenced from a static field change during native image generation? " +
-                            "For example, a lazily initialized cache could have been initialized during image generation, " +
-                            "in which case you need to force eager initialization of the cache before static analysis or reset the cache using a field value recomputation.\n" +
-                            "  class: " + original + "\n" +
-                            "  reachable through:\n" +
-                            fillReasonStack(new StringBuilder(), reason));
+            throw VMError.shouldNotReachHere("DynamicHub written to the image that has not been seen as reachable during static analysis: " + original);
         }
 
         int identityHashCode;
@@ -345,10 +339,10 @@ public final class NativeImageHeap {
         final Optional<HostedType> optionalType = getMetaAccess().optionalLookupJavaType(object.getClass());
         if (!optionalType.isPresent() || !optionalType.get().isInstantiated()) {
             throw UserError.abort("Image heap writing found an object whose class was not seen as instantiated during static analysis. " +
-                            "Did a static field or an object referenced from a static field change during native image generation? " +
+                            "Did a static field or an object referenced from a static field changed during native image generation? " +
                             "For example, a lazily initialized cache could have been initialized during image generation, " +
                             "in which case you need to force eager initialization of the cache before static analysis or reset the cache using a field value recomputation.\n" +
-                            "  object: " + object + " of class: " + object.getClass().getTypeName() + "\n" +
+                            "  object: " + object + "  of class: " + object.getClass().getTypeName() + "\n" +
                             "  reachable through:\n" +
                             fillReasonStack(new StringBuilder(), reason));
         }
@@ -725,15 +719,21 @@ public final class NativeImageHeap {
         // Figure out where the boundaries of the heap partitions are and
         // patch the objects that reference them so they will be correct at runtime.
         final NativeImageInfoPatcher patcher = new NativeImageInfoPatcher(debug, roBuffer, rwBuffer);
+
         patcher.patchReference("firstReadOnlyPrimitiveObject", readOnlyPrimitive.firstAllocatedObject);
         patcher.patchReference("lastReadOnlyPrimitiveObject", readOnlyPrimitive.lastAllocatedObject);
 
+        /*
+         * Expand the read-only reference partition to include the objects in the read-only
+         * relocated partition.
+         */
+        /* The start of the read-only reference partition. */
         Object firstReadOnlyReferenceObject = readOnlyReference.firstAllocatedObject;
         if (firstReadOnlyReferenceObject == null) {
             firstReadOnlyReferenceObject = readOnlyRelocatable.firstAllocatedObject;
         }
         patcher.patchReference("firstReadOnlyReferenceObject", firstReadOnlyReferenceObject);
-
+        /* The end of the read-only reference partition. */
         Object lastReadOnlyReferenceObject = readOnlyRelocatable.lastAllocatedObject;
         if (lastReadOnlyReferenceObject == null) {
             lastReadOnlyReferenceObject = readOnlyReference.lastAllocatedObject;
@@ -949,12 +949,29 @@ public final class NativeImageHeap {
     /** Objects that are known to be immutable in the native image heap. */
     private final Set<Object> knownImmutableObjects = Collections.newSetFromMap(new IdentityHashMap<>());
 
+    /** A partition holding objects with only read-only primitive values, but no references. */
     private final HeapPartition readOnlyPrimitive;
+    /** A partition holding objects with read-only references and primitive values. */
     private final HeapPartition readOnlyReference;
+    /** A partition holding objects with writable primitive values, but no references. */
+    private final HeapPartition writablePrimitive;
+    /** A partition holding objects with writable references and primitive values. */
+    private final HeapPartition writableReference;
+    /**
+     * A pseudo-partition used during image building to consolidate objects that contain relocatable
+     * references.
+     * <p>
+     * Collecting the relocations together means the dynamic linker has to operate on less of the
+     * image heap during image startup, and it means that less of the image heap has to be
+     * copied-on-write if the image heap is relocated in a new process.
+     * <p>
+     * A relocated reference is read-only once relocated, e.g., at runtime.
+     * {@link NativeImageHeap#patchPartitionBoundaries(DebugContext, RelocatableBuffer, RelocatableBuffer)}
+     * expands the read-only reference partition to include the read-only relocation partition. The
+     * read-only relocation partition does not exist in the generated image.
+     */
     private final HeapPartition readOnlyRelocatable;
     private long firstRelocatablePointerOffsetInSection = -1;
-    private final HeapPartition writablePrimitive;
-    private final HeapPartition writableReference;
 
     static class AddObjectData {
 
