@@ -505,7 +505,7 @@ public class Graph {
             Node minCountNode = null;
             for (Node input : node.inputs()) {
                 if (input != null) {
-                    int estimate = input.getUsageCount();
+                    int estimate = input.getUsageCountUpperBound();
                     if (estimate == 0) {
                         return null;
                     } else if (estimate < minCount) {
@@ -624,7 +624,7 @@ public class Graph {
 
     // Fully qualified annotation name is required to satisfy javac
     @com.oracle.graal.nodeinfo.NodeInfo
-    static final class PlaceHolderNode extends Node {
+    static class PlaceHolderNode extends Node {
         public PlaceHolderNode() {
         }
 
