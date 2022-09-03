@@ -22,7 +22,6 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
@@ -57,7 +56,7 @@ public final class FloatSub extends FloatArithmetic {
 
     private static class FloatSubCanonicalizerOp implements CanonicalizerOp {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             FloatSub sub = (FloatSub) node;
             Value x = sub.x();
             Value y = sub.y();
@@ -92,6 +91,20 @@ public final class FloatSub extends FloatArithmetic {
                         return x;
                     }
                     return new FloatAdd(kind, x, Constant.forDouble(-c, graph), sub.isStrictFP(), graph);
+                }
+            } else if (x.isConstant()) {
+                // TODO (gd) check that Negate impl for floating point is really faster/better than 0.0 - x
+                if (kind == CiKind.Float) {
+                    float c = x.asConstant().asFloat();
+                    if (c == 0.0f) {
+                        return new Negate(y, graph);
+                    }
+                } else {
+                    assert kind == CiKind.Double;
+                    double c = x.asConstant().asDouble();
+                    if (c == 0.0) {
+                        return new Negate(y, graph);
+                    }
                 }
             }
             return sub;
