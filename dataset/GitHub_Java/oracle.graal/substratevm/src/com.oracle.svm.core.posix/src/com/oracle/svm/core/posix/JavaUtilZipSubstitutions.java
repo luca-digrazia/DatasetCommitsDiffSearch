@@ -38,14 +38,10 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.jdk.JDK8OrEarlier;
-import com.oracle.svm.core.jdk.JDK9OrLater;
 import com.oracle.svm.core.posix.headers.LibC;
 import com.oracle.svm.core.posix.headers.ZLib;
 import com.oracle.svm.core.posix.headers.ZLib.z_stream;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
-import com.oracle.svm.core.util.VMError;
 
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 @TargetClass(java.util.zip.Adler32.class)
@@ -111,18 +107,9 @@ final class Target_java_util_zip_CRC32 {
 @TargetClass(java.util.zip.Deflater.class)
 final class Target_java_util_zip_Deflater {
 
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    private byte[] buf;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    int off;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    int len;
-
+    @Alias private byte[] buf;
+    @Alias int off;
+    @Alias int len;
     @Alias private int level;
     @Alias private int strategy;
     @Alias private boolean setParams;
@@ -173,7 +160,6 @@ final class Target_java_util_zip_Deflater {
     // Deflater.c-Java_java_util_zip_Deflater_deflateBytes(JNIEnv *env, jobject this, jlong addr,
     @SuppressWarnings("hiding")
     @Substitute
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     private int deflateBytes(long addr, byte[] b, int off, int len, int flush) {
         z_stream strm = WordFactory.pointer(addr);
 
@@ -187,7 +173,7 @@ final class Target_java_util_zip_Deflater {
                 int res = ZLib.deflateParams(strm, level, strategy);
                 this.setParams = false;
                 if (res == ZLib.Z_OK()) {
-                    return Util_java_util_zip_Deflater_JDK8OrEarlier.update(this, len, strm);
+                    return Util_java_util_zip_Deflater.update(this, len, strm);
                 } else if (res == ZLib.Z_BUF_ERROR()) {
                     return 0;
                 } else {
@@ -197,9 +183,9 @@ final class Target_java_util_zip_Deflater {
                 int res = ZLib.deflate(strm, this.finish ? ZLib.Z_FINISH() : flush);
                 if (res == ZLib.Z_STREAM_END()) {
                     this.finished = true;
-                    return Util_java_util_zip_Deflater_JDK8OrEarlier.update(this, len, strm);
+                    return Util_java_util_zip_Deflater.update(this, len, strm);
                 } else if (res == ZLib.Z_OK()) {
-                    return Util_java_util_zip_Deflater_JDK8OrEarlier.update(this, len, strm);
+                    return Util_java_util_zip_Deflater.update(this, len, strm);
                 } else if (res == ZLib.Z_BUF_ERROR()) {
                     return 0;
                 } else {
@@ -207,46 +193,6 @@ final class Target_java_util_zip_Deflater {
                 }
             }
         }
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    @SuppressWarnings({"unused", "static-method"})
-    long deflateBytesBytes(long addr,
-                    byte[] inputArray, int inputOff, int inputLen,
-                    byte[] outputArray, int outputOff, int outputLen,
-                    int flush, int params) {
-        throw VMError.unsupportedFeature("JDK9OrLater: Target_java_util_zip_Deflater.deflateBytesBytes(long, byte[], int, int, byte[], int, int, int, int)");
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    @SuppressWarnings({"unused", "static-method"})
-    long deflateBytesBuffer(long addr,
-                    byte[] inputArray, int inputOff, int inputLen,
-                    long outputAddress, int outputLen,
-                    int flush, int params) {
-        throw VMError.unsupportedFeature("JDK9OrLater: Target_java_util_zip_Deflater.deflateBytesBuffer(long, byte[], int, int, long, int, int, int)");
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    @SuppressWarnings({"unused", "static-method"})
-    long deflateBufferBytes(long addr,
-                    long inputAddress, int inputLen,
-                    byte[] outputArray, int outputOff, int outputLen,
-                    int flush, int params) {
-        throw VMError.unsupportedFeature("JDK9OrLater: Target_java_util_zip_Deflater.deflateBufferBytes(long, long, int, byte[], int, int, int, int)");
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    @SuppressWarnings({"unused", "static-method"})
-    long deflateBufferBuffer(long addr,
-                    long inputAddress, int inputLen,
-                    long outputAddress, int outputLen,
-                    int flush, int params) {
-        throw VMError.unsupportedFeature("JDK9OrLater: Target_java_util_zip_Deflater.deflateBufferBuffer(long, long, int, long, int, int, int)");
     }
 
     // Deflater.c-Java_java_util_zip_Deflater_getAdler(JNIEnv *env, jclass cls, jlong addr)
@@ -277,13 +223,9 @@ final class Target_java_util_zip_Deflater {
 }
 
 final class Util_java_util_zip_Deflater {
-
     // Checkstyle: stop
     static int DEF_MEM_LEVEL = 8;
     // Checkstyle: resume
-}
-
-final class Util_java_util_zip_Deflater_JDK8OrEarlier {
 
     static int update(Object obj, int len, z_stream strm) {
         Target_java_util_zip_Deflater instance = KnownIntrinsics.unsafeCast(obj, Target_java_util_zip_Deflater.class);
@@ -296,21 +238,10 @@ final class Util_java_util_zip_Deflater_JDK8OrEarlier {
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 @TargetClass(java.util.zip.Inflater.class)
 final class Target_java_util_zip_Inflater {
-
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    private byte[] buf;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    int off;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    int len;
-
+    @Alias private byte[] buf;
+    @Alias int off;
+    @Alias int len;
     @Alias private boolean finished;
-
     @Alias private boolean needDict;
 
     // Inflater.c-Java_java_util_zip_Inflater_init(JNIEnv *env, jclass cls, jboolean nowrap)
@@ -355,7 +286,6 @@ final class Target_java_util_zip_Inflater {
     // Inflater.c-Java_java_util_zip_Inflater_inflateBytes(JNIEnv *env, jobject this, jlong addr,
     @SuppressWarnings("hiding")
     @Substitute
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     private int inflateBytes(long addr, byte[] b, int off, int len) throws DataFormatException {
         z_stream strm = WordFactory.pointer(addr);
 
@@ -369,12 +299,12 @@ final class Target_java_util_zip_Inflater {
             int ret = ZLib.inflate(strm, ZLib.Z_PARTIAL_FLUSH());
             if (ret == ZLib.Z_STREAM_END()) {
                 this.finished = true;
-                return Util_java_util_zip_Inflater_JDK8OrEarlier.update(this, len, strm);
+                return Util_java_util_zip_Inflater.update(this, len, strm);
             } else if (ret == ZLib.Z_OK()) {
-                return Util_java_util_zip_Inflater_JDK8OrEarlier.update(this, len, strm);
+                return Util_java_util_zip_Inflater.update(this, len, strm);
             } else if (ret == ZLib.Z_NEED_DICT()) {
                 needDict = true;
-                Util_java_util_zip_Inflater_JDK8OrEarlier.update(this, len, strm);
+                Util_java_util_zip_Inflater.update(this, len, strm);
                 return 0;
             } else if (ret == ZLib.Z_BUF_ERROR()) {
                 return 0;
@@ -386,42 +316,6 @@ final class Target_java_util_zip_Inflater {
                 throw new InternalError();
             }
         }
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    @SuppressWarnings({"unused", "static-method"})
-    long inflateBytesBytes(long addr,
-                    byte[] inputArray, int inputOff, int inputLen,
-                    byte[] outputArray, int outputOff, int outputLen) throws DataFormatException {
-        throw VMError.unsupportedFeature("JDK9OrLater: Target_java_util_zip_Inflater.inflateBytesBytes(long, byte[], int, int, byte[], int, int)");
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    @SuppressWarnings({"unused", "static-method"})
-    long inflateBytesBuffer(long addr,
-                    byte[] inputArray, int inputOff, int inputLen,
-                    long outputAddress, int outputLen) throws DataFormatException {
-        throw VMError.unsupportedFeature("JDK9OrLater: Target_java_util_zip_Inflater.inflateBytesBuffer(long, byte[], int, int, long, int)");
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    @SuppressWarnings({"unused", "static-method"})
-    long inflateBufferBytes(long addr,
-                    long inputAddress, int inputLen,
-                    byte[] outputArray, int outputOff, int outputLen) throws DataFormatException {
-        throw VMError.unsupportedFeature("JDK9OrLater: com.oracle.svm.core.posix.Target_java_util_zip_Inflater.inflateBufferBytes(long, long, int, byte[], int, int)");
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    @SuppressWarnings({"unused", "static-method"})
-    long inflateBufferBuffer(long addr,
-                    long inputAddress, int inputLen,
-                    long outputAddress, int outputLen) throws DataFormatException {
-        throw VMError.unsupportedFeature("JDK9OrLater: com.oracle.svm.core.posix.Target_java_util_zip_Inflater.inflateBufferBuffer(long, long, int, long, int)");
     }
 
     // Inflater.c-Java_java_util_zip_Inflater_getAdler(JNIEnv *env, jclass cls, jlong addr)
@@ -451,7 +345,7 @@ final class Target_java_util_zip_Inflater {
     }
 }
 
-final class Util_java_util_zip_Inflater_JDK8OrEarlier {
+final class Util_java_util_zip_Inflater {
     static int update(Object obj, int len, z_stream strm) {
         Target_java_util_zip_Inflater instance = KnownIntrinsics.unsafeCast(obj, Target_java_util_zip_Inflater.class);
         instance.off += instance.len - strm.avail_in();
