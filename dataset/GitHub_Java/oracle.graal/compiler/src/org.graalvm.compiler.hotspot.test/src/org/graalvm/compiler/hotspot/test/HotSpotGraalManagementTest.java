@@ -61,6 +61,7 @@ import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionsParser;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.junit.Assert;
 import org.junit.AssumptionViolatedException;
 import org.junit.Test;
@@ -80,15 +81,16 @@ public class HotSpotGraalManagementTest {
     @Test
     public void registration() throws Exception {
         HotSpotGraalRuntime runtime = (HotSpotGraalRuntime) Graal.getRuntime();
-        HotSpotGraalManagementRegistration management = runtime.getManagement();
+        HotSpotGraalManagementRegistration management = GraalServices.loadSingle(HotSpotGraalManagementRegistration.class, false);
         if (management == null) {
             return;
         }
+        management.initialize(runtime);
 
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
 
         ObjectName name;
-        assertNotNull("Now the bean thinks it is registered", name = (ObjectName) management.poll(true));
+        assertNotNull("Now the bean thinks it is registered", name = (ObjectName) management.poll());
 
         assertNotNull("And the bean is found", server.getObjectInstance(name));
     }
@@ -99,13 +101,13 @@ public class HotSpotGraalManagementTest {
         assertNotNull("Server is started", ManagementFactory.getPlatformMBeanServer());
 
         HotSpotGraalRuntime runtime = (HotSpotGraalRuntime) Graal.getRuntime();
-        HotSpotGraalManagementRegistration management = runtime.getManagement();
+        HotSpotGraalManagementRegistration management = GraalServices.loadSingle(HotSpotGraalManagementRegistration.class, false);
         if (management == null) {
             return;
         }
-
+        management.initialize(runtime);
         ObjectName mbeanName;
-        assertNotNull("Bean is registered", mbeanName = (ObjectName) management.poll(true));
+        assertNotNull("Bean is registered", mbeanName = (ObjectName) management.poll());
         final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
 
         ObjectInstance bean = server.getObjectInstance(mbeanName);
@@ -156,7 +158,6 @@ public class HotSpotGraalManagementTest {
      * </pre>
      */
     static class JunitShield {
-
         /**
          * Tests changing the value of {@code option} via the management interface to a) a new legal
          * value and b) an illegal value.
@@ -326,28 +327,20 @@ public class HotSpotGraalManagementTest {
         return "\"" + s + "\"";
     }
 
-    /**
-     * Tests publicaly visible names and identifiers used by tools developed and distributed on an
-     * independent schedule (like VisualVM). Consider keeping the test passing without any semantic
-     * modifications. The cost of changes is higher than you estimate. Include all available
-     * stakeholders as reviewers to give them a chance to stop you before causing too much damage.
-     */
     @Test
-    public void publicJmxApiOfGraalDumpOperation() throws Exception {
+    public void dumpOperation() throws Exception {
         assertNotNull("Server is started", ManagementFactory.getPlatformMBeanServer());
 
         HotSpotGraalRuntime runtime = (HotSpotGraalRuntime) Graal.getRuntime();
-        HotSpotGraalManagementRegistration management = runtime.getManagement();
+        HotSpotGraalManagementRegistration management = GraalServices.loadSingle(HotSpotGraalManagementRegistration.class, false);
         if (management == null) {
             return;
         }
+        management.initialize(runtime);
 
         ObjectName mbeanName;
-        assertNotNull("Bean is registered", mbeanName = (ObjectName) management.poll(true));
+        assertNotNull("Bean is registered", mbeanName = (ObjectName) management.poll());
         final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-
-        assertEquals("Domain name is used to lookup the beans by VisualVM", "org.graalvm.compiler.hotspot", mbeanName.getDomain());
-        assertEquals("type can be used to identify the Graal bean", "HotSpotGraalRuntime_VM", mbeanName.getKeyProperty("type"));
 
         ObjectInstance bean = server.getObjectInstance(mbeanName);
         assertNotNull("Bean is registered", bean);
@@ -364,7 +357,7 @@ public class HotSpotGraalManagementTest {
                 dumpOp = arr[i];
             }
         }
-        assertNotNull("three args variant (as used by VisualVM) found", dumpOp);
+        assertNotNull("three args variant found", dumpOp);
 
         MBeanAttributeInfo dumpPath = findAttributeInfo("DumpPath", info);
         MBeanAttributeInfo printGraphFile = findAttributeInfo("PrintGraphFile", info);

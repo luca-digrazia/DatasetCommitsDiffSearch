@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +22,6 @@
  */
 package org.graalvm.compiler.hotspot.management;
 
-import org.graalvm.compiler.phases.common.jmx.HotSpotMBeanOperationProvider;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -50,7 +47,6 @@ import org.graalvm.compiler.hotspot.HotSpotGraalRuntime;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionsParser;
-import org.graalvm.compiler.serviceprovider.GraalServices;
 
 /**
  * MBean used to access properties and operations of a {@link HotSpotGraalRuntime} instance.
@@ -172,29 +168,11 @@ final class HotSpotGraalRuntimeMBean implements DynamicMBean {
             if (DEBUG) {
                 System.out.printf("invoke: %s%s%n", actionName, Arrays.asList(params));
             }
-            Object retvalue;
-            OK: if ("dumpMethod".equals(actionName)) {
-                retvalue = runtime.invokeManagementAction(actionName, params);
-            } else {
-                List<MBeanOperationInfo> info = new ArrayList<>();
-                for (HotSpotMBeanOperationProvider p : GraalServices.load(HotSpotMBeanOperationProvider.class)) {
-                    info.clear();
-                    p.registerOperations(info);
-                    for (MBeanOperationInfo op : info) {
-                        if (actionName.equals(op.getName())) {
-                            retvalue = p.invoke(actionName, params, signature);
-                            break OK;
-                        }
-                    }
-                }
-                throw new MBeanException(new IllegalStateException("Cannot find operation " + actionName));
-            }
+            Object retvalue = runtime.invokeManagementAction(actionName, params);
             if (DEBUG) {
                 System.out.printf("invoke: %s%s = %s%n", actionName, Arrays.asList(params), retvalue);
             }
             return retvalue;
-        } catch (MBeanException ex) {
-            throw ex;
         } catch (Exception ex) {
             throw new ReflectionException(ex);
         }
@@ -218,35 +196,30 @@ final class HotSpotGraalRuntimeMBean implements DynamicMBean {
                 return o1.getName().compareTo(o2.getName());
             }
         });
-        List<MBeanOperationInfo> opts = new ArrayList<>();
-        opts.add(new MBeanOperationInfo("dumpMethod", "Enable IGV dumps for provided method", new MBeanParameterInfo[]{
-                        new MBeanParameterInfo("className", "java.lang.String", "Class to observe"),
-                        new MBeanParameterInfo("methodName", "java.lang.String", "Method to observe"),
-        }, "void", MBeanOperationInfo.ACTION));
-        opts.add(new MBeanOperationInfo("dumpMethod", "Enable IGV dumps for provided method", new MBeanParameterInfo[]{
-                        new MBeanParameterInfo("className", "java.lang.String", "Class to observe"),
-                        new MBeanParameterInfo("methodName", "java.lang.String", "Method to observe"),
-                        new MBeanParameterInfo("filter", "java.lang.String", "The parameter for Dump option"),
-        }, "void", MBeanOperationInfo.ACTION));
-        opts.add(new MBeanOperationInfo("dumpMethod", "Enable IGV dumps for provided method", new MBeanParameterInfo[]{
-                        new MBeanParameterInfo("className", "java.lang.String", "Class to observe"),
-                        new MBeanParameterInfo("methodName", "java.lang.String", "Method to observe"),
-                        new MBeanParameterInfo("filter", "java.lang.String", "The parameter for Dump option"),
-                        new MBeanParameterInfo("host", "java.lang.String", "The host where the IGV tool is running at"),
-                        new MBeanParameterInfo("port", "int", "The port where the IGV tool is listening at"),
-        }, "void", MBeanOperationInfo.ACTION));
-
-        for (HotSpotMBeanOperationProvider p : GraalServices.load(HotSpotMBeanOperationProvider.class)) {
-            p.registerOperations(opts);
-        }
+        MBeanOperationInfo[] ops = {
+                        new MBeanOperationInfo("dumpMethod", "Enable IGV dumps for provided method", new MBeanParameterInfo[]{
+                                        new MBeanParameterInfo("className", "java.lang.String", "Class to observe"),
+                                        new MBeanParameterInfo("methodName", "java.lang.String", "Method to observe"),
+                        }, "void", MBeanOperationInfo.ACTION),
+                        new MBeanOperationInfo("dumpMethod", "Enable IGV dumps for provided method", new MBeanParameterInfo[]{
+                                        new MBeanParameterInfo("className", "java.lang.String", "Class to observe"),
+                                        new MBeanParameterInfo("methodName", "java.lang.String", "Method to observe"),
+                                        new MBeanParameterInfo("filter", "java.lang.String", "The parameter for Dump option"),
+                        }, "void", MBeanOperationInfo.ACTION),
+                        new MBeanOperationInfo("dumpMethod", "Enable IGV dumps for provided method", new MBeanParameterInfo[]{
+                                        new MBeanParameterInfo("className", "java.lang.String", "Class to observe"),
+                                        new MBeanParameterInfo("methodName", "java.lang.String", "Method to observe"),
+                                        new MBeanParameterInfo("filter", "java.lang.String", "The parameter for Dump option"),
+                                        new MBeanParameterInfo("host", "java.lang.String", "The host where the IGV tool is running at"),
+                                        new MBeanParameterInfo("port", "int", "The port where the IGV tool is listening at"),
+                        }, "void", MBeanOperationInfo.ACTION)
+        };
 
         return new MBeanInfo(
                         HotSpotGraalRuntimeMBean.class.getName(),
                         "Graal",
                         attrs.toArray(new MBeanAttributeInfo[attrs.size()]),
-                        null,
-                        opts.toArray(new MBeanOperationInfo[opts.size()]),
-                        null);
+                        null, ops, null);
     }
 
     private static EconomicMap<String, OptionDescriptor> getOptionDescriptors() {
