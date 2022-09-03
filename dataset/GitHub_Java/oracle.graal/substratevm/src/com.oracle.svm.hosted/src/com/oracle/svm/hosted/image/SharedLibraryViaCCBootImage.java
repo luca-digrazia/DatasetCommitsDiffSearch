@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,7 +29,6 @@ import java.util.List;
 
 import org.graalvm.compiler.debug.DebugContext;
 
-import com.oracle.svm.core.LinkerInvocation;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.BeforeImageWriteAccessImpl;
 import com.oracle.svm.hosted.c.NativeLibraries;
@@ -42,8 +39,8 @@ import com.oracle.svm.hosted.meta.HostedUniverse;
 public class SharedLibraryViaCCBootImage extends NativeBootImageViaCC {
 
     public SharedLibraryViaCCBootImage(HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap, NativeImageCodeCache codeCache,
-                    List<HostedMethod> entryPoints, HostedMethod mainEntryPoint, ClassLoader imageLoader) {
-        super(NativeImageKind.SHARED_LIBRARY, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, mainEntryPoint, imageLoader);
+                    List<HostedMethod> entryPoints) {
+        super(NativeImageKind.SHARED_LIBRARY, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints);
     }
 
     @Override
@@ -52,17 +49,10 @@ public class SharedLibraryViaCCBootImage extends NativeBootImageViaCC {
     }
 
     @Override
-    protected void addMainEntryPoint(CCLinkerInvocation inv) {
-        if (mainEntryPoint != null) {
-            inv.addSymbolAlias(mainEntryPoint, "run_main");
-        }
-    }
-
-    @Override
-    public LinkerInvocation write(DebugContext debug, Path outputDirectory, Path tempDirectory, String imageName, BeforeImageWriteAccessImpl config) {
-        LinkerInvocation inv = super.write(debug, outputDirectory, tempDirectory, imageName, config);
-        writeHeaderFiles(outputDirectory, imageName, inv.getSymbolAliases(), false);
-        writeHeaderFiles(outputDirectory, imageName, inv.getSymbolAliases(), true);
-        return inv;
+    public Path write(DebugContext debug, Path outputDirectory, Path tempDirectory, String imageName, BeforeImageWriteAccessImpl config) {
+        Path imagePath = super.write(debug, outputDirectory, tempDirectory, imageName, config);
+        writeHeaderFile(outputDirectory.resolve(imageName + ".h"), imageName, false);
+        writeHeaderFile(outputDirectory.resolve(imageName + "_dynamic.h"), imageName, true);
+        return imagePath;
     }
 }
