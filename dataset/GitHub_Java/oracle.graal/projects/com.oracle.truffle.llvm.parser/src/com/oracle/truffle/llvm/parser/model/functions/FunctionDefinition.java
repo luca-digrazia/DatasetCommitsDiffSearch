@@ -36,28 +36,24 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.metadata.MDAttachment;
-import com.oracle.truffle.llvm.parser.metadata.MetadataAttachmentHolder;
-import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceFunction;
 import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceModel;
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
+import com.oracle.truffle.llvm.parser.model.IRScope;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.Constant;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
+import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
-import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
-import com.oracle.truffle.llvm.parser.model.ValueSymbol;
+import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
-public final class FunctionDefinition implements Constant, ValueSymbol, MetadataAttachmentHolder {
+public final class FunctionDefinition extends IRScope implements Constant, ValueSymbol {
 
     private final List<FunctionParameter> parameters = new ArrayList<>();
     private final FunctionType type;
@@ -65,7 +61,7 @@ public final class FunctionDefinition implements Constant, ValueSymbol, Metadata
     private final Linkage linkage;
 
     private List<MDAttachment> mdAttachments = null;
-    private SourceFunction sourceFunction = SourceModel.DEFAULT_FUNCTION;
+    private SourceModel.Function sourceFunction = null;
 
     private InstructionBlock[] blocks = new InstructionBlock[0];
     private int currentBlock = 0;
@@ -111,11 +107,7 @@ public final class FunctionDefinition implements Constant, ValueSymbol, Metadata
     }
 
     @Override
-    public void replace(SymbolImpl oldValue, SymbolImpl newValue) {
-    }
-
-    @Override
-    public void accept(SymbolVisitor visitor) {
+    public void accept(ConstantVisitor visitor) {
         visitor.visit(this);
     }
 
@@ -152,14 +144,14 @@ public final class FunctionDefinition implements Constant, ValueSymbol, Metadata
         return paramAttr.getParameterAttributesGroup(idx);
     }
 
-    public FunctionParameter createParameter(Type t) {
+    public void createParameter(Type t) {
         final AttributesGroup attrGroup = paramAttr.getParameterAttributesGroup(parameters.size());
         final FunctionParameter parameter = new FunctionParameter(t, attrGroup);
+        addSymbol(parameter, t);
         parameters.add(parameter);
-        return parameter;
     }
 
-    public void exitLocalScope() {
+    public void exitFunction() {
         int symbolIndex = 0;
 
         // in K&R style function declarations the parameters are not assigned names
@@ -208,6 +200,7 @@ public final class FunctionDefinition implements Constant, ValueSymbol, Metadata
         return parameters;
     }
 
+    @Override
     public void nameBlock(int index, String argName) {
         blocks[index].setName(argName);
     }
@@ -231,19 +224,11 @@ public final class FunctionDefinition implements Constant, ValueSymbol, Metadata
         return String.format("FunctionDefinition %s(%s) {%d blocks}", name, formalArgs, blocks == null ? 0 : blocks.length);
     }
 
-    public LLVMSourceLocation getLexicalScope() {
-        return sourceFunction != null ? sourceFunction.getLexicalScope() : null;
-    }
-
-    public SourceSection getSourceSection() {
-        return sourceFunction != null ? sourceFunction.getSourceSection() : null;
-    }
-
-    public SourceFunction getSourceFunction() {
+    public SourceModel.Function getSourceFunction() {
         return sourceFunction;
     }
 
-    public void setSourceFunction(SourceFunction sourceFunction) {
+    public void setSourceFunction(SourceModel.Function sourceFunction) {
         this.sourceFunction = sourceFunction;
     }
 }

@@ -30,13 +30,16 @@
 package com.oracle.truffle.llvm.parser.model.symbols.instructions;
 
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
-public abstract class ValueInstruction implements Instruction, ValueSymbol {
+public abstract class ValueInstruction extends Instruction implements ValueSymbol {
 
     private final Type type;
 
-    private String name = ValueSymbol.UNKNOWN;
+    private String name = LLVMIdentifier.UNKNOWN;
+
+    private boolean isSourceVariable = false;
 
     ValueInstruction(Type type) {
         this.type = type;
@@ -53,17 +56,15 @@ public abstract class ValueInstruction implements Instruction, ValueSymbol {
     }
 
     @Override
-    public boolean hasName() {
-        return true;
-    }
-
-    @Override
-    public boolean isTerminating() {
-        return false;
-    }
-
-    @Override
     public void setName(String name) {
-        this.name = "%" + name;
+        this.name = LLVMIdentifier.toLocalIdentifier(name);
+    }
+
+    public boolean isSourceVariable() {
+        return isSourceVariable;
+    }
+
+    public void setSourceVariable(boolean isSourceVariable) {
+        this.isSourceVariable = isSourceVariable;
     }
 }

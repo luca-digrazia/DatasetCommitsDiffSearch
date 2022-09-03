@@ -44,7 +44,7 @@ import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueContainer;
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueContainerType;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -92,10 +92,10 @@ final class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
     public void visit(InstructionBlock block) {
         List<Phi> blockPhis = phis.get(block);
         ArrayList<LLVMLivenessAnalysis.NullerInformation> blockNullerInfos = liveness.getNullableWithinBlock()[block.getBlockIndex()];
-        LLVMBitcodeInstructionVisitor visitor = new LLVMBitcodeInstructionVisitor(frame, labels, blockPhis, nodeFactory, argCount, symbols, runtime, blockNullerInfos, function.getSourceFunction());
+        LLVMBitcodeInstructionVisitor visitor = new LLVMBitcodeInstructionVisitor(frame, labels, blockPhis, nodeFactory, argCount, symbols, runtime, blockNullerInfos);
 
         if (addGlobalVISlot) {
-            FrameSlot debugSlot = frame.findFrameSlot(LLVMDebugValueContainer.FRAMESLOT_NAME);
+            FrameSlot debugSlot = frame.findFrameSlot(LLVMDebugValueContainerType.FRAMESLOT_NAME);
             final SourceModel.Function sourceFunction = function.getSourceFunction();
             if (sourceFunction != null) {
                 for (SourceModel.Variable var : sourceFunction.getGlobals()) {

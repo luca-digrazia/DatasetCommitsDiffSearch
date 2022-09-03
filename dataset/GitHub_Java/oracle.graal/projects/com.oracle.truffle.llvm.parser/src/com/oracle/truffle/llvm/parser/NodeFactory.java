@@ -189,6 +189,6 @@ public interface NodeFactory {
 
     LLVMExpressionNode createDebugDeclaration(String varName, LLVMSourceType type, LLVMExpressionNode valueProvider, FrameSlot sourceValuesContainerSlot);
 
-    LLVMExpressionNode registerSourceType(FrameSlot valueSlot, LLVMSourceType type);
+    LLVMExpressionNode registerDebugType(FrameSlot valueSlot, LLVMSourceType type);
 
 }

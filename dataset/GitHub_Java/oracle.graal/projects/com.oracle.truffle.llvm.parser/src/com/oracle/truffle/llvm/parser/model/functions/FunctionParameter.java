@@ -29,20 +29,24 @@
  */
 package com.oracle.truffle.llvm.parser.model.functions;
 
+import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
 public final class FunctionParameter implements ValueSymbol {
 
     private final Type type;
 
-    private final int index;
+    private String name = LLVMIdentifier.UNKNOWN;
 
-    private String name = ValueSymbol.UNKNOWN;
+    private final AttributesGroup parameterAttribute;
 
-    FunctionParameter(Type type, int index) {
+    private boolean isSourceVariable = false;
+
+    FunctionParameter(Type type, AttributesGroup parameterAttribute) {
         this.type = type;
-        this.index = index;
+        this.parameterAttribute = parameterAttribute;
     }
 
     @Override
@@ -52,7 +56,7 @@ public final class FunctionParameter implements ValueSymbol {
 
     @Override
     public void setName(String name) {
-        this.name = "%" + name;
+        this.name = LLVMIdentifier.toLocalIdentifier(name);
     }
 
     @Override
@@ -60,8 +64,20 @@ public final class FunctionParameter implements ValueSymbol {
         return type;
     }
 
+    public AttributesGroup getParameterAttribute() {
+        return parameterAttribute;
+    }
+
+    public boolean isSourceVariable() {
+        return isSourceVariable;
+    }
+
+    public void setSourceVariable(boolean isSourceVariable) {
+        this.isSourceVariable = isSourceVariable;
+    }
+
     @Override
     public String toString() {
-        return "FunctionParameter [type=" + type + ", index=" + index + ", name=" + name + "]";
+        return String.format("Parameter %s (%s)", name, type);
     }
 }

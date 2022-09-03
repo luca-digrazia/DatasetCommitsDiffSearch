@@ -31,24 +31,26 @@ package com.oracle.truffle.llvm.nodes.vars;
 
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-public final class LLVMSetInteropTypeNode extends LLVMStatementNode {
+public final class LLVMSetInteropTypeNode extends LLVMExpressionNode {
 
     private final FrameSlot frameSlot;
 
-    private final LLVMInteropType interopType;
+    private final LLVMSourceType sourceType;
 
-    public LLVMSetInteropTypeNode(FrameSlot frameSlot, LLVMInteropType interopType) {
+    public LLVMSetInteropTypeNode(FrameSlot frameSlot, LLVMSourceType sourceType) {
         this.frameSlot = frameSlot;
-        this.interopType = interopType;
+        this.sourceType = sourceType;
     }
 
     @Override
-    public void execute(VirtualFrame frame) {
+    public Object executeGeneric(VirtualFrame frame) {
         final Type type = (Type) frameSlot.getInfo();
-        type.setInteropType(interopType);
+        type.setSourceType(sourceType);
+        return null;
     }
+
 }

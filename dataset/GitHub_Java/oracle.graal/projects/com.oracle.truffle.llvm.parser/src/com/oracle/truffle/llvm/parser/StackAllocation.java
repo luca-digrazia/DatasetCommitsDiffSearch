@@ -44,9 +44,8 @@ import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.ValueInstructionVisitor;
 import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
-import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public final class StackAllocation {
 
@@ -57,7 +56,7 @@ public final class StackAllocation {
     private StackAllocation(Map<String, FrameDescriptor> frameDescriptors) {
         this.frameDescriptors = frameDescriptors;
         rootFrame = new FrameDescriptor();
-        rootFrame.addFrameSlot(LLVMStack.FRAME_ID, new PointerType(VoidType.INSTANCE), FrameSlotKind.Object);
+        rootFrame.addFrameSlot(LLVMStack.FRAME_ID, PrimitiveType.I64, FrameSlotKind.Long);
     }
 
     public FrameDescriptor getFrame(String functionName) {
@@ -86,7 +85,7 @@ public final class StackAllocation {
         public void visit(FunctionDefinition functionDefinition) {
             final FrameDescriptor frame = new FrameDescriptor();
             frame.addFrameSlot(LLVMException.FRAME_SLOT_ID, null, FrameSlotKind.Object);
-            frame.addFrameSlot(LLVMStack.FRAME_ID, new PointerType(VoidType.INSTANCE), FrameSlotKind.Object);
+            frame.addFrameSlot(LLVMStack.FRAME_ID, PrimitiveType.I64, FrameSlotKind.Long);
             for (FunctionParameter parameter : functionDefinition.getParameters()) {
                 Type type = parameter.getType();
                 if (parameter.isSourceVariable()) {
@@ -96,7 +95,7 @@ public final class StackAllocation {
             }
 
             final StackAllocationFunctionVisitor functionVisitor = new StackAllocationFunctionVisitor(frame);
-            functionDefinition.accept((FunctionVisitor) functionVisitor);
+            functionDefinition.accept(functionVisitor);
 
             frames.put(functionDefinition.getName(), frame);
         }
