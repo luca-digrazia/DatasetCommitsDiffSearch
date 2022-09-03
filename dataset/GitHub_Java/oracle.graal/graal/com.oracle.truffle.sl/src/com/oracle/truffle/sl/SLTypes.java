@@ -24,7 +24,7 @@ package com.oracle.truffle.sl;
 
 import java.math.*;
 
-import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.codegen.*;
 
 @TypeSystem({int.class, BigInteger.class, boolean.class, String.class})
 public class SLTypes {
@@ -68,10 +68,5 @@ public class SLTypes {
     @TypeCheck
     public boolean isBigInteger(@SuppressWarnings("unused") int value) {
         return true;
-    }
-
-    @ImplicitCast
-    public BigInteger castBigInteger(int value) {
-        return BigInteger.valueOf(value);
     }
 }
