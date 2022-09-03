@@ -33,8 +33,7 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.phases.common.inlining.policy.AbstractInliningPolicy;
 import org.graalvm.compiler.phases.graph.FixedNodeProbabilityCache;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.CompareStrategy;
+import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -75,13 +74,13 @@ public final class CallsiteHolderExplorable extends CallsiteHolder {
     private final ToDoubleFunction<FixedNode> probabilities;
     private final ComputeInliningRelevance computeInliningRelevance;
 
-    public CallsiteHolderExplorable(StructuredGraph graph, double probability, double relevance, BitSet freshlyInstantiatedArguments) {
+    public CallsiteHolderExplorable(StructuredGraph graph, double probability, double relevance, BitSet freshlyInstantiatedArguments, LinkedList<Invoke> invokes) {
         assert graph != null;
         this.graph = graph;
         this.probability = probability;
         this.relevance = relevance;
         this.fixedParams = fixedParamsAt(freshlyInstantiatedArguments);
-        remainingInvokes = new InliningIterator(graph).apply();
+        remainingInvokes = invokes == null ? new InliningIterator(graph).apply() : invokes;
         if (remainingInvokes.isEmpty()) {
             probabilities = null;
             computeInliningRelevance = null;
@@ -98,9 +97,9 @@ public final class CallsiteHolderExplorable extends CallsiteHolder {
      */
     private EconomicSet<ParameterNode> fixedParamsAt(BitSet freshlyInstantiatedArguments) {
         if (freshlyInstantiatedArguments == null || freshlyInstantiatedArguments.isEmpty()) {
-            return CollectionFactory.newSet(CompareStrategy.IDENTITY);
+            return EconomicSet.create(Equivalence.IDENTITY);
         }
-        EconomicSet<ParameterNode> result = CollectionFactory.newSet(CompareStrategy.IDENTITY);
+        EconomicSet<ParameterNode> result = EconomicSet.create(Equivalence.IDENTITY);
         for (ParameterNode p : graph.getNodes(ParameterNode.TYPE)) {
             if (freshlyInstantiatedArguments.get(p.index())) {
                 result.add(p);
