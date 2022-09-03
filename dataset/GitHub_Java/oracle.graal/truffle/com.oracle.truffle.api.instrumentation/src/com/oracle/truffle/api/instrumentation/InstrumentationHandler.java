@@ -83,6 +83,9 @@ final class InstrumentationHandler {
      */
     private final ConcurrentHashMap<Object, AbstractInstrumenter> instrumenterMap = new ConcurrentHashMap<>();
 
+    /* Has the instrumentation framework been initialized? */
+    private volatile boolean instrumentationInitialized;
+
     private final OutputStream out;
     private final OutputStream err;
     private final InputStream in;
@@ -98,6 +101,10 @@ final class InstrumentationHandler {
         if (!AccessorInstrumentHandler.nodesAccess().isInstrumentable(root)) {
             return;
         }
+        if (!instrumentationInitialized) {
+            initializeInstrumentation();
+        }
+
         SourceSection sourceSection = root.getSourceSection();
         if (sourceSection != null) {
             // notify sources
@@ -128,6 +135,9 @@ final class InstrumentationHandler {
         if (!AccessorInstrumentHandler.nodesAccess().isInstrumentable(root)) {
             return;
         }
+        if (!instrumentationInitialized) {
+            initializeInstrumentation();
+        }
         executedRoots.add(root);
 
         // fast path no bindings attached
@@ -144,25 +154,24 @@ final class InstrumentationHandler {
 
     void disposeInstrumenter(Object key, boolean cleanupRequired) {
         AbstractInstrumenter disposedInstrumenter = instrumenterMap.remove(key);
-        if (disposedInstrumenter == null) {
-            throw new AssertionError("Instrumenter already disposed.");
-        }
-        if (TRACE) {
-            trace("BEGIN: Dispose instrumenter %n", key);
-        }
-        disposedInstrumenter.dispose();
-
-        if (cleanupRequired) {
-            Collection<EventBinding<?>> disposedExecutionBindings = filterBindingsForInstrumenter(executionBindings, disposedInstrumenter);
-            if (!disposedExecutionBindings.isEmpty()) {
-                visitRoots(executedRoots, new DisposeWrappersWithBindingVisitor(disposedExecutionBindings));
+        if (disposedInstrumenter != null) {
+            if (TRACE) {
+                trace("BEGIN: Dispose instrumenter %n", key);
             }
-            disposeBindingsBulk(disposedExecutionBindings);
-            disposeBindingsBulk(filterBindingsForInstrumenter(sourceSectionBindings, disposedInstrumenter));
-            disposeBindingsBulk(filterBindingsForInstrumenter(sourceBindings, disposedInstrumenter));
-        }
-        if (TRACE) {
-            trace("END: Disposed instrumenter %n", key);
+            disposedInstrumenter.dispose();
+
+            if (cleanupRequired) {
+                Collection<EventBinding<?>> disposedExecutionBindings = filterBindingsForInstrumenter(executionBindings, disposedInstrumenter);
+                if (!disposedExecutionBindings.isEmpty()) {
+                    visitRoots(executedRoots, new DisposeWrappersWithBindingVisitor(disposedExecutionBindings));
+                }
+                disposeBindingsBulk(disposedExecutionBindings);
+                disposeBindingsBulk(filterBindingsForInstrumenter(sourceSectionBindings, disposedInstrumenter));
+                disposeBindingsBulk(filterBindingsForInstrumenter(sourceBindings, disposedInstrumenter));
+            }
+            if (TRACE) {
+                trace("END: Disposed instrumenter %n", key);
+            }
         }
     }
 
@@ -183,7 +192,7 @@ final class InstrumentationHandler {
 
         this.executionBindings.add(binding);
 
-        if (!executedRoots.isEmpty()) {
+        if (instrumentationInitialized) {
             visitRoots(executedRoots, new InsertWrappersWithBindingVisitor(binding));
         }
 
@@ -200,10 +209,8 @@ final class InstrumentationHandler {
         }
 
         this.sourceSectionBindings.add(binding);
-        if (notifyLoaded) {
-            if (!loadedRoots.isEmpty()) {
-                visitRoots(loadedRoots, new NotifyLoadedWithBindingVisitor(binding));
-            }
+        if (instrumentationInitialized && notifyLoaded) {
+            visitRoots(loadedRoots, new NotifyLoadedWithBindingVisitor(binding));
         }
 
         if (TRACE) {
@@ -219,7 +226,7 @@ final class InstrumentationHandler {
         }
 
         this.sourceBindings.add(binding);
-        if (notifyLoaded) {
+        if (instrumentationInitialized && notifyLoaded) {
             for (Source source : sourcesList) {
                 notifySourceBindingLoaded(binding, source);
             }
@@ -324,12 +331,29 @@ final class InstrumentationHandler {
         }
     }
 
+    private synchronized void initializeInstrumentation() {
+        if (!instrumentationInitialized) {
+            if (TRACE) {
+                trace("BEGIN: Initialize instrumentation%n");
+            }
+            for (AbstractInstrumenter instrumenter : instrumenterMap.values()) {
+                instrumenter.initialize();
+            }
+            if (TRACE) {
+                trace("END: Initialized instrumentation%n");
+            }
+            instrumentationInitialized = true;
+        }
+    }
+
     private void addInstrumenter(Object key, AbstractInstrumenter instrumenter) throws AssertionError {
         Object previousKey = instrumenterMap.putIfAbsent(key, instrumenter);
         if (previousKey != null) {
-            throw new AssertionError("Instrumenter already present.");
+            return;
         }
-        instrumenter.initialize();
+        if (instrumentationInitialized) {
+            instrumenter.initialize();
+        }
     }
 
     private static Collection<EventBinding<?>> filterBindingsForInstrumenter(Collection<EventBinding<?>> bindings, AbstractInstrumenter instrumenter) {
@@ -782,11 +806,16 @@ final class InstrumentationHandler {
 
         @Override
         void dispose() {
-            instrument.onDispose(env);
+            if (isInitialized()) {
+                instrument.onDispose(env);
+            }
         }
 
         @Override
         <T> T lookup(InstrumentationHandler handler, Class<T> type) {
+            if (instrument == null) {
+                handler.initializeInstrumentation();
+            }
             if (services != null) {
                 for (Object service : services) {
                     if (type.isInstance(service)) {
