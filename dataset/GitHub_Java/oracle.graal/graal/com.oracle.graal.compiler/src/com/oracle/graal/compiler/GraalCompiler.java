@@ -125,8 +125,7 @@ public class GraalCompiler {
         } else {
             Debug.dump(graph, "initial state");
         }
-        new VerifyUsageWithEquals(runtime, Value.class).apply(graph);
-        new VerifyUsageWithEquals(runtime, Register.class).apply(graph);
+        new VerifyValueUsage(runtime).apply(graph);
 
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
