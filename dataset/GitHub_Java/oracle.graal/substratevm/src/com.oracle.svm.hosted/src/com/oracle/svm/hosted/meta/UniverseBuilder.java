@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -135,6 +133,7 @@ public class UniverseBuilder {
 
             collectDeclaredMethods();
             collectMonitorFieldInfo(bb);
+            collectWaitNotifyFieldInfo(bb);
             collectHashCodeFieldInfo(bb);
 
             layoutInstanceFields();
@@ -610,6 +609,60 @@ public class UniverseBuilder {
         return true;
     }
 
+    /**
+     * Tag all classes that are used as the receiver of a {@link Object#wait(long)},
+     * {@link Object#notify()}, or {@link Object#notifyAll()} call. Any such class needs to have a
+     * synthetic field added to hold a condition variable.
+     */
+    @SuppressWarnings("try")
+    private void collectWaitNotifyFieldInfo(BigBang bb) {
+        if (!SubstrateOptions.MultiThreaded.getValue()) {
+            /* No locking information needed in single-threaded mode. */
+            return;
+        }
+
+        /*
+         * A list of the wait and notify methods. Fortunately, all of these are instance methods, so
+         * the receiver is parameter 0 on all of them.
+         */
+        final List<AnalysisMethod> waitNotifyAnalysisMethods = new ArrayList<>();
+        try {
+            waitNotifyAnalysisMethods.add(aMetaAccess.lookupJavaMethod(Object.class.getMethod("wait", long.class)));
+            waitNotifyAnalysisMethods.add(aMetaAccess.lookupJavaMethod(Object.class.getMethod("notify", (Class<?>[]) null)));
+            waitNotifyAnalysisMethods.add(aMetaAccess.lookupJavaMethod(Object.class.getMethod("notifyAll", (Class<?>[]) null)));
+        } catch (NoSuchMethodException | SecurityException e) {
+            throw shouldNotReachHere("Could not find wait/notify method.");
+        }
+
+        DebugContext debug = bb.getDebug();
+        try (Indent ignore = debug.logAndIndent("check types for which wait or notify is invoked")) {
+
+            for (AnalysisMethod method : waitNotifyAnalysisMethods) {
+
+                // If the method is never called, then I do not have to worry about it.
+                if (method == null || !method.isImplementationInvoked()) {
+                    continue;
+                }
+
+                // Check which types may be a receiver of this method.
+                TypeState receiverTypeState = method.getTypeFlow().getParameterTypeState(bb, 0);
+                assert receiverTypeState != null;
+
+                Iterable<AnalysisType> typesNeedWaitNotify = receiverTypeState.types();
+                // All receiver types of a wait/notify call need the wait/notify field.
+                for (AnalysisType type : typesNeedWaitNotify) {
+                    debug.log("type %s is a receiver for a wait/notify call", type);
+                    if (canHaveMonitorFields(type)) {
+                        HostedInstanceClass hType = (HostedInstanceClass) hUniverse.lookup(type);
+                        /* Wait and notify need a monitor and a condition. */
+                        hType.setNeedMonitorField();
+                        hType.setNeedWaitNotifyConditionField();
+                    }
+                }
+            }
+        }
+    }
+
     @SuppressWarnings("try")
     private void collectHashCodeFieldInfo(BigBang bb) {
 
@@ -739,6 +792,15 @@ public class UniverseBuilder {
             final int referenceFieldAlignmentAndSize = ConfigurationValues.getObjectLayout().sizeInBytes(JavaKind.Object);
             nextOffset = ObjectLayout.roundUp(nextOffset, referenceFieldAlignmentAndSize);
             clazz.setMonitorFieldOffset(nextOffset);
+            nextOffset += referenceFieldAlignmentAndSize;
+        }
+
+        // A reference to a {@link java.util.concurrent.locks.Condition for
+        // Object.wait() and Object.notify().
+        if (clazz.needWaitNotifyConditionField()) {
+            final int referenceFieldAlignmentAndSize = ConfigurationValues.getObjectLayout().sizeInBytes(JavaKind.Object);
+            nextOffset = ObjectLayout.roundUp(nextOffset, referenceFieldAlignmentAndSize);
+            clazz.setWaitNotifyConditionFieldOffset(nextOffset);
             nextOffset += referenceFieldAlignmentAndSize;
         }
 
@@ -1026,6 +1088,7 @@ public class UniverseBuilder {
         for (HostedType type : hUniverse.orderedTypes) {
             int layoutHelper;
             int monitorOffset = 0;
+            int waitNotifyOffset = 0;
             int hashCodeOffset = 0;
             if (type.isInstanceClass()) {
                 HostedInstanceClass instanceClass = (HostedInstanceClass) type;
@@ -1039,6 +1102,7 @@ public class UniverseBuilder {
                     layoutHelper = LayoutEncoding.forInstance(ConfigurationValues.getObjectLayout().alignUp(instanceClass.getInstanceSize()));
                 }
                 monitorOffset = instanceClass.getMonitorFieldOffset();
+                waitNotifyOffset = instanceClass.getWaitNotifyConditionFieldOffset();
                 hashCodeOffset = instanceClass.getHashCodeFieldOffset();
             } else if (type.isArray()) {
                 JavaKind kind = type.getComponentType().getStorageKind();
@@ -1071,7 +1135,7 @@ public class UniverseBuilder {
             long referenceMapIndex = referenceMapEncoder.lookupEncoding(referenceMap);
 
             DynamicHub hub = type.getHub();
-            hub.setData(layoutHelper, type.getTypeID(), monitorOffset, hashCodeOffset, type.getAssignableFromMatches(), type.instanceOfBits, vtable, referenceMapIndex,
+            hub.setData(layoutHelper, type.getTypeID(), monitorOffset, waitNotifyOffset, hashCodeOffset, type.getAssignableFromMatches(), type.instanceOfBits, vtable, referenceMapIndex,
                             type.isInstantiated());
         }
     }
@@ -1082,7 +1146,7 @@ public class UniverseBuilder {
         SubstrateReferenceMap referenceMap = new SubstrateReferenceMap();
         for (HostedField field : fields) {
             if (field.getType().getStorageKind() == JavaKind.Object && field.hasLocation() && field.getAnnotation(ExcludeFromReferenceMap.class) == null) {
-                referenceMap.markReferenceAtOffset(field.getLocation());
+                referenceMap.markReferenceAtIndex(field.getLocation() / ConfigurationValues.getTarget().wordSize);
             }
         }
         if (type.isInstanceClass()) {
@@ -1092,7 +1156,16 @@ public class UniverseBuilder {
              */
             final int monitorOffset = instanceClass.getMonitorFieldOffset();
             if (monitorOffset != 0) {
-                referenceMap.markReferenceAtOffset(monitorOffset);
+                final int monitorIndex = monitorOffset / ConfigurationValues.getTarget().wordSize;
+                referenceMap.markReferenceAtIndex(monitorIndex);
+            }
+            /*
+             * If the instance type has a wait/notify condition field, put it in the reference map.
+             */
+            final int waitNotifyOffset = instanceClass.getWaitNotifyConditionFieldOffset();
+            if (waitNotifyOffset != 0) {
+                final int waitNotifyIndex = waitNotifyOffset / ConfigurationValues.getTarget().wordSize;
+                referenceMap.markReferenceAtIndex(waitNotifyIndex);
             }
         }
         return referenceMap;
