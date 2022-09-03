@@ -209,9 +209,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                     workList.add(node);
                     if (node instanceof IndirectCanonicalization) {
                         for (Node usage : node.usages()) {
-                            if (usage.isAlive()) {
-                                workList.add(usage);
-                            }
+                            workList.add(usage);
                         }
                     }
                 }
@@ -220,8 +218,8 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                 public void usagesDroppedToZero(Node node) {
                     workList.add(node);
                 }
-            };
 
+            };
             try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
                 for (Node n : workList) {
                     boolean changed = processNode(n);
