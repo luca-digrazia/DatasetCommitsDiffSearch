@@ -29,13 +29,9 @@ import static com.oracle.graal.java.BytecodeParser.Options.*;
 import java.lang.invoke.*;
 import java.util.zip.*;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
 import sun.reflect.*;
 
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.graphbuilderconf.InvocationPlugin.Receiver;
@@ -51,6 +47,10 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.word.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.options.*;
 
 /**
  * Defines the {@link Plugins} used when running on HotSpot.
@@ -145,8 +145,8 @@ public class HotSpotGraphBuilderPlugins {
     private static void registerCallSitePlugins(InvocationPlugins plugins) {
         InvocationPlugin plugin = new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                ValueNode callSite = receiver.get();
-                ValueNode folded = CallSiteTargetNode.tryFold(GraphUtil.originalValue(callSite), b.getMetaAccess(), b.getAssumptions());
+                ValueNode callSite = GraphUtil.originalValue(receiver.get());
+                ValueNode folded = CallSiteTargetNode.tryFold(callSite, b.getMetaAccess(), b.getAssumptions());
                 if (folded != null) {
                     b.addPush(Kind.Object, folded);
                 } else {

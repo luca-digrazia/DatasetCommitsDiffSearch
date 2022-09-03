@@ -22,19 +22,13 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_50;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.address.*;
 
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.DeoptimizingNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.address.AddressNode;
-
-@NodeInfo(cycles = CYCLES_50, size = SIZE_50)
-public final class G1PreWriteBarrier extends ObjectWriteBarrier implements DeoptimizingNode.DeoptBefore {
+@NodeInfo
+public final class G1PreWriteBarrier extends WriteBarrier implements DeoptimizingNode.DeoptBefore {
 
     public static final NodeClass<G1PreWriteBarrier> TYPE = NodeClass.create(G1PreWriteBarrier.class);
 

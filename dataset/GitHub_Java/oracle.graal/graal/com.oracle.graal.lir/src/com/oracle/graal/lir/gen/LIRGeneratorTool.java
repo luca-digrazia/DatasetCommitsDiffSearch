@@ -22,14 +22,28 @@
  */
 package com.oracle.graal.lir.gen;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.jvmci.code.CallingConvention;
+import com.oracle.jvmci.code.ForeignCallLinkage;
+import com.oracle.jvmci.code.RegisterAttributes;
+import com.oracle.jvmci.code.TargetDescription;
+import com.oracle.jvmci.code.StackSlotValue;
+import com.oracle.jvmci.code.CodeCacheProvider;
+import com.oracle.jvmci.code.Register;
+import com.oracle.jvmci.code.ForeignCallsProvider;
+import com.oracle.jvmci.meta.PlatformKind;
+import com.oracle.jvmci.meta.Constant;
+import com.oracle.jvmci.meta.Kind;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.Value;
+import com.oracle.jvmci.meta.LIRKind;
+import com.oracle.jvmci.meta.AllocatableValue;
+import com.oracle.jvmci.meta.MetaAccessProvider;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.StandardOp.StackMove;
+import com.oracle.jvmci.common.*;
 
 public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCounterFactory {
 
@@ -37,7 +51,9 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
 
         LIRInstruction createMove(AllocatableValue result, Value input);
 
-        LIRInstruction createStackMove(AllocatableValue result, Value input);
+        default LIRInstruction createStackMove(AllocatableValue result, Value input) {
+            return new StackMove(result, input);
+        }
     }
 
     public abstract class BlockScope implements AutoCloseable {

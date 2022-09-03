@@ -22,13 +22,10 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_50;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
-
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.address.*;
 
 /**
  * The {@code G1ReferentFieldReadBarrier} is added when a read access is performed to the referent
@@ -36,8 +33,8 @@ import com.oracle.graal.nodes.memory.address.AddressNode;
  * {@code UnsafeLoadNode}). The return value of the read is passed to the snippet implementing the
  * read barrier and consequently is added to the SATB queue if the concurrent marker is enabled.
  */
-@NodeInfo(cycles = CYCLES_50, size = SIZE_50)
-public final class G1ReferentFieldReadBarrier extends ObjectWriteBarrier {
+@NodeInfo
+public final class G1ReferentFieldReadBarrier extends WriteBarrier {
     public static final NodeClass<G1ReferentFieldReadBarrier> TYPE = NodeClass.create(G1ReferentFieldReadBarrier.class);
 
     protected final boolean doLoad;

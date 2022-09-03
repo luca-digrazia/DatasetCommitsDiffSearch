@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
 import org.junit.*;
 
 import com.oracle.graal.nodes.*;
@@ -33,6 +30,8 @@ import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
 
 /* consider
  *     B b = (B) a;
@@ -78,7 +77,6 @@ public class ReadAfterCheckCastTest extends GraphScheduleTest {
         test("test1Snippet");
     }
 
-    @SuppressWarnings("try")
     private void test(final String snippet) {
         try (Scope s = Debug.scope("ReadAfterCheckCastTest", new DebugDumpScope(snippet))) {
             // check shape of graph, with lots of assumptions. will probably fail if graph

@@ -23,11 +23,6 @@
 //JaCoCo Exclude
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
@@ -41,6 +36,9 @@ import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.meta.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory, InputType.Value})
 public final class CheckcastArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {

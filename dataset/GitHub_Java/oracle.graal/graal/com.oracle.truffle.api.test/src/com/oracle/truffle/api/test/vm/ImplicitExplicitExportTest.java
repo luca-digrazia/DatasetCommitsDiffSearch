@@ -22,18 +22,18 @@
  */
 package com.oracle.truffle.api.test.vm;
 
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.TruffleVM;
+import java.io.IOException;
+import java.io.Reader;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 import static org.junit.Assert.*;
-
-import java.io.*;
-import java.util.*;
-
-import org.junit.*;
-
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.debug.*;
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.vm.*;
+import org.junit.Before;
+import org.junit.Test;
 
 public class ImplicitExplicitExportTest {
     private TruffleVM vm;
@@ -158,16 +158,6 @@ public class ImplicitExplicitExportTest {
         @Override
         protected boolean isObjectOfLanguage(Object object) {
             return false;
-        }
-
-        @Override
-        protected ToolSupportProvider getToolSupport() {
-            return null;
-        }
-
-        @Override
-        protected DebugSupportProvider getDebugSupport() {
-            return null;
         }
     }
 

@@ -22,13 +22,13 @@
  */
 package com.oracle.graal.hotspot.phases;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig.*;
-import jdk.internal.jvmci.meta.*;
+import com.oracle.jvmci.meta.MetaAccessProvider;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.ResolvedJavaType;
+import com.oracle.jvmci.meta.ConstantReflectionProvider;
+import static com.oracle.jvmci.meta.LocationIdentity.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
-import static jdk.internal.jvmci.meta.LocationIdentity.*;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -39,6 +39,9 @@ import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
 
 /**
  * For AOT compilation we aren't allowed to use a {@link Class} reference ({@code javaMirror})
@@ -70,7 +73,7 @@ public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
                 Stamp stamp = StampFactory.exactNonNull(metaAccess.lookupJavaType(Class.class));
 
                 if (type instanceof HotSpotResolvedObjectType) {
-                    ConstantNode klass = ConstantNode.forConstant(context.getStampProvider().createHubStamp(true), ((HotSpotResolvedObjectType) type).klass(), metaAccess, graph);
+                    ConstantNode klass = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), ((HotSpotResolvedObjectType) type).klass(), metaAccess, graph);
                     AddressNode address = graph.unique(new OffsetAddressNode(klass, ConstantNode.forLong(classMirrorOffset, graph)));
                     ValueNode read = graph.unique(new FloatingReadNode(address, CLASS_MIRROR_LOCATION, null, stamp));
 

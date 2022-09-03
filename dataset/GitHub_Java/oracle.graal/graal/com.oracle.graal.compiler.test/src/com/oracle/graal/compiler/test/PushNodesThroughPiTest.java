@@ -22,10 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-import jdk.internal.jvmci.meta.*;
-
 import org.junit.*;
 
 import com.oracle.graal.nodes.*;
@@ -37,6 +33,9 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
+import com.oracle.jvmci.meta.*;
 
 public class PushNodesThroughPiTest extends GraalCompilerTest {
 
@@ -75,7 +74,7 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
                 long disp = address.getOffset().asJavaConstant().asLong();
 
                 ResolvedJavaType receiverType = StampTool.typeOrNull(address.getBase());
-                ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(disp, rn.getStackKind());
+                ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(disp, rn.getKind());
 
                 assert field != null : "Node " + rn + " tries to access a field which doesn't exists for this type";
                 if (field.getName().equals("x")) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,29 +23,31 @@
 
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.memory.address.AddressNode.Address;
+import com.oracle.graal.nodes.spi.*;
 
-public class PrefetchAllocateNode extends FixedWithNextNode implements LIRGenLowerable {
+@NodeInfo
+public final class PrefetchAllocateNode extends FixedWithNextNode implements LIRLowerable {
 
-    @Input private ValueNode distance;
-    @Input private ValueNode address;
+    public static final NodeClass<PrefetchAllocateNode> TYPE = NodeClass.create(PrefetchAllocateNode.class);
+    @Input(InputType.Association) AddressNode address;
 
-    public PrefetchAllocateNode(ValueNode address, ValueNode distance) {
-        super(StampFactory.forVoid());
-        this.address = address;
-        this.distance = distance;
+    public PrefetchAllocateNode(ValueNode address) {
+        super(TYPE, StampFactory.forVoid());
+        this.address = (AddressNode) address;
     }
 
     @Override
-    public void generate(NodeLIRGenerator gen) {
-        ((HotSpotNodeLIRGenerator) gen).emitPrefetchAllocate(address, distance);
+    public void generate(NodeLIRBuilderTool gen) {
+        ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitPrefetchAllocate(gen.operand(address));
     }
 
     @NodeIntrinsic
-    public static native void prefetch(Word address, Word distance);
+    public static native void prefetch(Address address);
 }

@@ -24,9 +24,7 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
-import static jdk.internal.jvmci.meta.LocationIdentity.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.jvmci.meta.LocationIdentity.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -43,19 +41,17 @@ import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.word.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Extends {@link WordOperationPlugin} to handle {@linkplain HotSpotOperation HotSpot word
  * operations}.
  */
 class HotSpotWordOperationPlugin extends WordOperationPlugin {
-
-    public HotSpotWordOperationPlugin(SnippetReflectionProvider snippetReflection, HotSpotWordTypes wordTypes) {
+    public HotSpotWordOperationPlugin(SnippetReflectionProvider snippetReflection, WordTypes wordTypes) {
         super(snippetReflection, wordTypes);
-    }
-
-    HotSpotWordTypes wordTypes() {
-        return (HotSpotWordTypes) wordTypes;
     }
 
     @Override
@@ -119,17 +115,17 @@ class HotSpotWordOperationPlugin extends WordOperationPlugin {
 
             case TO_KLASS_POINTER:
                 assert args.length == 1;
-                b.addPush(returnKind, new PointerCastNode(wordTypes().getKlassPointerStamp(), args[0]));
+                b.addPush(returnKind, new PointerCastNode(KlassPointerStamp.klass(), args[0]));
                 break;
 
             case TO_METHOD_POINTER:
                 assert args.length == 1;
-                b.addPush(returnKind, new PointerCastNode(wordTypes().getMethodPointerStamp(), args[0]));
+                b.addPush(returnKind, new PointerCastNode(MethodPointerStamp.method(), args[0]));
                 break;
 
             case READ_KLASS_POINTER:
                 assert args.length == 2 || args.length == 3;
-                Stamp readStamp = wordTypes().getKlassPointerStamp();
+                Stamp readStamp = KlassPointerStamp.klass();
                 AddressNode address = makeAddress(b, args[0], args[1]);
                 LocationIdentity location;
                 if (args.length == 2) {

@@ -22,14 +22,9 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static jdk.internal.jvmci.common.UnsafeAccess.*;
+import static com.oracle.jvmci.common.UnsafeAccess.*;
 
 import java.lang.ref.*;
-
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
 
 import org.junit.*;
 
@@ -51,6 +46,10 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.common.inlining.policy.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * The following unit tests assert the presence of write barriers for both Serial and G1 GCs.
@@ -251,7 +250,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
         try (Scope s = Debug.scope("WriteBarrierAdditionTest", snippet)) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
             HighTierContext highContext = getDefaultHighTierContext();
-            MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
+            MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo(), null);
             new InliningPhase(new InlineEverythingPolicy(), new CanonicalizerPhase()).apply(graph, highContext);
             new CanonicalizerPhase().apply(graph, highContext);
             new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highContext);

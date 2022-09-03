@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,17 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.hotspot.HotSpotNodeLIRBuilder;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.CompareAndSwapNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.jvmci.meta.LocationIdentity;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.memory.address.AddressNode.Address;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 /**
  * A special purpose store node that differs from {@link CompareAndSwapNode} in that it is not a

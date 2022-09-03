@@ -22,15 +22,9 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.MemoryAccessProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.PrimitiveConstant;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-import com.oracle.graal.compiler.common.spi.LIRKindTool;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Type describing pointers to raw memory. This stamp is used for example for direct pointers to
@@ -100,14 +94,6 @@ public class RawPointerStamp extends AbstractPointerStamp {
     @Override
     public boolean isCompatible(Stamp other) {
         return other instanceof RawPointerStamp;
-    }
-
-    @Override
-    public boolean isCompatible(Constant constant) {
-        if (constant instanceof PrimitiveConstant) {
-            return ((PrimitiveConstant) constant).getJavaKind().isNumericInteger();
-        }
-        return false;
     }
 
     @Override

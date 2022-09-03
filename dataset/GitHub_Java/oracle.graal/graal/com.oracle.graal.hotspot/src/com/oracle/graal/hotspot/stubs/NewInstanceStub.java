@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
+import com.oracle.jvmci.code.Register;
+import com.oracle.jvmci.meta.ForeignCallDescriptor;
+import com.oracle.jvmci.meta.Kind;
 import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.stubs.StubUtil.*;
@@ -36,6 +36,7 @@ import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
@@ -43,6 +44,7 @@ import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.word.*;
+import com.oracle.jvmci.hotspot.*;
 
 /**
  * Stub implementing the fast path for TLAB refill during instance class allocation. This stub is
@@ -63,7 +65,7 @@ public class NewInstanceStub extends SnippetStub {
         Object[] args = new Object[count];
         assert checkConstArg(1, "intArrayHub");
         assert checkConstArg(2, "threadRegister");
-        args[1] = ConstantNode.forConstant(providers.getStampProvider().createHubStamp(true), intArrayType.klass(), null);
+        args[1] = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), intArrayType.klass(), null);
         args[2] = providers.getRegisters().getThreadRegister();
         return args;
     }

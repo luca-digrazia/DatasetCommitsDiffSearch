@@ -22,25 +22,16 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.nodes.DeoptimizationFetchUnrollInfoCallNode;
-import com.oracle.graal.hotspot.nodes.EnterUnpackFramesStackFrameNode;
-import com.oracle.graal.hotspot.nodes.LeaveCurrentStackFrameNode;
-import com.oracle.graal.hotspot.nodes.LeaveDeoptimizedStackFrameNode;
-import com.oracle.graal.hotspot.nodes.LeaveUnpackFramesStackFrameNode;
-import com.oracle.graal.hotspot.nodes.PushInterpreterFrameNode;
-import com.oracle.graal.hotspot.nodes.SaveAllRegistersNode;
-import com.oracle.graal.hotspot.nodes.UncommonTrapCallNode;
+import com.oracle.jvmci.code.StackSlotValue;
+import com.oracle.jvmci.meta.DeoptimizationReason;
+import com.oracle.jvmci.meta.Value;
+import com.oracle.jvmci.meta.DeoptimizationAction;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.gen.LIRGenerator;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-
-import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
 
 /**
  * This interface defines the contract a HotSpot backend LIR generator needs to fulfill in addition
@@ -71,7 +62,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param saveRegisterOp saved registers
      */
     default void emitLeaveCurrentStackFrame(SaveRegistersOp saveRegisterOp) {
-        throw GraalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
     /**
@@ -81,7 +72,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param initialInfo
      */
     default void emitLeaveDeoptimizedStackFrame(Value frameSize, Value initialInfo) {
-        throw GraalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
     /**
@@ -93,7 +84,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param saveRegisterOp
      */
     default void emitEnterUnpackFramesStackFrame(Value framePc, Value senderSp, Value senderFp, SaveRegistersOp saveRegisterOp) {
-        throw GraalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
     /**
@@ -102,7 +93,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param saveRegisterOp
      */
     default void emitLeaveUnpackFramesStackFrame(SaveRegistersOp saveRegisterOp) {
-        throw GraalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
     /**
@@ -114,42 +105,48 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param initialInfo
      */
     default void emitPushInterpreterFrame(Value frameSize, Value framePc, Value senderSp, Value initialInfo) {
-        throw GraalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
     /**
      * Emits code for a {@link UncommonTrapCallNode}.
      *
      * @param trapRequest
-     * @param mode
      * @param saveRegisterOp
      * @return a {@code Deoptimization::UnrollBlock} pointer
      */
-    default Value emitUncommonTrapCall(Value trapRequest, Value mode, SaveRegistersOp saveRegisterOp) {
-        throw GraalError.unimplemented();
+    default Value emitUncommonTrapCall(Value trapRequest, SaveRegistersOp saveRegisterOp) {
+        throw JVMCIError.unimplemented();
     }
 
     /**
      * Emits code for a {@link DeoptimizationFetchUnrollInfoCallNode}.
      *
-     * @param mode
      * @param saveRegisterOp
      * @return a {@code Deoptimization::UnrollBlock} pointer
      */
-    default Value emitDeoptimizationFetchUnrollInfoCall(Value mode, SaveRegistersOp saveRegisterOp) {
-        throw GraalError.unimplemented();
+    default Value emitDeoptimizationFetchUnrollInfoCall(SaveRegistersOp saveRegisterOp) {
+        throw JVMCIError.unimplemented();
+    }
+
+    default Value emitCardTableShift() {
+        throw JVMCIError.unimplemented();
+    }
+
+    default Value emitCardTableAddress() {
+        throw JVMCIError.unimplemented();
     }
 
     /**
      * Gets a stack slot for a lock at a given lock nesting depth.
      */
-    VirtualStackSlot getLockSlot(int lockDepth);
+    StackSlotValue getLockSlot(int lockDepth);
 
-    @Override
     HotSpotProviders getProviders();
 
     Value emitCompress(Value pointer, CompressEncoding encoding, boolean nonNull);
 
     Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull);
 
+    void emitPrefetchAllocate(Value address);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,19 +24,28 @@ package com.oracle.truffle.sl;
 
 import java.io.*;
 import java.math.*;
+import java.net.*;
+import java.util.*;
+import java.util.Scanner;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.vm.*;
+import com.oracle.truffle.api.vm.TruffleVM.Symbol;
 import com.oracle.truffle.sl.builtins.*;
+import com.oracle.truffle.sl.factory.*;
 import com.oracle.truffle.sl.nodes.*;
 import com.oracle.truffle.sl.nodes.call.*;
 import com.oracle.truffle.sl.nodes.controlflow.*;
 import com.oracle.truffle.sl.nodes.expression.*;
+import com.oracle.truffle.sl.nodes.instrument.*;
 import com.oracle.truffle.sl.nodes.local.*;
 import com.oracle.truffle.sl.parser.*;
 import com.oracle.truffle.sl.runtime.*;
+import com.oracle.truffle.tools.*;
 
 /**
  * SL is a simple language to demonstrate and showcase features of Truffle. The implementation is as
@@ -81,7 +90,7 @@ import com.oracle.truffle.sl.runtime.*;
  * {@link SLWhileNode while} with {@link SLBreakNode break} and {@link SLContinueNode continue},
  * {@link SLReturnNode return}.
  * <li>Function calls: {@link SLInvokeNode invocations} are efficiently implemented with
- * {@link SLAbstractDispatchNode polymorphic inline caches}.
+ * {@link SLDispatchNode polymorphic inline caches}.
  * </ul>
  *
  * <p>
@@ -110,67 +119,139 @@ import com.oracle.truffle.sl.runtime.*;
  * argument and adds them to the function registry. Functions that are already defined are replaced
  * with the new version.
  * </ul>
+ *
+ * <p>
+ * <b>Tools:</b><br>
+ * The use of some of Truffle's support for developer tools (based on the Truffle Instrumentation
+ * Framework) are demonstrated in this file, for example:
+ * <ul>
+ * <li>a {@linkplain NodeExecCounter counter for node executions}, tabulated by node type; and</li>
+ * <li>a simple {@linkplain CoverageTracker code coverage engine}.</li>
+ * </ul>
+ * In each case, the tool is enabled if a corresponding local boolean variable in this file is set
+ * to {@code true}. Results are printed at the end of the execution using each tool's
+ * <em>default printer</em>.
+ *
  */
-public class SLMain {
+@TruffleLanguage.Registration(name = "sl", version = "0.5", mimeType = "application/x-sl")
+public class SLMain extends TruffleLanguage {
+    private static SLMain LAST;
+    private static List<NodeFactory<? extends SLBuiltinNode>> builtins = Collections.emptyList();
+    private final SLContext context;
+
+    public SLMain(Env env) {
+        super(env);
+        context = SLContextFactory.create(new BufferedReader(env().stdIn()), new PrintWriter(env().stdOut(), true));
+        LAST = this;
+        for (NodeFactory<? extends SLBuiltinNode> builtin : builtins) {
+            context.installBuiltin(builtin);
+        }
+    }
+
+    /* Enables demonstration of per-type tabulation of node execution counts */
+    private static boolean nodeExecCounts = false;
+    /* Enables demonstration of per-line tabulation of STATEMENT node execution counts */
+    private static boolean statementCounts = false;
+    /* Enables demonstration of er-line tabulation of STATEMENT coverage */
+    private static boolean coverage = false;
+
+    /* Small tools that can be installed for demonstration */
+    private static NodeExecCounter nodeExecCounter = null;
+    private static NodeExecCounter statementExecCounter = null;
+    private static CoverageTracker coverageTracker = null;
 
     /**
      * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
      */
     public static void main(String[] args) throws IOException {
-        SourceManager sourceManager = new SourceManager();
+        TruffleVM vm = TruffleVM.newVM().build();
+        assert vm.getLanguages().containsKey("application/x-sl");
 
-        Source source;
-        if (args.length == 0) {
-            source = sourceManager.get("stdin", System.in);
-        } else {
-            source = sourceManager.get(args[0]);
-        }
+        setupToolDemos();
 
         int repeats = 1;
         if (args.length >= 2) {
             repeats = Integer.parseInt(args[1]);
         }
 
-        SLContext context = new SLContext(sourceManager, new BufferedReader(new InputStreamReader(System.in)), System.out);
-        run(context, source, System.out, repeats);
+        if (args.length == 0) {
+            vm.eval("application/x-sl", new InputStreamReader(System.in));
+        } else {
+            vm.eval(new File(args[0]).toURI());
+        }
+        Symbol main = vm.findGlobalSymbol("main");
+        if (main == null) {
+            throw new SLException("No function main() defined in SL source file.");
+        }
+        while (repeats-- > 0) {
+            main.invoke(null);
+        }
+        reportToolDemos();
+    }
+
+    /**
+     * Temporary method during API evolution, supports debugger integration.
+     */
+    public static void run(Source source) throws IOException {
+        TruffleVM vm = TruffleVM.newVM().build();
+        assert vm.getLanguages().containsKey("application/x-sl");
+        vm.eval(new File(source.getPath()).toURI());
+        Symbol main = vm.findGlobalSymbol("main");
+        if (main == null) {
+            throw new SLException("No function main() defined in SL source file.");
+        }
+        main.invoke(null);
     }
 
     /**
      * Parse and run the specified SL source. Factored out in a separate method so that it can also
      * be used by the unit test harness.
      */
-    public static void run(SLContext context, Source source, PrintStream logOutput, int repeats) {
+    public static long run(TruffleVM context, URI source, PrintWriter logOutput, PrintWriter out, int repeats, List<NodeFactory<? extends SLBuiltinNode>> currentBuiltins) throws IOException {
+        builtins = currentBuiltins;
+
         if (logOutput != null) {
             logOutput.println("== running on " + Truffle.getRuntime().getName());
+            // logOutput.println("Source = " + source.getCode());
         }
 
         /* Parse the SL source file. */
-        Parser.parseSL(context, source);
+        Object result = context.eval(source);
+        if (result != null) {
+            out.println(result);
+        }
+
         /* Lookup our main entry point, which is per definition always named "main". */
-        SLFunction main = context.getFunctionRegistry().lookup("main");
-        if (main.getCallTarget() == null) {
+        Symbol main = context.findGlobalSymbol("main");
+        if (main == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
 
         /* Change to true if you want to see the AST on the console. */
         boolean printASTToLog = false;
+        /* Change to true if you want to see source attribution for the AST to the console */
+        boolean printSourceAttributionToLog = false;
         /* Change to dump the AST to IGV over the network. */
         boolean dumpASTToIGV = false;
 
-        printScript("before execution", context, logOutput, printASTToLog, dumpASTToIGV);
+        printScript("before execution", LAST.context, logOutput, printASTToLog, printSourceAttributionToLog, dumpASTToIGV);
+        long totalRuntime = 0;
         try {
             for (int i = 0; i < repeats; i++) {
                 long start = System.nanoTime();
                 /* Call the main entry point, without any arguments. */
                 try {
-                    Object result = main.getCallTarget().call(null, new SLArguments(new Object[0]));
-                    if (result != SLNull.SINGLETON) {
-                        context.getOutput().println(result);
+                    result = main.invoke(null);
+                    if (result != null) {
+                        out.println(result);
                     }
                 } catch (UnsupportedSpecializationException ex) {
-                    context.getOutput().println(formatTypeError(ex));
+                    out.println(formatTypeError(ex));
+                } catch (SLUndefinedFunctionException ex) {
+                    out.println(String.format("Undefined function: %s", ex.getFunctionName()));
                 }
                 long end = System.nanoTime();
+                totalRuntime += end - start;
 
                 if (logOutput != null && repeats > 1) {
                     logOutput.println("== iteration " + (i + 1) + ": " + ((end - start) / 1000000) + " ms");
@@ -178,8 +259,9 @@ public class SLMain {
             }
 
         } finally {
-            printScript("after execution", context, logOutput, printASTToLog, dumpASTToIGV);
+            printScript("after execution", LAST.context, logOutput, printASTToLog, printSourceAttributionToLog, dumpASTToIGV);
         }
+        return totalRuntime;
     }
 
     /**
@@ -188,7 +270,7 @@ public class SLMain {
      * <p>
      * When printASTToLog is true: prints the ASTs to the console.
      */
-    private static void printScript(String groupName, SLContext context, PrintStream logOutput, boolean printASTToLog, boolean dumpASTToIGV) {
+    private static void printScript(String groupName, SLContext context, PrintWriter logOutput, boolean printASTToLog, boolean printSourceAttributionToLog, boolean dumpASTToIGV) {
         if (dumpASTToIGV) {
             GraphPrintVisitor graphPrinter = new GraphPrintVisitor();
             graphPrinter.beginGroup(groupName);
@@ -209,6 +291,15 @@ public class SLMain {
                 }
             }
         }
+        if (printSourceAttributionToLog && logOutput != null) {
+            for (SLFunction function : context.getFunctionRegistry().getFunctions()) {
+                RootCallTarget callTarget = function.getCallTarget();
+                if (callTarget != null) {
+                    logOutput.println("=== " + function);
+                    NodeUtil.printSourceAttributionTree(logOutput, callTarget.getRootNode());
+                }
+            }
+        }
     }
 
     /**
@@ -224,11 +315,16 @@ public class SLMain {
         result.append("Type error");
         if (ex.getNode() != null && ex.getNode().getSourceSection() != null) {
             SourceSection ss = ex.getNode().getSourceSection();
-            result.append(" at ").append(ss.getSource().getName()).append(" line ").append(ss.getStartLine()).append(" col ").append(ss.getStartColumn());
+            if (ss != null && !(ss instanceof NullSourceSection)) {
+                result.append(" at ").append(ss.getSource().getShortName()).append(" line ").append(ss.getStartLine()).append(" col ").append(ss.getStartColumn());
+            }
         }
         result.append(": operation");
-        if (ex.getNode() != null && ex.getNode().getClass().getAnnotation(NodeInfo.class) != null) {
-            result.append(" \"").append(ex.getNode().getClass().getAnnotation(NodeInfo.class).shortName()).append("\"");
+        if (ex.getNode() != null) {
+            NodeInfo nodeInfo = SLContext.lookupNodeInfo(ex.getNode().getClass());
+            if (nodeInfo != null) {
+                result.append(" \"").append(nodeInfo.shortName()).append("\"");
+            }
         }
         result.append(" not defined for");
 
@@ -260,4 +356,70 @@ public class SLMain {
         }
         return result.toString();
     }
+
+    @Override
+    protected Object eval(Source code) throws IOException {
+        try {
+            context.executeMain(code);
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
+        return null;
+    }
+
+    @Override
+    protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
+        for (SLFunction f : context.getFunctionRegistry().getFunctions()) {
+            if (globalName.equals(f.getName())) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    protected Object getLanguageGlobal() {
+        return context;
+    }
+
+    @Override
+    protected boolean isObjectOfLanguage(Object object) {
+        return object instanceof SLFunction;
+    }
+
+    private static void setupToolDemos() {
+        if (statementCounts || coverage) {
+            Probe.registerASTProber(new SLStandardASTProber());
+        }
+        if (nodeExecCounts) {
+            nodeExecCounter = new NodeExecCounter();
+            nodeExecCounter.install();
+        }
+
+        if (statementCounts) {
+            statementExecCounter = new NodeExecCounter(StandardSyntaxTag.STATEMENT);
+            statementExecCounter.install();
+        }
+
+        if (coverage) {
+            coverageTracker = new CoverageTracker();
+            coverageTracker.install();
+        }
+    }
+
+    private static void reportToolDemos() {
+        if (nodeExecCounter != null) {
+            nodeExecCounter.print(System.out);
+            nodeExecCounter.dispose();
+        }
+        if (statementExecCounter != null) {
+            statementExecCounter.print(System.out);
+            statementExecCounter.dispose();
+        }
+        if (coverageTracker != null) {
+            coverageTracker.print(System.out);
+            coverageTracker.dispose();
+        }
+    }
+
 }

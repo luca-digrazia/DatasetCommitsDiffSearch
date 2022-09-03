@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,13 @@
  */
 package com.oracle.graal.hotspot.word;
 
-import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.FROM_POINTER;
-import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.IS_NULL;
+import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.*;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
-import com.oracle.graal.word.Pointer;
-import com.oracle.graal.word.Signed;
-import com.oracle.graal.word.Unsigned;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.word.*;
 import com.oracle.graal.word.Word.Opcode;
 import com.oracle.graal.word.Word.Operation;
-import com.oracle.graal.word.WordBase;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Marker type for a metaspace pointer.

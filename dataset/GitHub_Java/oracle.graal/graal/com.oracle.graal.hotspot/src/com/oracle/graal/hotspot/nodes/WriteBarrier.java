@@ -22,23 +22,38 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_100;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.spi.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-
-@NodeInfo(cycles = CYCLES_100, size = SIZE_100)
+@NodeInfo
 public abstract class WriteBarrier extends FixedWithNextNode implements Lowerable {
 
     public static final NodeClass<WriteBarrier> TYPE = NodeClass.create(WriteBarrier.class);
+    @Input(InputType.Association) protected AddressNode address;
+    @OptionalInput protected ValueNode value;
+    protected final boolean precise;
 
-    protected WriteBarrier(NodeClass<? extends WriteBarrier> c) {
+    protected WriteBarrier(NodeClass<? extends WriteBarrier> c, AddressNode address, ValueNode value, boolean precise) {
         super(c, StampFactory.forVoid());
+        this.address = address;
+        this.value = value;
+        this.precise = precise;
+    }
+
+    public ValueNode getValue() {
+        return value;
+    }
+
+    public AddressNode getAddress() {
+        return address;
+    }
+
+    public boolean usePrecise() {
+        return precise;
     }
 
     @Override
