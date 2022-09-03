@@ -27,7 +27,6 @@ import static com.oracle.graal.api.meta.LocationIdentity.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -194,7 +193,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
 
     private class ReadEliminationMergeProcessor extends EffectsClosure<ReadEliminationBlockState>.MergeProcessor {
 
-        private final HashMap<Object, ValuePhiNode> materializedPhis = CollectionsFactory.newMap();
+        private final HashMap<Object, ValuePhiNode> materializedPhis = new HashMap<>();
 
         public ReadEliminationMergeProcessor(Block mergeBlock) {
             super(mergeBlock);
