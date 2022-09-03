@@ -26,8 +26,6 @@ import java.util.*;
 
 import org.junit.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.phases.common.*;
 
@@ -69,13 +67,9 @@ public class DeoptimizeOnExceptionTest extends GraalCompilerTest {
             Class<Runnable> c = (Class<Runnable>) testCl.loadClass(name);
             Runnable r = c.newInstance();
             ct = Long.MAX_VALUE;
-            // warmup
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < 100000000; i++) {
                 r.run();
             }
-            // compile
-            ResolvedJavaMethod m = getResolvedJavaMethod(c, "run");
-            getCode(m);
             ct = 0;
             r.run();
         } catch (Throwable e) {
@@ -95,7 +89,6 @@ public class DeoptimizeOnExceptionTest extends GraalCompilerTest {
     public static void methodB() {
         Random r = new Random(System.currentTimeMillis());
         while (r.nextFloat() > .03f) {
-            // Empty
         }
 
         return;
@@ -104,7 +97,6 @@ public class DeoptimizeOnExceptionTest extends GraalCompilerTest {
     public static void methodA() {
         Random r = new Random(System.currentTimeMillis());
         while (r.nextDouble() > .05) {
-            // Empty
         }
         return;
     }
