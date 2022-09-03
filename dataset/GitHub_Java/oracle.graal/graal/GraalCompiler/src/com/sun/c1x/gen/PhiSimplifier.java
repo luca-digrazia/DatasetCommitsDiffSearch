@@ -31,15 +31,8 @@ import com.sun.c1x.ir.*;
  */
 public final class PhiSimplifier {
 
-    private NodeBitMap visited;
-    private NodeBitMap cannotSimplify;
-
     public PhiSimplifier(IR ir) {
-        Graph graph = ir.compilation.graph;
-        visited = graph.createNodeBitMap();
-        cannotSimplify = graph.createNodeBitMap();
-
-        for (Node n : graph.getNodes()) {
+        for (Node n : ir.compilation.graph.getNodes()) {
             if (n instanceof Phi) {
                 simplify((Phi) n);
             }
@@ -52,41 +45,41 @@ public final class PhiSimplifier {
         }
         Phi phi = (Phi) x;
 
-        if (phi.valueCount() == 1 && !cannotSimplify.isMarked(phi)) {
+        if (phi.valueCount() == 1 && !phi.checkFlag(Value.Flag.PhiCannotSimplify)) {
             return (Value) phi.replace(phi.valueAt(0));
         }
 
-        if (cannotSimplify.isMarked(phi)) {
+        if (phi.checkFlag(Value.Flag.PhiCannotSimplify)) {
             // already tried, cannot simplify this phi
             return phi;
-        } else if (visited.isMarked(phi)) {
+        } else if (phi.checkFlag(Value.Flag.PhiVisited)) {
             // break cycles in phis
             return phi;
-        } else if (phi.isDead()) {
+        } else if (phi.isIllegal()) {
             // don't bother with illegals
             return phi;
         } else {
             // attempt to simplify the phi by recursively simplifying its operands
-            visited.mark(phi);
+            phi.setFlag(Value.Flag.PhiVisited);
             Value phiSubst = null;
             int max = phi.valueCount();
             boolean cannotSimplify = false;
             for (int i = 0; i < max; i++) {
                 Value oldInstr = phi.valueAt(i);
 
-                if (oldInstr == null || (oldInstr instanceof Phi && ((Phi) oldInstr).isDead())) {
+                if (oldInstr == null || oldInstr.isIllegal() || oldInstr.isDeadPhi()) {
                     // if one operand is illegal, make the entire phi illegal
                     phi.makeDead();
-                    visited.clear(phi);
+                    phi.clearFlag(Value.Flag.PhiVisited);
                     return phi;
                 }
 
                 Value newInstr = simplify(oldInstr);
 
-                if (newInstr == null || (newInstr instanceof Phi && ((Phi) newInstr).isDead())) {
+                if (newInstr == null || newInstr.isIllegal() || newInstr.isDeadPhi()) {
                     // if the subst instruction is illegal, make the entire phi illegal
                     phi.makeDead();
-                    visited.clear(phi);
+                    phi.clearFlag(Value.Flag.PhiVisited);
                     return phi;
                 }
 
@@ -104,16 +97,17 @@ public final class PhiSimplifier {
                 }
             }
             if (cannotSimplify) {
-                this.cannotSimplify.mark(phi);
-                visited.clear(phi);
+                phi.setFlag(Value.Flag.PhiCannotSimplify);
+                phi.clearFlag(Value.Flag.PhiVisited);
                 return phi;
             }
 
             // successfully simplified the phi
             assert phiSubst != null : "illegal phi function";
-            visited.clear(phi);
+            phi.clearFlag(Value.Flag.PhiVisited);
 
             phi.replace(phiSubst);
+//            System.out.printf("replaced phi with %d inputs\n", max);
 
             return phiSubst;
         }
