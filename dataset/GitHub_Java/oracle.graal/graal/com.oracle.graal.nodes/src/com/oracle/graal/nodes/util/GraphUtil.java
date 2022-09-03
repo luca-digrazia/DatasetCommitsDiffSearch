@@ -43,7 +43,7 @@ public class GraphUtil {
         }
     };
 
-    public static void killCFG(Node node) {
+    public static void killCFG(FixedNode node) {
         assert node.isAlive();
         if (node instanceof AbstractEndNode) {
             // We reached a control flow end.
@@ -58,7 +58,7 @@ public class GraphUtil {
              * while processing one branch.
              */
             for (Node successor : node.successors()) {
-                killCFG(successor);
+                killCFG((FixedNode) successor);
             }
         }
         propagateKill(node);
@@ -123,17 +123,13 @@ public class GraphUtil {
     }
 
     public static void killWithUnusedFloatingInputs(Node node) {
-        if (node.recordsUsages()) {
-            List<Node> floatingInputs = node.inputs().filter(isFloatingNode()).snapshot();
-            node.safeDelete();
+        List<Node> floatingInputs = node.inputs().filter(isFloatingNode()).snapshot();
+        node.safeDelete();
 
-            for (Node in : floatingInputs) {
-                if (in.isAlive() && (!in.recordsUsages() || in.usages().isEmpty())) {
-                    killWithUnusedFloatingInputs(in);
-                }
+        for (Node in : floatingInputs) {
+            if (in.isAlive() && in.usages().isEmpty()) {
+                killWithUnusedFloatingInputs(in);
             }
-        } else {
-            assert node.inputs().isEmpty();
         }
     }
 

@@ -27,6 +27,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * A node that attaches a type profile to a proxied input node.
@@ -66,7 +67,12 @@ public final class TypeProfileProxyNode extends FloatingNode implements Canonica
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(object.stamp());
+        return object.inferStamp();
+    }
+
+    @Override
+    public Stamp stamp() {
+        return object.stamp();
     }
 
     @Override

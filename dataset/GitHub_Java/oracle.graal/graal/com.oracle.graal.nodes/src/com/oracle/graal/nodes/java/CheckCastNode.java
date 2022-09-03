@@ -24,11 +24,10 @@ package com.oracle.graal.nodes.java;
 
 import static com.oracle.graal.api.code.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ProfilingInfo.TriState;
+import com.oracle.graal.api.meta.ProfilingInfo.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -118,9 +117,7 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
                     condition = typeTest;
                     stamp = stamp.join(StampFactory.objectNonNull());
                 } else {
-                    // TODO (ds) replace with probability of null-seen when available
-                    double shortCircuitProbability = NOT_FREQUENT_PROBABILITY;
-                    condition = graph().unique(new ShortCircuitOrNode(graph().unique(new IsNullNode(object)), false, typeTest, false, shortCircuitProbability));
+                    condition = graph().unique(new LogicDisjunctionNode(graph().unique(new IsNullNode(object)), typeTest));
                 }
             }
             GuardingPiNode checkedObject = graph().add(new GuardingPiNode(object, condition, false, forStoreCheck ? ArrayStoreException : ClassCastException, InvalidateReprofile, stamp));
