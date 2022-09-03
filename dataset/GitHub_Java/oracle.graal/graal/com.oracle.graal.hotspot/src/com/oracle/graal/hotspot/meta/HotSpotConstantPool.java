@@ -35,7 +35,9 @@ import com.oracle.graal.hotspot.*;
 /**
  * Implementation of {@link ConstantPool} for HotSpot.
  */
-public class HotSpotConstantPool implements ConstantPool, HotSpotProxified {
+public class HotSpotConstantPool extends CompilerObject implements ConstantPool, HotSpotProxified {
+
+    private static final long serialVersionUID = -5443206401485234850L;
 
     /**
      * Enum of all {@code JVM_CONSTANT} constants used in the VM. This includes the public and
@@ -503,9 +505,7 @@ public class HotSpotConstantPool implements ConstantPool, HotSpotProxified {
         } else {
             final long metaspacePointer = runtime().getCompilerToVM().lookupKlassInPool(metaspaceConstantPool, cpi);
             JavaType result = getJavaType(metaspacePointer);
-            if (result instanceof ResolvedJavaType) {
-                this.lastLookupType = new LookupTypeCacheElement(cpi, result);
-            }
+            this.lastLookupType = new LookupTypeCacheElement(cpi, result);
             return result;
         }
     }
