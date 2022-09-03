@@ -43,7 +43,7 @@ import com.oracle.graal.ptx.*;
  */
 public abstract class PTXTest extends GraalCompilerTest {
 
-    public static PTXHotSpotBackend getPTXBackend() {
+    private static PTXHotSpotBackend getPTXBackend() {
         Backend backend = runtime().getBackend(PTX.class);
         Assume.assumeTrue(backend instanceof PTXHotSpotBackend);
         return (PTXHotSpotBackend) backend;
@@ -69,15 +69,7 @@ public abstract class PTXTest extends GraalCompilerTest {
         Assume.assumeTrue(ptxBackend.isDeviceInitialized());
         HotSpotNmethod installedPTXCode = installKernel(method, ptxCode);
         StructuredGraph wrapper = new PTXWrapperBuilder(method, installedPTXCode, (HotSpotProviders) getProviders()).getGraph();
-
-        // The PTX C++ layer expects a 1:1 relationship between kernel compilation
-        // and kernel execution as it creates a cuContext in the former and
-        // destroys it in the latter. So, each kernel installed requires a unique
-        // wrapper.
-        // TODO: do cuContext management properly
-        boolean forceCompile = true;
-
-        return getCode(method, wrapper, forceCompile);
+        return super.getCode(method, wrapper);
     }
 
     protected static void compileAndPrintCode(PTXTest test) {
