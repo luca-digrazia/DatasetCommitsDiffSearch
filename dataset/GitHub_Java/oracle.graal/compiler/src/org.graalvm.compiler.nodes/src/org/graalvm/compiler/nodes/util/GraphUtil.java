@@ -39,6 +39,7 @@ import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.code.SourceStackTraceBailoutException;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
+import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node;
@@ -73,11 +74,11 @@ import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.spi.ArrayLengthProvider;
-import org.graalvm.compiler.nodes.spi.ArrayLengthProvider.FindLengthMode;
 import org.graalvm.compiler.nodes.spi.LimitedValueProxy;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.nodes.spi.ValueProxy;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
+import org.graalvm.compiler.nodes.spi.ArrayLengthProvider.FindLengthMode;
 import org.graalvm.compiler.nodes.virtual.VirtualArrayNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.compiler.options.Option;
@@ -715,6 +716,7 @@ public class GraphUtil {
         }
 
         ValueNode singleLength = null;
+        ValueNode[] newPhiLengths = null;
         for (int i = 0; i < phi.values().count(); i++) {
             ValueNode input = phi.values().get(i);
             ValueNode length = arrayLength(input, mode);
@@ -724,15 +726,35 @@ public class GraphUtil {
             assert length.stamp(NodeView.DEFAULT).getStackKind() == JavaKind.Int;
 
             if (i == 0) {
-                assert singleLength == null;
+                assert singleLength == null && newPhiLengths == null;
                 singleLength = length;
             } else if (singleLength == length) {
+                assert newPhiLengths == null;
                 /* Nothing to do, still having a single length. */
             } else {
-                return null;
+                if (mode == ArrayLengthProvider.FindLengthMode.SEARCH_ONLY) {
+                    /*
+                     * We do not want to create new nodes when only searching for an existing
+                     * result. Bail out of the search before creating any temporary objects.
+                     */
+                    return null;
+                }
+                if (newPhiLengths == null) {
+                    newPhiLengths = new ValueNode[phi.values().count()];
+                    for (int j = 0; j < i; j++) {
+                        newPhiLengths[j] = singleLength;
+                    }
+                }
+                newPhiLengths[i] = length;
+                singleLength = null;
             }
         }
-        return singleLength;
+
+        if (newPhiLengths != null) {
+            return new ValuePhiNode(StampFactory.forKind(JavaKind.Int), phi.merge(), newPhiLengths);
+        } else {
+            return singleLength;
+        }
     }
 
     /**
