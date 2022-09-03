@@ -57,51 +57,22 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
     }
 
     private static void tryUseTrappingNullCheck(MetaAccessProvider metaAccessProvider, DynamicDeoptimizeNode deopt) {
+        ValueNode speculation = deopt.getSpeculation();
+        if (!speculation.isConstant() || !speculation.asConstant().equals(Constant.NULL_OBJECT)) {
+            return;
+        }
         Node predecessor = deopt.predecessor();
         if (predecessor instanceof MergeNode) {
             MergeNode merge = (MergeNode) predecessor;
 
-            // Process each predecessor at the merge, unpacking the reasons and speculations as
-            // needed.
+            // Process each predecessor at the merge, unpacking the reasons as needed.
             ValueNode reason = deopt.getActionAndReason();
-            ValuePhiNode reasonPhi = null;
-            List<ValueNode> reasons = null;
-            int expectedPhis = 0;
-
-            if (reason instanceof ValuePhiNode) {
-                reasonPhi = (ValuePhiNode) reason;
-                if (reasonPhi.merge() != merge) {
-                    return;
-                }
-                reasons = reasonPhi.values().snapshot();
-                expectedPhis++;
-            } else if (!reason.isConstant()) {
-                return;
-            }
-
-            ValueNode speculation = deopt.getSpeculation();
-            ValuePhiNode speculationPhi = null;
-            List<ValueNode> speculations = null;
-            if (speculation instanceof ValuePhiNode) {
-                speculationPhi = (ValuePhiNode) speculation;
-                if (speculationPhi.merge() != merge) {
-                    return;
-                }
-                speculations = speculationPhi.values().snapshot();
-                expectedPhis++;
-            }
-
-            if (merge.phis().count() != expectedPhis) {
-                return;
-            }
+            List<ValueNode> values = reason instanceof ValuePhiNode ? ((ValuePhiNode) reason).values().snapshot() : Collections.nCopies(merge.forwardEndCount(), reason);
 
             int index = 0;
             for (AbstractEndNode end : merge.cfgPredecessors().snapshot()) {
-                ValueNode thisReason = reasons != null ? reasons.get(index) : reason;
-                ValueNode thisSpeculation = speculations != null ? speculations.get(index++) : speculation;
-                if (!thisReason.isConstant() || !thisSpeculation.isConstant() || !thisSpeculation.asConstant().equals(Constant.NULL_OBJECT)) {
-                    continue;
-                }
+                ValueNode thisReason = values.get(index++);
+                assert thisReason.isConstant();
                 DeoptimizationReason deoptimizationReason = metaAccessProvider.decodeDeoptReason(thisReason.asConstant());
                 tryUseTrappingNullCheck(deopt, end.predecessor(), deoptimizationReason, null);
             }
@@ -117,11 +88,10 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
         }
         if (predecessor instanceof MergeNode) {
             MergeNode merge = (MergeNode) predecessor;
-            if (merge.phis().isEmpty()) {
-                for (AbstractEndNode end : merge.cfgPredecessors().snapshot()) {
-                    checkPredecessor(deopt, end.predecessor(), deoptimizationReason);
-                }
+            for (AbstractEndNode end : merge.cfgPredecessors().snapshot()) {
+                checkPredecessor(deopt, end.predecessor(), deoptimizationReason);
             }
+
         } else if (predecessor instanceof BeginNode) {
             checkPredecessor(deopt, predecessor, deoptimizationReason);
         }
