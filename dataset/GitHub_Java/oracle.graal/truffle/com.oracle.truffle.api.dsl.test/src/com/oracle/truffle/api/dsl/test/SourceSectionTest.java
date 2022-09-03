@@ -22,23 +22,31 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.*;
-import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
+import static com.oracle.truffle.api.dsl.test.TestHelper.createRoot;
+import static com.oracle.truffle.api.dsl.test.TestHelper.createRootPrefix;
+import static com.oracle.truffle.api.dsl.test.TestHelper.executeWith;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.sameInstance;
+import static org.junit.Assert.assertThat;
 
-import org.junit.*;
-import org.junit.experimental.theories.*;
-import org.junit.runner.*;
+import org.junit.Test;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
+import org.junit.runner.RunWith;
 
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
-import com.oracle.truffle.api.dsl.test.SourceSectionTestFactory.SourceSection0Factory;
-import com.oracle.truffle.api.dsl.test.SourceSectionTestFactory.SourceSection1Factory;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.CreateCast;
+import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.internal.SpecializationNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ArgumentNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 
 @RunWith(Theories.class)
 public class SourceSectionTest {
@@ -47,9 +55,9 @@ public class SourceSectionTest {
 
     @Theory
     public void testSourceSections(int value0, int value1, int value2) {
-        TestRootNode<SourceSection0> root = createRoot(SourceSection0Factory.getInstance());
-        SourceSection section = new NullSourceSection("a", "b");
-        root.getNode().assignSourceSection(section);
+        TestRootNode<MutableSourceSectionNode> root = createRoot(SourceSectionTestFactory.MutableSourceSectionNodeFactory.getInstance());
+        SourceSection section = Source.newBuilder("").name("a").mimeType("").build().createUnavailableSection();
+        root.getNode().changeSourceSection(section);
         expectSourceSection(root.getNode(), section);
         assertThat((int) executeWith(root, value0), is(value0));
         expectSourceSection(root.getNode(), section);
@@ -72,7 +80,21 @@ public class SourceSectionTest {
     }
 
     @NodeChild("a")
-    static class SourceSection0 extends ValueNode {
+    static class MutableSourceSectionNode extends ValueNode {
+        // BEGIN: MutableSourceSectionNode
+        @CompilerDirectives.CompilationFinal private SourceSection section;
+
+        final void changeSourceSection(SourceSection sourceSection) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            this.section = sourceSection;
+        }
+
+        @Override
+        public SourceSection getSourceSection() {
+            return section;
+        }
+
+        // END: MutableSourceSectionNode
 
         @Specialization(guards = "a == 1")
         int do1(int a) {
@@ -97,19 +119,28 @@ public class SourceSectionTest {
 
     @Test
     public void testCreateCast() {
-        SourceSection section = new NullSourceSection("a", "b");
-        TestRootNode<SourceSection1> root = createRootPrefix(SourceSection1Factory.getInstance(), true, section);
+        SourceSection section = Source.newBuilder("").name("a").mimeType("").build().createUnavailableSection();
+        TestRootNode<NodeWithFixedSourceSection> root = createRootPrefix(SourceSectionTestFactory.NodeWithFixedSourceSectionFactory.getInstance(), true, section);
         expectSourceSection(root.getNode(), section);
         assertThat((int) executeWith(root, 1), is(1));
         expectSourceSection(root.getNode(), section);
     }
 
     @NodeChild("a")
-    static class SourceSection1 extends ValueNode {
+    static class NodeWithFixedSourceSection extends ValueNode {
+        // BEGIN: NodeWithFixedSourceSection
+        private final SourceSection section;
 
-        public SourceSection1(SourceSection section) {
-            super(section);
+        NodeWithFixedSourceSection(SourceSection section) {
+            this.section = section;
         }
+
+        @Override
+        public SourceSection getSourceSection() {
+            return section;
+        }
+
+        // END: NodeWithFixedSourceSection
 
         @CreateCast("a")
         public ValueNode cast(ValueNode node) {
