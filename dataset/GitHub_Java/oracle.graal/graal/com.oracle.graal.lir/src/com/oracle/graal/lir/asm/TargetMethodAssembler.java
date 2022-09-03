@@ -33,7 +33,6 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.nodes.*;
 
 public class TargetMethodAssembler {
 
@@ -89,7 +88,7 @@ public class TargetMethodAssembler {
         compilationResult.addAnnotation(new CompilationResult.CodeComment(asm.codeBuffer.position(), s));
     }
 
-    public CompilationResult finishTargetMethod(StructuredGraph graph) {
+    public CompilationResult finishTargetMethod(Object name, boolean isStub) {
         // Install code, data and frame size
         compilationResult.setTargetCode(asm.codeBuffer.close(false), asm.codeBuffer.position());
 
@@ -114,11 +113,11 @@ public class TargetMethodAssembler {
 
             Debug.metric("TargetMethods").increment();
             Debug.metric("CodeBytesEmitted").add(compilationResult.getTargetCodeSize());
-            Debug.metric("InfopointsEmitted").add(compilationResult.getInfopoints().size());
+            Debug.metric("SafepointsEmitted").add(compilationResult.getInfopoints().size());
             Debug.metric("DataPatches").add(ldp.size());
             Debug.metric("ExceptionHandlersEmitted").add(compilationResult.getExceptionHandlers().size());
         }
-        Debug.log("Finished compiling %s", graph);
+        Debug.log("Finished target method %s, isStub %b", name, isStub);
         return compilationResult;
     }
 
