@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -53,17 +51,17 @@ public class NodeSourcePosition extends BytecodePosition {
      * Remove marker frames.
      */
     public NodeSourcePosition trim() {
-        assert marker == None : "must start a real method";
-        NodeSourcePosition lastMarker = null;
-        for (NodeSourcePosition current = this; current != null; current = current.getCaller()) {
-            if (current.marker != None) {
-                lastMarker = current;
-            }
+        if (marker != None) {
+            return null;
         }
-        if (lastMarker == null) {
-            return this;
+        NodeSourcePosition caller = getCaller();
+        if (caller != null) {
+            caller = caller.trim();
         }
-        return lastMarker.getCaller();
+        if (caller != getCaller()) {
+            return new NodeSourcePosition(caller, getMethod(), getBCI());
+        }
+        return this;
     }
 
     public ResolvedJavaMethod getRootMethod() {
@@ -124,19 +122,11 @@ public class NodeSourcePosition extends BytecodePosition {
     }
 
     public static NodeSourcePosition substitution(ResolvedJavaMethod method) {
-        return substitution(null, method, BytecodeFrame.INVALID_FRAMESTATE_BCI);
-    }
-
-    public static NodeSourcePosition substitution(ResolvedJavaMethod method, int bci) {
-        return substitution(null, method, bci);
+        return substitution(null, method);
     }
 
     public static NodeSourcePosition substitution(NodeSourcePosition caller, ResolvedJavaMethod method) {
-        return substitution(caller, method, BytecodeFrame.INVALID_FRAMESTATE_BCI);
-    }
-
-    public static NodeSourcePosition substitution(NodeSourcePosition caller, ResolvedJavaMethod method, int bci) {
-        return new NodeSourcePosition(caller, method, bci, Substitution);
+        return new NodeSourcePosition(caller, method, BytecodeFrame.INVALID_FRAMESTATE_BCI, Substitution);
     }
 
     public boolean isSubstitution() {
@@ -176,7 +166,7 @@ public class NodeSourcePosition extends BytecodePosition {
         return d;
     }
 
-    public SourceLanguagePosition getSourceLanguage() {
+    public SourceLanguagePosition getSourceLanauage() {
         return sourceLanguagePosition;
     }
 
@@ -203,10 +193,10 @@ public class NodeSourcePosition extends BytecodePosition {
                 return new NodeSourcePosition(newSourceLanguagePosition, link, getMethod(), 0);
             }
             assert link == null || isSubstitution || verifyCaller(this, link) : link;
-            assert !isSubstitution || marker == None;
-            return new NodeSourcePosition(newSourceLanguagePosition, link, getMethod(), getBCI(), isSubstitution ? Substitution : None);
+
+            return new NodeSourcePosition(newSourceLanguagePosition, link, getMethod(), getBCI());
         } else {
-            return new NodeSourcePosition(getCaller().addCaller(newSourceLanguagePosition, link, isSubstitution), getMethod(), getBCI(), marker);
+            return new NodeSourcePosition(getCaller().addCaller(newSourceLanguagePosition, link, isSubstitution), getMethod(), getBCI());
         }
     }
 
@@ -229,9 +219,6 @@ public class NodeSourcePosition extends BytecodePosition {
 
     private static void format(StringBuilder sb, NodeSourcePosition pos) {
         MetaUtil.appendLocation(sb.append("at "), pos.getMethod(), pos.getBCI());
-        if (pos.marker != None) {
-            sb.append(" " + pos.marker);
-        }
         if (SOURCE_POSITION_BYTECODES) {
             String disassembly = BytecodeDisassembler.disassembleOne(pos.getMethod(), pos.getBCI());
             if (disassembly != null && disassembly.length() > 0) {

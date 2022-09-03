@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -265,7 +263,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     static class NodeCreationStackTrace extends NodeStackTrace {
     }
 
-    public static class NodeInsertionStackTrace extends NodeStackTrace {
+    static class NodeInsertionStackTrace extends NodeStackTrace {
     }
 
     public Node(NodeClass<? extends Node> c) {
@@ -1023,7 +1021,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         }
         newNode.graph = into;
         newNode.id = INITIAL_ID;
-        if (getNodeSourcePosition() != null && (into == null || into.trackNodeSourcePosition())) {
+        if (getNodeSourcePosition() != null && (into == null || into.updateNodeSourcePosition())) {
             newNode.setNodeSourcePosition(getNodeSourcePosition());
         }
         if (into != null) {
@@ -1062,10 +1060,6 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         if (Options.VerifyGraalGraphEdges.getValue(getOptions())) {
             verifyEdges();
         }
-        return true;
-    }
-
-    public boolean verifySourcePosition() {
         return true;
     }
 
