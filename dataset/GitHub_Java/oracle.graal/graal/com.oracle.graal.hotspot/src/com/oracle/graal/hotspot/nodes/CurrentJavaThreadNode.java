@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,15 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.PlatformKind;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.hotspot.HotSpotLIRGenerator;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.word.Word;
-import com.oracle.graal.word.WordTypes;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 /**
  * Gets the address of the C++ JavaThread object for the current thread.
@@ -44,19 +39,21 @@ import com.oracle.graal.word.WordTypes;
 public final class CurrentJavaThreadNode extends FloatingNode implements LIRLowerable {
     public static final NodeClass<CurrentJavaThreadNode> TYPE = NodeClass.create(CurrentJavaThreadNode.class);
 
+    protected LIRKind wordKind;
+
     public CurrentJavaThreadNode(@InjectedNodeParameter WordTypes wordTypes) {
         this(wordTypes.getWordKind());
     }
 
-    public CurrentJavaThreadNode(JavaKind wordKind) {
+    public CurrentJavaThreadNode(Kind wordKind) {
         super(TYPE, StampFactory.forKind(wordKind));
+        this.wordKind = LIRKind.value(wordKind);
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         Register rawThread = ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).getProviders().getRegisters().getThreadRegister();
-        PlatformKind wordKind = gen.getLIRGeneratorTool().target().arch.getWordKind();
-        gen.setResult(this, rawThread.asValue(LIRKind.value(wordKind)));
+        gen.setResult(this, rawThread.asValue(wordKind));
     }
 
     @NodeIntrinsic
