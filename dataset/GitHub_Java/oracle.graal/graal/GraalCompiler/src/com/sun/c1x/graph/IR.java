@@ -24,7 +24,6 @@ package com.sun.c1x.graph;
 
 import java.util.*;
 
-import com.oracle.graal.graph.*;
 import com.oracle.max.graal.schedule.*;
 import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
@@ -63,7 +62,7 @@ public class IR {
         this.compilation = compilation;
     }
 
-    public Map<Node, LIRBlock> valueToBlock;
+    public Map<Value, LIRBlock> valueToBlock;
 
     /**
      * Builds the graph, optimizes it, and computes the linear scan block order.
@@ -117,9 +116,9 @@ public class IR {
 
         orderedBlocks = lirBlocks;
 
-        valueToBlock = new HashMap<Node, LIRBlock>();
+        valueToBlock = new HashMap<Value, LIRBlock>();
         for (LIRBlock b : orderedBlocks) {
-            for (Node i : b.getInstructions()) {
+            for (Instruction i : b.getInstructions()) {
                 valueToBlock.put(i, b);
             }
         }

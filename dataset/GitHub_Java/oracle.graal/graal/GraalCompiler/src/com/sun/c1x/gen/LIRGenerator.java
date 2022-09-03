@@ -239,7 +239,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                     }
                 }
             }
-            if (!(instr instanceof Merge)) {
+            if (!(instr instanceof BlockBegin)) {
                 walkState(instr, stateAfter);
                 doRoot(instr);
             }
@@ -400,7 +400,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
-    public void visitGoto(Anchor x) {
+    public void visitGoto(Goto x) {
         setNoResult(x);
 
         // emit phi-instruction moves after safepoint since this simplifies
@@ -853,7 +853,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (rangeDensity >= C1XOptions.RangeTestsSwitchDensity) {
                 visitSwitchRanges(switchRanges, tag, getLIRBlock(x.defaultSuccessor()));
             } else {
-                List<Instruction> nonDefaultSuccessors = x.blockSuccessors().subList(0, x.numberOfCases());
+                List<BlockBegin> nonDefaultSuccessors = x.blockSuccessors().subList(0, x.numberOfCases());
                 LIRBlock[] targets = new LIRBlock[nonDefaultSuccessors.size()];
                 for (int i = 0; i < nonDefaultSuccessors.size(); ++i) {
                     targets[i] = getLIRBlock(nonDefaultSuccessors.get(i));
@@ -1290,7 +1290,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     private List<Phi> getPhis(LIRBlock block) {
         if (block.getInstructions().size() > 0) {
             Instruction i = block.getInstructions().get(0);
-            if (i instanceof Merge) {
+            if (i instanceof BlockBegin) {
                 List<Phi> result = new ArrayList<Phi>();
                 for (Node n : i.usages()) {
                     if (n instanceof Phi) {
