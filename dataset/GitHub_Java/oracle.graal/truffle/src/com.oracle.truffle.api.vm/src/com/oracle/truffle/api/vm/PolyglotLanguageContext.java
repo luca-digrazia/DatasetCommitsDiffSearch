@@ -151,9 +151,6 @@ final class PolyglotLanguageContext implements VMObject {
         assert Thread.holdsLock(context);
         Env localEnv = this.env;
         if (localEnv != null) {
-            if (!activePolyglotThreads.isEmpty()) {
-                throw new AssertionError("The language did not complete all polyglot threads but should have: " + activePolyglotThreads);
-            }
             for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
                 assert threadInfo.thread != null;
                 if (threadInfo.isPolyglotThread(context)) {
@@ -399,7 +396,7 @@ final class PolyglotLanguageContext implements VMObject {
                     toGuestValue[i] = createToGuestValue();
                 }
             }
-            if (cachedLength == 0) {
+            if (args.length == 0) {
                 return args;
             } else if (cachedLength == args.length) {
                 // fast path
