@@ -77,9 +77,6 @@ public class LLVMFunctionRegistry {
     public LLVMFunctionRegistry(LLVMOptimizationConfiguration optimizationConfig, NodeFactoryFacade facade) {
         this.facade = facade;
         this.intrinsics = facade.getFunctionSubstitutionFactories(optimizationConfig);
-        functionPtrCallTargetMap = new RootCallTarget[FUNCTION_START_INDEX + intrinsics.size()];
-        registerIntrinsics();
-
     }
 
     /**
@@ -101,21 +98,11 @@ public class LLVMFunctionRegistry {
 
     public void register(Map<LLVMFunctionDescriptor, RootCallTarget> functionCallTargets) {
         CompilerAsserts.neverPartOfCompilation();
-        int maxFunctionIndex = Math.max(maxIndex(functionCallTargets) + 1, functionPtrCallTargetMap.length);
-        RootCallTarget[] newFunctionPtrCallTargetMap = new RootCallTarget[maxFunctionIndex];
-        System.arraycopy(functionPtrCallTargetMap, 0, newFunctionPtrCallTargetMap, 0, functionPtrCallTargetMap.length);
+        functionPtrCallTargetMap = new RootCallTarget[FUNCTION_START_INDEX + functionDescriptors.length + intrinsics.size()];
+        registerIntrinsics();
         for (LLVMFunctionDescriptor func : functionCallTargets.keySet()) {
-            newFunctionPtrCallTargetMap[func.getFunctionIndex()] = functionCallTargets.get(func);
+            functionPtrCallTargetMap[func.getFunctionIndex()] = functionCallTargets.get(func);
         }
-        functionPtrCallTargetMap = newFunctionPtrCallTargetMap;
-    }
-
-    private static int maxIndex(Map<LLVMFunctionDescriptor, RootCallTarget> functionCallTargets) {
-        int maxIndex = 0;
-        for (LLVMFunctionDescriptor descr : functionCallTargets.keySet()) {
-            maxIndex = Math.max(maxIndex, descr.getFunctionIndex());
-        }
-        return maxIndex;
     }
 
     private void registerIntrinsics() {
