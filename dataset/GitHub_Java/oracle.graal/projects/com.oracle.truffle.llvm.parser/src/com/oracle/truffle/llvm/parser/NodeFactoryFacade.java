@@ -133,7 +133,7 @@ public interface NodeFactoryFacade {
 
     LLVMExpressionNode createExtractValue(LLVMBaseType type, LLVMExpressionNode targetAddress);
 
-    LLVMExpressionNode createGetElementPtr(LLVMBaseType indexType, LLVMExpressionNode currentAddress, LLVMExpressionNode index, int indexedTypeLength);
+    LLVMExpressionNode createGetElementPtr(LLVMBaseType llvmBaseType, LLVMExpressionNode currentAddress, LLVMExpressionNode valueRef, int indexedTypeLength);
 
     Class<?> getJavaClass(LLVMExpressionNode llvmExpressionNode);
 
@@ -189,6 +189,8 @@ public interface NodeFactoryFacade {
     LLVMExpressionNode createZeroNode(LLVMExpressionNode addressNode, int size);
 
     LLVMExpressionNode createEmptyStructLiteralNode(LLVMExpressionNode alloca, int byteSize);
+
+    LLVMExpressionNode createGetElementPtr(LLVMExpressionNode currentAddress, LLVMExpressionNode oneValueNode, int currentOffset);
 
     /**
      * Creates the global root (e.g., the main function in C).

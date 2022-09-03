@@ -258,6 +258,11 @@ public class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
+    public LLVMExpressionNode createGetElementPtr(LLVMExpressionNode currentAddress, LLVMExpressionNode oneValueNode, int currentOffset) {
+        return null;
+    }
+
+    @Override
     public RootNode createGlobalRootNode(RootCallTarget mainCallTarget, Object[] args, Source sourceFile, LLVMRuntimeType[] mainTypes) {
         return null;
     }
