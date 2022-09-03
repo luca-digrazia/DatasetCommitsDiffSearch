@@ -24,6 +24,8 @@ package com.oracle.graal.replacements.nodes;
 
 import static java.lang.reflect.Modifier.*;
 
+import java.lang.reflect.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -45,7 +47,6 @@ public class MacroNode extends AbstractMemoryCheckpoint implements Lowerable, Me
     private final int bci;
     private final ResolvedJavaMethod targetMethod;
     private final JavaType returnType;
-    private final InvokeKind invokeKind;
 
     protected MacroNode(Invoke invoke) {
         super(invoke.asNode().stamp(), invoke.stateAfter());
@@ -54,7 +55,6 @@ public class MacroNode extends AbstractMemoryCheckpoint implements Lowerable, Me
         this.bci = invoke.bci();
         this.targetMethod = methodCallTarget.targetMethod();
         this.returnType = methodCallTarget.returnType();
-        this.invokeKind = methodCallTarget.invokeKind();
     }
 
     public int getBci() {
@@ -148,21 +148,17 @@ public class MacroNode extends AbstractMemoryCheckpoint implements Lowerable, Me
         }
     }
 
-    protected InvokeNode replaceWithInvoke() {
+    private InvokeNode replaceWithInvoke() {
         InvokeNode invoke = createInvoke();
         graph().replaceFixedWithFixed(this, invoke);
         return invoke;
     }
 
     protected InvokeNode createInvoke() {
+        InvokeKind invokeKind = Modifier.isStatic(targetMethod.getModifiers()) ? InvokeKind.Static : InvokeKind.Special;
         MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(invokeKind, targetMethod, arguments.toArray(new ValueNode[arguments.size()]), returnType));
         InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci));
-        if (stateAfter() != null) {
-            invoke.setStateAfter(stateAfter().duplicate());
-            if (kind() != Kind.Void) {
-                invoke.stateAfter().replaceFirstInput(this, invoke);
-            }
-        }
+        invoke.setStateAfter(stateAfter());
         return invoke;
     }
 
