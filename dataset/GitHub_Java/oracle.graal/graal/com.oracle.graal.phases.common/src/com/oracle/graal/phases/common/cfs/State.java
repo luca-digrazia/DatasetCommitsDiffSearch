@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.phases.common.cfs;
 
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
+
 import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -115,20 +116,20 @@ public final class State extends MergeableState<State> implements Cloneable {
     Map<LogicNode, GuardingNode> falseFacts;
 
     public State() {
-        this.typeRefinements = Node.newIdentityMap();
-        this.trueFacts = Node.newIdentityMap();
-        this.falseFacts = Node.newIdentityMap();
+        this.typeRefinements = newNodeIdentityMap();
+        this.trueFacts = newNodeIdentityMap();
+        this.falseFacts = newNodeIdentityMap();
     }
 
     public State(State other) {
         this.isUnreachable = other.isUnreachable;
         this.versionNr = other.versionNr;
-        this.typeRefinements = Node.newIdentityMap();
+        this.typeRefinements = newNodeIdentityMap();
         for (Map.Entry<ValueNode, Witness> entry : other.typeRefinements.entrySet()) {
             this.typeRefinements.put(entry.getKey(), new Witness(entry.getValue()));
         }
-        this.trueFacts = Node.newIdentityMap(other.trueFacts);
-        this.falseFacts = Node.newIdentityMap(other.falseFacts);
+        this.trueFacts = newNodeIdentityMap(other.trueFacts);
+        this.falseFacts = newNodeIdentityMap(other.falseFacts);
     }
 
     public boolean repOK() {
@@ -154,7 +155,7 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     private Map<ValueNode, Witness> mergeKnownTypes(MergeNode merge, ArrayList<State> withReachableStates) {
-        Map<ValueNode, Witness> newKnownTypes = Node.newIdentityMap();
+        Map<ValueNode, Witness> newKnownTypes = newNodeIdentityMap();
 
         for (Map.Entry<ValueNode, Witness> entry : typeRefinements.entrySet()) {
             ValueNode node = entry.getKey();
@@ -278,7 +279,7 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     private Map<LogicNode, GuardingNode> mergeTrueFacts(ArrayList<State> withReachableStates, GuardingNode merge) {
-        Map<LogicNode, GuardingNode> newTrueConditions = Node.newIdentityMap();
+        Map<LogicNode, GuardingNode> newTrueConditions = newNodeIdentityMap();
         for (Map.Entry<LogicNode, GuardingNode> entry : trueFacts.entrySet()) {
             LogicNode check = entry.getKey();
             GuardingNode guard = entry.getValue();
@@ -301,7 +302,7 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     private Map<LogicNode, GuardingNode> mergeFalseFacts(ArrayList<State> withReachableStates, GuardingNode merge) {
-        Map<LogicNode, GuardingNode> newFalseConditions = Node.newIdentityMap();
+        Map<LogicNode, GuardingNode> newFalseConditions = newNodeIdentityMap();
         for (Map.Entry<LogicNode, GuardingNode> entry : falseFacts.entrySet()) {
             LogicNode check = entry.getKey();
             GuardingNode guard = entry.getValue();
@@ -453,9 +454,6 @@ public final class State extends MergeableState<State> implements Cloneable {
 
     // @formatter:off
     /**
-     * Determines if the first argument is known not to conform to the second argument.
-     *
-     * <pre>
      *   \   |     |     |     |
      *    \ b|     |     |     |
      *   a \ |     |     |     |
@@ -474,7 +472,7 @@ public final class State extends MergeableState<State> implements Cloneable {
      *    iface: interface
      *    final: exact non-interface reference-type
      *    non-f: non-exact non-interface reference-type
-     * </pre>
+     *
      * @return true iff the first argument is known not to conform to the second argument.
      */
     // @formatter:on
@@ -629,7 +627,7 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     /**
-     * Ideas for the future.
+     * Ideas for the future:
      * <ul>
      * <li>track inferred less-than edges from (accumulated) CompareNode-s</li>
      * <li>track set-representative for equality classes determined by (chained) IntegerTestNode</li>
@@ -908,7 +906,7 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     /**
-     * Utility method for {@link #outcome(boolean, com.oracle.graal.nodes.LogicNode)}.
+     * Utility method for {@link #outcome(boolean, com.oracle.graal.nodes.LogicNode)}
      */
     private Evidence outcomeIsNullNode(boolean isTrue, IsNullNode isNullNode) {
         if (isTrue) {
@@ -935,7 +933,7 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     /**
-     * Utility method for {@link #outcome(boolean, com.oracle.graal.nodes.LogicNode)}.
+     * Utility method for {@link #outcome(boolean, com.oracle.graal.nodes.LogicNode)}
      */
     private Evidence outcomeInstanceOfNode(boolean isTrue, InstanceOfNode iOf) {
         final Witness w = typeInfo(iOf.getValue());
@@ -975,7 +973,7 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     /**
-     * Utility method for {@link #outcome(boolean, com.oracle.graal.nodes.LogicNode)}.
+     * Utility method for {@link #outcome(boolean, com.oracle.graal.nodes.LogicNode)}
      */
     private Evidence outcomeShortCircuitOrNode(boolean isTrue, ShortCircuitOrNode orNode) {
         if (!isTrue) {

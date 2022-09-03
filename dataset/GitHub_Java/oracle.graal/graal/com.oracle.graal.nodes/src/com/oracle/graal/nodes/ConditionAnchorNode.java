@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(nameTemplate = "ConditionAnchor(!={p#negated})", allowedUsageTypes = {InputType.Guard})
-public class ConditionAnchorNode extends FixedWithNextNode implements Canonicalizable.Unary<Node>, Lowerable, GuardingNode {
+public final class ConditionAnchorNode extends FixedWithNextNode implements Canonicalizable, Lowerable, GuardingNode {
 
     @Input(InputType.Condition) private LogicNode condition;
     private boolean negated;
@@ -48,6 +48,11 @@ public class ConditionAnchorNode extends FixedWithNextNode implements Canonicali
         return condition;
     }
 
+    private void setCondition(LogicNode x) {
+        updateUsages(condition, x);
+        condition = x;
+    }
+
     public boolean isNegated() {
         return negated;
     }
@@ -61,19 +66,24 @@ public class ConditionAnchorNode extends FixedWithNextNode implements Canonicali
         }
     }
 
-    public Node canonical(CanonicalizerTool tool, Node forValue) {
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
         if (condition instanceof LogicNegationNode) {
             LogicNegationNode negation = (LogicNegationNode) condition;
-            return new ConditionAnchorNode(negation.getValue(), !negated);
+            setCondition(negation.getValue());
+            negated = !negated;
         }
+
         if (condition instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition;
             if (c.getValue() != negated) {
+                this.replaceAtUsages(null);
                 return null;
             } else {
-                return new ValueAnchorNode(null);
+                return graph().add(new ValueAnchorNode(null));
             }
         }
+
         return this;
     }
 
@@ -83,9 +93,5 @@ public class ConditionAnchorNode extends FixedWithNextNode implements Canonicali
             ValueAnchorNode newAnchor = graph().add(new ValueAnchorNode(null));
             graph().replaceFixedWithFixed(this, newAnchor);
         }
-    }
-
-    public Node getValue() {
-        return condition;
     }
 }

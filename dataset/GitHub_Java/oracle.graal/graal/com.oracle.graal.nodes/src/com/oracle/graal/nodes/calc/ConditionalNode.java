@@ -37,8 +37,7 @@ import com.oracle.graal.nodes.spi.*;
  * The {@code ConditionalNode} class represents a comparison that yields one of two values. Note
  * that these nodes are not built directly from the bytecode but are introduced by canonicalization.
  */
-@NodeInfo
-public class ConditionalNode extends FloatingNode implements Canonicalizable, LIRLowerable {
+public final class ConditionalNode extends FloatingNode implements Canonicalizable, LIRLowerable {
 
     @Input(InputType.Condition) private LogicNode condition;
     @Input private ValueNode trueValue;
@@ -77,7 +76,7 @@ public class ConditionalNode extends FloatingNode implements Canonicalizable, LI
     public ValueNode canonical(CanonicalizerTool tool) {
         if (condition instanceof LogicNegationNode) {
             LogicNegationNode negated = (LogicNegationNode) condition;
-            return new ConditionalNode(negated.getValue(), falseValue(), trueValue());
+            return graph().unique(new ConditionalNode(negated.getValue(), falseValue(), trueValue()));
         }
 
         // this optimizes the case where a value that can only be 0 or 1 is materialized to 0 or 1

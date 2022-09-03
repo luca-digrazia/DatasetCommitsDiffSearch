@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,7 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 
-public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, Canonicalizable.Binary<LogicNode> {
+public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, Canonicalizable {
 
     @Input(InputType.Condition) private LogicNode x;
     @Input(InputType.Condition) private LogicNode y;
@@ -65,40 +65,36 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
         return shortCircuitProbability;
     }
 
-    protected ShortCircuitOrNode canonicalizeNegation(LogicNode forX, LogicNode forY) {
-        LogicNode xCond = forX;
+    protected ShortCircuitOrNode canonicalizeNegation() {
+        LogicNode xCond = x;
         boolean xNeg = xNegated;
         while (xCond instanceof LogicNegationNode) {
             xCond = ((LogicNegationNode) xCond).getValue();
             xNeg = !xNeg;
         }
 
-        LogicNode yCond = forY;
+        LogicNode yCond = y;
         boolean yNeg = yNegated;
         while (yCond instanceof LogicNegationNode) {
             yCond = ((LogicNegationNode) yCond).getValue();
             yNeg = !yNeg;
         }
 
-        if (xCond != forX || yCond != forY) {
-            return new ShortCircuitOrNode(xCond, xNeg, yCond, yNeg, shortCircuitProbability);
+        if (xCond != x || yCond != y) {
+            return graph().unique(new ShortCircuitOrNode(xCond, xNeg, yCond, yNeg, shortCircuitProbability));
         } else {
-            return this;
+            return null;
         }
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        return canonical(tool, getX(), getY());
-    }
-
-    public LogicNode canonical(CanonicalizerTool tool, LogicNode forX, LogicNode forY) {
-        ShortCircuitOrNode ret = canonicalizeNegation(forX, forY);
-        if (ret != this) {
+        ShortCircuitOrNode ret = canonicalizeNegation();
+        if (ret != null) {
             return ret;
         }
 
-        if (forX == forY) {
+        if (getX() == getY()) {
             // @formatter:off
             //  a ||  a = a
             //  a || !a = true
@@ -108,40 +104,40 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
             if (isXNegated()) {
                 if (isYNegated()) {
                     // !a || !a = !a
-                    return new LogicNegationNode(forX);
+                    return graph().unique(new LogicNegationNode(getX()));
                 } else {
                     // !a || a = true
-                    return LogicConstantNode.tautology();
+                    return LogicConstantNode.tautology(graph());
                 }
             } else {
                 if (isYNegated()) {
                     // a || !a = true
-                    return LogicConstantNode.tautology();
+                    return LogicConstantNode.tautology(graph());
                 } else {
                     // a || a = a
-                    return forX;
+                    return getX();
                 }
             }
         }
-        if (forX instanceof LogicConstantNode) {
-            if (((LogicConstantNode) forX).getValue() ^ isXNegated()) {
-                return LogicConstantNode.tautology();
+        if (getX() instanceof LogicConstantNode) {
+            if (((LogicConstantNode) getX()).getValue() ^ isXNegated()) {
+                return LogicConstantNode.tautology(graph());
             } else {
                 if (isYNegated()) {
-                    return new LogicNegationNode(forY);
+                    return graph().unique(new LogicNegationNode(getY()));
                 } else {
-                    return forY;
+                    return getY();
                 }
             }
         }
-        if (forY instanceof LogicConstantNode) {
-            if (((LogicConstantNode) forY).getValue() ^ isYNegated()) {
-                return LogicConstantNode.tautology();
+        if (getY() instanceof LogicConstantNode) {
+            if (((LogicConstantNode) getY()).getValue() ^ isYNegated()) {
+                return LogicConstantNode.tautology(graph());
             } else {
                 if (isXNegated()) {
-                    return new LogicNegationNode(forX);
+                    return graph().unique(new LogicNegationNode(getX()));
                 } else {
-                    return forX;
+                    return getX();
                 }
             }
         }
