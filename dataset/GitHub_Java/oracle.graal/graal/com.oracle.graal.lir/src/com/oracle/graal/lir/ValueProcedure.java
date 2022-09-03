@@ -31,8 +31,7 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
 /**
  * Similar to {@link InstructionValueProcedure} but without an {@link LIRInstruction} parameter.
  */
-@FunctionalInterface
-public interface ValueProcedure {
+public abstract class ValueProcedure extends InstructionValueProcedure {
 
     /**
      * Iterator method to be overwritten.
@@ -42,5 +41,10 @@ public interface ValueProcedure {
      * @param flags A set of flags for the value.
      * @return The new value to replace the value that was passed in.
      */
-    Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags);
+    public abstract Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags);
+
+    @Override
+    public final Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+        return doValue(value, mode, flags);
+    }
 }
