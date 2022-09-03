@@ -33,7 +33,7 @@ import com.oracle.truffle.api.Truffle;
 final class ContextThreadLocal extends ThreadLocal<Object> {
 
     private final Assumption singleThread = Truffle.getRuntime().createAssumption("constant context store");
-    private PolyglotContextImpl firstContext;
+    private Object firstContext;
     @CompilationFinal private volatile Thread firstThread;
 
     @Override
@@ -83,7 +83,7 @@ final class ContextThreadLocal extends ThreadLocal<Object> {
             Object prev;
             if (Thread.currentThread() == firstThread) {
                 prev = this.firstContext;
-                this.firstContext = (PolyglotContextImpl) value;
+                this.firstContext = value;
             } else {
                 CompilerDirectives.transferToInterpreter();
                 prev = setReturnParentSlowPath(value);
@@ -141,11 +141,11 @@ final class ContextThreadLocal extends ThreadLocal<Object> {
         Thread storeThread = firstThread;
         Object prev = this.firstContext;
         if (currentThread == storeThread) {
-            this.firstContext = (PolyglotContextImpl) context;
+            this.firstContext = context;
         } else {
             if (storeThread == null) {
                 this.firstThread = currentThread;
-                this.firstContext = (PolyglotContextImpl) context;
+                this.firstContext = context;
             } else {
                 singleThread.invalidate();
                 return setTLReturnParent(context);
