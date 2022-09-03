@@ -23,21 +23,20 @@
 package com.oracle.graal.graph.iterators;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.NodePredicates.*;
 
 public interface NodePredicate {
 
     boolean apply(Node n);
 
     default NodePredicate and(NodePredicate np) {
-        return new AndPredicate(this, np);
+        return NodePredicates.and(this, np);
     }
 
     default NodePredicate or(NodePredicate np) {
-        return new OrPredicate(this, np);
+        return NodePredicates.or(this, np);
     }
 
     default NodePredicate negate() {
-        return new NotPredicate(this);
+        return NodePredicates.not(this);
     }
 }
