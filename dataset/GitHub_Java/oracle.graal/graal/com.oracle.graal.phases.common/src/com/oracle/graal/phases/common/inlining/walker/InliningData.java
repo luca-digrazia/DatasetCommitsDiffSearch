@@ -379,17 +379,17 @@ public class InliningData {
      * @return true iff inlining was actually performed
      */
     private boolean tryToInline(CallsiteHolder callerCallsiteHolder, MethodInvocation calleeInvocation, MethodInvocation parentInvocation, int inliningDepth) {
-        InlineInfo calleeInfo = calleeInvocation.callee();
+        InlineInfo callee = calleeInvocation.callee();
         Assumptions callerAssumptions = parentInvocation.assumptions();
         metricInliningConsidered.increment();
 
-        if (inliningPolicy.isWorthInlining(probabilities, context.getReplacements(), calleeInfo, inliningDepth, calleeInvocation.probability(), calleeInvocation.relevance(), true)) {
+        if (inliningPolicy.isWorthInlining(probabilities, context.getReplacements(), callee, inliningDepth, calleeInvocation.probability(), calleeInvocation.relevance(), true)) {
             doInline(callerCallsiteHolder, calleeInvocation, callerAssumptions);
             return true;
         }
 
         if (context.getOptimisticOptimizations().devirtualizeInvokes()) {
-            calleeInfo.tryToDevirtualizeInvoke(context.getMetaAccess(), callerAssumptions);
+            callee.tryToDevirtualizeInvoke(context.getMetaAccess(), callerAssumptions);
         }
 
         return false;
