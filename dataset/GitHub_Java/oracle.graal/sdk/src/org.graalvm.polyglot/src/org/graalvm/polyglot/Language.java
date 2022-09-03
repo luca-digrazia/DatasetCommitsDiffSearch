@@ -99,7 +99,6 @@ public final class Language {
 
     /**
      * Returns <code>true</code> if this language object represents the Java host language.
-     * 
      * @since 1.0
      */
     public boolean isHost() {
