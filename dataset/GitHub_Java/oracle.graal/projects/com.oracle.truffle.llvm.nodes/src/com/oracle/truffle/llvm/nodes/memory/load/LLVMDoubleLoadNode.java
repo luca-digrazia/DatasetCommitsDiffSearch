@@ -33,14 +33,14 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.profiles.DoubleValueProfile;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadDoubleNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public abstract class LLVMDoubleLoadNode extends LLVMAbstractLoadNode {
 
@@ -59,12 +59,12 @@ public abstract class LLVMDoubleLoadNode extends LLVMAbstractLoadNode {
     }
 
     @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected double doDoubleNative(LLVMNativePointer addr) {
+    protected double doDouble(LLVMAddress addr) {
         return profile.profile(getLLVMMemoryCached().getDouble(addr));
     }
 
     @Specialization(guards = "isAutoDerefHandle(addr)")
-    protected double doDoubleDerefHandle(LLVMNativePointer addr) {
+    protected double doDoubleDerefHandle(LLVMAddress addr) {
         return doDoubleManaged(getDerefHandleGetReceiverNode().execute(addr));
     }
 
@@ -73,8 +73,13 @@ public abstract class LLVMDoubleLoadNode extends LLVMAbstractLoadNode {
         return new LLVMForeignReadNode(ForeignToLLVMType.DOUBLE);
     }
 
-    @Specialization
-    protected double doDoubleManaged(LLVMManagedPointer addr) {
+    @Specialization(guards = "addr.isNative()")
+    protected double doDoubleNative(LLVMTruffleObject addr) {
+        return doDouble(addr.asNative());
+    }
+
+    @Specialization(guards = "addr.isManaged()")
+    protected double doDoubleManaged(LLVMTruffleObject addr) {
         return (double) getForeignReadNode().execute(addr);
     }
 

@@ -99,7 +99,7 @@ public abstract class LLVMAddressStoreNode extends LLVMStoreNodeCommon {
 
     @Specialization(guards = "address.isManaged()")
     protected Object doTruffleObject(LLVMTruffleObject address, Object value) {
-        getForeignWriteNode().execute(address, value);
+        getForeignReadNode().execute(address, value);
         return null;
     }
 }

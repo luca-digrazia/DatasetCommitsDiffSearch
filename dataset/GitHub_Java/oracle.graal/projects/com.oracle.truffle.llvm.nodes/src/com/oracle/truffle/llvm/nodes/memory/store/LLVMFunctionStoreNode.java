@@ -75,7 +75,7 @@ public abstract class LLVMFunctionStoreNode extends LLVMStoreNodeCommon {
 
     @Specialization(guards = "address.isManaged()")
     protected Object doOpManaged(LLVMTruffleObject address, Object value) {
-        getForeignWriteNode().execute(address, value);
+        getForeignReadNode().execute(address, value);
         return null;
     }
 }
