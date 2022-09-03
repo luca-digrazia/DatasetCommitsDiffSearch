@@ -112,14 +112,6 @@ public interface TruffleRuntime {
     MaterializedFrame createMaterializedFrame(Object[] arguments, FrameDescriptor frameDescriptor);
 
     /**
-     * Creates an object which allows you to test for support of and set options specific for this
-     * runtime.
-     *
-     * @return the newly created compiler options object
-     */
-    CompilerOptions createCompilerOptions();
-
-    /**
      * Accesses the current stack, i.e., the contents of the {@link Frame}s and the associated
      * {@link CallTarget}s. Iteration starts at the caller frame, i.e., it does not include the
      * current frame.
@@ -145,14 +137,6 @@ public interface TruffleRuntime {
      * important to note that this {@link FrameInstance} supports only slow path access.
      */
     FrameInstance getCurrentFrame();
-
-    /**
-     * Requests a capability from the runtime.
-     *
-     * @param capability the type of the interface representing the capability
-     * @return an implementation of the capability or {@code null} if the runtime does not offer it
-     */
-    <T> T getCapability(Class<T> capability);
 
     /**
      * Returns a list of all still referenced {@link RootCallTarget} instances that were created

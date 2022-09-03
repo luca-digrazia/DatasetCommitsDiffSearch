@@ -56,13 +56,13 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
 
     @Override
     public RootCallTarget createCallTarget(RootNode rootNode) {
-        DefaultCallTarget target = new DefaultCallTarget(rootNode);
+        DefaultCallTarget target = new DefaultCallTarget(rootNode, this);
         callTargets.put(target, null);
         return target;
     }
 
     public DirectCallNode createDirectCallNode(CallTarget target) {
-        return new DefaultDirectCallNode(target);
+        return new DefaultDirectCallNode(target, this);
     }
 
     public IndirectCallNode createIndirectCallNode() {
