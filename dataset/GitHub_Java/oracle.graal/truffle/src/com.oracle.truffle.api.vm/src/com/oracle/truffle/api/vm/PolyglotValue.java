@@ -1055,13 +1055,15 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
         @Override
         public boolean isHostObject(Object receiver) {
-            return isJava;
+            return isProxy || isJava;
         }
 
         @Override
         public Object asHostObject(Object receiver) {
             TruffleObject castReceiver = (TruffleObject) receiver;
-            if (isJava) {
+            if (isProxy) {
+                return PolyglotProxy.toProxyHostObject(castReceiver);
+            } else if (isJava) {
                 return JavaInterop.asJavaObject(castReceiver);
             } else {
                 return super.asHostObject(receiver);
