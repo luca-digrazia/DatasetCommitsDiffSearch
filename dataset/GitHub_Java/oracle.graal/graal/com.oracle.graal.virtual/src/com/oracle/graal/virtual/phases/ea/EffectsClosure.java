@@ -22,44 +22,23 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.nodes.extended.BoxNode;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.nodes.virtual.AllocatedObjectNode;
-import com.oracle.graal.nodes.virtual.CommitAllocationNode;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.phases.graph.ReentrantBlockIterator;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
 import com.oracle.graal.phases.graph.ReentrantBlockIterator.LoopInfo;
-import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.phases.schedule.*;
 
 public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> extends EffectsPhase.Closure<BlockT> {
 
@@ -180,7 +159,6 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                 if (node instanceof LoopExitNode) {
                     LoopExitNode loopExit = (LoopExitNode) node;
                     for (ProxyNode proxy : loopExit.proxies()) {
-                        aliases.set(proxy, null);
                         changed |= processNode(proxy, state, effects, lastFixedNode) && isSignificantNode(node);
                     }
                     processLoopExit(loopExit, loopEntryStates.get(loopExit.loopBegin()), state, blockEffects.get(block));
@@ -265,7 +243,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                 }
             }
         }
-        throw new JVMCIError("too many iterations at %s", loop);
+        throw new GraalInternalError("too many iterations at %s", loop);
     }
 
     @SuppressWarnings("unused")

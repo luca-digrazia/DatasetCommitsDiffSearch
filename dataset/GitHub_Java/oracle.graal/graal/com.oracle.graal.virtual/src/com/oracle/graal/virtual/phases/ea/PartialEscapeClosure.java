@@ -136,21 +136,15 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         FixedNode nextFixedNode = lastFixedNode == null ? null : lastFixedNode.next();
         VirtualUtil.trace("%s", node);
 
-        if (requiresProcessing(node)) {
-            if (processVirtualizable((ValueNode) node, nextFixedNode, state, effects) == false) {
-                return false;
-            }
-            if (tool.isDeleted()) {
+        if (node instanceof VirtualizableAllocation) {
+            if (processVirtualizable((ValueNode) node, nextFixedNode, state, effects)) {
                 VirtualUtil.trace("deleted virtualizable allocation %s", node);
                 return true;
             }
         }
         if (hasVirtualInputs.isMarked(node) && node instanceof ValueNode) {
             if (node instanceof Virtualizable) {
-                if (processVirtualizable((ValueNode) node, nextFixedNode, state, effects) == false) {
-                    return false;
-                }
-                if (tool.isDeleted()) {
+                if (processVirtualizable((ValueNode) node, nextFixedNode, state, effects)) {
                     VirtualUtil.trace("deleted virtualizable node %s", node);
                     return true;
                 }
@@ -164,10 +158,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
         }
         return false;
-    }
-
-    protected boolean requiresProcessing(Node node) {
-        return node instanceof VirtualizableAllocation;
     }
 
     private boolean processNodeWithScalarReplacedInputs(ValueNode node, FixedNode insertBefore, BlockT state, GraphEffectList effects) {
@@ -275,12 +265,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     private boolean processVirtualizable(ValueNode node, FixedNode insertBefore, BlockT state, GraphEffectList effects) {
         tool.reset(state, node, insertBefore, effects);
-        return virtualize(node, tool);
-    }
-
-    protected boolean virtualize(ValueNode node, VirtualizerTool vt) {
-        ((Virtualizable) node).virtualize(vt);
-        return true; // request further processing
+        ((Virtualizable) node).virtualize(tool);
+        return tool.isDeleted();
     }
 
     private void processNodeWithState(NodeWithState nodeWithState, BlockT state, GraphEffectList effects) {

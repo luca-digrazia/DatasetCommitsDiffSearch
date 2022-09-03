@@ -22,18 +22,12 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.meta.LocationIdentity;
-
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.virtual.AllocatedObjectNode;
-import com.oracle.graal.nodes.virtual.VirtualInstanceNode;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.virtual.*;
 
 public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadEliminationBlockState> {
 
@@ -45,7 +39,7 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
         public final ValueNode object;
         public final int index;
 
-        ReadCacheEntry(LocationIdentity identity, ValueNode object, int index) {
+        public ReadCacheEntry(LocationIdentity identity, ValueNode object, int index) {
             this.identity = identity;
             this.object = object;
             this.index = index;
