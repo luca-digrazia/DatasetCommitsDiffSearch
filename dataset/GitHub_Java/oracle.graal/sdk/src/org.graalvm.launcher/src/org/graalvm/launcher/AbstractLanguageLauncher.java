@@ -76,9 +76,9 @@ public abstract class AbstractLanguageLauncher extends Launcher {
 
         List<String> unrecognizedArgs = preprocessArguments(args, polyglotOptions);
 
-        if (isAOT() && doNativeSetup) {
+        if (isAOT() && doNativeSetup && IN_GRAALVM) {
             assert nativeAccess != null;
-            nativeAccess.maybeExec(args, false, polyglotOptions, getDefaultVMType(), IN_GRAALVM);
+            nativeAccess.maybeExec(args, false, polyglotOptions, getDefaultVMType());
         }
 
         for (String arg : unrecognizedArgs) {
