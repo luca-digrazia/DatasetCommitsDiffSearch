@@ -28,7 +28,6 @@ import static org.graalvm.compiler.core.common.GraalOptions.MinimumPeelProbabili
 
 import java.util.List;
 
-import org.graalvm.compiler.core.common.util.UnsignedLong;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
@@ -90,14 +89,11 @@ public class DefaultLoopPolicies implements LoopPolicies {
         }
         OptionValues options = loop.entryPoint().getOptions();
         CountedLoopInfo counted = loop.counted();
-        UnsignedLong maxTrips = counted.constantMaxTripCount();
-        if (maxTrips.equals(0)) {
-            return loop.canDuplicateLoop();
-        }
+        long maxTrips = counted.constantMaxTripCount();
         int maxNodes = (counted.isExactTripCount() && counted.isConstantExactTripCount()) ? Options.ExactFullUnrollMaxNodes.getValue(options) : Options.FullUnrollMaxNodes.getValue(options);
         maxNodes = Math.min(maxNodes, Math.max(0, MaximumDesiredSize.getValue(options) - loop.loopBegin().graph().getNodeCount()));
         int size = Math.max(1, loop.size() - 1 - loop.loopBegin().phis().count());
-        if (maxTrips.isLessOrEqualTo(Options.FullUnrollMaxIterations.getValue(options)) && maxTrips.minus(1).times(size).isLessOrEqualTo(maxNodes)) {
+        if (maxTrips <= Options.FullUnrollMaxIterations.getValue(options) && size * (maxTrips - 1) <= maxNodes) {
             // check whether we're allowed to unroll this loop
             return loop.canDuplicateLoop();
         } else {
