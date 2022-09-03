@@ -253,9 +253,10 @@ import com.oracle.truffle.llvm.nodes.op.LLVMLogicNodeFactory.LLVMShlNodeGen;
 import com.oracle.truffle.llvm.nodes.op.LLVMLogicNodeFactory.LLVMXorNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMAccessGlobalVariableStorageNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVM80BitFloatSelectNodeGen;
-import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMGenericSelectNodeGen;
+import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMAddressSelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMDoubleSelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMFloatSelectNodeGen;
+import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMFunctionSelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMI16SelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMI1SelectNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMSelectNodeFactory.LLVMI32SelectNodeGen;
@@ -1109,47 +1110,57 @@ public class BasicNodeFactory implements NodeFactory {
     @Override
     public LLVMExpressionNode createSelect(LLVMParserRuntime runtime, Type type, LLVMExpressionNode condition, LLVMExpressionNode trueValue, LLVMExpressionNode falseValue) {
         if (type instanceof VectorType) {
-            final Type elementType = ((VectorType) type).getElementType();
-            if (elementType == PrimitiveType.I1) {
-                return LLVMI1VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.I8) {
-                return LLVMI8VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.I16) {
-                return LLVMI16VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.I32) {
-                return LLVMI32VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.I64) {
-                return LLVMI64VectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.FLOAT) {
-                return LLVMFloatVectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType == PrimitiveType.DOUBLE) {
-                return LLVMDoubleVectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else if (elementType instanceof PointerType) {
-                return LLVMAddressVectorSelectNodeGen.create(condition, trueValue, falseValue);
-            } else {
-                throw new AssertionError("Cannot create vector select for type: " + type);
+            if (type instanceof VectorType) {
+                final Type elementType = ((VectorType) type).getElementType();
+                if (elementType == PrimitiveType.I1) {
+                    return LLVMI1VectorSelectNodeGen.create(condition, trueValue, falseValue);
+                } else if (elementType == PrimitiveType.I8) {
+                    return LLVMI8VectorSelectNodeGen.create(condition, trueValue, falseValue);
+                } else if (elementType == PrimitiveType.I16) {
+                    return LLVMI16VectorSelectNodeGen.create(condition, trueValue, falseValue);
+                } else if (elementType == PrimitiveType.I32) {
+                    return LLVMI32VectorSelectNodeGen.create(condition, trueValue, falseValue);
+                } else if (elementType == PrimitiveType.I64) {
+                    return LLVMI64VectorSelectNodeGen.create(condition, trueValue, falseValue);
+                } else if (elementType == PrimitiveType.FLOAT) {
+                    return LLVMFloatVectorSelectNodeGen.create(condition, trueValue, falseValue);
+                } else if (elementType == PrimitiveType.DOUBLE) {
+                    return LLVMDoubleVectorSelectNodeGen.create(condition, trueValue, falseValue);
+                } else if (elementType instanceof PointerType) {
+                    return LLVMAddressVectorSelectNodeGen.create(condition, trueValue, falseValue);
+                }
             }
-        } else if (type instanceof PrimitiveType) {
-            switch (((PrimitiveType) type).getPrimitiveKind()) {
-                case I1:
-                    return LLVMI1SelectNodeGen.create(condition, trueValue, falseValue);
-                case I8:
-                    return LLVMI8SelectNodeGen.create(condition, trueValue, falseValue);
-                case I16:
-                    return LLVMI16SelectNodeGen.create(condition, trueValue, falseValue);
-                case I32:
-                    return LLVMI32SelectNodeGen.create(condition, trueValue, falseValue);
-                case I64:
-                    return LLVMI64SelectNodeGen.create(condition, trueValue, falseValue);
-                case FLOAT:
-                    return LLVMFloatSelectNodeGen.create(condition, trueValue, falseValue);
-                case DOUBLE:
-                    return LLVMDoubleSelectNodeGen.create(condition, trueValue, falseValue);
-                case X86_FP80:
-                    return LLVM80BitFloatSelectNodeGen.create(condition, trueValue, falseValue);
+            throw new AssertionError("Cannot create vector select for type: " + type);
+        } else {
+            if (Type.isFunctionOrFunctionPointer(type)) {
+                return LLVMFunctionSelectNodeGen.create(condition, trueValue, falseValue);
+            } else if (type instanceof PointerType) {
+                return LLVMAddressSelectNodeGen.create(condition, trueValue, falseValue);
+            } else if (type instanceof PrimitiveType) {
+                switch (((PrimitiveType) type).getPrimitiveKind()) {
+                    case I1:
+                        return LLVMI1SelectNodeGen.create(condition, trueValue, falseValue);
+                    case I8:
+                        return LLVMI8SelectNodeGen.create(condition, trueValue, falseValue);
+                    case I16:
+                        return LLVMI16SelectNodeGen.create(condition, trueValue, falseValue);
+                    case I32:
+                        return LLVMI32SelectNodeGen.create(condition, trueValue, falseValue);
+                    case I64:
+                        return LLVMI64SelectNodeGen.create(condition, trueValue, falseValue);
+                    case FLOAT:
+                        return LLVMFloatSelectNodeGen.create(condition, trueValue, falseValue);
+                    case DOUBLE:
+                        return LLVMDoubleSelectNodeGen.create(condition, trueValue, falseValue);
+                    case X86_FP80:
+                        return LLVM80BitFloatSelectNodeGen.create(condition, trueValue, falseValue);
+                    default:
+                        throw new AssertionError(type);
+                }
+            } else {
+                throw new AssertionError(type);
             }
         }
-        return LLVMGenericSelectNodeGen.create(condition, trueValue, falseValue);
     }
 
     @Override
@@ -1371,7 +1382,7 @@ public class BasicNodeFactory implements NodeFactory {
                     throw new AssertionError(llvmType);
             }
         } else if (llvmType instanceof PointerType) {
-            store = LLVMAddressStoreNodeGen.create(null, null);
+            store = LLVMAddressStoreNodeGen.create(llvmType, null, null);
         } else {
             throw new AssertionError(llvmType);
         }
@@ -1405,7 +1416,7 @@ public class BasicNodeFactory implements NodeFactory {
     private LLVMStoreNode createMemoryStore(LLVMParserRuntime runtime, Type resolvedType) {
         if (resolvedType instanceof ArrayType || resolvedType instanceof StructureType) {
             int byteSize = runtime.getContext().getByteSize(resolvedType);
-            return LLVMStructStoreNodeGen.create(null, createMemMove(), null, null, byteSize);
+            return LLVMStructStoreNodeGen.create(null, createMemMove(), resolvedType, null, null, byteSize);
         } else if (resolvedType instanceof PrimitiveType) {
             switch (((PrimitiveType) resolvedType).getPrimitiveKind()) {
                 case I8:
@@ -1426,7 +1437,7 @@ public class BasicNodeFactory implements NodeFactory {
                     throw new AssertionError(resolvedType);
             }
         } else if (resolvedType instanceof PointerType || Type.isFunctionOrFunctionPointer(resolvedType)) {
-            return LLVMAddressStoreNodeGen.create(null, null);
+            return LLVMAddressStoreNodeGen.create(resolvedType, null, null);
         }
         throw new AssertionError(resolvedType);
     }
@@ -2115,7 +2126,7 @@ public class BasicNodeFactory implements NodeFactory {
             case DOUBLE:
                 return LLVMDoubleStoreNodeGen.create(null, null);
             case POINTER:
-                return LLVMAddressStoreNodeGen.create(null, null);
+                return LLVMAddressStoreNodeGen.create(PointerType.VOID, null, null);
             default:
                 throw new IllegalStateException("unexpected interop kind " + kind);
         }
@@ -2144,16 +2155,16 @@ public class BasicNodeFactory implements NodeFactory {
                     throw new AssertionError(type);
             }
         } else if (type instanceof VariableBitWidthType) {
-            return LLVMIVarBitStoreNodeGen.create(source, pointerNode, valueNode);
+            return LLVMIVarBitStoreNodeGen.create(source, (VariableBitWidthType) type, pointerNode, valueNode);
         } else if (Type.isFunctionOrFunctionPointer(type)) {
-            return LLVMFunctionStoreNodeGen.create(source, pointerNode, valueNode);
+            return LLVMFunctionStoreNodeGen.create(source, type, pointerNode, valueNode);
         } else if (type instanceof StructureType || type instanceof ArrayType) {
-            return LLVMStructStoreNodeGen.create(source, createMemMove(), pointerNode, valueNode, size);
+            return LLVMStructStoreNodeGen.create(source, createMemMove(), type, pointerNode, valueNode, size);
         } else if (type instanceof PointerType) {
             if (pointerNode instanceof LLVMAccessGlobalVariableStorageNode) {
                 return LLVMGlobalVariableStoreNodeGen.create(((LLVMAccessGlobalVariableStorageNode) pointerNode).getDescriptor(), source, valueNode);
             } else {
-                return LLVMAddressStoreNodeGen.create(source, pointerNode, valueNode);
+                return LLVMAddressStoreNodeGen.create(source, type, pointerNode, valueNode);
             }
         } else if (type instanceof VectorType) {
             VectorType vectorType = (VectorType) type;
