@@ -35,6 +35,7 @@ import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.compiler.types.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
@@ -71,6 +72,7 @@ public class GraalCompiler {
         this.xir = xirGen;
         this.backend = backend;
     }
+
 
     public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, int osrBCI, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts) {
         assert (method.accessFlags() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
@@ -112,8 +114,14 @@ public class GraalCompiler {
             Debug.dump(graph, "initial state");
         }
 
+        new PhiStampPhase().apply(graph);
+
         if (GraalOptions.ProbabilityAnalysis && graph.start().probability() == 0) {
             new ComputeProbabilityPhase().apply(graph);
+        }
+
+        if (GraalOptions.PropagateTypes) {
+            new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
         }
 
         if (GraalOptions.OptCanonicalizer) {
@@ -126,6 +134,11 @@ public class GraalCompiler {
 
         if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
             new InliningPhase(target, runtime, null, assumptions, cache, plan, optimisticOpts).apply(graph);
+            new PhiStampPhase().apply(graph);
+
+            if (GraalOptions.PropagateTypes) {
+                new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
+            }
 
             if (GraalOptions.OptCanonicalizer) {
                 new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
@@ -142,13 +155,11 @@ public class GraalCompiler {
 
         if (GraalOptions.FullUnroll) {
             new LoopFullUnrollPhase(runtime).apply(graph);
-            if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-            }
         }
 
         if (GraalOptions.EscapeAnalysis && !plan.isPhaseDisabled(EscapeAnalysisPhase.class)) {
             new EscapeAnalysisPhase(target, runtime, assumptions, cache, plan, optimisticOpts).apply(graph);
+            new PhiStampPhase().apply(graph);
         }
         if (GraalOptions.OptLoopTransform) {
             new LoopTransformHighPhase().apply(graph);
@@ -177,6 +188,10 @@ public class GraalCompiler {
             if (GraalOptions.OptReadElimination) {
                 new ReadEliminationPhase().apply(graph);
             }
+        }
+
+        if (GraalOptions.PropagateTypes) {
+            new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
         }
 
         if (GraalOptions.OptLoopTransform) {
