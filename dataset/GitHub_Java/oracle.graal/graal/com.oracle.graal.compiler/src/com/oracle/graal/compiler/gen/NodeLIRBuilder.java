@@ -23,6 +23,7 @@
 package com.oracle.graal.compiler.gen;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.api.meta.Value.*;
 import static com.oracle.graal.lir.LIR.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
 
@@ -52,7 +53,7 @@ import com.oracle.graal.phases.*;
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
-public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
+public abstract class NodeLIRBuilder implements NodeLIRBuiderTool {
 
     private final NodeMap<Value> nodeOperands;
     private final DebugInfoBuilder debugInfoBuilder;
@@ -449,6 +450,16 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
             assert paramValue.getKind() == param.getKind().getStackKind();
             setResult(param, gen.emitMove(paramValue));
         }
+    }
+
+    @Override
+    public void visitReturn(ReturnNode x) {
+        AllocatableValue operand = ILLEGAL;
+        if (x.result() != null) {
+            operand = gen.resultOperandFor(x.result().getKind());
+            gen.emitMove(operand, operand(x.result()));
+        }
+        gen.emitReturn(operand);
     }
 
     @Override

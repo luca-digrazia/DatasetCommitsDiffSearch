@@ -23,23 +23,22 @@
 package com.oracle.graal.lir;
 
 import com.oracle.graal.asm.*;
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.StandardOp.BranchOp;
 import com.oracle.graal.lir.StandardOp.JumpOp;
+import com.oracle.graal.nodes.cfg.*;
 
 /**
  * LIR instructions such as {@link JumpOp} and {@link BranchOp} need to reference their target
- * {@link AbstractBlockBase}. However, direct references are not possible since the control flow
- * graph (and therefore successors lists) can be changed by optimizations - and fixing the
- * instructions is error prone. Therefore, we represent an edge to block B from block A via the
- * tuple {@code (A,
+ * {@link Block}. However, direct references are not possible since the control flow graph (and
+ * therefore successors lists) can be changed by optimizations - and fixing the instructions is
+ * error prone. Therefore, we represent an edge to block B from block A via the tuple {@code (A,
  * successor-index-of-B)}. That is, indirectly by storing the index into the successor list of A.
  * Note therefore that the successor list cannot be re-ordered.
  */
 public final class LabelRef {
 
     private final LIR lir;
-    private final AbstractBlockBase<?> block;
+    private final AbstractBlock<?> block;
     private final int suxIndex;
 
     /**
@@ -49,7 +48,7 @@ public final class LabelRef {
      * @param suxIndex The index of the successor.
      * @return The newly created label reference.
      */
-    public static LabelRef forSuccessor(final LIR lir, final AbstractBlockBase<?> block, final int suxIndex) {
+    public static LabelRef forSuccessor(final LIR lir, final AbstractBlock<?> block, final int suxIndex) {
         return new LabelRef(lir, block, suxIndex);
     }
 
@@ -59,17 +58,17 @@ public final class LabelRef {
      * @param block The base block that contains the successor list.
      * @param suxIndex The index of the successor.
      */
-    private LabelRef(final LIR lir, final AbstractBlockBase<?> block, final int suxIndex) {
+    private LabelRef(final LIR lir, final AbstractBlock<?> block, final int suxIndex) {
         this.lir = lir;
         this.block = block;
         this.suxIndex = suxIndex;
     }
 
-    public AbstractBlockBase<?> getSourceBlock() {
+    public AbstractBlock<?> getSourceBlock() {
         return block;
     }
 
-    public AbstractBlockBase<?> getTargetBlock() {
+    public AbstractBlock<?> getTargetBlock() {
         return block.getSuccessors().get(suxIndex);
     }
 
