@@ -24,22 +24,23 @@ package com.oracle.graal.hotspot.stubs;
 
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.DESTROYS_REGISTERS;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.PRESERVES_REGISTERS;
-import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.JavaCall;
-import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.JavaCallee;
-import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.NativeCall;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
-import jdk.vm.ci.hotspot.HotSpotSignature;
-import jdk.vm.ci.meta.JavaMethod;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
+import static jdk.internal.jvmci.code.CallingConvention.Type.JavaCall;
+import static jdk.internal.jvmci.code.CallingConvention.Type.JavaCallee;
+import static jdk.internal.jvmci.code.CallingConvention.Type.NativeCall;
+import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.internal.jvmci.hotspot.HotSpotSignature;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.JavaMethod;
+import jdk.internal.jvmci.meta.JavaType;
+import jdk.internal.jvmci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.Signature;
 
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.JavaMethodContext;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
@@ -218,6 +219,7 @@ public class ForeignCallStub extends Stub {
         boolean isObjectResult = !linkage.getOutgoingCallingConvention().getReturn().getLIRKind().isValue();
 
         StructuredGraph graph = new StructuredGraph(toString(), null, AllowAssumptions.NO);
+        graph.disableInlinedMethodRecording();
         graph.disableUnsafeAccessTracking();
 
         GraphKit kit = new GraphKit(graph, providers, wordTypes, providers.getGraphBuilderPlugins());
@@ -250,7 +252,12 @@ public class ForeignCallStub extends Stub {
         ResolvedJavaType accessingClass = providers.getMetaAccess().lookupJavaType(getClass());
         for (int i = 0; i < args.length; i++) {
             ResolvedJavaType type = providers.getMetaAccess().lookupJavaType(args[i]).resolve(accessingClass);
-            StampPair stamp = StampFactory.forDeclaredType(kit.getGraph().getAssumptions(), type, false);
+            Stamp stamp;
+            if (type.getJavaKind().getStackKind() == JavaKind.Object) {
+                stamp = StampFactory.declared(type);
+            } else {
+                stamp = StampFactory.forKind(type.getJavaKind());
+            }
             ParameterNode param = kit.unique(new ParameterNode(i, stamp));
             params[i] = param;
         }
