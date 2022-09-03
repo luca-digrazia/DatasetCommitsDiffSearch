@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.hotspot.test;
 
+import static org.junit.Assert.*;
+
 import java.lang.reflect.*;
 import java.util.*;
 
@@ -154,19 +156,6 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
     }
 
     @Test
-    public void testDisjointObject() {
-        mustIntrinsify = false; // a generic call to arraycopy will not be intrinsified
-
-        Integer[] src1 = {1, 2, 3, 4};
-        test("objectArraycopy", src1, 0, src1, 1, src1.length - 1);
-
-        Integer[] src2 = {1, 2, 3, 4};
-        test("objectArraycopy", src2, 1, src2, 0, src2.length - 1);
-
-        mustIntrinsify = true;
-    }
-
-    @Test
     public void testObjectExact() {
         Integer[] src = {1, 2, 3, 4};
         testHelper("objectArraycopyExact", src);
@@ -189,10 +178,6 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
             test(name, src, 0, newArray(src, length), 0, length);
             test(name, src, srcLength - length, newArray(src, length), 0, length);
             test(name, src, 0, newArray(src, srcLength), 0, length);
-        }
-
-        if (srcLength > 1) {
-            test(name, src, 0, src, 1, srcLength - 1);
         }
     }
 

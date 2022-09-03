@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.hotspot.test;
 
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+
 import java.lang.ref.*;
 
 import org.junit.*;
@@ -32,11 +34,9 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.phases.*;
-import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -46,7 +46,6 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.common.inlining.policy.*;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.replacements.*;
 
 /**
  * The following unit tests assert the presence of write barriers for both Serial and G1 GCs.
@@ -59,9 +58,6 @@ import com.oracle.graal.replacements.*;
  */
 public class WriteBarrierAdditionTest extends GraalCompilerTest {
 
-    private static final HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
-    private static final long referentOffset = HotSpotReplacementsUtil.referentOffset();
-
     public static class Container {
 
         public Container a;
@@ -73,7 +69,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test1() throws Exception {
-        testHelper("test1Snippet", (config.useG1GC) ? 4 : 2);
+        test("test1Snippet", (useG1GC()) ? 4 : 2);
     }
 
     public static void test1Snippet() {
@@ -89,7 +85,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test2() throws Exception {
-        testHelper("test2Snippet", config.useG1GC ? 8 : 4);
+        test("test2Snippet", (useG1GC()) ? 8 : 4);
     }
 
     public static void test2Snippet(boolean test) {
@@ -112,7 +108,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test3() throws Exception {
-        testHelper("test3Snippet", config.useG1GC ? 8 : 4);
+        test("test3Snippet", useG1GC() ? 8 : 4);
     }
 
     public static void test3Snippet() {
@@ -135,7 +131,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test4() throws Exception {
-        testHelper("test4Snippet", config.useG1GC ? 5 : 2);
+        test("test4Snippet", (useG1GC()) ? 5 : 2);
     }
 
     public static Object test4Snippet() {
@@ -153,11 +149,11 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test5() throws Exception {
-        testHelper("test5Snippet", config.useG1GC ? 1 : 0);
+        test("test5Snippet", useG1GC() ? 1 : 0);
     }
 
     public static Object test5Snippet() throws Exception {
-        return UnsafeAccess.unsafe.getObject(wr, config.useCompressedOops ? 12L : 16L);
+        return UnsafeAccess.unsafe.getObject(wr, useCompressedOops() ? 12L : 16L);
     }
 
     /**
@@ -166,7 +162,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test6() throws Exception {
-        test2("testUnsafeLoad", wr, new Long(referentOffset), null);
+        test2("testUnsafeLoad", wr, new Long(referentOffset()), null);
     }
 
     /**
@@ -175,7 +171,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test7() throws Exception {
-        test2("testUnsafeLoad", con, new Long(referentOffset), null);
+        test2("testUnsafeLoad", con, new Long(referentOffset()), null);
     }
 
     /**
@@ -185,7 +181,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test8() throws Exception {
-        test2("testUnsafeLoad", wr, new Long(config.useCompressedOops ? 20 : 32), null);
+        test2("testUnsafeLoad", wr, new Long(useCompressedOops() ? 20 : 32), null);
     }
 
     /**
@@ -195,7 +191,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test10() throws Exception {
-        test2("testUnsafeLoad", wr, new Long(config.useCompressedOops ? 6 : 8), new Integer(config.useCompressedOops ? 6 : 8));
+        test2("testUnsafeLoad", wr, new Long(useCompressedOops() ? 6 : 8), new Integer(useCompressedOops() ? 6 : 8));
     }
 
     /**
@@ -205,7 +201,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test9() throws Exception {
-        test2("testUnsafeLoad", wr, new Long(config.useCompressedOops ? 10 : 16), new Integer(config.useCompressedOops ? 10 : 16));
+        test2("testUnsafeLoad", wr, new Long(useCompressedOops() ? 10 : 16), new Integer(useCompressedOops() ? 10 : 16));
     }
 
     static Object[] src = new Object[1];
@@ -241,22 +237,20 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
         return installedBenchmarkCode;
     }
 
-    private void testHelper(final String snippetName, final int expectedBarriers) throws Exception, SecurityException {
-        ResolvedJavaMethod snippet = getResolvedJavaMethod(snippetName);
-        try (Scope s = Debug.scope("WriteBarrierAdditionTest", snippet)) {
+    private void test(final String snippet, final int expectedBarriers) throws Exception, SecurityException {
+        try (Scope s = Debug.scope("WriteBarrierAdditionTest", new DebugDumpScope(snippet))) {
             StructuredGraph graph = parseEager(snippet);
             HighTierContext highContext = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
             MidTierContext midContext = new MidTierContext(getProviders(), new Assumptions(false), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo(), null);
-            new NodeIntrinsificationPhase(getProviders(), getSnippetReflection()).apply(graph);
             new InliningPhase(new InlineEverythingPolicy(), new CanonicalizerPhase(true)).apply(graph, highContext);
             new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highContext);
             new GuardLoweringPhase().apply(graph, midContext);
             new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, midContext);
-            new WriteBarrierAdditionPhase(config).apply(graph);
+            new WriteBarrierAdditionPhase().apply(graph);
             Debug.dump(graph, "After Write Barrier Addition");
 
             int barriers = 0;
-            if (config.useG1GC) {
+            if (useG1GC()) {
                 barriers = graph.getNodes().filter(G1ReferentFieldReadBarrier.class).count() + graph.getNodes().filter(G1PreWriteBarrier.class).count() +
                                 graph.getNodes().filter(G1PostWriteBarrier.class).count();
             } else {
@@ -264,7 +258,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
             }
             Assert.assertEquals(expectedBarriers, barriers);
             for (WriteNode write : graph.getNodes().filter(WriteNode.class)) {
-                if (config.useG1GC) {
+                if (useG1GC()) {
                     if (write.getBarrierType() != BarrierType.NONE) {
                         Assert.assertEquals(1, write.successors().count());
                         Assert.assertTrue(write.next() instanceof G1PostWriteBarrier);
@@ -281,9 +275,9 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
             for (ReadNode read : graph.getNodes().filter(ReadNode.class)) {
                 if (read.getBarrierType() != BarrierType.NONE) {
                     if (read.location() instanceof ConstantLocationNode) {
-                        Assert.assertEquals(referentOffset, ((ConstantLocationNode) (read.location())).getDisplacement());
+                        Assert.assertEquals(referentOffset(), ((ConstantLocationNode) (read.location())).getDisplacement());
                     }
-                    Assert.assertTrue(config.useG1GC);
+                    Assert.assertTrue(useG1GC());
                     Assert.assertEquals(BarrierType.PRECISE, read.getBarrierType());
                     Assert.assertTrue(read.next() instanceof G1ReferentFieldReadBarrier);
                 }

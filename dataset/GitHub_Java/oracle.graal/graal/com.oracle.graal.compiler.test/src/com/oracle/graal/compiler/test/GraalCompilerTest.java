@@ -41,9 +41,7 @@ import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.baseline.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.GraalCompiler.Request;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.remote.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -251,8 +249,8 @@ public abstract class GraalCompilerTest extends GraalTest {
         Assert.assertEquals("unexpected number of ReturnNodes: " + graphString, graph.getNodes(ReturnNode.class).count(), 1);
         ValueNode result = graph.getNodes(ReturnNode.class).first().result();
         Assert.assertTrue("unexpected ReturnNode result node: " + graphString, result.isConstant());
-        Assert.assertEquals("unexpected ReturnNode result kind: " + graphString, result.asJavaConstant().getKind(), Kind.Int);
-        Assert.assertEquals("unexpected ReturnNode result: " + graphString, result.asJavaConstant().asInt(), value);
+        Assert.assertEquals("unexpected ReturnNode result kind: " + graphString, result.asConstant().getKind(), Kind.Int);
+        Assert.assertEquals("unexpected ReturnNode result: " + graphString, result.asConstant().asInt(), value);
     }
 
     protected static String getCanonicalGraphString(StructuredGraph graph, boolean excludeVirtual, boolean checkConstants) {
@@ -674,34 +672,6 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     /**
-     * Determines if every compilation should also be attempted in a replay {@link Context}.
-     *
-     * <pre>
-     * -Dgraal.testReplay=true
-     * </pre>
-     */
-    private static final boolean TEST_REPLAY = Boolean.getBoolean("graal.testReplay");
-
-    protected CompilationResult replayCompile(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph) {
-
-        StructuredGraph graphToCompile = graph == null ? parseForCompile(installedCodeOwner) : graph;
-        lastCompiledGraph = graphToCompile;
-
-        CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graphToCompile.method(), false);
-        try (Context c = new Context(); Debug.Scope s = Debug.scope("ReplayCompiling", new DebugDumpScope("REPLAY", true))) {
-            Request<CompilationResult> request = new GraalCompiler.Request<>(graphToCompile, null, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), null,
-                            getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graphToCompile), getSpeculationLog(), getSuites(), new CompilationResult(),
-                            CompilationResultBuilderFactory.Default);
-
-            request = c.get(request);
-
-            return GraalCompiler.compile(request);
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
-    }
-
-    /**
      * Compiles a given method.
      *
      * @param installedCodeOwner the method the compiled code will be associated with when installed
@@ -713,13 +683,8 @@ public abstract class GraalCompilerTest extends GraalTest {
         StructuredGraph graphToCompile = graph == null ? parseForCompile(installedCodeOwner) : graph;
         lastCompiledGraph = graphToCompile;
         CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graphToCompile.method(), false);
-        CompilationResult res = GraalCompiler.compileGraph(graphToCompile, null, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(),
+        return GraalCompiler.compileGraph(graphToCompile, null, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(),
                         OptimisticOptimizations.ALL, getProfilingInfo(graphToCompile), getSpeculationLog(), getSuites(), new CompilationResult(), CompilationResultBuilderFactory.Default);
-
-        if (TEST_REPLAY && graph == null) {
-            replayCompile(installedCodeOwner, null);
-        }
-        return res;
     }
 
     protected StructuredGraph lastCompiledGraph;

@@ -33,6 +33,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.gpu.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.ptx.*;
 import com.oracle.graal.nodes.*;
@@ -43,7 +44,7 @@ import com.oracle.graal.ptx.*;
  */
 public abstract class PTXTest extends GraalCompilerTest {
 
-    private static PTXHotSpotBackend getPTXBackend() {
+    public static PTXHotSpotBackend getPTXBackend() {
         Backend backend = runtime().getBackend(PTX.class);
         Assume.assumeTrue(backend instanceof PTXHotSpotBackend);
         return (PTXHotSpotBackend) backend;
@@ -54,17 +55,30 @@ public abstract class PTXTest extends GraalCompilerTest {
     }
 
     protected ExternalCompilationResult compileKernel(String test) {
-        return compileKernel(getMetaAccess().lookupJavaMethod(getMethod(test)));
+        return compileKernel(getResolvedJavaMethod(test));
+    }
+
+    protected HotSpotNmethod installKernel(ResolvedJavaMethod method, ExternalCompilationResult ptxCode) {
+        PTXHotSpotBackend ptxBackend = getPTXBackend();
+        return ptxBackend.installKernel(method, ptxCode);
     }
 
     @Override
-    protected InstalledCode getCode(ResolvedJavaMethod method, StructuredGraph graph) {
+    protected InstalledCode getCode(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph) {
         PTXHotSpotBackend ptxBackend = getPTXBackend();
-        ExternalCompilationResult ptxCode = compileKernel(method);
+        ExternalCompilationResult ptxCode = compileKernel(installedCodeOwner);
         Assume.assumeTrue(ptxBackend.isDeviceInitialized());
-        InstalledCode installedPTXCode = ptxBackend.installKernel(method, ptxCode);
-        StructuredGraph kernelWrapper = new PTXLaunchKernelGraphKit(method, installedPTXCode.getStart(), (HotSpotProviders) getProviders()).getGraph();
-        return super.getCode(method, kernelWrapper);
+        HotSpotNmethod installedPTXCode = installKernel(installedCodeOwner, ptxCode);
+        StructuredGraph wrapper = new PTXWrapperBuilder(installedCodeOwner, installedPTXCode, (HotSpotProviders) getProviders()).getGraph();
+
+        // The PTX C++ layer expects a 1:1 relationship between kernel compilation
+        // and kernel execution as it creates a cuContext in the former and
+        // destroys it in the latter. So, each kernel installed requires a unique
+        // wrapper.
+        // TODO: do cuContext management properly
+        boolean forceCompile = true;
+
+        return getCode(installedCodeOwner, wrapper, forceCompile);
     }
 
     protected static void compileAndPrintCode(PTXTest test) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.hotspot.test;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+
 import java.io.*;
 import java.lang.reflect.*;
 import java.security.*;
@@ -32,6 +34,7 @@ import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
 import com.oracle.graal.hotspot.meta.*;
@@ -40,13 +43,13 @@ import com.oracle.graal.nodes.*;
 /**
  * Tests the intrinsification of certain crypto methods.
  */
-public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
+public class HotSpotCryptoSubstitutionTest extends GraalCompilerTest {
 
     @Override
     protected InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
         HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
         HotSpotNmethod installedCode = new HotSpotNmethod(hsMethod, compResult.getName(), true);
-        HotSpotCompiledNmethod compiledNmethod = new HotSpotCompiledNmethod(hsMethod, compResult);
+        HotSpotCompiledNmethod compiledNmethod = new HotSpotCompiledNmethod(runtime().getTarget(), hsMethod, compResult);
         CodeInstallResult result = runtime().getCompilerToVM().installCode(compiledNmethod, installedCode, null);
         Assert.assertEquals("Error installing method " + method + ": " + result, result, CodeInstallResult.OK);
 
