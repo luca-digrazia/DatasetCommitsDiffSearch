@@ -25,18 +25,21 @@ package com.oracle.graal.compiler.hsail.test;
 import org.junit.Test;
 
 /**
- * Tests allocation of a new String based on string interning.
+ * Tests allocation of a new Vec3 object but only for half of the workitems.
  */
 
-public class EscapingNewStringInternTest extends EscapingNewBase {
+public class EscapingNewVec3PartialTest extends EscapingNewVec3Base {
 
+    @Override
     public void run(int gid) {
-        outArray[gid] = Integer.toString(gid * 111).intern();
+        float inval = inArray[gid];
+        outArray[gid] = (gid % 2 == 0 ? new Vec3(inval + 1.1f, inval + 2.1f, inval + 3.1f) : null);
+        myOutArray[gid] = (gid % 2 != 0 ? new Vec3(inval + 4.1f, inval + 5.1f, inval + 6.1f) : null);
     }
 
-    // at node: 12|Invoke#Direct#intern
-    @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
+    @Test
     public void test() {
         testGeneratedHsail();
     }
+
 }

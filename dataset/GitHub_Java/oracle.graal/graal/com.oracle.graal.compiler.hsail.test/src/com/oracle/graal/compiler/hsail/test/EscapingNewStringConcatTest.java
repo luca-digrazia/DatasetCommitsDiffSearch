@@ -22,11 +22,7 @@
  */
 package com.oracle.graal.compiler.hsail.test;
 
-import static com.oracle.graal.debug.Debug.*;
-
 import org.junit.Test;
-
-import com.oracle.graal.debug.*;
 
 /**
  * Tests allocation of a new String based on string concatenation.
@@ -53,8 +49,6 @@ public class EscapingNewStringConcatTest extends EscapingNewBase {
     // Node implementing Lowerable not handled in HSAIL Backend: 6274|MonitorEnter
     @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
     public void test() {
-        try (DebugConfigScope s = disableIntercept()) {
-            testGeneratedHsail();
-        }
+        testGeneratedHsail();
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,23 +20,33 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+
 package com.oracle.graal.compiler.hsail.test;
 
 import org.junit.Test;
 
 /**
- * Tests allocation of a new String based on string interning.
+ * Tests code generation for IntegerTestNode for HSAIL backend.
  */
+public class IntTestBranchTest extends StaticMethodTwoIntArrays {
 
-public class EscapingNewStringInternTest extends EscapingNewBase {
-
-    public void run(int gid) {
-        outArray[gid] = Integer.toString(gid * 111).intern();
+    /**
+     * The static "kernel" method we will be testing. By convention the gid is the last parameter.
+     * 
+     * @param out
+     * @param in
+     * @param gid
+     */
+    public static void run(int[] out, int[] in, int gid) {
+        if ((in[gid] & 3) != 0) {
+            out[gid] = in[gid] * 2;
+        } else {
+            out[gid] = in[gid] * 3;
+        }
     }
 
-    // at node: 12|Invoke#Direct#intern
-    @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
+    @Test
     public void test() {
-        testGeneratedHsail();
+        super.testGeneratedHsail();
     }
 }

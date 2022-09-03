@@ -25,17 +25,18 @@ package com.oracle.graal.compiler.hsail.test;
 import org.junit.Test;
 
 /**
- * Tests allocation of a new String based on string interning.
+ * Tests allocation of a new String from integer with a large range of workitems.
  */
 
-public class EscapingNewStringInternTest extends EscapingNewBase {
+public class EscapingNewStringLargeRangeTest extends EscapingNewStringTest {
 
-    public void run(int gid) {
-        outArray[gid] = Integer.toString(gid * 111).intern();
+    @Override
+    int getRange() {
+        return 125000;
     }
 
-    // at node: 12|Invoke#Direct#intern
-    @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
+    @Override
+    @Test
     public void test() {
         testGeneratedHsail();
     }

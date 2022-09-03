@@ -22,21 +22,51 @@
  */
 package com.oracle.graal.compiler.hsail.test;
 
+import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
 import org.junit.Test;
 
 /**
- * Tests allocation of a new String based on string interning.
+ * Tests allocation of a Vec3 object stored in a field by workitem #1.
  */
 
-public class EscapingNewStringInternTest extends EscapingNewBase {
+public class EscapingNewStoreFieldTest extends GraalKernelTester {
 
-    public void run(int gid) {
-        outArray[gid] = Integer.toString(gid * 111).intern();
+    static final int NUM = 20;
+    public float[] inArray = new float[NUM];
+    @Result public Vec3 outField;
+
+    void setupArrays() {
+        for (int i = 0; i < NUM; i++) {
+            inArray[i] = i;
+        }
     }
 
-    // at node: 12|Invoke#Direct#intern
-    @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
+    public void run(int gid) {
+        if (gid == 1) {
+            float inval = inArray[gid];
+            outField = new Vec3(inval + 1, inval + 2, inval + 3);
+        }
+    }
+
+    @Override
+    public void runTest() {
+        setupArrays();
+
+        dispatchMethodKernel(NUM);
+
+        // see what happens if we do it again
+        dispatchMethodKernel(NUM);
+        System.gc();
+    }
+
+    @Override
+    protected boolean supportsRequiredCapabilities() {
+        return canHandleObjectAllocation();
+    }
+
+    @Test
     public void test() {
         testGeneratedHsail();
     }
+
 }

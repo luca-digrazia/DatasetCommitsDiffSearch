@@ -154,8 +154,11 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
             if (canStoreConstant(c, isCompressed)) {
                 if (isCompressed) {
                     if ((c.getKind() == Kind.Object) && c.isNull()) {
+                        // Constant value = c.isNull() ? c : compress(c, config.getOopEncoding());
                         append(new StoreConstantOp(Kind.Int, storeAddress, Constant.forInt(0), state));
                     } else if (c.getKind() == Kind.Long) {
+                        // It's always a good idea to directly store compressed constants since they
+                        // have to be materialized as 64 bits encoded otherwise.
                         Constant value = compress(c, config.getKlassEncoding());
                         append(new StoreConstantOp(Kind.Int, storeAddress, value, state));
                     } else {
@@ -294,15 +297,17 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
         throw GraalInternalError.shouldNotReachHere("NYI");
     }
 
-    public Value emitCompress(Value pointer, CompressEncoding encoding) {
+    @Override
+    public Value emitCompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
         Variable result = newVariable(NarrowOopStamp.NarrowOop);
-        append(new HSAILMove.CompressPointer(result, newVariable(pointer.getPlatformKind()), asAllocatable(pointer), encoding.base, encoding.shift, encoding.alignment));
+        append(new HSAILMove.CompressPointer(result, newVariable(pointer.getPlatformKind()), asAllocatable(pointer), encoding.base, encoding.shift, encoding.alignment, nonNull));
         return result;
     }
 
-    public Value emitUncompress(Value pointer, CompressEncoding encoding) {
+    @Override
+    public Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
         Variable result = newVariable(Kind.Object);
-        append(new HSAILMove.UncompressPointer(result, asAllocatable(pointer), encoding.base, encoding.shift, encoding.alignment));
+        append(new HSAILMove.UncompressPointer(result, asAllocatable(pointer), encoding.base, encoding.shift, encoding.alignment, nonNull));
         return result;
     }
 }
