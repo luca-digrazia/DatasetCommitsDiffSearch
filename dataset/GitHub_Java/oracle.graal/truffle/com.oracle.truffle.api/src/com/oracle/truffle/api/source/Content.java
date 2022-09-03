@@ -59,7 +59,10 @@ abstract class Content {
             return false;
         }
         Content other = (Content) obj;
-        return Objects.equals(getCode(), other.getCode());
+        if (code == null && other.code == null) {
+            return true;
+        }
+        return Objects.equals(code, other.code);
     }
 
     @Override
