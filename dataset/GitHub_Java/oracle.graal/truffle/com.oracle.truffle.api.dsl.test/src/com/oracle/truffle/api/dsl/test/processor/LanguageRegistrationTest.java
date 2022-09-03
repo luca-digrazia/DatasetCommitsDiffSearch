@@ -23,6 +23,8 @@
 package com.oracle.truffle.api.dsl.test.processor;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -87,8 +89,8 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected ASTProber getDefaultASTProber() {
-            return null;
+        protected List<ASTProber> getASTProbers() {
+            return Collections.emptyList();
         }
 
         @Override
@@ -159,8 +161,8 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected ASTProber getDefaultASTProber() {
-            return null;
+        protected List<ASTProber> getASTProbers() {
+            return Collections.emptyList();
         }
 
         @Override
@@ -227,8 +229,8 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected ASTProber getDefaultASTProber() {
-            return null;
+        protected List<ASTProber> getASTProbers() {
+            return Collections.emptyList();
         }
 
         @Override

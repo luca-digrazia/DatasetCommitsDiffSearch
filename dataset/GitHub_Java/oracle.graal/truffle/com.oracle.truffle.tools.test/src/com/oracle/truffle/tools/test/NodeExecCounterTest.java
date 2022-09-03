@@ -24,29 +24,27 @@
  */
 package com.oracle.truffle.tools.test;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.StandardSyntaxTag;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.tools.NodeExecCounter;
+import static com.oracle.truffle.tools.test.TestNodes.*;
+import static org.junit.Assert.*;
+
+import org.junit.*;
+
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.tools.*;
 import com.oracle.truffle.tools.NodeExecCounter.NodeExecutionCount;
 import com.oracle.truffle.tools.test.TestNodes.TestAddNode;
 import com.oracle.truffle.tools.test.TestNodes.TestValueNode;
-import static com.oracle.truffle.tools.test.TestNodes.createExpr13TestCallTarget;
-import static com.oracle.truffle.tools.test.TestNodes.createExpr13TestRootNode;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
-import org.junit.Test;
 
 public class NodeExecCounterTest {
 
     @Test
-    public void testNoExecution() {
+    public void testNoExecution() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
+        final Instrumenter instrumenter = TestNodes.createInstrumenter();
         final NodeExecCounter tool = new NodeExecCounter();
         assertEquals(tool.getCounts().length, 0);
-        tool.install();
+        tool.install(instrumenter);
         assertEquals(tool.getCounts().length, 0);
         tool.setEnabled(false);
         assertEquals(tool.getCounts().length, 0);
@@ -59,30 +57,33 @@ public class NodeExecCounterTest {
     }
 
     @Test
-    public void testToolCreatedTooLate() {
-        final CallTarget expr13callTarget = createExpr13TestCallTarget();
+    public void testToolCreatedTooLate() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
+        final Instrumenter instrumenter = TestNodes.createInstrumenter();
+        final CallTarget expr13callTarget = createExpr13TestCallTarget(instrumenter);
         final NodeExecCounter tool = new NodeExecCounter();
-        tool.install();
+        tool.install(instrumenter);
         assertEquals(13, expr13callTarget.call());
         assertEquals(tool.getCounts().length, 0);
         tool.dispose();
     }
 
     @Test
-    public void testToolInstalledcTooLate() {
+    public void testToolInstalledcTooLate() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
+        final Instrumenter instrumenter = TestNodes.createInstrumenter();
         final NodeExecCounter tool = new NodeExecCounter();
-        final CallTarget expr13callTarget = createExpr13TestCallTarget();
-        tool.install();
+        final CallTarget expr13callTarget = createExpr13TestCallTarget(instrumenter);
+        tool.install(instrumenter);
         assertEquals(13, expr13callTarget.call());
         assertEquals(tool.getCounts().length, 0);
         tool.dispose();
     }
 
     @Test
-    public void testCountingAll() {
+    public void testCountingAll() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
+        final Instrumenter instrumenter = TestNodes.createInstrumenter();
         final NodeExecCounter tool = new NodeExecCounter();
-        tool.install();
-        final CallTarget expr13callTarget = createExpr13TestCallTarget();
+        tool.install(instrumenter);
+        final CallTarget expr13callTarget = createExpr13TestCallTarget(instrumenter);
 
         // execute once
         assertEquals(13, expr13callTarget.call());
@@ -124,17 +125,18 @@ public class NodeExecCounterTest {
     }
 
     @Test
-    public void testCountingTagged() {
+    public void testCountingTagged() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
+        final Instrumenter instrumenter = TestNodes.createInstrumenter();
         final NodeExecCounter tool = new NodeExecCounter(StandardSyntaxTag.STATEMENT);
-        tool.install();
-        final RootNode expr13rootNode = createExpr13TestRootNode();
+        tool.install(instrumenter);
+        final RootNode expr13rootNode = createExpr13TestRootNode(instrumenter);
 
         // Not probed yet.
         assertEquals(13, expr13rootNode.execute(null));
         assertEquals(tool.getCounts().length, 0);
 
         final Node addNode = expr13rootNode.getChildren().iterator().next();
-        final Probe probe = addNode.probe();
+        final Probe probe = instrumenter.probe(addNode);
 
         // Probed but not tagged yet.
         assertEquals(13, expr13rootNode.execute(null));

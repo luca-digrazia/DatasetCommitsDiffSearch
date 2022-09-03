@@ -24,8 +24,8 @@
  */
 package com.oracle.truffle.api.instrument;
 
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.source.*;
 
 /**
  * An observer of events related to {@link Probe}s: creating and tagging.
@@ -41,10 +41,11 @@ public interface ProbeListener {
     void startASTProbing(Source source);
 
     /**
-     * Notifies that a {@link Probe} has been newly attached to an AST via {@link Node#probe()}.
+     * Notifies that a {@link Probe} has been newly attached to an AST via
+     * {@link Instrumenter#probe(Node)}.
      * <p>
      * There can be no more than one {@link Probe} at a node; this notification will only be
-     * delivered the first time {@linkplain Node#probe() probe()} is called at a particular AST
+     * delivered the first time {@linkplain Instrumenter#probe(Node)} is called at a particular AST
      * node. There will also be no notification when the AST to which the Probe is attached is
      * cloned.
      */

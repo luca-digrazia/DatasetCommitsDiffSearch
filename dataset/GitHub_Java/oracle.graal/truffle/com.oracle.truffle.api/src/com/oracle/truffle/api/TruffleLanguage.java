@@ -32,6 +32,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -208,9 +209,10 @@ public abstract class TruffleLanguage<C> {
     protected abstract void enableASTProbing(ASTProber astProber);
 
     /**
-     * Gets the current specification for AST instrumentation for the language.
+     * Gets the current specification for AST instrumentation for the language; <em>empty</em> if
+     * none.
      */
-    protected abstract ASTProber getDefaultASTProber();
+    protected abstract List<ASTProber> getASTProbers();
 
     /**
      * Runs source code in a halted execution context, or at top level.
@@ -426,9 +428,9 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        protected ASTProber getDefaultASTProber(Object vm, Class<? extends TruffleLanguage> languageClass) {
+        protected List<ASTProber> getASTProbers(Object vm, Class<? extends TruffleLanguage> languageClass) {
             TruffleLanguage impl = findLanguageImpl(vm, languageClass);
-            return impl.getDefaultASTProber();
+            return impl.getASTProbers();
         }
 
         @SuppressWarnings("deprecation")

@@ -24,37 +24,22 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.Assumption;
+import static com.oracle.truffle.api.debug.Breakpoint.State.*;
+
+import java.io.*;
+import java.util.*;
+import java.util.Map.Entry;
+
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Truffle;
-import static com.oracle.truffle.api.debug.Breakpoint.State.DISABLED;
-import static com.oracle.truffle.api.debug.Breakpoint.State.DISABLED_UNRESOLVED;
-import static com.oracle.truffle.api.debug.Breakpoint.State.DISPOSED;
-import static com.oracle.truffle.api.debug.Breakpoint.State.ENABLED;
-import static com.oracle.truffle.api.debug.Breakpoint.State.ENABLED_UNRESOLVED;
 import com.oracle.truffle.api.debug.Debugger.BreakpointCallback;
 import com.oracle.truffle.api.debug.Debugger.WarningLog;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
-import com.oracle.truffle.api.instrument.Instrument;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.SyntaxTag;
-import com.oracle.truffle.api.instrument.SyntaxTagTrap;
-import com.oracle.truffle.api.instrument.impl.DefaultProbeListener;
-import com.oracle.truffle.api.instrument.impl.DefaultStandardInstrumentListener;
-import com.oracle.truffle.api.nodes.InvalidAssumptionException;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.utilities.CyclicAssumption;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.instrument.impl.*;
+import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.utilities.*;
 
 // TODO (mlvdv) some common functionality could be factored out of this and LineBreakpointSupport
 
@@ -62,10 +47,10 @@ import java.util.Map.Entry;
  * Support class for creating and managing "Tag Breakpoints". A Tag Breakpoint halts execution just
  * before reaching any node whose Probe carries a specified {@linkplain SyntaxTag Tag}.
  * <p>
- * The {@linkplain Probe#setBeforeTagTrap(SyntaxTagTrap) Tag Trap}, which is built directly into the
- * Instrumentation Framework, does the same thing more efficiently, but there may only be one Tag
- * Trap active at a time. Any number of tag breakpoints may coexist with the Tag Trap, but it would
- * be confusing to have a Tag Breakpoint set for the same Tag as the current Tag Trap.
+ * The {@linkplain Instrumenter#setBeforeTagTrap(SyntaxTagTrap) Tag Trap}, which is built directly
+ * into the Instrumentation Framework, does the same thing more efficiently, but there may only be
+ * one Tag Trap active at a time. Any number of tag breakpoints may coexist with the Tag Trap, but
+ * it would be confusing to have a Tag Breakpoint set for the same Tag as the current Tag Trap.
  * <p>
  * Notes:
  * <ol>
@@ -103,6 +88,7 @@ final class TagBreakpointFactory {
         }
     };
 
+    private final Debugger debugger;
     private final BreakpointCallback breakpointCallback;
     private final WarningLog warningLog;
 
@@ -117,14 +103,13 @@ final class TagBreakpointFactory {
      */
     @CompilationFinal private boolean breakpointsActive = true;
     private final CyclicAssumption breakpointsActiveUnchanged = new CyclicAssumption(BREAKPOINT_NAME + " globally active");
-    private final Debugger debugger;
 
     TagBreakpointFactory(Debugger debugger, BreakpointCallback breakpointCallback, final WarningLog warningLog) {
         this.debugger = debugger;
         this.breakpointCallback = breakpointCallback;
         this.warningLog = warningLog;
 
-        Probe.addProbeListener(new DefaultProbeListener() {
+        debugger.getInstrumenter().addProbeListener(new DefaultProbeListener() {
 
             @Override
             public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
@@ -195,7 +180,7 @@ final class TagBreakpointFactory {
 
             tagToBreakpoint.put(tag, breakpoint);
 
-            for (Probe probe : Probe.findProbesTaggedAs(tag)) {
+            for (Probe probe : debugger.getInstrumenter().findProbesTaggedAs(tag)) {
                 breakpoint.attach(probe);
             }
         } else {

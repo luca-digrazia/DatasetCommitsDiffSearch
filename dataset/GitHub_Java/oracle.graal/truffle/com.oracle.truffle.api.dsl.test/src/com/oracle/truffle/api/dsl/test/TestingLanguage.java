@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import java.io.IOException;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.DebugSupportProvider;
@@ -35,6 +33,10 @@ import com.oracle.truffle.api.instrument.ToolSupportProvider;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 public final class TestingLanguage extends TruffleLanguage<Object> {
     public static final TestingLanguage INSTANCE = new TestingLanguage();
@@ -69,8 +71,8 @@ public final class TestingLanguage extends TruffleLanguage<Object> {
     }
 
     @Override
-    protected ASTProber getDefaultASTProber() {
-        return null;
+    protected List<ASTProber> getASTProbers() {
+        return Collections.emptyList();
     }
 
     @SuppressWarnings("deprecation")

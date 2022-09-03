@@ -28,6 +28,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 import org.junit.Test;
 
@@ -254,8 +256,8 @@ public class InitializationTest {
         }
 
         @Override
-        protected ASTProber getDefaultASTProber() {
-            return prober;
+        protected List<ASTProber> getASTProbers() {
+            return Arrays.asList(prober);
         }
 
         @SuppressWarnings("deprecation")
