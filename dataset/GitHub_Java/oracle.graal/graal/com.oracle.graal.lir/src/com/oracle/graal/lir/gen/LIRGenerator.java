@@ -22,25 +22,24 @@
  */
 package com.oracle.graal.lir.gen;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
+import com.oracle.graal.options.*;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
@@ -184,7 +183,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
             TTY.println();
         }
         assert LIRVerifier.verify(op);
-        res.getLIR().getLIRforBlock(getCurrentBlock()).add(op);
+        res.getLIR().getLIRforBlock(currentBlock).add(op);
         return op;
     }
 
@@ -196,55 +195,35 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return ops.get(ops.size() - 1) instanceof BlockEndOp;
     }
 
-    private final class BlockScopeImpl extends BlockScope {
-
-        private BlockScopeImpl(AbstractBlockBase<?> block) {
-            currentBlock = block;
+    public final void doBlockStart(AbstractBlockBase<?> block) {
+        if (Options.PrintIRWithLIR.getValue()) {
+            TTY.print(block.toString());
         }
 
-        private void doBlockStart() {
-            if (Options.PrintIRWithLIR.getValue()) {
-                TTY.print(currentBlock.toString());
-            }
+        currentBlock = block;
 
-            // set up the list of LIR instructions
-            assert res.getLIR().getLIRforBlock(currentBlock) == null : "LIR list already computed for this block";
-            res.getLIR().setLIRforBlock(currentBlock, new ArrayList<LIRInstruction>());
+        // set up the list of LIR instructions
+        assert res.getLIR().getLIRforBlock(block) == null : "LIR list already computed for this block";
+        res.getLIR().setLIRforBlock(block, new ArrayList<LIRInstruction>());
 
-            append(new LabelOp(new Label(currentBlock.getId()), currentBlock.isAligned()));
+        append(new LabelOp(new Label(block.getId()), block.isAligned()));
 
-            if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
-                TTY.println("BEGIN Generating LIR for block B" + currentBlock.getId());
-            }
+        if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
+            TTY.println("BEGIN Generating LIR for block B" + block.getId());
         }
-
-        private void doBlockEnd() {
-            if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
-                TTY.println("END Generating LIR for block B" + currentBlock.getId());
-            }
-
-            if (Options.PrintIRWithLIR.getValue()) {
-                TTY.println();
-            }
-            currentBlock = null;
-        }
-
-        @Override
-        public AbstractBlockBase<?> getCurrentBlock() {
-            return currentBlock;
-        }
-
-        @Override
-        public void close() {
-            doBlockEnd();
-        }
-
     }
 
-    public final BlockScope getBlockScope(AbstractBlockBase<?> block) {
-        BlockScopeImpl blockScope = new BlockScopeImpl(block);
-        blockScope.doBlockStart();
-        return blockScope;
+    public final void doBlockEnd(AbstractBlockBase<?> block) {
+
+        if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
+            TTY.println("END Generating LIR for block B" + block.getId());
+        }
+
+        currentBlock = null;
+
+        if (Options.PrintIRWithLIR.getValue()) {
+            TTY.println();
+        }
     }
 
     public void emitIncomingValues(Value[] params) {
@@ -280,7 +259,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
             } else if (isStackSlot(value)) {
                 return StackSlot.get(stackKind, asStackSlot(value).getRawOffset(), asStackSlot(value).getRawAddFrameSize());
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         }
         return value;
@@ -289,7 +268,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     @Override
     public Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState frameState, Value... args) {
         LIRFrameState state = null;
-        if (linkage.needsDebugInfo()) {
+        if (linkage.canDeoptimize()) {
             if (frameState != null) {
                 state = frameState;
             } else {
@@ -414,10 +393,10 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     public LIRInstruction createBenchmarkCounter(String name, String group, Value increment) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     public LIRInstruction createMultiBenchmarkCounter(String[] names, String[] groups, Value[] increments) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 }

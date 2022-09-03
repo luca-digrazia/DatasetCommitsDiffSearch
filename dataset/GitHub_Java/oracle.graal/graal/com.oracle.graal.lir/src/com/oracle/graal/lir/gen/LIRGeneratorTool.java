@@ -29,25 +29,12 @@ import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.StackMove;
 
 public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCounterFactory {
 
     public interface SpillMoveFactory {
 
         LIRInstruction createMove(AllocatableValue result, Value input);
-
-        default LIRInstruction createStackMove(AllocatableValue result, Value input) {
-            return new StackMove(result, input);
-        }
-    }
-
-    public abstract class BlockScope implements AutoCloseable {
-
-        public abstract AbstractBlockBase<?> getCurrentBlock();
-
-        public abstract void close();
-
     }
 
     CodeGenProviders getProviders();
@@ -68,7 +55,9 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
 
     SpillMoveFactory getSpillMoveFactory();
 
-    BlockScope getBlockScope(AbstractBlockBase<?> block);
+    void doBlockStart(AbstractBlockBase<?> block);
+
+    void doBlockEnd(AbstractBlockBase<?> block);
 
     Value emitLoadConstant(LIRKind kind, Constant constant);
 
