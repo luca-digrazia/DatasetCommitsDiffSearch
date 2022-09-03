@@ -22,10 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.InputType.Association;
-import static com.oracle.graal.nodeinfo.InputType.State;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 import static jdk.vm.ci.code.BytecodeFrame.getPlaceholderBciName;
 import static jdk.vm.ci.code.BytecodeFrame.isPlaceholderBci;
 
@@ -34,6 +30,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaUtil;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.bytecode.Bytecodes;
@@ -52,19 +54,13 @@ import com.oracle.graal.nodes.java.MonitorIdNode;
 import com.oracle.graal.nodes.virtual.EscapeObjectState;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaUtil;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
 /**
  * The {@code FrameState} class encapsulates the frame state (i.e. local variables and operand
  * stack) at a particular point in the abstract interpretation.
  *
  * This can be used as debug or deoptimization information.
  */
-@NodeInfo(nameTemplate = "@{p#method/s}:{p#bci}", cycles = CYCLES_0, size = SIZE_1)
+@NodeInfo(nameTemplate = "@{p#method/s}:{p#bci}")
 public final class FrameState extends VirtualState implements IterableNodeType {
     public static final NodeClass<FrameState> TYPE = NodeClass.create(FrameState.class);
 
@@ -104,9 +100,9 @@ public final class FrameState extends VirtualState implements IterableNodeType {
      */
     @OptionalInput NodeInputList<ValueNode> values;
 
-    @OptionalInput(Association) NodeInputList<MonitorIdNode> monitorIds;
+    @OptionalInput(InputType.Association) NodeInputList<MonitorIdNode> monitorIds;
 
-    @OptionalInput(State) NodeInputList<EscapeObjectState> virtualObjectMappings;
+    @OptionalInput(InputType.State) NodeInputList<EscapeObjectState> virtualObjectMappings;
 
     /**
      * The bytecode index to which this frame state applies.
