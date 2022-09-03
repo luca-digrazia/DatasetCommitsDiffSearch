@@ -250,7 +250,7 @@ abstract class LibFFIType {
         @Override
         public Object slowpathPrepareArgument(TruffleObject value) {
             // we always need an unbox here
-            return PrepareArgument.UNBOX;
+            return null;
         }
     }
 
@@ -307,7 +307,7 @@ abstract class LibFFIType {
             if (value instanceof NativePointer || value instanceof NativeString) {
                 return value;
             } else {
-                return PrepareArgument.POINTER;
+                return super.slowpathPrepareArgument(value);
             }
         }
     }
@@ -354,7 +354,7 @@ abstract class LibFFIType {
             if (value instanceof NativeString) {
                 return value;
             } else {
-                return PrepareArgument.UNBOX;
+                return null;
             }
         }
     }
@@ -550,7 +550,7 @@ abstract class LibFFIType {
         public Object slowpathPrepareArgument(TruffleObject value) {
             Class<?> arrayType = getArrayType(value);
             if (arrayType == null) {
-                return PrepareArgument.POINTER;
+                return null;
             } else {
                 return JavaInterop.asJavaObject(arrayType, value);
             }
@@ -740,19 +740,12 @@ abstract class LibFFIType {
         return createSerializeArgumentNode();
     }
 
-    public enum PrepareArgument {
-        UNBOX,
-        POINTER
-    }
-
     /**
      * Prepare the argument so it can be passed to the {@link #serialize} method. This should only
      * be called from the slow-path, on the fast-path the node created by
      * {@link #createSerializeArgumentNode()} will do this already in a more efficient way. If this
-     * method returns {@link PrepareArgument#UNBOX}, you should send an {@link Message#UNBOX}
-     * message to the object and try again. If this method returns {@link PrepareArgument#POINTER},
-     * you should try to convert this object to a pointer with {@link Message#AS_POINTER} or
-     * {@link Message#TO_NATIVE}.
+     * method returns {@code null}, you should send an {@link Message#UNBOX} message to the object
+     * and try again.
      */
     @TruffleBoundary
     public abstract Object slowpathPrepareArgument(TruffleObject value);
