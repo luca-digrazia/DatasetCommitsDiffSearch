@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -350,7 +350,7 @@ public class NativeImage {
         @Override
         public Path getJavaExecutable() {
             Path javaHomePath = rootDir.getParent();
-            Path binJava = Paths.get("bin", OS.getCurrent() == OS.WINDOWS ? "java.exe" : "java");
+            Path binJava = Paths.get("bin", "java");
             if (Files.isExecutable(javaHomePath.resolve(binJava))) {
                 return javaHomePath.resolve(binJava);
             }
@@ -562,7 +562,7 @@ public class NativeImage {
             if (!config.getBuilderJVMCIClasspathAppend().isEmpty()) {
                 String builderJavaArg = config.getBuilderJVMCIClasspathAppend()
                                 .stream().map(path -> canonicalize(path).toString())
-                                .collect(Collectors.joining(File.pathSeparator, "-Djvmci.class.path.append=", ""));
+                                .collect(Collectors.joining(":", "-Djvmci.class.path.append=", ""));
                 addImageBuilderJavaArgs(builderJavaArg);
             }
 
@@ -620,7 +620,7 @@ public class NativeImage {
     private Stream<String> getRelativeLauncherClassPath() {
         return optionRegistry.getEnabledOptionsStream(MacroOptionKind.Language, MacroOptionKind.Tool)
                         .map(lang -> lang.getProperty("LauncherClassPath"))
-                        .filter(Objects::nonNull).flatMap(Pattern.compile(File.pathSeparator, Pattern.LITERAL)::splitAsStream);
+                        .filter(Objects::nonNull).flatMap(Pattern.compile(":", Pattern.LITERAL)::splitAsStream);
     }
 
     protected static String consolidateSingleValueArg(Collection<String> args, String argPrefix) {
@@ -675,28 +675,6 @@ public class NativeImage {
         }
     }
 
-    private static final String cpWildcardSubstitute = "$JavaCla$$pathWildcard$ubstitute$";
-
-    static Path stringToClasspath(String cp) {
-        String[] components = cp.split(Pattern.quote(File.separator), Integer.MAX_VALUE);
-        for (int i = 0; i < components.length; i++) {
-            if (components[i].equals("*")) {
-                components[i] = cpWildcardSubstitute;
-            }
-        }
-        return Paths.get(String.join(File.separator, components));
-    }
-
-    static String classpathToString(Path cp) {
-        String[] components = cp.toString().split(Pattern.quote(File.separator), Integer.MAX_VALUE);
-        for (int i = 0; i < components.length; i++) {
-            if (components[i].equals(cpWildcardSubstitute)) {
-                components[i] = "*";
-            }
-        }
-        return String.join(File.separator, components);
-    }
-
     private void processClasspathNativeImageProperties(Path classpathEntry) {
         try {
             if (Files.isDirectory(classpathEntry)) {
@@ -704,7 +682,7 @@ public class NativeImage {
                 processNativeImageProperties(nativeImageMetaInfBase);
             } else {
                 List<Path> jarFileMatches;
-                if (classpathEntry.endsWith(cpWildcardSubstitute)) {
+                if (classpathEntry.endsWith("*")) {
                     jarFileMatches = Files.list(classpathEntry.getParent())
                                     .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".jar"))
                                     .collect(Collectors.toList());
@@ -721,7 +699,7 @@ public class NativeImage {
                 }
             }
         } catch (IOException e) {
-            throw showError("Invalid classpath entry " + classpathToString(classpathEntry), e);
+            throw showError("Invalid classpath entry " + classpathEntry, e);
         }
     }
 
@@ -730,6 +708,7 @@ public class NativeImage {
             List<Path> nativeImageProperties = Files.walk(nativeImageMetaInfBase)
                             .filter(p -> p.endsWith(nativeImagePropertiesFilename))
                             .collect(Collectors.toList());
+
             for (Path nativeImagePropertyFile : nativeImageProperties) {
                 Function<String, String> resolver = str -> {
                     Path resourceRoot = nativeImageMetaInfBase.getParent().getParent();
@@ -746,7 +725,7 @@ public class NativeImage {
                 try {
                     processNativeImageProperties(loadProperties(Files.newInputStream(nativeImagePropertyFile)), resolver);
                 } catch (NativeImageError err) {
-                    showError("Processing " + nativeImagePropertyFile.toUri() + " failed", err);
+                    showError("Processing " + nativeImagePropertyFile + " failed", err);
                 }
             }
         }
@@ -907,9 +886,9 @@ public class NativeImage {
         command.add(canonicalize(config.getJavaExecutable()).toString());
         command.addAll(javaArgs);
         if (!bcp.isEmpty()) {
-            command.add(bcp.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator, "-Xbootclasspath/a:", "")));
+            command.add(bcp.stream().map(Path::toString).collect(Collectors.joining(":", "-Xbootclasspath/a:", "")));
         }
-        command.addAll(Arrays.asList("-cp", cp.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator))));
+        command.addAll(Arrays.asList("-cp", cp.stream().map(Path::toString).collect(Collectors.joining(":"))));
         command.add("com.oracle.svm.hosted.NativeImageGeneratorRunner");
         if (IS_AOT && OS.getCurrent().hasProcFS) {
             /*
@@ -919,7 +898,7 @@ public class NativeImage {
             command.addAll(Arrays.asList("-watchpid", "" + ProcessProperties.getProcessID()));
         }
         command.addAll(imageArgs);
-        command.addAll(Arrays.asList("-imagecp", imagecp.stream().map(NativeImage::classpathToString).collect(Collectors.joining(File.pathSeparator))));
+        command.addAll(Arrays.asList("-imagecp", imagecp.stream().map(Path::toString).collect(Collectors.joining(":"))));
 
         showVerboseMessage(isVerbose() || dryRun, "Executing [");
         showVerboseMessage(isVerbose() || dryRun, command.stream().collect(Collectors.joining(" \\\n")));
@@ -968,24 +947,24 @@ public class NativeImage {
 
     Path canonicalize(Path path) {
         Path absolutePath = path.isAbsolute() ? path : config.getWorkingDirectory().resolve(path);
-        boolean hasWildcard = absolutePath.endsWith(cpWildcardSubstitute);
+        boolean hasWildcard = absolutePath.endsWith("*");
         if (hasWildcard) {
             absolutePath = absolutePath.getParent();
         }
         try {
             Path realPath = absolutePath.toRealPath(LinkOption.NOFOLLOW_LINKS);
             if (!Files.isReadable(realPath)) {
-                showError("Path entry " + classpathToString(path) + " is not readable");
+                showError("Path entry " + path.toString() + " is not readable");
             }
             if (hasWildcard) {
                 if (!Files.isDirectory(realPath)) {
-                    showError("Path entry with wildcard " + classpathToString(path) + " is not a directory");
+                    showError("Path entry with wildcard " + path.toString() + " is not a directory");
                 }
-                realPath = realPath.resolve(cpWildcardSubstitute);
+                realPath = realPath.resolve("*");
             }
             return realPath;
         } catch (IOException e) {
-            throw showError("Invalid Path entry " + classpathToString(path), e);
+            throw showError("Invalid Path entry " + path.toString(), e);
         }
     }
 
@@ -1047,23 +1026,18 @@ public class NativeImage {
         imageProvidedClasspath.add(classpathEntry);
     }
 
-    void addCustomImageClasspath(String classpath) {
-        addCustomImageClasspath(stringToClasspath(classpath));
-    }
-
     void addCustomImageClasspath(Path classpath) {
-        Path classpathEntry;
         try {
-            classpathEntry = canonicalize(classpath);
+            Path classpathEntry = canonicalize(classpath);
+            processClasspathNativeImageProperties(classpathEntry);
+            customImageClasspath.add(classpathEntry);
         } catch (NativeImageError e) {
+            /* Allow non-existent classpath entries to comply with `java` command behaviour. */
+            customImageClasspath.add(classpath);
             if (isVerbose()) {
                 showWarning("Invalid classpath entry: " + classpath);
             }
-            /* Allow non-existent classpath entries to comply with `java` command behaviour. */
-            classpathEntry = classpath;
         }
-        processClasspathNativeImageProperties(classpathEntry);
-        customImageClasspath.add(classpathEntry);
     }
 
     void addCustomJavaArgs(String javaArg) {
