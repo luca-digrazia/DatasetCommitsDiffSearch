@@ -22,9 +22,10 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_5;
-
 import java.util.EnumMap;
+
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 
 import com.oracle.graal.compiler.common.calc.FloatConvert;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
@@ -39,14 +40,11 @@ import com.oracle.graal.nodes.spi.Lowerable;
 import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-
 /**
  * A {@code FloatConvert} converts between integers and floating point numbers according to Java
  * semantics.
  */
-@NodeInfo(cycles = CYCLES_5)
+@NodeInfo
 public final class FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> implements ConvertNode, Lowerable, ArithmeticLIRLowerable {
     public static final NodeClass<FloatConvertNode> TYPE = NodeClass.create(FloatConvertNode.class);
 
@@ -115,7 +113,6 @@ public final class FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> 
         return this;
     }
 
-    @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,42 +22,62 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
+import java.io.Serializable;
+import java.util.function.Function;
+
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ArithmeticOperation;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 
 @NodeInfo
-public abstract class UnaryArithmeticNode extends UnaryNode implements ArithmeticLIRLowerable {
+public abstract class UnaryArithmeticNode<OP> extends UnaryNode implements ArithmeticOperation, ArithmeticLIRLowerable {
 
-    protected final UnaryOp op;
+    @SuppressWarnings("rawtypes") public static final NodeClass<UnaryArithmeticNode> TYPE = NodeClass.create(UnaryArithmeticNode.class);
 
-    protected UnaryArithmeticNode(UnaryOp op, ValueNode value) {
-        super(op.foldStamp(value.stamp()), value);
-        this.op = op;
+    protected interface SerializableUnaryFunction<T> extends Function<ArithmeticOpTable, UnaryOp<T>>, Serializable {
     }
 
-    public UnaryOp getOp() {
-        return op;
+    protected final SerializableUnaryFunction<OP> getOp;
+
+    protected UnaryArithmeticNode(NodeClass<? extends UnaryArithmeticNode<OP>> c, SerializableUnaryFunction<OP> getOp, ValueNode value) {
+        super(c, getOp.apply(ArithmeticOpTable.forStamp(value.stamp())).foldStamp(value.stamp()), value);
+        this.getOp = getOp;
     }
 
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 1;
-        return op.foldConstant(inputs[0]);
+    protected final UnaryOp<OP> getOp(ValueNode forValue) {
+        return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp()));
+    }
+
+    public final UnaryOp<OP> getArithmeticOp() {
+        return getOp(getValue());
     }
 
     @Override
-    public boolean inferStamp() {
-        return updateStamp(op.foldStamp(getValue().stamp()));
+    public Stamp foldStamp(Stamp newStamp) {
+        assert newStamp.isCompatible(getValue().stamp());
+        return getOp(getValue()).foldStamp(newStamp);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        if (forValue.isConstant()) {
-            return ConstantNode.forPrimitive(stamp(), op.foldConstant(forValue.asConstant()));
+        ValueNode synonym = findSynonym(forValue, getOp(forValue));
+        if (synonym != null) {
+            return synonym;
         }
         return this;
+    }
+
+    protected static <OP> ValueNode findSynonym(ValueNode forValue, UnaryOp<OP> op) {
+        if (forValue.isConstant()) {
+            return ConstantNode.forPrimitive(op.foldStamp(forValue.stamp()), op.foldConstant(forValue.asConstant()));
+        }
+        return null;
     }
 }
