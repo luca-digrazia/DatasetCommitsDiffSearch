@@ -35,16 +35,14 @@ public class ReadEliminationPhase extends Phase {
     @Override
     protected void run(Graph graph) {
         for (ReadNode n : graph.getNodes(ReadNode.class)) {
-            if (n.inputs().variablePart().size() > 0) {
-                Node memoryInput = n.inputs().variablePart().get(0);
-                if (memoryInput instanceof WriteNode) {
-                    WriteNode other = (WriteNode) memoryInput;
-                    if (other.object() == n.object() && other.location() == n.location()) {
-                        if (GraalOptions.TraceReadElimination) {
-                            TTY.println("Eliminated memory read " + n + "and replaced with node " + other.value());
-                        }
-                        n.replaceAndDelete(other.value());
+            Node memoryInput = n.inputs().variablePart().get(0);
+            if (memoryInput instanceof WriteNode) {
+                WriteNode other = (WriteNode) memoryInput;
+                if (other.object() == n.object() && other.location() == n.location()) {
+                    if (GraalOptions.TraceReadElimination) {
+                        TTY.println("Eliminated memory read " + n + "and replaced with node " + other.value());
                     }
+                    n.replaceAndDelete(other.value());
                 }
             }
         }

@@ -26,7 +26,6 @@ import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.runtime.nodes.*;
@@ -47,7 +46,6 @@ public class HotSpotRuntime implements RiRuntime {
     final HotSpotRegisterConfig regConfig;
     final HotSpotRegisterConfig globalStubRegConfig;
     private final Compiler compiler;
-    private IdentityHashMap<RiMethod, CompilerGraph> intrinsicGraphs = new IdentityHashMap<RiMethod, CompilerGraph>();
 
 
     public HotSpotRuntime(HotSpotVMConfig config, Compiler compiler) {
@@ -277,23 +275,5 @@ public class HotSpotRuntime implements RiRuntime {
             }
             field.replaceAndDelete(memoryWrite);
         }
-    }
-
-    @Override
-    public Graph intrinsicGraph(RiMethod method, List<? extends Node> parameters) {
-        if (!intrinsicGraphs.containsKey(method)) {
-            RiType holder = method.holder();
-            String fullName = method.name() + method.signature().asString();
-            if (holder.name().equals("Ljava/lang/Object;")) {
-                if (fullName.equals("getClass()Ljava/lang/Class;")) {
-
-                }
-            }
-
-            if (!intrinsicGraphs.containsKey(method)) {
-                intrinsicGraphs.put(method, null);
-            }
-        }
-        return intrinsicGraphs.get(method);
     }
 }
