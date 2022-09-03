@@ -26,6 +26,7 @@ package com.oracle.svm.graal;
 
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.Custom;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.FromAlias;
+import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.NewInstance;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.Reset;
 
 import java.io.PrintStream;
@@ -78,8 +79,6 @@ import com.oracle.svm.graal.meta.SubstrateMethod;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-// Checkstyle: stop
 
 @TargetClass(value = org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.class, onlyWith = GraalFeature.IsEnabled.class)
 final class Target_org_graalvm_compiler_nodes_graphbuilderconf_InvocationPlugins {
@@ -162,7 +161,7 @@ final class Target_org_graalvm_compiler_debug_DebugContext_Immutable {
      * be cleared.
      */
     @Alias @RecomputeFieldValue(kind = Custom, declClass = ClearImmutableCache.class)//
-    private static Target_org_graalvm_compiler_debug_DebugContext_Immutable[] CACHE;
+    private static final Target_org_graalvm_compiler_debug_DebugContext_Immutable[] CACHE = null;
 }
 
 @TargetClass(value = DebugHandlersFactory.class, onlyWith = GraalFeature.IsEnabled.class)
@@ -191,7 +190,7 @@ final class Target_org_graalvm_compiler_debug_DebugContext {
      * holds onto a thread and is only used for assertions.
      */
     @Alias @RecomputeFieldValue(kind = Reset)//
-    private Target_org_graalvm_compiler_debug_DebugContext_Invariants invariants;
+    private final Target_org_graalvm_compiler_debug_DebugContext_Invariants invariants = null;
 
     /**
      * Initialization of {@code TTY.out} causes the pointsto analysis to see
@@ -199,7 +198,7 @@ final class Target_org_graalvm_compiler_debug_DebugContext {
      * must not include HotSpot code, a substitution is required.
      */
     @Alias @RecomputeFieldValue(kind = FromAlias)//
-    public static PrintStream DEFAULT_LOG_STREAM = Log.logStream();
+    public static final PrintStream DEFAULT_LOG_STREAM = Log.logStream();
 
     /**
      * SVM doesn't currently support {@code Throwable.fillInStackTrace()}. This substitution should
@@ -214,7 +213,7 @@ final class Target_org_graalvm_compiler_debug_DebugContext {
 @TargetClass(value = TimeSource.class, onlyWith = GraalFeature.IsEnabled.class)
 final class Target_org_graalvm_compiler_debug_TimeSource {
     @Alias @RecomputeFieldValue(kind = FromAlias)//
-    private static boolean USING_THREAD_CPU_TIME = false;
+    private static final boolean USING_THREAD_CPU_TIME = false;
 }
 
 @TargetClass(value = org.graalvm.compiler.debug.TTY.class, onlyWith = GraalFeature.IsEnabled.class)
@@ -241,10 +240,18 @@ final class Target_org_graalvm_compiler_virtual_phases_ea_EffectList {
 @TargetClass(value = org.graalvm.compiler.debug.KeyRegistry.class, onlyWith = GraalFeature.IsEnabled.class)
 final class Target_org_graalvm_compiler_debug_KeyRegistry {
 
-    @Alias @RecomputeFieldValue(kind = FromAlias)//
+    static class EconomicMapResetter implements RecomputeFieldValue.CustomFieldValueComputer {
+
+        @Override
+        public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
+            return EconomicMap.create();
+        }
+    }
+
+    @Alias @RecomputeFieldValue(kind = Custom, declClass = EconomicMapResetter.class)//
     private static EconomicMap<String, Integer> keyMap = EconomicMap.create();
 
-    @Alias @RecomputeFieldValue(kind = FromAlias)//
+    @Alias @RecomputeFieldValue(kind = NewInstance, declClass = ArrayList.class)//
     private static List<MetricKey> keys = new ArrayList<>();
 }
 
@@ -378,14 +385,14 @@ final class Target_org_graalvm_compiler_lir_CompositeValueClass {
 final class Target_org_graalvm_compiler_printer_NoDeadCodeVerifyHandler {
     @Alias//
     @RecomputeFieldValue(kind = Kind.NewInstance, declClass = ConcurrentHashMap.class)//
-    private static Map<String, Boolean> discovered;
+    private static final Map<String, Boolean> discovered = new ConcurrentHashMap<>();
 }
 
 @TargetClass(value = org.graalvm.compiler.nodes.NamedLocationIdentity.class, innerClass = "DB", onlyWith = GraalFeature.IsEnabled.class)
 final class Target_org_graalvm_compiler_nodes_NamedLocationIdentity_DB {
     @Alias//
     @RecomputeFieldValue(kind = FromAlias, declClass = EconomicMap.class)//
-    private static EconomicSet<String> map = EconomicSet.create(Equivalence.DEFAULT);
+    private static final EconomicSet<String> map = EconomicSet.create(Equivalence.DEFAULT);
 }
 
 /** Dummy class to have a class with the file's name. Do not remove. */
