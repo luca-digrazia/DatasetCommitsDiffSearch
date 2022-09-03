@@ -43,7 +43,6 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.Feature;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.RuntimeReflection;
 
 import com.oracle.graal.pointsto.meta.AnalysisType;
@@ -53,7 +52,6 @@ import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
-import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
 
 /**
  * Support for {@link ServiceLoader} on Substrate VM.
@@ -202,10 +200,6 @@ public class ServiceLoaderFeature implements Feature {
             Class<?> implementationClass = access.findClassByName(implementationClassName);
             if (implementationClass == null) {
                 throw UserError.abort("Could not find registered service implementation class `" + implementationClassName + "` for service `" + serviceClassName + "`");
-            }
-
-            if (ImageSingletons.lookup(AnnotationSubstitutionProcessor.class).isDeleted(implementationClass)) {
-                continue;
             }
 
             /* Allow Class.forName at run time for the service implementation. */
