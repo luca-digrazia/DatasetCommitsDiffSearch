@@ -25,11 +25,13 @@ package com.sun.c1x.ir;
 import java.util.*;
 
 import com.oracle.graal.graph.*;
+import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * Denotes the beginning of a basic block, and holds information
@@ -41,7 +43,8 @@ public final class BlockBegin extends StateSplit {
     private static final int INPUT_COUNT = 1;
     private static final int INPUT_STATE_BEFORE = 0;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 1;
+    private static final int SUCCESSOR_END = 0;
 
     @Override
     protected int inputCount() {
@@ -57,16 +60,17 @@ public final class BlockBegin extends StateSplit {
      * The last node in the block (which contains the successors).
      */
     public BlockEnd end() {
-        Instruction next = next();
-        while (!(next instanceof BlockEnd)) {
-            next = next.next();
-        }
-        return (BlockEnd) next;
+        return (BlockEnd) successors().get(super.successorCount() + SUCCESSOR_END);
     }
 
     @Override
     public boolean needsStateAfter() {
         return false;
+    }
+
+    public void setEnd(BlockEnd end) {
+        assert end != null;
+        successors().set(super.successorCount() + SUCCESSOR_END, end);
     }
 
     /**
