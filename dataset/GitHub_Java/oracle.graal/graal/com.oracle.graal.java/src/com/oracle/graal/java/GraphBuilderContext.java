@@ -57,11 +57,6 @@ public interface GraphBuilderContext {
     void push(Kind kind, ValueNode value);
 
     /**
-     * Determines if the graph builder is parsing a snippet or method substitution.
-     */
-    boolean parsingReplacement();
-
-    /**
      * @see GuardingPiNode#nullCheckedValue(ValueNode)
      */
     static ValueNode nullCheckedValue(GraphBuilderContext builder, ValueNode value) {

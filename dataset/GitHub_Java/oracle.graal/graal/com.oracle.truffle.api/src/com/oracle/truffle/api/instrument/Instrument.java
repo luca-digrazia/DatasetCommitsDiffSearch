@@ -286,31 +286,31 @@ public final class Instrument {
             return nextInstrument.removeFromChain(instrument);
         }
 
-        public void enter(Node node, VirtualFrame vFrame) {
-            Instrument.this.toolEventListener.enter(node, vFrame);
+        public void enter(Node node, VirtualFrame frame) {
+            Instrument.this.toolEventListener.enter(node, frame);
             if (nextInstrument != null) {
-                nextInstrument.enter(node, vFrame);
+                nextInstrument.enter(node, frame);
             }
         }
 
-        public void returnVoid(Node node, VirtualFrame vFrame) {
-            Instrument.this.toolEventListener.returnVoid(node, vFrame);
+        public void returnVoid(Node node, VirtualFrame frame) {
+            Instrument.this.toolEventListener.returnVoid(node, frame);
             if (nextInstrument != null) {
-                nextInstrument.returnVoid(node, vFrame);
+                nextInstrument.returnVoid(node, frame);
             }
         }
 
-        public void returnValue(Node node, VirtualFrame vFrame, Object result) {
-            Instrument.this.toolEventListener.returnValue(node, vFrame, result);
+        public void returnValue(Node node, VirtualFrame frame, Object result) {
+            Instrument.this.toolEventListener.returnValue(node, frame, result);
             if (nextInstrument != null) {
-                nextInstrument.returnValue(node, vFrame, result);
+                nextInstrument.returnValue(node, frame, result);
             }
         }
 
-        public void returnExceptional(Node node, VirtualFrame vFrame, Exception exception) {
-            Instrument.this.toolEventListener.returnExceptional(node, vFrame, exception);
+        public void returnExceptional(Node node, VirtualFrame frame, Exception exception) {
+            Instrument.this.toolEventListener.returnExceptional(node, frame, exception);
             if (nextInstrument != null) {
-                nextInstrument.returnExceptional(node, vFrame, exception);
+                nextInstrument.returnExceptional(node, frame, exception);
             }
         }
 

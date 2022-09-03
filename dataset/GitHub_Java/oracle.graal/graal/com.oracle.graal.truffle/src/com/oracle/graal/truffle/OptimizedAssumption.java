@@ -22,20 +22,18 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleAssumptions;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleStackTraceLimit;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import java.lang.ref.WeakReference;
-import java.util.Arrays;
-import java.util.stream.Collectors;
+import java.lang.ref.*;
+import java.util.*;
+import java.util.stream.*;
 
-import jdk.vm.ci.code.InstalledCode;
-
-import com.oracle.graal.debug.TTY;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.impl.AbstractAssumption;
-import com.oracle.truffle.api.nodes.InvalidAssumptionException;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.debug.*;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CompilerDirectives.*;
+import com.oracle.truffle.api.impl.*;
+import com.oracle.truffle.api.nodes.*;
 
 public final class OptimizedAssumption extends AbstractAssumption {
 
@@ -60,22 +58,14 @@ public final class OptimizedAssumption extends AbstractAssumption {
     }
 
     @Override
-    public void invalidate() {
+    public synchronized void invalidate() {
         if (isValid) {
             invalidateImpl();
         }
     }
 
     @TruffleBoundary
-    private synchronized void invalidateImpl() {
-        /*
-         * Check again, now that we are holding the lock. Since isValid is defined volatile,
-         * double-checked locking is allowed.
-         */
-        if (!isValid) {
-            return;
-        }
-
+    private void invalidateImpl() {
         boolean invalidatedInstalledCode = false;
         Entry e = first;
         while (e != null) {

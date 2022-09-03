@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -40,7 +39,6 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public abstract class CompareNode extends BinaryOpLogicNode {
 
-    public static final NodeClass TYPE = NodeClass.get(CompareNode.class);
     protected final Condition condition;
     protected final boolean unorderedIsTrue;
 
@@ -50,8 +48,8 @@ public abstract class CompareNode extends BinaryOpLogicNode {
      * @param x the instruction producing the first input to the instruction
      * @param y the instruction that produces the second input to this instruction
      */
-    protected CompareNode(NodeClass c, Condition condition, boolean unorderedIsTrue, ValueNode x, ValueNode y) {
-        super(c, x, y);
+    public CompareNode(Condition condition, boolean unorderedIsTrue, ValueNode x, ValueNode y) {
+        super(x, y);
         this.condition = condition;
         this.unorderedIsTrue = unorderedIsTrue;
     }
@@ -90,7 +88,7 @@ public abstract class CompareNode extends BinaryOpLogicNode {
                     return conditionalNode.condition();
                 } else {
                     assert falseResult == true;
-                    return LogicNegationNode.create(conditionalNode.condition());
+                    return new LogicNegationNode(conditionalNode.condition());
 
                 }
             }
@@ -168,8 +166,7 @@ public abstract class CompareNode extends BinaryOpLogicNode {
     }
 
     public static LogicNode createCompareNode(StructuredGraph graph, Condition condition, ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
-        LogicNode result = createCompareNode(condition, x, y, constantReflection);
-        return (result.graph() == null ? graph.unique(result) : result);
+        return graph.unique(createCompareNode(condition, x, y, constantReflection));
     }
 
     public static LogicNode createCompareNode(Condition condition, ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {

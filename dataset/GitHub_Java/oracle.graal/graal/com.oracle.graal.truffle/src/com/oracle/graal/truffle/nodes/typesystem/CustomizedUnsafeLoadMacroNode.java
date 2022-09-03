@@ -38,7 +38,6 @@ import com.oracle.graal.truffle.nodes.asserts.*;
  */
 @NodeInfo
 public final class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode implements Canonicalizable {
-    public static final NodeClass TYPE = NodeClass.get(CustomizedUnsafeLoadMacroNode.class);
 
     private static final int ARGUMENT_COUNT = 4;
     private static final int OBJECT_ARGUMENT_INDEX = 0;
@@ -47,7 +46,7 @@ public final class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationN
     private static final int LOCATION_ARGUMENT_INDEX = 3;
 
     public CustomizedUnsafeLoadMacroNode(Invoke invoke) {
-        super(TYPE, invoke, "The location argument could not be resolved to a constant.");
+        super(invoke, "The location argument could not be resolved to a constant.");
         assert arguments.size() == ARGUMENT_COUNT;
     }
 

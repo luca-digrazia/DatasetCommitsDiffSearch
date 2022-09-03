@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -34,11 +33,10 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class UnboxNode extends UnaryNode implements Virtualizable, Lowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(UnboxNode.class);
     protected final Kind boxingKind;
 
     protected UnboxNode(ValueNode value, Kind boxingKind) {
-        super(TYPE, StampFactory.forKind(boxingKind.getStackKind()), value);
+        super(StampFactory.forKind(boxingKind.getStackKind()), value);
         this.boxingKind = boxingKind;
     }
 

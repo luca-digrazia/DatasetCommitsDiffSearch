@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,47 +23,44 @@
 package com.oracle.graal.truffle.nodes.typesystem;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.truffle.api.*;
+import com.oracle.graal.truffle.nodes.*;
 
 /**
- * Macro node for method {@link CompilerDirectives#unsafeGetFinalObject} and friends.
+ * Load of a final value from a location specified as an offset relative to an object.
+ *
+ * Substitution for method CompilerDirectives#unsafeGet*.
  */
-public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements Canonicalizable, Virtualizable, Lowerable {
-    private static final int ARGUMENT_COUNT = 4;
-    private static final int OBJECT_ARGUMENT_INDEX = 0;
-    private static final int OFFSET_ARGUMENT_INDEX = 1;
-    private static final int CONDITION_ARGUMENT_INDEX = 2;
-    private static final int LOCATION_ARGUMENT_INDEX = 3;
+@NodeInfo
+public final class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements Canonicalizable, Virtualizable, Lowerable {
+    @Input ValueNode object;
+    @Input ValueNode offset;
+    @Input ValueNode condition;
+    @Input ValueNode location;
+    protected final Kind accessKind;
 
-    @Input private ValueNode object;
-    @Input private ValueNode offset;
-    @Input private ValueNode condition;
-    @Input private ValueNode location;
-    private final Kind accessKind;
-
-    public CustomizedUnsafeLoadFinalNode(Invoke invoke) {
-        super(invoke.asNode().stamp());
-        NodeInputList<ValueNode> arguments = invoke.callTarget().arguments();
-        assert arguments.size() == ARGUMENT_COUNT;
-        this.object = arguments.get(OBJECT_ARGUMENT_INDEX);
-        this.offset = arguments.get(OFFSET_ARGUMENT_INDEX);
-        this.condition = arguments.get(CONDITION_ARGUMENT_INDEX);
-        this.location = arguments.get(LOCATION_ARGUMENT_INDEX);
-        this.accessKind = ((MethodCallTargetNode) invoke.callTarget()).targetMethod().getSignature().getReturnKind();
+    public CustomizedUnsafeLoadFinalNode(ValueNode object, ValueNode offset, ValueNode condition, ValueNode location, Kind accessKind) {
+        super(StampFactory.forKind(accessKind.getStackKind()));
+        this.object = object;
+        this.offset = offset;
+        this.condition = condition;
+        this.location = location;
+        this.accessKind = accessKind;
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (object.isConstant() && !object.isNullConstant() && offset.isConstant()) {
-            Constant constant = tool.getConstantReflection().readUnsafeConstant(accessKind, object.asConstant().asObject(), offset.asConstant().asLong(), accessKind == Kind.Object);
-            return ConstantNode.forConstant(constant, tool.getMetaAccess(), graph());
+        if (object.isConstant() && !object.isNullConstant() && offset.isConstant() && condition.isConstant() && condition.asJavaConstant().asInt() == 1) {
+            JavaConstant constant = tool.getConstantReflection().getMemoryAccessProvider().readUnsafeConstant(accessKind, object.asJavaConstant(), offset.asJavaConstant().asLong());
+            return ConstantNode.forConstant(constant, tool.getMetaAccess());
         }
         return this;
     }
@@ -77,11 +74,11 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
         if (state != null && state.getState() == EscapeState.Virtual) {
             ValueNode offsetValue = tool.getReplacedValue(offset);
             if (offsetValue.isConstant()) {
-                long constantOffset = offsetValue.asConstant().asLong();
-                int entryIndex = state.getVirtualObject().entryIndexForOffset(constantOffset);
+                long constantOffset = offsetValue.asJavaConstant().asLong();
+                int entryIndex = state.getVirtualObject().entryIndexForOffset(constantOffset, accessKind);
                 if (entryIndex != -1) {
                     ValueNode entry = state.getEntry(entryIndex);
-                    if (entry.kind() == kind() || state.getVirtualObject().entryKind(entryIndex) == accessKind) {
+                    if (entry.getKind() == getKind() || state.getVirtualObject().entryKind(entryIndex) == accessKind) {
                         tool.replaceWith(entry);
                     }
                 }
@@ -91,16 +88,21 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
 
     @Override
     public void lower(LoweringTool tool) {
-        CompareNode compare = CompareNode.createCompareNode(graph(), Condition.EQ, condition, ConstantNode.forBoolean(true, graph()));
-        Object locationIdentityObject = location.asConstant().asObject();
+        LogicNode compare = CompareNode.createCompareNode(graph(), Condition.EQ, condition, ConstantNode.forBoolean(true, graph()), tool.getConstantReflection());
         LocationIdentity locationIdentity;
-        if (locationIdentityObject == null) {
+        if (!location.isConstant() || location.isNullConstant()) {
             locationIdentity = LocationIdentity.ANY_LOCATION;
         } else {
-            locationIdentity = ObjectLocationIdentity.create(locationIdentityObject);
+            locationIdentity = ObjectLocationIdentity.create(location.asJavaConstant());
         }
         UnsafeLoadNode result = graph().add(new UnsafeLoadNode(object, offset, accessKind, locationIdentity, compare));
         graph().replaceFixedWithFixed(this, result);
         result.lower(tool);
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static <T> T load(Object object, long offset, boolean condition, Object locationIdentity, @ConstantNodeParameter Kind kind) {
+        return UnsafeLoadNode.load(object, offset, kind, null);
     }
 }

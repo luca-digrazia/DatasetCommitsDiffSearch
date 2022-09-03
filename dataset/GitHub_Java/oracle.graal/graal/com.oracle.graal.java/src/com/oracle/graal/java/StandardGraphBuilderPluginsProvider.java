@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.java;
 
+import static com.oracle.graal.java.GraphBuilderContext.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.java.GraphBuilderPlugins.InvocationPlugin;
@@ -86,7 +88,8 @@ public class StandardGraphBuilderPluginsProvider implements GraphBuilderPluginsP
         }
 
         public boolean apply(GraphBuilderContext builder, ValueNode value) {
-            builder.push(kind, builder.append(new UnboxNode(value, kind)));
+            ValueNode valueNode = UnboxNode.create(builder.getMetaAccess(), builder.getConstantReflection(), nullCheckedValue(builder, value), kind);
+            builder.push(kind.getStackKind(), builder.append(valueNode));
             return true;
         }
 

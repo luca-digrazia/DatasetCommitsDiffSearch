@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,19 @@
  */
 package com.oracle.graal.phases.common.inlining.info;
 
-import com.oracle.graal.api.code.Assumptions;
+import java.util.*;
+
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.CompareNode;
-import com.oracle.graal.nodes.extended.LoadHubNode;
-import com.oracle.graal.phases.common.inlining.InliningUtil;
-import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
-import com.oracle.graal.phases.util.Providers;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.common.inlining.info.elem.*;
+import com.oracle.graal.phases.util.*;
 
 /**
  * Represents an inlining opportunity for which profiling information suggests a monomorphic
@@ -48,7 +51,7 @@ public class TypeGuardInlineInfo extends AbstractInlineInfo {
         super(invoke);
         this.concrete = concrete;
         this.type = type;
-        assert type.isArray() || !type.isAbstract() : type;
+        assert type.isArray() || type.isConcrete() : type;
     }
 
     @Override
@@ -87,23 +90,23 @@ public class TypeGuardInlineInfo extends AbstractInlineInfo {
     }
 
     @Override
-    public void inline(Providers providers, Assumptions assumptions) {
-        createGuard(graph(), providers.getMetaAccess());
-        inline(invoke, concrete, inlineableElement, assumptions, false);
+    public Collection<Node> inline(Providers providers, Assumptions assumptions) {
+        createGuard(graph(), providers);
+        return inline(invoke, concrete, inlineableElement, assumptions, false);
     }
 
     @Override
-    public void tryToDevirtualizeInvoke(MetaAccessProvider metaAccess, Assumptions assumptions) {
-        createGuard(graph(), metaAccess);
+    public void tryToDevirtualizeInvoke(Providers providers, Assumptions assumptions) {
+        createGuard(graph(), providers);
         InliningUtil.replaceInvokeCallTarget(invoke, graph(), InvokeKind.Special, concrete);
     }
 
-    private void createGuard(StructuredGraph graph, MetaAccessProvider metaAccess) {
+    private void createGuard(StructuredGraph graph, Providers providers) {
         ValueNode nonNullReceiver = InliningUtil.nonNullReceiver(invoke);
-        ConstantNode typeHub = ConstantNode.forConstant(type.getEncoding(ResolvedJavaType.Representation.ObjectHub), metaAccess, graph);
-        LoadHubNode receiverHub = graph.unique(new LoadHubNode(nonNullReceiver, typeHub.getKind()));
+        LoadHubNode receiverHub = graph.unique(new LoadHubNode(providers.getStampProvider(), nonNullReceiver));
+        ConstantNode typeHub = ConstantNode.forConstant(receiverHub.stamp(), type.getObjectHub(), providers.getMetaAccess(), graph);
 
-        CompareNode typeCheck = CompareNode.createCompareNode(graph, Condition.EQ, receiverHub, typeHub);
+        LogicNode typeCheck = CompareNode.createCompareNode(graph, Condition.EQ, receiverHub, typeHub, providers.getConstantReflection());
         FixedGuardNode guard = graph.add(new FixedGuardNode(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile));
         assert invoke.predecessor() != null;
 
@@ -115,7 +118,7 @@ public class TypeGuardInlineInfo extends AbstractInlineInfo {
 
     @Override
     public String toString() {
-        return "type-checked with type " + type.getName() + " and method " + MetaUtil.format("%H.%n(%p):%r", concrete);
+        return "type-checked with type " + type.getName() + " and method " + concrete.format("%H.%n(%p):%r");
     }
 
     public boolean shouldInline() {
