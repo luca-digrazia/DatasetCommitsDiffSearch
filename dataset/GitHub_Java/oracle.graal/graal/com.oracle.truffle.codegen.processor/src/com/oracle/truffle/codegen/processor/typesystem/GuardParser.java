@@ -27,72 +27,41 @@ import java.util.*;
 
 import javax.lang.model.element.*;
 
+import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
-import com.oracle.truffle.codegen.processor.node.*;
 import com.oracle.truffle.codegen.processor.template.*;
+import com.oracle.truffle.codegen.processor.template.ParameterSpec.Cardinality;
 
-public class GuardParser extends NodeMethodParser<GuardData> {
+public class GuardParser extends TemplateMethodParser<Template, GuardData> {
 
-    private final SpecializationData specialization;
-    private final String guardName;
+    private final TypeSystemData typeSystem;
 
-    public GuardParser(ProcessorContext context, SpecializationData specialization, String guardName) {
-        super(context, specialization.getNode());
-        this.specialization = specialization;
-        this.guardName = guardName;
-        setEmitErrors(false);
-        setParseNullOnError(false);
+    public GuardParser(ProcessorContext context, Template template, TypeSystemData typeSystem) {
+        super(context, template);
+        this.typeSystem = typeSystem;
     }
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        MethodSpec spec = createDefaultMethodSpec(method, mirror, true, null);
-        spec.setVariableRequiredArguments(true);
-        spec.getRequired().clear();
-
-        for (ActualParameter parameter : specialization.getRequiredParameters()) {
-            ParameterSpec paramSpec = new ParameterSpec(parameter.getLocalName(), parameter.getType(), getNode().getTypeSystem().getGenericType());
-            paramSpec.setSignature(true);
-            spec.addRequired(paramSpec);
-        }
-
-        return spec;
-    }
-
-    @Override
-    protected ParameterSpec createReturnParameterSpec() {
-        return new ParameterSpec("returnType", getContext().getType(boolean.class));
+        List<ParameterSpec> specs = new ArrayList<>();
+        specs.add(new ParameterSpec("valueN", typeSystem, false, Cardinality.MULTIPLE));
+        ParameterSpec returnTypeSpec = new ParameterSpec("returnType", getContext().getType(boolean.class), false);
+        return new MethodSpec(returnTypeSpec, specs);
     }
 
     @Override
     public boolean isParsable(ExecutableElement method) {
-        return method.getSimpleName().toString().equals(guardName);
+        return Utils.findAnnotationMirror(getContext().getEnvironment(), method, getAnnotationType()) != null;
     }
 
     @Override
     public GuardData create(TemplateMethod method) {
-        GuardData guard = new GuardData(method, specialization);
-        /*
-         * Update parameters in way that parameter specifications match again the node field names
-         * etc.
-         */
-        List<ActualParameter> newParameters = new ArrayList<>();
-        for (ActualParameter parameter : guard.getParameters()) {
-            ActualParameter specializationParameter = specialization.findParameter(parameter.getSpecification().getName());
-            if (specializationParameter == null) {
-                newParameters.add(parameter);
-            } else {
-                newParameters.add(new ActualParameter(specializationParameter.getSpecification(), parameter.getTypeSystemType(), specializationParameter.getIndex(), parameter.isImplicit()));
-            }
-        }
-        guard.setParameters(newParameters);
-
-        return guard;
+        return new GuardData(method, template);
     }
 
     @Override
     public Class<? extends Annotation> getAnnotationType() {
-        return null;
+        return GuardCheck.class;
     }
 
 }
