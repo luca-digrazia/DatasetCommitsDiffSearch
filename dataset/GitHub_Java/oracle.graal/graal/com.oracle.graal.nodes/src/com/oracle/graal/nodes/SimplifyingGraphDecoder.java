@@ -175,9 +175,7 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
                 Node canonical;
                 if (condition.getValue() == guard.isNegated()) {
                     DeoptimizeNode deopt = new DeoptimizeNode(guard.getAction(), guard.getReason(), guard.getSpeculation());
-                    if (guard.stateBefore() != null) {
-                        deopt.setStateBefore(guard.stateBefore());
-                    }
+                    deopt.setStateBefore(guard.stateBefore());
                     canonical = deopt;
                 } else {
                     /*
