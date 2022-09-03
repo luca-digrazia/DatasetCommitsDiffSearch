@@ -56,6 +56,7 @@ import com.oracle.truffle.espresso.intrinsics.Target_java_lang_Runtime;
 import com.oracle.truffle.espresso.intrinsics.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.intrinsics.Target_java_lang_reflect_Array;
 import com.oracle.truffle.espresso.intrinsics.Target_java_security_AccessController;
+import com.oracle.truffle.espresso.intrinsics.Target_java_util_jar_JarFile;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_Perf;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_Signal;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_URLClassPath;
@@ -99,6 +100,7 @@ public class InterpreterToVM {
                     Target_java_lang_Thread.class,
                     Target_java_lang_reflect_Array.class,
                     Target_java_security_AccessController.class,
+                    Target_java_util_jar_JarFile.class,
                     Target_sun_misc_Perf.class,
                     Target_sun_misc_Signal.class,
                     Target_sun_misc_Unsafe.class,
@@ -445,7 +447,7 @@ public class InterpreterToVM {
     }
 
     private Object arrayStoreExCheck(Object value, Klass componentType) {
-        if (StaticObject.isNull(value) || instanceOf(value, componentType)) {
+        if (value == StaticObject.NULL || instanceOf(value, componentType)) {
             return value;
         } else {
             throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayStoreException.class);
@@ -628,7 +630,7 @@ public class InterpreterToVM {
      */
     public boolean instanceOf(Object instance, Klass typeToCheck) {
         assert instance != null : "use StaticObject.NULL";
-        if (StaticObject.isNull(instance)) {
+        if (instance == StaticObject.NULL) {
             return false;
         }
         Meta meta = meta(typeToCheck).getMeta();
@@ -636,7 +638,7 @@ public class InterpreterToVM {
     }
 
     public Object checkCast(Object instance, Klass klass) {
-        if (StaticObject.isNull(instance) || instanceOf(instance, klass)) {
+        if (instance == StaticObject.NULL || instanceOf(instance, klass)) {
             return instance;
         }
         Meta meta = klass.getContext().getMeta();
