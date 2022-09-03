@@ -36,8 +36,6 @@ import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.Truffle
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getValue;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.overrideOptions;
-import static org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime.LazyFrameBoxingQuery.FrameBoxingClass;
-import static org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime.LazyFrameBoxingQuery.FrameBoxingClassName;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
@@ -355,11 +353,13 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                         FrameDescriptor.class,
                         FrameSlot.class,
                         FrameSlotKind.class,
+                        FrameWithoutBoxing.class,
+                        FrameWithBoxing.class,
                         MethodHandle.class,
                         ArrayList.class,
                         FrameSlotKind.class,
-                        AbstractAssumption.class,
-                        MaterializedFrame.class
+                        AbstractAssumption.class
+
         }) {
             m.put(c.getName(), c);
         }
@@ -373,7 +373,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     @Override
     public ResolvedJavaType resolveType(MetaAccessProvider metaAccess, String className, boolean required) {
-        Class<?> c = className.equals(FrameBoxingClassName) ? FrameBoxingClass : lookupTypes.get(className);
+        Class<?> c = lookupTypes.get(className);
         if (c == null) {
             if (!required) {
                 return null;
@@ -1046,8 +1046,5 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
          * fold the decision as early as possible.
          */
         public static final boolean useFrameWithoutBoxing = TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing);
-
-        static final Class<?> FrameBoxingClass = useFrameWithoutBoxing ? FrameWithoutBoxing.class : FrameWithBoxing.class;
-        static final String FrameBoxingClassName = FrameBoxingClass.getName();
     }
 }

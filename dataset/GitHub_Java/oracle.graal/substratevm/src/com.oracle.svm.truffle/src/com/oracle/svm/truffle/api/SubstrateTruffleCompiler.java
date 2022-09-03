@@ -45,13 +45,10 @@ import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
-import com.oracle.svm.core.graal.GraalConfiguration;
 import com.oracle.svm.core.graal.code.SubstrateCompilationResult;
 import com.oracle.svm.graal.GraalSupport;
 import com.oracle.svm.truffle.SubstrateTruffleCompilationIdentifier;
 import com.oracle.svm.truffle.TruffleFeature;
-
-import jdk.vm.ci.code.InstalledCode;
 
 public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
 
@@ -69,11 +66,6 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
     @Override
     protected PhaseSuite<HighTierContext> createGraphBuilderSuite() {
         return null;
-    }
-
-    @Override
-    public String getCompilerConfigurationName() {
-        return GraalConfiguration.instance().getCompilerConfigurationName();
     }
 
     @Override
@@ -99,10 +91,5 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
     @Override
     protected Map<ExceptionAction, Integer> getCompilationProblemsPerAction() {
         return GraalSupport.get().getCompilationProblemsPerAction();
-    }
-
-    @Override
-    protected InstalledCode createInstalledCode(CompilableTruffleAST compilable) {
-        return new SubstrateTruffleInstalledCodeBridge((SubstrateOptimizedCallTarget) compilable);
     }
 }
