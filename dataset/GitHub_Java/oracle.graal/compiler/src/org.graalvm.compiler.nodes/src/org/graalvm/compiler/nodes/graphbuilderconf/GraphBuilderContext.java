@@ -35,7 +35,6 @@ import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -90,7 +89,14 @@ public interface GraphBuilderContext extends GraphBuilderTool {
             assert !(value instanceof StateSplit) || ((StateSplit) value).stateAfter() != null;
             return value;
         }
-        return GraphBuilderContextUtil.setStateAfterIfNecessary(this, append(value));
+        T equivalentValue = append(value);
+        if (equivalentValue instanceof StateSplit) {
+            StateSplit stateSplit = (StateSplit) equivalentValue;
+            if (stateSplit.stateAfter() == null && stateSplit.hasSideEffect()) {
+                setStateAfter(stateSplit);
+            }
+        }
+        return equivalentValue;
     }
 
     /**
@@ -107,7 +113,14 @@ public interface GraphBuilderContext extends GraphBuilderTool {
             assert !(value instanceof StateSplit) || ((StateSplit) value).stateAfter() != null;
             return value;
         }
-        return GraphBuilderContextUtil.setStateAfterIfNecessary(this, append(value));
+        T equivalentValue = append(value);
+        if (equivalentValue instanceof StateSplit) {
+            StateSplit stateSplit = (StateSplit) equivalentValue;
+            if (stateSplit.stateAfter() == null && stateSplit.hasSideEffect()) {
+                setStateAfter(stateSplit);
+            }
+        }
+        return equivalentValue;
     }
 
     default ValueNode addNonNullCast(ValueNode value) {
@@ -134,7 +147,13 @@ public interface GraphBuilderContext extends GraphBuilderTool {
     default <T extends ValueNode> T addPush(JavaKind kind, T value) {
         T equivalentValue = value.graph() != null ? value : append(value);
         push(kind, equivalentValue);
-        return GraphBuilderContextUtil.setStateAfterIfNecessary(this, equivalentValue);
+        if (equivalentValue instanceof StateSplit) {
+            StateSplit stateSplit = (StateSplit) equivalentValue;
+            if (stateSplit.stateAfter() == null && stateSplit.hasSideEffect()) {
+                setStateAfter(stateSplit);
+            }
+        }
+        return equivalentValue;
     }
 
     /**
@@ -318,17 +337,5 @@ public interface GraphBuilderContext extends GraphBuilderTool {
         } else {
             return append(SignExtendNode.create(narrow, 32, NodeView.DEFAULT));
         }
-    }
-}
-
-class GraphBuilderContextUtil {
-    static <T extends ValueNode> T setStateAfterIfNecessary(GraphBuilderContext b, T value) {
-        if (value instanceof StateSplit) {
-            StateSplit stateSplit = (StateSplit) value;
-            if (stateSplit.stateAfter() == null && (stateSplit.hasSideEffect() || stateSplit instanceof AbstractMergeNode)) {
-                b.setStateAfter(stateSplit);
-            }
-        }
-        return value;
     }
 }

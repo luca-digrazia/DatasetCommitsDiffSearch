@@ -36,11 +36,7 @@ import org.graalvm.compiler.nodes.calc.SignExtendNode;
 import org.graalvm.compiler.nodes.extended.JavaReadNode;
 import org.graalvm.compiler.nodes.extended.JavaWriteNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
-import org.graalvm.compiler.phases.OptimisticOptimizations;
-import org.graalvm.compiler.phases.common.CanonicalizerPhase;
-import org.graalvm.compiler.phases.tiers.HighTierContext;
-import org.graalvm.compiler.word.Word;
-import org.graalvm.compiler.word.WordCastNode;
+import org.graalvm.compiler.word.ObjectAccess;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
@@ -48,21 +44,15 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.JavaKind;
 
 /**
  * Tests for the {@link Pointer} read and write operations.
  */
-public class PointerTest extends SnippetsTest {
+public class ObjectAccessTest extends SnippetsTest {
 
-    private static final LocationIdentity ID = NamedLocationIdentity.mutable("ID");
+    private static final LocationIdentity ID = NamedLocationIdentity.mutable("ObjectAccessTestID");
     private static final JavaKind[] KINDS = new JavaKind[]{JavaKind.Byte, JavaKind.Char, JavaKind.Short, JavaKind.Int, JavaKind.Long, JavaKind.Float, JavaKind.Double, JavaKind.Object};
-    private final TargetDescription target;
-
-    public PointerTest() {
-        target = getCodeCache().getTarget();
-    }
 
     @Test
     public void testRead1() {
@@ -106,17 +96,12 @@ public class PointerTest extends SnippetsTest {
         }
     }
 
-    private void assertRead(StructuredGraph graph, JavaKind kind, boolean indexConvert, LocationIdentity locationIdentity) {
-        WordCastNode cast = (WordCastNode) graph.start().next();
-
-        JavaReadNode read = (JavaReadNode) cast.next();
+    private static void assertRead(StructuredGraph graph, JavaKind kind, boolean indexConvert, LocationIdentity locationIdentity) {
+        JavaReadNode read = (JavaReadNode) graph.start().next();
         Assert.assertEquals(kind.getStackKind(), read.stamp(NodeView.DEFAULT).getStackKind());
 
         OffsetAddressNode address = (OffsetAddressNode) read.getAddress();
-        Assert.assertEquals(cast, address.getBase());
-        Assert.assertEquals(graph.getParameter(0), cast.getInput());
-        Assert.assertEquals(target.wordJavaKind, cast.stamp(NodeView.DEFAULT).getStackKind());
-
+        Assert.assertEquals(graph.getParameter(0), address.getBase());
         Assert.assertEquals(locationIdentity, read.getLocationIdentity());
 
         if (indexConvert) {
@@ -132,10 +117,8 @@ public class PointerTest extends SnippetsTest {
         Assert.assertEquals(read, ret.result());
     }
 
-    private void assertWrite(StructuredGraph graph, JavaKind kind, boolean indexConvert, LocationIdentity locationIdentity) {
-        WordCastNode cast = (WordCastNode) graph.start().next();
-
-        JavaWriteNode write = (JavaWriteNode) cast.next();
+    private static void assertWrite(StructuredGraph graph, JavaKind kind, boolean indexConvert, LocationIdentity locationIdentity) {
+        JavaWriteNode write = (JavaWriteNode) graph.start().next();
         ValueNode valueNode = write.value();
         if (kind != kind.getStackKind()) {
             while (valueNode instanceof ConvertNode) {
@@ -143,12 +126,9 @@ public class PointerTest extends SnippetsTest {
             }
         }
         Assert.assertEquals(graph.getParameter(2), valueNode);
-        Assert.assertEquals(BytecodeFrame.AFTER_BCI, write.stateAfter().bci);
-
         OffsetAddressNode address = (OffsetAddressNode) write.getAddress();
-        Assert.assertEquals(cast, address.getBase());
-        Assert.assertEquals(graph.getParameter(0), cast.getInput());
-        Assert.assertEquals(target.wordJavaKind, cast.stamp(NodeView.DEFAULT).getStackKind());
+        Assert.assertEquals(graph.getParameter(0), address.getBase());
+        Assert.assertEquals(BytecodeFrame.AFTER_BCI, write.stateAfter().bci);
 
         Assert.assertEquals(locationIdentity, write.getLocationIdentity());
 
@@ -167,299 +147,241 @@ public class PointerTest extends SnippetsTest {
 
     @Snippet
     public static byte readByte1(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readByte(offset, ID);
+        return ObjectAccess.readByte(o, offset, ID);
     }
 
     @Snippet
     public static byte readByte2(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readByte(WordFactory.signed(offset), ID);
+        return ObjectAccess.readByte(o, WordFactory.signed(offset), ID);
     }
 
     @Snippet
     public static byte readByte3(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readByte(offset);
+        return ObjectAccess.readByte(o, offset);
     }
 
     @Snippet
     public static void writeByte1(Object o, int offset, byte value) {
-        Word.objectToTrackedPointer(o).writeByte(offset, value, ID);
+        ObjectAccess.writeByte(o, offset, value, ID);
     }
 
     @Snippet
     public static void writeByte2(Object o, int offset, byte value) {
-        Word.objectToTrackedPointer(o).writeByte(WordFactory.signed(offset), value, ID);
+        ObjectAccess.writeByte(o, WordFactory.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeByte3(Object o, int offset, byte value) {
-        Word.objectToTrackedPointer(o).writeByte(offset, value);
+        ObjectAccess.writeByte(o, offset, value);
     }
 
     @Snippet
     public static char readChar1(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readChar(offset, ID);
+        return ObjectAccess.readChar(o, offset, ID);
     }
 
     @Snippet
     public static char readChar2(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readChar(WordFactory.signed(offset), ID);
+        return ObjectAccess.readChar(o, WordFactory.signed(offset), ID);
     }
 
     @Snippet
     public static char readChar3(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readChar(offset);
+        return ObjectAccess.readChar(o, offset);
     }
 
     @Snippet
     public static void writeChar1(Object o, int offset, char value) {
-        Word.objectToTrackedPointer(o).writeChar(offset, value, ID);
+        ObjectAccess.writeChar(o, offset, value, ID);
     }
 
     @Snippet
     public static void writeChar2(Object o, int offset, char value) {
-        Word.objectToTrackedPointer(o).writeChar(WordFactory.signed(offset), value, ID);
+        ObjectAccess.writeChar(o, WordFactory.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeChar3(Object o, int offset, char value) {
-        Word.objectToTrackedPointer(o).writeChar(offset, value);
+        ObjectAccess.writeChar(o, offset, value);
     }
 
     @Snippet
     public static short readShort1(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readShort(offset, ID);
+        return ObjectAccess.readShort(o, offset, ID);
     }
 
     @Snippet
     public static short readShort2(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readShort(WordFactory.signed(offset), ID);
+        return ObjectAccess.readShort(o, WordFactory.signed(offset), ID);
     }
 
     @Snippet
     public static short readShort3(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readShort(offset);
+        return ObjectAccess.readShort(o, offset);
     }
 
     @Snippet
     public static void writeShort1(Object o, int offset, short value) {
-        Word.objectToTrackedPointer(o).writeShort(offset, value, ID);
+        ObjectAccess.writeShort(o, offset, value, ID);
     }
 
     @Snippet
     public static void writeShort2(Object o, int offset, short value) {
-        Word.objectToTrackedPointer(o).writeShort(WordFactory.signed(offset), value, ID);
+        ObjectAccess.writeShort(o, WordFactory.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeShort3(Object o, int offset, short value) {
-        Word.objectToTrackedPointer(o).writeShort(offset, value);
+        ObjectAccess.writeShort(o, offset, value);
     }
 
     @Snippet
     public static int readInt1(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readInt(offset, ID);
+        return ObjectAccess.readInt(o, offset, ID);
     }
 
     @Snippet
     public static int readInt2(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readInt(WordFactory.signed(offset), ID);
+        return ObjectAccess.readInt(o, WordFactory.signed(offset), ID);
     }
 
     @Snippet
     public static int readInt3(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readInt(offset);
+        return ObjectAccess.readInt(o, offset);
     }
 
     @Snippet
     public static void writeInt1(Object o, int offset, int value) {
-        Word.objectToTrackedPointer(o).writeInt(offset, value, ID);
+        ObjectAccess.writeInt(o, offset, value, ID);
     }
 
     @Snippet
     public static void writeInt2(Object o, int offset, int value) {
-        Word.objectToTrackedPointer(o).writeInt(WordFactory.signed(offset), value, ID);
+        ObjectAccess.writeInt(o, WordFactory.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeInt3(Object o, int offset, int value) {
-        Word.objectToTrackedPointer(o).writeInt(offset, value);
+        ObjectAccess.writeInt(o, offset, value);
     }
 
     @Snippet
     public static long readLong1(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readLong(offset, ID);
+        return ObjectAccess.readLong(o, offset, ID);
     }
 
     @Snippet
     public static long readLong2(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readLong(WordFactory.signed(offset), ID);
+        return ObjectAccess.readLong(o, WordFactory.signed(offset), ID);
     }
 
     @Snippet
     public static long readLong3(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readLong(offset);
+        return ObjectAccess.readLong(o, offset);
     }
 
     @Snippet
     public static void writeLong1(Object o, int offset, long value) {
-        Word.objectToTrackedPointer(o).writeLong(offset, value, ID);
+        ObjectAccess.writeLong(o, offset, value, ID);
     }
 
     @Snippet
     public static void writeLong2(Object o, int offset, long value) {
-        Word.objectToTrackedPointer(o).writeLong(WordFactory.signed(offset), value, ID);
+        ObjectAccess.writeLong(o, WordFactory.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeLong3(Object o, int offset, long value) {
-        Word.objectToTrackedPointer(o).writeLong(offset, value);
+        ObjectAccess.writeLong(o, offset, value);
     }
 
     @Snippet
     public static float readFloat1(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readFloat(offset, ID);
+        return ObjectAccess.readFloat(o, offset, ID);
     }
 
     @Snippet
     public static float readFloat2(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readFloat(WordFactory.signed(offset), ID);
+        return ObjectAccess.readFloat(o, WordFactory.signed(offset), ID);
     }
 
     @Snippet
     public static float readFloat3(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readFloat(offset);
+        return ObjectAccess.readFloat(o, offset);
     }
 
     @Snippet
     public static void writeFloat1(Object o, int offset, float value) {
-        Word.objectToTrackedPointer(o).writeFloat(offset, value, ID);
+        ObjectAccess.writeFloat(o, offset, value, ID);
     }
 
     @Snippet
     public static void writeFloat2(Object o, int offset, float value) {
-        Word.objectToTrackedPointer(o).writeFloat(WordFactory.signed(offset), value, ID);
+        ObjectAccess.writeFloat(o, WordFactory.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeFloat3(Object o, int offset, float value) {
-        Word.objectToTrackedPointer(o).writeFloat(offset, value);
+        ObjectAccess.writeFloat(o, offset, value);
     }
 
     @Snippet
     public static double readDouble1(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readDouble(offset, ID);
+        return ObjectAccess.readDouble(o, offset, ID);
     }
 
     @Snippet
     public static double readDouble2(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readDouble(WordFactory.signed(offset), ID);
+        return ObjectAccess.readDouble(o, WordFactory.signed(offset), ID);
     }
 
     @Snippet
     public static double readDouble3(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readDouble(offset);
+        return ObjectAccess.readDouble(o, offset);
     }
 
     @Snippet
     public static void writeDouble1(Object o, int offset, double value) {
-        Word.objectToTrackedPointer(o).writeDouble(offset, value, ID);
+        ObjectAccess.writeDouble(o, offset, value, ID);
     }
 
     @Snippet
     public static void writeDouble2(Object o, int offset, double value) {
-        Word.objectToTrackedPointer(o).writeDouble(WordFactory.signed(offset), value, ID);
+        ObjectAccess.writeDouble(o, WordFactory.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeDouble3(Object o, int offset, double value) {
-        Word.objectToTrackedPointer(o).writeDouble(offset, value);
+        ObjectAccess.writeDouble(o, offset, value);
     }
 
     @Snippet
     public static Object readObject1(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readObject(offset, ID);
+        return ObjectAccess.readObject(o, offset, ID);
     }
 
     @Snippet
     public static Object readObject2(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readObject(WordFactory.signed(offset), ID);
+        return ObjectAccess.readObject(o, WordFactory.signed(offset), ID);
     }
 
     @Snippet
     public static Object readObject3(Object o, int offset) {
-        return Word.objectToTrackedPointer(o).readObject(offset);
+        return ObjectAccess.readObject(o, offset);
     }
 
     @Snippet
     public static void writeObject1(Object o, int offset, Object value) {
-        Word.objectToTrackedPointer(o).writeObject(offset, value, ID);
+        ObjectAccess.writeObject(o, offset, value, ID);
     }
 
     @Snippet
     public static void writeObject2(Object o, int offset, Object value) {
-        Word.objectToTrackedPointer(o).writeObject(WordFactory.signed(offset), value, ID);
+        ObjectAccess.writeObject(o, WordFactory.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeObject3(Object o, int offset, Object value) {
-        Word.objectToTrackedPointer(o).writeObject(offset, value);
-    }
-
-    private void assertNumWordCasts(String snippetName, int expectedWordCasts) {
-        HighTierContext context = new HighTierContext(getProviders(), null, OptimisticOptimizations.ALL);
-
-        StructuredGraph graph = parseEager(snippetName, AllowAssumptions.YES);
-        new CanonicalizerPhase().apply(graph, context);
-        Assert.assertEquals(expectedWordCasts, graph.getNodes().filter(WordCastNode.class).count());
-    }
-
-    @Test
-    public void testUnusedFromObject() {
-        assertNumWordCasts("unusedFromObject", 0);
-    }
-
-    @Snippet
-    public static void unusedFromObject(Object o) {
-        Word.objectToTrackedPointer(o);
-    }
-
-    @Test
-    public void testUnusedRawValue() {
-        assertNumWordCasts("unusedRawValue", 0);
-    }
-
-    @Snippet
-    public static void unusedRawValue(Object o) {
-        Word.objectToTrackedPointer(o).rawValue();
-    }
-
-    @Test
-    public void testUsedRawValue() {
-        assertNumWordCasts("usedRawValue", 1);
-    }
-
-    @Snippet
-    public static long usedRawValue(Object o) {
-        return Word.objectToTrackedPointer(o).rawValue();
-    }
-
-    @Test
-    public void testUnusedToObject() {
-        assertNumWordCasts("unusedToObject", 0);
-    }
-
-    @Snippet
-    public static void unusedToObject(Word w) {
-        w.toObject();
-    }
-
-    @Test
-    public void testUsedToObject() {
-        assertNumWordCasts("usedToObject", 1);
-    }
-
-    @Snippet
-    public static Object usedToObject(Word w) {
-        return w.toObject();
+        ObjectAccess.writeObject(o, offset, value);
     }
 }
