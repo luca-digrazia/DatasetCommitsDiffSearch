@@ -24,12 +24,12 @@
  */
 package com.oracle.truffle.tools.debug.shell.client;
 
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.tools.debug.shell.REPLMessage;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.tools.debug.shell.REPLMessage;
 
 // TODO (mlvdv)  write a real command line parser
 public abstract class REPLRemoteCommand extends REPLCommand {
@@ -147,9 +147,63 @@ public abstract class REPLRemoteCommand extends REPLCommand {
         }
     };
 
+    public static final REPLRemoteCommand BREAK_AT_THROW_CMD = new REPLRemoteCommand("break-at-throw", "breakthrow", "Break at any throw") {
+
+        private final String[] help = {"break-at-throw: set breakpoint on any throw"};
+
+        @Override
+        public String[] getHelp() {
+            return help;
+        }
+
+        @Override
+        public REPLMessage createRequest(REPLClientContext context, String[] args) {
+            final REPLMessage request = new REPLMessage();
+            request.put(REPLMessage.OP, REPLMessage.BREAK_AT_THROW);
+            return request;
+        }
+
+        @Override
+        void processReply(REPLClientContext context, REPLMessage[] replies) {
+            REPLMessage firstReply = replies[0];
+
+            if (firstReply.get(REPLMessage.STATUS).equals(REPLMessage.SUCCEEDED)) {
+                firstReply.put(REPLMessage.DISPLAY_MSG, "breakpoint at any throw set");
+            }
+            super.processReply(context, replies);
+        }
+    };
+
+    public static final REPLRemoteCommand BREAK_AT_THROW_ONCE_CMD = new REPLRemoteCommand("break-at-throw-once", "break1throw", "Break once at any throw") {
+
+        private final String[] help = {"break-at-throw: set one-short breakpoint on any throw"};
+
+        @Override
+        public String[] getHelp() {
+            return help;
+        }
+
+        @Override
+        public REPLMessage createRequest(REPLClientContext context, String[] args) {
+            final REPLMessage request = new REPLMessage();
+            request.put(REPLMessage.OP, REPLMessage.BREAK_AT_THROW_ONCE);
+            return request;
+        }
+
+        @Override
+        void processReply(REPLClientContext context, REPLMessage[] replies) {
+            REPLMessage firstReply = replies[0];
+
+            if (firstReply.get(REPLMessage.STATUS).equals(REPLMessage.SUCCEEDED)) {
+                firstReply.put(REPLMessage.DISPLAY_MSG, "one-shot breakpoint at any throw set");
+            }
+            super.processReply(context, replies);
+        }
+    };
+
     public static final REPLRemoteCommand CALL_CMD = new REPLRemoteCommand("call", null, "call a method/function") {
 
-        private final String[] help = {"call <name> <args>: calls a function by name"};
+        private final String[] help = {"call <name>: calls a function by name, arguments not yet supported"};
 
         @Override
         public String[] getHelp() {
@@ -185,30 +239,6 @@ public abstract class REPLRemoteCommand extends REPLCommand {
             } else {
                 context.displayReply(firstReply.get(REPLMessage.VALUE));
             }
-        }
-    };
-
-    public static final REPLRemoteCommand CALL_STEP_INTO_CMD = new REPLRemoteCommand("call-step-into", "calls", "Call a method/function and step into") {
-
-        private final String[] help = {"call <name> <args>: calls function by name and step into"};
-
-        @Override
-        public String[] getHelp() {
-            return help;
-        }
-
-        @Override
-        public REPLMessage createRequest(REPLClientContext context, String[] args) {
-            final REPLMessage request = CALL_CMD.createRequest(context, args);
-            if (request != null) {
-                request.put(REPLMessage.STEP_INTO, REPLMessage.TRUE);
-            }
-            return request;
-        }
-
-        @Override
-        void processReply(REPLClientContext context, REPLMessage[] replies) {
-            CALL_CMD.processReply(context, replies);
         }
     };
 
@@ -640,12 +670,13 @@ public abstract class REPLRemoteCommand extends REPLCommand {
 
         @Override
         public REPLMessage createRequest(REPLClientContext context, String[] args) {
-
+            if (args.length == 1) {
+                context.displayFailReply("no language specified");
+                return null;
+            }
             final REPLMessage request = new REPLMessage();
             request.put(REPLMessage.OP, REPLMessage.SET_LANGUAGE);
-            if (args.length > 1) {
-                request.put(REPLMessage.LANG_NAME, args[1]);
-            }
+            request.put(REPLMessage.LANG_NAME, args[1]);
             return request;
         }
 
@@ -659,7 +690,7 @@ public abstract class REPLRemoteCommand extends REPLCommand {
 
     public static final REPLRemoteCommand STEP_INTO_CMD = new REPLRemoteCommand("step", "s", "(StepInto) next statement, going into functions.") {
 
-        private final String[] help = new String[]{"step:  (StepInto) next statement (into calls)", "step <n>: (StepInto) nth next statement (into calls)"};
+        private final String[] help = new String[]{"step into:  step to next statement (into calls)", "step <n>: step to nth next statement (into calls)"};
 
         @Override
         public String[] getHelp() {
@@ -685,7 +716,7 @@ public abstract class REPLRemoteCommand extends REPLCommand {
                         return null;
                     }
                 } catch (NumberFormatException e) {
-                    context.displayFailReply("Count \"" + nText + "\" not recognized");
+                    context.displayFailReply("Step into count \"" + nText + "\" not recognized");
                     return null;
                 }
             }
@@ -699,7 +730,7 @@ public abstract class REPLRemoteCommand extends REPLCommand {
         }
     };
 
-    public static final REPLRemoteCommand STEP_OUT_CMD = new REPLRemoteCommand("finish", null, "(StepOut) return from function") {
+    public static final REPLRemoteCommand STEP_OUT_CMD = new REPLRemoteCommand("finish", null, "(StepOut) continue to end of function") {
 
         @Override
         public REPLMessage createRequest(REPLClientContext context, String[] args) {
@@ -709,6 +740,7 @@ public abstract class REPLRemoteCommand extends REPLCommand {
             }
             final REPLMessage request = new REPLMessage();
             request.put(REPLMessage.OP, REPLMessage.STEP_OUT);
+
             return request;
         }
 
