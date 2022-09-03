@@ -22,24 +22,26 @@
  */
 package com.oracle.graal.lir.alloc.lsra.ssa;
 
-import java.util.*;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.lir.alloc.lsra.LinearScan;
+import com.oracle.graal.lir.alloc.lsra.LinearScanEliminateSpillMovePhase;
+import com.oracle.graal.lir.alloc.lsra.LinearScanLifetimeAnalysisPhase;
+import com.oracle.graal.lir.alloc.lsra.LinearScanResolveDataFlowPhase;
+import com.oracle.graal.lir.alloc.lsra.MoveResolver;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.ssa.SSAUtil;
 
-import jdk.internal.jvmci.code.*;
-
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-import com.oracle.graal.compiler.common.alloc.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.alloc.lsra.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
-import com.oracle.graal.lir.ssa.*;
+import jdk.vm.ci.code.TargetDescription;
 
 public final class SSALinearScan extends LinearScan {
 
-    public SSALinearScan(TargetDescription target, LIRGenerationResult res, SpillMoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig,
-                    List<? extends AbstractBlockBase<?>> sortedBlocks) {
-        super(target, res, spillMoveFactory, regAllocConfig, sortedBlocks);
+    public SSALinearScan(TargetDescription target, LIRGenerationResult res, MoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig, AbstractBlockBase<?>[] sortedBlocks,
+                    boolean neverSpillConstants) {
+        super(target, res, spillMoveFactory, regAllocConfig, sortedBlocks, neverSpillConstants);
     }
 
     @Override
@@ -56,7 +58,7 @@ public final class SSALinearScan extends LinearScan {
 
     @Override
     protected LinearScanResolveDataFlowPhase createResolveDataFlowPhase() {
-        return new SSALinarScanResolveDataFlowPhase(this);
+        return new SSALinearScanResolveDataFlowPhase(this);
     }
 
     @Override
@@ -65,6 +67,7 @@ public final class SSALinearScan extends LinearScan {
     }
 
     @Override
+    @SuppressWarnings("try")
     protected void beforeSpillMoveElimination() {
         /*
          * PHI Ins are needed for the RegisterVerifier, otherwise PHIs where the Out and In value
@@ -73,7 +76,7 @@ public final class SSALinearScan extends LinearScan {
         try (Scope s1 = Debug.scope("Remove Phi In")) {
             for (AbstractBlockBase<?> toBlock : sortedBlocks()) {
                 if (toBlock.getPredecessorCount() > 1) {
-                    SSAUtils.removePhiIn(getLIR(), toBlock);
+                    SSAUtil.removePhiIn(getLIR(), toBlock);
                 }
             }
         }
