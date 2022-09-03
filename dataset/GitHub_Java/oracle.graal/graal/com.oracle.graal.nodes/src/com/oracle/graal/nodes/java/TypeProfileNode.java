@@ -22,17 +22,18 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.vm.ci.meta.JavaTypeProfile;
-
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.FixedWithNextNode;
 
-@NodeInfo
+import jdk.vm.ci.meta.JavaTypeProfile;
+
+@NodeInfo(allowedUsageTypes = InputType.Association)
 public final class TypeProfileNode extends FixedWithNextNode implements Canonicalizable {
 
     public static final NodeClass<TypeProfileNode> TYPE = NodeClass.create(TypeProfileNode.class);
@@ -43,14 +44,15 @@ public final class TypeProfileNode extends FixedWithNextNode implements Canonica
         this.profile = profile;
     }
 
-    public static TypeProfileNode createWithoutProfile() {
-        return create(null);
-    }
-
     public static TypeProfileNode create(JavaTypeProfile profile) {
+        if (profile == null || profile.getNotRecordedProbability() > 0.0) {
+            return null;
+        }
+        assert profile != null;
         return new TypeProfileNode(profile);
     }
 
+    @Override
     public Node canonical(CanonicalizerTool tool) {
         if (this.usages().isEmpty()) {
             return null;
