@@ -46,6 +46,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import com.oracle.graal.phases.tiers.*;
@@ -113,6 +114,7 @@ public class PartialEvaluator {
 
         Debug.scope("createGraph", graph, new Runnable() {
 
+            @SuppressWarnings("deprecation")
             @Override
             public void run() {
                 new GraphBuilderPhase(metaAccessProvider, config, TruffleCompilerImpl.Optimizations).apply(graph);
@@ -155,8 +157,18 @@ public class PartialEvaluator {
 
                 // Additional inlining.
                 final PhasePlan plan = new PhasePlan();
+                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(metaAccessProvider, config, TruffleCompilerImpl.Optimizations);
+                plan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
+                canonicalizer.addToPhasePlan(plan, baseContext);
+                plan.addPhase(PhasePosition.AFTER_PARSING, new ReplaceIntrinsicsPhase(replacements));
+
+                new ConvertDeoptimizeToGuardPhase().apply(graph);
                 canonicalizer.apply(graph, baseContext);
+                new DeadCodeEliminationPhase().apply(graph);
+
                 HighTierContext context = new HighTierContext(metaAccessProvider, assumptions, replacements, cache, plan, OptimisticOptimizations.NONE);
+                InliningPhase inliningPhase = new InliningPhase(canonicalizer);
+                inliningPhase.apply(graph, context);
 
                 for (NeverPartOfCompilationNode neverPartOfCompilationNode : graph.getNodes(NeverPartOfCompilationNode.class)) {
                     Throwable exception = new VerificationError(neverPartOfCompilationNode.getMessage());
@@ -214,8 +226,7 @@ public class PartialEvaluator {
                         }
                     }
 
-                    if (inlineGraph == null && !Modifier.isNative(methodCallTargetNode.targetMethod().getModifiers()) &&
-                                    methodCallTargetNode.targetMethod().getAnnotation(CompilerDirectives.SlowPath.class) == null) {
+                    if (inlineGraph == null && !Modifier.isNative(methodCallTargetNode.targetMethod().getModifiers())) {
                         inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, context);
                     }
 
@@ -223,11 +234,11 @@ public class PartialEvaluator {
                         int nodeCountBefore = graph.getNodeCount();
                         int mark = graph.getMark();
                         InliningUtil.inline(methodCallTargetNode.invoke(), inlineGraph, false);
+                        canonicalizer.applyIncremental(graph, context, mark);
                         if (Debug.isDumpEnabled()) {
                             int nodeCountAfter = graph.getNodeCount();
                             Debug.dump(graph, "After inlining %s %+d (%d)", methodCallTargetNode.targetMethod().toString(), nodeCountAfter - nodeCountBefore, nodeCountAfter);
                         }
-                        canonicalizer.applyIncremental(graph, context, mark);
                         changed = true;
                     }
                 }
