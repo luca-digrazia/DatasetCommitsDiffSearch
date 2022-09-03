@@ -48,19 +48,25 @@ import java.util.logging.Logger;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.FindContextNode;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.ComputeInExecutor.Info;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
-import com.oracle.truffle.api.vm.PolyglotRootNode.EvalRootNode;
 
 /**
  * A multi-language execution environment for Truffle-implemented {@linkplain Language languages}
@@ -209,9 +215,6 @@ public class PolyglotEngine {
     private final List<Object[]> config;
     private final Object[] debugger = {null};
     private final ContextStore context;
-    private final Map<Class<?>, CallTarget> asJavaObjectTargets = new HashMap<>();
-    private final Map<Class<?>, CallTarget> executeTargets = new HashMap<>();
-
     private volatile boolean disposed;
 
     static final boolean JDK8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
@@ -273,10 +276,6 @@ public class PolyglotEngine {
         this.langs = map;
         this.instruments = createAndAutostartDescriptors(InstrumentCache.load());
         this.context = ExecutionImpl.createStore(this);
-    }
-
-    Info executor() {
-        return executor;
     }
 
     private Map<String, Instrument> createAndAutostartDescriptors(List<InstrumentCache> instrumentCaches) {
@@ -701,7 +700,7 @@ public class PolyglotEngine {
     private Object evalImpl(TruffleLanguage[] langTarget, Language l, Source source) {
         CallTarget target = l.cache.get(source);
         if (target == null) {
-            target = PolyglotRootNode.createEval(this, l, source);
+            target = Truffle.getRuntime().createCallTarget(new PolyglotEvalRootNode(this, l, source));
             l.cache.put(source, target);
         }
         Object value = target.call((Object) langTarget);
@@ -728,8 +727,51 @@ public class PolyglotEngine {
         return debugger;
     }
 
+    @SuppressWarnings({"try"})
+    final Object invokeForeign(final Node foreignNode, VirtualFrame frame, final TruffleObject receiver) {
+        assertNoTruffle();
+        Object res;
+        CompilerAsserts.neverPartOfCompilation();
+        if (executor == null) {
+            ContextStore prev = ExecutionImpl.executionStarted(context);
+            try {
+                Access.DEBUG.executionStarted(PolyglotEngine.this);
+                final Object[] args = ForeignAccess.getArguments(frame).toArray();
+                SymbolInvokerImpl.unwrapArgs(this, args);
+                res = ForeignAccess.execute(foreignNode, frame, receiver, args);
+            } finally {
+                ExecutionImpl.executionEnded(prev);
+            }
+        } else {
+            res = invokeForeignOnExecutor(foreignNode, frame, receiver);
+        }
+        return EngineTruffleObject.wrap(this, res);
+    }
+
     static void assertNoTruffle() {
         CompilerAsserts.neverPartOfCompilation("Methods of PolyglotEngine must not be compiled by Truffle. Use Truffle interoperability or a @TruffleBoundary instead.");
+    }
+
+    @TruffleBoundary
+    private Object invokeForeignOnExecutor(final Node foreignNode, VirtualFrame frame, final TruffleObject receiver) {
+        final MaterializedFrame materialized = frame.materialize();
+        ComputeInExecutor<Object> compute = new ComputeInExecutor<Object>(executor) {
+            @SuppressWarnings("try")
+            @Override
+            protected Object compute() {
+                ContextStore prev = ExecutionImpl.executionStarted(context);
+                try {
+                    Access.DEBUG.executionStarted(PolyglotEngine.this);
+                    final Object[] args = ForeignAccess.getArguments(materialized).toArray();
+                    RootNode node = SymbolInvokerImpl.createTemporaryRoot(TruffleLanguage.class, foreignNode, receiver);
+                    final CallTarget target = Truffle.getRuntime().createCallTarget(node);
+                    return target.call(args);
+                } finally {
+                    ExecutionImpl.executionEnded(prev);
+                }
+            }
+        };
+        return compute.get();
     }
 
     /**
@@ -950,22 +992,70 @@ public class PolyglotEngine {
         }
     }
 
-    CallTarget lookupGlobalAsJavaObject(Class<?> type) {
-        CallTarget target = asJavaObjectTargets.get(type);
-        if (target == null) {
-            target = PolyglotRootNode.createAsJava(this, type);
-            asJavaObjectTargets.put(type, target);
+    abstract static class PolyglotRootNode extends RootNode {
+
+        protected final PolyglotEngine engine;
+
+        PolyglotRootNode(Class<? extends TruffleLanguage> language, PolyglotEngine engine) {
+            super(language, null, null);
+            this.engine = engine;
         }
-        return target;
+
+        @Override
+        public final Object execute(VirtualFrame frame) {
+            ContextStore prev = ExecutionImpl.executionStarted(engine.context());
+            Access.DEBUG.executionStarted(engine);
+            try {
+                return executeImpl(frame);
+            } finally {
+                ExecutionImpl.executionEnded(prev);
+            }
+        }
+
+        protected abstract Object executeImpl(VirtualFrame frame);
     }
 
-    CallTarget lookupGlobalExecute(Class<?> type) {
-        CallTarget target = executeTargets.get(type);
-        if (target == null) {
-            target = PolyglotRootNode.createExecuteSymbol(this, type);
-            executeTargets.put(type, target);
+    private static class PolyglotEvalRootNode extends PolyglotRootNode {
+
+        private static final Object[] EMPTY_ARRAY = new Object[0];
+
+        @Child private DirectCallNode call;
+        private TruffleLanguage<?> fillLanguage;
+        private final Language language;
+        private final Source source;
+        private final PolyglotEngine engine;
+
+        PolyglotEvalRootNode(PolyglotEngine engine, Language language, Source source) {
+            super(TruffleLanguage.class, engine);
+            this.engine = engine;
+            this.source = source;
+            this.language = language;
         }
-        return target;
+
+        public PolyglotEngine getEngine() {
+            return engine;
+        }
+
+        @Override
+        protected Object executeImpl(VirtualFrame frame) {
+            TruffleLanguage[] fillLang = (TruffleLanguage[]) frame.getArguments()[0];
+            if (call == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                initialize();
+            }
+            fillLang[0] = fillLanguage;
+            return call.call(EMPTY_ARRAY);
+        }
+
+        private void initialize() {
+            TruffleLanguage<?> languageImpl = language.getImpl(true);
+            CallTarget target = Access.LANGS.parse(languageImpl, source, null);
+            if (target == null) {
+                throw new NullPointerException("Parsing has not produced a CallTarget for " + source);
+            }
+            fillLanguage = languageImpl;
+            call = insert(DirectCallNode.create(target));
+        }
     }
 
     /**
@@ -981,9 +1071,7 @@ public class PolyglotEngine {
      */
     public abstract class Value {
         private final TruffleLanguage<?>[] language;
-        private CallTarget executeTarget;
-        private CallTarget unwrapTarget;
-        private CallTarget asJavaObjectTarget;
+        private CallTarget target;
 
         Value(TruffleLanguage<?>[] language) {
             this.language = language;
@@ -992,31 +1080,6 @@ public class PolyglotEngine {
         abstract boolean isDirect();
 
         abstract Object value();
-
-        @SuppressWarnings("unchecked")
-        private <T> T unwrapJava(Object value) {
-            if (unwrapTarget == null) {
-                unwrapTarget = lookupGlobalAsJavaObject(value.getClass());
-            }
-            return (T) unwrapTarget.call(Object.class, value);
-        }
-
-        @SuppressWarnings("unchecked")
-        private <T> T asJavaObject(Class<T> type, Object value) {
-            if (asJavaObjectTarget == null) {
-                asJavaObjectTarget = lookupGlobalAsJavaObject(value == null ? void.class : value.getClass());
-            }
-            return (T) asJavaObjectTarget.call(type, value);
-        }
-
-        @SuppressWarnings("try")
-        private Object executeDirect(Object[] args) {
-            Object value = value();
-            if (executeTarget == null) {
-                executeTarget = lookupGlobalExecute(value.getClass());
-            }
-            return executeTarget.call(value, args);
-        }
 
         /**
          * Returns the object represented by this value, possibly null. The <em>raw</em> object can
@@ -1029,11 +1092,18 @@ public class PolyglotEngine {
          * @since 0.9
          */
         public Object get() {
+            return get(true, true);
+        }
+
+        private Object get(boolean unwrapJava, boolean wrapEngine) {
+            assertNoTruffle();
             Object result = waitForSymbol();
             if (result instanceof TruffleObject) {
-                result = unwrapJava((TruffleObject) result);
-                if (result instanceof TruffleObject) {
-                    result = EngineTruffleObject.wrap(PolyglotEngine.this, result);
+                if (unwrapJava) {
+                    result = JavaInterop.asJavaObject(Object.class, (TruffleObject) result);
+                }
+                if (wrapEngine && result instanceof TruffleObject) {
+                    return EngineTruffleObject.wrap(PolyglotEngine.this, result);
                 }
             }
             return result;
@@ -1111,25 +1181,26 @@ public class PolyglotEngine {
          * @since 0.9
          */
         public <T> T as(final Class<T> representation) {
-            Object original = waitForSymbol();
-            Object unwrapped = original;
-
-            if (original instanceof TruffleObject) {
-                unwrapped = unwrapJava(original);
+            assertNoTruffle();
+            final Object obj = get(true, false);
+            if (obj instanceof EngineTruffleObject) {
+                EngineTruffleObject eto = (EngineTruffleObject) obj;
+                if (representation.isInstance(eto.getDelegate())) {
+                    return representation.cast(eto.getDelegate());
+                }
             }
             if (representation == String.class) {
                 final Class<? extends TruffleLanguage> clazz = language[0].getClass();
-                Object unwrappedConvered = unwrapped instanceof ConvertedObject ? ((ConvertedObject) unwrapped).getOriginal() : unwrapped;
-                return representation.cast(Access.LANGS.toStringIfVisible(language[0], findEnv(clazz), unwrappedConvered, null));
+                Object unwrapped = obj instanceof NullObject ? ((NullObject) obj).getOriginal() : obj;
+                while (unwrapped instanceof EngineTruffleObject) {
+                    unwrapped = ((EngineTruffleObject) obj).getDelegate();
+                }
+                return representation.cast(Access.LANGS.toStringIfVisible(language[0], findEnv(clazz), unwrapped, null));
             }
-            if (ConvertedObject.isInstance(representation, unwrapped)) {
-                return ConvertedObject.cast(representation, unwrapped);
+            if (representation.isInstance(obj)) {
+                return representation.cast(obj);
             }
-
-            if (original instanceof TruffleObject) {
-                original = EngineTruffleObject.wrap(PolyglotEngine.this, original);
-            }
-            return representation.cast(asJavaObject(representation, original));
+            return JavaInterop.asJavaObject(representation, (TruffleObject) get(false, true));
         }
 
         /**
@@ -1236,13 +1307,18 @@ public class PolyglotEngine {
             return new ExecutorValue(language, invokeCompute);
         }
 
+        @SuppressWarnings("try")
+        private Object executeDirect(Object[] args) {
+            if (target == null) {
+                target = SymbolInvokerImpl.createExecuteSymbol(language[0], PolyglotEngine.this, value());
+            }
+            return target.call(args);
+        }
+
         private Object waitForSymbol() {
             assertNoTruffle();
             assert checkThread();
-            Object value = value();
-            assert value != null;
-            assert !(value instanceof EngineTruffleObject);
-            return value;
+            return value();
         }
     }
 
@@ -1252,7 +1328,6 @@ public class PolyglotEngine {
         DirectValue(TruffleLanguage<?>[] language, Object value) {
             super(language);
             this.value = value;
-            assert value != null;
         }
 
         @Override
@@ -1655,8 +1730,8 @@ public class PolyglotEngine {
 
             @Override
             public boolean isEvalRoot(RootNode target) {
-                if (target instanceof EvalRootNode) {
-                    if (((EvalRootNode) target).getEngine() == ExecutionImpl.findVM()) {
+                if (target instanceof PolyglotEvalRootNode) {
+                    if (((PolyglotEvalRootNode) target).getEngine() == ExecutionImpl.findVM()) {
                         return true;
                     }
                 }

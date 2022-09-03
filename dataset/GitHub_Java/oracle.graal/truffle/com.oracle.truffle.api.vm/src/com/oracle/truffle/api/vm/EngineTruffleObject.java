@@ -24,11 +24,8 @@
  */
 package com.oracle.truffle.api.vm;
 
-import java.util.Objects;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
@@ -36,7 +33,9 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import java.util.Objects;
 
 final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory {
     private static final Class<?> JFO_CLASS;
@@ -63,8 +62,7 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
         this.delegate = obj;
     }
 
-    static Object wrap(PolyglotEngine engine, Object value) {
-        Object obj = ConvertedObject.value(value);
+    static Object wrap(PolyglotEngine engine, Object obj) {
         if (obj instanceof TruffleObject) {
             if (obj.getClass() == JO_CLASS) {
                 return obj;
@@ -72,7 +70,11 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
             if (obj.getClass() == JFO_CLASS) {
                 return obj;
             }
-            return new EngineTruffleObject(engine, (TruffleObject) obj);
+            if (obj instanceof NullObject) {
+                return null;
+            } else {
+                return new EngineTruffleObject(engine, (TruffleObject) obj);
+            }
         } else {
             return obj;
         }
@@ -104,8 +106,8 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
     }
 
     @Override
-    public CallTarget accessMessage(Message message) {
-        return Truffle.getRuntime().createCallTarget(new WrappingRoot(engine, message));
+    public CallTarget accessMessage(Message tree) {
+        return Truffle.getRuntime().createCallTarget(new WrappingRoot(TruffleLanguage.class, tree.createNode()));
     }
 
     @Override
@@ -133,50 +135,20 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
         return delegate.toString();
     }
 
-    /*
-     * This wrapper is responsible for unwrapping the receiver, potentially executing on the
-     * executor and wrapping again the return value.
-     */
     static class WrappingRoot extends RootNode {
+        @Child private Node foreignAccess;
 
-        private final PolyglotEngine engine;
-        private final CallTarget messageTarget;
-
-        WrappingRoot(PolyglotEngine engine, Message foreignMessage) {
-            super(TruffleLanguage.class, null, null);
-            this.engine = engine;
-            this.messageTarget = PolyglotRootNode.createSend(engine, foreignMessage);
+        @SuppressWarnings("rawtypes")
+        WrappingRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess) {
+            super(lang, null, null);
+            this.foreignAccess = foreignAccess;
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
             EngineTruffleObject engineTruffleObject = (EngineTruffleObject) ForeignAccess.getReceiver(frame);
-            final Object[] arguments = frame.getArguments();
-            TruffleObject delegate = engineTruffleObject.getDelegate();
-            // hacky to update the receiver like this
-            arguments[0] = delegate;
-            Object res;
-            if (engine.executor() == null) {
-                res = messageTarget.call(arguments);
-            } else {
-                res = invokeOnExecutor(arguments);
-            }
-            return wrap(engine, res);
+            return engineTruffleObject.engine.invokeForeign(foreignAccess, frame, engineTruffleObject.delegate);
         }
-
-        @TruffleBoundary
-        private Object invokeOnExecutor(final Object[] arguments) {
-            ComputeInExecutor<Object> compute = new ComputeInExecutor<Object>(engine.executor()) {
-                @SuppressWarnings("try")
-                @Override
-                protected Object compute() {
-                    return messageTarget.call(arguments);
-                }
-            };
-            compute.perform();
-            return compute.get();
-        }
-
     }
 
 }
