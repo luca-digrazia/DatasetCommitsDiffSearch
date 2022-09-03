@@ -23,7 +23,8 @@
 package com.oracle.graal.hotspot.test;
 
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectTypeImpl.*;
+import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectType.*;
+import static java.lang.reflect.Modifier.*;
 
 import java.lang.reflect.*;
 
@@ -37,7 +38,7 @@ import com.oracle.graal.hotspot.meta.*;
  */
 public class HotSpotResolvedJavaFieldTest {
 
-    private static final Class<?>[] classesWithInternalFields = {Class.class, ClassLoader.class};
+    private static final Class[] classesWithInternalFields = {Class.class, ClassLoader.class};
 
     /**
      * Tests that {@link HotSpotResolvedJavaField#getModifiers()} only includes the modifiers
@@ -46,8 +47,8 @@ public class HotSpotResolvedJavaFieldTest {
      */
     @Test
     public void testModifiersForInternal() {
-        for (Class<?> c : classesWithInternalFields) {
-            HotSpotResolvedObjectType type = HotSpotResolvedObjectTypeImpl.fromObjectClass(c);
+        for (Class c : classesWithInternalFields) {
+            ResolvedJavaType type = HotSpotResolvedObjectType.fromClass(c);
             for (ResolvedJavaField field : type.getInstanceFields(false)) {
                 if (field.isInternal()) {
                     Assert.assertEquals(0, ~getReflectionFieldModifiers() & field.getModifiers());
@@ -57,13 +58,13 @@ public class HotSpotResolvedJavaFieldTest {
     }
 
     /**
-     * Tests that {@link HotSpotResolvedObjectTypeImpl#createField(String, JavaType, long, int)}
-     * always returns the same object for an internal field.
+     * Tests that {@link HotSpotResolvedObjectType#createField(String, JavaType, long, int)} always
+     * returns the same object for an internal field.
      */
     @Test
     public void testCachingForInternalFields() {
-        for (Class<?> c : classesWithInternalFields) {
-            HotSpotResolvedObjectTypeImpl type = HotSpotResolvedObjectTypeImpl.fromObjectClass(c);
+        for (Class c : classesWithInternalFields) {
+            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(c);
             for (ResolvedJavaField field : type.getInstanceFields(false)) {
                 if (field.isInternal()) {
                     HotSpotResolvedJavaField expected = (HotSpotResolvedJavaField) field;
@@ -78,7 +79,7 @@ public class HotSpotResolvedJavaFieldTest {
     public void testIsInObject() {
         for (Field f : String.class.getDeclaredFields()) {
             HotSpotResolvedJavaField rf = (HotSpotResolvedJavaField) runtime().getHostProviders().getMetaAccess().lookupJavaField(f);
-            Assert.assertEquals(rf.toString(), rf.isInObject("a string"), !rf.isStatic());
+            Assert.assertEquals(rf.toString(), rf.isInObject("a string"), !isStatic(rf.getModifiers()));
         }
     }
 }
