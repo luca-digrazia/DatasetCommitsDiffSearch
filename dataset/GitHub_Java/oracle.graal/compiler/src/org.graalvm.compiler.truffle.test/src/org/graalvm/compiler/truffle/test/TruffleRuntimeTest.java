@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,7 +29,7 @@ import static org.junit.Assert.assertTrue;
 
 import org.graalvm.compiler.api.test.Graal;
 import org.graalvm.compiler.runtime.RuntimeProvider;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.junit.Test;
 
 import com.oracle.truffle.api.Truffle;
@@ -83,7 +81,7 @@ public class TruffleRuntimeTest {
         LayoutFactory layoutFactory = runtime.getCapability(LayoutFactory.class);
         assertNotNull("LayoutFactory not found", layoutFactory);
 
-        boolean java8OrEarlier = JavaVersionUtil.Java8OrEarlier;
+        boolean java8OrEarlier = GraalServices.Java8OrEarlier;
         ClassLoader layoutFactoryCL = layoutFactory.getClass().getClassLoader();
         if (java8OrEarlier) {
             // Bootstrap class loader or JVMCI class loader

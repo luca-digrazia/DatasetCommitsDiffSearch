@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -47,9 +45,7 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.test.SubprocessUtil;
 import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
-import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Test;
 
 import jdk.vm.ci.runtime.JVMCICompilerFactory;
@@ -83,7 +79,6 @@ public class LazyInitializationTest {
 
     @Test
     public void testSLTck() throws IOException, InterruptedException {
-        Assume.assumeTrue(TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleCompileImmediately));
         List<String> vmArgs = withoutDebuggerArguments(getVMCommandLine());
         vmArgs.add(Java8OrEarlier ? "-XX:+TraceClassLoading" : "-Xlog:class+init=info");
         vmArgs.add("-dsa");
@@ -173,7 +168,7 @@ public class LazyInitializationTest {
         for (Class<?> cls : loadedGraalClasses) {
             if (OptionDescriptors.class.isAssignableFrom(cls)) {
                 try {
-                    OptionDescriptors optionDescriptors = cls.asSubclass(OptionDescriptors.class).getDeclaredConstructor().newInstance();
+                    OptionDescriptors optionDescriptors = cls.asSubclass(OptionDescriptors.class).newInstance();
                     for (OptionDescriptor option : optionDescriptors) {
                         whitelist.add(option.getDeclaringClass());
                         whitelist.add(option.getOptionValueType());

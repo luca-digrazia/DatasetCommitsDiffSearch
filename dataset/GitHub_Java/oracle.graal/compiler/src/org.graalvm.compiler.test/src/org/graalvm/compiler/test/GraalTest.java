@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -36,7 +34,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugDumpHandler;
@@ -46,12 +43,8 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.junit.After;
 import org.junit.Assert;
-import org.junit.AssumptionViolatedException;
 import org.junit.internal.ComparisonCriteria;
 import org.junit.internal.ExactComparisonCriteria;
-import org.junit.rules.DisableOnDebug;
-import org.junit.rules.TestRule;
-import org.junit.rules.Timeout;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import sun.misc.Unsafe;
@@ -237,15 +230,6 @@ public class GraalTest {
         }
         // anything else just use the non-ulps version
         assertDeepEquals(message, expected, actual, equalFloatsOrDoublesDelta());
-    }
-
-    /** @see <a href="https://bugs.openjdk.java.net/browse/JDK-8076557">JDK-8076557</a> */
-    protected static void assumeManagementLibraryIsLoadable() {
-        try {
-            System.loadLibrary("management");
-        } catch (UnsatisfiedLinkError e) {
-            throw new AssumptionViolatedException("Management interface is unavailable: " + e);
-        }
     }
 
     /**
@@ -466,36 +450,5 @@ public class GraalTest {
                 debug.closeDumpHandlers(true);
             }
         }
-    }
-
-    private static final double TIMEOUT_SCALING_FACTOR = Double.parseDouble(System.getProperty("graaltest.timeout.factor", "1.0"));
-
-    /**
-     * Creates a {@link TestRule} that applies a given timeout.
-     *
-     * A test harness can scale {@code length} with a factor specified by the
-     * {@code graaltest.timeout.factor} system property.
-     */
-    public static TestRule createTimeout(long length, TimeUnit timeUnit) {
-        Timeout timeout = new Timeout((long) (length * TIMEOUT_SCALING_FACTOR), timeUnit);
-        try {
-            return new DisableOnDebug(timeout);
-        } catch (LinkageError ex) {
-            return timeout;
-        }
-    }
-
-    /**
-     * @see #createTimeout
-     */
-    public static TestRule createTimeoutSeconds(int seconds) {
-        return createTimeout(seconds, TimeUnit.SECONDS);
-    }
-
-    /**
-     * @see #createTimeout
-     */
-    public static TestRule createTimeoutMillis(long milliseconds) {
-        return createTimeout(milliseconds, TimeUnit.MILLISECONDS);
     }
 }
