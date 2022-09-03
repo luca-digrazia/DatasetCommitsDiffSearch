@@ -22,10 +22,19 @@
  */
 package com.oracle.graal.replacements;
 
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.replacements.nodes.*;
 
+@ClassSubstitution(Integer.class)
 public class IntegerSubstitutions {
 
+    @MethodSubstitution
+    public static int reverseBytes(int i) {
+        return ReverseBytesNode.reverse(i);
+    }
+
+    @MethodSubstitution
     public static int numberOfLeadingZeros(int i) {
         if (i == 0) {
             return 32;
@@ -33,10 +42,26 @@ public class IntegerSubstitutions {
         return 31 - BitScanReverseNode.unsafeScan(i);
     }
 
+    @MethodSubstitution
     public static int numberOfTrailingZeros(int i) {
         if (i == 0) {
             return 32;
         }
         return BitScanForwardNode.unsafeScan(i);
+    }
+
+    @MethodSubstitution
+    public static int bitCount(int i) {
+        return BitCountNode.bitCount(i);
+    }
+
+    @MethodSubstitution
+    public static int divideUnsigned(int dividend, int divisor) {
+        return UnsignedDivNode.unsignedDivide(dividend, divisor);
+    }
+
+    @MethodSubstitution
+    public static int remainderUnsigned(int dividend, int divisor) {
+        return UnsignedRemNode.unsignedRemainder(dividend, divisor);
     }
 }
