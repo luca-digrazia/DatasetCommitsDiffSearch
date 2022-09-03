@@ -207,11 +207,10 @@ final class MacroOption {
         private static Map<MacroOptionKind, Map<String, MacroOption>> collectMacroOptions(Path rootDir) throws IOException {
             Map<MacroOptionKind, Map<String, MacroOption>> result = new HashMap<>();
             for (MacroOptionKind kind : MacroOptionKind.values()) {
-                Path optionsDir = rootDir.resolve(kind.subdir);
+                Path optionDir = rootDir.resolve(kind.subdir);
                 Map<String, MacroOption> collectedOptions = Collections.emptyMap();
-                if (Files.isDirectory(optionsDir)) {
-                    collectedOptions = Files.list(optionsDir).filter(Files::isDirectory)
-                                    .filter(optionDir -> Files.isReadable(optionDir.resolve(NativeImage.nativeImagePropertiesFilename)))
+                if (Files.isDirectory(optionDir)) {
+                    collectedOptions = Files.list(optionDir).filter(Files::isDirectory)
                                     .map(MacroOption::create).filter(Objects::nonNull)
                                     .collect(Collectors.toMap(MacroOption::getOptionName, Function.identity()));
                 }
