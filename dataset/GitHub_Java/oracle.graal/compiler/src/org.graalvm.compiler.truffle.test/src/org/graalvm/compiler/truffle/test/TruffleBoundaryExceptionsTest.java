@@ -22,11 +22,8 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationThreshold;
+
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.truffle.GraalTruffleCompilationListener;
@@ -38,7 +35,11 @@ import org.graalvm.compiler.truffle.TruffleInlining;
 import org.junit.Assert;
 import org.junit.Test;
 
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationThreshold;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
 
 public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling {
 
@@ -76,7 +77,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
 
             @CompilerDirectives.TruffleBoundary
             public void throwExceptionBoundary() {
-                throw new RuntimeException();
+                throw new AssertionError();
             }
         }
         final int[] compilationCount = {0};
