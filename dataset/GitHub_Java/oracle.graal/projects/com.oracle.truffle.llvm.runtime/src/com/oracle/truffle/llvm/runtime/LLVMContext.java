@@ -91,17 +91,14 @@ public final class LLVMContext {
 
     private final List<ContextExtension> contextExtension;
 
-    private final ThreadLocal<LLVMAddress> tls = ThreadLocal.withInitial(LLVMAddress::nullPointer);
-    private final ThreadLocal<LLVMAddress> clearChildTid = ThreadLocal.withInitial(LLVMAddress::nullPointer);
-
     // #define SIG_DFL ((__sighandler_t) 0) /* Default action. */
-    private final LLVMAddress sigDfl;
+    private final LLVMFunction sigDfl;
 
     // # define SIG_IGN ((__sighandler_t) 1) /* Ignore signal. */
-    private final LLVMAddress sigIgn;
+    private final LLVMFunction sigIgn;
 
     // #define SIG_ERR ((__sighandler_t) -1) /* Error return. */
-    private final LLVMAddress sigErr;
+    private final LLVMFunction sigErr;
 
     public static final class DestructorStackElement {
         private final LLVMFunctionDescriptor destructor;
@@ -125,8 +122,8 @@ public final class LLVMContext {
         private int currentFunctionIndex = 0;
         private final HashMap<LLVMAddress, LLVMFunctionDescriptor> functionDescriptors = new HashMap<>();
 
-        synchronized LLVMFunctionDescriptor getDescriptor(LLVMAddress pointer) {
-            return functionDescriptors.get(pointer);
+        synchronized LLVMFunctionDescriptor getDescriptor(LLVMFunctionHandle handle) {
+            return functionDescriptors.get(LLVMAddress.fromLong(handle.getFunctionPointer()));
         }
 
         synchronized void register(LLVMAddress pointer, LLVMFunctionDescriptor desc) {
@@ -150,9 +147,9 @@ public final class LLVMContext {
 
         this.nativeCallStatistics = SulongEngineOption.isTrue(env.getOptions().get(SulongEngineOption.NATIVE_CALL_STATS)) ? new HashMap<>() : null;
         this.threadingStack = new LLVMThreadingStack(env.getOptions().get(SulongEngineOption.STACK_SIZE_KB));
-        this.sigDfl = LLVMAddress.fromLong(0);
-        this.sigIgn = LLVMAddress.fromLong(1);
-        this.sigErr = LLVMAddress.fromLong(-1);
+        this.sigDfl = LLVMFunctionHandle.createHandle(0);
+        this.sigIgn = LLVMFunctionHandle.createHandle(1);
+        this.sigErr = LLVMFunctionHandle.createHandle(-1);
         this.toNative = new IdentityHashMap<>();
         this.toManaged = new HashMap<>();
         this.handlesLock = new Object();
@@ -272,16 +269,8 @@ public final class LLVMContext {
         return globalScope;
     }
 
-    public ThreadLocal<LLVMAddress> getThreadLocalStorage() {
-        return tls;
-    }
-
-    public ThreadLocal<LLVMAddress> getClearChildTid() {
-        return clearChildTid;
-    }
-
     @TruffleBoundary
-    public LLVMFunctionDescriptor getFunctionDescriptor(LLVMAddress handle) {
+    public LLVMFunctionDescriptor getFunctionDescriptor(LLVMFunctionHandle handle) {
         return functionPointerRegistry.getDescriptor(handle);
     }
 
@@ -295,15 +284,15 @@ public final class LLVMContext {
         functionPointerRegistry.register(address, descriptor);
     }
 
-    public LLVMAddress getSigDfl() {
+    public LLVMFunction getSigDfl() {
         return sigDfl;
     }
 
-    public LLVMAddress getSigIgn() {
+    public LLVMFunction getSigIgn() {
         return sigIgn;
     }
 
-    public LLVMAddress getSigErr() {
+    public LLVMFunction getSigErr() {
         return sigErr;
     }
 
