@@ -52,6 +52,7 @@ import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.LIRValueUtil;
+import com.oracle.graal.lir.RedundantMoveElimination;
 import com.oracle.graal.lir.StandardOp;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
@@ -80,8 +81,17 @@ import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
 
 /**
- * TODO(zapster) document me!
+ * Allocates registers within a trace in a greedy, bottom-up fashion. The liveness information is
+ * computed on the fly as the instructions are traversed instead of computing it in a separate pass.
+ * The goal of this allocator is to provide a simple and fast algorithm for situations where code
+ * quality is not the primary target.
  *
+ * This implementation does not (yet) exploit hinting information and might introduce multiple spill
+ * moves to the same stack slot (which are likely to be remove by {@link RedundantMoveElimination}.
+ *
+ * The current implementation cannot deal with {@link AbstractBlockBase blocks} with edges to
+ * compiled exception handlers since it might introduce spill code after the {@link LIRInstruction
+ * instruction} that triggers the exception.
  */
 public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocationContext> {
     private final TargetDescription target;
@@ -346,8 +356,6 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
                 for (int i = trace.getBlocks().length - 1; i >= 0; i--) {
                     AbstractBlockBase<?> block = trace.getBlocks()[i];
                     // handle PHIs
-                    assert !block.isLoopHeader() || successorBlock != null || (block.getSuccessorCount() == 1 && block.getSuccessors()[0].equals(block)) : "LoopHeader without loop condition block: " +
-                                    block;
                     if (successorBlock != null) {
                         resolvePhis(successorBlock, block);
                     }
@@ -405,7 +413,7 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
         private void resolveLocalDataFlow(Trace trace) {
             for (AbstractBlockBase<?> block : trace.getBlocks()) {
                 for (AbstractBlockBase<?> pred : block.getPredecessors()) {
-                    if (resultTraces.traceForBlock(pred).equals(trace)) {
+                    if (resultTraces.getTraceForBlock(pred).equals(trace)) {
                         resolveFindInsertPos(pred, block);
                         SSIUtil.forEachValuePair(getLIR(), block, pred, resolveLoopBackEdgeVisitor);
                         moveResolver.resolveAndAppendMoves();
