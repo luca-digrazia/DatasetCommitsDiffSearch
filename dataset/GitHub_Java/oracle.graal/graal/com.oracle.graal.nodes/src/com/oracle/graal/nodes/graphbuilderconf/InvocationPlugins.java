@@ -335,12 +335,10 @@ public class InvocationPlugins {
         public boolean equals(Object obj) {
             if (obj instanceof ResolvedJavaMethodKey) {
                 ResolvedJavaMethodKey that = (ResolvedJavaMethodKey) obj;
-                if (this.method.isStatic() == that.method.isStatic()) {
-                    if (this.method.getDeclaringClass().equals(that.method.getDeclaringClass())) {
-                        if (this.method.getName().equals(that.method.getName())) {
-                            if (this.method.getSignature().equals(that.method.getSignature())) {
-                                return true;
-                            }
+                if (this.method.getDeclaringClass().equals(that.method.getDeclaringClass())) {
+                    if (this.method.getName().equals(that.method.getName())) {
+                        if (this.method.getSignature().equals(that.method.getSignature())) {
+                            return true;
                         }
                     }
                 }
