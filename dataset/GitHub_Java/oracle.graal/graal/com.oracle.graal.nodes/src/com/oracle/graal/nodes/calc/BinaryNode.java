@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -34,7 +33,6 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public abstract class BinaryNode extends FloatingNode implements Canonicalizable.Binary<ValueNode> {
 
-    public static final NodeClass TYPE = NodeClass.get(BinaryNode.class);
     @Input protected ValueNode x;
     @Input protected ValueNode y;
 
@@ -63,8 +61,8 @@ public abstract class BinaryNode extends FloatingNode implements Canonicalizable
      * @param x the first input instruction
      * @param y the second input instruction
      */
-    protected BinaryNode(NodeClass c, Stamp stamp, ValueNode x, ValueNode y) {
-        super(c, stamp);
+    public BinaryNode(Stamp stamp, ValueNode x, ValueNode y) {
+        super(stamp);
         this.x = x;
         this.y = y;
     }
