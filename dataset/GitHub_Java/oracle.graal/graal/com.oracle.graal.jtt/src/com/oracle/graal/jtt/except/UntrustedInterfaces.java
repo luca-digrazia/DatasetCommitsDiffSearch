@@ -30,7 +30,7 @@ import com.oracle.graal.jtt.*;
 public class UntrustedInterfaces extends JTTTest {
 
     public interface CallBack {
-        int callBack(TestInterface ti);
+        public int callBack(TestInterface ti);
     }
 
     private interface TestInterface {
@@ -38,7 +38,7 @@ public class UntrustedInterfaces extends JTTTest {
     }
 
     /**
-     * What a GoodPill would look like.
+     * What a GoodPill would look like:
      *
      * <pre>
      * private static final class GoodPill extends Pill {
@@ -66,7 +66,7 @@ public class UntrustedInterfaces extends JTTTest {
      * }
      * </pre>
      */
-    public abstract static class Pill {
+    public static abstract class Pill {
         public static TestInterface staticField;
         public TestInterface field;
 
@@ -143,13 +143,10 @@ public class UntrustedInterfaces extends JTTTest {
 
     private static Pill poisonPill;
 
-    // Checkstyle: stop
     @BeforeClass
-    public static void setUp() throws InstantiationException, IllegalAccessException, ClassNotFoundException {
+    public static void setup() throws InstantiationException, IllegalAccessException, ClassNotFoundException {
         poisonPill = (Pill) new PoisonLoader().findClass(PoisonLoader.POISON_IMPL_NAME).newInstance();
     }
-
-    // Checkstyle: resume
 
     @Test
     public void testStaticField0() {
