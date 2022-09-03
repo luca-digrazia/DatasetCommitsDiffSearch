@@ -143,8 +143,6 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
 
     abstract ResolvedJavaMethod findMethod(Object obj);
 
-    abstract Edges findEdges(Node node, boolean dumpInputs);
-
     abstract Edges findEdges(NodeClass<?> nodeClass, boolean dumpInputs);
 
     abstract int findNodeId(Node n);
@@ -357,7 +355,8 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
     }
 
     private void writeEdges(Node node, boolean dumpInputs) throws IOException {
-        Edges edges = findEdges(node, dumpInputs);
+        NodeClass<?> nodeClass = findNodeClass(node);
+        Edges edges = findEdges(nodeClass, dumpInputs);
         int size = findSize(edges);
         for (int i = 0; i < size; i++) {
             if (isDirect(edges, i)) {
