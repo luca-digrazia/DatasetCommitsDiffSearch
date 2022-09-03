@@ -23,9 +23,9 @@
 package com.oracle.graal.api.meta;
 
 /**
- * The implementation type of the {@link JavaConstant#NULL_OBJECT null constant}.
+ * The implementation type of the {@link JavaConstant#NULL_POINTER null constant}.
  */
-final class NullConstant extends JavaConstant {
+final class NullConstant extends AbstractValue implements JavaConstant {
 
     private static final long serialVersionUID = 8906209595800783961L;
 
@@ -74,18 +74,22 @@ final class NullConstant extends JavaConstant {
     }
 
     @Override
+    public String toString() {
+        return JavaConstant.toString(this);
+    }
+
+    @Override
     public String toValueString() {
         return "null";
     }
 
     @Override
     public int hashCode() {
-        return System.identityHashCode(this);
+        return 13;
     }
 
     @Override
     public boolean equals(Object o) {
-        assert o == this || !(o instanceof NullConstant) : "null constant is a singleton";
-        return o == this;
+        return o instanceof NullConstant;
     }
 }
