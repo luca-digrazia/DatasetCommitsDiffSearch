@@ -51,7 +51,6 @@ import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption1Factor
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption2Factory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption3Factory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption4Factory;
-import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption5Factory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestBoundCacheOverflowContainsFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestCacheFieldFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestCacheMethodFactory;
@@ -568,22 +567,6 @@ public class CachedTest {
 
     }
 
-    @NodeChild
-    abstract static class ChildrenAdoption5 extends ValueNode {
-
-        abstract Node[] execute(Object value);
-
-        @Specialization
-        static Node[] do1(Object value, @Cached("createChildren()") Node[] cachedValue) {
-            return cachedValue;
-        }
-
-        protected static Node[] createChildren() {
-            return new Node[2];
-        }
-
-    }
-
     @Test
     public void testChildrenAdoption1() {
         ChildrenAdoption1 root = createNode(ChildrenAdoption1Factory.getInstance(), false);
@@ -612,14 +595,6 @@ public class CachedTest {
     @Test
     public void testChildrenAdoption4() {
         ChildrenAdoption4 root = createNode(ChildrenAdoption4Factory.getInstance(), false);
-        Node child = new ValueNode();
-        root.execute(child);
-        Assert.assertTrue(hasParent(root, child.getParent()));
-    }
-
-    @Test
-    public void testChildrenAdoption5() {
-        ChildrenAdoption5 root = createNode(ChildrenAdoption5Factory.getInstance(), false);
         Node child = new ValueNode();
         root.execute(child);
         Assert.assertTrue(hasParent(root, child.getParent()));
