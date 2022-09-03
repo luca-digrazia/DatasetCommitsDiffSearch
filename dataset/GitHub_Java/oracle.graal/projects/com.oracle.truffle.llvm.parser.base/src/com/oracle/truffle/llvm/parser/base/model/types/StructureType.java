@@ -30,17 +30,22 @@
 package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock.MetadataReference;
 import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
-public final class StructureType implements AggregateType, ValueSymbol {
+import java.util.Arrays;
+import java.util.Objects;
+
+public class StructureType implements AggregateType, ValueSymbol {
 
     private String name = ValueSymbol.UNKNOWN;
 
     private final boolean isPacked;
 
-    private final Type[] types;
+    protected final Type[] types;
 
     private MetadataReference metadata = MetadataBlock.voidRef;
 
@@ -50,8 +55,12 @@ public final class StructureType implements AggregateType, ValueSymbol {
     }
 
     @Override
-    public int getAlignment() {
-        return types == null || types.length == 0 ? Long.BYTES : types[0].getAlignment();
+    public int getBits() {
+        if (isPacked) {
+            return Arrays.stream(types).mapToInt(Type::getBits).sum();
+        } else {
+            throw new UnsupportedOperationException("TargetDataLayout is necessary to compute Padding information!");
+        }
     }
 
     @Override
@@ -59,25 +68,8 @@ public final class StructureType implements AggregateType, ValueSymbol {
         return types[index];
     }
 
-    public long getElementOffset(int index) {
-        int offset = 0;
-        for (int i = 0; i <= index; i++) {
-            if (!isPacked() && (offset % types[i].getAlignment() != 0)) {
-                offset += types[i].getAlignment() - (offset % types[i].getAlignment());
-            }
-
-            if (i == index) {
-                break;
-            }
-
-            offset += types[i].sizeof();
-        }
-
-        return offset * Byte.SIZE;
-    }
-
     @Override
-    public int getElementCount() {
+    public int getLength() {
         return types.length;
     }
 
@@ -87,8 +79,60 @@ public final class StructureType implements AggregateType, ValueSymbol {
     }
 
     @Override
+    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        return LLVMFunctionDescriptor.LLVMRuntimeType.STRUCT;
+    }
+
+    @Override
     public String getName() {
         return name;
+    }
+
+    @Override
+    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return getLargestAlignment(targetDataLayout);
+    }
+
+    @Override
+    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        int sumByte = 0;
+        for (final Type elementType : types) {
+            if (!isPacked) {
+                sumByte += Type.getPadding(sumByte, elementType, targetDataLayout);
+            }
+            sumByte += elementType.getSize(targetDataLayout);
+        }
+
+        int padding = 0;
+        if (!isPacked && sumByte != 0) {
+            padding = Type.getPadding(sumByte, getLargestAlignment(targetDataLayout));
+        }
+
+        return sumByte + padding;
+    }
+
+    @Override
+    public int getIndexOffset(int index, DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        int offset = 0;
+        for (int i = 0; i < index; i++) {
+            final Type elementType = types[i];
+            offset += elementType.getSize(targetDataLayout);
+            if (!isPacked) {
+                offset += Type.getPadding(offset, elementType, targetDataLayout);
+            }
+        }
+        if (!isPacked && getSize(targetDataLayout) > offset) {
+            offset += Type.getPadding(offset, types[index], targetDataLayout);
+        }
+        return offset;
+    }
+
+    private int getLargestAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        int largestAlignment = 0;
+        for (final Type elementType : types) {
+            largestAlignment = Math.max(largestAlignment, elementType.getAlignment(targetDataLayout));
+        }
+        return largestAlignment;
     }
 
     @Override
@@ -105,25 +149,7 @@ public final class StructureType implements AggregateType, ValueSymbol {
         this.name = name;
     }
 
-    @Override
-    public int sizeof() {
-        int size = 0;
-        for (Type type : types) {
-            size += type.sizeof() + calculatePadding(type.getAlignment(), size);
-        }
-        return size;
-    }
-
-    @Override
-    public int sizeof(int alignment) {
-        int size = 0;
-        for (Type type : types) {
-            size = size + type.sizeof(alignment) + calculatePadding(Math.min(alignment, type.getAlignment()), size);
-        }
-        return size;
-    }
-
-    public String toDeclarationString() {
+    private String toDeclarationString() {
         StringBuilder str = new StringBuilder();
         if (isPacked) {
             str.append("<{ ");
@@ -153,23 +179,6 @@ public final class StructureType implements AggregateType, ValueSymbol {
     }
 
     @Override
-    public String toString() {
-        if (name.equals(ValueSymbol.UNKNOWN)) {
-            return toDeclarationString();
-        } else {
-            return "%" + name;
-        }
-    }
-
-    private int calculatePadding(int alignment, int address) {
-        if (isPacked || alignment == 1) {
-            return 0;
-        }
-        int mask = alignment - 1;
-        return (alignment - (address & mask)) & mask;
-    }
-
-    @Override
     public void setMetadataReference(MetadataReference metadata) {
         this.metadata = metadata;
     }
@@ -177,5 +186,45 @@ public final class StructureType implements AggregateType, ValueSymbol {
     @Override
     public MetadataReference getMetadataReference() {
         return metadata;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 11;
+        hash = 23 * hash + (isPacked ? 1231 : 1237);
+        for (Type type : types) {
+            /*
+             * Those types could create cycles, so we ignore them for hashCode() calculation.
+             */
+            if (type instanceof AggregateType || type instanceof PointerType || type instanceof FunctionType) {
+                hash = 23 * hash + 47;
+                continue;
+            }
+            hash = 23 * hash + type.hashCode();
+        }
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+
+        } else if (obj instanceof StructureType) {
+            final StructureType other = (StructureType) obj;
+            return Objects.equals(name, other.name) && isPacked == other.isPacked && Arrays.equals(types, other.types);
+
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public String toString() {
+        if (name.equals(ValueSymbol.UNKNOWN)) {
+            return toDeclarationString();
+        } else {
+            return "%" + name;
+        }
     }
 }

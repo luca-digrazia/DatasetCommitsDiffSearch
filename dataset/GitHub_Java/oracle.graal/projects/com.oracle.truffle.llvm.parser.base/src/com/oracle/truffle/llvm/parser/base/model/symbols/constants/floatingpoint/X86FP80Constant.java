@@ -55,15 +55,11 @@ public final class X86FP80Constant extends FloatingPointConstant {
         return new X86FP80Constant(value);
     }
 
-    private static final int HEX_MASK = 0xf;
-
-    private static final int BYTE_MSB_SHIFT = 4;
-
     @Override
     public String getStringValue() {
         final StringBuilder builder = new StringBuilder("0xK");
         for (byte aValue : value) {
-            builder.append(String.format("%x%x", (aValue >>> BYTE_MSB_SHIFT) & HEX_MASK, aValue & HEX_MASK));
+            builder.append(String.format("%x", aValue));
         }
         return builder.toString();
     }

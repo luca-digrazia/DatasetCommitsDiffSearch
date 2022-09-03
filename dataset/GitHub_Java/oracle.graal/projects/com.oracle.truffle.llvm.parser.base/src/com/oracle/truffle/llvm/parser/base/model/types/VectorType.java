@@ -32,49 +32,47 @@ package com.oracle.truffle.llvm.parser.base.model.types;
 import java.util.Objects;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock.MetadataReference;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public class VectorType implements AggregateType {
 
-    public final Type type;
+    private final Type elementType;
 
     private final int length;
 
     private MetadataReference metadata = MetadataBlock.voidRef;
 
     public VectorType(Type type, int length) {
-        this.type = type;
+        this.elementType = type;
         this.length = length;
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof VectorType) {
-            VectorType other = (VectorType) obj;
-            return length == other.length && type.equals(other.type);
-        }
-        return false;
+    public int getBits() {
+        return getElementType().getBits() * length;
     }
 
     public Type getElementType() {
-        return type;
+        return elementType;
     }
 
     @Override
-    public int getElementCount() {
+    public int getLength() {
         return length;
     }
 
     @Override
     public Type getElementType(int index) {
-        return type;
+        return getElementType();
     }
 
     @Override
     public LLVMBaseType getLLVMBaseType() {
-        final LLVMBaseType elementType = type.getLLVMBaseType();
-        switch (elementType) {
+        final LLVMBaseType llvmBaseType = this.getElementType().getLLVMBaseType();
+        switch (llvmBaseType) {
             case I1:
                 return LLVMBaseType.I1_VECTOR;
             case I8:
@@ -90,26 +88,45 @@ public class VectorType implements AggregateType {
             case DOUBLE:
                 return LLVMBaseType.DOUBLE_VECTOR;
             default:
-                throw new AssertionError("Unsupported Vector Element Type: " + type);
+                throw new UnsupportedOperationException("Unsupported Vector Element Type: " + getElementType());
         }
     }
 
     @Override
-    public int hashCode() {
-        int hash = 5;
-        hash = 59 * hash + Objects.hashCode(this.type);
-        hash = 59 * hash + this.length;
-        return hash;
+    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        switch (getElementType().getRuntimeType()) {
+            case I1:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I1_VECTOR;
+            case I8:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I8_VECTOR;
+            case I16:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I16_VECTOR;
+            case I32:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I32_VECTOR;
+            case I64:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I64_VECTOR;
+            case FLOAT:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.FLOAT_VECTOR;
+            case DOUBLE:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.DOUBLE_VECTOR;
+            default:
+                throw new UnsupportedOperationException("Unsupported Vector Element Type: " + getElementType());
+        }
     }
 
     @Override
-    public int sizeof() {
-        return length * type.sizeof();
+    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return getElementType().getAlignment(targetDataLayout);
     }
 
     @Override
-    public String toString() {
-        return String.format("<%d x %s>", getElementCount(), getElementType());
+    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return getElementType().getSize(targetDataLayout) * length;
+    }
+
+    @Override
+    public int getIndexOffset(int index, DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return getElementType().getSize(targetDataLayout) * index;
     }
 
     @Override
@@ -120,5 +137,32 @@ public class VectorType implements AggregateType {
     @Override
     public MetadataReference getMetadataReference() {
         return metadata;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 5;
+        hash = 59 * hash + Objects.hashCode(this.getElementType());
+        hash = 59 * hash + this.length;
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+
+        } else if (obj instanceof VectorType) {
+            final VectorType other = (VectorType) obj;
+            return length == other.length && getElementType().equals(other.getElementType());
+
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("<%d x %s>", getLength(), getElementType());
     }
 }

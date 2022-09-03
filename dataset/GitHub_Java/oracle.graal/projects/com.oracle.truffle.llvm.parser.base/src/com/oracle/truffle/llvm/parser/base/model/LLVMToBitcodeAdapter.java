@@ -29,272 +29,67 @@
  */
 package com.oracle.truffle.llvm.parser.base.model;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-import com.intel.llvm.ireditor.types.ResolvedArrayType;
-import com.intel.llvm.ireditor.types.ResolvedFloatingType;
-import com.intel.llvm.ireditor.types.ResolvedFunctionType;
-import com.intel.llvm.ireditor.types.ResolvedIntegerType;
-import com.intel.llvm.ireditor.types.ResolvedMetadataType;
-import com.intel.llvm.ireditor.types.ResolvedNamedType;
-import com.intel.llvm.ireditor.types.ResolvedOpaqueType;
-import com.intel.llvm.ireditor.types.ResolvedPointerType;
-import com.intel.llvm.ireditor.types.ResolvedStructType;
-import com.intel.llvm.ireditor.types.ResolvedType;
-import com.intel.llvm.ireditor.types.ResolvedUnknownType;
-import com.intel.llvm.ireditor.types.ResolvedVarargType;
-import com.intel.llvm.ireditor.types.ResolvedVectorType;
-import com.intel.llvm.ireditor.types.ResolvedVoidType;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
-import com.oracle.truffle.llvm.parser.base.model.types.ArrayType;
-import com.oracle.truffle.llvm.parser.base.model.types.FloatingPointType;
+import com.intel.llvm.ireditor.lLVM_IR.FunctionDef;
+import com.intel.llvm.ireditor.lLVM_IR.FunctionHeader;
+import com.intel.llvm.ireditor.lLVM_IR.Parameter;
+import com.oracle.truffle.llvm.parser.base.model.enums.Linkage;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
-import com.oracle.truffle.llvm.parser.base.model.types.IntegerType;
-import com.oracle.truffle.llvm.parser.base.model.types.MetaType;
-import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
-import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
-import com.oracle.truffle.llvm.parser.base.model.types.VectorType;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 
 public final class LLVMToBitcodeAdapter {
 
     private LLVMToBitcodeAdapter() {
     }
 
-    public static Type resolveType(ResolvedType type) {
-        if (type instanceof ResolvedNamedType) {
-            return resolveType((ResolvedNamedType) type);
-        } else if (type.isFunction()) {
-            return resolveType((ResolvedFunctionType) type);
-        } else if (type.isFloating()) {
-            return resolveType((ResolvedFloatingType) type);
-        } else if (type.isInteger()) {
-            return resolveType((ResolvedIntegerType) type);
-        } else if (type.isMetadata()) {
-            return resolveType((ResolvedMetadataType) type);
-        } else if (type.isPointer()) {
-            return resolveType((ResolvedPointerType) type);
-        } else if (type.isStruct()) {
-            return resolveType((ResolvedStructType) type);
-        } else if (type.isVararg()) {
-            throw new AssertionError("varargs are only expected inside functions");
-        } else if (type.isVector()) {
-            return resolveType((ResolvedVectorType) type);
-        } else if (type.isVoid()) {
-            return resolveType((ResolvedVoidType) type);
-        } else if (type.isUnknown()) {
-            return resolveType((ResolvedUnknownType) type);
-        } else if (type instanceof ResolvedArrayType) {
-            return resolveType((ResolvedArrayType) type);
-        } else if (type instanceof ResolvedOpaqueType) {
-            return resolveType((ResolvedOpaqueType) type);
-        }
-
-        throw new AssertionError("Unknown type: " + type + " - " + type.getClass().getTypeName());
+    public static FunctionDefinition resolveFunctionDef(LLVMParserRuntime runtime, FunctionDef def) {
+        FunctionDefinition funcDef = new FunctionDefinition(resolveFunctionHeader(runtime, def.getHeader()), null);
+        funcDef.setName(def.getHeader().getName().substring(1));
+        return funcDef;
     }
 
-    private static Map<ResolvedNamedType, Type> namedTypes = new HashMap<>();
-
-    public static Type resolveType(ResolvedNamedType type) {
-        if (!namedTypes.containsKey(type)) {
-            namedTypes.put(type, MetaType.UNKNOWN); // TODO: resolve cycles
-            namedTypes.put(type, resolveType(type.getReferredType()));
-        }
-
-        return namedTypes.get(type);
-    }
-
-    public static Type resolveType(ResolvedFunctionType type) {
-        Type returnType = resolveType(type.getReturnType());
+    public static FunctionType resolveFunctionHeader(LLVMParserRuntime runtime, FunctionHeader header) {
+        Type returnType = TextToBCConverter.convert(runtime.resolve(header.getRettype()));
         List<Type> args = new ArrayList<>();
         boolean hasVararg = false;
-        for (ResolvedType arg : type.getParameters()) {
+        for (Parameter arg : header.getParameters().getParameters()) {
             assert !hasVararg; // should be the last element of the parameterlist
-            if (arg.isVararg()) {
+            if (runtime.resolve(arg.getType().getType()).isVararg()) {
                 hasVararg = true;
             } else {
-                args.add(resolveType(arg));
+                args.add(TextToBCConverter.convert(runtime.resolve(arg.getType().getType())));
             }
         }
-        FunctionType fType = new FunctionType(returnType, args.toArray(new Type[args.size()]), hasVararg);
-        return new FunctionDeclaration(fType);
+        FunctionType funcType = new FunctionType(returnType, args.toArray(new Type[args.size()]), hasVararg);
+        funcType.setName(header.getName().substring(1));
+        return funcType;
     }
 
-    private static final int HALF_SIZE = 16;
-    private static final int X86_FP80_SIZE = 80;
-    private static final int FP128_SIZE = 128;
-
-    public static Type resolveType(ResolvedFloatingType type) {
-        switch (type.getBits().intValue()) {
-
-            case HALF_SIZE:
-                return FloatingPointType.HALF;
-
-            case Float.SIZE:
-                return FloatingPointType.FLOAT;
-
-            case Double.SIZE:
-                return FloatingPointType.DOUBLE;
-
-            case X86_FP80_SIZE:
-                return FloatingPointType.X86_FP80;
-
-            case FP128_SIZE:
-                return FloatingPointType.FP128;
-
-            default:
-                throw new AssertionError("Unknown bitsize: " + type.getBits());
+    private static Linkage resolveLinkage(String linkage) {
+        for (final Linkage linkageEnumVal : Linkage.values()) {
+            if (linkageEnumVal.getIrString().equalsIgnoreCase(linkage)) {
+                return linkageEnumVal;
+            }
         }
+        return Linkage.UNKNOWN;
     }
 
-    public static Type resolveType(ResolvedIntegerType type) {
-        switch (type.getBits().intValue()) {
-            case 1:
-                return IntegerType.BOOLEAN;
+    public static GlobalVariable resolveGlobalVariable(LLVMParserRuntime runtime, com.intel.llvm.ireditor.lLVM_IR.GlobalVariable globalVariable) {
+        Type type = TextToBCConverter.convert(runtime.resolve(globalVariable.getType()));
 
-            case Byte.SIZE:
-                return IntegerType.BYTE;
+        String alignString = globalVariable.getAlign();
+        int align = alignString != null ? Integer.valueOf(alignString.replaceAll("align ", "")) : 0;
 
-            case Short.SIZE:
-                return IntegerType.SHORT;
+        Linkage linkage = resolveLinkage(globalVariable.getLinkage());
 
-            case Integer.SIZE:
-                return IntegerType.INTEGER;
+        GlobalVariable glob = GlobalVariable.create(type, 0, align, linkage != null ? linkage.ordinal() : 0);
+        glob.setName(globalVariable.getName().substring(1));
 
-            case Long.SIZE:
-                return IntegerType.LONG;
-
-            default:
-                return new IntegerType(type.getBits().intValue());
-        }
-    }
-
-    public static Type resolveType(@SuppressWarnings("unused") ResolvedMetadataType type) {
-        return MetaType.METADATA;
-    }
-
-    public static Type resolveType(ResolvedPointerType type) {
-        Type pointedType = resolveType(type.getContainedType(-1));
-        return new PointerType(pointedType);
-    }
-
-    public static Type resolveType(ResolvedStructType type) {
-        List<Type> elements = new ArrayList<>();
-        for (ResolvedType arg : type.getFieldTypes()) {
-            elements.add(resolveType(arg));
-        }
-        return new StructureType(type.isPacked(), elements.toArray(new Type[elements.size()]));
-    }
-
-    public static Type resolveType(ResolvedVectorType type) {
-        Type elementType = resolveType(type.getContainedType(-1));
-        return new VectorType(elementType, type.getSize());
-    }
-
-    public static Type resolveType(@SuppressWarnings("unused") ResolvedVoidType type) {
-        return MetaType.VOID;
-    }
-
-    public static Type resolveType(@SuppressWarnings("unused") ResolvedUnknownType type) {
-        return MetaType.UNKNOWN;
-    }
-
-    public static Type resolveType(ResolvedArrayType type) {
-        Type elementType = resolveType(type.getContainedType(-1));
-        return new ArrayType(elementType, type.getSize());
-    }
-
-    public static Type resolveType(@SuppressWarnings("unused") ResolvedOpaqueType type) {
-        return MetaType.OPAQUE;
-    }
-
-    // temporary solution to convert the new type back to the old one
-    public static ResolvedType unresolveType(Type type) {
-        if (type instanceof FunctionDeclaration) {
-            return unresolveType((FunctionDeclaration) type);
-        } else if (type instanceof FloatingPointType) {
-            return unresolveType((FloatingPointType) type);
-        } else if (type instanceof IntegerType) {
-            return unresolveType((IntegerType) type);
-        } else if (type instanceof MetaType) {
-            return unresolveType((MetaType) type);
-        } else if (type instanceof PointerType) {
-            return unresolveType((PointerType) type);
-        } else if (type instanceof StructureType) {
-            return unresolveType((StructureType) type);
-        } else if (type instanceof ArrayType) {
-            return unresolveType((ArrayType) type);
-        } else if (type instanceof VectorType) {
-            return unresolveType((VectorType) type);
-        }
-
-        throw new AssertionError("Unknown type: " + type + " - " + type.getClass().getTypeName());
-    }
-
-    public static ResolvedType unresolveType(FunctionDeclaration type) {
-        ResolvedType returnType = unresolveType(type.getReturnType());
-        List<ResolvedType> paramTypes = new ArrayList<>();
-        for (Type t : type.getArgumentTypes()) {
-            paramTypes.add(unresolveType(t));
-        }
-        if (type.isVarArg()) {
-            paramTypes.add(new ResolvedVarargType());
-        }
-        return new ResolvedFunctionType(returnType, paramTypes);
-    }
-
-    public static ResolvedType unresolveType(FloatingPointType type) {
-        return new ResolvedFloatingType(type.name(), type.width());
-    }
-
-    public static ResolvedType unresolveType(IntegerType type) {
-        return new ResolvedIntegerType(type.getBits());
-    }
-
-    public static ResolvedType unresolveType(MetaType type) {
-        switch (type) {
-            case UNKNOWN:
-                return new ResolvedUnknownType();
-
-            case VOID:
-                return new ResolvedVoidType();
-
-            case OPAQUE:
-                return new ResolvedOpaqueType();
-
-            case METADATA:
-                return new ResolvedMetadataType();
-
-            default:
-                throw new AssertionError("Unknown type: " + type);
-        }
-    }
-
-    public static ResolvedType unresolveType(PointerType type) {
-        ResolvedType pointeeType = unresolveType(type.getPointeeType());
-        BigInteger addrSpace = new BigInteger(new byte[]{(byte) 0}); // TODO: important?
-        return new ResolvedPointerType(pointeeType, addrSpace);
-    }
-
-    public static ResolvedType unresolveType(StructureType type) {
-        List<ResolvedType> fieldTypes = new ArrayList<>();
-        for (int i = 0; i < type.getElementCount(); i++) {
-            fieldTypes.add(unresolveType(type.getElementType(i)));
-        }
-        return new ResolvedStructType(fieldTypes, type.isPacked(), false);
-    }
-
-    public static ResolvedType unresolveType(ArrayType type) {
-        ResolvedType elementType = unresolveType(type.getElementType());
-        return new ResolvedArrayType(type.getElementCount(), elementType);
-    }
-
-    public static ResolvedType unresolveType(VectorType type) {
-        ResolvedType elementType = unresolveType(type.getElementType());
-        return new ResolvedVectorType(type.getElementCount(), elementType);
+        return glob;
     }
 }

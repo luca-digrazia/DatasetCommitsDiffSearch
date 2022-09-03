@@ -30,22 +30,18 @@
 package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
+import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 
-public final class PointerType implements Type {
+public class PointerType implements Type {
 
     /* This must be mutable to handle circular references */
     private Type type;
 
     public PointerType(Type type) {
         this.type = type;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof PointerType) {
-            return type.equals(((PointerType) obj).type);
-        }
-        return false;
     }
 
     @Override
@@ -60,11 +56,6 @@ public final class PointerType implements Type {
         }
     }
 
-    @Override
-    public int hashCode() {
-        return type.hashCode();
-    }
-
     public Type getPointeeType() {
         return type;
     }
@@ -74,8 +65,72 @@ public final class PointerType implements Type {
     }
 
     @Override
-    public int sizeof() {
-        return Long.BYTES;
+    public int getBits() {
+        return Long.BYTES * Byte.SIZE;
+    }
+
+    @Override
+    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        if (targetDataLayout != null) {
+            return targetDataLayout.getBitAlignment(getLLVMBaseType()) / Byte.SIZE;
+        } else {
+            return Long.BYTES;
+        }
+    }
+
+    @Override
+    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        if (type instanceof FunctionType) {
+            return LLVMHeap.FUNCTION_PTR_SIZE_BYTE;
+        } else {
+            return LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
+        }
+    }
+
+    @Override
+    public int getIndexOffset(int index, DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return type.getSize(targetDataLayout) * index;
+    }
+
+    @Override
+    public Type getIndexType(int index) {
+        return type;
+    }
+
+    @Override
+    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        switch (type.getRuntimeType()) {
+            case FUNCTION_ADDRESS:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.FUNCTION_ADDRESS;
+            case I1:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I1_POINTER;
+            case I8:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I8_POINTER;
+            case I16:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I16_POINTER;
+            case I32:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I32_POINTER;
+            case I64:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.I64_POINTER;
+            case HALF:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.HALF_POINTER;
+            case FLOAT:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.FLOAT_POINTER;
+            case DOUBLE:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.DOUBLE_POINTER;
+            default:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.ADDRESS;
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        return type.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return this == obj || (obj instanceof PointerType && type.equals(((PointerType) obj).type));
     }
 
     @Override

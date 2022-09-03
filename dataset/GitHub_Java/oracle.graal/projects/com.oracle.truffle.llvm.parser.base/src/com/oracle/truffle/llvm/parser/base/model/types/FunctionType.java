@@ -29,15 +29,22 @@
  */
 package com.oracle.truffle.llvm.parser.base.model.types;
 
-import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import java.util.Arrays;
 
-public class FunctionType implements Type {
+import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
+import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+
+public class FunctionType implements Type, ValueSymbol {
 
     private final Type type;
 
-    private final Type[] args;
+    protected final Type[] args;
 
     private final boolean isVarArg;
+
+    private String name = ValueSymbol.UNKNOWN;
 
     public FunctionType(Type type, Type[] args, boolean isVarArg) {
         this.type = type;
@@ -54,8 +61,27 @@ public class FunctionType implements Type {
         return LLVMBaseType.FUNCTION_ADDRESS;
     }
 
+    @Override
+    public Type getType() {
+        return new PointerType(Type.super.getType());
+    }
+
     public Type getReturnType() {
         return type;
+    }
+
+    @Override
+    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        if (targetDataLayout != null) {
+            return targetDataLayout.getBitAlignment(getLLVMBaseType()) / Byte.SIZE;
+        } else {
+            return Long.BYTES;
+        }
+    }
+
+    @Override
+    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return 0;
     }
 
     public boolean isVarArg() {
@@ -63,15 +89,53 @@ public class FunctionType implements Type {
     }
 
     @Override
-    public int sizeof() {
+    public int getBits() {
         return 0;
+    }
+
+    @Override
+    public void setName(String name) {
+        this.name = "@" + name;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        return LLVMFunctionDescriptor.LLVMRuntimeType.FUNCTION_ADDRESS;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 29;
+        hash = 17 * hash + Arrays.hashCode(args);
+        hash = 17 * hash + (isVarArg ? 1231 : 1237);
+        hash = 17 * hash + ((getReturnType() == null) ? 0 : getReturnType().hashCode());
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+
+        } else if (obj instanceof FunctionType) {
+            final FunctionType other = (FunctionType) obj;
+            return getReturnType().equals(other.getReturnType()) && Arrays.equals(args, other.args) && isVarArg == other.isVarArg && name.equals(other.name);
+
+        } else {
+            return false;
+        }
     }
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
 
-        sb.append(type).append(" (");
+        sb.append(getReturnType()).append(" (");
 
         for (int i = 0; i < args.length; i++) {
             if (i > 0) {

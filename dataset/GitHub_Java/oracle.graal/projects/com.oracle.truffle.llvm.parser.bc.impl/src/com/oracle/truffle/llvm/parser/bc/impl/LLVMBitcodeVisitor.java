@@ -35,6 +35,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.oracle.truffle.llvm.parser.base.model.TextToBCConverter;
+import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
+import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
+import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
+import com.oracle.truffle.llvm.parser.base.model.types.Type;
+import org.eclipse.emf.ecore.EObject;
+
+import com.intel.llvm.ireditor.types.ResolvedType;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -43,12 +51,12 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.context.LLVMContext;
 import com.oracle.truffle.llvm.context.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
+import com.oracle.truffle.llvm.context.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMFreeFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
@@ -76,10 +84,6 @@ import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
 import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
 import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.base.model.target.TargetDataLayout;
-import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
-import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
-import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.parser.base.util.LLVMParserAsserts;
@@ -552,8 +556,13 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         }
 
         @Override
-        public LLVMExpressionNode allocateFunctionLifetime(Type type, int size, int alignment) {
-            return factoryFacade.createAlloc(type, size, alignment, null, null);
+        public ResolvedType resolve(EObject e) {
+            throw new UnsupportedOperationException("Not implemented!");
+        }
+
+        @Override
+        public LLVMExpressionNode allocateFunctionLifetime(ResolvedType type, int size, int alignment) {
+            return factoryFacade.createAlloc(TextToBCConverter.convert(type), size, alignment, null, null);
         }
 
         @Override
@@ -573,7 +582,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         }
 
         @Override
-        public Object getGlobalAddress(GlobalVariable var) {
+        public Object getGlobalAddress(com.intel.llvm.ireditor.lLVM_IR.GlobalVariable var) {
             throw new UnsupportedOperationException("Not implemented!");
         }
 

@@ -32,39 +32,32 @@ package com.oracle.truffle.llvm.parser.base.model.types;
 import java.util.Objects;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock.MetadataReference;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public class ArrayType implements AggregateType {
 
-    public final Type type;
+    private final Type elementType;
 
-    private final int size;
+    private final int length;
 
     private MetadataReference metadata = MetadataBlock.voidRef;
 
     public ArrayType(Type type, int size) {
         super();
-        this.type = type;
-        this.size = size;
+        this.elementType = type;
+        this.length = size;
     }
 
     @Override
-    public int getAlignment() {
-        return type.getAlignment();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof ArrayType) {
-            ArrayType other = (ArrayType) obj;
-            return size == other.size && type.equals(other.type);
-        }
-        return false;
+    public int getBits() {
+        return getElementType().getBits() * length;
     }
 
     public Type getElementType() {
-        return type;
+        return elementType;
     }
 
     @Override
@@ -73,8 +66,8 @@ public class ArrayType implements AggregateType {
     }
 
     @Override
-    public int getElementCount() {
-        return size;
+    public int getLength() {
+        return length;
     }
 
     @Override
@@ -83,26 +76,23 @@ public class ArrayType implements AggregateType {
     }
 
     @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 67 * hash + Objects.hashCode(this.type);
-        hash = 67 * hash + this.size;
-        return hash;
+    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        return LLVMFunctionDescriptor.LLVMRuntimeType.ARRAY;
     }
 
     @Override
-    public int sizeof() {
-        return size * type.sizeof();
+    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return getElementType().getAlignment(targetDataLayout);
     }
 
     @Override
-    public int sizeof(int alignment) {
-        return size * type.sizeof(alignment);
+    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return getElementType().getSize(targetDataLayout) * length;
     }
 
     @Override
-    public String toString() {
-        return String.format("[%d x %s]", getElementCount(), getElementType());
+    public int getIndexOffset(int index, DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return getElementType().getSize(targetDataLayout) * index;
     }
 
     @Override
@@ -113,5 +103,32 @@ public class ArrayType implements AggregateType {
     @Override
     public MetadataReference getMetadataReference() {
         return metadata;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 67 * hash + Objects.hashCode(this.getElementType());
+        hash = 67 * hash + this.length;
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+
+        } else if (obj instanceof ArrayType) {
+            final ArrayType other = (ArrayType) obj;
+            return length == other.length && Objects.equals(getElementType(), other.getElementType());
+
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("[%d x %s]", getLength(), getElementType());
     }
 }
