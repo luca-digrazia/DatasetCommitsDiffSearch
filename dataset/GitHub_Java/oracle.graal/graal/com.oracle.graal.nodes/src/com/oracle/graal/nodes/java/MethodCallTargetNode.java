@@ -22,52 +22,29 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.compiler.common.type.CheckedJavaType;
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Assumptions.AssumptionResult;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.JavaTypeProfile;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.CallTargetNode;
-import com.oracle.graal.nodes.FixedGuardNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.UncheckedInterfaceProvider;
-import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
 
 @NodeInfo
 public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable {
     public static final NodeClass<MethodCallTargetNode> TYPE = NodeClass.create(MethodCallTargetNode.class);
     protected final JavaType returnType;
-    protected JavaTypeProfile profile;
 
-    public MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType, JavaTypeProfile profile) {
-        this(TYPE, invokeKind, targetMethod, arguments, returnType, profile);
+    public MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType) {
+        this(TYPE, invokeKind, targetMethod, arguments, returnType);
     }
 
-    protected MethodCallTargetNode(NodeClass<? extends MethodCallTargetNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType,
-                    JavaTypeProfile profile) {
+    protected MethodCallTargetNode(NodeClass<? extends MethodCallTargetNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType) {
         super(c, arguments, targetMethod, invokeKind);
         this.returnType = returnType;
-        this.profile = profile;
     }
 
     /**
@@ -89,7 +66,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         return invokeKind() == InvokeKind.Static;
     }
 
-    public JavaKind returnKind() {
+    public Kind returnKind() {
         return targetMethod().getSignature().getReturnKind();
     }
 
@@ -148,21 +125,22 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
             if (resolvedMethod != null && (resolvedMethod.canBeStaticallyBound() || StampTool.isExactType(receiver) || type.isArray())) {
                 return resolvedMethod;
             }
-
             Assumptions assumptions = receiver.graph().getAssumptions();
-            AssumptionResult<ResolvedJavaType> leafConcreteSubtype = type.findLeafConcreteSubtype();
-            if (leafConcreteSubtype != null && leafConcreteSubtype.canRecordTo(assumptions)) {
-                ResolvedJavaMethod methodFromUniqueType = leafConcreteSubtype.getResult().resolveConcreteMethod(targetMethod, contextType);
-                if (methodFromUniqueType != null) {
-                    leafConcreteSubtype.recordTo(assumptions);
-                    return methodFromUniqueType;
+            if (assumptions != null) {
+                AssumptionResult<ResolvedJavaType> leafConcreteSubtype = type.findLeafConcreteSubtype();
+                if (leafConcreteSubtype != null) {
+                    ResolvedJavaMethod methodFromUniqueType = leafConcreteSubtype.getResult().resolveConcreteMethod(targetMethod, contextType);
+                    if (methodFromUniqueType != null) {
+                        assumptions.record(leafConcreteSubtype);
+                        return methodFromUniqueType;
+                    }
                 }
-            }
 
-            AssumptionResult<ResolvedJavaMethod> uniqueConcreteMethod = type.findUniqueConcreteMethod(targetMethod);
-            if (uniqueConcreteMethod != null && uniqueConcreteMethod.canRecordTo(assumptions)) {
-                uniqueConcreteMethod.recordTo(assumptions);
-                return uniqueConcreteMethod.getResult();
+                AssumptionResult<ResolvedJavaMethod> uniqueConcreteMethod = type.findUniqueConcreteMethod(targetMethod);
+                if (uniqueConcreteMethod != null) {
+                    assumptions.record(uniqueConcreteMethod);
+                    return uniqueConcreteMethod.getResult();
+                }
             }
         }
 
@@ -224,7 +202,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
 
         ResolvedJavaType singleImplementor = declaredReceiverType.getSingleImplementor();
         if (singleImplementor != null && !singleImplementor.equals(declaredReceiverType)) {
-            ResolvedJavaMethod singleImplementorMethod = singleImplementor.resolveMethod(targetMethod(), invoke().getContextType());
+            ResolvedJavaMethod singleImplementorMethod = singleImplementor.resolveMethod(targetMethod(), invoke().getContextType(), true);
             if (singleImplementorMethod != null) {
                 /**
                  * We have an invoke on an interface with a single implementor. We can replace this
@@ -237,7 +215,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                  * an assumption but as we need an instanceof check anyway we can verify both
                  * properties by checking of the receiver is an instance of the single implementor.
                  */
-                LogicNode condition = graph().unique(InstanceOfNode.create(CheckedJavaType.create(assumptions, singleImplementor), receiver, getProfile()));
+                LogicNode condition = graph().unique(InstanceOfNode.create(singleImplementor, receiver, getProfile()));
                 FixedGuardNode guard = graph().add(new FixedGuardNode(condition, DeoptimizationReason.OptimizedTypeCheckViolated, DeoptimizationAction.InvalidateRecompile, false));
                 graph().addBeforeFixed(invoke().asNode(), guard);
                 PiNode piNode = graph().unique(new PiNode(receiver, StampFactory.declaredNonNull(singleImplementor), guard));
@@ -248,14 +226,21 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         }
     }
 
-    public JavaTypeProfile getProfile() {
-        return profile;
+    private JavaTypeProfile getProfile() {
+        assert !isStatic();
+        if (receiver() instanceof TypeProfileProxyNode) {
+            // get profile from TypeProfileProxy
+            return ((TypeProfileProxyNode) receiver()).getProfile();
+        }
+        // get profile from invoke()
+        ProfilingInfo profilingInfo = invoke().getContextMethod().getProfilingInfo();
+        return profilingInfo.getTypeProfile(invoke().bci());
     }
 
     @Override
     public Stamp returnStamp() {
-        JavaKind returnKind = targetMethod().getSignature().getReturnKind();
-        if (returnKind == JavaKind.Object && returnType instanceof ResolvedJavaType) {
+        Kind returnKind = targetMethod().getSignature().getReturnKind();
+        if (returnKind == Kind.Object && returnType instanceof ResolvedJavaType) {
             return StampFactory.declared((ResolvedJavaType) returnType);
         } else {
             return StampFactory.forKind(returnKind);
