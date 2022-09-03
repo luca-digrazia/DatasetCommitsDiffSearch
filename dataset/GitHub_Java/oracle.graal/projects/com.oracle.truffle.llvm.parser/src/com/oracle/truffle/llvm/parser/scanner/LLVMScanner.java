@@ -61,11 +61,11 @@ public final class LLVMScanner {
 
     private static final int MAX_BLOCK_DEPTH = 3;
 
-    private final List<AbbreviatedRecord[]> abbreviationDefinitions = new ArrayList<>();
+    private final List<List<AbbreviatedRecord>> abbreviationDefinitions = new ArrayList<>();
 
     private final BitStream bitstream;
 
-    private final Map<Block, List<AbbreviatedRecord[]>> defaultAbbreviations = new HashMap<>();
+    private final Map<Block, List<List<AbbreviatedRecord>>> defaultAbbreviations = new HashMap<>();
 
     private final Deque<ScannerState> parents = new ArrayDeque<>(MAX_BLOCK_DEPTH);
 
@@ -229,12 +229,7 @@ public final class LLVMScanner {
     }
 
     private void abbreviatedRecord(int recordId) {
-        AbbreviatedRecord[] records = abbreviationDefinitions.get(recordId - BuiltinIDs.CUSTOM_ABBREV_OFFSET);
-        for (AbbreviatedRecord record : records) {
-            if (record != null) {
-                record.scan();
-            }
-        }
+        abbreviationDefinitions.get(recordId - BuiltinIDs.CUSTOM_ABBREV_OFFSET).forEach(AbbreviatedRecord::scan);
         passRecordToParser();
     }
 
@@ -248,7 +243,7 @@ public final class LLVMScanner {
     private void defineAbbreviation() {
         final long operandCount = read(Primitive.ABBREVIATED_RECORD_OPERANDS);
 
-        AbbreviatedRecord[] operandScanners = new AbbreviatedRecord[(int) operandCount];
+        final List<AbbreviatedRecord> operandScanners = new ArrayList<>((int) operandCount);
 
         int i = 0;
         boolean containsArrayOperand = false;
@@ -258,7 +253,7 @@ public final class LLVMScanner {
             final boolean isLiteral = read(Primitive.USER_OPERAND_LITERALBIT) == 1;
             if (isLiteral) {
                 final long fixedValue = read(Primitive.USER_OPERAND_LITERAL);
-                operandScanners[i] = () -> recordBuffer.addOp(fixedValue);
+                operandScanners.add(() -> recordBuffer.addOp(fixedValue));
 
             } else {
 
@@ -267,19 +262,19 @@ public final class LLVMScanner {
                 switch ((int) recordType) {
                     case AbbrevRecordId.FIXED: {
                         final int width = (int) read(Primitive.USER_OPERAND_DATA);
-                        operandScanners[i] = () -> {
+                        operandScanners.add(() -> {
                             final long op = read(width);
                             recordBuffer.addOp(op);
-                        };
+                        });
                         break;
                     }
 
                     case AbbrevRecordId.VBR: {
                         final int width = (int) read(Primitive.USER_OPERAND_DATA);
-                        operandScanners[i] = () -> {
+                        operandScanners.add(() -> {
                             final long op = readVBR(width);
                             recordBuffer.addOp(op);
-                        };
+                        });
                         break;
                     }
 
@@ -291,14 +286,14 @@ public final class LLVMScanner {
                         break;
 
                     case AbbrevRecordId.CHAR6:
-                        operandScanners[i] = () -> {
+                        operandScanners.add(() -> {
                             final long op = readChar();
                             recordBuffer.addOp(op);
-                        };
+                        });
                         break;
 
                     case AbbrevRecordId.BLOB:
-                        operandScanners[i] = () -> {
+                        operandScanners.add(() -> {
                             long blobLength = read(Primitive.USER_OPERAND_BLOB_LENGTH);
                             alignInt();
                             final long maxBlobPartLength = Long.SIZE / Primitive.USER_OPERAND_LITERAL.getBits();
@@ -310,7 +305,7 @@ public final class LLVMScanner {
                                 blobLength -= l;
                             }
                             alignInt();
-                        };
+                        });
                         break;
 
                     default:
@@ -322,7 +317,7 @@ public final class LLVMScanner {
         }
 
         if (containsArrayOperand) {
-            final AbbreviatedRecord elementScanner = operandScanners[operandScanners.length - 1];
+            final AbbreviatedRecord elementScanner = operandScanners.get(operandScanners.size() - 1);
             final AbbreviatedRecord arrayScanner = () -> {
                 final long arrayLength = read(Primitive.USER_OPERAND_ARRAY_LENGTH);
                 recordBuffer.ensureFits(arrayLength);
@@ -330,7 +325,7 @@ public final class LLVMScanner {
                     elementScanner.scan();
                 }
             };
-            operandScanners[operandScanners.length - 1] = arrayScanner;
+            operandScanners.set(operandScanners.size() - 1, arrayScanner);
         }
 
         abbreviationDefinitions.add(operandScanners);
@@ -448,13 +443,13 @@ public final class LLVMScanner {
 
     public final class LazyScanner {
 
-        private final Map<Block, List<AbbreviatedRecord[]>> oldDefaultAbbreviations;
+        private final Map<Block, List<List<AbbreviatedRecord>>> oldDefaultAbbreviations;
         private final long startingOffset;
         private final long endingOffset;
         private final int startingIdSize;
         private final Block startingBlock;
 
-        private LazyScanner(Map<Block, List<AbbreviatedRecord[]>> oldDefaultAbbreviations, long startingOffset, long endingOffset, int startingIdSize, Block startingBlock) {
+        private LazyScanner(Map<Block, List<List<AbbreviatedRecord>>> oldDefaultAbbreviations, long startingOffset, long endingOffset, int startingIdSize, Block startingBlock) {
             this.oldDefaultAbbreviations = oldDefaultAbbreviations;
             this.startingOffset = startingOffset;
             this.endingOffset = endingOffset;
