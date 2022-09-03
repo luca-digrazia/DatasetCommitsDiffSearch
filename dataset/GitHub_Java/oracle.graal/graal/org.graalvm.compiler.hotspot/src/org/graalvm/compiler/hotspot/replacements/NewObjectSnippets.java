@@ -205,11 +205,6 @@ public class NewObjectSnippets implements Snippets {
     @Snippet
     public static Object allocateInstance(@ConstantParameter int size, KlassPointer hub, Word prototypeMarkWord, @ConstantParameter boolean fillContents,
                     @ConstantParameter Register threadRegister, @ConstantParameter boolean constantSize, @ConstantParameter String typeContext, @ConstantParameter OptionValues options) {
-        return piCast(allocateInstanceHelper(size, hub, prototypeMarkWord, fillContents, threadRegister, constantSize, typeContext, options), StampFactory.forNodeIntrinsic());
-    }
-
-    public static Object allocateInstanceHelper(@ConstantParameter int size, KlassPointer hub, Word prototypeMarkWord, @ConstantParameter boolean fillContents,
-                    @ConstantParameter Register threadRegister, @ConstantParameter boolean constantSize, @ConstantParameter String typeContext, @ConstantParameter OptionValues options) {
         Object result;
         Word thread = registerAsWord(threadRegister);
         Word top = readTlabTop(thread);
@@ -224,7 +219,7 @@ public class NewObjectSnippets implements Snippets {
             result = newInstance(HotSpotBackend.NEW_INSTANCE, hub);
         }
         profileAllocation("instance", size, typeContext, options);
-        return verifyOop(result);
+        return result;
     }
 
     @NodeIntrinsic(value = ForeignCallNode.class, returnStampIsNonNull = true)
@@ -237,7 +232,7 @@ public class NewObjectSnippets implements Snippets {
         // just load it from the corresponding cell and avoid the resolution check. We have to use a
         // fixed load though, to prevent it from floating above the initialization.
         KlassPointer picHub = LoadConstantIndirectlyFixedNode.loadKlass(hub);
-        return piCast(allocateInstanceHelper(size, picHub, prototypeMarkWord, fillContents, threadRegister, constantSize, typeContext, options), StampFactory.forNodeIntrinsic());
+        return piCast(verifyOop(allocateInstance(size, picHub, prototypeMarkWord, fillContents, threadRegister, constantSize, typeContext, options)), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet
@@ -252,10 +247,6 @@ public class NewObjectSnippets implements Snippets {
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
 
-        return PiNode.piCast(allocateInstanceDynamicHelper(type, fillContents, threadRegister, options, nonNullType), StampFactory.forNodeIntrinsic());
-    }
-
-    private static Object allocateInstanceDynamicHelper(Class<?> type, boolean fillContents, Register threadRegister, OptionValues options, Class<?> nonNullType) {
         KlassPointer hub = ClassGetHubNode.readClass(nonNullType);
         if (probability(FAST_PATH_PROBABILITY, !hub.isNull())) {
             KlassPointer nonNullHub = ClassGetHubNode.piCastNonNull(hub, SnippetAnchorNode.anchor());
@@ -274,7 +265,7 @@ public class NewObjectSnippets implements Snippets {
                      * FIXME(je,ds): we should actually pass typeContext instead of "" but late
                      * binding of parameters is not yet supported by the GraphBuilderPlugin system.
                      */
-                    return allocateInstanceHelper(layoutHelper, nonNullHub, prototypeMarkWord, fillContents, threadRegister, false, "", options);
+                    return allocateInstance(layoutHelper, nonNullHub, prototypeMarkWord, fillContents, threadRegister, false, "", options);
                 }
             }
         }

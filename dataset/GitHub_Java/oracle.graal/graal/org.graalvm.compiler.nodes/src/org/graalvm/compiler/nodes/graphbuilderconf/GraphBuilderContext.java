@@ -34,7 +34,6 @@ import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.nodes.CallTargetNode;
-import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.LogicNode;
@@ -259,10 +258,5 @@ public interface GraphBuilderContext extends GraphBuilderTool {
             return nonNullReceiver;
         }
         return value;
-    }
-
-    @SuppressWarnings("unused")
-    default void notifyReplacedCall(ResolvedJavaMethod targetMethod, ConstantNode node) {
-
     }
 }

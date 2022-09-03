@@ -77,10 +77,10 @@ import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.GetClassNode;
 import org.graalvm.compiler.nodes.extended.MembarNode;
 import org.graalvm.compiler.nodes.extended.UnboxNode;
-import org.graalvm.compiler.nodes.extended.RawLoadNode;
+import org.graalvm.compiler.nodes.extended.UnsafeLoadNode;
 import org.graalvm.compiler.nodes.extended.UnsafeMemoryLoadNode;
 import org.graalvm.compiler.nodes.extended.UnsafeMemoryStoreNode;
-import org.graalvm.compiler.nodes.extended.RawStoreNode;
+import org.graalvm.compiler.nodes.extended.UnsafeStoreNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
@@ -557,7 +557,7 @@ public class StandardGraphBuilderPlugins {
             r.register2("get" + c.getSimpleName() + "Unsafe", Node.class, long.class, new InvocationPlugin() {
                 @Override
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode node, ValueNode offset) {
-                    RawLoadNode value = b.add(new RawLoadNode(node, offset, JavaKind.Object, LocationIdentity.any()));
+                    UnsafeLoadNode value = b.add(new UnsafeLoadNode(node, offset, JavaKind.Object, LocationIdentity.any()));
                     value.setStamp(StampFactory.object(TypeReference.createTrusted(b.getAssumptions(), metaAccess.lookupJavaType(c))));
                     b.addPush(JavaKind.Object, value);
                     return true;
@@ -566,7 +566,7 @@ public class StandardGraphBuilderPlugins {
             r.register3("put" + c.getSimpleName() + "Unsafe", Node.class, long.class, c, new InvocationPlugin() {
                 @Override
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode node, ValueNode offset, ValueNode value) {
-                    b.add(new RawStoreNode(node, offset, value, JavaKind.Object, LocationIdentity.any()));
+                    b.add(new UnsafeStoreNode(node, offset, value, JavaKind.Object, LocationIdentity.any()));
                     return true;
                 }
             });
@@ -656,7 +656,7 @@ public class StandardGraphBuilderPlugins {
             if (isVolatile) {
                 b.add(new MembarNode(JMM_PRE_VOLATILE_READ));
             }
-            b.addPush(returnKind, new RawLoadNode(object, offset, returnKind, LocationIdentity.any()));
+            b.addPush(returnKind, new UnsafeLoadNode(object, offset, returnKind, LocationIdentity.any()));
             if (isVolatile) {
                 b.add(new MembarNode(JMM_POST_VOLATILE_READ));
             }
@@ -691,7 +691,7 @@ public class StandardGraphBuilderPlugins {
             if (isVolatile) {
                 b.add(new MembarNode(JMM_PRE_VOLATILE_WRITE));
             }
-            b.add(new RawStoreNode(object, offset, value, kind, LocationIdentity.any()));
+            b.add(new UnsafeStoreNode(object, offset, value, kind, LocationIdentity.any()));
             if (isVolatile) {
                 b.add(new MembarNode(JMM_POST_VOLATILE_WRITE));
             }
@@ -838,10 +838,10 @@ public class StandardGraphBuilderPlugins {
             for (JavaKind kind : JavaKind.values()) {
                 if ((kind.isPrimitive() && kind != JavaKind.Void) || kind == JavaKind.Object) {
                     Class<?> javaClass = kind == JavaKind.Object ? Object.class : kind.toJavaClass();
-                    r.registerOptional2("consume", Receiver.class, javaClass, blackholePlugin);
+                    r.register2("consume", Receiver.class, javaClass, blackholePlugin);
                 }
             }
-            r.registerOptional2("consume", Receiver.class, Object[].class, blackholePlugin);
+            r.register2("consume", Receiver.class, Object[].class, blackholePlugin);
         }
     }
 
