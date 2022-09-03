@@ -24,15 +24,13 @@ package com.oracle.graal.compiler.test.tutorial;
 
 import java.util.*;
 
-import jdk.internal.jvmci.common.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.java.*;
+import com.oracle.graal.java.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -109,7 +107,7 @@ public class StaticAnalysis {
     }
 
     protected static RuntimeException error(String msg) {
-        throw JVMCIError.shouldNotReachHere(msg);
+        throw GraalInternalError.shouldNotReachHere(msg);
     }
 
     /**
@@ -225,7 +223,7 @@ public class StaticAnalysis {
                      * the code before static analysis, the classes would otherwise be not loaded
                      * yet and the bytecode parser would only create a graph.
                      */
-                    GraphBuilderConfiguration graphBuilderConfig = GraphBuilderConfiguration.getEagerDefault(new Plugins(new InvocationPlugins(metaAccess)));
+                    GraphBuilderConfiguration graphBuilderConfig = GraphBuilderConfiguration.getEagerDefault();
                     /*
                      * For simplicity, we ignore all exception handling during the static analysis.
                      * This is a constraint of this example code, a real static analysis needs to
@@ -240,6 +238,7 @@ public class StaticAnalysis {
                      */
                     OptimisticOptimizations optimisticOpts = OptimisticOptimizations.NONE;
 
+                    graphBuilderConfig.setPlugins(new Plugins(metaAccess));
                     GraphBuilderPhase.Instance graphBuilder = new GraphBuilderPhase.Instance(metaAccess, stampProvider, null, graphBuilderConfig, optimisticOpts, null);
                     graphBuilder.apply(graph);
                 } catch (Throwable ex) {
@@ -442,7 +441,7 @@ public class StaticAnalysis {
         }
 
         private boolean isObject(ValueNode node) {
-            return node.getStackKind() == Kind.Object;
+            return node.getKind() == Kind.Object;
         }
 
         @Override

@@ -25,16 +25,16 @@ package com.oracle.graal.truffle.test;
 import org.junit.*;
 
 import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.java.*;
 import com.oracle.graal.truffle.substitutions.*;
 import com.oracle.truffle.api.*;
 
 public class ExactMathTest extends GraalCompilerTest {
 
     @Override
-    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
-        TruffleGraphBuilderPlugins.registerExactMathPlugins(conf.getPlugins().getInvocationPlugins());
-        return super.editGraphBuilderConfiguration(conf);
+    protected void editGraphBuilderPlugins(GraphBuilderConfiguration.Plugins plugins) {
+        TruffleGraphBuilderPlugins.registerExactMathPlugins(plugins.getInvocationPlugins());
+        super.editGraphBuilderPlugins(plugins);
     }
 
     @Test

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,57 +22,242 @@
  */
 package com.oracle.graal.java;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.phases.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.java.GraphBuilderPlugin.GenericInvocationPlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.LoadFieldPlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.LoadIndexedPlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.LoopExplosionPlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.ParameterPlugin;
+import com.oracle.graal.nodes.*;
 
 public class GraphBuilderConfiguration {
 
-    public static enum ResolvePolicy {
-        Default, EagerForSnippets, Eager,
+    public static class Plugins {
+        private InvocationPlugins invocationPlugins;
+        private LoadFieldPlugin loadFieldPlugin;
+        private LoadIndexedPlugin loadIndexedPlugin;
+        private ParameterPlugin parameterPlugin;
+        private InlineInvokePlugin inlineInvokePlugin;
+        private GenericInvocationPlugin genericInvocationPlugin;
+        private LoopExplosionPlugin loopExplosionPlugin;
+
+        public Plugins(MetaAccessProvider metaAccess) {
+            invocationPlugins = new InvocationPlugins(metaAccess);
+        }
+
+        public Plugins(InvocationPlugins invocationPlugins) {
+            this.invocationPlugins = invocationPlugins;
+        }
+
+        public InvocationPlugins getInvocationPlugins() {
+            return invocationPlugins;
+        }
+
+        public GenericInvocationPlugin getGenericInvocationPlugin() {
+            return genericInvocationPlugin;
+        }
+
+        public void setGenericInvocationPlugin(GenericInvocationPlugin plugin) {
+            this.genericInvocationPlugin = plugin;
+        }
+
+        public LoadFieldPlugin getLoadFieldPlugin() {
+            return loadFieldPlugin;
+        }
+
+        public void setLoadFieldPlugin(LoadFieldPlugin plugin) {
+            this.loadFieldPlugin = plugin;
+        }
+
+        public LoadIndexedPlugin getLoadIndexedPlugin() {
+            return loadIndexedPlugin;
+        }
+
+        public void setLoadIndexedPlugin(LoadIndexedPlugin plugin) {
+            this.loadIndexedPlugin = plugin;
+        }
+
+        public ParameterPlugin getParameterPlugin() {
+            return parameterPlugin;
+        }
+
+        public void setParameterPlugin(ParameterPlugin plugin) {
+            this.parameterPlugin = plugin;
+        }
+
+        public InlineInvokePlugin getInlineInvokePlugin() {
+            return inlineInvokePlugin;
+        }
+
+        public void setInlineInvokePlugin(InlineInvokePlugin plugin) {
+            this.inlineInvokePlugin = plugin;
+        }
+
+        public LoopExplosionPlugin getLoopExplosionPlugin() {
+            return loopExplosionPlugin;
+        }
+
+        public void setLoopExplosionPlugin(LoopExplosionPlugin plugin) {
+            this.loopExplosionPlugin = plugin;
+        }
+
+        public Plugins updateFrom(Plugins other, boolean includeInvocationPlugins) {
+            if (includeInvocationPlugins) {
+                this.invocationPlugins.updateFrom(other.getInvocationPlugins());
+            }
+            this.parameterPlugin = other.parameterPlugin;
+            this.loadFieldPlugin = other.loadFieldPlugin;
+            this.loadIndexedPlugin = other.loadIndexedPlugin;
+            this.inlineInvokePlugin = other.inlineInvokePlugin;
+            this.loopExplosionPlugin = other.loopExplosionPlugin;
+            this.genericInvocationPlugin = other.genericInvocationPlugin;
+            return this;
+        }
     }
 
-    private final ResolvePolicy resolving;
-    private final PhasePlan plan;
-    private ResolvedJavaType[] skippedExceptionTypes;
+    private static final ResolvedJavaType[] EMPTY = new ResolvedJavaType[]{};
 
-    public GraphBuilderConfiguration(ResolvePolicy resolving, PhasePlan plan) {
-        this.resolving = resolving;
-        this.plan = plan;
+    private final boolean eagerResolving;
+    private final boolean omitAllExceptionEdges;
+    private final ResolvedJavaType[] skippedExceptionTypes;
+    private final DebugInfoMode debugInfoMode;
+    private final boolean doLivenessAnalysis;
+    private boolean useProfiling;
+    private Plugins plugins;
+
+    public static enum DebugInfoMode {
+        SafePointsOnly,
+        /**
+         * This mode inserts {@link SimpleInfopointNode}s in places where no safepoints would be
+         * inserted: inlining boundaries, and line number switches.
+         * <p>
+         * In this mode the infopoint only have a location (method and bytecode index) and no
+         * values.
+         * <p>
+         * This is useful to have better program counter to bci mapping and has no influence on the
+         * generated code. However it can increase the amount of metadata and does not allow access
+         * to accessing values at runtime.
+         */
+        Simple,
+        /**
+         * In this mode, {@link FullInfopointNode}s are generated in the same locations as in
+         * {@link #Simple} mode but the infopoints have access to the runtime values.
+         * <p>
+         * This is relevant when code is to be generated for native, machine-code level debugging
+         * but can have a limit the amount of optimization applied to the code.
+         */
+        Full,
     }
 
-    public void setSkippedExceptionTypes(ResolvedJavaType[] skippedExceptionTypes) {
+    protected GraphBuilderConfiguration(boolean eagerResolving, boolean omitAllExceptionEdges, DebugInfoMode debugInfoMode, ResolvedJavaType[] skippedExceptionTypes, boolean doLivenessAnalysis) {
+        this.eagerResolving = eagerResolving;
+        this.omitAllExceptionEdges = omitAllExceptionEdges;
+        this.debugInfoMode = debugInfoMode;
         this.skippedExceptionTypes = skippedExceptionTypes;
+        this.doLivenessAnalysis = doLivenessAnalysis;
+        this.useProfiling = true;
+    }
+
+    public GraphBuilderConfiguration copy() {
+        GraphBuilderConfiguration result = new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, debugInfoMode, skippedExceptionTypes, doLivenessAnalysis);
+        result.useProfiling = useProfiling;
+        result.copyPluginsFrom(this);
+        return result;
+    }
+
+    public boolean getUseProfiling() {
+        return useProfiling;
+    }
+
+    public void setUseProfiling(boolean b) {
+        this.useProfiling = b;
+    }
+
+    public GraphBuilderConfiguration withSkippedExceptionTypes(ResolvedJavaType[] newSkippedExceptionTypes) {
+        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, debugInfoMode, newSkippedExceptionTypes, doLivenessAnalysis);
+    }
+
+    public GraphBuilderConfiguration withOmitAllExceptionEdges(boolean newOmitAllExceptionEdges) {
+        return new GraphBuilderConfiguration(eagerResolving, newOmitAllExceptionEdges, debugInfoMode, skippedExceptionTypes, doLivenessAnalysis);
+    }
+
+    public GraphBuilderConfiguration withDebugInfoMode(DebugInfoMode newDebugInfoMode) {
+        ResolvedJavaType[] newSkippedExceptionTypes = skippedExceptionTypes == EMPTY ? EMPTY : Arrays.copyOf(skippedExceptionTypes, skippedExceptionTypes.length);
+        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, newDebugInfoMode, newSkippedExceptionTypes, doLivenessAnalysis);
+    }
+
+    public GraphBuilderConfiguration withDoLivenessAnalysis(boolean newLivenessAnalysis) {
+        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, debugInfoMode, skippedExceptionTypes, newLivenessAnalysis);
     }
 
     public ResolvedJavaType[] getSkippedExceptionTypes() {
         return skippedExceptionTypes;
     }
 
-    public boolean eagerResolvingForSnippets() {
-        return (resolving == ResolvePolicy.EagerForSnippets || resolving == ResolvePolicy.Eager);
-    }
-
     public boolean eagerResolving() {
-        return (resolving == ResolvePolicy.Eager);
+        return eagerResolving;
     }
 
-    public PhasePlan plan() {
-        return plan;
+    public boolean omitAllExceptionEdges() {
+        return omitAllExceptionEdges;
+    }
+
+    public boolean insertNonSafepointDebugInfo() {
+        return debugInfoMode.ordinal() >= DebugInfoMode.Simple.ordinal();
+    }
+
+    public boolean insertFullDebugInfo() {
+        return debugInfoMode.ordinal() >= DebugInfoMode.Full.ordinal();
+    }
+
+    public boolean doLivenessAnalysis() {
+        return doLivenessAnalysis;
     }
 
     public static GraphBuilderConfiguration getDefault() {
-        return getDefault(null);
+        return new GraphBuilderConfiguration(false, false, DebugInfoMode.SafePointsOnly, EMPTY, GraalOptions.OptLivenessAnalysis.getValue());
     }
 
-    public static GraphBuilderConfiguration getDefault(PhasePlan plan) {
-        return new GraphBuilderConfiguration(ResolvePolicy.Default, plan);
+    public static GraphBuilderConfiguration getEagerDefault() {
+        return new GraphBuilderConfiguration(true, false, DebugInfoMode.SafePointsOnly, EMPTY, GraalOptions.OptLivenessAnalysis.getValue());
     }
 
     public static GraphBuilderConfiguration getSnippetDefault() {
-        return getSnippetDefault(null);
+        return new GraphBuilderConfiguration(true, true, DebugInfoMode.SafePointsOnly, EMPTY, GraalOptions.OptLivenessAnalysis.getValue());
     }
 
-    public static GraphBuilderConfiguration getSnippetDefault(PhasePlan plan) {
-        return new GraphBuilderConfiguration(ResolvePolicy.EagerForSnippets, plan);
+    public static GraphBuilderConfiguration getFullDebugDefault() {
+        return new GraphBuilderConfiguration(true, false, DebugInfoMode.Full, EMPTY, GraalOptions.OptLivenessAnalysis.getValue());
+    }
+
+    /**
+     * Returns {@code true} if it is an error for a class/field/method resolution to fail. The
+     * default is the same result as returned by {@link #eagerResolving()}. However, it may be
+     * overridden to allow failure even when {@link #eagerResolving} is {@code true}.
+     */
+    public boolean unresolvedIsError() {
+        return eagerResolving;
+    }
+
+    public Plugins getPlugins() {
+        return plugins;
+    }
+
+    public void setPlugins(Plugins plugins) {
+        this.plugins = plugins;
+    }
+
+    public GraphBuilderConfiguration copyPluginsFrom(GraphBuilderConfiguration other) {
+        if (other.plugins != null) {
+            if (this.plugins == null) {
+                this.plugins = new Plugins(other.plugins.getInvocationPlugins().getMetaAccess());
+            }
+            this.plugins.updateFrom(other.plugins, true);
+        }
+        return this;
     }
 }
