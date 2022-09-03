@@ -84,37 +84,27 @@ public class MergeSpecializationsTest {
 
     @Test
     public void testMultithreadedMergeInOrder() {
-        for (int i = 0; i < 100; i++) {
-            multithreadedMerge(TestNodeFactory.getInstance(), new Executions(1, 1L << 32, 1.0), 1, 2, 3);
-        }
+        multithreadedMerge(TestNodeFactory.getInstance(), new Executions(1, 1L << 32, 1.0), 1, 2, 3);
     }
 
     @Test
     public void testMultithreadedMergeReverse() {
-        for (int i = 0; i < 100; i++) {
-            multithreadedMerge(TestNodeFactory.getInstance(), new Executions(1.0, 1L << 32, 1), 3, 2, 1);
-        }
+        multithreadedMerge(TestNodeFactory.getInstance(), new Executions(1.0, 1L << 32, 1), 3, 2, 1);
     }
 
     @Test
     public void testMultithreadedMergeCachedInOrder() {
-        for (int i = 0; i < 100; i++) {
-            multithreadedMerge(TestCachedNodeFactory.getInstance(), new Executions(1, 1L << 32, 1.0), 1, 2, 3);
-        }
+        multithreadedMerge(TestCachedNodeFactory.getInstance(), new Executions(1, 1L << 32, 1.0), 1, 2, 3);
     }
 
     @Test
     public void testMultithreadedMergeCachedTwoEntries() {
-        for (int i = 0; i < 100; i++) {
-            multithreadedMerge(TestCachedNodeFactory.getInstance(), new Executions(1, 2, 1.0), 1, 1, 3);
-        }
+        multithreadedMerge(TestCachedNodeFactory.getInstance(), new Executions(1, 2, 1.0), 1, 1, 3);
     }
 
     @Test
     public void testMultithreadedMergeCachedThreeEntries() {
-        for (int i = 0; i < 100; i++) {
-            multithreadedMerge(TestCachedNodeFactory.getInstance(), new Executions(1, 2, 3), 1, 1, 1);
-        }
+        multithreadedMerge(TestCachedNodeFactory.getInstance(), new Executions(1, 2, 3), 1, 1, 1);
     }
 
     private static <T extends ValueNode> void multithreadedMerge(NodeFactory<T> factory, final Executions executions, int... order) {

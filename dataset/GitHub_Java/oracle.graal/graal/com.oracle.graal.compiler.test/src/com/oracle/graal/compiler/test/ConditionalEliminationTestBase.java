@@ -22,19 +22,15 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Assert;
+import org.junit.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
-import com.oracle.graal.phases.common.DominatorConditionalEliminationPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.schedule.SchedulePhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * Collection of tests for
@@ -43,11 +39,11 @@ import com.oracle.graal.phases.tiers.PhaseContext;
  */
 public class ConditionalEliminationTestBase extends GraalCompilerTest {
 
-    protected void testConditionalElimination(String snippet, String referenceSnippet) {
-        testConditionalElimination(snippet, referenceSnippet, false);
+    protected void test(String snippet, String referenceSnippet) {
+        test(snippet, referenceSnippet, false);
     }
 
-    protected void testConditionalElimination(String snippet, String referenceSnippet, boolean applyConditionalEliminationOnReference) {
+    protected void test(String snippet, String referenceSnippet, boolean applyConditionalEliminationOnReference) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
         Debug.dump(graph, "Graph");
         PhaseContext context = new PhaseContext(getProviders());
@@ -60,7 +56,6 @@ public class ConditionalEliminationTestBase extends GraalCompilerTest {
         canonicalizer.apply(graph, context);
         canonicalizer.apply(graph, context);
         StructuredGraph referenceGraph = parseEager(referenceSnippet, AllowAssumptions.YES);
-        new ConvertDeoptimizeToGuardPhase().apply(referenceGraph, context);
         if (applyConditionalEliminationOnReference) {
             new DominatorConditionalEliminationPhase(true).apply(referenceGraph, context);
             canonicalizer.apply(referenceGraph, context);

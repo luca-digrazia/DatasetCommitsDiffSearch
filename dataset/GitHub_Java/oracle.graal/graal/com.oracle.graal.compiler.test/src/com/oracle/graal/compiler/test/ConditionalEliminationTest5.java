@@ -22,9 +22,7 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Test;
-
-import com.oracle.graal.api.directives.GraalDirectives;
+import org.junit.*;
 
 /**
  * Collection of tests for
@@ -45,14 +43,16 @@ public class ConditionalEliminationTest5 extends ConditionalEliminationTestBase 
     static final class DistinctB {
     }
 
-    public static int reference1Snippet(Object a) {
+    @SuppressWarnings("all")
+    public static int reference1Snippet(A a, B b) {
         if (a instanceof B) {
             return 1;
         }
         return 2;
     }
 
-    public static int test1Snippet(Object a) {
+    @SuppressWarnings("all")
+    public static int test1Snippet(A a, B b) {
         if (a instanceof B) {
             if (a instanceof A) {
                 return 1;
@@ -63,7 +63,7 @@ public class ConditionalEliminationTest5 extends ConditionalEliminationTestBase 
 
     @Test
     public void test1() {
-        testConditionalElimination("test1Snippet", "reference1Snippet");
+        test("test1Snippet", "reference1Snippet");
     }
 
     public static int reference2Snippet(A a) {
@@ -85,7 +85,7 @@ public class ConditionalEliminationTest5 extends ConditionalEliminationTestBase 
 
     @Test
     public void test2() {
-        testConditionalElimination("test2Snippet", "reference2Snippet");
+        test("test2Snippet", "reference2Snippet");
     }
 
     @SuppressWarnings("unused")
@@ -115,39 +115,6 @@ public class ConditionalEliminationTest5 extends ConditionalEliminationTestBase 
 
     @Test
     public void test3() {
-        testConditionalElimination("test3Snippet", "reference3Snippet", true);
-    }
-
-    public static int reference4Snippet(Object a) {
-        if (!(a instanceof B)) {
-            GraalDirectives.deoptimize();
-        }
-        return 1;
-    }
-
-    public static int test4Snippet1(Object a) {
-        if (!(a instanceof B)) {
-            GraalDirectives.deoptimize();
-        }
-        if (!(a instanceof A)) {
-            GraalDirectives.deoptimize();
-        }
-        return 1;
-    }
-
-    public static int test4Snippet2(Object a) {
-        if (!(a instanceof A)) {
-            GraalDirectives.deoptimize();
-        }
-        if (!(a instanceof B)) {
-            GraalDirectives.deoptimize();
-        }
-        return 1;
-    }
-
-    @Test
-    public void test4() {
-        testConditionalElimination("test4Snippet1", "reference4Snippet");
-        testConditionalElimination("test4Snippet2", "reference4Snippet");
+        test("test3Snippet", "reference3Snippet", true);
     }
 }
