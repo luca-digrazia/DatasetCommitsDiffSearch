@@ -42,7 +42,7 @@ public interface ConstantGenerator {
 
     void createCompareExpression(Type type, int opcode, int lhs, int rhs);
 
-    void createFloatingPoint(Type type, long[] value);
+    void createFloatingPoint(Type type, long value);
 
     void createFromData(Type type, long[] data);
 

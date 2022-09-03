@@ -241,9 +241,4 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     public void createUndefined(Type type) {
         symbols.addSymbol(new UndefinedConstant(type));
     }
-
-    @Override
-    public String toString() {
-        return "FunctionDefinition [symbolCount=" + symbols.getSize() + ", parameters=" + parameters + ", blocks=" + blocks.length + ", currentBlock=" + currentBlock + ", name=" + name + "]";
-    }
 }

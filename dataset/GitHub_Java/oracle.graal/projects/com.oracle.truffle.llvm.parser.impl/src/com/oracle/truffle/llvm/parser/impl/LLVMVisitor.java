@@ -139,8 +139,11 @@ import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.LLVMType;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
-import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.impl.LLVMPhiVisitor.Phi;
+import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutConverter;
+import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutConverter.DataSpecConverter;
+import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutParser;
+import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutParser.DataTypeSpecification;
 import com.oracle.truffle.llvm.parser.impl.lifetime.LLVMLifeTimeAnalysisResult;
 import com.oracle.truffle.llvm.parser.impl.lifetime.LLVMLifeTimeAnalysisVisitor;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
@@ -150,6 +153,7 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.runtime.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.LLVMParserException.ParserErrorCause;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
@@ -182,6 +186,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     private FrameSlot stackPointerSlot;
     private FunctionDef containingFunctionDef;
     private NodeFactoryFacade factoryFacade;
+    private final LLVMOptimizationConfiguration optimizationConfiguration;
 
     private Map<BasicBlock, List<Phi>> phiRefs;
 
@@ -194,7 +199,8 @@ public final class LLVMVisitor implements LLVMParserRuntime {
 
     private LLVMTypeHelper typeHelper;
 
-    public LLVMVisitor(Object[] mainArgs, Source sourceFile, Source mainSourceFile) {
+    public LLVMVisitor(LLVMOptimizationConfiguration optimizationConfiguration, Object[] mainArgs, Source sourceFile, Source mainSourceFile) {
+        this.optimizationConfiguration = optimizationConfiguration;
         this.mainArgs = mainArgs;
         this.sourceFile = sourceFile;
         this.mainSourceFile = mainSourceFile;
@@ -442,14 +448,8 @@ public final class LLVMVisitor implements LLVMParserRuntime {
                 // ignore
                 break;
             case "datalayout":
-                String layout = object.getLayout();
-                if (layout != null) {
-                    // remove enclosing quotes
-                    layout = layout.substring(1, layout.length() - 2);
-                    layoutConverter = DataLayoutConverter.getConverter(layout);
-                } else {
-                    throw new AssertionError("Invalid Layout!");
-                }
+                List<DataTypeSpecification> dataLayout = DataLayoutParser.parseDataLayout(object.getLayout());
+                layoutConverter = DataLayoutConverter.getConverter(dataLayout);
                 break;
             default:
                 throw new AssertionError(infoType + " not supported!");
@@ -665,7 +665,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         return labels;
     }
 
-    public static DataLayoutConverter.DataSpecConverter layoutConverter;
+    public static DataSpecConverter layoutConverter;
 
     private LLVMNode[] deallocations;
 
@@ -1559,6 +1559,11 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     @Override
     public FrameSlot getStackPointerSlot() {
         return stackPointerSlot;
+    }
+
+    @Override
+    public LLVMOptimizationConfiguration getOptimizationConfiguration() {
+        return optimizationConfiguration;
     }
 
     @Override
