@@ -25,11 +25,13 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import org.graalvm.compiler.core.CompilerThreadFactory;
+import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 
 import java.lang.ref.WeakReference;
+import java.util.Comparator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.PriorityBlockingQueue;
@@ -39,7 +41,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilerThreads;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleFirstTierCompilation;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleLowGradeCompilation;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.overrideOptions;
 
@@ -53,7 +55,7 @@ public class BackgroundCompileQueue {
         private final OptionValues optionOverrides;
         private final WeakReference<OptimizedCallTarget> weakCallTarget;
         private final Cancellable cancellable;
-        private final boolean isFirstTier;
+        private final boolean isLowGrade;
 
         public Request(GraalTruffleRuntime runtime, OptionValues optionOverrides, OptimizedCallTarget callTarget, Cancellable cancellable) {
             this.id = idCounter.getAndIncrement();
@@ -61,20 +63,25 @@ public class BackgroundCompileQueue {
             this.optionOverrides = optionOverrides;
             this.weakCallTarget = new WeakReference<>(callTarget);
             this.cancellable = cancellable;
-            this.isFirstTier = optionOverrides != null && TruffleFirstTierCompilation.getValue(optionOverrides);
+            this.isLowGrade = optionOverrides != null && TruffleLowGradeCompilation.getValue(optionOverrides);
         }
 
         @SuppressWarnings("try")
         @Override
         public void run() {
             OptimizedCallTarget callTarget = weakCallTarget.get();
-            if (callTarget != null) {
-                try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = optionOverrides != null ? overrideOptions(optionOverrides.getMap()) : null) {
-                    if (!cancellable.isCancelled()) {
-                        OptionValues options = getOptions();
-                        runtime.doCompile(options, callTarget, cancellable);
-                    }
-                } finally {
+            try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = optionOverrides != null ? overrideOptions(optionOverrides.getMap()) : null) {
+                // if (!TruffleLowGradeCompilation.getValue(getOptions())) {
+                //     TTY.println("running htc: " + callTarget);
+                // } else {
+                //     TTY.println("running ltc: " + callTarget);
+                // }
+                if (callTarget != null) {
+                    OptionValues options = getOptions();
+                    runtime.doCompile(options, callTarget, cancellable);
+                }
+            } finally {
+                if (callTarget != null) {
                     callTarget.resetCompilationTask();
                 }
             }
@@ -82,15 +89,15 @@ public class BackgroundCompileQueue {
 
         @Override
         public int compareTo(Request that) {
-            if (this.isFirstTier != that.isFirstTier) {
-                return this.isFirstTier ? -1 : 1;
+            if (this.isLowGrade != that.isLowGrade) {
+                return this.isLowGrade ? -1 : 1;
             }
             return (int) (this.id - that.id);
         }
 
         @Override
         public String toString() {
-            return "Request(lo: " + isFirstTier + ", id: " + id + ", " + weakCallTarget + ")";
+            return "Request(lo: " + isLowGrade + ", id: " + id + ", " + weakCallTarget + ")";
         }
     }
 
@@ -142,8 +149,15 @@ public class BackgroundCompileQueue {
     public CancellableCompileTask submitCompilationRequest(GraalTruffleRuntime runtime, OptimizedCallTarget optimizedCallTarget) {
         final OptionValues optionOverrides = TruffleCompilerOptions.getCurrentOptionOverrides();
         CancellableCompileTask cancellable = new CancellableCompileTask();
+        // try (TruffleOptionsOverrideScope scope = optionOverrides != null ? overrideOptions(optionOverrides.getMap()) : null) {
+        //     if (!TruffleLowGradeCompilation.getValue(getOptions())) {
+        //         TTY.println("submitting htc...: " + optimizedCallTarget);
+        //     }
+        // }
         Request request = new Request(runtime, optionOverrides, optimizedCallTarget, cancellable);
         cancellable.setFuture(compilationExecutorService.submit(request));
+        // Task and future must never diverge from each other.
+        assert cancellable.future != null;
         return cancellable;
     }
 
