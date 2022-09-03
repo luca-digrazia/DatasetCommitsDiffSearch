@@ -27,6 +27,7 @@ import static com.oracle.graal.api.meta.LocationIdentity.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.HeapAccess.WriteBarrierType;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
@@ -48,9 +49,13 @@ public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
 
                     Stamp stamp = StampFactory.exactNonNull(runtime.lookupJavaType(Class.class));
                     LocationNode location = graph.unique(ConstantLocationNode.create(FINAL_LOCATION, stamp.kind(), runtime.config.classMirrorOffset, graph));
-                    FloatingReadNode freadNode = graph.add(new FloatingReadNode(klassNode, location, null, stamp));
+                    ReadNode readNode = graph.add(new ReadNode(klassNode, location, stamp, WriteBarrierType.NONE, false));
 
-                    graph.replaceFloating(node, freadNode);
+                    FixedNode afterStart = graph.start().next();
+                    graph.start().setNext(readNode);
+                    readNode.setNext(afterStart);
+
+                    graph.replaceFloating(node, readNode);
                 }
             }
         }
