@@ -236,10 +236,6 @@ public abstract class Locations {
             return result;
         }
 
-        public InternalLongLocation getPrimitiveLocation() {
-            return primitiveLocation;
-        }
-
         public ObjectLocation getObjectLocation() {
             return objectLocation;
         }
