@@ -54,14 +54,18 @@ public final class LanguageCheckGenerator {
     protected final String userClassName;
     protected final String truffleLanguageFullClazzName;
     protected final ProcessingEnvironment processingEnv;
+    protected String receiverClassName;
+    protected ForeignAccessFactoryGenerator containingForeignAccessFactory;
 
-    LanguageCheckGenerator(ProcessingEnvironment processingEnv, MessageResolution messageResolutionAnnotation, TypeElement element) {
+    LanguageCheckGenerator(ProcessingEnvironment processingEnv, MessageResolution messageResolutionAnnotation, TypeElement element, ForeignAccessFactoryGenerator containingForeignAccessFactory) {
         this.processingEnv = processingEnv;
         this.element = element;
         this.packageName = ElementUtils.getPackageName(element);
         this.userClassName = ElementUtils.getQualifiedName(element);
         this.truffleLanguageFullClazzName = Utils.getTruffleLanguageFullClassName(messageResolutionAnnotation);
         this.clazzName = ElementUtils.getSimpleName(element) + "Sub";
+        this.receiverClassName = Utils.getReceiverTypeFullClassName(messageResolutionAnnotation);
+        this.containingForeignAccessFactory = containingForeignAccessFactory;
     }
 
     public void generate() throws IOException {
@@ -70,6 +74,9 @@ public final class LanguageCheckGenerator {
         w.append("package ").append(packageName).append(";\n");
         appendImports(w);
 
+        appendGeneratedFor(w, "");
+        Utils.appendMessagesGeneratedByInformation(w, "", containingForeignAccessFactory.getFullClassName(), ElementUtils.getQualifiedName(element));
+        Utils.appendVisibilityModifier(w, element);
         w.append("abstract class ").append(clazzName).append(" extends ").append(userClassName).append(" {\n");
         appendExecuteWithTarget(w);
         appendSpecializations(w);
@@ -79,6 +86,12 @@ public final class LanguageCheckGenerator {
 
         w.append("}\n");
         w.close();
+    }
+
+    void appendGeneratedFor(Writer w, String ident) throws IOException {
+        w.append(ident).append("/**\n");
+        w.append(ident).append(" * Generated for {@link ").append(receiverClassName).append("}\n");
+        w.append(ident).append(" */\n");
     }
 
     public List<ExecutableElement> getTestMethods() {
@@ -125,6 +138,10 @@ public final class LanguageCheckGenerator {
         if (params.size() != expectedNumberOfArguments) {
             return "Wrong number of arguments.";
         }
+
+        if (method.getThrownTypes().size() > 0) {
+            return "Method test must not throw a checked exception.";
+        }
         return null;
     }
 
@@ -160,7 +177,7 @@ public final class LanguageCheckGenerator {
     }
 
     void appendRootNode(Writer w) throws IOException {
-        w.append("    private final static class LanguageCheckRootNode extends RootNode {\n");
+        w.append("    private static final class LanguageCheckRootNode extends RootNode {\n");
         w.append("        protected LanguageCheckRootNode(Class<? extends TruffleLanguage<?>> language) {\n");
         w.append("            super(language, null, null);\n");
         w.append("        }\n");
@@ -173,7 +190,7 @@ public final class LanguageCheckGenerator {
         w.append("              Object receiver = ForeignAccess.getReceiver(frame);\n");
         w.append("              return node.executeWithTarget(frame, receiver);\n");
         w.append("            } catch (UnsupportedSpecializationException e) {\n");
-        w.append("                throw UnsupportedTypeException.raise(e.getSuppliedValues());\n");
+        appendHandleUnsupportedTypeException(w);
         w.append("            }\n");
         w.append("        }\n");
         w.append("\n");
@@ -185,6 +202,14 @@ public final class LanguageCheckGenerator {
         w.append("        return new LanguageCheckRootNode(language);\n");
         w.append("    }\n");
 
+    }
+
+    protected void appendHandleUnsupportedTypeException(Writer w) throws IOException {
+        w.append("                if (e.getNode() instanceof ").append(clazzName).append(") {\n");
+        w.append("                  throw UnsupportedTypeException.raise(e, e.getSuppliedValues());\n");
+        w.append("                } else {\n");
+        w.append("                  throw e;\n");
+        w.append("                }\n");
     }
 
     public String getRootNodeFactoryInvokation() {

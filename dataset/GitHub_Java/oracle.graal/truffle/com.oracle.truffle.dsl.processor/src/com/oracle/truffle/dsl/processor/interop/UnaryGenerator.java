@@ -42,8 +42,9 @@ public final class UnaryGenerator extends MessageGenerator {
     private final String targetableUnaryNode;
     private final String unaryRootNode;
 
-    public UnaryGenerator(ProcessingEnvironment processingEnv, Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element) {
-        super(processingEnv, resolveAnnotation, messageResolutionAnnotation, element);
+    public UnaryGenerator(ProcessingEnvironment processingEnv, Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element,
+                    ForeignAccessFactoryGenerator containingForeignAccessFactory) {
+        super(processingEnv, resolveAnnotation, messageResolutionAnnotation, element, containingForeignAccessFactory);
         this.targetableUnaryNode = (new StringBuilder(messageName)).replace(0, 1, messageName.substring(0, 1).toUpperCase()).append("Node").insert(0, "Targetable").toString();
         this.unaryRootNode = (new StringBuilder(messageName)).replace(0, 1, messageName.substring(0, 1).toUpperCase()).append("RootNode").toString();
     }
@@ -60,7 +61,7 @@ public final class UnaryGenerator extends MessageGenerator {
 
     @Override
     void appendRootNode(Writer w) throws IOException {
-        w.append("    private final static class ").append(unaryRootNode).append(" extends RootNode {\n");
+        w.append("    private static final class ").append(unaryRootNode).append(" extends RootNode {\n");
         w.append("        protected ").append(unaryRootNode).append("(Class<? extends TruffleLanguage<?>> language) {\n");
         w.append("            super(language, null, null);\n");
         w.append("        }\n");
@@ -73,7 +74,7 @@ public final class UnaryGenerator extends MessageGenerator {
         w.append("            try {\n");
         w.append("                return node.executeWithTarget(frame, receiver);\n");
         w.append("            } catch (UnsupportedSpecializationException e) {\n");
-        w.append("                throw UnsupportedTypeException.raise(e.getSuppliedValues());\n");
+        appendHandleUnsupportedTypeException(w);
         w.append("            }\n");
         w.append("        }\n");
         w.append("\n");
@@ -95,9 +96,9 @@ public final class UnaryGenerator extends MessageGenerator {
         int expectedNumberOfArguments = hasFrameArgument ? NUMBER_OF_UNARY + 1 : NUMBER_OF_UNARY;
 
         if (params.size() != expectedNumberOfArguments) {
-            return "Wrong number of arguments.";
+            return "Wrong number of arguments. Expected signature: ([frame: VirtualFrame], receiverObject: TruffleObject)";
         }
-        return null;
+        return super.checkSignature(method);
     }
 
 }
