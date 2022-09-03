@@ -92,11 +92,7 @@ public final class PolyglotLauncher extends Launcher {
     }
 
     protected static void printVersion(Engine engine) {
-        String engineImplementationName = engine.getImplementationName();
-        if (isAOT()) {
-            engineImplementationName += " Native";
-        }
-        System.out.println(String.format("%s polyglot launcher %s", engineImplementationName, engine.getVersion()));
+        System.out.println(String.format("%s polyglot launcher %s", engine.getImplementationName(), engine.getVersion()));
     }
 
     private void launch(String[] args) {
