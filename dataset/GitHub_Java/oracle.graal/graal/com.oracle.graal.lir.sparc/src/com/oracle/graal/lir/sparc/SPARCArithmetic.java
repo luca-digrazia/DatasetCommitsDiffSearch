@@ -45,12 +45,23 @@ import com.oracle.graal.asm.sparc.SPARCAssembler.Fadds;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fandd;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fdivd;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fdivs;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fdtoi;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fdtos;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fdtox;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fitod;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fitos;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fmuld;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fmuls;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fnegd;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fnegs;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fsmuld;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fstod;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fstoi;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fstox;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fsubd;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fsubs;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fxtod;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fxtos;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Mulx;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Or;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Sdivx;
@@ -696,15 +707,15 @@ public enum SPARCArithmetic {
                 break;
             case L2D:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fxtod(asDoubleReg(src), asDoubleReg(dst));
+                new Fxtod(asDoubleReg(src), asDoubleReg(dst)).emit(masm);
                 break;
             case L2F:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fxtos(asDoubleReg(src), asFloatReg(dst));
+                new Fxtos(asDoubleReg(src), asFloatReg(dst)).emit(masm);
                 break;
             case I2D:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fitod(asFloatReg(src), asDoubleReg(dst));
+                new Fitod(asFloatReg(src), asDoubleReg(dst)).emit(masm);
                 break;
             case I2L:
                 delaySlotLir.emitControlTransfer(crb, masm);
@@ -736,50 +747,50 @@ public enum SPARCArithmetic {
                 break;
             case I2F:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fitos(asFloatReg(src), asFloatReg(dst));
+                new Fitos(asFloatReg(src), asFloatReg(dst)).emit(masm);
                 break;
             case F2D:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fstod(asFloatReg(src), asDoubleReg(dst));
+                new Fstod(asFloatReg(src), asDoubleReg(dst)).emit(masm);
                 break;
             case F2L:
                 masm.fcmp(Fcc0, Fcmps, asFloatReg(src), asFloatReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
-                masm.fstox(asFloatReg(src), asDoubleReg(dst));
+                new Fstox(asFloatReg(src), asDoubleReg(dst)).emit(masm);
                 new Fsubd(asDoubleReg(dst), asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
                 masm.bind(notOrdered);
                 break;
             case F2I:
                 masm.fcmp(Fcc0, Fcmps, asFloatReg(src), asFloatReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
-                masm.fstoi(asFloatReg(src), asFloatReg(dst));
-                masm.fitos(asFloatReg(dst), asFloatReg(dst));
+                new Fstoi(asFloatReg(src), asFloatReg(dst)).emit(masm);
+                new Fitos(asFloatReg(dst), asFloatReg(dst)).emit(masm);
                 new Fsubs(asFloatReg(dst), asFloatReg(dst), asFloatReg(dst)).emit(masm);
                 masm.bind(notOrdered);
                 break;
             case D2L:
                 masm.fcmp(Fcc0, Fcmpd, asDoubleReg(src), asDoubleReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
-                masm.fdtox(asDoubleReg(src), asDoubleReg(dst));
-                masm.fxtod(asDoubleReg(dst), asDoubleReg(dst));
+                new Fdtox(asDoubleReg(src), asDoubleReg(dst)).emit(masm);
+                new Fxtod(asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
                 new Fsubd(asDoubleReg(dst), asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
                 masm.bind(notOrdered);
                 break;
             case D2I:
                 masm.fcmp(Fcc0, Fcmpd, asDoubleReg(src), asDoubleReg(src));
                 masm.fbpcc(F_Ordered, ANNUL, notOrdered, Fcc0, PREDICT_TAKEN);
-                masm.fdtoi(asDoubleReg(src), asFloatReg(dst));
+                new Fdtoi(asDoubleReg(src), asFloatReg(dst)).emit(masm);
                 new Fsubs(asFloatReg(dst), asFloatReg(dst), asFloatReg(dst)).emit(masm);
-                masm.fstoi(asFloatReg(dst), asFloatReg(dst));
+                new Fstoi(asFloatReg(dst), asFloatReg(dst)).emit(masm);
                 masm.bind(notOrdered);
                 break;
             case FNEG:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fnegs(asFloatReg(src), asFloatReg(dst));
+                new Fnegs(asFloatReg(src), asFloatReg(dst)).emit(masm);
                 break;
             case DNEG:
                 delaySlotLir.emitControlTransfer(crb, masm);
-                masm.fnegd(asDoubleReg(src), asDoubleReg(dst));
+                new Fnegd(asDoubleReg(src), asDoubleReg(dst)).emit(masm);
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("missing: " + opcode);
