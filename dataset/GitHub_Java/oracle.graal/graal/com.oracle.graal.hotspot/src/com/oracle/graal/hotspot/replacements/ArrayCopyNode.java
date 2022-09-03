@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.IterableNodeType;
@@ -31,6 +29,7 @@ import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.nodes.*;
@@ -83,7 +82,7 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
         }
         // the canonicalization before loop unrolling is needed to propagate the length into
         // additions, etc.
-        HighTierContext context = new HighTierContext(tool.getRuntime(), tool.assumptions(), tool.getReplacements());
+        HighTierContext context = new HighTierContext(tool.getRuntime(), tool.assumptions());
         new CanonicalizerPhase().apply(snippetGraph, context);
         new LoopFullUnrollPhase().apply(snippetGraph, context);
         new CanonicalizerPhase().apply(snippetGraph, context);
@@ -91,7 +90,7 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
 
     @Override
     protected StructuredGraph getSnippetGraph(LoweringTool tool) {
-        if (!IntrinsifyArrayCopy.getValue()) {
+        if (!GraalOptions.IntrinsifyArrayCopy) {
             return null;
         }
 

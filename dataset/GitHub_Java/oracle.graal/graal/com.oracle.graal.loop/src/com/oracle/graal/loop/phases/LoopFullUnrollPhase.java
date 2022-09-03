@@ -28,17 +28,15 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
-public class LoopFullUnrollPhase extends BasePhase<PhaseContext> {
+public class LoopFullUnrollPhase extends BasePhase<HighTierContext> {
 
     private static final DebugMetric FULLY_UNROLLED_LOOPS = Debug.metric("FullUnrolls");
-    private final boolean canonicalizeReads;
 
-    public LoopFullUnrollPhase(boolean canonicalizeReads) {
-        this.canonicalizeReads = canonicalizeReads;
+    public LoopFullUnrollPhase() {
     }
 
     @Override
-    protected void run(StructuredGraph graph, PhaseContext context) {
+    protected void run(StructuredGraph graph, HighTierContext context) {
         if (graph.hasLoops()) {
             boolean peeled;
             do {
@@ -48,7 +46,7 @@ public class LoopFullUnrollPhase extends BasePhase<PhaseContext> {
                 for (LoopEx loop : dataCounted.countedLoops()) {
                     if (LoopPolicies.shouldFullUnroll(loop)) {
                         Debug.log("FullUnroll %s", loop);
-                        LoopTransformations.fullUnroll(loop, context.getRuntime(), context.getAssumptions(), canonicalizeReads);
+                        LoopTransformations.fullUnroll(loop, context.getRuntime(), context.getAssumptions());
                         FULLY_UNROLLED_LOOPS.increment();
                         Debug.dump(graph, "After fullUnroll %s", loop);
                         peeled = true;
