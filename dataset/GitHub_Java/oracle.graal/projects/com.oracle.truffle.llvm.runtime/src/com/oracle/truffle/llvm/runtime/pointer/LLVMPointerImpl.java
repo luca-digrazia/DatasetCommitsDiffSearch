@@ -60,8 +60,6 @@ class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer, LLVMObje
         if (!(obj instanceof LLVMPointerImpl)) {
             return false;
         }
-        // TODO (chaeubl): this equals implementation is not correct for foreign objects as those
-        // are wrapped in a LLVMTypedForeignObject which is a @ValueType.
         LLVMPointerImpl other = (LLVMPointerImpl) obj;
         return this.object == other.object && this.offset == other.offset;
     }
@@ -123,6 +121,29 @@ class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer, LLVMObje
     public LLVMPointerImpl increment(long incr) {
         // reset type, since the result points to something else now
         return new LLVMPointerImpl(object, offset + incr, null);
+    }
+
+    @Override
+    public LLVMNativePointer and(long value) {
+        assert isNative();
+        return new LLVMPointerImpl(object, offset & value, null);
+    }
+
+    @Override
+    public LLVMPointerImpl andAlign(long value) {
+        assert isManaged();
+        return new LLVMPointerImpl(object, offset & value, null);
+    }
+
+    @Override
+    public long andRem(long value) {
+        assert isManaged();
+        return offset & value;
+    }
+
+    @Override
+    public long urem(long value) {
+        return Long.remainderUnsigned(offset, value);
     }
 
     @Override
