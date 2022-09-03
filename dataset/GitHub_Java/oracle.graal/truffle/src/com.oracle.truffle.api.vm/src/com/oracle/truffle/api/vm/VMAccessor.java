@@ -25,11 +25,13 @@
 package com.oracle.truffle.api.vm;
 
 import java.util.Collection;
+import java.util.Collections;
 
 import org.graalvm.options.OptionDescriptors;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.Accessor;
 
 class VMAccessor extends Accessor {
@@ -51,8 +53,8 @@ class VMAccessor extends Accessor {
         return SPI.instrumentSupport();
     }
 
-    static Collection<ClassLoader> allLoaders() {
-        return SPI.loaders();
+    Collection<ClassLoader> allLoaders() {
+        return TruffleOptions.AOT ? Collections.emptyList() : loaders();
     }
 
     @Override
