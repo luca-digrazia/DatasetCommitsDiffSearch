@@ -22,32 +22,17 @@
  */
 package com.oracle.graal.lir;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.COMPOSITE;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.CONST;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.UNINITIALIZED;
-import static com.oracle.graal.lir.LIRInstruction.OperandMode.ALIVE;
-import static com.oracle.graal.lir.LIRInstruction.OperandMode.DEF;
-import static com.oracle.graal.lir.LIRInstruction.OperandMode.TEMP;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandMode.*;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-import java.util.EnumMap;
-import java.util.EnumSet;
+import java.lang.annotation.*;
+import java.util.*;
 
-import jdk.internal.jvmci.code.RegisterValue;
-import jdk.internal.jvmci.code.StackSlot;
-import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * The base class for an {@code LIRInstruction}.
@@ -171,7 +156,7 @@ public abstract class LIRInstruction {
         ALLOWED_FLAGS = new EnumMap<>(OperandMode.class);
         ALLOWED_FLAGS.put(OperandMode.USE, EnumSet.of(REG, STACK, COMPOSITE, CONST, ILLEGAL, HINT, UNINITIALIZED));
         ALLOWED_FLAGS.put(ALIVE, EnumSet.of(REG, STACK, COMPOSITE, CONST, ILLEGAL, HINT, UNINITIALIZED));
-        ALLOWED_FLAGS.put(TEMP, EnumSet.of(REG, STACK, COMPOSITE, ILLEGAL, HINT));
+        ALLOWED_FLAGS.put(TEMP, EnumSet.of(REG, COMPOSITE, CONST, ILLEGAL, HINT));
         ALLOWED_FLAGS.put(DEF, EnumSet.of(REG, STACK, COMPOSITE, ILLEGAL, HINT));
     }
 
