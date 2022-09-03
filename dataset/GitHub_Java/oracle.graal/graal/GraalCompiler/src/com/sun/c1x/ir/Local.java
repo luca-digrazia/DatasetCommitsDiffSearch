@@ -31,7 +31,7 @@ import com.sun.cri.ri.*;
  * The {@code Local} instruction is a placeholder for an incoming argument
  * to a function call.
  */
-public final class Local extends FloatingNode {
+public final class Local extends Value {
 
     private static final int INPUT_COUNT = 1;
 
@@ -43,7 +43,6 @@ public final class Local extends FloatingNode {
     public Local(CiKind kind, int javaIndex, Graph graph) {
         super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.index = javaIndex;
-        this.inputs().set(0, graph.start());
     }
 
     /**
@@ -98,6 +97,4 @@ public final class Local extends FloatingNode {
         x.setNonNull(isNonNull());
         return x;
     }
-
-
 }

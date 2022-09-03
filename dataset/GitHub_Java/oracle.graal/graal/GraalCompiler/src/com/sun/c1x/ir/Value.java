@@ -22,243 +22,60 @@
  */
 package com.sun.c1x.ir;
 
-import static com.sun.c1x.ir.Value.Flag.*;
+import java.util.*;
 
-import com.sun.c1x.*;
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.opt.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * This class represents a value within the HIR graph, including local variables, phis, and
  * all other instructions.
- *
- * @author Ben L. Titzer
  */
-public abstract class Value {
-    /**
-     * An enumeration of flags on values.
-     */
-    public enum Flag {
-        NonNull,            // this value is non-null
+public abstract class Value extends Node {
 
-        NoNullCheck,        // does not require null check
-        NoStoreCheck,       // does not require store check
-        NoBoundsCheck,      // does not require bounds check
-        NoZeroCheck,        // divide or modulus cannot cause exception
-
-        NoReadBarrier,      // does not require read barrier
-        NoWriteBarrier,     // does not require write barrier
-        NoDivSpecialCase,   // divide or modulus cannot be special case of MIN_INT / -1
-        DirectCompare,
-        IsLoaded,           // field or method is resolved and class is loaded and initialized
-        IsStatic,           // field or method access is static
-        IsSafepoint,        // branch is backward (safepoint)
-        IsStrictFP,
-        PreservesState,     // intrinsic preserves state
-        UnorderedIsTrue,
-        NeedsPatching,
-        LiveValue,          // live because value is used
-        LiveDeopt,          // live for deoptimization
-        LiveControl,        // live for control dependencies
-        LiveSideEffect,     // live for possible side-effects only
-        LiveStore,          // instruction is a store
-        PhiDead,            // phi is illegal because local is dead
-        PhiCannotSimplify,  // phi cannot be simplified
-        PhiVisited,         // phi has been visited during simplification
-
-        ResultIsUnique;     // the result of this instruction is guaranteed to be unique (e.g. a new object)
-
-        public final int mask = 1 << ordinal();
-    }
-
-    private static final int LIVE_FLAGS = Flag.LiveValue.mask |
-                                          Flag.LiveDeopt.mask |
-                                          Flag.LiveControl.mask |
-                                          Flag.LiveSideEffect.mask;
     /**
      * The kind of this value. This is {@link CiKind#Void} for instructions that produce no value.
      * This kind is guaranteed to be a {@linkplain CiKind#stackKind() stack kind}.
      */
     public final CiKind kind;
 
-    /**
-     * Unique identifier for this value. This field's value is lazily initialized by {@link #id()}.
-     */
-    private int id;
-
-    /**
-     * A mask of {@linkplain Flag flags} denoting extra properties of this value.
-     */
-    private int flags;
+    private boolean isNonNull;
 
     protected CiValue operand = CiValue.IllegalValue;
 
     /**
-     * A cache for analysis information. Every optimization must reset this field to {@code null} once it has completed.
-     */
-    public Object optInfo;
-
-    /**
-     * Used by {@link InstructionSubstituter}.
-     */
-    public Value subst;
-
-    public abstract BlockBegin block();
-
-    /**
      * Creates a new value with the specified kind.
      * @param kind the type of this value
+     * @param inputCount
+     * @param successorCount
+     * @param graph
      */
-    public Value(CiKind kind) {
+    public Value(CiKind kind, int inputCount, int successorCount, Graph graph) {
+        super(inputCount, successorCount, graph);
         assert kind == kind.stackKind() : kind + " != " + kind.stackKind();
         this.kind = kind;
     }
 
-    /**
-     * Checks whether this instruction is live (i.e. code should be generated for it).
-     * This is computed in a dedicated pass by {@link LivenessMarker}.
-     * An instruction is live because its value is needed by another live instruction,
-     * because its value is needed for deoptimization, or the program is control dependent
-     * upon it.
-     * @return {@code true} if this instruction should be considered live
-     */
-    public final boolean isLive() {
-        return C1XOptions.PinAllInstructions || (flags & LIVE_FLAGS) != 0;
-    }
+    ///////////////
+    // TODO: remove when Value class changes are completed
 
-    /**
-     * Clears all liveness flags.
-     */
-    public final void clearLive() {
-        flags = flags & ~LIVE_FLAGS;
-    }
-
-    /**
-     * Gets the instruction that should be substituted for this one. Note that this
-     * method is recursive; if the substituted instruction has a substitution, then
-     * the final substituted instruction will be returned. If there is no substitution
-     * for this instruction, {@code this} will be returned.
-     * @return the substitution for this instruction
-     */
-    public final Value subst() {
-        if (subst == null) {
-            return this;
-        }
-        return subst.subst();
-    }
-
-    /**
-     * Checks whether this instruction has a substitute.
-     * @return {@code true} if this instruction has a substitution.
-     */
-    public final boolean hasSubst() {
-        return subst != null;
-    }
-
-    /**
-     * Eliminates a given runtime check for this instruction.
-     *
-     * @param flag the flag representing the (elimination of the) runtime check
-     */
-    public final void clearRuntimeCheck(Flag flag) {
-        if (!checkFlag(flag)) {
-            setFlag(flag);
-            runtimeCheckCleared();
-            if (flag == NoNullCheck) {
-                C1XMetrics.NullCheckEliminations++;
-            } else if (flag == NoBoundsCheck) {
-                C1XMetrics.BoundsChecksElminations++;
-            } else if (flag == NoStoreCheck) {
-                C1XMetrics.StoreCheckEliminations++;
-            } else if (flag != NoZeroCheck) {
-                throw new InternalError("Unknown runtime check: " + flag);
-            }
-        }
-    }
-
-
-    /**
-     * Clear any internal state related to null checks, because a null check
-     * for this instruction is redundant. The state cleared may depend
-     * on the type of this instruction
-     */
-    public final void eliminateNullCheck() {
-        clearRuntimeCheck(NoNullCheck);
-    }
-
-    /**
-     * Notifies this instruction that a runtime check has been
-     * eliminated or made redundant.
-     */
-    protected void runtimeCheckCleared() {
-    }
-
-    /**
-     * Check whether this instruction has the specified flag set.
-     * @param flag the flag to test
-     * @return {@code true} if this instruction has the flag
-     */
-    public final boolean checkFlag(Flag flag) {
-        return (flags & flag.mask) != 0;
-    }
-
-    /**
-     * Set a flag on this instruction.
-     * @param flag the flag to set
-     */
-    public final void setFlag(Flag flag) {
-        flags |= flag.mask;
-    }
-
-    /**
-     * Clear a flag on this instruction.
-     * @param flag the flag to set
-     */
-    public final void clearFlag(Flag flag) {
-        flags &= ~flag.mask;
-    }
-
-    /**
-     * Set or clear a flag on this instruction.
-     * @param flag the flag to set
-     * @param val if {@code true}, set the flag, otherwise clear it
-     */
-    public final void setFlag(Flag flag, boolean val) {
-        if (val) {
-            setFlag(flag);
-        } else {
-            clearFlag(flag);
-        }
-    }
-
-    /**
-     * Initialize a flag on this instruction. Assumes the flag is not initially set,
-     * e.g. in the constructor of an instruction.
-     * @param flag the flag to set
-     * @param val if {@code true}, set the flag, otherwise do nothing
-     */
-    public final void initFlag(Flag flag, boolean val) {
-        if (val) {
-            setFlag(flag);
-        }
+    @Override
+    protected Object clone() throws CloneNotSupportedException {
+        throw new CloneNotSupportedException();
     }
 
     /**
      * Checks whether this instruction produces a value which is guaranteed to be non-null.
      * @return {@code true} if this instruction's value is not null
      */
-    public final boolean isNonNull() {
-        return checkFlag(Flag.NonNull);
+    public boolean isNonNull() {
+        return isNonNull;
     }
 
-    /**
-     * Checks whether this instruction needs a null check.
-     * @return {@code true} if this instruction needs a null check
-     */
-    public final boolean needsNullCheck() {
-        return !checkFlag(Flag.NoNullCheck);
+    public void setNonNull(boolean isNonNull) {
+        this.isNonNull = isNonNull;
     }
 
     /**
@@ -275,15 +92,6 @@ public abstract class Value {
      */
     public final boolean isNullConstant() {
         return this instanceof Constant && ((Constant) this).value.isNull();
-    }
-
-    /**
-     * Checks whether this instruction "is illegal"--i.e. it represents a dead
-     * phi or an instruction which does not produce a value.
-     * @return {@code true} if this instruction is illegal as an input value to another instruction
-     */
-    public final boolean isIllegal() {
-        return checkFlag(Flag.PhiDead);
     }
 
     /**
@@ -345,38 +153,56 @@ public abstract class Value {
      * @param closure the closure to apply
      */
     public void inputValuesDo(ValueClosure closure) {
-        // default: do nothing.
+        for (int i = 0; i < inputs().size(); i++) {
+            inputs().set(i, closure.apply((Value) inputs().get(i)));
+        }
+        for (int i = 0; i < successors().size(); i++) {
+            successors().set(i, closure.apply((Value) successors().get(i)));
+        }
     }
 
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append(getClass().getSimpleName());
-        builder.append(" #");
+        builder.append("#");
         builder.append(id());
-        if (this instanceof Instruction) {
-            builder.append(" @ ");
-            builder.append(((Instruction) this).bci());
+        builder.append(' ');
+        if (id() < 10) {
+            builder.append(' ');
         }
+        builder.append(getClass().getSimpleName());
         builder.append(" [").append(flagsToString()).append("]");
         return builder.toString();
     }
 
     public String flagsToString() {
         StringBuilder sb = new StringBuilder();
-        for (Flag f : Flag.values()) {
-            if (checkFlag(f)) {
-                if (sb.length() != 0) {
-                    sb.append(' ');
-                }
-                sb.append(f.name());
-            }
+        if (isNonNull()) {
+            sb.append("NonNull");
         }
         return sb.toString();
     }
 
-    public final boolean isDeadPhi() {
-        return checkFlag(Flag.PhiDead);
+    /**
+     * Compute the value number of this Instruction. Local and global value numbering
+     * optimizations use a hash map, and the value number provides a hash code.
+     * If the instruction cannot be value numbered, then this method should return
+     * {@code 0}.
+     * @return the hashcode of this instruction
+     */
+    public int valueNumber() {
+        return 0;
+    }
+
+    /**
+     * Checks that this instruction is equal to another instruction for the purposes
+     * of value numbering.
+     * @param i the other instruction
+     * @return {@code true} if this instruction is equivalent to the specified
+     * instruction w.r.t. value numbering
+     */
+    public boolean valueEqual(Node i) {
+        return false;
     }
 
     /**
@@ -389,19 +215,14 @@ public abstract class Value {
 
     public abstract void print(LogStream out);
 
-    /**
-     * This method returns a unique identification number for this value. The number returned is unique
-     * only to the compilation that produced this node and is computed lazily by using the current compilation
-     * for the current thread. Thus the first access is a hash lookup using {@link java.lang.ThreadLocal} and
-     * should not be considered fast. Because of the potentially slow first access, use of this ID should be
-     * restricted to debugging output.
-     * @return a unique ID for this value
-     */
-    public int id() {
-        if (id == 0) {
-            C1XMetrics.UniqueValueIdsAssigned++;
-            id = C1XCompilation.compilation().nextID();
-        }
-        return id;
+    @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("kind", kind.toString());
+        properties.put("nonNull", isNonNull);
+        properties.put("operand", operand == null ? "null" : operand.toString());
+        return properties;
     }
+
+
 }

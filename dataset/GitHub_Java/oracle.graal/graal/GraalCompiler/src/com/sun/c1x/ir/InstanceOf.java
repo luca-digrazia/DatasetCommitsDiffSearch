@@ -22,31 +22,29 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.util.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code InstanceOf} instruction represents an instanceof test.
- *
- * @author Ben L. Titzer
  */
 public final class InstanceOf extends TypeCheck {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Constructs a new InstanceOf instruction.
      * @param targetClass the target class of the instanceof check
      * @param object the instruction producing the object input to this instruction
-     * @param stateBefore the state before this instruction
+     * @param graph
      */
-    public InstanceOf(RiType targetClass, Value targetClassInstruction, Value object, FrameState stateBefore) {
-        super(targetClass, targetClassInstruction, object, CiKind.Int, stateBefore);
-        if (object.isNonNull()) {
-            eliminateNullCheck();
-        }
+    public InstanceOf(RiType targetClass, Value targetClassInstruction, Value object, Graph graph) {
+        super(targetClass, targetClassInstruction, object, CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override
@@ -56,14 +54,14 @@ public final class InstanceOf extends TypeCheck {
 
     @Override
     public int valueNumber() {
-        return Util.hash1(Bytecodes.INSTANCEOF, object);
+        return Util.hash1(Bytecodes.INSTANCEOF, object());
     }
 
     @Override
-    public boolean valueEqual(Instruction i) {
+    public boolean valueEqual(Node i) {
         if (i instanceof InstanceOf) {
             InstanceOf o = (InstanceOf) i;
-            return targetClass == o.targetClass && object == o.object;
+            return targetClass == o.targetClass && object() == o.object();
         }
         return false;
     }
@@ -71,5 +69,12 @@ public final class InstanceOf extends TypeCheck {
     @Override
     public void print(LogStream out) {
         out.print("instanceof(").print(object()).print(") ").print(CiUtil.toJavaName(targetClass()));
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        InstanceOf x = new InstanceOf(targetClass, null, null, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

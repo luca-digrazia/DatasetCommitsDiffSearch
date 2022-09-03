@@ -22,55 +22,60 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.util.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.bytecode.*;
+import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code NullCheck} class represents an explicit null check instruction.
- *
- * @author Ben L. Titzer
  */
-public final class NullCheck extends StateSplit {
+public final class NullCheck extends Value {
 
-    Value object;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_OBJECT = 0;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The instruction that produces the object tested against null.
+     */
+     public Value object() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    }
+
+    public Value setObject(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
+    }
 
     /**
      * Constructs a new NullCheck instruction.
-     * @param obj the instruction producing the object to check against null
+     * @param object the instruction producing the object to check against null
      * @param stateBefore the state before executing the null check
+     * @param graph
      */
-    public NullCheck(Value obj, FrameState stateBefore) {
-        super(obj.kind, stateBefore);
-        this.object = obj;
-        setFlag(Flag.NonNull);
-        if (object.isNonNull()) {
-            eliminateNullCheck();
-        }
+    public NullCheck(Value object, Graph graph) {
+        super(object.kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        setNonNull(true);
+        setObject(object);
     }
 
-    /**
-     * Gets the instruction that produces the object tested against null.
-     * @return the instruction producing the object
-     */
-    public Value object() {
-        return object;
-    }
-
-    /**
-     * Checks whether this instruction can cause a trap.
-     * @return {@code true} if this instruction can cause a trap
-     */
-    @Override
-    public boolean canTrap() {
-        return needsNullCheck();
-    }
-
-    @Override
-    public void inputValuesDo(ValueClosure closure) {
-        object = closure.apply(object);
+    // for copying
+    private NullCheck(CiKind kind, Graph graph) {
+        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        setNonNull(true);
     }
 
     @Override
@@ -80,14 +85,14 @@ public final class NullCheck extends StateSplit {
 
     @Override
     public int valueNumber() {
-        return Util.hash1(Bytecodes.IFNONNULL, object);
+        return Util.hash1(Bytecodes.IFNONNULL, object());
     }
 
     @Override
-    public boolean valueEqual(Instruction i) {
+    public boolean valueEqual(Node i) {
         if (i instanceof NullCheck) {
             NullCheck o = (NullCheck) i;
-            return object == o.object;
+            return object() == o.object();
         }
         return false;
     }
@@ -95,25 +100,24 @@ public final class NullCheck extends StateSplit {
     @Override
     public RiType declaredType() {
         // null check does not alter the type of the object
-        return object.declaredType();
+        return object().declaredType();
     }
 
     @Override
     public RiType exactType() {
         // null check does not alter the type of the object
-        return object.exactType();
-    }
-
-    @Override
-    public void runtimeCheckCleared() {
-        clearState();
+        return object().exactType();
     }
 
     @Override
     public void print(LogStream out) {
         out.print("null_check(").print(object()).print(')');
-        if (!canTrap()) {
-          out.print(" (eliminated)");
-        }
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        NullCheck x = new NullCheck(kind, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

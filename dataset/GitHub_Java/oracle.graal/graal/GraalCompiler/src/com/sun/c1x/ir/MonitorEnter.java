@@ -22,17 +22,22 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 
 /**
  * The {@code MonitorEnter} instruction represents the acquisition of a monitor.
- *
- * @author Ben L. Titzer
  */
 public final class MonitorEnter extends AccessMonitor {
 
-    private FrameState stateAfter;
+    private static final int INPUT_COUNT = 0;
+
+    private static final int SUCCESSOR_COUNT = 1;
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
 
     /**
      * Creates a new MonitorEnter instruction.
@@ -40,22 +45,10 @@ public final class MonitorEnter extends AccessMonitor {
      * @param object the instruction producing the object
      * @param lockAddress the address of the on-stack lock object or {@code null} if the runtime does not place locks on the stack
      * @param lockNumber the number of the lock
-     * @param stateBefore the state before
+     * @param graph
      */
-    public MonitorEnter(Value object, Value lockAddress, int lockNumber, FrameState stateBefore) {
-        super(object, lockAddress, stateBefore, lockNumber);
-        if (object.isNonNull()) {
-            eliminateNullCheck();
-        }
-    }
-
-    /**
-     * Checks whether this instruction can trap.
-     * @return {@code true} if this instruction may raise a {@link NullPointerException}
-     */
-    @Override
-    public boolean canTrap() {
-        return needsNullCheck();
+    public MonitorEnter(Value object, Value lockAddress, int lockNumber, Graph graph) {
+        super(object, lockAddress, lockNumber, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override
@@ -63,17 +56,15 @@ public final class MonitorEnter extends AccessMonitor {
         v.visitMonitorEnter(this);
     }
 
-    public void setStateAfter(FrameState frameState) {
-        this.stateAfter = frameState;
-    }
-
-    @Override
-    public FrameState stateAfter() {
-        return stateAfter;
-    }
-
     @Override
     public void print(LogStream out) {
         out.print("enter monitor[").print(lockNumber).print("](").print(object()).print(')');
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        MonitorEnter x = new MonitorEnter(null, null, lockNumber, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

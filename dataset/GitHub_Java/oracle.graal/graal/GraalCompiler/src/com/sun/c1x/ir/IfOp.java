@@ -22,37 +22,81 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.util.*;
 import com.sun.cri.bytecode.*;
+import com.sun.cri.ci.*;
 
 /**
  * The {@code IfOp} class represents a comparison that yields one of two values.
  * Note that these nodes are not built directly from the bytecode but are introduced
  * by conditional expression elimination.
- *
- * @author Ben L. Titzer
  */
 public final class IfOp extends Op2 {
 
-    Condition cond;
-    Value trueVal;
-    Value falseVal;
+    private static final int INPUT_COUNT = 2;
+    private static final int INPUT_TRUE_VALUE = 0;
+    private static final int INPUT_FALSE_VALUE = 1;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+
+    /**
+     * The instruction that produces the value if the comparison is true.
+     */
+    public Value trueValue() {
+        return (Value) inputs().get(super.inputCount() + INPUT_TRUE_VALUE);
+    }
+
+    public Value setTrueValue(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_TRUE_VALUE, n);
+    }
+
+    /**
+     * The instruction that produces the value if the comparison is false.
+     */
+    public Value falseValue() {
+        return (Value) inputs().get(super.inputCount() + INPUT_FALSE_VALUE);
+    }
+
+    public Value setFalseValue(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_FALSE_VALUE, n);
+    }
+
+
+    Condition condition;
 
     /**
      * Constructs a new IfOp.
      * @param x the instruction producing the first value to be compared
-     * @param cond the condition of the comparison
+     * @param condition the condition of the comparison
      * @param y the instruction producing the second value to be compared
-     * @param tval the value produced if the condition is true
-     * @param fval the value produced if the condition is false
+     * @param trueValue the value produced if the condition is true
+     * @param falseValue the value produced if the condition is false
      */
-    public IfOp(Value x, Condition cond, Value y, Value tval, Value fval) {
+    public IfOp(Value x, Condition condition, Value y, Value trueValue, Value falseValue, Graph graph) {
         // TODO: return the appropriate bytecode IF_ICMPEQ, etc
-        super(tval.kind.meet(fval.kind), Bytecodes.ILLEGAL, x, y);
-        this.cond = cond;
-        this.trueVal = tval;
-        falseVal = fval;
+        super(trueValue.kind.meet(falseValue.kind), Bytecodes.ILLEGAL, x, y, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        this.condition = condition;
+        setTrueValue(trueValue);
+        setFalseValue(falseValue);
+    }
+
+    // for copying
+    private IfOp(CiKind kind, Condition cond, Graph graph) {
+        super(kind, Bytecodes.ILLEGAL, null, null, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        this.condition = cond;
     }
 
     /**
@@ -60,23 +104,7 @@ public final class IfOp extends Op2 {
      * @return the condition
      */
     public Condition condition() {
-        return cond;
-    }
-
-    /**
-     * Gets the instruction that produces the value if the comparison is true.
-     * @return the instruction producing the value upon true
-     */
-    public Value trueValue() {
-        return trueVal;
-    }
-
-    /**
-     * Gets the instruction that produces the value if the comparison is false.
-     * @return the instruction producing the value upon false
-     */
-    public Value falseValue() {
-        return falseVal;
+        return condition;
     }
 
     /**
@@ -84,14 +112,7 @@ public final class IfOp extends Op2 {
      * @return {@code true} if this comparison is commutative
      */
     public boolean isCommutative() {
-        return cond == Condition.EQ || cond == Condition.NE;
-    }
-
-    @Override
-    public void inputValuesDo(ValueClosure closure) {
-        super.inputValuesDo(closure);
-        trueVal = closure.apply(trueVal);
-        falseVal = closure.apply(falseVal);
+        return condition == Condition.EQ || condition == Condition.NE;
     }
 
     @Override
@@ -101,14 +122,14 @@ public final class IfOp extends Op2 {
 
     @Override
     public int valueNumber() {
-        return Util.hash4(cond.hashCode(), x, y, trueVal, falseVal);
+        return Util.hash4(condition.hashCode(), x(), y(), trueValue(), falseValue());
     }
 
     @Override
-    public boolean valueEqual(Instruction i) {
+    public boolean valueEqual(Node i) {
         if (i instanceof IfOp) {
             IfOp o = (IfOp) i;
-            return opcode == o.opcode && x == o.x && y == o.y && trueVal == o.trueVal && falseVal == o.falseVal;
+            return opcode == o.opcode && x() == o.x() && y() == o.y() && trueValue() == o.trueValue() && falseValue() == o.falseValue();
         }
         return false;
     }
@@ -124,5 +145,12 @@ public final class IfOp extends Op2 {
         print(trueValue()).
         print(" : ").
         print(falseValue());
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        IfOp x = new IfOp(kind, condition, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

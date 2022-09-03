@@ -22,59 +22,73 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code NewMultiArray} instruction represents an allocation of a multi-dimensional object
  * array.
- *
- * @author Ben L. Titzer
  */
 public final class NewMultiArray extends NewArray {
-    public final RiType elementKind;
-    final Value[] dimensions;
+
+    private final int dimensionCount;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + dimensionCount;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The list of instructions which produce input for this instruction.
+     */
+    public Value dimension(int index) {
+        assert index >= 0 && index < dimensionCount;
+        return (Value) inputs().get(super.inputCount() + index);
+    }
+
+    public Value setDimension(int index, Value n) {
+        assert index >= 0 && index < dimensionCount;
+        return (Value) inputs().set(super.inputCount() + index, n);
+    }
+
+    /**
+     * The rank of the array allocated by this instruction, i.e. how many array dimensions.
+     */
+    public int dimensionCount() {
+        return dimensionCount;
+    }
+
+    public final RiType elementType;
     public final int cpi;
     public final RiConstantPool constantPool;
 
     /**
      * Constructs a new NewMultiArray instruction.
-     * @param elementKind the element type of the array
+     * @param elementType the element type of the array
      * @param dimensions the instructions which produce the dimensions for this array
      * @param stateBefore the state before this instruction
      * @param cpi the constant pool index for resolution
      * @param riConstantPool the constant pool for resolution
+     * @param graph
      */
-    public NewMultiArray(RiType elementKind, Value[] dimensions, FrameState stateBefore, int cpi, RiConstantPool riConstantPool) {
-        super(null, stateBefore);
+    public NewMultiArray(RiType elementType, Value[] dimensions, int cpi, RiConstantPool riConstantPool, Graph graph) {
+        super(null, dimensions.length, SUCCESSOR_COUNT, graph);
         this.constantPool = riConstantPool;
-        this.elementKind = elementKind;
-        this.dimensions = dimensions;
+        this.elementType = elementType;
         this.cpi = cpi;
-    }
 
-    /**
-     * Gets the list of instructions which produce input for this instruction.
-     * @return the list of instructions which produce input
-     */
-    public Value[] dimensions() {
-        return dimensions;
-    }
-
-    /**
-     * Gets the rank of the array allocated by this instruction, i.e. how many array dimensions.
-     * @return the rank of the array allocated
-     */
-    public int rank() {
-        return dimensions.length;
-    }
-
-    @Override
-    public void inputValuesDo(ValueClosure closure) {
+        this.dimensionCount = dimensions.length;
         for (int i = 0; i < dimensions.length; i++) {
-            dimensions[i] = closure.apply(dimensions[i]);
+            setDimension(i, dimensions[i]);
         }
     }
 
@@ -88,19 +102,25 @@ public final class NewMultiArray extends NewArray {
      * @return the element type of the array
      */
     public RiType elementType() {
-        return elementKind;
+        return elementType;
     }
 
     @Override
     public void print(LogStream out) {
         out.print("new multi array [");
-        final Value[] dimensions = dimensions();
-        for (int i = 0; i < dimensions.length; i++) {
+        for (int i = 0; i < dimensionCount; i++) {
           if (i > 0) {
               out.print(", ");
           }
-          out.print(dimensions[i]);
+          out.print(dimension(i));
         }
-        out.print("] ").print(CiUtil.toJavaName(elementKind));
+        out.print("] ").print(CiUtil.toJavaName(elementType));
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        NewMultiArray x = new NewMultiArray(elementType, new Value[dimensionCount], cpi, constantPool, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

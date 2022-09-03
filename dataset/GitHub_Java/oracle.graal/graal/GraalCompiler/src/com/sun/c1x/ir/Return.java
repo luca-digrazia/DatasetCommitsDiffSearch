@@ -34,7 +34,8 @@ public final class Return extends BlockEnd {
     private static final int INPUT_COUNT = 1;
     private static final int INPUT_RESULT = 0;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 1;
+    private static final int SUCCESSOR_END = 0;
 
     @Override
     protected int inputCount() {
@@ -57,16 +58,26 @@ public final class Return extends BlockEnd {
         return (Value) inputs().set(super.inputCount() + INPUT_RESULT, n);
     }
 
+    @Override
+    public Instruction next() {
+        return null;
+    }
+
     /**
      * Constructs a new Return instruction.
      * @param result the instruction producing the result for this return; {@code null} if this
      * is a void return
-     * @param isSafepoint {@code true} if this instruction is a safepoint instruction
      * @param graph
      */
-    public Return(Value result, boolean isSafepoint, Graph graph) {
-        super(result == null ? CiKind.Void : result.kind, null, isSafepoint, 0, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public Return(Value result, Graph graph) {
+        super(result == null ? CiKind.Void : result.kind, 0, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setResult(result);
+        successors().set(SUCCESSOR_END, graph.end());
+    }
+
+    // for copying
+    private Return(CiKind kind, Graph graph) {
+        super(kind, 0, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override
@@ -81,5 +92,12 @@ public final class Return extends BlockEnd {
         } else {
             out.print(kind.typeChar).print("return ").print(result());
         }
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        Return x = new Return(kind, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

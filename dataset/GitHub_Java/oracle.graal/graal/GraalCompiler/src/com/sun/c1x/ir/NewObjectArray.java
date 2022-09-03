@@ -22,17 +22,18 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code NewObjectArray} instruction represents an allocation of an object array.
- *
- * @author Ben L. Titzer
  */
 public final class NewObjectArray extends NewArray {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     final RiType elementClass;
 
@@ -40,10 +41,10 @@ public final class NewObjectArray extends NewArray {
      * Constructs a new NewObjectArray instruction.
      * @param elementClass the class of elements in this array
      * @param length the instruction producing the length of the array
-     * @param stateBefore the state before the allocation
+     * @param graph
      */
-    public NewObjectArray(RiType elementClass, Value length, FrameState stateBefore) {
-        super(length, stateBefore);
+    public NewObjectArray(RiType elementClass, Value length, Graph graph) {
+        super(length, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.elementClass = elementClass;
     }
 
@@ -73,5 +74,12 @@ public final class NewObjectArray extends NewArray {
     @Override
     public void print(LogStream out) {
         out.print("new object array [").print(length()).print("] ").print(CiUtil.toJavaName(elementClass()));
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        NewObjectArray x = new NewObjectArray(elementClass, null, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

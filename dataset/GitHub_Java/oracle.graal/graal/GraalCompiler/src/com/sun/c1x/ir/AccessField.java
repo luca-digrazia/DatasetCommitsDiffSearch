@@ -24,19 +24,41 @@ package com.sun.c1x.ir;
 
 import java.lang.reflect.*;
 
-import com.sun.c1x.*;
-import com.sun.c1x.value.*;
+import com.oracle.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The base class of all instructions that access fields.
- *
- * @author Ben L. Titzer
  */
 public abstract class AccessField extends StateSplit {
 
-    private Value object;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_OBJECT = 0;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The instruction that produces the receiver object of this field access (for instance field accesses).
+     */
+     public Value object() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    }
+
+    public Value setObject(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
+    }
+
     protected final RiField field;
 
     /**
@@ -44,34 +66,14 @@ public abstract class AccessField extends StateSplit {
      * @param kind the result kind of the access
      * @param object the instruction producing the receiver object
      * @param field the compiler interface representation of the field
-     * @param isStatic indicates if the field is static
-     * @param stateBefore the state before the field access
-     * @param isLoaded indicates if the class is loaded
+     * @param inputCount
+     * @param successorCount
+     * @param graph
      */
-    public AccessField(CiKind kind, Value object, RiField field, boolean isStatic, FrameState stateBefore, boolean isLoaded) {
-        super(kind, stateBefore);
-        this.object = object;
+    public AccessField(CiKind kind, Value object, RiField field, int inputCount, int successorCount, Graph graph) {
+        super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
         this.field = field;
-        if (!isLoaded || (C1XOptions.TestPatching && !Modifier.isVolatile(field.accessFlags()))) {
-            // require patching if the field is not loaded (i.e. resolved),
-            // or if patch testing is turned on (but not if the field is volatile)
-            setFlag(Flag.NeedsPatching);
-        }
-        initFlag(Flag.IsLoaded, isLoaded);
-        initFlag(Flag.IsStatic, isStatic);
-        if (isLoaded && object.isNonNull()) {
-            eliminateNullCheck();
-        }
-        assert object != null : "every field access must reference some object";
-    }
-
-    /**
-     * Gets the instruction that produces the receiver object of this field access
-     * (for instance field accesses).
-     * @return the instruction that produces the receiver object
-     */
-    public Value object() {
-        return object;
+        setObject(object);
     }
 
     /**
@@ -87,7 +89,7 @@ public abstract class AccessField extends StateSplit {
      * @return {@code true} if this field access is to a static field
      */
     public boolean isStatic() {
-        return checkFlag(Flag.IsStatic);
+        return Modifier.isStatic(field.accessFlags());
     }
 
     /**
@@ -95,7 +97,7 @@ public abstract class AccessField extends StateSplit {
      * @return {@code true} if the class is loaded
      */
     public boolean isLoaded() {
-        return checkFlag(Flag.IsLoaded);
+        return field.isResolved();
     }
 
     /**
@@ -104,35 +106,5 @@ public abstract class AccessField extends StateSplit {
      */
     public boolean isVolatile() {
         return isLoaded() && Modifier.isVolatile(field.accessFlags());
-    }
-
-    @Override
-    public void runtimeCheckCleared() {
-        if (isLoaded()) {
-            clearState();
-        }
-    }
-
-    /**
-     * Checks whether this field access will require patching.
-     * @return {@code true} if this field access will require patching
-     */
-    public boolean needsPatching() {
-        return checkFlag(Flag.NeedsPatching);
-    }
-
-    /**
-     * Checks whether this field access may cause a trap or an exception, which
-     * is if it either requires a null check or needs patching.
-     * @return {@code true} if this field access can cause a trap
-     */
-    @Override
-    public boolean canTrap() {
-        return needsPatching() || needsNullCheck();
-    }
-
-    @Override
-    public void inputValuesDo(ValueClosure closure) {
-        object = closure.apply(object);
     }
 }

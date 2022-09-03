@@ -22,29 +22,32 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code LogicOp} class definition.
- *
- * @author Ben L. Titzer
  */
 public final class LogicOp extends Op2 {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Constructs a new logic operation instruction.
      * @param opcode the opcode of the logic operation
      * @param x the first input into this instruction
-     * @param s the second input into this instruction
+     * @param y the second input into this instruction
      */
-    public LogicOp(int opcode, Value x, Value s) {
-        super(x.kind, opcode, x, s);
+    public LogicOp(int opcode, Value x, Value y, Graph graph) {
+        super(x.kind, opcode, x, y, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
-    public LogicOp(CiKind kind, int opcode, Value x, Value s) {
-        super(kind, opcode, x, s);
+    // for copying
+    private LogicOp(CiKind kind, int opcode, Graph graph) {
+        super(kind, opcode, null, null, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override
@@ -55,5 +58,12 @@ public final class LogicOp extends Op2 {
     @Override
     public void print(LogStream out) {
         out.print(x()).print(' ').print(Bytecodes.operator(opcode)).print(' ').print(y());
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        LogicOp x = new LogicOp(kind, opcode, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

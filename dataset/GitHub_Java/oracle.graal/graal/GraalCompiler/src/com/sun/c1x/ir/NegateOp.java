@@ -31,7 +31,7 @@ import com.sun.cri.ci.*;
 /**
  * The {@code NegateOp} instruction negates its operand.
  */
-public final class NegateOp extends FloatingNode {
+public final class NegateOp extends Value {
 
     private static final int INPUT_COUNT = 2;
     private static final int INPUT_X = 0;
@@ -69,6 +69,7 @@ public final class NegateOp extends FloatingNode {
         setX(x);
     }
 
+    // for copying
     private NegateOp(CiKind kind, Graph graph) {
         super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }

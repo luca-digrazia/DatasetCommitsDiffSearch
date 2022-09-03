@@ -22,28 +22,29 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code LoadIndexed} instruction represents a read from an element of an array.
- *
- * @author Ben L. Titzer
  */
 public final class LoadIndexed extends AccessIndexed {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Creates a new LoadIndexed instruction.
      * @param array the instruction producing the array
      * @param index the instruction producing the index
      * @param length the instruction producing the length
-     * @param elementType the element type
-     * @param stateBefore the state before executing this instruction
+     * @param elementKind the element type
+     * @param graph
      */
-    public LoadIndexed(Value array, Value index, Value length, CiKind elementType, FrameState stateBefore) {
-        super(elementType.stackKind(), array, index, length, elementType, stateBefore);
+    public LoadIndexed(Value array, Value index, Value length, CiKind elementKind, Graph graph) {
+        super(elementKind.stackKind(), array, index, length, elementKind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     /**
@@ -77,5 +78,17 @@ public final class LoadIndexed extends AccessIndexed {
     @Override
     public void print(LogStream out) {
         out.print(array()).print('[').print(index()).print("] (").print(kind.typeChar).print(')');
+    }
+
+    @Override
+    public boolean needsStateAfter() {
+        return false;
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        LoadIndexed x = new LoadIndexed(null, null, null, elementKind(), into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }
