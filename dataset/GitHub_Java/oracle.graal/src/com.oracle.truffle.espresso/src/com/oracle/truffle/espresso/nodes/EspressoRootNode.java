@@ -225,7 +225,6 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.SIPUSH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.SWAP;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
-import static com.oracle.truffle.espresso.meta.Meta.meta;
 
 import java.lang.reflect.Modifier;
 import java.util.function.Supplier;
@@ -274,7 +273,6 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.object.DebugCounter;
 
 public class EspressoRootNode extends RootNode implements LinkedNode {
-
     private final MethodInfo method;
     private final InterpreterToVM vm;
 
@@ -520,7 +518,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
                         stack.pushDouble(vm.getArrayDouble(stack.popInt(), nullCheck(stack.popObject())));
                         break;
                     case AALOAD:
-                        stack.pushObject(vm.getArrayObject(stack.popInt(), (StaticObjectArray) nullCheck(stack.popObject())));
+                        stack.pushObject(vm.getArrayObject(stack.popInt(), nullCheck(stack.popObject())));
                         break;
                     case BALOAD:
                         stack.pushInt(vm.getArrayByte(stack.popInt(), nullCheck(stack.popObject())));
@@ -1024,7 +1022,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
                         break;
                     case NEWARRAY:
                         newInstances.inc();
-                        stack.pushObject(InterpreterToVM.allocatePrimitiveArray(bs.readByte(curBCI), stack.popInt()));
+                        stack.pushObject(InterpreterToVM.allocateNativeArray(bs.readByte(curBCI), stack.popInt()));
                         break;
                     case ANEWARRAY:
                         newInstances.inc();
@@ -1036,7 +1034,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
                         break;
                     case ATHROW:
                         CompilerDirectives.transferToInterpreter();
-                        throw new EspressoException(nullCheck(stack.popObject()));
+                        throw new EspressoException((StaticObject) nullCheck(stack.popObject()));
                     case CHECKCAST:
                         stack.pushObject(checkCast(stack.popObject(), resolveType(bs.currentBC(curBCI), bs.readCPI(curBCI))));
                         break;
@@ -1074,10 +1072,8 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
                         }
                         break;
                     case BREAKPOINT:
-                        CompilerDirectives.transferToInterpreter();
                         throw new UnsupportedOperationException("breakpoints not supported.");
                     case INVOKEDYNAMIC:
-                        CompilerDirectives.transferToInterpreter();
                         throw new UnsupportedOperationException("invokedynamic not supported.");
                 }
             } catch (EspressoException e) {
@@ -1186,10 +1182,10 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         return FrameUtil.getLongSafe(frame, locals[n]);
     }
 
-    StaticObject getObjectLocal(VirtualFrame frame, int n) {
+    Object getObjectLocal(VirtualFrame frame, int n) {
         Object result = FrameUtil.getObjectSafe(frame, locals[n]);
         assert !(result instanceof ReturnAddress) : "use getReturnAddressLocal";
-        return (StaticObject) result;
+        return result;
     }
 
     int getReturnAddressLocal(VirtualFrame frame, int n) {
@@ -1274,14 +1270,17 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     }
 
     private void invokeSpecial(OperandStack stack, MethodInfo target) {
-        assert !target.isStatic();
-        // TODO(peterssen): Intercept/hook methods on primitive arrays e.g. int[].clone().
-        StaticObject receiver = nullCheck(stack.peekReceiver(target));
-        invoke(stack, target, receiver, !target.isStatic(), target.getSignature());
+        if (!Modifier.isStatic(target.getModifiers())) {
+            // TODO(peterssen): Intercept/hook methods on primitive arrays e.g. int[].clone().
+            Object receiver = nullCheck(stack.peekReceiver(target));
+            invoke(stack, target, receiver, !target.isStatic(), target.getSignature());
+        } else {
+            invoke(stack, target, null, !target.isStatic(), target.getSignature());
+        }
     }
 
     private static void invokeStatic(OperandStack stack, MethodInfo target) {
-        meta(target.getDeclaringClass()).safeInitialize();
+        target.getDeclaringClass().initialize();
         invoke(stack, target, null, !target.isStatic(), target.getSignature());
     }
 
@@ -1289,7 +1288,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         if (resolutionSeed.isFinal()) {
             // TODO(peterssen): Intercept/hook methods on primitive arrays e.g. int[].clone().
             // Receiver can be a primitive array (not a StaticObject).
-            StaticObject receiver = nullCheck(stack.peekReceiver(resolutionSeed));
+            Object receiver = nullCheck(stack.peekReceiver(resolutionSeed));
             invoke(stack, resolutionSeed, receiver, !resolutionSeed.isStatic(), resolutionSeed.getSignature());
         } else {
             resolveAndInvoke(stack, resolutionSeed);
@@ -1313,18 +1312,18 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         return methodInfo;
     }
 
-    private static void invoke(OperandStack stack, MethodInfo targetMethod, StaticObject receiver, boolean hasReceiver, SignatureDescriptor signature) {
+    private static void invoke(OperandStack stack, MethodInfo targetMethod, Object receiver, boolean hasReceiver, SignatureDescriptor signature) {
         methodInvokes.inc();
         CallTarget callTarget = targetMethod.getCallTarget();
         // In bytecode boolean, byte, char and short are just plain ints.
         // When a method is intrinsified it will obey Java types, so we need to convert the
         // (boolean, byte, char, short) result back to int.
         // (pop)Arguments have proper Java types.
-        Object[] arguments = stack.popArguments(hasReceiver, signature);
+        Object[] arguments = popArguments(stack, hasReceiver, signature);
         assert receiver == null || arguments[0] == receiver;
         JavaKind resultKind = signature.getReturnTypeDescriptor().toKind();
         Object result = callTarget.call(arguments);
-        stack.pushKind(result, resultKind);
+        pushKind(stack, result, resultKind);
     }
 
     private void resolveAndInvoke(OperandStack stack, MethodInfo originalMethod) {
@@ -1332,20 +1331,20 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         // TODO(peterssen): Ignore return type on method signature.
         // TODO(peterssen): Intercept/hook methods on primitive arrays e.g. int[].clone().
         // We could call a virtual method on a primitive array. e.g. ((Object)new byte[1]).clone();
-        StaticObject receiver = nullCheck(stack.peekReceiver(originalMethod));
+        Object receiver = nullCheck(stack.peekReceiver(originalMethod));
         // Resolve
         MethodInfo targetMethod = methodLookup(originalMethod, receiver);
         invoke(stack, targetMethod, receiver, !originalMethod.isStatic(), originalMethod.getSignature());
     }
 
     @CompilerDirectives.TruffleBoundary
-    private static MethodInfo methodLookup(MethodInfo originalMethod, StaticObject receiver) {
+    private static MethodInfo methodLookup(MethodInfo originalMethod, Object receiver) {
         StaticObjectClass clazz = (StaticObjectClass) EspressoLanguage.getCurrentContext().getJNI().GetObjectClass(receiver);
         return clazz.getMirror().findConcreteMethod(originalMethod.getName(), originalMethod.getSignature());
     }
 
     @CompilerDirectives.TruffleBoundary
-    private StaticObjectArray allocateArray(Klass componentType, int length) {
+    private StaticObject allocateArray(Klass componentType, int length) {
         assert !componentType.isPrimitive();
         return vm.newArray(componentType, length);
     }
@@ -1384,7 +1383,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         return this.method.getConstantPool();
     }
 
-    private boolean instanceOf(StaticObject instance, Klass typeToCheck) {
+    private boolean instanceOf(Object instance, Klass typeToCheck) {
         return vm.instanceOf(instance, typeToCheck);
     }
 
@@ -1401,7 +1400,6 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
             case Int:
                 return result;
             default:
-                CompilerDirectives.transferToInterpreter();
                 throw EspressoError.shouldNotReachHere();
         }
     }
@@ -1533,11 +1531,11 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         return switchHelper.defaultTarget(curBCI);
     }
 
-    private StaticObject checkCast(StaticObject instance, Klass typeToCheck) {
+    private Object checkCast(Object instance, Klass typeToCheck) {
         return vm.checkCast(instance, typeToCheck);
     }
 
-    private StaticObject allocateInstance(Klass klass) {
+    private Object allocateInstance(Klass klass) {
         klass.initialize();
         return vm.newObject(klass);
     }
@@ -1563,7 +1561,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         return (x > y ? 1 : ((x == y) ? 0 : -1));
     }
 
-    private StaticObject nullCheck(StaticObject value) {
+    private Object nullCheck(Object value) {
         if (StaticObject.isNull(value)) {
             CompilerDirectives.transferToInterpreter();
             // TODO(peterssen): Profile whether null was hit or not.
@@ -1577,7 +1575,6 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         if (value != 0) {
             return value;
         }
-        CompilerDirectives.transferToInterpreter();
         throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArithmeticException.class, "/ by zero");
     }
 
@@ -1585,7 +1582,6 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         if (value != 0L) {
             return value;
         }
-        CompilerDirectives.transferToInterpreter();
         throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArithmeticException.class, "/ by zero");
     }
 
@@ -1614,7 +1610,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
 
         Supplier<StaticObject> receiver = () -> isStatic
                         ? (field.getDeclaringClass()).getStatics() /* static storage */
-                        : nullCheck(stack.popObject());
+                        : (StaticObject) nullCheck(stack.popObject());
 
         switch (field.getKind()) {
             case Boolean:
@@ -1646,8 +1642,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
                 vm.setFieldObject(stack.popObject(), receiver.get(), field);
                 break;
             default:
-                CompilerDirectives.transferToInterpreter();
-                throw EspressoError.shouldNotReachHere("unexpected kind");
+                assert false : "unexpected kind";
         }
     }
 
@@ -1660,7 +1655,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         // Arrays do not have fields, the receiver can only be a StaticObject.
         StaticObject receiver = isStatic
                         ? field.getDeclaringClass().getStatics() /* static storage */
-                        : nullCheck(stack.popObject());
+                        : (StaticObject) nullCheck(stack.popObject());
         switch (field.getKind()) {
             case Boolean:
                 stack.pushInt(vm.getFieldBoolean(receiver, field) ? 1 : 0);
@@ -1795,6 +1790,6 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
 
     @Override
     public Meta.Method getOriginalMethod() {
-        return meta(method);
+        return Meta.meta(method);
     }
 }
