@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-
 /**
  * Used to communicate configuration details, runtime offsets, etc. to graal upon compileMethod.
  */
@@ -30,7 +29,7 @@ public final class HotSpotVMConfig extends CompilerObject {
 
     private static final long serialVersionUID = -4744897993263044184L;
 
-    HotSpotVMConfig() {
+    private HotSpotVMConfig() {
     }
 
     // os information, register layout, code generation, ...
