@@ -152,13 +152,14 @@ public class InliningUtil {
         return false;
     }
 
-    public static void logInliningDecision(InlineInfo info, int inliningDepth, boolean allowLogging, boolean success, String msg, final Object... args) {
+    public static boolean logInliningDecision(InlineInfo info, int inliningDepth, boolean allowLogging, boolean success, String msg, final Object... args) {
         if (allowLogging) {
             printInlining(info, inliningDepth, success, msg, args);
             if (shouldLogInliningDecision()) {
                 logInliningDecision(methodName(info), success, msg, args);
             }
         }
+        return success;
     }
 
     public static void logInliningDecision(final String msg, final Object... args) {
