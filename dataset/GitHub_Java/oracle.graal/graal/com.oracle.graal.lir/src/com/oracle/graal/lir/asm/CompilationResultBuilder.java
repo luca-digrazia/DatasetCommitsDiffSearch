@@ -54,7 +54,7 @@ public class CompilationResultBuilder {
         }
     }
 
-    public final Assembler asm;
+    public final AbstractAssembler asm;
     public final CompilationResult compilationResult;
     public final TargetDescription target;
     public final CodeCacheProvider codeCache;
@@ -78,7 +78,8 @@ public class CompilationResultBuilder {
 
     private List<ExceptionInfo> exceptionInfoList;
 
-    public CompilationResultBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, Assembler asm, FrameContext frameContext, CompilationResult compilationResult) {
+    public CompilationResultBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, AbstractAssembler asm, FrameContext frameContext,
+                    CompilationResult compilationResult) {
         this.target = codeCache.getTarget();
         this.codeCache = codeCache;
         this.foreignCalls = foreignCalls;
@@ -96,15 +97,15 @@ public class CompilationResultBuilder {
     private static final CompilationResult.Mark[] NO_REFS = {};
 
     public CompilationResult.Mark recordMark(Object id) {
-        return compilationResult.recordMark(asm.position(), id, NO_REFS);
+        return compilationResult.recordMark(asm.codeBuffer.position(), id, NO_REFS);
     }
 
     public CompilationResult.Mark recordMark(Object id, CompilationResult.Mark... references) {
-        return compilationResult.recordMark(asm.position(), id, references);
+        return compilationResult.recordMark(asm.codeBuffer.position(), id, references);
     }
 
     public void blockComment(String s) {
-        compilationResult.addAnnotation(new CompilationResult.CodeComment(asm.position(), s));
+        compilationResult.addAnnotation(new CompilationResult.CodeComment(asm.codeBuffer.position(), s));
     }
 
     /**
@@ -113,7 +114,7 @@ public class CompilationResultBuilder {
      * the compilation result.
      */
     public void finish() {
-        compilationResult.setTargetCode(asm.close(false), asm.position());
+        compilationResult.setTargetCode(asm.codeBuffer.close(false), asm.codeBuffer.position());
 
         // Record exception handlers if they exist
         if (exceptionInfoList != null) {
@@ -158,8 +159,8 @@ public class CompilationResultBuilder {
 
     public void recordInlineDataInCode(Constant data) {
         assert data != null;
-        int pos = asm.position();
-        Debug.log("Inline data in code: pos = %d, data = %s", pos, data);
+        int pos = asm.codeBuffer.position();
+        Debug.log("Inline data in code: pos = %d, data = %s", pos, data.toString());
         compilationResult.recordInlineData(pos, data);
     }
 
@@ -170,8 +171,8 @@ public class CompilationResultBuilder {
 
     public AbstractAddress recordDataReferenceInCode(Data data) {
         assert data != null;
-        int pos = asm.position();
-        Debug.log("Data reference in code: pos = %d, data = %s", pos, data);
+        int pos = asm.codeBuffer.position();
+        Debug.log("Data reference in code: pos = %d, data = %s", pos, data.toString());
         compilationResult.recordDataReference(pos, data);
         return asm.getPlaceholder();
     }
@@ -298,7 +299,7 @@ public class CompilationResultBuilder {
      */
     public boolean isSuccessorEdge(LabelRef edge) {
         assert lir != null;
-        List<? extends AbstractBlock<?>> order = lir.codeEmittingOrder();
+        List<Block> order = lir.codeEmittingOrder();
         assert order.get(currentBlockIndex) == edge.getSourceBlock();
         return currentBlockIndex < order.size() - 1 && order.get(currentBlockIndex + 1) == edge.getTargetBlock();
     }
@@ -312,7 +313,7 @@ public class CompilationResultBuilder {
         this.lir = lir;
         this.currentBlockIndex = 0;
         frameContext.enter(this);
-        for (AbstractBlock<?> b : lir.codeEmittingOrder()) {
+        for (Block b : lir.codeEmittingOrder()) {
             emitBlock(b);
             currentBlockIndex++;
         }
@@ -320,7 +321,7 @@ public class CompilationResultBuilder {
         this.currentBlockIndex = 0;
     }
 
-    private void emitBlock(AbstractBlock<?> block) {
+    private void emitBlock(Block block) {
         if (Debug.isDumpEnabled()) {
             blockComment(String.format("block B%d %s", block.getId(), block.getLoop()));
         }
