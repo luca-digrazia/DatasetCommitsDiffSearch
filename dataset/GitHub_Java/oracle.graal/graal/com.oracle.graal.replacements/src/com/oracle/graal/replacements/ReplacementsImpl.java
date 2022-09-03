@@ -23,7 +23,6 @@
 package com.oracle.graal.replacements;
 
 import static com.oracle.graal.api.meta.MetaUtil.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -321,7 +320,7 @@ public class ReplacementsImpl implements Replacements {
             graphBuilder.apply(graph);
 
             new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
-            if (OptCanonicalizer.getValue()) {
+            if (GraalOptions.OptCanonicalizer) {
                 new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
                 new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
             }
@@ -336,7 +335,7 @@ public class ReplacementsImpl implements Replacements {
          * @param callee the graph that was inlined into {@code caller}
          */
         protected void afterInline(StructuredGraph caller, StructuredGraph callee) {
-            if (OptCanonicalizer.getValue()) {
+            if (GraalOptions.OptCanonicalizer) {
                 new WordTypeRewriterPhase(runtime, target.wordKind).apply(caller);
                 new CanonicalizerPhase.Instance(runtime, assumptions).apply(caller);
             }
@@ -351,7 +350,7 @@ public class ReplacementsImpl implements Replacements {
             new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
 
             new DeadCodeEliminationPhase().apply(graph);
-            if (OptCanonicalizer.getValue()) {
+            if (GraalOptions.OptCanonicalizer) {
                 new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
             }
         }

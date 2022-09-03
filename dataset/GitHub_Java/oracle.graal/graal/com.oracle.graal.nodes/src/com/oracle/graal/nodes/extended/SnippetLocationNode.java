@@ -22,11 +22,8 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -77,11 +74,11 @@ public final class SnippetLocationNode extends LocationNode implements Canonical
             return (LocationIdentity) locationIdentity.asConstant().asObject();
         }
         // We do not know our actual location identity yet, so be conservative.
-        return ANY_LOCATION;
+        return LocationNode.ANY_LOCATION;
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (valueKind.isConstant() && locationIdentity.isConstant() && displacement.isConstant() && (indexScaling == null || indexScaling.isConstant())) {
             Kind constKind = (Kind) valueKind.asConstant().asObject();
             LocationIdentity constLocation = (LocationIdentity) locationIdentity.asConstant().asObject();
@@ -100,7 +97,7 @@ public final class SnippetLocationNode extends LocationNode implements Canonical
     }
 
     @Override
-    public Value generateAddress(NodeLIRBuilderTool gen, Value base) {
+    public Value generateAddress(LIRGeneratorTool gen, Value base) {
         throw new GraalInternalError("locationIdentity must be a constant so that this node can be canonicalized: " + locationIdentity);
     }
 
