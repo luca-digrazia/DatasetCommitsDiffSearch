@@ -49,15 +49,6 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractLanguageImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractStackFrameImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueImpl;
 
-/**
- * An engine represents an the execution environment for polyglot applications. Using an engine
- * contexts can be created. Contexts can either be single language contexts that are
- * {@link Language#createContext() created} using a {@link Language language} or polyglot contexts
- * that are {@link Engine#createPolyglotContext() created} from the engine. Contexts allow to
- * {@link Context#eval(Source) evaluate} guest language code directly and polylgot contexts require
- * to evaluate code code should be run in.
- *
- */
 public final class Engine implements AutoCloseable {
 
     private static volatile AbstractPolyglotImpl IMPL;
@@ -72,11 +63,10 @@ public final class Engine implements AutoCloseable {
      * Returns an installed language by looking it up using its unique id. Shortcut for
      * <code>engine.getLanguages().get(languageId)</code>. Returns <code>null</code> if the language
      * was not found. Examples for language ids are: <code>"js"</code>, <code>"r"</code> or
-     * <code>"ruby"</code>. Throws {@link IllegalArgumentException} if an invalid languageId was
-     * provided. Use the map returned by {@link #getLanguages()} to find out whether a language is
-     * installed.
+     * <code>"ruby"</code>.
      *
      * @param languageId the unique of the language
+     *
      * @since 1.0
      */
     public Language getLanguage(String languageId) {
@@ -283,11 +273,7 @@ public final class Engine implements AutoCloseable {
         }
 
         public Engine build() {
-            AbstractPolyglotImpl loadedImpl = getImpl();
-            if (loadedImpl == null) {
-                throw new IllegalStateException("The Polyglot API implementation failed to load.");
-            }
-            return loadedImpl.buildEngine(out, err, in, options, 0, null,
+            return getImpl().buildEngine(out, err, in, options, 0, null,
                             false, 0, useSystemProperties);
         }
 
