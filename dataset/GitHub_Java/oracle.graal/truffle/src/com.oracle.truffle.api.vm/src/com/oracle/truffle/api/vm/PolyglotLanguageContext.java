@@ -109,7 +109,6 @@ final class PolyglotLanguageContext implements VMObject {
                                     context.out,
                                     context.err,
                                     context.in, config, getOptionValues(), applicationArguments);
-                    LANGUAGE.createEnvContext(env);
                     LANGUAGE.postInitEnv(env);
                     return true;
                 }

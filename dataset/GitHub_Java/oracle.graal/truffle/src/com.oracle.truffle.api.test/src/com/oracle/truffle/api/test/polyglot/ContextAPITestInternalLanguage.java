@@ -43,6 +43,11 @@ public class ContextAPITestInternalLanguage extends TruffleLanguage<Object> {
     }
 
     @Override
+    protected Object getLanguageGlobal(Object context) {
+        return null;
+    }
+
+    @Override
     protected boolean isObjectOfLanguage(Object object) {
         return false;
     }

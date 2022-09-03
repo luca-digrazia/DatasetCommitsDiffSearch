@@ -28,15 +28,14 @@ import java.util.function.Function;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.test.polyglot.ContextAPITestLanguage.LanguageContext;
 
-@TruffleLanguage.Registration(id = ContextAPITestLanguage.ID, name = ContextAPITestLanguage.ID, version = "1.0", mimeType = ContextAPITestLanguage.MIME)
+@TruffleLanguage.Registration(id = ContextAPITestLanguage.ID, name = ContextAPITestLanguage.ID, version = "1.0", mimeType = ContextAPITestLanguage.ID)
 public class ContextAPITestLanguage extends TruffleLanguage<LanguageContext> {
 
     static final String ID = "ContextAPITestLanguage";
-    static final String MIME = "ContextAPITestMime";
+
     static Function<Env, Object> runinside;
 
     static class LanguageContext {
@@ -64,13 +63,7 @@ public class ContextAPITestLanguage extends TruffleLanguage<LanguageContext> {
         if (result == null) {
             result = "null result";
         }
-        final Object finalResult = result;
-        return Truffle.getRuntime().createCallTarget(new RootNode(this) {
-            @Override
-            public Object execute(VirtualFrame frame) {
-                return finalResult;
-            }
-        });
+        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(result));
     }
 
     @Override

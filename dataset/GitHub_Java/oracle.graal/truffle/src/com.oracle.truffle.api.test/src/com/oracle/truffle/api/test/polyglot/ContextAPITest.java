@@ -47,7 +47,6 @@ public class ContextAPITest {
         } catch (IllegalArgumentException e) {
         }
         assertInternalNotAccessible(context);
-        context.close();
     }
 
     private static void assertInternalNotAccessible(Context context) {
@@ -76,7 +75,6 @@ public class ContextAPITest {
         context.eval(ContextAPITestLanguage.ID, "");
         context.eval(LanguageSPITestLanguage.ID, "");
         assertInternalNotAccessible(context);
-        context.close();
     }
 
     @Test
@@ -93,7 +91,6 @@ public class ContextAPITest {
         assertEquals(42, context.importSymbol("int").asInt());
         assertSame(object, context.importSymbol("object").asHostObject());
         assertNull(context.importSymbol("notexisting"));
-        context.close();
     }
 
 }
