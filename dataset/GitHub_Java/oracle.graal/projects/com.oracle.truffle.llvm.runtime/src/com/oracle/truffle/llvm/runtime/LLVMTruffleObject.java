@@ -165,12 +165,8 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
             @Override
             public Object toNative(VirtualFrame frame, Object obj) throws InteropException {
                 LLVMTruffleObject object = (LLVMTruffleObject) obj;
-                if (object.getObject() == null) {
-                    return object;
-                } else {
-                    Object nativeBase = lib.toNative(frame, object.getObject());
-                    return new LLVMTruffleObject((TruffleObject) nativeBase, object.offset, object.type, object.baseType);
-                }
+                Object nativeBase = lib.toNative(frame, object.getObject());
+                return new LLVMTruffleObject((TruffleObject) nativeBase, object.offset, object.type, object.baseType);
             }
         };
     }

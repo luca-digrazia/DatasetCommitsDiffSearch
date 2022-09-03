@@ -33,6 +33,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
@@ -55,54 +56,54 @@ public abstract class LLVMMemMove {
 
         @SuppressWarnings("unused")
         @Specialization
-        protected Object doVoid(LLVMAddress dest, LLVMAddress source, long length, int align, boolean isVolatile) {
-            memMove.executeWithTarget(dest, source, length);
+        protected Object doVoid(VirtualFrame frame, LLVMAddress dest, LLVMAddress source, long length, int align, boolean isVolatile) {
+            memMove.executeWithTarget(frame, dest, source, length);
             return null;
         }
 
         @SuppressWarnings("unused")
         @Specialization
-        protected Object doVoid(LLVMGlobal dest, LLVMAddress source, long length, int align, boolean isVolatile,
+        protected Object doVoid(VirtualFrame frame, LLVMGlobal dest, LLVMAddress source, long length, int align, boolean isVolatile,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
-            memMove.executeWithTarget(globalAccess.executeWithTarget(dest), source, length);
+            memMove.executeWithTarget(frame, globalAccess.executeWithTarget(frame, dest), source, length);
             return null;
         }
 
         @SuppressWarnings("unused")
         @Specialization
-        protected Object doVoid(LLVMAddress dest, LLVMGlobal source, long length, int align, boolean isVolatile,
+        protected Object doVoid(VirtualFrame frame, LLVMAddress dest, LLVMGlobal source, long length, int align, boolean isVolatile,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
-            memMove.executeWithTarget(dest, globalAccess.executeWithTarget(source), length);
+            memMove.executeWithTarget(frame, dest, globalAccess.executeWithTarget(frame, source), length);
             return null;
         }
 
         @SuppressWarnings("unused")
         @Specialization
-        protected Object doVoid(LLVMGlobal dest, LLVMGlobal source, long length, int align, boolean isVolatile,
+        protected Object doVoid(VirtualFrame frame, LLVMGlobal dest, LLVMGlobal source, long length, int align, boolean isVolatile,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess1,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess2) {
-            memMove.executeWithTarget(globalAccess1.executeWithTarget(dest), globalAccess2.executeWithTarget(source), length);
+            memMove.executeWithTarget(frame, globalAccess1.executeWithTarget(frame, dest), globalAccess2.executeWithTarget(frame, source), length);
             return null;
         }
 
         @SuppressWarnings("unused")
         @Specialization
-        protected Object doVoid(LLVMTruffleObject dest, LLVMTruffleObject source, long length, int align, boolean isVolatile) {
-            memMove.executeWithTarget(dest, source, length);
+        protected Object doVoid(VirtualFrame frame, LLVMTruffleObject dest, LLVMTruffleObject source, long length, int align, boolean isVolatile) {
+            memMove.executeWithTarget(frame, dest, source, length);
             return null;
         }
 
         @SuppressWarnings("unused")
         @Specialization
-        protected Object doVoid(LLVMTruffleObject dest, LLVMAddress source, long length, int align, boolean isVolatile) {
-            memMove.executeWithTarget(dest, source, length);
+        protected Object doVoid(VirtualFrame frame, LLVMTruffleObject dest, LLVMAddress source, long length, int align, boolean isVolatile) {
+            memMove.executeWithTarget(frame, dest, source, length);
             return null;
         }
 
         @SuppressWarnings("unused")
         @Specialization
-        protected Object doVoid(LLVMAddress dest, LLVMTruffleObject source, long length, int align, boolean isVolatile) {
-            memMove.executeWithTarget(dest, source, length);
+        protected Object doVoid(VirtualFrame frame, LLVMAddress dest, LLVMTruffleObject source, long length, int align, boolean isVolatile) {
+            memMove.executeWithTarget(frame, dest, source, length);
             return null;
         }
     }
