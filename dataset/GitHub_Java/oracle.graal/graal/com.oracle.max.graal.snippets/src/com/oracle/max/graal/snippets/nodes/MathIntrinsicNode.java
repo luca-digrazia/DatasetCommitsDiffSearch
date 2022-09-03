@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,18 @@
  */
 package com.oracle.max.graal.snippets.nodes;
 
+import static com.oracle.max.graal.compiler.target.amd64.AMD64Arithmetic.*;
+
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.graal.compiler.lir.*;
+import com.oracle.max.graal.compiler.target.amd64.AMD64Arithmetic.Op2Reg;
 import com.oracle.max.graal.compiler.target.amd64.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
 import com.oracle.max.graal.snippets.target.amd64.*;
-import com.sun.cri.ci.*;
 
 public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, AMD64LIRLowerable {
 
@@ -58,23 +61,23 @@ public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, 
 
     @Override
     public void generateAmd64(AMD64LIRGenerator gen) {
-        CiVariable input = gen.load(gen.operand(x()));
-        CiVariable result = gen.newVariable(kind());
+        Variable input = gen.load(gen.operand(x()));
+        Variable result = gen.newVariable(kind());
         switch (operation()) {
-            case ABS:   gen.append(AMD64LogicFloatOpcode.DAND.create(result, input, CiConstant.forDouble(Double.longBitsToDouble(0x7FFFFFFFFFFFFFFFL)))); break;
-            case SQRT:  gen.append(AMD64MathIntrinsicOpcode.SQRT.create(result, input)); break;
-            case LOG:   gen.append(AMD64MathIntrinsicOpcode.LOG.create(result, input)); break;
-            case LOG10: gen.append(AMD64MathIntrinsicOpcode.LOG10.create(result, input)); break;
-            case SIN:   gen.append(AMD64MathIntrinsicOpcode.SIN.create(result, input)); break;
-            case COS:   gen.append(AMD64MathIntrinsicOpcode.COS.create(result, input)); break;
-            case TAN:   gen.append(AMD64MathIntrinsicOpcode.TAN.create(result, input)); break;
+            case ABS:   gen.append(new Op2Reg(DAND, result, input, CiConstant.forDouble(Double.longBitsToDouble(0x7FFFFFFFFFFFFFFFL)))); break;
+            case SQRT:  gen.append(new AMD64MathIntrinsicOp(AMD64MathIntrinsicOp.Opcode.SQRT, result, input)); break;
+            case LOG:   gen.append(new AMD64MathIntrinsicOp(AMD64MathIntrinsicOp.Opcode.LOG, result, input)); break;
+            case LOG10: gen.append(new AMD64MathIntrinsicOp(AMD64MathIntrinsicOp.Opcode.LOG10, result, input)); break;
+            case SIN:   gen.append(new AMD64MathIntrinsicOp(AMD64MathIntrinsicOp.Opcode.SIN, result, input)); break;
+            case COS:   gen.append(new AMD64MathIntrinsicOp(AMD64MathIntrinsicOp.Opcode.COS, result, input)); break;
+            case TAN:   gen.append(new AMD64MathIntrinsicOp(AMD64MathIntrinsicOp.Opcode.TAN, result, input)); break;
             default:    throw Util.shouldNotReachHere();
         }
         gen.setResult(this, result);
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant()) {
             double value = x().asConstant().asDouble();
             switch (operation()) {
@@ -90,6 +93,7 @@ public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, 
         return this;
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
     public static double compute(double x, @ConstantNodeParameter Operation op) {
         throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
