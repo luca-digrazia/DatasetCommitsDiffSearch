@@ -24,21 +24,20 @@ package com.oracle.graal.lir.framemap;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Represents a {@link #getSlots() numbered} range of {@link VirtualStackSlot virtual stack slot} of
  * size {@link TargetDescription#wordSize}.
  */
-class VirtualStackSlotRange extends VirtualStackSlot {
+public class VirtualStackSlotRange extends VirtualStackSlot {
 
-    private static final long serialVersionUID = 5152592950118317121L;
     private final BitSet objects;
     private final int slots;
 
-    public VirtualStackSlotRange(int slots, BitSet objects) {
-        super(LIRKind.reference(Kind.Object));
+    public VirtualStackSlotRange(int id, int slots, BitSet objects) {
+        super(id, LIRKind.reference(Kind.Object));
         this.slots = slots;
         this.objects = (BitSet) objects.clone();
     }

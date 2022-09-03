@@ -22,10 +22,9 @@
  */
 package com.oracle.graal.compiler.common.type;
 
+import com.oracle.jvmci.meta.SerializableConstant;
 import java.nio.*;
 import java.util.*;
-
-import com.oracle.graal.api.meta.*;
 
 /**
  * Type describing values that support arithmetic operations.
@@ -43,6 +42,11 @@ public abstract class ArithmeticStamp extends Stamp {
     }
 
     public abstract SerializableConstant deserialize(ByteBuffer buffer);
+
+    @Override
+    public Stamp improveWith(Stamp other) {
+        return this.join(other);
+    }
 
     @Override
     public int hashCode() {

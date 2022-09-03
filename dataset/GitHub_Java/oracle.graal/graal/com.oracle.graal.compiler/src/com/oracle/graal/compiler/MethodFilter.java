@@ -22,37 +22,73 @@
  */
 package com.oracle.graal.compiler;
 
+import com.oracle.jvmci.meta.JavaType;
+import com.oracle.jvmci.meta.JavaMethod;
+import com.oracle.jvmci.meta.Signature;
 import java.util.*;
 import java.util.regex.*;
 
-import com.oracle.graal.api.meta.*;
-
 /**
- * This class implements a method filter that can filter based on class name, method name and parameters.
- * The syntax for the source pattern that is passed to the constructor is as follows:
+ * This class implements a method filter that can filter based on class name, method name and
+ * parameters. The syntax for the source pattern that is passed to the constructor is as follows:
  *
  * <pre>
+ * SourcePatterns = SourcePattern ["," SourcePatterns] .
  * SourcePattern = [ Class "." ] method [ "(" [ Parameter { ";" Parameter } ] ")" ] .
  * Parameter = Class | "int" | "long" | "float" | "double" | "short" | "char" | "boolean" .
  * Class = { package "." } class .
  * </pre>
  *
  *
- * Glob pattern matching (*, ?) is allowed in all parts of the source pattern. Examples for valid filters are:
+ * Glob pattern matching (*, ?) is allowed in all parts of the source pattern. Examples for valid
+ * filters are:
  *
  * <ul>
- * <li><pre>visit(Argument;BlockScope)</pre>
- * Matches all methods named "visit", with the first parameter of type "Argument", and the second parameter of type "BlockScope".
- * The packages of the parameter types are irrelevant.</li>
- * <li><pre>arraycopy(Object;;;;)</pre>
- * Matches all methods named "arraycopy", with the first parameter of type "Object", and four more parameters of any type.
- * The packages of the parameter types are irrelevant.</li>
- * <li><pre>com.oracle.graal.compiler.graph.PostOrderNodeIterator.*</pre>
+ * <li>
+ *
+ * <pre>
+ * visit(Argument;BlockScope)
+ * </pre>
+ *
+ * Matches all methods named "visit", with the first parameter of type "Argument", and the second
+ * parameter of type "BlockScope". The packages of the parameter types are irrelevant.</li>
+ * <li>
+ *
+ * <pre>
+ * arraycopy(Object;;;;)
+ * </pre>
+ *
+ * Matches all methods named "arraycopy", with the first parameter of type "Object", and four more
+ * parameters of any type. The packages of the parameter types are irrelevant.</li>
+ * <li>
+ *
+ * <pre>
+ * com.oracle.graal.compiler.graph.PostOrderNodeIterator.*
+ * </pre>
+ *
  * Matches all methods in the class "com.oracle.graal.compiler.graph.PostOrderNodeIterator".</li>
- * <li><pre>*</pre>
+ * <li>
+ *
+ * <pre>
+ * *
+ * </pre>
+ *
  * Matches all methods in all classes</li>
- * <li><pre>com.oracle.graal.compiler.graph.*.visit</pre>
- * Matches all methods named "visit" in classes in the package "com.oracle.graal.compiler.graph".</pre>
+ * <li>
+ *
+ * <pre>
+ * com.oracle.graal.compiler.graph.*.visit
+ * </pre>
+ *
+ * Matches all methods named "visit" in classes in the package "com.oracle.graal.compiler.graph".
+ * <li>
+ *
+ * <pre>
+ * arraycopy,toString
+ * </pre>
+ *
+ * Matches all methods named "arraycopy" or "toString", meaning that ',' acts as an <i>or</i>
+ * operator.</li>
  * </ul>
  */
 public class MethodFilter {
@@ -60,6 +96,43 @@ public class MethodFilter {
     private final Pattern clazz;
     private final Pattern methodName;
     private final Pattern[] signature;
+
+    /**
+     * Parses a string containing list of comma separated filter patterns into an array of
+     * {@link MethodFilter}s.
+     */
+    public static MethodFilter[] parse(String commaSeparatedPatterns) {
+        String[] filters = commaSeparatedPatterns.split(",");
+        MethodFilter[] methodFilters = new MethodFilter[filters.length];
+        for (int i = 0; i < filters.length; i++) {
+            methodFilters[i] = new MethodFilter(filters[i]);
+        }
+        return methodFilters;
+    }
+
+    /**
+     * Determines if a given method is matched by a given array of filters.
+     */
+    public static boolean matches(MethodFilter[] filters, JavaMethod method) {
+        for (MethodFilter filter : filters) {
+            if (filter.matches(method)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Determines if a given class name is matched by a given array of filters.
+     */
+    public static boolean matchesClassName(MethodFilter[] filters, String className) {
+        for (MethodFilter filter : filters) {
+            if (filter.matchesClassName(className)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     public MethodFilter(String sourcePattern) {
         String pattern = sourcePattern.trim();
@@ -102,8 +175,15 @@ public class MethodFilter {
         } else if (pattern.contains(".")) {
             return Pattern.compile(createGlobString(pattern));
         } else {
-            return Pattern.compile("([^\\.]*\\.)*" + createGlobString(pattern));
+            return Pattern.compile("([^\\.\\$]*[\\.\\$])*" + createGlobString(pattern));
         }
+    }
+
+    /**
+     * Determines if the class part of this filter matches a given class name.
+     */
+    public boolean matchesClassName(String className) {
+        return clazz == null || clazz.matcher(className).matches();
     }
 
     public boolean matches(JavaMethod o) {
@@ -111,7 +191,7 @@ public class MethodFilter {
         if (methodName != null && !methodName.matcher(o.getName()).matches()) {
             return false;
         }
-        if (clazz != null && !clazz.matcher(MetaUtil.toJavaName(o.getDeclaringClass())).matches()) {
+        if (clazz != null && !clazz.matcher(o.getDeclaringClass().toJavaName()).matches()) {
             return false;
         }
         if (signature != null) {
@@ -121,7 +201,7 @@ public class MethodFilter {
             }
             for (int i = 0; i < signature.length; i++) {
                 JavaType type = sig.getParameterType(i, null);
-                String javaName = MetaUtil.toJavaName(type);
+                String javaName = type.toJavaName();
                 if (signature[i] != null && !signature[i].matcher(javaName).matches()) {
                     return false;
                 }

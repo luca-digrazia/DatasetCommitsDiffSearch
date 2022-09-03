@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,21 @@
  */
 package com.oracle.graal.truffle.nodes;
 
-import java.util.Objects;
-
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.Kind;
+import com.oracle.jvmci.meta.LocationIdentity;
+import java.util.*;
 
 /**
  * A {@link LocationIdentity} wrapping an object.
  */
 public final class ObjectLocationIdentity extends LocationIdentity {
 
-    private final JavaConstant object;
+    private JavaConstant object;
 
     public static LocationIdentity create(JavaConstant object) {
-        assert object.getJavaKind() == JavaKind.Object && object.isNonNull();
+        assert object.getKind() == Kind.Object && object.isNonNull();
         return new ObjectLocationIdentity(object);
-    }
-
-    private ObjectLocationIdentity(JavaConstant object) {
-        this.object = object;
     }
 
     @Override
@@ -56,6 +51,10 @@ public final class ObjectLocationIdentity extends LocationIdentity {
     @Override
     public int hashCode() {
         return object.hashCode();
+    }
+
+    private ObjectLocationIdentity(JavaConstant object) {
+        this.object = object;
     }
 
     @Override

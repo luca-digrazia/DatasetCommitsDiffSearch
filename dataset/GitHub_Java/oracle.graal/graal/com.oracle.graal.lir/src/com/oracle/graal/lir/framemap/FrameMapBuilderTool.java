@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,23 @@
  */
 package com.oracle.graal.lir.framemap;
 
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.lir.VirtualStackSlot;
+import com.oracle.jvmci.code.*;
 
 /**
  * A {@link FrameMapBuilder} that allows access to the underlying {@link FrameMap}.
  */
-public abstract class FrameMapBuilderTool extends FrameMapBuilder {
+public interface FrameMapBuilderTool extends FrameMapBuilder {
 
     /**
      * Returns the number of {@link VirtualStackSlot}s created by this {@link FrameMapBuilder}. Can
      * be used as an upper bound for an array indexed by {@link VirtualStackSlot#getId()}.
      */
-    public abstract int getNumberOfStackSlots();
+    int getNumberOfStackSlots();
 
-    public abstract List<VirtualStackSlot> getStackSlots();
+    List<VirtualStackSlot> getStackSlots();
 
-    public abstract FrameMap getFrameMap();
+    FrameMap getFrameMap();
 
 }
