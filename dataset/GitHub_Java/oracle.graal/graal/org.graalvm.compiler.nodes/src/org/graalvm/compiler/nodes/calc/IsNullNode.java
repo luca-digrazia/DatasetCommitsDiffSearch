@@ -86,8 +86,7 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, 
         return canonicalized(this, forValue);
     }
 
-    private static LogicNode canonicalized(IsNullNode isNullNode, ValueNode forValue) {
-        IsNullNode self = isNullNode;
+    private static LogicNode canonicalized(IsNullNode self, ValueNode forValue) {
         LogicNode result = tryCanonicalize(forValue);
         if (result != null) {
             return result;
