@@ -29,8 +29,8 @@ import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.Una
 import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG10;
 import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.SIN;
 import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.TAN;
-import static org.graalvm.compiler.serviceprovider.GraalServices.JAVA_SPECIFICATION_VERSION;
-import static org.graalvm.compiler.serviceprovider.GraalServices.Java8OrEarlier;
+import static org.graalvm.compiler.serviceprovider.JDK9Method.JAVA_SPECIFICATION_VERSION;
+import static org.graalvm.compiler.serviceprovider.JDK9Method.Java8OrEarlier;
 
 import java.util.Arrays;
 
@@ -50,7 +50,6 @@ import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
 import org.graalvm.compiler.replacements.ArraysSubstitutions;
 import org.graalvm.compiler.replacements.IntegerSubstitutions;
 import org.graalvm.compiler.replacements.LongSubstitutions;
-import org.graalvm.compiler.replacements.StandardGraphBuilderPlugins;
 import org.graalvm.compiler.replacements.StandardGraphBuilderPlugins.UnsafeGetPlugin;
 import org.graalvm.compiler.replacements.StandardGraphBuilderPlugins.UnsafePutPlugin;
 import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode;
@@ -75,8 +74,6 @@ public class AMD64GraphBuilderPlugins {
             public void run() {
                 registerIntegerLongPlugins(invocationPlugins, IntegerSubstitutions.class, JavaKind.Int, arch, replacementsBytecodeProvider);
                 registerIntegerLongPlugins(invocationPlugins, LongSubstitutions.class, JavaKind.Long, arch, replacementsBytecodeProvider);
-                StandardGraphBuilderPlugins.registerPlatformSpecificUnsafePlugins(invocationPlugins, replacementsBytecodeProvider,
-                        new JavaKind[]{JavaKind.Int, JavaKind.Long, JavaKind.Object, JavaKind.Boolean, JavaKind.Byte, JavaKind.Short, JavaKind.Char, JavaKind.Float, JavaKind.Double});
                 registerUnsafePlugins(invocationPlugins, replacementsBytecodeProvider);
                 registerStringPlugins(invocationPlugins, arch, replacementsBytecodeProvider);
                 registerStringLatin1Plugins(invocationPlugins, replacementsBytecodeProvider);
