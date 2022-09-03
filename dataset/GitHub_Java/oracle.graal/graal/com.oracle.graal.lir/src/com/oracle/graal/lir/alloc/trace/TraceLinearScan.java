@@ -470,7 +470,7 @@ final class TraceLinearScan {
      * @return the block containing the instruction denoted by {@code opId}
      */
     public AbstractBlockBase<?> blockForId(int opId) {
-        assert opIdToBlockMap.length > 0 && opId >= 0 && opId <= maxOpId() + 1 : "opId out of range: " + opId;
+        assert opIdToBlockMap.length > 0 && opId >= 0 && opId <= maxOpId() + 1 : "opId out of range";
         return opIdToBlockMap[opIdToIndex(opId)];
     }
 
