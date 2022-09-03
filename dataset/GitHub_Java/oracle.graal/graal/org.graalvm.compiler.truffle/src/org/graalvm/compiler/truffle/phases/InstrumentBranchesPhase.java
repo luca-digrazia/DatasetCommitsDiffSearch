@@ -22,14 +22,16 @@
  */
 package org.graalvm.compiler.truffle.phases;
 
-import com.oracle.truffle.api.TruffleOptions;
-import jdk.vm.ci.meta.JavaConstant;
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
+
+import jdk.vm.ci.meta.JavaConstant;
 
 /**
  * Instruments {@link IfNode}s in the graph, by adding execution counters to the true and the false
@@ -59,13 +61,15 @@ import org.graalvm.compiler.truffle.TruffleCompilerOptions;
  * of an {@link IfNode}.
  */
 public class InstrumentBranchesPhase extends InstrumentPhase {
-    public InstrumentBranchesPhase() {
+
+    public InstrumentBranchesPhase(OptionValues options, SnippetReflectionProvider snippetReflection, Instrumentation instrumentation) {
+        super(options, snippetReflection, instrumentation);
     }
 
     @Override
     protected void instrumentGraph(StructuredGraph graph, HighTierContext context, JavaConstant tableConstant) {
         for (IfNode n : graph.getNodes().filter(IfNode.class)) {
-            Instrumentation.Point p = getOrCreatePoint(methodFilter, n);
+            Point p = getOrCreatePoint(n);
             if (p != null) {
                 insertCounter(graph, context, tableConstant, n.trueSuccessor(), p.slotIndex(0));
                 insertCounter(graph, context, tableConstant, n.falseSuccessor(), p.slotIndex(1));
@@ -79,18 +83,13 @@ public class InstrumentBranchesPhase extends InstrumentPhase {
     }
 
     @Override
-    protected String instrumentationFilter() {
-        return TruffleCompilerOptions.TruffleInstrumentBranchesFilter.getValue();
+    protected boolean instrumentPerInlineSite(OptionValues options) {
+        return TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue(options);
     }
 
     @Override
-    protected boolean instrumentPerInlineSite() {
-        return TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue();
-    }
-
-    @Override
-    protected Instrumentation.Point createPoint(int id, int startIndex, Node n) {
-        return new IfPoint(id, startIndex, n.getNodeSourcePosition(), TruffleCompilerOptions.TruffleInstrumentBranchesPretty.getValue() && TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue());
+    protected Point createPoint(int id, int startIndex, Node n) {
+        return new IfPoint(id, startIndex, n.getNodeSourcePosition());
     }
 
     public enum BranchState {
@@ -112,9 +111,9 @@ public class InstrumentBranchesPhase extends InstrumentPhase {
         }
     }
 
-    public static class IfPoint extends InstrumentPhase.Instrumentation.Point {
-        IfPoint(int id, int rawIndex, NodeSourcePosition position, boolean prettify) {
-            super(id, rawIndex, position, prettify);
+    public class IfPoint extends InstrumentPhase.Point {
+        IfPoint(int id, int rawIndex, NodeSourcePosition position) {
+            super(id, rawIndex, position);
         }
 
         @Override
@@ -122,12 +121,17 @@ public class InstrumentBranchesPhase extends InstrumentPhase {
             return 2;
         }
 
+        @Override
+        public boolean isPrettified(OptionValues options) {
+            return TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue(options);
+        }
+
         public long ifVisits() {
-            return ACCESS_TABLE[rawIndex];
+            return getInstrumentation().getAccessTable()[rawIndex];
         }
 
         public long elseVisits() {
-            return ACCESS_TABLE[rawIndex + 1];
+            return getInstrumentation().getAccessTable()[rawIndex + 1];
         }
 
         public BranchState getBranchState() {

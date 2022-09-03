@@ -74,7 +74,6 @@ import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
@@ -175,8 +174,7 @@ public class PartialEvaluator {
     }
 
     @SuppressWarnings("try")
-    public StructuredGraph createGraph(final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId,
-                    CancellableCompileTask task) {
+    public StructuredGraph createGraph(final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
         try (Scope c = Debug.scope("TruffleTree")) {
             Debug.dump(Debug.BASIC_LOG_LEVEL, new TruffleTreeDumpHandler.TruffleTreeDump(callTarget), "%s", callTarget);
         } catch (Throwable e) {
@@ -184,9 +182,8 @@ public class PartialEvaluator {
         }
 
         String name = callTarget.toString();
-        OptionValues options = TruffleCompilerOptions.getOptions();
-        final StructuredGraph graph = new StructuredGraph.Builder(options, allowAssumptions).name(name).method(callRootMethod).speculationLog(callTarget.getSpeculationLog()).compilationId(
-                        compilationId).cancellable(task).build();
+        final StructuredGraph graph = new StructuredGraph.Builder(allowAssumptions).name(name).method(callRootMethod).speculationLog(callTarget.getSpeculationLog()).compilationId(
+                        compilationId).options(TruffleCompilerOptions.getOptions()).build();
         assert graph != null : "no graph for root method";
 
         try (Scope s = Debug.scope("CreateGraph", graph); Indent indent = Debug.logAndIndent("createGraph %s", graph)) {
@@ -196,7 +193,7 @@ public class PartialEvaluator {
 
             fastPartialEvaluation(callTarget, inliningDecision, graph, baseContext, tierContext);
 
-            if (task != null && task.isCancelled()) {
+            if (Thread.currentThread().isInterrupted()) {
                 return null;
             }
 
