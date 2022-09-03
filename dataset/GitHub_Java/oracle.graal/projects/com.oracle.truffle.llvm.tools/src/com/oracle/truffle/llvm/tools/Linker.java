@@ -41,20 +41,14 @@ import java.util.Collection;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
-
 public class Linker {
-
-    private static final int BUFFER_SIZE = 1024;
 
     public static void main(String[] args) {
         try {
             String outputFileName = null;
             final Collection<String> bitcodeFileNames = new ArrayList<>();
 
-            int n = 0;
-
-            while (n < args.length) {
+            for (int n = 0; n < args.length; n++) {
                 final String arg = args[n];
 
                 switch (arg) {
@@ -79,8 +73,6 @@ public class Linker {
                         bitcodeFileNames.add(arg);
                         break;
                 }
-
-                n++;
             }
 
             if (outputFileName == null) {
@@ -89,19 +81,20 @@ public class Linker {
 
             link(outputFileName, bitcodeFileNames);
         } catch (Exception e) {
-            LLVMLogger.error(e.getMessage());
+            System.err.println(e.getMessage());
             System.exit(1);
         }
 
     }
 
     private static void help() {
-        LLVMLogger.info("su-link [-o out.su] one.ll two.ll ...");
-        LLVMLogger.info("  Links multiple LLVM bitcode files into a single file which can be loaded by Sulong.");
+        System.err.println("su-link [-o out.su] one.ll two.ll ...");
+        System.err.println();
+        System.err.println("  Links multiple LLVM bitcode files into a single file which can be loaded by Sulong.");
     }
 
     public static void link(String outputFileName, Collection<String> bitcodeFileNames) throws IOException, NoSuchAlgorithmException {
-        final byte[] buffer = new byte[BUFFER_SIZE];
+        final byte[] buffer = new byte[1024];
 
         try (ZipOutputStream outputStream = new ZipOutputStream(new FileOutputStream(outputFileName))) {
             for (String bitcodeFileName : bitcodeFileNames) {
