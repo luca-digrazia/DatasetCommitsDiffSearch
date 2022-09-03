@@ -35,6 +35,7 @@ import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.Label;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
 import jdk.internal.org.objectweb.asm.Opcodes;
+import jdk.vm.ci.code.CompiledCode;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -108,7 +109,8 @@ public final class InterfaceMethodHandleTest extends GraalCompilerTest implement
     protected InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
         if (method.getDeclaringClass().equals(getMetaAccess().lookupJavaType(M2Thrower.class))) {
             // Make sure M2Thrower.m2 is invoked from normal code
-            return getBackend().createDefaultInstalledCode(method, compResult);
+            CompiledCode compiledCode = getBackend().createCompiledCode(method, compResult);
+            return getCodeCache().setDefaultCode(method, compiledCode);
         }
         return super.addMethod(method, compResult);
     }
