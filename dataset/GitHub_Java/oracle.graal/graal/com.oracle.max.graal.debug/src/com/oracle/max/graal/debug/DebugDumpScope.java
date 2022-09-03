@@ -33,9 +33,4 @@ public final class DebugDumpScope {
     public String getName() {
         return name;
     }
-
-    @Override
-    public String toString() {
-        return "DebugDumpScope[" + name + "]";
-    }
 }

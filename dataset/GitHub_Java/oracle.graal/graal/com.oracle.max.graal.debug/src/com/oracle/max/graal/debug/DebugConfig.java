@@ -22,11 +22,14 @@
  */
 package com.oracle.max.graal.debug;
 
+import java.util.*;
+
 
 public interface DebugConfig {
     boolean isLogEnabled();
     boolean isMeterEnabled();
     boolean isDumpEnabled();
-    boolean isTimerEnabled();
-    RuntimeException interceptException(RuntimeException e);
+    boolean isTimeEnabled();
+    RuntimeException interceptException(Throwable e);
+    Collection<? extends DebugDumpHandler> dumpHandlers();
 }

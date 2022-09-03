@@ -39,7 +39,7 @@ public class HotSpotDebugConfig implements DebugConfig {
     private final String meterFilter;
     private final String timerFilter;
     private final String dumpFilter;
-    private final String[] methodFilter;
+    private final String methodFilter;
     private final List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
 
     public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter) {
@@ -47,13 +47,8 @@ public class HotSpotDebugConfig implements DebugConfig {
         this.meterFilter = meterFilter;
         this.timerFilter = timerFilter;
         this.dumpFilter = dumpFilter;
-        this.methodFilter = methodFilter == null ? null : methodFilter.split(",");
-        if (GraalOptions.PrintIdealGraphFile) {
-            dumpHandlers.add(new IdealGraphPrinterDumpHandler());
-        } else {
-            dumpHandlers.add(new IdealGraphPrinterDumpHandler(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort));
-        }
-        dumpHandlers.add(new CFGPrinterObserver());
+        this.methodFilter = methodFilter;
+        dumpHandlers.add(new IdealGraphPrinterDumpHandler(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort));
     }
 
     public boolean isLogEnabled() {
@@ -93,11 +88,9 @@ public class HotSpotDebugConfig implements DebugConfig {
         } else {
             for (Object o : Debug.context()) {
                 if (o instanceof RiMethod) {
-                    String methodName = CiUtil.format("%H.%n", (RiMethod) o);
-                    for (String filter : methodFilter) {
-                        if (methodName.contains(filter)) {
-                            return true;
-                        }
+                    RiMethod riMethod = (RiMethod) o;
+                    if (CiUtil.format("%H.%n", riMethod).contains(methodFilter)) {
+                        return true;
                     }
                 }
             }
@@ -113,7 +106,7 @@ public class HotSpotDebugConfig implements DebugConfig {
         add(sb, "Meter", meterFilter);
         add(sb, "Time", timerFilter);
         add(sb, "Dump", dumpFilter);
-        add(sb, "MethodFilter", Arrays.toString(methodFilter));
+        add(sb, "MethodFilter", methodFilter);
         return sb.toString();
     }
 

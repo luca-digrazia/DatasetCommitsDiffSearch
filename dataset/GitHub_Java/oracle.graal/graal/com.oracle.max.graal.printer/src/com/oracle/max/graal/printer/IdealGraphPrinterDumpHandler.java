@@ -70,6 +70,7 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
             } else {
                 initializeNetworkPrinter();
             }
+            printer.begin();
         }
     }
 
@@ -77,9 +78,8 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
         try {
             FileOutputStream stream = new FileOutputStream(fileName);
             printer = new IdealGraphPrinter(stream);
-            printer.begin();
         } catch (IOException e) {
-            printer = null;
+            throw new RuntimeException(e);
         }
     }
 
@@ -88,11 +88,9 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
             Socket socket = new Socket(host, port);
             BufferedOutputStream stream = new BufferedOutputStream(socket.getOutputStream(), 0x4000);
             printer = new IdealGraphPrinter(stream);
-            printer.begin();
             TTY.println("Connected to the IGV on port %d", port);
         } catch (IOException e) {
-            TTY.println("Could not connect to the IGV on port %d: %s", port, e);
-            printer = null;
+            throw new RuntimeException(e);
         }
     }
 
@@ -102,7 +100,7 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
             ensureInitialized();
             final Graph graph = (Graph) object;
 
-            if (printer != null && printer.isValid()) {
+            if (printer.isValid()) {
                 // Get all current RiResolvedMethod instances in the context.
                 List<String> inlineContext = getInlineContext();
                 Debug.contextSnapshot(RiResolvedMethod.class);
@@ -142,6 +140,9 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
 
                     }
                 });
+            } else {
+                TTY.println("Fatal error: Printer invalid!");
+                System.exit(-1);
             }
         }
     }
