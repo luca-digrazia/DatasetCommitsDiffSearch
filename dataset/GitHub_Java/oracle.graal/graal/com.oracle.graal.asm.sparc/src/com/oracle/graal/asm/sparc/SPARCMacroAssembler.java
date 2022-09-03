@@ -254,10 +254,6 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         public Jmp(SPARCAddress address) {
             super(address.getBase(), address.getDisplacement(), g0);
         }
-
-        public Jmp(Register reg) {
-            super(reg, 0, g0);
-        }
     }
 
     public static class Neg extends Sub {
