@@ -193,19 +193,14 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
     @Override
     public void preInitializeEngine() {
         ensureInitialized();
-        final Handler logHandler = PolyglotLogHandler.createStreamHandler(System.out, false, true);
-        try {
-            final PolyglotEngineImpl preInitializedEngine = PolyglotEngineImpl.preInitialize(
+        final PolyglotEngineImpl preInitializedEngine = PolyglotEngineImpl.preInitialize(
                         this,
                         INSTRUMENT.createDispatchOutput(System.out),
                         INSTRUMENT.createDispatchOutput(System.err),
                         System.in,
                         TruffleOptions.AOT ? null : Thread.currentThread().getContextClassLoader(),
-                        logHandler);
+                        PolyglotLogHandler.createStreamHandler(System.out, false, true));
         preInitializedEngineRef.set(preInitializedEngine);
-        } finally {
-            logHandler.flush();
-        }
     }
 
     /**
