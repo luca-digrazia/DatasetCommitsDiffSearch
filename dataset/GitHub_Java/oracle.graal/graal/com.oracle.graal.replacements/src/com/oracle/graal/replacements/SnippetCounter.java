@@ -24,22 +24,14 @@ package com.oracle.graal.replacements;
 
 //JaCoCo Exclude
 
-import static com.oracle.graal.graph.UnsafeAccess.*;
-
 import java.io.*;
 import java.util.*;
-
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.replacements.Snippet.Fold;
-import com.oracle.graal.replacements.nodes.*;
 
 /**
  * A counter that can be safely {@linkplain #inc() incremented} from within a snippet for gathering
  * snippet specific metrics.
  */
 public class SnippetCounter implements Comparable<SnippetCounter> {
-
     /**
      * A group of related counters.
      */
@@ -66,10 +58,13 @@ public class SnippetCounter implements Comparable<SnippetCounter> {
 
             StringBuilder buf = new StringBuilder(String.format("Counters: %s%n", name));
 
+            String formatString = "  %" + maxNameLen + "s: %6.2f%%%," + (String.format("%,d", total).length() + 2) + "d  // %s%n";
             for (SnippetCounter c : counters) {
                 double percent = total == 0D ? 0D : ((double) (c.value * 100)) / total;
-                buf.append(String.format("  %" + maxNameLen + "s: %5.2f%%%10d  // %s%n", c.name, percent, c.value, c.description));
+                buf.append(String.format(formatString, c.name, percent, c.value, c.description));
             }
+            buf.append(String.format(formatString, "TOTAL", 100.0D, total, ""));
+
             return buf.toString();
         }
     }
@@ -95,18 +90,9 @@ public class SnippetCounter implements Comparable<SnippetCounter> {
     private final String description;
     private long value;
 
-    @Fold
-    private static int countOffset() {
-        try {
-            return (int) unsafe.objectFieldOffset(SnippetCounter.class.getDeclaredField("value"));
-        } catch (Exception e) {
-            throw new GraalInternalError(e);
-        }
-    }
-
     /**
      * Creates a counter.
-     * 
+     *
      * @param group the group to which the counter belongs. If this is null, the newly created
      *            counter is disabled and {@linkplain #inc() incrementing} is a no-op.
      * @param name the name of the counter
@@ -129,14 +115,22 @@ public class SnippetCounter implements Comparable<SnippetCounter> {
     }
 
     /**
-     * Increments the value of this counter. This method can be safely used in a snippet if it is
-     * invoked on a compile-time constant {@link SnippetCounter} object.
+     * Increments the value of this counter. This method can only be used in a snippet on a
+     * compile-time constant {@link SnippetCounter} object.
      */
     public void inc() {
         if (group != null) {
-            // TODO: instead of ANY_LOCATION we should actually
-            // use the location for the field "value".
-            DirectObjectStoreNode.storeLong(this, countOffset(), 0, value + 1, LocationIdentity.ANY_LOCATION);
+            SnippetCounterNode.increment(this);
+        }
+    }
+
+    /**
+     * Increments the value of this counter. This method can only be used in a snippet on a
+     * compile-time constant {@link SnippetCounter} object.
+     */
+    public void add(int increment) {
+        if (group != null) {
+            SnippetCounterNode.add(this, increment);
         }
     }
 
@@ -145,6 +139,14 @@ public class SnippetCounter implements Comparable<SnippetCounter> {
      */
     public long value() {
         return value;
+    }
+
+    @Override
+    public String toString() {
+        if (group != null) {
+            return "SnippetCounter-" + group.name + ":" + name;
+        }
+        return super.toString();
     }
 
     /**
