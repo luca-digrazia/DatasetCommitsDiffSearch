@@ -74,9 +74,6 @@ final class PolyglotLanguageContext implements VMObject {
     volatile boolean creating; // true when context is currently being created.
     volatile boolean initialized;
     volatile boolean finalized;
-    private volatile Object guestBindings;
-    private volatile Object polyglotGuestBindings;
-    private volatile Value hostBindings;
     @CompilationFinal volatile Env env;
     private final Node keyInfoNode = Message.KEY_INFO.createNode();
     private final Node readNode = Message.READ.createNode();
@@ -100,41 +97,6 @@ final class PolyglotLanguageContext implements VMObject {
         PolyglotValue.createDefaultValueCaches(this);
         nullValue = toHostValue(toGuestValue(null));
         defaultValueCache = new PolyglotValue.Default(this);
-    }
-
-    Value getHostBindings() {
-        Value bindings = this.hostBindings;
-        if (bindings == null) {
-            initializeLanguageBindings();
-            bindings = hostBindings;
-            assert bindings != null;
-        }
-        return bindings;
-    }
-
-    Object getPolyglotGuestBindings() {
-        Object bindings = this.polyglotGuestBindings;
-        if (bindings == null) {
-            initializeLanguageBindings();
-            bindings = polyglotGuestBindings;
-            assert bindings != null;
-        }
-        return bindings;
-    }
-
-    private void initializeLanguageBindings() {
-        Object prev = enter();
-        try {
-            ensureInitialized(null);
-            Iterable<Scope> scopes = LANGUAGE.findTopScopes(env);
-            this.guestBindings = new PolyglotLanguageBindings(scopes);
-            this.polyglotGuestBindings = new PolyglotBindings(this, context.polyglotBindings);
-            this.hostBindings = this.toHostValue(guestBindings);
-        } catch (Throwable e) {
-            throw PolyglotImpl.wrapGuestException(this, e);
-        } finally {
-            leave(prev);
-        }
     }
 
     boolean isInitialized() {
@@ -319,7 +281,6 @@ final class PolyglotLanguageContext implements VMObject {
                             }
                             LANGUAGE.initializeThread(env, threadInfo.thread);
                         }
-
                         wasInitialized = true;
                     } catch (Throwable e) {
                         // language not successfully initialized, reset to avoid inconsistent
@@ -438,7 +399,7 @@ final class PolyglotLanguageContext implements VMObject {
                     toGuestValue[i] = createToGuestValue();
                 }
             }
-            if (args.length == 0) {
+            if (cachedLength == 0) {
                 return args;
             } else if (cachedLength == args.length) {
                 // fast path
@@ -584,18 +545,19 @@ final class PolyglotLanguageContext implements VMObject {
         assert !(value instanceof Value);
         Object receiver = value;
         PolyglotValue cache = valueCache.get(receiver.getClass());
+        final APIAccess apiAccess = context.engine.impl.getAPIAccess();
         if (cache == null) {
             receiver = convertToInterop(receiver);
             cache = lookupValueCache(receiver);
         }
-        return getAPIAccess().newValue(receiver, cache);
+        return apiAccess.newValue(receiver, cache);
     }
 
-    TruffleObject convertToInterop(Object receiver) {
+    Object convertToInterop(Object receiver) {
         if (receiver instanceof Proxy) {
             return PolyglotProxy.toProxyGuestObject(PolyglotLanguageContext.this, (Proxy) receiver);
         } else {
-            return (TruffleObject) JAVAINTEROP.toJavaGuestObject(receiver, PolyglotLanguageContext.this);
+            return JAVAINTEROP.toJavaGuestObject(receiver, PolyglotLanguageContext.this);
         }
     }
 
@@ -656,7 +618,9 @@ final class PolyglotLanguageContext implements VMObject {
                 }
             }
             return toHostValue(value);
+
         }
+
     }
 
     ToHostValueNode createToHostValue() {
