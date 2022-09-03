@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@ package com.oracle.graal.asm.amd64;
 
 import static com.oracle.graal.asm.amd64.AMD64AsmOptions.*;
 
+import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
@@ -37,26 +38,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         super(target, registerConfig);
     }
 
-    public void pushptr(Address src) {
-        pushq(src);
-    }
-
-    public void popptr(Address src) {
-        popq(src);
-    }
-
-    public void xorptr(Register dst, Register src) {
-        xorq(dst, src);
-    }
-
-    public void xorptr(Register dst, Address src) {
-        xorq(dst, src);
-    }
-
-    // 64 bit versions
-
-
-    public void decrementq(Register reg, int value) {
+    public final void decrementq(Register reg, int value) {
         if (value == Integer.MIN_VALUE) {
             subq(reg, value);
             return;
@@ -72,6 +54,25 @@ public class AMD64MacroAssembler extends AMD64Assembler {
             decq(reg);
         } else {
             subq(reg, value);
+        }
+    }
+
+    public final void decrementq(AMD64Address dst, int value) {
+        if (value == Integer.MIN_VALUE) {
+            subq(dst, value);
+            return;
+        }
+        if (value < 0) {
+            incrementq(dst, -value);
+            return;
+        }
+        if (value == 0) {
+            return;
+        }
+        if (value == 1 && UseIncDec) {
+            decq(dst);
+        } else {
+            subq(dst, value);
         }
     }
 
@@ -94,83 +95,46 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    // These are mostly for initializing null
-    public void movptr(Address dst, int src) {
+    public final void incrementq(AMD64Address dst, int value) {
+        if (value == Integer.MIN_VALUE) {
+            addq(dst, value);
+            return;
+        }
+        if (value < 0) {
+            decrementq(dst, -value);
+            return;
+        }
+        if (value == 0) {
+            return;
+        }
+        if (value == 1 && UseIncDec) {
+            incq(dst);
+        } else {
+            addq(dst, value);
+        }
+    }
+
+    public final void movptr(Register dst, AMD64Address src) {
+        movq(dst, src);
+    }
+
+    public final void movptr(AMD64Address dst, Register src) {
+        movq(dst, src);
+    }
+
+    public final void movptr(AMD64Address dst, int src) {
         movslq(dst, src);
     }
 
-    public final void cmp32(Register src1, int imm) {
-        cmpl(src1, imm);
-    }
-
-    public final void cmp32(Register src1, Address src2) {
-        cmpl(src1, src2);
-    }
-
-    public void cmpsd2int(Register opr1, Register opr2, Register dst, boolean unorderedIsLess) {
-        assert opr1.isFpu() && opr2.isFpu();
-        ucomisd(opr1, opr2);
-
-        Label l = new Label();
-        if (unorderedIsLess) {
-            movl(dst, -1);
-            jcc(AMD64Assembler.ConditionFlag.parity, l);
-            jcc(AMD64Assembler.ConditionFlag.below, l);
-            movl(dst, 0);
-            jcc(AMD64Assembler.ConditionFlag.equal, l);
-            incrementl(dst, 1);
-        } else { // unordered is greater
-            movl(dst, 1);
-            jcc(AMD64Assembler.ConditionFlag.parity, l);
-            jcc(AMD64Assembler.ConditionFlag.above, l);
-            movl(dst, 0);
-            jcc(AMD64Assembler.ConditionFlag.equal, l);
-            decrementl(dst, 1);
-        }
-        bind(l);
-    }
-
-    public void cmpss2int(Register opr1, Register opr2, Register dst, boolean unorderedIsLess) {
-        assert opr1.isFpu();
-        assert opr2.isFpu();
-        ucomiss(opr1, opr2);
-
-        Label l = new Label();
-        if (unorderedIsLess) {
-            movl(dst, -1);
-            jcc(AMD64Assembler.ConditionFlag.parity, l);
-            jcc(AMD64Assembler.ConditionFlag.below, l);
-            movl(dst, 0);
-            jcc(AMD64Assembler.ConditionFlag.equal, l);
-            incrementl(dst, 1);
-        } else { // unordered is greater
-            movl(dst, 1);
-            jcc(AMD64Assembler.ConditionFlag.parity, l);
-            jcc(AMD64Assembler.ConditionFlag.above, l);
-            movl(dst, 0);
-            jcc(AMD64Assembler.ConditionFlag.equal, l);
-            decrementl(dst, 1);
-        }
-        bind(l);
-    }
-
-    public void cmpptr(Register src1, Register src2) {
+    public final void cmpptr(Register src1, Register src2) {
         cmpq(src1, src2);
     }
 
-    public void cmpptr(Register src1, Address src2) {
+    public final void cmpptr(Register src1, AMD64Address src2) {
         cmpq(src1, src2);
     }
 
-    public void cmpptr(Register src1, int src2) {
-        cmpq(src1, src2);
-    }
-
-    public void cmpptr(Address src1, int src2) {
-        cmpq(src1, src2);
-    }
-
-    public void decrementl(Register reg, int value) {
+    public final void decrementl(Register reg, int value) {
         if (value == Integer.MIN_VALUE) {
             subl(reg, value);
             return;
@@ -189,7 +153,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public void decrementl(Address dst, int value) {
+    public final void decrementl(AMD64Address dst, int value) {
         if (value == Integer.MIN_VALUE) {
             subl(dst, value);
             return;
@@ -208,7 +172,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public void incrementl(Register reg, int value) {
+    public final void incrementl(Register reg, int value) {
         if (value == Integer.MIN_VALUE) {
             addl(reg, value);
             return;
@@ -227,7 +191,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public void incrementl(Address dst, int value) {
+    public final void incrementl(AMD64Address dst, int value) {
         if (value == Integer.MIN_VALUE) {
             addl(dst, value);
             return;
@@ -246,22 +210,8 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public void signExtendByte(Register reg) {
-        if (reg.isByte()) {
-            movsxb(reg, reg); // movsxb
-        } else {
-            shll(reg, 24);
-            sarl(reg, 24);
-        }
-    }
-
-    public void signExtendShort(Register reg) {
-        movsxw(reg, reg); // movsxw
-    }
-
-    // Support optimal SSE move instructions.
     public void movflt(Register dst, Register src) {
-        assert dst.isFpu() && src.isFpu();
+        assert dst.getRegisterCategory().equals(AMD64.XMM) && src.getRegisterCategory().equals(AMD64.XMM);
         if (UseXmmRegToRegMoveAll) {
             movaps(dst, src);
         } else {
@@ -269,18 +219,18 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public void movflt(Register dst, Address src) {
-        assert dst.isFpu();
+    public void movflt(Register dst, AMD64Address src) {
+        assert dst.getRegisterCategory().equals(AMD64.XMM);
         movss(dst, src);
     }
 
-    public void movflt(Address dst, Register src) {
-        assert src.isFpu();
+    public void movflt(AMD64Address dst, Register src) {
+        assert src.getRegisterCategory().equals(AMD64.XMM);
         movss(dst, src);
     }
 
     public void movdbl(Register dst, Register src) {
-        assert dst.isFpu() && src.isFpu();
+        assert dst.getRegisterCategory().equals(AMD64.XMM) && src.getRegisterCategory().equals(AMD64.XMM);
         if (UseXmmRegToRegMoveAll) {
             movapd(dst, src);
         } else {
@@ -288,8 +238,8 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public void movdbl(Register dst, Address src) {
-        assert dst.isFpu();
+    public void movdbl(Register dst, AMD64Address src) {
+        assert dst.getRegisterCategory().equals(AMD64.XMM);
         if (UseXmmLoadAndClearUpper) {
             movsd(dst, src);
         } else {
@@ -297,96 +247,95 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public void movdbl(Address dst, Register src) {
-        assert src.isFpu();
+    public void movdbl(AMD64Address dst, Register src) {
+        assert src.getRegisterCategory().equals(AMD64.XMM);
         movsd(dst, src);
     }
 
     /**
-     * Non-atomic write of a 64-bit constant to memory. Do not use
-     * if the address might be a volatile field!
+     * Non-atomic write of a 64-bit constant to memory. Do not use if the address might be a
+     * volatile field!
      */
-    public void movlong(Address dst, long src) {
-        Address high = new Address(dst.getKind(), dst.getBase(), dst.getIndex(), dst.getScale(), dst.getDisplacement() + 4);
-        movl(dst, (int) (src & 0xFFFFFFFF));
-        movl(high, (int) (src >> 32));
+    public final void movlong(AMD64Address dst, long src) {
+        if (NumUtil.isInt(src)) {
+            AMD64MIOp.MOV.emit(this, OperandSize.QWORD, dst, (int) src);
+        } else {
+            AMD64Address high = new AMD64Address(dst.getBase(), dst.getIndex(), dst.getScale(), dst.getDisplacement() + 4);
+            movl(dst, (int) (src & 0xFFFFFFFF));
+            movl(high, (int) (src >> 32));
+        }
+
     }
 
-    public void xchgptr(Register src1, Register src2) {
-        xchgq(src1, src2);
-    }
-
-    public void flog(Register dest, Register value, boolean base10) {
-        assert value.spillSlotSize == dest.spillSlotSize;
-
-        Address tmp = new Address(Kind.Double, AMD64.RSP);
+    public final void flog(Register dest, Register value, boolean base10) {
         if (base10) {
             fldlg2();
         } else {
             fldln2();
         }
-        subq(AMD64.rsp, value.spillSlotSize);
-        movsd(tmp, value);
-        fld(tmp);
+        AMD64Address tmp = trigPrologue(value);
         fyl2x();
-        fstp(tmp);
-        movsd(dest, tmp);
-        addq(AMD64.rsp, dest.spillSlotSize);
+        trigEpilogue(dest, tmp);
     }
 
-    public void fsin(Register dest, Register value) {
-        ftrig(dest, value, 's');
+    public final void fsin(Register dest, Register value) {
+        AMD64Address tmp = trigPrologue(value);
+        fsin();
+        trigEpilogue(dest, tmp);
     }
 
-    public void fcos(Register dest, Register value) {
-        ftrig(dest, value, 'c');
+    public final void fcos(Register dest, Register value) {
+        AMD64Address tmp = trigPrologue(value);
+        fcos();
+        trigEpilogue(dest, tmp);
     }
 
-    public void ftan(Register dest, Register value) {
-        ftrig(dest, value, 't');
+    public final void ftan(Register dest, Register value) {
+        AMD64Address tmp = trigPrologue(value);
+        fptan();
+        fstp(0); // ftan pushes 1.0 in addition to the actual result, pop
+        trigEpilogue(dest, tmp);
     }
 
-    private void ftrig(Register dest, Register value, char op) {
-        assert value.spillSlotSize == dest.spillSlotSize;
+    public final void fpop() {
+        ffree(0);
+        fincstp();
+    }
 
-        Address tmp = new Address(Kind.Double, AMD64.RSP);
-        subq(AMD64.rsp, value.spillSlotSize);
-        movsd(tmp, value);
-        fld(tmp);
-        if (op == 's') {
-            fsin();
-        } else if (op == 'c') {
-            fcos();
-        } else if (op == 't') {
-            fptan();
-            fstp(0); // ftan pushes 1.0 in addition to the actual result, pop
-        } else {
-            throw new InternalError("should not reach here");
-        }
-        fstp(tmp);
-        movsd(dest, tmp);
-        addq(AMD64.rsp, dest.spillSlotSize);
+    private AMD64Address trigPrologue(Register value) {
+        assert value.getRegisterCategory().equals(AMD64.XMM);
+        AMD64Address tmp = new AMD64Address(AMD64.rsp);
+        subq(AMD64.rsp, target.getSizeInBytes(Kind.Double));
+        movdbl(tmp, value);
+        fldd(tmp);
+        return tmp;
+    }
+
+    private void trigEpilogue(Register dest, AMD64Address tmp) {
+        assert dest.getRegisterCategory().equals(AMD64.XMM);
+        fstpd(tmp);
+        movdbl(dest, tmp);
+        addq(AMD64.rsp, target.getSizeInBytes(Kind.Double));
     }
 
     /**
-     * Emit code to save a given set of callee save registers in the
-     * {@linkplain CalleeSaveLayout CSA} within the frame.
+     * Emit code to save a given set of callee save registers in the {@linkplain CalleeSaveLayout
+     * CSA} within the frame.
+     *
      * @param csl the description of the CSA
      * @param frameToCSA offset from the frame pointer to the CSA
      */
-    public void save(CalleeSaveLayout csl, int frameToCSA) {
-        RegisterValue frame = frameRegister.asValue();
+    public final void save(CalleeSaveLayout csl, int frameToCSA) {
         for (Register r : csl.registers) {
             int offset = csl.offsetOf(r);
-            movq(new Address(target.wordKind, frame, frameToCSA + offset), r);
+            movq(new AMD64Address(frameRegister, frameToCSA + offset), r);
         }
     }
 
-    public void restore(CalleeSaveLayout csl, int frameToCSA) {
-        RegisterValue frame = frameRegister.asValue();
+    public final void restore(CalleeSaveLayout csl, int frameToCSA) {
         for (Register r : csl.registers) {
             int offset = csl.offsetOf(r);
-            movq(r, new Address(target.wordKind, frame, frameToCSA + offset));
+            movq(r, new AMD64Address(frameRegister, frameToCSA + offset));
         }
     }
 }
