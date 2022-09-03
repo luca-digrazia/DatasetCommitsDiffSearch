@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,18 +29,18 @@
  */
 package com.oracle.truffle.llvm.parser.model.symbols.instructions;
 
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
-import com.oracle.truffle.llvm.parser.model.SymbolTable;
 import com.oracle.truffle.llvm.parser.model.enums.AtomicOrdering;
 import com.oracle.truffle.llvm.parser.model.enums.SynchronizationScope;
-import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
-import com.oracle.truffle.llvm.runtime.types.AggregateType;
+import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
+import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitor;
+import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 
 public final class CompareExchangeInstruction extends ValueInstruction {
 
-    private SymbolImpl ptr;
-    private SymbolImpl cmp;
-    private SymbolImpl replace;
+    private Symbol ptr;
+    private Symbol cmp;
+    private Symbol replace;
 
     private final AtomicOrdering successOrdering;
     private final AtomicOrdering failureOrdering;
@@ -49,8 +49,7 @@ public final class CompareExchangeInstruction extends ValueInstruction {
     private final boolean isWeak;
     private final boolean isVolatile;
 
-    private CompareExchangeInstruction(AggregateType type, AtomicOrdering successOrdering, AtomicOrdering failureOrdering, SynchronizationScope synchronizationScope, boolean isWeak,
-                    boolean isVolatile) {
+    private CompareExchangeInstruction(Type type, AtomicOrdering successOrdering, AtomicOrdering failureOrdering, SynchronizationScope synchronizationScope, boolean isWeak, boolean isVolatile) {
         super(type);
         this.successOrdering = successOrdering;
         this.failureOrdering = failureOrdering;
@@ -59,21 +58,16 @@ public final class CompareExchangeInstruction extends ValueInstruction {
         this.isVolatile = isVolatile;
     }
 
-    public SymbolImpl getPtr() {
+    public Symbol getPtr() {
         return ptr;
     }
 
-    public SymbolImpl getCmp() {
+    public Symbol getCmp() {
         return cmp;
     }
 
-    public SymbolImpl getReplace() {
+    public Symbol getReplace() {
         return replace;
-    }
-
-    @Override
-    public AggregateType getType() {
-        return (AggregateType) super.getType();
     }
 
     public AtomicOrdering getSuccessOrdering() {
@@ -97,7 +91,7 @@ public final class CompareExchangeInstruction extends ValueInstruction {
     }
 
     @Override
-    public void replace(SymbolImpl original, SymbolImpl replacement) {
+    public void replace(Symbol original, Symbol replacement) {
         if (original == ptr) {
             ptr = replacement;
         }
@@ -110,20 +104,20 @@ public final class CompareExchangeInstruction extends ValueInstruction {
     }
 
     @Override
-    public void accept(SymbolVisitor visitor) {
+    public void accept(InstructionVisitor visitor) {
         visitor.visit(this);
     }
 
-    public static CompareExchangeInstruction fromSymbols(SymbolTable symbols, AggregateType type, int ptr, int cmp, int replace, boolean isVolatile, long successOrderingId,
-                    long synchronizationScopeId, long failureOrderingId, boolean isWeak) {
+    public static CompareExchangeInstruction fromSymbols(Symbols symbols, Type type, int ptr, int cmp, int replace, boolean isVolatile, long successOrderingId, long synchronizationScopeId,
+                    long failureOrderingId, boolean isWeak) {
         final AtomicOrdering successOrdering = AtomicOrdering.decode(successOrderingId);
         final SynchronizationScope synchronizationScope = SynchronizationScope.decode(synchronizationScopeId);
         final AtomicOrdering failureOrdering = AtomicOrdering.getOrStrongestFailureOrdering(failureOrderingId, successOrdering);
 
         final CompareExchangeInstruction cmpxchg = new CompareExchangeInstruction(type, successOrdering, failureOrdering, synchronizationScope, isWeak, isVolatile);
-        cmpxchg.ptr = symbols.getForwardReferenced(ptr, cmpxchg);
-        cmpxchg.cmp = symbols.getForwardReferenced(cmp, cmpxchg);
-        cmpxchg.replace = symbols.getForwardReferenced(replace, cmpxchg);
+        cmpxchg.ptr = symbols.getSymbol(ptr, cmpxchg);
+        cmpxchg.cmp = symbols.getSymbol(cmp, cmpxchg);
+        cmpxchg.replace = symbols.getSymbol(replace, cmpxchg);
         return cmpxchg;
     }
 }

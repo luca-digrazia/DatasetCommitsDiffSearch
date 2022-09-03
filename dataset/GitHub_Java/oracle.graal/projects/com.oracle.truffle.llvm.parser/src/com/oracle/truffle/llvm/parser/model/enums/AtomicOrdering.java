@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -38,8 +38,6 @@ public enum AtomicOrdering {
     ACQUIRE_RELEASE(5L, "acq_rel"),
     SEQUENTIALLY_CONSISTENT(6L, "seq_cst");
 
-    private static final AtomicOrdering[] VALUES = values();
-
     private final long encodedValue;
     private final String irString;
 
@@ -60,7 +58,7 @@ public enum AtomicOrdering {
     }
 
     public static AtomicOrdering decode(long id) {
-        for (AtomicOrdering atomicOrdering : VALUES) {
+        for (AtomicOrdering atomicOrdering : values()) {
             if (atomicOrdering.getEncodedValue() == id) {
                 return atomicOrdering;
             }
@@ -69,7 +67,7 @@ public enum AtomicOrdering {
     }
 
     public static AtomicOrdering getOrStrongestFailureOrdering(long id, AtomicOrdering successOrdering) {
-        for (AtomicOrdering atomicOrdering : VALUES) {
+        for (AtomicOrdering atomicOrdering : values()) {
             if (atomicOrdering.getEncodedValue() == id) {
                 return atomicOrdering;
             }

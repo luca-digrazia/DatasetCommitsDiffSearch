@@ -334,14 +334,13 @@ public class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode tryCreateFunctionCallSubstitution(LLVMParserRuntime runtime, String name, LLVMExpressionNode[] argNodes, Type[] argTypes, int numberOfExplicitArguments,
-                    FrameSlot exceptionValueSlot) {
+    public LLVMExpressionNode tryCreateFunctionCallSubstitution(LLVMParserRuntime runtime, String name, LLVMExpressionNode[] argNodes, int numberOfExplicitArguments, FrameSlot exceptionValueSlot) {
         return null;
     }
 
     @Override
     public LLVMControlFlowNode tryCreateFunctionInvokeSubstitution(LLVMParserRuntime runtime, String name, FunctionType type, int numberOfExplicitArguments, LLVMExpressionNode[] argNodes,
-                    Type[] argTypes, FrameSlot returnValueSlot,
+                    FrameSlot returnValueSlot,
                     FrameSlot exceptionValueSlot, int normalIndex, int unwindIndex, LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
         return null;
     }

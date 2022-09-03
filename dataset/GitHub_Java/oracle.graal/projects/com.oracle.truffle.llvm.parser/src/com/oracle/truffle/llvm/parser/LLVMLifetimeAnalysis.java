@@ -40,6 +40,7 @@ import java.util.Set;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
+import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.AllocateInstruction;
@@ -47,6 +48,7 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.BinaryOperation
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.BranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CallInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CastInstruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareExchangeInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ConditionalBranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractElementInstruction;
@@ -56,8 +58,11 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.IndirectBranchI
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertElementInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.InvokeInstruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.LandingpadInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.LoadInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.PhiInstruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.ResumeInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReturnInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.SelectInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ShuffleVectorInstruction;
@@ -68,13 +73,13 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.TerminatingInst
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
 import com.oracle.truffle.llvm.parser.model.visitors.AbstractTerminatingInstructionVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitor;
-import com.oracle.truffle.llvm.parser.model.visitors.ValueSymbolVisitor;
+import com.oracle.truffle.llvm.parser.model.visitors.ValueInstructionVisitor;
 import com.oracle.truffle.llvm.parser.util.LLVMParserAsserts;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
-import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
@@ -141,8 +146,10 @@ public final class LLVMLifetimeAnalysis {
             instruction.accept(new InstructionVisitor() {
 
                 private void resolve(Symbol symbol) {
-                    if (symbol.hasName() && !(symbol instanceof GlobalValueSymbol || symbol instanceof FunctionType)) {
-                        final FrameSlot frameSlot = frame.findFrameSlot(((ValueSymbol) symbol).getName());
+                    if (symbol.hasName() && !(symbol instanceof GlobalValueSymbol || symbol instanceof FunctionDefinition || symbol instanceof FunctionDeclaration)) {
+                        String name = ((ValueSymbol) symbol).getName();
+                        assert name != null;
+                        final FrameSlot frameSlot = frame.findFrameSlot(name);
                         if (frameSlot == null) {
                             throw new AssertionError("No Frameslot for ValueSymbol: " + symbol);
                         } else {
@@ -167,6 +174,14 @@ public final class LLVMLifetimeAnalysis {
                 }
 
                 @Override
+                public void visit(InvokeInstruction call) {
+                    for (int i = 0; i < call.getArgumentCount(); i++) {
+                        resolve(call.getArgument(i));
+                    }
+                    resolve(call.getCallTarget());
+                }
+
+                @Override
                 public void visit(CallInstruction call) {
                     for (int i = 0; i < call.getArgumentCount(); i++) {
                         resolve(call.getArgument(i));
@@ -177,6 +192,13 @@ public final class LLVMLifetimeAnalysis {
                 @Override
                 public void visit(CastInstruction cast) {
                     resolve(cast.getValue());
+                }
+
+                @Override
+                public void visit(LandingpadInstruction landingpadInstruction) {
+                    if (landingpadInstruction.getValue() != null) {
+                        resolve(landingpadInstruction.getValue());
+                    }
                 }
 
                 @Override
@@ -247,6 +269,20 @@ public final class LLVMLifetimeAnalysis {
                 }
 
                 @Override
+                public void visit(ResumeInstruction resume) {
+                    if (resume.getValue() != null) {
+                        resolve(resume.getValue());
+                    }
+                }
+
+                @Override
+                public void visit(CompareExchangeInstruction cmpxchg) {
+                    resolve(cmpxchg.getPtr());
+                    resolve(cmpxchg.getCmp());
+                    resolve(cmpxchg.getReplace());
+                }
+
+                @Override
                 public void visit(SelectInstruction select) {
                     resolve(select.getCondition());
                     resolve(select.getTrueValue());
@@ -284,6 +320,14 @@ public final class LLVMLifetimeAnalysis {
 
                 @Override
                 public void visit(VoidCallInstruction call) {
+                    for (int i = 0; i < call.getArgumentCount(); i++) {
+                        resolve(call.getArgument(i));
+                    }
+                    resolve(call.getCallTarget());
+                }
+
+                @Override
+                public void visit(VoidInvokeInstruction call) {
                     for (int i = 0; i < call.getArgumentCount(); i++) {
                         resolve(call.getArgument(i));
                     }
@@ -349,8 +393,9 @@ public final class LLVMLifetimeAnalysis {
             final InstructionVisitor initSuccessorsVisitor = new AbstractTerminatingInstructionVisitor() {
                 @Override
                 public void visitTerminatingInstruction(TerminatingInstruction instruction) {
-                    successorBlocks.put(instruction, instruction.getSuccessors());
+                    successorBlocks.put((Instruction) instruction, instruction.getSuccessors());
                 }
+
             };
             functionDefinition.accept(block -> block.accept(initSuccessorsVisitor));
         }
@@ -367,7 +412,7 @@ public final class LLVMLifetimeAnalysis {
         }
 
         private void initializeInstructionInOuts() {
-            final InstructionVisitor initEndKillsVisitor = new ValueSymbolVisitor() {
+            final InstructionVisitor initEndKillsVisitor = new ValueInstructionVisitor() {
                 @Override
                 public void visitValueInstruction(ValueInstruction valueInstruction) {
                     bbEndKills.put(valueInstruction, new HashSet<>());
@@ -391,8 +436,10 @@ public final class LLVMLifetimeAnalysis {
                     if (i == bb.getInstructionCount() - 1) {
                         for (final LLVMPhiManager.Phi phi : bbPhis) {
                             final Symbol val = phi.getValue();
-                            if (val.hasName() && !(val instanceof GlobalValueSymbol || val instanceof FunctionType)) {
-                                uses.add(getFrameSlot(((ValueSymbol) val).getName()));
+                            if (val.hasName() && !(val instanceof GlobalValueSymbol || val instanceof FunctionDefinition || val instanceof FunctionDeclaration)) {
+                                String name = ((ValueSymbol) val).getName();
+                                assert name != null;
+                                uses.add(getFrameSlot(name));
                             }
                         }
                     }
@@ -404,7 +451,7 @@ public final class LLVMLifetimeAnalysis {
         }
 
         private void initializeVariableDefinitions() {
-            final InstructionVisitor initVarDefVisitor = new ValueSymbolVisitor() {
+            final InstructionVisitor initVarDefVisitor = new ValueInstructionVisitor() {
                 @Override
                 public void visitValueInstruction(ValueInstruction valueInstruction) {
                     final Set<FrameSlot> instructionDefs = new HashSet<>(1);
@@ -426,7 +473,7 @@ public final class LLVMLifetimeAnalysis {
                         final Instruction inst = block.getInstruction(i);
 
                         // update out
-                        if (inst.isTerminating()) {
+                        if (inst instanceof TerminatingInstruction) {
                             // non sequential successor
                             // out[n] = in[n+1, n+2, ...]
                             assert i == block.getInstructionCount() - 1;
@@ -477,7 +524,7 @@ public final class LLVMLifetimeAnalysis {
                     final Set<FrameSlot> outSlots = out.getOrDefault(inst, new HashSet<>(0));
                     final Set<FrameSlot> instructionKills = new HashSet<>(inSlots);
                     instructionKills.removeAll(outSlots);
-                    if (inst.isTerminating()) {
+                    if (inst instanceof TerminatingInstruction) {
                         for (final InstructionBlock bas : successorBlocks.getOrDefault(inst, Collections.emptyList())) {
                             final Instruction firstInst = getFirstNonPhiInstruction(bas);
                             Set<FrameSlot> deadAtBegin = new HashSet<>(out.getOrDefault(inst, new HashSet<>(0)));
