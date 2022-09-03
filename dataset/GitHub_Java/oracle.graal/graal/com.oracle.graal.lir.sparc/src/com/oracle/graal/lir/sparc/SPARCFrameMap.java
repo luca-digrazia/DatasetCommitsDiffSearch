@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.sparc.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.sparc.*;
 
 /**
  * SPARC specific frame map.
@@ -36,6 +35,7 @@ import com.oracle.graal.lir.framemap.*;
  *
  * <pre>
  *   Base       Contents
+ *
  *            :                                :  -----
  *   caller   | incoming overflow argument n   |    ^
  *   frame    :     ...                        :    | positive
@@ -77,7 +77,7 @@ public final class SPARCFrameMap extends FrameMap {
 
     public SPARCFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig) {
         super(codeCache, registerConfig);
-        // Initial spill size is set to register save area size (SPARC register window)
+        // offset relative to sp + total frame size
         initialSpillSize = 0;
         spillSize = initialSpillSize;
     }
@@ -89,12 +89,7 @@ public final class SPARCFrameMap extends FrameMap {
 
     @Override
     public int currentFrameSize() {
-        return alignFrameSize(calleeSaveAreaSize() + outgoingSize + spillSize);
-    }
-
-    @Override
-    protected int calleeSaveAreaSize() {
-        return SPARC.REGISTER_SAFE_AREA_SIZE;
+        return alignFrameSize(calleeSaveAreaSize() + returnAddressSize() + outgoingSize + spillSize);
     }
 
     @Override
@@ -120,15 +115,16 @@ public final class SPARCFrameMap extends FrameMap {
         return SPARC.spillSlotSize(getTarget(), kind.getPlatformKind());
     }
 
+    /**
+     * We must add the calleSaveAreaSize() when it is a in or out parameter.
+     */
     @Override
     public int offsetForStackSlot(StackSlot slot) {
-        // @formatter:off
-        assert (!slot.getRawAddFrameSize() && slot.getRawOffset() <  outgoingSize + SPARC.REGISTER_SAFE_AREA_SIZE) ||
-               (slot.getRawAddFrameSize() && slot.getRawOffset()  <  0 && -slot.getRawOffset() <= spillSize) ||
-               (slot.getRawAddFrameSize() && slot.getRawOffset()  >= 0) :
-                   String.format("RawAddFrameSize: %b RawOffset: 0x%x spillSize: 0x%x outgoingSize: 0x%x", slot.getRawAddFrameSize(), slot.getRawOffset(), spillSize, outgoingSize);
-        // @formatter:on
-        return super.offsetForStackSlot(slot);
+        int offset = super.offsetForStackSlot(slot);
+        if (slot.getRawOffset() >= 0) { // If In or Out parameter
+            offset += calleeSaveAreaSize();
+        }
+        return offset;
     }
 
     @Override

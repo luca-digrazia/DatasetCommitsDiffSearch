@@ -24,12 +24,10 @@ package com.oracle.graal.replacements;
 
 import java.io.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.compiler.common.spi.*;
 
 //JaCoCo Exclude
 
@@ -42,7 +40,7 @@ public final class Log {
     public static final ForeignCallDescriptor LOG_OBJECT = new ForeignCallDescriptor("logObject", void.class, Object.class, int.class);
     public static final ForeignCallDescriptor LOG_PRINTF = new ForeignCallDescriptor("logPrintf", void.class, Object.class, long.class, long.class, long.class);
 
-    // Note: Must be kept in sync with constants in jvmciRuntime.hpp
+    // Note: Must be kept in sync with constants in graalRuntime.hpp
     private static final int LOG_OBJECT_NEWLINE = 0x01;
     private static final int LOG_OBJECT_STRING = 0x02;
     private static final int LOG_OBJECT_ADDRESS = 0x04;

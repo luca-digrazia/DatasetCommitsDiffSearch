@@ -24,13 +24,13 @@ package com.oracle.graal.api.code;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 
 /**
- * The callee save area (CSA) is a contiguous space in a stack frame
- * used to save (and restore) the values of the caller's registers.
- * This class describes the layout of a CSA in terms of its
- * {@linkplain #size size}, {@linkplain #slotSize slot size} and
- * the {@linkplain #registers callee save registers} covered by the CSA.
+ * The callee save area (CSA) is a contiguous space in a stack frame used to save (and restore) the
+ * values of the caller's registers. This class describes the layout of a CSA in terms of its
+ * {@linkplain #size size}, {@linkplain #slotSize slot size} and the {@linkplain #registers callee
+ * save registers} covered by the CSA.
  */
 public class CalleeSaveLayout {
 
@@ -40,7 +40,7 @@ public class CalleeSaveLayout {
     public final int size;
 
     /**
-     * The size (in bytes) of an {@linkplain #registerAtIndex(int) indexable} slot in the CSA.
+     * The size (in bytes) of an {@linkplain #registerAt(int) indexable} slot in the CSA.
      */
     public final int slotSize;
 
@@ -52,24 +52,26 @@ public class CalleeSaveLayout {
     private final Register[] indexToReg;
 
     /**
-     * The list of registers {@linkplain #contains(Register) contained} by this CSA.
+     * The list of registers {@linkplain #contains(int) contained} by this CSA.
      */
     public final Register[] registers;
 
     /**
-     * The offset from the frame pointer to the CSA. If this is not known, then this field
-     * will have the value {@link Integer#MAX_VALUE}.
+     * The offset from the frame pointer to the CSA. If this is not known, then this field will have
+     * the value {@link Integer#MAX_VALUE}.
      */
     public final int frameOffsetToCSA;
 
     /**
      * Creates a CSA layout.
      *
-     * @param size size (in bytes) of the CSA. If this is {@code -1}, then the CSA size will be computed from {@code registers}.
-     * @param slotSize the size (in bytes) of an {@linkplain #registerAtIndex(int) indexable} slot in the CSA
+     * @param size size (in bytes) of the CSA. If this is {@code -1}, then the CSA size will be
+     *            computed from {@code registers}.
+     * @param slotSize the size (in bytes) of an {@linkplain #registerAt(int) indexable} slot in the
+     *            CSA
      * @param registers the registers that can be saved in the CSA
      */
-    public CalleeSaveLayout(int frameOffsetToCSA, int size, int slotSize, Register... registers) {
+    public CalleeSaveLayout(TargetDescription target, int frameOffsetToCSA, int size, int slotSize, Register... registers) {
         this.frameOffsetToCSA = frameOffsetToCSA;
         assert slotSize == 0 || CodeUtil.isPowerOf2(slotSize);
         this.slotSize = slotSize;
@@ -86,7 +88,8 @@ public class CalleeSaveLayout {
             if (offset > maxOffset) {
                 maxOffset = offset;
             }
-            offset += reg.spillSlotSize;
+            PlatformKind kind = target.arch.getLargestStorableKind(reg.getRegisterCategory());
+            offset += target.getSizeInBytes(kind);
         }
         if (size == -1) {
             this.size = offset;
@@ -103,7 +106,8 @@ public class CalleeSaveLayout {
             int index = offset / slotSize;
             regNumToIndex[reg.number] = index;
             indexToReg[index] = reg;
-            offset += reg.spillSlotSize;
+            PlatformKind kind = target.arch.getLargestStorableKind(reg.getRegisterCategory());
+            offset += target.getSizeInBytes(kind);
         }
     }
 
@@ -154,8 +158,8 @@ public class CalleeSaveLayout {
      * Gets the register whose slot in the CSA is at a given index.
      *
      * @param index an index of a slot in the CSA
-     * @return the register whose slot in the CSA is at  {@code index} or {@code null} if {@code index} does not denote a
-     *         slot in the CSA aligned with a register
+     * @return the register whose slot in the CSA is at {@code index} or {@code null} if
+     *         {@code index} does not denote a slot in the CSA aligned with a register
      */
     public Register registerAt(int index) {
         if (index < 0 || index >= indexToReg.length) {

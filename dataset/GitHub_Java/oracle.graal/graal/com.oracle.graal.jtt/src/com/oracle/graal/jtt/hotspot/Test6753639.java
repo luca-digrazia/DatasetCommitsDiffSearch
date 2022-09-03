@@ -22,17 +22,18 @@
  */
 package com.oracle.graal.jtt.hotspot;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /**
  * @test
  * @bug 6753639
  * @summary Strange optimisation in for loop with cyclic integer condition
- * 
+ *
  * @run main/othervm -Xbatch Test6753639
  */
-
+// @formatter:off
 public class Test6753639 extends JTTTest {
 
     public static int test() {

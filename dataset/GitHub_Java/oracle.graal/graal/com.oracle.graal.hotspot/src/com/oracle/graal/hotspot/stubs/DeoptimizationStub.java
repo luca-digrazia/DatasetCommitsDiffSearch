@@ -22,18 +22,17 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.hotspot.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.Options.*;
 import static com.oracle.graal.hotspot.nodes.DeoptimizationFetchUnrollInfoCallNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.stubs.UncommonTrapStub.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
@@ -85,7 +84,7 @@ public class DeoptimizationStub extends SnippetStub {
     private final TargetDescription target;
 
     public DeoptimizationStub(HotSpotProviders providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
-        super(DeoptimizationStub.class, "deoptimizationHandler", providers, linkage);
+        super(DeoptimizationStub.class, "deoptimizationHandler", providers, target, linkage);
         this.target = target;
         assert PreferGraalStubs.getValue();
     }
@@ -103,7 +102,7 @@ public class DeoptimizationStub extends SnippetStub {
             case 1:
                 return providers.getRegisters().getStackPointerRegister();
             default:
-                throw JVMCIError.shouldNotReachHere("unknown parameter " + name + " at index " + index);
+                throw GraalInternalError.shouldNotReachHere("unknown parameter " + name + " at index " + index);
         }
     }
 

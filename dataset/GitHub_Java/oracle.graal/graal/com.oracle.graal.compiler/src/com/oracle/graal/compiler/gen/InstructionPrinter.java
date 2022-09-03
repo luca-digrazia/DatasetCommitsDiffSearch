@@ -22,16 +22,10 @@
  */
 package com.oracle.graal.compiler.gen;
 
-import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.BCI;
-import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.END;
-import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.INSTRUCTION;
-import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.USE;
-import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.VALUE;
+import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.*;
 
-import com.oracle.graal.debug.LogStream;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValueNodeUtil;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * A utility for {@linkplain #printInstruction(ValueNode) printing} a node as an expression or
@@ -69,7 +63,7 @@ public class InstructionPrinter {
         final int position;
         final String label;
 
-        InstructionLineColumn(int position, String label) {
+        private InstructionLineColumn(int position, String label) {
             this.position = position;
             this.label = label;
         }

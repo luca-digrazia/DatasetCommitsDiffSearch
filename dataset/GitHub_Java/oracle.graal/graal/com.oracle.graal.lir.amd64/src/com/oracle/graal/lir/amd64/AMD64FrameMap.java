@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.lir.amd64;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.lir.framemap.*;
 
@@ -36,7 +36,7 @@ import com.oracle.graal.lir.framemap.*;
  *
  * <pre>
  *   Base       Contents
- * 
+ *
  *            :                                :  -----
  *   caller   | incoming overflow argument n   |    ^
  *   frame    :     ...                        :    | positive
@@ -104,17 +104,6 @@ public class AMD64FrameMap extends FrameMap {
     @Override
     protected StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset) {
         return StackSlot.get(kind, -spillSize + additionalOffset, true);
-    }
-
-    @Override
-    public int offsetForStackSlot(StackSlot slot) {
-        // @formatter:off
-        assert (!slot.getRawAddFrameSize() && slot.getRawOffset() <  outgoingSize) ||
-               (slot.getRawAddFrameSize() && slot.getRawOffset()  <  0 && -slot.getRawOffset() <= spillSize) ||
-               (slot.getRawAddFrameSize() && slot.getRawOffset()  >= 0) :
-                   String.format("RawAddFrameSize: %b RawOffset: 0x%x spillSize: 0x%x outgoingSize: 0x%x", slot.getRawAddFrameSize(), slot.getRawOffset(), spillSize, outgoingSize);
-        // @formatter:on
-        return super.offsetForStackSlot(slot);
     }
 
     /**

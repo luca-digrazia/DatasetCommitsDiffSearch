@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.asm.amd64;
 
-import com.oracle.jvmci.code.Register;
-import com.oracle.jvmci.code.AbstractAddress;
+import com.oracle.graal.api.code.*;
 
 /**
  * Represents an address in target machine memory, specified via some combination of a base
@@ -108,21 +107,6 @@ public final class AMD64Address extends AbstractAddress {
                 case 4:
                     return Times4;
                 case 8:
-                    return Times8;
-                default:
-                    return null;
-            }
-        }
-
-        public static Scale fromShift(int shift) {
-            switch (shift) {
-                case 0:
-                    return Times1;
-                case 1:
-                    return Times2;
-                case 2:
-                    return Times4;
-                case 3:
                     return Times8;
                 default:
                     return null;

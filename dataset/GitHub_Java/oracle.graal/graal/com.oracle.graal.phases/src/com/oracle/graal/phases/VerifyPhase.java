@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.phases;
 
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 
 /***
  * This phase serves as a verification, in order to check the graph for certain properties. The
@@ -40,10 +40,6 @@ public abstract class VerifyPhase<C> extends BasePhase<C> {
 
         public VerificationError(String message) {
             super(message);
-        }
-
-        public VerificationError(String format, Object... args) {
-            super(String.format(format, args));
         }
 
         public VerificationError(String message, Throwable cause) {

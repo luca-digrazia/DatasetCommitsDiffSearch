@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,26 +20,25 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.graph;
+package com.oracle.graal.runtime;
+
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.compiler.target.*;
 
 /**
- * This error represents a failed verification of a node . It must only be used for conditions that
- * should never occur during normal operation.
+ * A runtime supporting a host backend as well, zero or more additional backends.
  */
-public class VerificationError extends GraalGraphInternalError {
-
-    private static final long serialVersionUID = 8459607567446819822L;
+public interface RuntimeProvider {
 
     /**
-     * This constructor creates a {@link VerificationError} with a message assembled via
-     * {@link String#format(String, Object...)}. It always uses the ENGLISH locale in order to
-     * always generate the same output.
-     *
-     * @param msg the message that will be associated with the error, in String.format syntax
-     * @param args parameters to String.format - parameters that implement {@link Iterable} will be
-     *            expanded into a [x, x, ...] representation.
+     * Gets the host backend.
      */
-    public VerificationError(String msg, Object... args) {
-        super(msg, args);
-    }
+    Backend getHostBackend();
+
+    /**
+     * Gets the backend for a given architecture.
+     *
+     * @param arch a specific architecture class
+     */
+    <T extends Architecture> Backend getBackend(Class<T> arch);
 }

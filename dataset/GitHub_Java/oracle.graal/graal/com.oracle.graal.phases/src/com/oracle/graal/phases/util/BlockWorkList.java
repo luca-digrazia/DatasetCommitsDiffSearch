@@ -25,21 +25,22 @@ package com.oracle.graal.phases.util;
 import com.oracle.graal.nodes.*;
 
 /**
- * This class implements a worklist for dealing with blocks. The worklist can
- * operate either as a stack (i.e. first-in / last-out), or as a sorted list,
- * where blocks can be sorted by a supplied number. The latter usage lends itself
- * naturally to iterative dataflow analysis problems.
+ * This class implements a worklist for dealing with blocks. The worklist can operate either as a
+ * stack (i.e. first-in / last-out), or as a sorted list, where blocks can be sorted by a supplied
+ * number. The latter usage lends itself naturally to iterative dataflow analysis problems.
  */
 public class BlockWorkList {
-    MergeNode[] workList;
+
+    AbstractMergeNode[] workList;
     int[] workListNumbers;
     int workListIndex;
 
     /**
      * Adds a block to this list in an unsorted fashion, like a stack.
+     *
      * @param block the block to add
      */
-    public void add(MergeNode block) {
+    public void add(AbstractMergeNode block) {
         if (workList == null) {
             // worklist not allocated yet
             allocate();
@@ -52,12 +53,13 @@ public class BlockWorkList {
     }
 
     /**
-     * Adds a block to this list, sorted by the supplied number. The block
-     * with the lowest number is returned upon subsequent removes.
+     * Adds a block to this list, sorted by the supplied number. The block with the lowest number is
+     * returned upon subsequent removes.
+     *
      * @param block the block to add
      * @param number the number used to sort the block
      */
-    public void addSorted(MergeNode block, int number) {
+    public void addSorted(AbstractMergeNode block, int number) {
         if (workList == null) {
             // worklist not allocated yet
             allocate();
@@ -84,12 +86,13 @@ public class BlockWorkList {
     }
 
     /**
-     * Removes the next block from this work list. If the blocks have been added
-     * in a sorted order, then the block with the lowest number is returned. Otherwise,
-     * the last block added is returned.
+     * Removes the next block from this work list. If the blocks have been added in a sorted order,
+     * then the block with the lowest number is returned. Otherwise, the last block added is
+     * returned.
+     *
      * @return the next block in the list
      */
-    public MergeNode removeFromWorkList() {
+    public AbstractMergeNode removeFromWorkList() {
         if (workListIndex != 0) {
             return workList[--workListIndex];
         }
@@ -98,6 +101,7 @@ public class BlockWorkList {
 
     /**
      * Checks whether the list is empty.
+     *
      * @return {@code true} if this list is empty
      */
     public boolean isEmpty() {
@@ -105,13 +109,13 @@ public class BlockWorkList {
     }
 
     private void allocate() {
-        workList = new MergeNode[5];
+        workList = new AbstractMergeNode[5];
         workListNumbers = new int[5];
     }
 
     private void grow() {
         int prevLength = workList.length;
-        MergeNode[] nworkList = new MergeNode[prevLength * 3];
+        AbstractMergeNode[] nworkList = new AbstractMergeNode[prevLength * 3];
         System.arraycopy(workList, 0, nworkList, 0, prevLength);
         workList = nworkList;
 

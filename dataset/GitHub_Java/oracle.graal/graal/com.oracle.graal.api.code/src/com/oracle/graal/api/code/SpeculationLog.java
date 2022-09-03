@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,9 +29,9 @@ import com.oracle.graal.api.meta.*;
 
 /**
  * Manages a list of unique deoptimization reasons.
- * 
+ *
  */
-public final class SpeculationLog {
+public abstract class SpeculationLog {
     private volatile Object lastFailed;
     private volatile Collection<Object> speculations;
     private Set<Object> failedSpeculations;
@@ -47,10 +47,15 @@ public final class SpeculationLog {
         }
     }
 
-    public Constant maySpeculate(Object reason) {
+    public boolean maySpeculate(Object reason) {
         if (failedSpeculations != null && failedSpeculations.contains(reason)) {
-            return null;
+            return false;
         }
+        return true;
+    }
+
+    protected void addSpeculation(Object reason) {
+        assert maySpeculate(reason);
         if (speculations == null) {
             synchronized (this) {
                 if (speculations == null) {
@@ -59,6 +64,7 @@ public final class SpeculationLog {
             }
         }
         speculations.add(reason);
-        return Constant.forObject(reason);
     }
+
+    public abstract JavaConstant speculate(Object reason);
 }

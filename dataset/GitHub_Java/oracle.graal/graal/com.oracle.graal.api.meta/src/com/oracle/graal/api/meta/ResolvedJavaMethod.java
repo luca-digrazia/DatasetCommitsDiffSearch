@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,161 +24,268 @@ package com.oracle.graal.api.meta;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
-import java.util.*;
 
 /**
- * Represents resolved Java methods. Methods, like fields and types, are resolved through
+ * Represents a resolved Java method. Methods, like fields and types, are resolved through
  * {@link ConstantPool constant pools}.
  */
-public interface ResolvedJavaMethod extends JavaMethod {
+public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget, ModifiersProvider {
 
     /**
-     * Gets the bytecode of the method, if the method {@linkplain #isResolved()} and has code.
-     * The returned byte array does not contain breakpoints or non-Java bytecodes.
-     * @return the bytecode of the method or {@code null} if none is available
+     * Returns the bytecode of this method, if the method has code. The returned byte array does not
+     * contain breakpoints or non-Java bytecodes. This may return null if the
+     * {@link #getDeclaringClass() holder} is not {@link ResolvedJavaType#isLinked() linked}.
+     *
+     * The contained constant pool indices may not be the ones found in the original class file but
+     * they can be used with the Graal API (e.g. methods in {@link ConstantPool}).
+     *
+     * @return the bytecode of the method, or {@code null} if {@code getCodeSize() == 0} or if the
+     *         code is not ready.
      */
-    byte[] code();
+    byte[] getCode();
 
     /**
-     * Gets the size of the bytecode of the method, if the method {@linkplain #isResolved()} and has code.
+     * Returns the size of the bytecode of this method, if the method has code. This is equivalent
+     * to {@link #getCode()}. {@code length} if the method has code.
+     *
      * @return the size of the bytecode in bytes, or 0 if no bytecode is available
      */
-    int codeSize();
+    int getCodeSize();
 
     /**
-     * Gets the size of the compiled machine code.
-     * @return the size of the compiled machine code in bytes, or 0 if no compiled code exists.
+     * Returns the {@link ResolvedJavaType} object representing the class or interface that declares
+     * this method.
      */
-    int compiledCodeSize();
+    ResolvedJavaType getDeclaringClass();
 
     /**
-     * Gets an estimate how complex it is to compile this method.
-     * @return A value >= 0, where higher means more complex.
+     * Returns the maximum number of locals used in this method's bytecodes.
      */
-    int compilationComplexity();
+    int getMaxLocals();
 
     /**
-     * Gets the symbol used to link this method if it is native, otherwise {@code null}.
+     * Returns the maximum number of stack slots used in this method's bytecodes.
      */
-    String jniSymbol();
+    int getMaxStackSize();
 
     /**
-     * Gets the type in which this method is declared.
-     * @return the type in which this method is declared
+     * {@inheritDoc}
+     * <p>
+     * Only the {@linkplain Modifier#methodModifiers() method flags} specified in the JVM
+     * specification will be included in the returned mask.
      */
-    ResolvedJavaType holder();
+    int getModifiers();
 
     /**
-     * Gets the maximum number of locals used in this method's bytecode.
-     * @return the maximum number of locals
+     * Determines if this method is a synthetic method as defined by the Java Language
+     * Specification.
      */
-    int maxLocals();
+    boolean isSynthetic();
 
     /**
-     * Gets the maximum number of stack slots used in this method's bytecode.
-     * @return the maximum number of stack slots
+     * Returns {@code true} if this method is a default method; returns {@code false} otherwise.
+     *
+     * A default method is a public non-abstract instance method, that is, a non-static method with
+     * a body, declared in an interface type.
+     *
+     * @return true if and only if this method is a default method as defined by the Java Language
+     *         Specification.
      */
-    int maxStackSize();
-
-    /**
-     * Checks whether this method has balanced monitor operations.
-     * @return {@code true} if the method has balanced monitor operations
-     */
-    boolean hasBalancedMonitors();
-
-    /**
-     * Gets the access flags for this method. Only the flags specified in the JVM specification
-     * will be included in the returned mask. The utility methods in the {@link Modifier} class
-     * should be used to query the returned mask for the presence/absence of individual flags.
-     * @return the mask of JVM defined method access flags defined for this method
-     */
-    int accessFlags();
-
-    /**
-     * Checks whether this method is a leaf method.
-     * @return {@code true} if the method is a leaf method (that is, is final or private)
-     */
-    boolean isLeafMethod();
+    boolean isDefault();
 
     /**
      * Checks whether this method is a class initializer.
+     *
      * @return {@code true} if the method is a class initializer
      */
     boolean isClassInitializer();
 
     /**
      * Checks whether this method is a constructor.
+     *
      * @return {@code true} if the method is a constructor
      */
     boolean isConstructor();
 
     /**
-     * Checks whether this method can be statically bound (that is, it is final or private or static).
+     * Checks whether this method can be statically bound (usually, that means it is final or
+     * private or static, but not abstract, or the declaring class is final).
+     *
      * @return {@code true} if this method can be statically bound
      */
     boolean canBeStaticallyBound();
 
     /**
-     * Gets the list of exception handlers for this method.
-     * @return the list of exception handlers
+     * Returns the list of exception handlers for this method.
      */
-    ExceptionHandler[] exceptionHandlers();
+    ExceptionHandler[] getExceptionHandlers();
 
     /**
-     * Gets a stack trace element for this method and a given bytecode index.
+     * Returns a stack trace element for this method and a given bytecode index.
      */
-    StackTraceElement toStackTraceElement(int bci);
+    StackTraceElement asStackTraceElement(int bci);
 
     /**
-     * Provides an estimate of how often this method has been executed.
-     * @return The number of invocations, or -1 if this information isn't available.
+     * Returns an object that provides access to the profiling information recorded for this method.
      */
-    int invocationCount();
+    ProfilingInfo getProfilingInfo();
 
     /**
-     * Returns an object that provides access to the method's profiling information.
-     * @return The profiling information recorded for this method.
+     * Invalidates the profiling information and restarts profiling upon the next invocation.
      */
-    ProfilingInfo profilingInfo();
+    void reprofile();
 
     /**
-     * Returns a map that the compiler can use to store objects that should survive the current compilation.
-     */
-    Map<Object, Object> compilerStorage();
-
-    /**
-     * Returns a pointer to the method's constant pool.
-     * @return the constant pool
+     * Returns the constant pool of this method.
      */
     ConstantPool getConstantPool();
 
     /**
-     * Returns this method's annotation of a specified type.
+     * Returns all annotations of this method. If no annotations are present, an array of length 0
+     * is returned.
+     */
+    Annotation[] getAnnotations();
+
+    /**
+     * Returns the annotation for the specified type of this method, if such an annotation is
+     * present.
      *
      * @param annotationClass the Class object corresponding to the annotation type
-     * @return the annotation of type {@code annotationClass} for this method if present, else null
+     * @return this element's annotation for the specified annotation type if present on this
+     *         method, else {@code null}
      */
     <T extends Annotation> T getAnnotation(Class<T> annotationClass);
 
     /**
-     * Returns an array of arrays that represent the annotations on the formal
-     * parameters, in declaration order, of this method.
+     * Returns an array of arrays that represent the annotations on the formal parameters, in
+     * declaration order, of this method.
      *
      * @see Method#getParameterAnnotations()
-     * @see CiUtil#getParameterAnnotation(int, JavaResolvedMethod)
      */
     Annotation[][] getParameterAnnotations();
 
     /**
-     * Returns an array of {@link Type} objects that represent the formal
-     * parameter types, in declaration order, of this method.
+     * Returns an array of {@link Type} objects that represent the formal parameter types, in
+     * declaration order, of this method.
      *
      * @see Method#getGenericParameterTypes()
      */
     Type[] getGenericParameterTypes();
 
     /**
-     * @return {@code true} if this method can be inlined
+     * Returns {@code true} if this method is not excluded from inlining and has associated Java
+     * bytecodes (@see {@link ResolvedJavaMethod#hasBytecodes()}).
      */
     boolean canBeInlined();
+
+    /**
+     * Returns {@code true} if the inlining of this method should be forced.
+     */
+    boolean shouldBeInlined();
+
+    /**
+     * Returns the LineNumberTable of this method or null if this method does not have a line
+     * numbers table.
+     */
+    LineNumberTable getLineNumberTable();
+
+    /**
+     * Returns the local variable table of this method or null if this method does not have a local
+     * variable table.
+     */
+    LocalVariableTable getLocalVariableTable();
+
+    /**
+     * Invokes the underlying method represented by this object, on the specified object with the
+     * specified parameters. This method is similar to a reflective method invocation by
+     * {@link Method#invoke}.
+     *
+     * @param receiver The receiver for the invocation, or {@code null} if it is a static method.
+     * @param arguments The arguments for the invocation.
+     * @return The value returned by the method invocation, or {@code null} if the return type is
+     *         {@code void}.
+     */
+    JavaConstant invoke(JavaConstant receiver, JavaConstant[] arguments);
+
+    /**
+     * Gets the encoding of (that is, a constant representing the value of) this method.
+     *
+     * @return a constant representing a reference to this method
+     */
+    Constant getEncoding();
+
+    /**
+     * Checks if this method is present in the virtual table for subtypes of the specified
+     * {@linkplain ResolvedJavaType type}.
+     *
+     * @return true is this method is present in the virtual table for subtypes of this type.
+     */
+    boolean isInVirtualMethodTable(ResolvedJavaType resolved);
+
+    /**
+     * Gets the annotation of a particular type for a formal parameter of this method.
+     *
+     * @param annotationClass the Class object corresponding to the annotation type
+     * @param parameterIndex the index of a formal parameter of {@code method}
+     * @return the annotation of type {@code annotationClass} for the formal parameter present, else
+     *         null
+     * @throws IndexOutOfBoundsException if {@code parameterIndex} does not denote a formal
+     *             parameter
+     */
+    default <T extends Annotation> T getParameterAnnotation(Class<T> annotationClass, int parameterIndex) {
+        if (parameterIndex >= 0) {
+            Annotation[][] parameterAnnotations = getParameterAnnotations();
+            for (Annotation a : parameterAnnotations[parameterIndex]) {
+                if (a.annotationType() == annotationClass) {
+                    return annotationClass.cast(a);
+                }
+            }
+        }
+        return null;
+    }
+
+    default JavaType[] toParameterTypes() {
+        JavaType receiver = isStatic() || isConstructor() ? null : getDeclaringClass();
+        return getSignature().toParameterTypes(receiver);
+    }
+
+    /**
+     * Gets the annotations of a particular type for the formal parameters of this method.
+     *
+     * @param annotationClass the Class object corresponding to the annotation type
+     * @return the annotation of type {@code annotationClass} (if any) for each formal parameter
+     *         present
+     */
+    @SuppressWarnings("unchecked")
+    default <T extends Annotation> T[] getParameterAnnotations(Class<T> annotationClass) {
+        Annotation[][] parameterAnnotations = getParameterAnnotations();
+        T[] result = (T[]) Array.newInstance(annotationClass, parameterAnnotations.length);
+        for (int i = 0; i < parameterAnnotations.length; i++) {
+            for (Annotation a : parameterAnnotations[i]) {
+                if (a.annotationType() == annotationClass) {
+                    result[i] = annotationClass.cast(a);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Checks whether the method has bytecodes associated with it. Methods without bytecodes are
+     * either abstract or native methods.
+     *
+     * @return whether the definition of this method is Java bytecodes
+     */
+    default boolean hasBytecodes() {
+        return isConcrete() && !isNative();
+    }
+
+    /**
+     * Checks whether the method has a receiver parameter - i.e., whether it is not static.
+     *
+     * @return whether the method has a receiver parameter
+     */
+    default boolean hasReceiver() {
+        return !isStatic();
+    }
 }

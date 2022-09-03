@@ -22,22 +22,11 @@
  */
 package com.oracle.graal.phases.common;
 
-import jdk.vm.ci.common.JVMCIError;
-
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.ShortCircuitOrNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.ConditionalNode;
-import com.oracle.graal.phases.Phase;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.phases.*;
 
 public class ExpandLogicPhase extends Phase {
 
@@ -59,7 +48,7 @@ public class ExpandLogicPhase extends Phase {
             } else if (usage instanceof ConditionalNode) {
                 processConditional(binary.getX(), binary.isXNegated(), binary.getY(), binary.isYNegated(), (ConditionalNode) usage);
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         }
         binary.safeDelete();
@@ -71,9 +60,9 @@ public class ExpandLogicPhase extends Phase {
         double firstIfProbability = shortCircuitProbability;
         /*
          * P(Y | not(X)) = P(Y inter not(X)) / P(not(X)) = (P(X union Y) - P(X)) / (1 - P(X))
-         * 
+         *
          * P(X) = shortCircuitProbability
-         * 
+         *
          * P(X union Y) = ifNode.probability(trueTarget)
          */
         double secondIfProbability = (ifNode.probability(trueTarget) - shortCircuitProbability) / (1 - shortCircuitProbability);

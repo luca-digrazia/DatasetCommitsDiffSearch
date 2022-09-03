@@ -22,15 +22,10 @@
  */
 package com.oracle.graal.debug;
 
-import java.io.PrintStream;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
-
-import jdk.vm.ci.service.Services;
+import java.io.*;
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.regex.*;
 
 /**
  * A collection of static methods for printing debug and informational output to a global
@@ -72,7 +67,7 @@ public class TTY {
                 }
                 if (suppressed) {
                     previous = out();
-                    log.set(LogStream.SINK);
+                    out.set(LogStream.SINK);
                 }
             }
         }
@@ -84,7 +79,7 @@ public class TTY {
          */
         public Filter() {
             previous = out();
-            log.set(LogStream.SINK);
+            out.set(LogStream.SINK);
         }
 
         /**
@@ -94,30 +89,35 @@ public class TTY {
         public void remove() {
             assert thread == Thread.currentThread();
             if (previous != null) {
-                log.set(previous);
+                out.set(previous);
             }
         }
     }
 
-    /**
-     * The {@link PrintStream} to which all non-suppressed output from {@link TTY} is written.
-     */
-    public static final PrintStream out;
-    static {
-        TTYStreamProvider p = Services.loadSingle(TTYStreamProvider.class, false);
-        out = p == null ? System.out : p.getStream();
+    public static PrintStream cachedOut;
+
+    public static void initialize(PrintStream ps) {
+        cachedOut = ps;
     }
 
-    private static final ThreadLocal<LogStream> log = new ThreadLocal<LogStream>() {
+    private static LogStream createLog() {
+        if (cachedOut == null) {
+            // In case initialize() was not called.
+            cachedOut = System.out;
+        }
+        return new LogStream(cachedOut);
+    }
+
+    private static final ThreadLocal<LogStream> out = new ThreadLocal<LogStream>() {
 
         @Override
         protected LogStream initialValue() {
-            return new LogStream(out);
+            return createLog();
         }
     };
 
     public static boolean isSuppressed() {
-        return log.get() == LogStream.SINK;
+        return out.get() == LogStream.SINK;
     }
 
     /**
@@ -127,7 +127,7 @@ public class TTY {
      * current thread.
      */
     public static LogStream out() {
-        return log.get();
+        return out.get();
     }
 
     /**
@@ -235,7 +235,7 @@ public class TTY {
         out().println(f);
     }
 
-    public static void printf(String format, Object... args) {
+    public static void print(String format, Object... args) {
         out().printf(format, args);
     }
 
