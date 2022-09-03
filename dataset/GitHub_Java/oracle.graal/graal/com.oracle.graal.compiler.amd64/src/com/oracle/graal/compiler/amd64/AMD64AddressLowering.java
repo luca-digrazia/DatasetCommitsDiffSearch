@@ -23,9 +23,6 @@
 
 package com.oracle.graal.compiler.amd64;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.compiler.common.type.*;
@@ -33,6 +30,8 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.phases.common.AddressLoweringPhase.AddressLowering;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.meta.*;
 
 public class AMD64AddressLowering extends AddressLowering {
 
@@ -114,9 +113,8 @@ public class AMD64AddressLowering extends AddressLowering {
             return null;
         }
 
-        JavaConstant c = node.asJavaConstant();
-        if (c != null) {
-            return improveConstDisp(address, node, c, null, shift);
+        if (node.isConstant()) {
+            return improveConstDisp(address, node, node.asJavaConstant(), null, shift);
         } else {
             if (node.stamp() instanceof IntegerStamp && ((IntegerStamp) node.stamp()).getBits() == 64) {
                 if (node instanceof ZeroExtendNode) {
@@ -142,7 +140,7 @@ public class AMD64AddressLowering extends AddressLowering {
     }
 
     private ValueNode improveConstDisp(AMD64AddressNode address, ValueNode original, JavaConstant c, ValueNode other, int shift) {
-        if (c.getJavaKind().isNumericInteger() && !codeCache.needsDataPatch(c)) {
+        if (c.getKind().isNumericInteger() && !codeCache.needsDataPatch(c)) {
             long disp = address.getDisplacement();
             disp += c.asLong() << shift;
             if (NumUtil.isInt(disp)) {
