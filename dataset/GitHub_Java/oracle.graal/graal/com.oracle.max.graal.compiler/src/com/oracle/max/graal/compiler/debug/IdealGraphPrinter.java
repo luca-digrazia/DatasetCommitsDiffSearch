@@ -27,16 +27,12 @@ import java.util.*;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Map.Entry;
 
-import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.util.LoopUtil.Loop;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
-import com.sun.cri.bytecode.*;
-import com.sun.cri.ri.*;
 
 /**
  * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the <a
@@ -93,27 +89,10 @@ public class IdealGraphPrinter {
     /**
      * Starts a new group of graphs with the given name, short name and method byte code index (BCI) as properties.
      */
-    public void beginGroup(String name, String shortName, RiMethod method, int bci) {
+    public void beginGroup(String name, String shortName, int bci) {
         stream.println("<group>");
         stream.printf(" <properties><p name='name'>%s</p><p name='origin'>Graal</p></properties>%n", escape(name));
-        stream.printf(" <method name='%s' shortName='%s' bci='%d'>%n", escape(name), escape(shortName), bci);
-        if (GraalOptions.PrintIdealGraphBytecodes) {
-            StringBuilder sb = new StringBuilder(40);
-            stream.println("<bytecodes>\n&lt;![CDATA[");
-            BytecodeStream bytecodes = new BytecodeStream(method.code());
-            while (bytecodes.currentBC() != Bytecodes.END) {
-                sb.setLength(0);
-                sb.append(bytecodes.currentBCI()).append(' ');
-                sb.append(Bytecodes.nameOf(bytecodes.currentBC()));
-                for (int i = bytecodes.currentBCI() + 1; i < bytecodes.nextBCI(); ++i) {
-                    sb.append(' ').append(bytecodes.readUByte(i));
-                }
-                stream.println(sb.toString());
-                bytecodes.next();
-            }
-            stream.println("]]&gt;</bytecodes>");
-        }
-        stream.println("</method>");
+        stream.printf(" <method name='%s' shortName='%s' bci='%d'/>%n", escape(name), escape(shortName), bci);
     }
 
     /**
@@ -161,15 +140,8 @@ public class IdealGraphPrinter {
         List<Loop> loops = null;
         try {
             loops = LoopUtil.computeLoops(graph);
-            // loop.nodes() does some more calculations which may fail, so execute this here as well
-            if (loops != null) {
-                for (Loop loop : loops) {
-                    loop.nodes();
-                }
-            }
         } catch (Throwable t) {
             t.printStackTrace();
-            loops = null;
         }
 
         stream.println("  <nodes>");
@@ -347,7 +319,7 @@ public class IdealGraphPrinter {
             int toIndex = 1;
             for (Node input : node.inputs()) {
                 if (input != Node.Null && !omittedClasses.contains(input.getClass())) {
-                    edges.add(new Edge(input.id(), input.successors().explicitCount(), node.id(), toIndex));
+                    edges.add(new Edge(input.id(), input.successors().size(), node.id(), toIndex));
                 }
                 toIndex++;
             }

@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
 
 
 public class Block {
@@ -34,13 +33,15 @@ public class Block {
     private int blockID;
     private final List<Block> successors = new ArrayList<Block>();
     private final List<Block> predecessors = new ArrayList<Block>();
+    private final List<Block> dominated = new ArrayList<Block>();
     private List<Node> instructions = new ArrayList<Node>();
     private Block dominator;
     private Block javaBlock;
-    private final List<Block> dominators = new ArrayList<Block>();
     private Anchor anchor;
+    private EndNode end;
     private int loopDepth = 0;
     private int loopIndex = -1;
+    private double probability;
 
     private Node firstNode;
     private Node lastNode;
@@ -52,6 +53,14 @@ public class Block {
     public void setFirstNode(Node node) {
         this.firstNode = node;
         this.anchor = null;
+    }
+
+    public EndNode end() {
+        return end;
+    }
+
+    public void setEnd(EndNode end) {
+        this.end = end;
     }
 
     public Block javaBlock() {
@@ -82,6 +91,17 @@ public class Block {
         loopIndex = i;
     }
 
+    public double probability() {
+        return probability;
+    }
+
+
+    public void setProbability(double probability) {
+        if (probability > this.probability) {
+            this.probability = probability;
+        }
+    }
+
     public Anchor createAnchor() {
         if (anchor == null) {
             if (firstNode instanceof Anchor) {
@@ -92,9 +112,8 @@ public class Block {
                     this.anchor = (Anchor) start.next();
                 } else {
                     Anchor a = new Anchor(firstNode.graph());
-                    FixedNode oldStart = (FixedNode) firstNode.graph().start().next();
+                    a.setNext((FixedNode) firstNode.graph().start().next());
                     firstNode.graph().start().setNext(a);
-                    a.setNext(oldStart);
                     this.anchor = a;
                 }
             } else if (firstNode instanceof Merge || firstNode instanceof ExceptionObject) {
@@ -103,17 +122,17 @@ public class Block {
                     this.anchor = (Anchor) fixedNode.next();
                 } else {
                     Anchor a = new Anchor(firstNode.graph());
-                    FixedNode next = fixedNode.next();
+                    a.setNext(fixedNode.next());
                     fixedNode.setNext(a);
-                    a.setNext(next);
                     this.anchor = a;
                 }
             } else {
                 assert !(firstNode instanceof Anchor);
                 Anchor a = new Anchor(firstNode.graph());
-                assert firstNode.predecessor() != null : firstNode;
-                Node pred = firstNode.predecessor();
-                pred.replaceFirstSuccessor(firstNode, a);
+                assert firstNode.predecessors().size() == 1 : firstNode;
+                Node pred = firstNode.predecessors().get(0);
+                int predIndex = pred.successors().indexOf(firstNode);
+                pred.successors().set(predIndex, a);
                 a.setNext((FixedNode) firstNode);
                 this.anchor = a;
             }
@@ -133,11 +152,11 @@ public class Block {
         assert this.dominator == null;
         assert dominator != null;
         this.dominator = dominator;
-        dominator.dominators.add(this);
+        dominator.dominated.add(this);
     }
 
-    public List<Block> getDominators() {
-        return Collections.unmodifiableList(dominators);
+    public List<Block> getDominated() {
+        return Collections.unmodifiableList(dominated);
     }
 
     public List<Node> getInstructions() {
