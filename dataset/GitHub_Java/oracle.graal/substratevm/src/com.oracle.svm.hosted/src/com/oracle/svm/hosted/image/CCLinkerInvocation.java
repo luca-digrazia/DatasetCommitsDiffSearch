@@ -36,8 +36,6 @@ import org.graalvm.compiler.options.Option;
 import com.oracle.svm.core.LinkerInvocation;
 import com.oracle.svm.core.option.HostedOptionKey;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
 public abstract class CCLinkerInvocation implements LinkerInvocation {
 
     public static class Options {
@@ -51,7 +49,7 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
     protected final List<String> rpaths = new ArrayList<>();
     protected final List<String> libpaths = new ArrayList<>();
     protected final List<String> libs = new ArrayList<>();
-    protected final Map<ResolvedJavaMethod, String> symbolAliases = new HashMap<>();
+    protected final Map<String, String> symbolAliases = new HashMap<>();
     protected Path outputFile;
     protected AbstractBootImage.NativeImageKind outputKind;
 
@@ -79,13 +77,13 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
     }
 
     @Override
-    public Map<ResolvedJavaMethod, String> getSymbolAliases() {
+    public Map<String, String> getSymbolAliases() {
         return Collections.unmodifiableMap(symbolAliases);
     }
 
     @Override
-    public void addSymbolAlias(ResolvedJavaMethod definition, String alias) {
-        symbolAliases.put(definition, alias);
+    public void addSymbolAlias(String alias, String definition) {
+        symbolAliases.put(alias, definition);
     }
 
     @Override
@@ -157,7 +155,7 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
         compilerCommand = command;
     }
 
-    protected abstract void addOneSymbolAliasOption(List<String> cmd, Map.Entry<ResolvedJavaMethod, String> ent);
+    protected abstract void addOneSymbolAliasOption(List<String> cmd, Map.Entry<String, String> ent);
 
     protected abstract void setOutputKind(List<String> cmd);
 
@@ -173,7 +171,7 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
             cmd.add(opt);
         }
         setOutputKind(cmd);
-        for (Map.Entry<ResolvedJavaMethod, String> ent : symbolAliases.entrySet()) {
+        for (Map.Entry<String, String> ent : symbolAliases.entrySet()) {
             addOneSymbolAliasOption(cmd, ent);
         }
         for (String libpath : libpaths) {
