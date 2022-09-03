@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.virtual;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,9 +35,7 @@ import com.oracle.graal.graph.NodeInputList;
 import com.oracle.graal.graph.spi.Simplifiable;
 import com.oracle.graal.graph.spi.SimplifierTool;
 import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodeinfo.Verbosity;
 import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.ValueNode;
@@ -46,15 +45,7 @@ import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.nodes.spi.VirtualizableAllocation;
 import com.oracle.graal.nodes.spi.VirtualizerTool;
 
-// @formatter:off
-@NodeInfo(nameTemplate = "Alloc {i#virtualObjects}",
-          allowedUsageTypes = {InputType.Extension},
-          cycles = NodeCycles.CYCLES_UNKNOWN,
-          cyclesRationale = "We don't know statically how many, and which, allocations are done.",
-          size = NodeSize.SIZE_UNKNOWN,
-          sizeRationale = "We don't know statically how much code for which allocations has to be generated."
-)
-// @formatter:on
+@NodeInfo(nameTemplate = "Alloc {i#virtualObjects}", allowedUsageTypes = {InputType.Extension})
 public final class CommitAllocationNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Simplifiable {
 
     public static final NodeClass<CommitAllocationNode> TYPE = NodeClass.create(CommitAllocationNode.class);
@@ -224,6 +215,25 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
             lockIndexes = newLockIndexes;
             ensureVirtual = newEnsureVirtual;
         }
+    }
+
+    /**
+     * For all the virtual object nodes that depends on commit allocation, this method maps the node
+     * with its values. For example, a commit allocation could depend on a {@link VirtualArrayNode}
+     * with many {@link ValueNode}s. The map will contain the corresponding {@link VirtualArrayNode}
+     * as a key with the array of {@link ValueNode}s.
+     */
+    public HashMap<VirtualObjectNode, Object[]> getVirtualObjectsArrays() {
+        HashMap<VirtualObjectNode, Object[]> arrayValues = new HashMap<>();
+        int pos = 0;
+        for (int i = 0; i < virtualObjects.size(); i++) {
+            VirtualObjectNode virtualObject = virtualObjects.get(i);
+            int entryCount = virtualObject.entryCount();
+            ValueNode[] array = values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]);
+            arrayValues.put(virtualObject, array);
+            pos += entryCount;
+        }
+        return arrayValues;
     }
 
 }
