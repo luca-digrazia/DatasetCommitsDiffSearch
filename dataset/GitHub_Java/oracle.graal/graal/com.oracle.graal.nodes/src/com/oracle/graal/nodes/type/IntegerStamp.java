@@ -29,33 +29,27 @@ import com.oracle.graal.nodes.*;
 /**
  * Describes the possible values of a {@link ValueNode} that produces an int or long result.
  * 
- * The description consists of (inclusive, signed) lower and upper bounds and up (may be set) and
- * down (always set) bit-masks.
+ * The description consists of (inclusive) lower and upper bounds and a bit-mask.
  */
 public class IntegerStamp extends Stamp {
 
     private final long lowerBound;
     private final long upperBound;
-    private final long downMask;
-    private final long upMask;
+    private final long mask;
 
     public IntegerStamp(Kind kind) {
-        this(kind.getStackKind(), kind.getMinValue(), kind.getMaxValue(), 0, defaultMask(kind == Kind.Char ? kind : kind.getStackKind()));
+        this(kind.getStackKind(), kind.getMinValue(), kind.getMaxValue(), defaultMask(kind));
     }
 
-    public IntegerStamp(Kind kind, long lowerBound, long upperBound, long downMask, long upMask) {
+    public IntegerStamp(Kind kind, long lowerBound, long upperBound, long mask) {
         super(kind);
+        assert lowerBound <= upperBound;
+        assert lowerBound >= kind.getMinValue();
+        assert upperBound <= kind.getMaxValue();
+        assert (mask & defaultMask(kind)) == mask;
         this.lowerBound = lowerBound;
         this.upperBound = upperBound;
-        this.downMask = downMask;
-        this.upMask = upMask;
-        assert lowerBound <= upperBound : this;
-        assert lowerBound >= kind.getMinValue() : this;
-        assert upperBound <= kind.getMaxValue() : this;
-        assert (downMask & defaultMask(kind)) == downMask : this;
-        assert (upMask & defaultMask(kind)) == upMask : this;
-        assert (lowerBound & downMask) == downMask : this;
-        assert (upperBound & downMask) == downMask : this;
+        this.mask = mask;
     }
 
     @Override
@@ -78,25 +72,19 @@ public class IntegerStamp extends Stamp {
     }
 
     /**
-     * This bit-mask describes the bits that are always set in the value described by this stamp.
+     * This bit-mask describes the bits that can be set in the value described by this stamp. It is
+     * primarily used to represent values that are multiples of a known power of two.
      */
-    public long downMask() {
-        return downMask;
-    }
-
-    /**
-     * This bit-mask describes the bits that can be set in the value described by this stamp.
-     */
-    public long upMask() {
-        return upMask;
+    public long mask() {
+        return mask;
     }
 
     public boolean isUnrestricted() {
-        return lowerBound == kind().getMinValue() && upperBound == kind().getMaxValue() && downMask == 0 && upMask == defaultMask(kind());
+        return lowerBound == kind().getMinValue() && upperBound == kind().getMaxValue() && mask == defaultMask(kind());
     }
 
     public boolean contains(long value) {
-        return value >= lowerBound && value <= upperBound && (value & downMask) == downMask && (value & upMask) == (value & defaultMask(kind()));
+        return value >= lowerBound && value <= upperBound && (value & mask) == (value & defaultMask(kind()));
     }
 
     public boolean isPositive() {
@@ -132,11 +120,8 @@ public class IntegerStamp extends Stamp {
         } else if (lowerBound != kind().getMinValue() || upperBound != kind().getMaxValue()) {
             str.append(" [").append(lowerBound).append(" - ").append(upperBound).append(']');
         }
-        if (downMask != 0) {
-            str.append(" \u21ca").append(Long.toHexString(downMask));
-        }
-        if (upMask != defaultMask(kind())) {
-            str.append(" \u21c8").append(Long.toHexString(upMask));
+        if (mask != defaultMask(kind())) {
+            str.append(" #").append(Long.toHexString(mask));
         }
         return str.toString();
     }
@@ -146,7 +131,7 @@ public class IntegerStamp extends Stamp {
         IntegerStamp other = (IntegerStamp) otherStamp;
         if (lowerBound > other.upperBound || upperBound < other.lowerBound) {
             return true;
-        } else if ((upMask & other.upMask) == 0 && (lowerBound > 0 || upperBound < 0 || other.lowerBound > 0 || other.upperBound < 0)) {
+        } else if ((mask & other.mask) == 0 && (lowerBound > 0 || upperBound < 0 || other.lowerBound > 0 || other.upperBound < 0)) {
             /*
              * Zero is the only common value if the masks don't overlap. If one of the two values is
              * less than or greater than zero, they are always distinct.
@@ -156,47 +141,36 @@ public class IntegerStamp extends Stamp {
         return false;
     }
 
-    private Stamp createStamp(IntegerStamp other, long newUpperBound, long newLowerBound, long newDownMask, long newUpMask) {
-        assert kind() == other.kind();
-        if (newLowerBound > newUpperBound || (newDownMask & (~newUpMask)) != 0) {
-            return StampFactory.illegal();
-        } else if (newLowerBound == lowerBound && newUpperBound == upperBound && newDownMask == downMask && newUpMask == upMask) {
-            return this;
-        } else if (newLowerBound == other.lowerBound && newUpperBound == other.upperBound && newDownMask == other.downMask && newUpMask == other.upMask) {
-            return other;
-        } else {
-            return new IntegerStamp(kind(), newLowerBound, newUpperBound, newDownMask, newUpMask);
-        }
-    }
-
     @Override
     public Stamp meet(Stamp otherStamp) {
-        if (otherStamp == this) {
-            return this;
-        }
-        if (otherStamp instanceof IllegalStamp) {
-            return otherStamp.meet(this);
-        }
-        if (!(otherStamp instanceof IntegerStamp)) {
-            return StampFactory.illegal();
-        }
         IntegerStamp other = (IntegerStamp) otherStamp;
-        return createStamp(other, Math.max(upperBound, other.upperBound), Math.min(lowerBound, other.lowerBound), downMask & other.downMask, upMask | other.upMask);
+        assert kind() == other.kind();
+        long meetUpperBound = Math.max(upperBound, other.upperBound);
+        long meetLowerBound = Math.min(lowerBound, other.lowerBound);
+        long meetMask = mask | other.mask;
+        if (meetLowerBound == lowerBound && meetUpperBound == upperBound && meetMask == mask) {
+            return this;
+        } else if (meetLowerBound == other.lowerBound && meetUpperBound == other.upperBound && meetMask == other.mask) {
+            return other;
+        } else {
+            return new IntegerStamp(kind(), meetLowerBound, meetUpperBound, meetMask);
+        }
     }
 
     @Override
     public Stamp join(Stamp otherStamp) {
-        if (otherStamp == this) {
-            return this;
-        }
-        if (otherStamp instanceof IllegalStamp) {
-            return otherStamp.join(this);
-        }
-        if (!(otherStamp instanceof IntegerStamp)) {
-            return StampFactory.illegal();
-        }
         IntegerStamp other = (IntegerStamp) otherStamp;
-        return createStamp(other, Math.min(upperBound, other.upperBound), Math.max(lowerBound, other.lowerBound), downMask | other.downMask, upMask & other.upMask);
+        assert kind() == other.kind();
+        long joinUpperBound = Math.min(upperBound, other.upperBound);
+        long joinLowerBound = Math.max(lowerBound, other.lowerBound);
+        long joinMask = mask & other.mask;
+        if (joinLowerBound == lowerBound && joinUpperBound == upperBound && joinMask == mask) {
+            return this;
+        } else if (joinLowerBound == other.lowerBound && joinUpperBound == other.upperBound && joinMask == other.mask) {
+            return other;
+        } else {
+            return new IntegerStamp(kind(), joinLowerBound, joinUpperBound, joinMask);
+        }
     }
 
     @Override
@@ -205,8 +179,7 @@ public class IntegerStamp extends Stamp {
         int result = 1;
         result = prime * result + (int) (lowerBound ^ (lowerBound >>> 32));
         result = prime * result + (int) (upperBound ^ (upperBound >>> 32));
-        result = prime * result + (int) (downMask ^ (downMask >>> 32));
-        result = prime * result + (int) (upMask ^ (upMask >>> 32));
+        result = prime * result + (int) (mask ^ (mask >>> 32));
         return result;
     }
 
@@ -219,7 +192,7 @@ public class IntegerStamp extends Stamp {
             return false;
         }
         IntegerStamp other = (IntegerStamp) obj;
-        if (lowerBound != other.lowerBound || upperBound != other.upperBound || downMask != other.downMask || upMask != other.upMask) {
+        if (lowerBound != other.lowerBound || upperBound != other.upperBound || mask != other.mask) {
             return false;
         }
         return true;
@@ -244,7 +217,7 @@ public class IntegerStamp extends Stamp {
         }
     }
 
-    public static long upMaskFor(Kind kind, long lowerBound, long upperBound) {
+    public static long maskFor(Kind kind, long lowerBound, long upperBound) {
         long mask = lowerBound | upperBound;
         if (mask == 0) {
             return 0;
@@ -264,11 +237,4 @@ public class IntegerStamp extends Stamp {
         return s1.isPositive() && s2.isPositive() || s1.isStrictlyNegative() && s2.isStrictlyNegative();
     }
 
-    @Override
-    public Constant asConstant() {
-        if (lowerBound == upperBound) {
-            return Constant.forIntegerKind(kind(), lowerBound, null);
-        }
-        return null;
-    }
 }
