@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,17 +20,17 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.amd64;
+package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.amd64.*;
+import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -38,34 +38,25 @@ import com.oracle.graal.nodes.spi.*;
  * Emits a safepoint poll.
  */
 @Opcode("SAFEPOINT")
-public class AMD64SafepointOp extends AMD64LIRInstruction {
+public class SPARCSafepointOp extends SPARCLIRInstruction {
 
     @State protected LIRFrameState state;
     @Temp({OperandFlag.REG}) private AllocatableValue temp;
 
     private final HotSpotVMConfig config;
 
-    public AMD64SafepointOp(LIRFrameState state, HotSpotVMConfig config, LIRGeneratorTool tool) {
+    public SPARCSafepointOp(LIRFrameState state, HotSpotVMConfig config, LIRGeneratorTool tool) {
         this.state = state;
         this.config = config;
         temp = tool.newVariable(tool.target().wordKind);
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler asm) {
-        final int pos = asm.codeBuffer.position();
-        RegisterValue scratch = (RegisterValue) temp;
-        if (config.isPollingPageFar) {
-            asm.movq(scratch.getRegister(), config.safepointPollingAddress);
-            tasm.recordMark(Marks.MARK_POLL_FAR);
-            tasm.recordInfopoint(pos, state, InfopointReason.SAFEPOINT);
-            asm.movq(scratch.getRegister(), new AMD64Address(scratch.getRegister()));
-        } else {
-            tasm.recordMark(Marks.MARK_POLL_NEAR);
-            tasm.recordInfopoint(pos, state, InfopointReason.SAFEPOINT);
-            // The C++ code transforms the polling page offset into an RIP displacement
-            // to the real address at that offset in the polling page.
-            asm.movq(scratch.getRegister(), new AMD64Address(rip, 0));
-        }
+    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        final int pos = masm.codeBuffer.position();
+        Register scratch = ((RegisterValue) temp).getRegister();
+        new Setx(config.safepointPollingAddress, scratch).emit(masm);
+        tasm.recordInfopoint(pos, state, InfopointReason.SAFEPOINT);
+        new Ldx(new SPARCAddress(scratch, 0), g0).emit(masm);
     }
 }
