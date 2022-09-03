@@ -51,7 +51,6 @@ import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -138,17 +137,7 @@ public interface NodeFactory {
 
     LLVMExpressionNode createArrayLiteral(LLVMParserRuntime runtime, List<LLVMExpressionNode> arrayValues, Type arrayType);
 
-    /*
-     * Stack allocations with type (LLVM's alloca instruction)
-     */
-    LLVMExpressionNode createAlloca(LLVMParserRuntime runtime, Type type, int size, int alignment);
-
-    LLVMExpressionNode createAlloca(LLVMParserRuntime runtime, Type elementType, LLVMExpressionNode numElements, int alignment);
-
-    /*
-     * Stack allocation without a type
-     */
-    LLVMStackAllocationNode createStackAllocation(LLVMParserRuntime runtime);
+    LLVMExpressionNode createAlloc(LLVMParserRuntime runtime, Type type, int byteSize, int alignment, Type numElementsType, LLVMExpressionNode numElements);
 
     LLVMExpressionNode createInsertValue(LLVMParserRuntime runtime, LLVMExpressionNode resultAggregate, LLVMExpressionNode sourceAggregate, int size, int offset, LLVMExpressionNode valueToInsert,
                     Type llvmType);
@@ -164,7 +153,7 @@ public interface NodeFactory {
     LLVMExpressionNode createBasicBlockNode(LLVMParserRuntime runtime, LLVMExpressionNode[] statementNodes, LLVMControlFlowNode terminatorNode, int blockId, String blockName);
 
     LLVMExpressionNode createFunctionBlockNode(LLVMParserRuntime runtime, FrameSlot exceptionValueSlot, List<? extends LLVMExpressionNode> basicBlockNodes, FrameSlot[][] beforeBlockNuller,
-                    FrameSlot[][] afterBlockNuller, SourceSection sourceSection);
+                    FrameSlot[][] afterBlockNuller);
 
     RootNode createFunctionStartNode(LLVMParserRuntime runtime, LLVMExpressionNode functionBodyNode, LLVMExpressionNode[] copyArgumentsToFrame,
                     SourceSection sourceSection, FrameDescriptor frameDescriptor, FunctionDefinition functionHeader, Source bcSource);
@@ -190,7 +179,7 @@ public interface NodeFactory {
 
     LLVMExpressionNode createPhi(LLVMExpressionNode[] from, FrameSlot[] to, Type[] types);
 
-    LLVMExpressionNode createCopyStructByValue(LLVMParserRuntime runtime, Type type, int length, int alignment, LLVMExpressionNode parameterNode);
+    LLVMExpressionNode createCopyStructByValue(LLVMParserRuntime runtime, int length, int alignment, LLVMExpressionNode parameterNode);
 
     LLVMExpressionNode createVarArgCompoundValue(LLVMParserRuntime runtime, int length, int alignment, LLVMExpressionNode parameterNode);
 

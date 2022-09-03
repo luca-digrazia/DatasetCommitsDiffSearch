@@ -41,10 +41,7 @@ import com.oracle.truffle.llvm.parser.LLVMPhiManager.Phi;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionKind;
-import com.oracle.truffle.llvm.parser.metadata.MDExpression;
-import com.oracle.truffle.llvm.parser.metadata.MetadataSymbol;
 import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceModel;
-import com.oracle.truffle.llvm.parser.metadata.debuginfo.ValueFragment;
 import com.oracle.truffle.llvm.parser.model.attributes.Attribute;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.enums.AsmDialect;
@@ -87,7 +84,7 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInst
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
-import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
+import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitor;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
 import com.oracle.truffle.llvm.parser.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.runtime.LLVMException;
@@ -105,9 +102,9 @@ import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 
-final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
+final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
 
     private final FrameDescriptor frame;
     private final Map<String, Integer> labels;
@@ -154,11 +151,6 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
     }
 
     @Override
-    public void defaultAction(SymbolImpl symbol) {
-        throw new IllegalStateException("Unimplemented Instruction: " + symbol.getClass().getSimpleName());
-    }
-
-    @Override
     public void visit(AllocateInstruction allocate) {
         final Type type = allocate.getPointeeType();
         int alignment;
@@ -172,19 +164,19 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         }
 
         final int size = runtime.getContext().getByteSize(type);
-        final SymbolImpl count = allocate.getCount();
+        final Symbol count = allocate.getCount();
         final LLVMExpressionNode result;
         if (count instanceof NullConstant) {
-            result = nodeFactory.createAlloca(runtime, type, size, alignment);
+            result = nodeFactory.createAlloc(runtime, type, size, alignment, null, null);
         } else if (count instanceof IntegerConstant) {
             if (type instanceof VariableBitWidthType) {
-                result = nodeFactory.createAlloca(runtime, type, size * (int) ((IntegerConstant) count).getValue(), alignment);
+                result = nodeFactory.createAlloc(runtime, type, size * (int) ((IntegerConstant) count).getValue(), alignment, null, null);
             } else {
-                result = nodeFactory.createAlloca(runtime, type, size * (int) ((IntegerConstant) count).getValue(), alignment);
+                result = nodeFactory.createAlloc(runtime, type, size * (int) ((IntegerConstant) count).getValue(), alignment, null, null);
             }
         } else {
             LLVMExpressionNode num = symbols.resolve(count);
-            result = nodeFactory.createAlloca(runtime, type, num, alignment);
+            result = nodeFactory.createAlloc(runtime, type, size, alignment, count.getType(), num);
         }
 
         // we never want to step on allocations, only to actual assignments in the source
@@ -237,7 +229,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             final int size = runtime.getContext().getByteSize(targetType);
             final int align = runtime.getContext().getByteAlignment(targetType);
             argTypes[argIndex] = new PointerType(targetType);
-            argNodes[argIndex] = nodeFactory.createAlloca(runtime, targetType, size, align);
+            argNodes[argIndex] = nodeFactory.createAlloc(runtime, targetType, size, align, null, null);
             argIndex++;
         }
         for (int i = 0; argIndex < argumentCount; i++) {
@@ -251,7 +243,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         }
 
         final SourceSection sourceSection = sourceFunction.getSourceSection(call);
-        final SymbolImpl target = call.getCallTarget();
+        final Symbol target = call.getCallTarget();
         LLVMExpressionNode result = nodeFactory.createLLVMBuiltin(runtime, target, argNodes, argCount, sourceSection);
         if (result == null) {
             if (target instanceof InlineAsmConstant) {
@@ -273,7 +265,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         Type type = landingpadInstruction.getType();
         final int size = runtime.getContext().getByteSize(type);
         final int align = runtime.getContext().getByteAlignment(type);
-        LLVMExpressionNode allocateLandingPadValue = nodeFactory.createAlloca(runtime, type, size, align);
+        LLVMExpressionNode allocateLandingPadValue = nodeFactory.createAlloc(runtime, type, size, align, null, null);
         LLVMExpressionNode[] entries = new LLVMExpressionNode[landingpadInstruction.getClauseSymbols().length];
         for (int i = 0; i < entries.length; i++) {
             entries[i] = symbols.resolve(landingpadInstruction.getClauseSymbols()[i]);
@@ -299,16 +291,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         createFrameWrite(nodeFactory.createCompareExchangeInstruction(runtime, cmpxchg.getType(), elementType, ptrNode, cmpNode, newNode), cmpxchg);
     }
 
-    private static final int[] CLEAR_NONE = new int[0];
-
-    private void visitDebugIntrinsic(VoidCallInstruction call, boolean isDeclaration) {
-        final SymbolImpl sourceVariableSymbol;
-        if (isDeclaration) {
-            sourceVariableSymbol = call.getArgument(SourceModel.LLVM_DBG_DECLARE_LOCALREF_ARGINDEX);
-        } else {
-            sourceVariableSymbol = call.getArgument(SourceModel.LLVM_DBG_VALUE_LOCALREF_ARGINDEX);
-        }
-
+    private void visitDebugIntrinsic(Symbol valueSymbol, Symbol sourceVariableSymbol, boolean isDeclaration, Integer valueOffset) {
         final SourceModel.Variable var;
         if (sourceVariableSymbol instanceof SourceModel.Variable) {
             var = (SourceModel.Variable) sourceVariableSymbol;
@@ -317,7 +300,6 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             return;
         }
 
-        final SymbolImpl valueSymbol = call.getArgument(SourceModel.LLVM_DBG_INTRINSICS_VALUE_ARGINDEX);
         FrameSlot valueSlot = null;
         if (valueSymbol instanceof ValueInstruction) {
             valueSlot = frame.findFrameSlot(((ValueInstruction) valueSymbol).getName());
@@ -333,86 +315,30 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             }
         }
 
-        if (!runtime.getContext().getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
-            handleNullerInfo();
-            return;
-        }
-
-        LLVMExpressionNode valueRead = null;
-        int exprIndex;
-        if (isDeclaration) {
-            if (valueSymbol instanceof UndefinedConstant || valueSymbol instanceof NullConstant) {
-                valueRead = symbols.resolve(new NullConstant(MetaType.DEBUG));
-            } else if (valueSymbol instanceof GlobalValueSymbol || valueSymbol.getType() instanceof PointerType) {
-                valueRead = symbols.resolve(valueSymbol);
-            }
-
-            exprIndex = SourceModel.LLVM_DBG_DECLARE_EXPR_ARGINDEX;
-
-        } else {
-            final SymbolImpl valueOffsetSymbol = call.getArgument(LLVM_DBG_VALUE_OFFSET_INDEX);
-            final Integer valueOffset = LLVMSymbolReadResolver.evaluateIntegerConstant(valueOffsetSymbol);
-            valueRead = symbols.resolve(valueSymbol);
-            exprIndex = SourceModel.LLVM_DBG_VALUE_EXPR_ARGINDEX;
-
-            if (valueOffset != null && valueOffset != 0) {
-                // this is unsupported, it doesn't appear in LLVM 3.8+
-                handleNullerInfo();
-                return;
-            }
-        }
-
-        if (valueRead == null) {
-            handleNullerInfo();
-            return;
-        }
-
-        int partIndex = -1;
-        int[] clearParts = null;
-
-        final SymbolImpl exprSymbol = call.getArgument(exprIndex);
-        if (exprSymbol instanceof MetadataSymbol && ((MetadataSymbol) exprSymbol).getNode() instanceof MDExpression) {
-            final MDExpression expression = (MDExpression) ((MetadataSymbol) exprSymbol).getNode();
-            if (ValueFragment.describesFragment(expression)) {
-                final ValueFragment fragment = ValueFragment.parse(expression);
-                final List<ValueFragment> siblings = var.getFragments();
-                final List<Integer> clearSiblings = new ArrayList<>(siblings.size());
-                partIndex = ValueFragment.getPartIndex(fragment, siblings, clearSiblings);
-                if (clearSiblings.isEmpty()) {
-                    // this will be the case most of the time
-                    clearParts = CLEAR_NONE;
-                } else {
-                    clearParts = clearSiblings.stream().mapToInt(Integer::intValue).toArray();
+        if (runtime.getContext().getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
+            if (isDeclaration) {
+                LLVMExpressionNode valueRead = null;
+                if (valueSymbol instanceof UndefinedConstant || valueSymbol instanceof NullConstant) {
+                    valueRead = symbols.resolve(new NullConstant(MetaType.DEBUG));
+                } else if (valueSymbol instanceof GlobalValueSymbol || valueSymbol.getType() instanceof PointerType) {
+                    valueRead = symbols.resolve(valueSymbol);
                 }
+
+                if (valueRead != null) {
+                    final FrameSlot frameSlot = getDebugValueSlot(var.getVariable());
+                    final LLVMExpressionNode debugValue = nodeFactory.createDebugDeclaration(var.getVariable(), valueRead, frameSlot);
+                    addInstructionUnchecked(debugValue);
+                }
+            } else if (valueOffset != null && valueOffset == 0) {
+                // the dbg.value intrinsic may specify only parts of a variable by giving a value to
+                // be stored at an offset into the variable, but this never happens in practice
+                final FrameSlot frameSlot = getDebugValueSlot(var.getVariable());
+                final LLVMExpressionNode valueNode = symbols.resolve(valueSymbol);
+                final LLVMExpressionNode debugValue = nodeFactory.createDebugValue(var.getVariable(), valueNode, frameSlot);
+                addInstructionUnchecked(debugValue);
             }
         }
 
-        if (partIndex < 0 && var.hasFragments()) {
-            partIndex = var.getFragmentIndex(0, (int) var.getSymbol().getType().getSize());
-            if (partIndex < 0) {
-                throw new IllegalStateException("Cannot find index of value fragment!");
-            }
-
-            clearParts = new int[var.getFragments().size() - 1];
-            for (int i = 0; i < partIndex; i++) {
-                clearParts[i] = i;
-            }
-            for (int i = partIndex; i < clearParts.length; i++) {
-                clearParts[i] = i + 1;
-            }
-        }
-
-        final FrameSlot targetSlot = getDebugValueSlot(var.getSymbol());
-        final LLVMExpressionNode dbgWrite;
-        if (partIndex < 0) {
-            dbgWrite = nodeFactory.createDebugWrite(isDeclaration, valueRead, targetSlot);
-
-        } else {
-            final LLVMExpressionNode aggregateRead = nodeFactory.createFrameRead(runtime, MetaType.DEBUG, targetSlot);
-            dbgWrite = nodeFactory.createDebugFragmentWrite(isDeclaration, valueRead, targetSlot, aggregateRead, partIndex, clearParts);
-        }
-
-        addInstructionUnchecked(dbgWrite);
         handleNullerInfo();
     }
 
@@ -424,18 +350,22 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
     @Override
     public void visit(VoidCallInstruction call) {
-        final SymbolImpl target = call.getCallTarget();
+        final Symbol target = call.getCallTarget();
 
         if (target instanceof FunctionDeclaration) {
             final String name = ((FunctionDeclaration) target).getName();
+            final int valueArgIndex = SourceModel.LLVM_DBG_INTRINSICS_VALUE_ARGINDEX;
             switch (name) {
                 case SourceModel.LLVM_DBG_DECLARE_NAME: {
-                    visitDebugIntrinsic(call, true);
+                    final int descriptorArgIndex = SourceModel.LLVM_DBG_DECLARE_LOCALREF_ARGINDEX;
+                    visitDebugIntrinsic(call.getArgument(valueArgIndex), call.getArgument(descriptorArgIndex), true, null);
                     return;
                 }
 
                 case SourceModel.LLVM_DBG_VALUE_NAME: {
-                    visitDebugIntrinsic(call, false);
+                    final int descriptorArgIndex = SourceModel.LLVM_DBG_VALUE_LOCALREF_ARGINDEX;
+                    final Integer valueOffset = LLVMSymbolReadResolver.evaluateIntegerConstant(call.getArgument(LLVM_DBG_VALUE_OFFSET_INDEX));
+                    visitDebugIntrinsic(call.getArgument(valueArgIndex), call.getArgument(descriptorArgIndex), false, valueOffset);
                     return;
                 }
             }
@@ -489,7 +419,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             final int size = runtime.getContext().getByteSize(targetType);
             final int align = runtime.getContext().getByteAlignment(targetType);
             argTypes[argIndex] = new PointerType(targetType);
-            argNodes[argIndex] = nodeFactory.createAlloca(runtime, targetType, size, align);
+            argNodes[argIndex] = nodeFactory.createAlloc(runtime, targetType, size, align, null, null);
             argIndex++;
         }
         for (int i = 0; argIndex < argumentCount; i++, argIndex++) {
@@ -501,7 +431,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             }
         }
 
-        final SymbolImpl target = call.getCallTarget();
+        final Symbol target = call.getCallTarget();
         int regularIndex = labels.get(call.normalSuccessor().getName());
         int unwindIndex = labels.get(call.unwindSuccessor().getName());
 
@@ -546,7 +476,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
     @Override
     public void visit(VoidInvokeInstruction call) {
-        final SymbolImpl target = call.getCallTarget();
+        final Symbol target = call.getCallTarget();
 
         final int argumentCount = call.getArgumentCount() + 1; // stackpointer
         final LLVMExpressionNode[] args = new LLVMExpressionNode[argumentCount];
@@ -741,7 +671,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         final int size = runtime.getContext().getByteSize(sourceType);
         final int alignment = runtime.getContext().getByteAlignment(sourceType);
 
-        final LLVMExpressionNode resultAggregate = nodeFactory.createAlloca(runtime, sourceType, size, alignment);
+        final LLVMExpressionNode resultAggregate = nodeFactory.createAlloc(runtime, sourceType, size, alignment, null, null);
 
         final int offset = runtime.getContext().getIndexOffset(targetIndex, sourceType);
         final LLVMExpressionNode result = nodeFactory.createInsertValue(runtime, resultAggregate, sourceAggregate,
