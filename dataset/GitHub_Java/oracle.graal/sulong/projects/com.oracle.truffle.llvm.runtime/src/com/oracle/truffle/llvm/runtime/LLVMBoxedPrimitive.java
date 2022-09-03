@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,19 +29,12 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Cached.Shared;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
-import com.oracle.truffle.llvm.runtime.interop.convert.ToLLVM;
-import com.oracle.truffle.llvm.runtime.library.LLVMNativeLibrary;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
 
 /**
  * This object is used to wrap primitive values that enter LLVM code via interop at points where a
@@ -49,11 +42,9 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
  * can not be dereferenced, and in pointer comparisons, the same primitive value will result in the
  * same pointer value.
  */
-@ExportLibrary(LLVMNativeLibrary.class)
-@ExportLibrary(InteropLibrary.class)
-public final class LLVMBoxedPrimitive implements TruffleObject {
+public final class LLVMBoxedPrimitive implements LLVMObjectNativeLibrary.Provider {
 
-    final Object value;
+    private final Object value;
 
     public LLVMBoxedPrimitive(Object value) {
         this.value = value;
@@ -69,94 +60,43 @@ public final class LLVMBoxedPrimitive implements TruffleObject {
         return "<boxed value: " + getValue() + ">";
     }
 
-    @SuppressWarnings("static-method")
-    @ExportMessage(library = LLVMNativeLibrary.class)
-    boolean isPointer() {
-        return true;
+    @Override
+    public LLVMObjectNativeLibrary createLLVMObjectNativeLibrary() {
+        return new LLVMBoxedPrimitiveNativeLibrary();
     }
 
-    @ExportMessage(library = LLVMNativeLibrary.class)
-    long asPointer(@Shared("toLLVM") @Cached ToLLVM toLLVM) {
-        return (long) toLLVM.executeWithType(getValue(), null, ForeignToLLVMType.I64);
-    }
+    private static final class LLVMBoxedPrimitiveNativeLibrary extends LLVMObjectNativeLibrary {
 
-    @ExportMessage(library = LLVMNativeLibrary.class)
-    LLVMNativePointer toNativePointer(@Shared("toLLVM") @Cached ToLLVM toLLVM) {
-        return LLVMNativePointer.create(asPointer(toLLVM));
-    }
+        @Child private ForeignToLLVM toLLVM;
 
-    @ExportMessage
-    boolean isBoolean(@CachedLibrary("this.value") InteropLibrary interop) {
-        return interop.isBoolean(value);
-    }
+        @Override
+        public boolean guard(Object obj) {
+            return obj instanceof LLVMBoxedPrimitive;
+        }
 
-    @ExportMessage
-    boolean asBoolean(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
-        return interop.asBoolean(value);
-    }
+        @Override
+        public boolean isPointer(Object obj) {
+            return true;
+        }
 
-    @ExportMessage
-    boolean isNumber(@CachedLibrary("this.value") InteropLibrary interop) {
-        return interop.isNumber(value);
-    }
+        @Override
+        public boolean isNull(Object obj) {
+            return false;
+        }
 
-    @ExportMessage
-    boolean fitsInByte(@CachedLibrary("this.value") InteropLibrary interop) {
-        return interop.fitsInByte(value);
-    }
+        @Override
+        public long asPointer(Object obj) throws InteropException {
+            if (toLLVM == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                toLLVM = insert(getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I64));
+            }
+            LLVMBoxedPrimitive boxed = (LLVMBoxedPrimitive) obj;
+            return (long) toLLVM.executeWithTarget(boxed.getValue());
+        }
 
-    @ExportMessage
-    boolean fitsInShort(@CachedLibrary("this.value") InteropLibrary interop) {
-        return interop.fitsInShort(value);
-    }
-
-    @ExportMessage
-    boolean fitsInInt(@CachedLibrary("this.value") InteropLibrary interop) {
-        return interop.fitsInInt(value);
-    }
-
-    @ExportMessage
-    boolean fitsInLong(@CachedLibrary("this.value") InteropLibrary interop) {
-        return interop.fitsInLong(value);
-    }
-
-    @ExportMessage
-    boolean fitsInFloat(@CachedLibrary("this.value") InteropLibrary interop) {
-        return interop.fitsInFloat(value);
-    }
-
-    @ExportMessage
-    boolean fitsInDouble(@CachedLibrary("this.value") InteropLibrary interop) {
-        return interop.fitsInDouble(value);
-    }
-
-    @ExportMessage
-    byte asByte(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
-        return interop.asByte(value);
-    }
-
-    @ExportMessage
-    short asShort(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
-        return interop.asShort(value);
-    }
-
-    @ExportMessage
-    int asInt(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
-        return interop.asInt(value);
-    }
-
-    @ExportMessage
-    long asLong(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
-        return interop.asLong(value);
-    }
-
-    @ExportMessage
-    float asFloat(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
-        return interop.asFloat(value);
-    }
-
-    @ExportMessage
-    double asDouble(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
-        return interop.asDouble(value);
+        @Override
+        public LLVMBoxedPrimitive toNative(Object obj) throws InteropException {
+            return (LLVMBoxedPrimitive) obj;
+        }
     }
 }
