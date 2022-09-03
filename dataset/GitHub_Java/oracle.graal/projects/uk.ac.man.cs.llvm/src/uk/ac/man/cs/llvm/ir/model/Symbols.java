@@ -27,33 +27,15 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.ir.model;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import uk.ac.man.cs.llvm.ir.model.constants.AggregateConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.Constant;
 import uk.ac.man.cs.llvm.ir.types.MetaType;
 import uk.ac.man.cs.llvm.ir.types.Type;
@@ -70,33 +52,24 @@ public final class Symbols {
         symbols = new Symbol[INITIAL_CAPACITY];
     }
 
-    public void addSymbol(Symbol symbol) {
+    void addSymbol(Symbol symbol) {
         ensureCapacity(size + 1);
 
         if (symbols[size] != null) {
+            final ForwardReference ref = (ForwardReference) symbols[size];
+            ref.replace(symbol);
+            if (ref.getName() != null && symbol instanceof ValueSymbol) {
+                ((ValueSymbol) symbol).setName(ref.getName());
+            }
             ((ForwardReference) symbols[size]).replace(symbol);
         }
         symbols[size++] = symbol;
     }
 
-    public void addSymbols(Symbols symbols) {
-        for (int i = 0; i < symbols.size; i++) {
-            addSymbol(symbols.symbols[i]);
+    void addSymbols(Symbols argSymbols) {
+        for (int i = 0; i < argSymbols.size; i++) {
+            addSymbol(argSymbols.symbols[i]);
         }
-    }
-
-    public Constant getConstant(int index) {
-        return (Constant) getSymbol(index);
-    }
-
-    public Constant[] getConstants(int[] indices) {
-        Constant[] consts = new Constant[indices.length];
-
-        for (int i = 0; i < indices.length; i++) {
-            consts[i] = getConstant(indices[i]);
-        }
-
-        return consts;
     }
 
     public int getSize() {
@@ -127,20 +100,40 @@ public final class Symbols {
         }
     }
 
-    public Symbol[] getSymbols(int[] indices) {
-        Symbol[] syms = new Symbol[indices.length];
+    public Symbol getSymbol(int index, AggregateConstant dependent, int elementIndex) {
+        if (index < size) {
+            return symbols[index];
+        } else {
+            ensureCapacity(index + 1);
 
-        for (int i = 0; i < indices.length; i++) {
-            syms[i] = getSymbol(indices[i]);
+            ForwardReference ref = (ForwardReference) symbols[index];
+            if (ref == null) {
+                symbols[index] = ref = new ForwardReference();
+            }
+            ref.addDependent(dependent, elementIndex);
+
+            return ref;
         }
-
-        return syms;
     }
 
-    public void setSymbolName(int index, String name) {
+    void setSymbolName(int index, String name) {
         Symbol symbol = getSymbol(index);
         if (symbol instanceof ValueSymbol) {
             ((ValueSymbol) symbol).setName(name);
+        }
+
+        if (index < size) {
+            if (symbols[index] instanceof ValueSymbol) {
+                ((ValueSymbol) symbols[index]).setName(name);
+            }
+        } else {
+            ensureCapacity(index + 1);
+
+            ForwardReference ref = (ForwardReference) symbols[index];
+            if (ref == null) {
+                symbols[index] = ref = new ForwardReference();
+            }
+            ref.setName(name);
         }
     }
 
@@ -150,26 +143,55 @@ public final class Symbols {
         }
     }
 
-    private static class ForwardReference implements Symbol {
+    @Override
+    public String toString() {
+        return "Symbols [symbols=" + Arrays.toString(Arrays.copyOfRange(symbols, 0, size)) + ", size=" + size + "]";
+    }
+
+    private static final class ForwardReference implements Constant, ValueSymbol {
 
         private final List<Symbol> dependents = new ArrayList<>();
+        private final Map<AggregateConstant, List<Integer>> aggregateDependents = new HashMap<>();
+
+        private String name;
 
         ForwardReference() {
+            this.name = null;
         }
 
-        public void addDependent(Symbol dependent) {
+        void addDependent(Symbol dependent) {
             dependents.add(dependent);
         }
 
-        public void replace(Symbol symbol) {
-            for (Symbol dependent : dependents) {
-                dependent.replace(this, symbol);
-            }
+        void addDependent(AggregateConstant dependent, int index) {
+            final List<Integer> indices = aggregateDependents.getOrDefault(dependent, new ArrayList<>());
+            indices.add(index);
+            aggregateDependents.put(dependent, indices);
+        }
+
+        public void replace(Symbol replacement) {
+            aggregateDependents.forEach((key, val) -> val.forEach(i -> key.replaceElement(i, replacement)));
+            dependents.forEach(dependent -> dependent.replace(this, replacement));
         }
 
         @Override
         public Type getType() {
             return MetaType.UNKNOWN;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("ForwardReference[name=%s]", name == null ? ValueSymbol.UNKNOWN : name);
         }
     }
 }
