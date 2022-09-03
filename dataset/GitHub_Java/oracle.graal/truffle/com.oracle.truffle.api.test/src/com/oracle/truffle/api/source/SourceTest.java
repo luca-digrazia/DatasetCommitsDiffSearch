@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.api.source;
 
-import com.oracle.truffle.api.profiles.SeparateClassloaderTestRunner;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
@@ -32,18 +31,13 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringReader;
 import java.lang.ref.WeakReference;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-@RunWith(SeparateClassloaderTestRunner.class)
 public class SourceTest {
     @Test
     public void assignMimeTypeAndIdentity() {
@@ -151,7 +145,7 @@ public class SourceTest {
         }
 
         Source s1 = Source.fromURL(file.toURI().toURL(), "Hello.java");
-        assertEquals("Recognized as Java", "text/x-java", s1.getMimeType());
+        assertEquals("Threated as plain", "text/plain", s1.getMimeType());
         Source s2 = s1.withMimeType("text/x-c");
         assertEquals("They have the same content", s1.getCode(), s2.getCode());
         assertEquals("// Hello", s1.getCode());
@@ -240,82 +234,6 @@ public class SourceTest {
         assertEquals("Path is derived from name", "/tmp/hi.tmp", orig.getPath());
         Source source = orig.withPath("c:\\temp\\hi.txt");
         assertEquals("c:\\temp\\hi.txt", source.getPath());
-    }
-
-    @Test
-    public void relativeURL() throws Exception {
-        URL resource = SourceSnippets.class.getResource("sample.js");
-        assertNotNull("Sample js file found", resource);
-        SourceSnippets.fromURL();
-    }
-
-    @Test
-    public void fileSample() throws Exception {
-        File sample = File.createTempFile("sample", ".java");
-        sample.deleteOnExit();
-        SourceSnippets.fromFile(sample.getParentFile(), sample.getName());
-        sample.delete();
-    }
-
-    @Test
-    public void stringSample() throws Exception {
-        SourceSnippets.fromAString();
-    }
-
-    @Test
-    public void readerSample() throws Exception {
-        SourceSnippets.fromReader();
-    }
-
-    @Test
-    public void fileWithReload() throws Exception {
-        File file = File.createTempFile("ChangeMe", ".java");
-        file.deleteOnExit();
-
-        String text;
-        try (FileWriter w = new FileWriter(file)) {
-            text = "// Hello";
-            w.write(text);
-        }
-
-        Source original = Source.fromFileName(file.getPath());
-        assertEquals(text, original.getCode());
-
-        String newText;
-        try (FileWriter w = new FileWriter(file)) {
-            newText = "// Hello World!";
-            w.write(newText);
-        }
-
-        Source still = Source.fromFileName(file.getPath(), false);
-        assertEquals(original, still);
-        assertEquals(text, still.getCode());
-
-        Source reloaded = Source.fromFileName(file.getPath(), true);
-        assertNotEquals(original, reloaded);
-        assertEquals("New source has the new text", newText, reloaded.getCode());
-
-        assertEquals("Old source1 remains unchanged", text, original.getCode());
-        assertEquals("Old source2 remains unchanged", text, still.getCode());
-    }
-
-    @Test
-    public void normalSourceIsntInternal() throws IOException {
-        Source source = Source.newWithText("anything")
-            .mimeType("text/plain")
-            .build();
-
-        assertFalse("Not internal", source.isInternal());
-    }
-
-    @Test
-    public void markSourceAsInternal() throws IOException {
-        Source source = Source.newWithText("anything internal")
-            .mimeType("text/plain")
-            .internal(true)
-            .build();
-
-        assertTrue("This source is internal", source.isInternal());
     }
 
     private static void assertGC(String msg, WeakReference<?> ref) {
