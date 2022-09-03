@@ -158,7 +158,7 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
                 }
                 break;
             default:
-                throw GraalError.shouldNotReachHere(input.getPlatformKind().toString());
+                throw GraalError.shouldNotReachHere();
         }
         return result;
     }
