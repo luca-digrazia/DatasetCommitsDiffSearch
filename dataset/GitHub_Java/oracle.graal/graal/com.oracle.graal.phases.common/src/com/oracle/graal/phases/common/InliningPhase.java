@@ -57,10 +57,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     private final OptimisticOptimizations optimisticOpts;
     private CustomCanonicalizer customCanonicalizer;
 
-    private int inliningCount;
-
-    private int maxMethodPerInlining = Integer.MAX_VALUE;
-
     // Metrics
     private static final DebugMetric metricInliningPerformed = Debug.metric("InliningPerformed");
     private static final DebugMetric metricInliningConsidered = Debug.metric("InliningConsidered");
@@ -75,10 +71,6 @@ public class InliningPhase extends Phase implements InliningCallback {
         this.customCanonicalizer = customCanonicalizer;
     }
 
-    public void setMaxMethodsPerInlining(int max) {
-        maxMethodPerInlining = max;
-    }
-
     public InliningPhase(GraalCodeCacheProvider runtime, Assumptions assumptions, GraphCache cache, PhasePlan plan, InliningPolicy inliningPolicy, OptimisticOptimizations optimisticOpts) {
         this.runtime = runtime;
         this.assumptions = assumptions;
@@ -86,10 +78,6 @@ public class InliningPhase extends Phase implements InliningCallback {
         this.plan = plan;
         this.inliningPolicy = inliningPolicy;
         this.optimisticOpts = optimisticOpts;
-    }
-
-    public int getInliningCount() {
-        return inliningCount;
     }
 
     @Override
@@ -101,7 +89,6 @@ public class InliningPhase extends Phase implements InliningCallback {
 
             if (candidate != null) {
                 boolean isWorthInlining = inliningPolicy.isWorthInlining(candidate);
-                isWorthInlining &= candidate.numberOfMethods() <= maxMethodPerInlining;
 
                 metricInliningConsidered.increment();
                 if (isWorthInlining) {
@@ -115,7 +102,6 @@ public class InliningPhase extends Phase implements InliningCallback {
                         if (GraalOptions.OptCanonicalizer) {
                             new CanonicalizerPhase(runtime, assumptions, invokeUsages, mark, customCanonicalizer).apply(graph);
                         }
-                        inliningCount++;
                         metricInliningPerformed.increment();
                     } catch (BailoutException bailout) {
                         throw bailout;
@@ -199,12 +185,9 @@ public class InliningPhase extends Phase implements InliningCallback {
                 return InliningUtil.logInlinedMethod(info, "intrinsic");
             }
 
-            boolean preferredInvoke = hints != null && hints.contains(info.invoke());
-            int bonus = preferredInvoke ? 2 : 1;
-
-            int bytecodeSize = bytecodeCodeSize(info) / bonus;
-            int complexity = compilationComplexity(info) / bonus;
-            int compiledCodeSize = compiledCodeSize(info) / bonus;
+            int bytecodeSize = bytecodeCodeSize(info);
+            int complexity = compilationComplexity(info);
+            int compiledCodeSize = compiledCodeSize(info);
             double relevance = info.invoke().inliningRelevance();
 
             /*
@@ -230,6 +213,7 @@ public class InliningPhase extends Phase implements InliningCallback {
             int invokeUsages = countInvokeUsages(info);
             int moreSpecificArguments = countMoreSpecificArgumentInfo(info);
             int level = info.level();
+            boolean preferredInvoke = hints != null && hints.contains(info.invoke());
 
             // TODO (chaeubl): compute metric that is used to check if this method should be inlined
 
@@ -459,7 +443,11 @@ public class InliningPhase extends Phase implements InliningCallback {
                     queueSuccessors(current);
                 } else if (current instanceof EndNode) {
                     queueMerge((EndNode) current);
-                } else if (current instanceof ControlSinkNode) {
+                } else if (current instanceof DeoptimizeNode) {
+                    // nothing todo
+                } else if (current instanceof ReturnNode) {
+                    // nothing todo
+                } else if (current instanceof UnwindNode) {
                     // nothing todo
                 } else if (current instanceof ControlSplitNode) {
                     queueSuccessors(current);
