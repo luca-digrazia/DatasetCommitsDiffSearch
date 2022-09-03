@@ -23,55 +23,48 @@
 package com.oracle.graal.hotspot;
 
 import java.lang.reflect.*;
-
 import com.oracle.graal.api.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.interpreter.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.target.amd64.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.cri.xir.*;
 
 /**
- * Singleton class holding the instance of the {@link GraalRuntime}.
- *
- * The platform specific subclass is created by a call from
- * the C++ HotSpot code.
+ * Singleton class holding the instance of the GraalCompiler.
  */
-public abstract class HotSpotGraalRuntime implements GraalRuntime {
+public final class HotSpotGraalRuntime implements GraalRuntime {
 
-    private static HotSpotGraalRuntime instance;
+    private static final HotSpotGraalRuntime instance = new HotSpotGraalRuntime();
 
-    /**
-     * Gets the singleton runtime instance object.
-     */
     public static HotSpotGraalRuntime getInstance() {
         return instance;
     }
 
-    /**
-     * Called by the platform specific class exactly once to register the singleton instance.
-     */
-    protected static void setInstance(HotSpotGraalRuntime runtime) {
-        assert instance == null : "runtime already registered";
-        instance = runtime;
-    }
+    private final CompilerToVM compilerToVm;
+    private final VMToCompiler vmToCompiler;
 
-    protected final CompilerToVM compilerToVm;
-    protected final VMToCompiler vmToCompiler;
-
-    protected final HotSpotRuntime runtime;
-    protected final GraalCompiler compiler;
-    protected final TargetDescription target;
-
+    private HotSpotRuntime runtime;
+    private GraalCompiler compiler;
+    private TargetDescription target;
     private HotSpotRuntimeInterpreterInterface runtimeInterpreterInterface;
     private volatile HotSpotGraphCache cache;
 
-    protected final HotSpotVMConfig config;
+    private final HotSpotVMConfig config;
 
-    protected HotSpotGraalRuntime() {
+    public HotSpotVMConfig getConfig() {
+        return config;
+    }
+
+    private HotSpotGraalRuntime() {
+
         CompilerToVM toVM = new CompilerToVMImpl();
 
         // initialize VmToCompiler
@@ -97,16 +90,6 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {
             printConfig(config);
         }
-
-        target = createTarget();
-        runtime = createRuntime();
-
-        HotSpotBackend backend = createBackend();
-        GraalOptions.StackShadowPages = config.stackShadowPages;
-        compiler = new GraalCompiler(getRuntime(), getTarget(), backend);
-        if (GraalOptions.CacheGraphs) {
-            cache = new HotSpotGraphCache();
-        }
     }
 
     private static void printConfig(HotSpotVMConfig config) {
@@ -120,19 +103,34 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         }
     }
 
-    protected abstract TargetDescription createTarget();
-    protected abstract HotSpotBackend createBackend();
-    protected abstract HotSpotRuntime createRuntime();
-
-    public HotSpotVMConfig getConfig() {
-        return config;
-    }
-
     public TargetDescription getTarget() {
+        if (target == null) {
+            final int wordSize = 8;
+            final int stackFrameAlignment = 16;
+            target = new TargetDescription(new AMD64(), true, stackFrameAlignment, config.vmPageSize, wordSize, true, true, true);
+        }
+
         return target;
     }
 
     public GraalCompiler getCompiler() {
+        if (compiler == null) {
+            // these options are important - graal will not generate correct code without them
+            GraalOptions.StackShadowPages = config.stackShadowPages;
+
+            XirGenerator generator = new HotSpotXirGenerator(config, getTarget(), getRuntime().getGlobalStubRegisterConfig(), this);
+            if (Logger.ENABLED) {
+                generator = LoggingProxy.getProxy(XirGenerator.class, generator);
+            }
+
+            Backend backend = Backend.create(runtime, target);
+            generator.initialize(backend.newXirAssembler());
+
+            compiler = new GraalCompiler(getRuntime(), getTarget(), backend, generator);
+            if (GraalOptions.CacheGraphs) {
+                cache = new HotSpotGraphCache();
+            }
+        }
         return compiler;
     }
 
@@ -190,6 +188,9 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
     }
 
     public HotSpotRuntime getRuntime() {
+        if (runtime == null) {
+            runtime = new HotSpotRuntime(config, this);
+        }
         return runtime;
     }
 
@@ -208,7 +209,7 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
 
     @Override
     public String getName() {
-        return getClass().getSimpleName();
+        return "HotSpotGraalRuntime";
     }
 
     @SuppressWarnings("unchecked")

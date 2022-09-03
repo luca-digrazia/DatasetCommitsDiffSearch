@@ -167,8 +167,5 @@ public class CompilerToVMImpl implements CompilerToVM {
     @Override
     public native String decodePC(long pc);
 
-    @Override
-    public native long JavaType_initialMarkWord(HotSpotResolvedJavaType type);
-
     // Checkstyle: resume
 }
