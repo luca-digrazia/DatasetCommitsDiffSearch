@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.calc;
 
 import static com.oracle.graal.api.meta.Kind.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -34,7 +33,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code ConvertNode} class represents a conversion between primitive types.
  */
-public final class ConvertNode extends FloatingNode implements Canonicalizable, LIRLowerable, Lowerable, ArithmeticOperation {
+public final class ConvertNode extends FloatingNode implements Canonicalizable, LIRLowerable, Lowerable {
 
     public static enum Op {
         I2L(Int, Long, true),
@@ -203,30 +202,22 @@ public final class ConvertNode extends FloatingNode implements Canonicalizable, 
 
     @Override
     public boolean inferStamp() {
-        Stamp stamp = value.stamp();
-        if (!(stamp instanceof IntegerStamp)) {
-            if (stamp instanceof FloatStamp) {
-                return false;
-            }
-            return updateStamp(StampFactory.illegal());
-        }
         Stamp newStamp;
-        IntegerStamp integerStamp = (IntegerStamp) stamp;
         switch (opcode) {
             case I2L:
-                newStamp = StampTool.intToLong(integerStamp);
+                newStamp = StampTool.intToLong(value().integerStamp());
                 break;
             case L2I:
-                newStamp = StampTool.longToInt(integerStamp);
+                newStamp = StampTool.longToInt(value().integerStamp());
                 break;
             case I2B:
-                newStamp = StampTool.intToByte(integerStamp);
+                newStamp = StampTool.intToByte(value().integerStamp());
                 break;
             case I2C:
-                newStamp = StampTool.intToChar(integerStamp);
+                newStamp = StampTool.intToChar(value().integerStamp());
                 break;
             case I2S:
-                newStamp = StampTool.intToShort(integerStamp);
+                newStamp = StampTool.intToShort(value().integerStamp());
                 break;
             default:
                 return false;
