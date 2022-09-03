@@ -31,6 +31,8 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.tools.profiler.CPUSampler;
 import com.oracle.truffle.tools.profiler.ProfilerNode;
 import org.graalvm.options.OptionCategory;
+import org.graalvm.options.OptionDescriptor;
+import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionType;
 
@@ -41,6 +43,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -104,13 +107,23 @@ class CPUSamplerCLI extends ProfilerCLI {
 
     @Option(name = "SampleInternal", help = "Capture internal elements (default:false).", category = OptionCategory.USER) static final OptionKey<Boolean> SAMPLE_INTERNAL = new OptionKey<>(false);
 
-    static void handleOutput(TruffleInstrument.Env env, CPUSampler sampler) {
+    static void handleOutput(TruffleInstrument.Env env, CPUSampler sampler, OptionDescriptors descriptors) {
         PrintStream out = new PrintStream(env.out());
         if (sampler.hasStackOverflowed()) {
             out.println("-------------------------------------------------------------------------------- ");
             out.println("ERROR: Shadow stack has overflowed its capacity of " + env.getOptions().get(STACK_LIMIT) + " during execution!");
             out.println("The gathered data is incomplete and incorrect!");
-            out.println("Use --" + CPUSamplerInstrument.ID + ".StackLimit=<" + STACK_LIMIT.getType().getName() + "> to set stack capacity.");
+            String name = "";
+            Iterator<OptionDescriptor> iterator = descriptors.iterator();
+            while (iterator.hasNext()) {
+                OptionDescriptor descriptor = iterator.next();
+                if (descriptor.getKey().equals(STACK_LIMIT)) {
+                    name = descriptor.getName();
+                    break;
+                }
+            }
+            assert !name.equals("");
+            out.println("Use --" + name + "=<" + STACK_LIMIT.getType().getName() + "> to set stack capacity.");
             out.println("-------------------------------------------------------------------------------- ");
             return;
         }
