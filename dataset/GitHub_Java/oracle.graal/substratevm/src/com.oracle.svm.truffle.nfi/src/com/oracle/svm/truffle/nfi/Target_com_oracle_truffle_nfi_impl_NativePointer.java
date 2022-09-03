@@ -25,32 +25,14 @@ package com.oracle.svm.truffle.nfi;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
-import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import java.util.concurrent.atomic.AtomicReference;
 
-import org.graalvm.nativeimage.UnmanagedMemory;
-import org.graalvm.word.WordFactory;
+@TargetClass(className = "com.oracle.truffle.nfi.impl.NativePointer", onlyWith = TruffleNFIFeature.IsEnabled.class)
+final class Target_com_oracle_truffle_nfi_impl_NativePointer {
 
-@TargetClass(className = "com.oracle.truffle.nfi.impl.NativeAllocation", onlyWith = TruffleNFIFeature.IsEnabled.class)
-final class Target_com_oracle_truffle_nfi_impl_NativeAllocation {
-
-    @Substitute
-    static void free(long pointer) {
-        UnmanagedMemory.free(WordFactory.pointer(pointer));
+    @Alias
+    Target_com_oracle_truffle_nfi_impl_NativePointer(@SuppressWarnings("unused") long pointer) {
     }
 
-    /**
-     * If the NFI is already used during image build time while building a preinitialized context,
-     * we need to reset this value to null, so the GC thread will be re-initialized during image
-     * loading.
-     */
-    @Alias @RecomputeFieldValue(kind = Kind.FromAlias) //
-    static final AtomicReference<Thread> gcThread = new AtomicReference<>(null);
-}
-
-@TargetClass(className = "com.oracle.truffle.nfi.impl.NativeAllocation", innerClass = "FreeDestructor", onlyWith = TruffleNFIFeature.IsEnabled.class)
-final class Target_com_oracle_truffle_nfi_impl_NativeAllocation_FreeDestructor {
-
-    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = NativeReferenceField.class) long address;
+    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = NativeReferenceField.class) long nativePointer;
 }

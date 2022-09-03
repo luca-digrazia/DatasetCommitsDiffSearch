@@ -22,35 +22,23 @@
  */
 package com.oracle.svm.truffle.nfi;
 
+import org.graalvm.word.WordFactory;
+
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import java.util.concurrent.atomic.AtomicReference;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
-import org.graalvm.nativeimage.UnmanagedMemory;
-import org.graalvm.word.WordFactory;
+@TargetClass(className = "com.oracle.truffle.nfi.impl.NativeString", onlyWith = TruffleNFIFeature.IsEnabled.class)
+final class Target_com_oracle_truffle_nfi_impl_NativeString {
 
-@TargetClass(className = "com.oracle.truffle.nfi.impl.NativeAllocation", onlyWith = TruffleNFIFeature.IsEnabled.class)
-final class Target_com_oracle_truffle_nfi_impl_NativeAllocation {
+    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = NativeReferenceField.class) long nativePointer;
 
     @Substitute
-    static void free(long pointer) {
-        UnmanagedMemory.free(WordFactory.pointer(pointer));
+    @TruffleBoundary
+    static String toJavaString(long pointer) {
+        return TruffleNFISupport.utf8ToJavaString(WordFactory.pointer(pointer));
     }
-
-    /**
-     * If the NFI is already used during image build time while building a preinitialized context,
-     * we need to reset this value to null, so the GC thread will be re-initialized during image
-     * loading.
-     */
-    @Alias @RecomputeFieldValue(kind = Kind.FromAlias) //
-    static final AtomicReference<Thread> gcThread = new AtomicReference<>(null);
-}
-
-@TargetClass(className = "com.oracle.truffle.nfi.impl.NativeAllocation", innerClass = "FreeDestructor", onlyWith = TruffleNFIFeature.IsEnabled.class)
-final class Target_com_oracle_truffle_nfi_impl_NativeAllocation_FreeDestructor {
-
-    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = NativeReferenceField.class) long address;
 }

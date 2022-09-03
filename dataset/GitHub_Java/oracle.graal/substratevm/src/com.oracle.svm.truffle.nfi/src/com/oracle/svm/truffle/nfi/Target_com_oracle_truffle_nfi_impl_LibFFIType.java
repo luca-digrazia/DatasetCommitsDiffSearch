@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,6 +23,8 @@
 package com.oracle.svm.truffle.nfi;
 
 import com.oracle.svm.core.annotate.Alias;
+import com.oracle.svm.core.annotate.RecomputeFieldValue;
+import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.TargetClass;
 
 @TargetClass(className = "com.oracle.truffle.nfi.impl.LibFFIType", onlyWith = TruffleNFIFeature.IsEnabled.class)
@@ -34,7 +34,7 @@ final class Target_com_oracle_truffle_nfi_impl_LibFFIType {
     @Alias protected int alignment;
     @Alias protected int objectCount;
 
-    @Alias protected long type;
+    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = NativeReferenceField.class) protected long type;
 }
 
 @TargetClass(className = "com.oracle.truffle.nfi.impl.LibFFIType", innerClass = "StringType", onlyWith = TruffleNFIFeature.IsEnabled.class)
@@ -43,10 +43,6 @@ final class Target_com_oracle_truffle_nfi_impl_LibFFIType_StringType {
 
 @TargetClass(className = "com.oracle.truffle.nfi.impl.LibFFIType", innerClass = "ObjectType", onlyWith = TruffleNFIFeature.IsEnabled.class)
 final class Target_com_oracle_truffle_nfi_impl_LibFFIType_ObjectType {
-}
-
-@TargetClass(className = "com.oracle.truffle.nfi.impl.LibFFIType", innerClass = "NullableType", onlyWith = TruffleNFIFeature.IsEnabled.class)
-final class Target_com_oracle_truffle_nfi_impl_LibFFIType_NullableType {
 }
 
 @TargetClass(className = "com.oracle.truffle.nfi.impl.LibFFIType", innerClass = "EnvType", onlyWith = TruffleNFIFeature.IsEnabled.class)
