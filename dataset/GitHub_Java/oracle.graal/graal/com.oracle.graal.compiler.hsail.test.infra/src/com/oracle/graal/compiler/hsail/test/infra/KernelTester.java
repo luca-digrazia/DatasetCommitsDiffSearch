@@ -121,23 +121,13 @@ public abstract class KernelTester extends GraalTest {
         return onSimulator;
     }
 
-    public boolean okraEnvIsInitialized() {
-        return this.okraLibExists;
-    }
-
     public KernelTester(boolean okraLibExists) {
         dispatchMode = DispatchMode.SEQ;
         hsailMode = HsailMode.COMPILED;
         useLambdaMethod = false;
-
-        this.okraLibExists = okraLibExists || OkraUtil.okraLibExists();
-        if (!this.okraLibExists) {
-            logger.info("Okra native library cannot be found or loaded while running" + this.getClass().getSimpleName());
-            return;
-        }
-
-        // Control which okra instances can run the tests (isSimulator is static).
+        // Control which okra instances can run the tests (is Simulator is static).
         onSimulator = OkraContext.isSimulator();
+        this.okraLibExists = okraLibExists;
     }
 
     public abstract void runTest();
