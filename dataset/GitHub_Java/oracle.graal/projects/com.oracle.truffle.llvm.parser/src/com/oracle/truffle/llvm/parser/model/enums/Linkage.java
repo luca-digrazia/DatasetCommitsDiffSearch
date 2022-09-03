@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -48,8 +48,6 @@ public enum Linkage {
     LINKER_PRIVATE_WEAK("linker_private_weak", 14L),
     LINK_ONCE_ODR_AUTO_HIDE("linkonce_odr_auto_hide", 15L);
 
-    private static final Linkage[] VALUES = values();
-
     private final String irString;
 
     private final long[] encodedValue;
@@ -64,7 +62,7 @@ public enum Linkage {
     }
 
     public static Linkage decode(long value) {
-        for (Linkage linkage : VALUES) {
+        for (Linkage linkage : values()) {
             for (long l : linkage.getEncodedValue()) {
                 if (l == value) {
                     return linkage;
@@ -78,54 +76,26 @@ public enum Linkage {
         return irString;
     }
 
-    public static boolean isExported(Linkage linkage, Visibility visibility) {
-        switch (linkage) {
-            case AVAILABLE_EXTERNALLY:
-            case DLL_IMPORT:
-                return true;
-            case EXTERNAL:
-            case DLL_EXPORT:
-            case WEAK:
-            case APPENDING:
-            case LINKONCE:
-            case EXTERN_WEAK:
-            case COMMON:
-            case WEAK_ODR:
-            case LINK_ONCE_ODR:
-                return visibility == Visibility.DEFAULT;
-            case INTERNAL:
-            case PRIVATE:
-            case LINKER_PRIVATE:
-            case LINKER_PRIVATE_WEAK:
-            case LINK_ONCE_ODR_AUTO_HIDE:
-                return false;
-            default:
-                throw new IllegalStateException("Unknown linkage: " + linkage);
-        }
+    public static boolean isFileLocal(Linkage linkage) {
+        return linkage == Linkage.INTERNAL || linkage == Linkage.PRIVATE;
     }
 
-    public static boolean isExternal(Linkage linkage) {
+    public static boolean isExtern(Linkage linkage) {
+        return linkage == Linkage.EXTERNAL || linkage == Linkage.EXTERN_WEAK;
+    }
+
+    public static boolean isWeak(Linkage linkage) {
         switch (linkage) {
-            case AVAILABLE_EXTERNALLY:
-            case DLL_IMPORT:
-                return true;
-            case EXTERNAL:
-            case EXTERN_WEAK:
             case WEAK:
-            case APPENDING:
-            case LINKONCE:
-            case DLL_EXPORT:
-            case COMMON:
             case WEAK_ODR:
+            case EXTERN_WEAK:
+            case LINKONCE:
             case LINK_ONCE_ODR:
-            case INTERNAL:
-            case PRIVATE:
-            case LINKER_PRIVATE:
-            case LINKER_PRIVATE_WEAK:
             case LINK_ONCE_ODR_AUTO_HIDE:
-                return false;
+            case AVAILABLE_EXTERNALLY:
+                return true;
             default:
-                throw new IllegalStateException("Unknown linkage: " + linkage);
+                return false;
         }
     }
 }
