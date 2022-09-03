@@ -40,6 +40,7 @@ import com.intel.llvm.ireditor.types.ResolvedVectorType;
 import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMFunctionNode;
+import com.oracle.truffle.llvm.nodes.base.floating.LLVM80BitFloatNode;
 import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
 import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
 import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
@@ -65,13 +66,13 @@ import com.oracle.truffle.llvm.nodes.literals.LLVMVectorLiteralNodeFactory.LLVMV
 import com.oracle.truffle.llvm.nodes.literals.LLVMVectorLiteralNodeFactory.LLVMVectorI32LiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.literals.LLVMVectorLiteralNodeFactory.LLVMVectorI64LiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.literals.LLVMVectorLiteralNodeFactory.LLVMVectorI8LiteralNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstruction.LLVMAllocaInstruction;
+import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVM80BitFloatArrayLiteralNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMAddressArrayCopyNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMAddressArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMDoubleArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMFloatArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMFunctionArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMI16ArrayLiteralNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMI1ArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMI32ArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMI64ArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNodeFactory.LLVMI8ArrayLiteralNodeGen;
@@ -205,41 +206,6 @@ public final class LLVMLiteralFactory {
         return bigInteger.longValue();
     }
 
-    public static LLVMExpressionNode createZeroArrayLiteral(ResolvedType arrayElementLLVMType, int nrElements, LLVMAllocaInstruction address) {
-        int byteLength = LLVMTypeHelper.getByteSize(arrayElementLLVMType);
-        switch (LLVMTypeHelper.getLLVMType(arrayElementLLVMType)) {
-            case I1:
-                LLVMI1Node[] i1ZeroInits = createI1LiteralNodes(nrElements, false);
-                return LLVMI1ArrayLiteralNodeGen.create(i1ZeroInits, byteLength, address);
-            case I8:
-                LLVMI8Node[] i8ZeroInits = createI8LiteralNodes(nrElements, (byte) 0);
-                return LLVMI8ArrayLiteralNodeGen.create(i8ZeroInits, byteLength, address);
-            case I16:
-                LLVMI16Node[] i16ZeroInits = createI16LiteralNodes(nrElements, (short) 0);
-                return LLVMI16ArrayLiteralNodeGen.create(i16ZeroInits, byteLength, address);
-            case I32:
-                LLVMI32Node[] i32ZeroInits = createI32LiteralNodes(nrElements, 0);
-                return LLVMI32ArrayLiteralNodeGen.create(i32ZeroInits, byteLength, address);
-            case I64:
-                LLVMI64Node[] i64ZeroInits = createI64LiteralNodes(nrElements, 0L);
-                return LLVMI64ArrayLiteralNodeGen.create(i64ZeroInits, byteLength, address);
-            case FLOAT:
-                LLVMFloatNode[] floatZeroInits = createFloatLiteralNodes(nrElements, 0f);
-                return LLVMFloatArrayLiteralNodeGen.create(floatZeroInits, byteLength, address);
-            case DOUBLE:
-                LLVMDoubleNode[] doubleZeroInits = createDoubleLiteralNodes(nrElements, 0d);
-                return LLVMDoubleArrayLiteralNodeGen.create(doubleZeroInits, byteLength, address);
-            case ADDRESS:
-                LLVMAddressNode[] pointerZeroInits = createPointerLiteralNodes(nrElements, LLVMAddress.NULL_POINTER);
-                return LLVMAddressArrayLiteralNodeGen.create(pointerZeroInits, byteLength, address);
-            case FUNCTION_ADDRESS:
-                LLVMFunctionNode[] functionZeroInits = createFunctionLiteralNodes(nrElements, LLVMFunction.createZeroFunction());
-                return LLVMFunctionArrayLiteralNodeGen.create(functionZeroInits, byteLength, address);
-            default:
-                throw new AssertionError(arrayElementLLVMType);
-        }
-    }
-
     public static LLVMFunctionNode[] createFunctionLiteralNodes(int nrElements, LLVMFunction value) {
         LLVMFunctionNode[] functionZeroInits = new LLVMFunctionNode[nrElements];
         for (int i = 0; i < nrElements; i++) {
@@ -337,6 +303,97 @@ public final class LLVMLiteralFactory {
                 return LLVMVectorDoubleLiteralNodeGen.create(doubleVals, target);
             default:
                 throw new AssertionError();
+        }
+    }
+
+    public static LLVMExpressionNode createZeroVectorInitializer(int nrElements, LLVMAddressNode target, LLVMBaseType llvmType) {
+        switch (llvmType) {
+            case I1_VECTOR:
+                LLVMI1Node[] i1Vals = createI1LiteralNodes(nrElements, false);
+                return LLVMVectorI1LiteralNodeGen.create(i1Vals, target);
+            case I8_VECTOR:
+                LLVMI8Node[] i8Vals = createI8LiteralNodes(nrElements, (byte) 0);
+                return LLVMVectorI8LiteralNodeGen.create(i8Vals, target);
+            case I16_VECTOR:
+                LLVMI16Node[] i16Vals = createI16LiteralNodes(nrElements, (short) 0);
+                return LLVMVectorI16LiteralNodeGen.create(i16Vals, target);
+            case I32_VECTOR:
+                LLVMI32Node[] i32Vals = createI32LiteralNodes(nrElements, 0);
+                return LLVMVectorI32LiteralNodeGen.create(i32Vals, target);
+            case I64_VECTOR:
+                LLVMI64Node[] i64Vals = createI64LiteralNodes(nrElements, 0);
+                return LLVMVectorI64LiteralNodeGen.create(i64Vals, target);
+            case FLOAT_VECTOR:
+                LLVMFloatNode[] floatVals = createFloatLiteralNodes(nrElements, 0.0f);
+                return LLVMVectorFloatLiteralNodeGen.create(floatVals, target);
+            case DOUBLE_VECTOR:
+                LLVMDoubleNode[] doubleVals = createDoubleLiteralNodes(nrElements, 0.0f);
+                return LLVMVectorDoubleLiteralNodeGen.create(doubleVals, target);
+            default:
+                throw new AssertionError(llvmType);
+        }
+    }
+
+    public static LLVMExpressionNode createLiteral(Object value, LLVMBaseType type) {
+        switch (type) {
+            case I1:
+                return new LLVMI1LiteralNode((boolean) value);
+            case I8:
+                return new LLVMI8LiteralNode((byte) value);
+            case I16:
+                return new LLVMI16LiteralNode((short) value);
+            case I32:
+                return new LLVMI32LiteralNode((int) value);
+            case I64:
+                return new LLVMI64LiteralNode((long) value);
+            case FLOAT:
+                return new LLVMFloatLiteralNode((float) value);
+            case DOUBLE:
+                return new LLVMDoubleLiteralNode((double) value);
+            case ADDRESS:
+                return new LLVMAddressLiteralNode((LLVMAddress) value);
+            case FUNCTION_ADDRESS:
+                return LLVMFunctionLiteralNodeGen.create((LLVMFunction) value);
+            default:
+                throw new AssertionError(value + " " + type);
+        }
+    }
+
+    public static LLVMAddressNode createArrayLiteral(LLVMParserRuntime runtime, List<LLVMExpressionNode> arrayValues, ResolvedType arrayType) {
+        int nrElements = arrayValues.size();
+        ResolvedType elementType = arrayType.getContainedType(-1);
+        LLVMBaseType llvmElementType = LLVMTypeHelper.getLLVMType(elementType);
+        int baseTypeSize = LLVMTypeHelper.getByteSize(elementType);
+        int size = nrElements * baseTypeSize;
+        LLVMAddressNode arrayAlloc = (LLVMAddressNode) runtime.allocateFunctionLifetime(size, LLVMTypeHelper.getAlignmentByte(arrayType));
+        int byteLength = LLVMTypeHelper.getByteSize(elementType);
+        if (size == 0) {
+            throw new AssertionError(llvmElementType + " has size of 0!");
+        }
+        switch (llvmElementType) {
+            case I8:
+                return LLVMI8ArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMI8Node[nrElements]), byteLength, arrayAlloc);
+            case I16:
+                return LLVMI16ArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMI16Node[nrElements]), byteLength, arrayAlloc);
+            case I32:
+                return LLVMI32ArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMI32Node[nrElements]), byteLength, arrayAlloc);
+            case I64:
+                return LLVMI64ArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMI64Node[nrElements]), byteLength, arrayAlloc);
+            case FLOAT:
+                return LLVMFloatArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMFloatNode[nrElements]), byteLength, arrayAlloc);
+            case DOUBLE:
+                return LLVMDoubleArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMDoubleNode[nrElements]), byteLength, arrayAlloc);
+            case X86_FP80:
+                return LLVM80BitFloatArrayLiteralNodeGen.create(arrayValues.toArray(new LLVM80BitFloatNode[nrElements]), byteLength, arrayAlloc);
+            case ARRAY:
+            case STRUCT:
+                return LLVMAddressArrayCopyNodeGen.create(arrayValues.toArray(new LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
+            case ADDRESS:
+                return LLVMAddressArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
+            case FUNCTION_ADDRESS:
+                return LLVMFunctionArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMFunctionNode[nrElements]), byteLength, arrayAlloc);
+            default:
+                throw new AssertionError(llvmElementType);
         }
     }
 
