@@ -84,6 +84,7 @@ public class LLVMBasicBlockNode extends LLVMNode {
         successorCount = new long[termInstruction.getSuccessors().length];
     }
 
+    @SuppressWarnings("deprecation")
     @ExplodeLoop
     public int executeGetSuccessorIndex(VirtualFrame frame) {
         for (LLVMNode statement : statements) {
@@ -101,7 +102,7 @@ public class LLVMBasicBlockNode extends LLVMNode {
                 if (exceptionSourceSection == null) {
                     throw e;
                 } else {
-                    String message = String.format("LLVM error in %s in %s - %s", statement.getSourceDescription(),
+                    String message = String.format("LLVM error in %s in %s - %s", exceptionSourceSection.getIdentifier(),
                                     exceptionSourceSection.getSource() != null ? exceptionSourceSection.getSource().getName() : "<unknow>", e.getMessage());
                     throw new RuntimeException(message, e);
                 }
@@ -110,9 +111,11 @@ public class LLVMBasicBlockNode extends LLVMNode {
         return termInstruction.executeGetSuccessorIndex(frame);
     }
 
+    @SuppressWarnings("deprecation")
     @TruffleBoundary
     private static void trace(LLVMNode statement) {
-        LLVMLogger.unconditionalInfo(String.format("[sulong] %s in %s", statement.getSourceDescription(), statement.getEncapsulatingSourceSection().getSource().getName()));
+        SourceSection traceSourceSection = statement.getEncapsulatingSourceSection();
+        LLVMLogger.unconditionalInfo(String.format("[sulong] %s in %s", traceSourceSection.getIdentifier(), traceSourceSection.getSource().getName()));
     }
 
     private void incrementCountAtIndex(int successorIndex) {
@@ -158,15 +161,23 @@ public class LLVMBasicBlockNode extends LLVMNode {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
-    public String getSourceDescription() {
-        LLVMFunctionStartNode functionStartNode = NodeUtil.findParent(this, LLVMFunctionStartNode.class);
-        assert functionStartNode != null : getParent().getClass();
-        if (blockId == 0) {
-            return String.format("first basic block in function %s", functionStartNode.getFunctionName());
-        } else {
-            return String.format("basic block %s in function %s", blockName, functionStartNode.getFunctionName());
+    public SourceSection getSourceSection() {
+        if (sourceSection == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            // No harm in racing to create the source section
+            LLVMFunctionStartNode functionStartNode = NodeUtil.findParent(this, LLVMFunctionStartNode.class);
+            assert functionStartNode != null : getParent().getClass();
+            String identifier;
+            if (blockId == 0) {
+                identifier = String.format("first basic block in function %s", functionStartNode.getFunctionName());
+            } else {
+                identifier = String.format("basic block %s in function %s", blockName, functionStartNode.getFunctionName());
+            }
+            sourceSection = functionStartNode.getSourceSection().getSource().createSection(identifier, 1);
         }
+        return sourceSection;
     }
 
     @Override
