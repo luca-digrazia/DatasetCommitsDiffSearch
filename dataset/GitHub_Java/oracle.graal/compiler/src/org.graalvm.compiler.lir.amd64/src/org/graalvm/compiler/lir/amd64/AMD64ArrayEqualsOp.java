@@ -117,15 +117,12 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
 
         // We only need the vector temporaries if we generate SSE code.
         if (supportsSSE41(tool.target())) {
-            if (canGenerateConstantLengthCompare(tool.target())) {
-                LIRKind lirKind = LIRKind.value(supportsAVX2(tool.target()) ? AMD64Kind.V256_BYTE : AMD64Kind.V128_BYTE);
-                this.vectorTemp1 = tool.newVariable(lirKind);
-                this.vectorTemp2 = tool.newVariable(lirKind);
-                this.vectorTemp3 = tool.newVariable(lirKind);
-                this.vectorTemp4 = tool.newVariable(lirKind);
+            this.vectorTemp1 = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
+            this.vectorTemp2 = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
+            if (constantByteLength >= 0) {
+                this.vectorTemp3 = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
+                this.vectorTemp4 = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
             } else {
-                this.vectorTemp1 = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
-                this.vectorTemp2 = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
                 this.vectorTemp3 = Value.ILLEGAL;
                 this.vectorTemp4 = Value.ILLEGAL;
             }
@@ -135,10 +132,6 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
             this.vectorTemp3 = Value.ILLEGAL;
             this.vectorTemp4 = Value.ILLEGAL;
         }
-    }
-
-    private boolean canGenerateConstantLengthCompare(TargetDescription target) {
-        return constantByteLength >= 0 && kind.isNumericInteger() && supportsSSE41(target);
     }
 
     @Override
@@ -155,7 +148,7 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
         masm.leaq(array1, new AMD64Address(asRegister(array1Value), arrayBaseOffset));
         masm.leaq(array2, new AMD64Address(asRegister(array2Value), arrayBaseOffset));
 
-        if (canGenerateConstantLengthCompare(crb.target)) {
+        if (constantByteLength >= 0 && supportsSSE41(crb.target) && kind.isNumericInteger()) {
             emitConstantLengthArrayCompareBytes(masm, array1, array2, asRegister(temp3), asRegister(temp4),
                             new Register[]{asRegister(vectorTemp1), asRegister(vectorTemp2), asRegister(vectorTemp3), asRegister(vectorTemp4)},
                             falseLabel, constantByteLength, AVXKind.getRegisterSize(vectorTemp1).getBytes());
