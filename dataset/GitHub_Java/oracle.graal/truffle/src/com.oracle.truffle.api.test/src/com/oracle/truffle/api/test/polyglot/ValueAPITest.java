@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,7 @@ import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.NULL;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.NUMBER;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.STRING;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -63,6 +63,7 @@ import org.graalvm.polyglot.proxy.ProxyInstantiable;
 import org.graalvm.polyglot.proxy.ProxyObject;
 import org.graalvm.polyglot.proxy.ProxyPrimitive;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -100,8 +101,8 @@ public class ValueAPITest {
     @Test
     public void testString() {
         for (Object string : STRINGS) {
-            assertValue(context, context.asValue(string), STRING);
-            assertValue(context, context.asValue((ProxyPrimitive) () -> string), STRING);
+            assertValue(context, context.asValue(string), null, STRING);
+            assertValue(context, context.asValue((ProxyPrimitive) () -> string), null, STRING);
         }
     }
 
@@ -117,8 +118,8 @@ public class ValueAPITest {
     @Test
     public void testNumbers() {
         for (Object number : NUMBERS) {
-            assertValue(context, context.asValue(number), NUMBER);
-            assertValue(context, context.asValue((ProxyPrimitive) () -> number), NUMBER);
+            assertValue(context, context.asValue(number), null, NUMBER);
+            assertValue(context, context.asValue((ProxyPrimitive) () -> number), null, NUMBER);
         }
     }
 
@@ -129,14 +130,14 @@ public class ValueAPITest {
     @Test
     public void testBooleans() {
         for (Object bool : BOOLEANS) {
-            assertValue(context, context.asValue(bool), BOOLEAN);
-            assertValue(context, context.asValue((ProxyPrimitive) () -> bool), BOOLEAN);
+            assertValue(context, context.asValue(bool), null, BOOLEAN);
+            assertValue(context, context.asValue((ProxyPrimitive) () -> bool), null, BOOLEAN);
         }
     }
 
     @Test
     public void testNull() {
-        assertValue(context, context.asValue(null), HOST_OBJECT, NULL);
+        assertValue(context, context.asValue(null), null, HOST_OBJECT, NULL);
     }
 
     private static final Object[] HOST_OBJECTS = new Object[]{
@@ -146,8 +147,7 @@ public class ValueAPITest {
                     new EmptyObject(),
                     new PrivateObject(),
                     new FieldAccess(),
-                    new JavaClass(),
-                    new JavaSuperClass(),
+                    new MemberAccess(),
                     Proxy.newProxyInstance(ValueAPITest.class.getClassLoader(), new Class[]{ProxyInterface.class}, new InvocationHandler() {
                         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                             switch (method.getName()) {
@@ -168,7 +168,7 @@ public class ValueAPITest {
         assertTrue(context.asValue(new PrivateObject()).getMemberKeys().isEmpty());
 
         for (Object value : HOST_OBJECTS) {
-            assertValue(context, context.asValue(value), MEMBERS, HOST_OBJECT);
+            assertValue(context, context.asValue(value), null, MEMBERS, HOST_OBJECT);
         }
     }
 
@@ -321,7 +321,7 @@ public class ValueAPITest {
     @Test
     public void testArrays() {
         for (Object array : ARRAYS) {
-            assertValue(context, context.asValue(array), ARRAY_ELEMENTS, HOST_OBJECT, MEMBERS);
+            assertValue(context, context.asValue(array), null, ARRAY_ELEMENTS, HOST_OBJECT, MEMBERS);
         }
     }
 
@@ -348,65 +348,55 @@ public class ValueAPITest {
         assertEquals("baz", value.get(0).get("foo").get("bar")[0]);
     }
 
-    public static interface JavaInterface {
-
-    }
-
-    @FunctionalInterface
-    public static interface JavaFunctionalInterface {
-
-        void foo();
-
-    }
-
-    public static class JavaSuperClass {
-
-    }
-
-    public static class JavaClass extends JavaSuperClass implements JavaInterface, JavaFunctionalInterface {
-
-        public void foo() {
-        }
-
+    @Test
+    public void testNumberCoercion() {
+        Value memberAccess = context.asValue(new MemberAccess());
+        assertEquals(1, memberAccess.getMemberKeys().size());
+        Value memberAccessExecute = memberAccess.getMember("execute");
+        Assert.assertEquals("int", memberAccessExecute.execute(42).asString());
+        Assert.assertEquals("double", memberAccessExecute.execute(42.1d).asString());
+        Assert.assertEquals("varArgs", memberAccessExecute.execute(42, "asdf").asString());
+        // should still call the int version as the numbers coerced
+        // TODO why?
+        // Assert.assertEquals("int", memberAccessExecute.execute(42d).asString());
+        // Assert.assertEquals("int", memberAccessExecute.execute(42f).asString());
+        Assert.assertEquals("int", memberAccessExecute.execute((byte) 42).asString());
+        Assert.assertEquals("int", memberAccessExecute.execute((short) 42).asString());
+        // Assert.assertEquals("int", memberAccessExecute.execute(42l).asString());
+        Assert.assertEquals("double", memberAccessExecute.execute(42.1f).asString());
+        Assert.assertEquals("int", memberAccessExecute.execute((ProxyPrimitive) () -> 42).asString());
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void testObjectCoercion() {
-        objectCoercionTest(null, Object.class, null);
-        objectCoercionTest(null, String.class, null);
-        objectCoercionTest(null, Boolean.class, null);
-        objectCoercionTest(null, Boolean.class, null);
+        List<ObjectCoercionTest> o = new ArrayList<>();
 
-        objectCoercionTest(true, Boolean.class, null);
-        objectCoercionTest("foo", String.class, null);
-        objectCoercionTest('c', Character.class, null);
-        objectCoercionTest((byte) 42, Byte.class, null);
-        objectCoercionTest((short) 42, Short.class, null);
-        objectCoercionTest(42, Integer.class, null);
-        objectCoercionTest((long) 42, Long.class, null);
-        objectCoercionTest(42.5d, Double.class, null);
-        objectCoercionTest(42.5f, Float.class, null);
-
-        objectCoercionTest(new JavaClass(), JavaClass.class, null);
-        objectCoercionTest(new JavaClass(), JavaSuperClass.class, null);
-        objectCoercionTest(new JavaClass(), JavaInterface.class, null);
-        objectCoercionTest(new JavaClass(), JavaFunctionalInterface.class, null);
-        objectCoercionTest(new JavaClass(), Object.class, null);
+        o.add(new ObjectCoercionTest(null, Object.class, null));
+        o.add(new ObjectCoercionTest(true, Boolean.class, null));
+        o.add(new ObjectCoercionTest("foo", String.class, null));
+        // TODO: should Character really be converted to String?
+        // o.add(new ObjectCoercionTest('c', String.class, (v) -> assertEquals("c", v)));
+        o.add(new ObjectCoercionTest((byte) 42, Byte.class, null));
+        o.add(new ObjectCoercionTest((short) 42, Short.class, null));
+        o.add(new ObjectCoercionTest(42, Integer.class, null));
+        o.add(new ObjectCoercionTest((long) 42, Long.class, null));
+        o.add(new ObjectCoercionTest(42.5d, Double.class, null));
+        o.add(new ObjectCoercionTest(42.5f, Float.class, null));
 
         Map<String, Object> map = new HashMap<>();
         map.put("foobar", "baz");
-        objectCoercionTest(ProxyObject.fromMap(map), Map.class,
-                        (v) -> assertEquals("baz", v.get("foobar")));
+        o.add(new ObjectCoercionTest(ProxyObject.fromMap(map), Map.class,
+                        (v) -> assertEquals("baz", v.get("foobar"))));
 
         ProxyArray array = ProxyArray.fromArray(42, 42, 42);
-        objectCoercionTest(array, Map.class,
-                        (v) -> assertEquals(42, v.get(2L)));
+        o.add(new ObjectCoercionTest(array, Map.class,
+                        (v) -> assertEquals(42, v.get(2L))));
 
         ArrayElements arrayElements = new ArrayElements();
         arrayElements.array.add(42);
 
-        objectCoercionTest(arrayElements, Map.class, (v) -> {
+        o.add(new ObjectCoercionTest(arrayElements, Map.class, (v) -> {
             assertEquals(42, v.get(0L));
             assertEquals(1, v.size());
             assertFalse(v instanceof Function);
@@ -416,13 +406,13 @@ public class ValueAPITest {
             assertFalse(value.canInstantiate());
             assertFalse(value.hasMembers());
             assertTrue(value.hasArrayElements());
-        });
+        }));
 
         MembersAndArray mapAndArray = new MembersAndArray();
         mapAndArray.map.put("foo", "bar");
         mapAndArray.array.add(42);
 
-        objectCoercionTest(mapAndArray, Map.class, (v) -> {
+        o.add(new ObjectCoercionTest(mapAndArray, Map.class, (v) -> {
             assertEquals(42, v.get(0L));
             assertEquals("bar", v.get("foo"));
             assertEquals(2, v.size());
@@ -433,13 +423,13 @@ public class ValueAPITest {
             assertFalse(value.canInstantiate());
             assertTrue(value.hasMembers());
             assertTrue(value.hasArrayElements());
-        });
+        }));
 
         MembersAndInstantiable membersAndInstantiable = new MembersAndInstantiable();
         membersAndInstantiable.map.put("foo", "bar");
         membersAndInstantiable.instantiableResult = "foobarbaz";
 
-        objectCoercionTest(membersAndInstantiable, Map.class, (v) -> {
+        o.add(new ObjectCoercionTest(membersAndInstantiable, Map.class, (v) -> {
             assertEquals("bar", v.get("foo"));
             assertEquals(1, v.size());
             assertTrue(v instanceof Function);
@@ -450,13 +440,13 @@ public class ValueAPITest {
             assertTrue(value.canInstantiate());
             assertTrue(value.hasMembers());
             assertFalse(value.hasArrayElements());
-        });
+        }));
 
         MembersAndExecutable membersAndExecutable = new MembersAndExecutable();
         membersAndExecutable.map.put("foo", "bar");
         membersAndExecutable.executableResult = "foobarbaz";
 
-        objectCoercionTest(membersAndExecutable, Map.class, (v) -> {
+        o.add(new ObjectCoercionTest(membersAndExecutable, Map.class, (v) -> {
             assertEquals("bar", v.get("foo"));
             assertEquals(1, v.size());
             assertTrue(v instanceof Function);
@@ -467,14 +457,14 @@ public class ValueAPITest {
             assertFalse(value.canInstantiate());
             assertTrue(value.hasMembers());
             assertFalse(value.hasArrayElements());
-        });
+        }));
 
         MembersAndArrayAndExecutable mapAndArrayAndExecutable = new MembersAndArrayAndExecutable();
         mapAndArrayAndExecutable.map.put("foo", "bar");
         mapAndArrayAndExecutable.array.add(42);
         mapAndArrayAndExecutable.executableResult = "foobarbaz";
 
-        objectCoercionTest(mapAndArrayAndExecutable, Map.class, (v) -> {
+        o.add(new ObjectCoercionTest(mapAndArrayAndExecutable, Map.class, (v) -> {
             assertEquals(42, v.get(0L));
             assertEquals("bar", v.get("foo"));
             assertEquals(2, v.size());
@@ -486,14 +476,14 @@ public class ValueAPITest {
             assertFalse(value.canInstantiate());
             assertTrue(value.hasMembers());
             assertTrue(value.hasArrayElements());
-        });
+        }));
 
         MembersAndArrayAndInstantiable mapAndArrayAndInstantiable = new MembersAndArrayAndInstantiable();
         mapAndArrayAndInstantiable.map.put("foo", "bar");
         mapAndArrayAndInstantiable.array.add(42);
         mapAndArrayAndInstantiable.instantiableResult = "foobarbaz";
 
-        objectCoercionTest(mapAndArrayAndInstantiable, Map.class, (v) -> {
+        o.add(new ObjectCoercionTest(mapAndArrayAndInstantiable, Map.class, (v) -> {
             assertEquals(42, v.get(0L));
             assertEquals("bar", v.get("foo"));
             assertEquals(2, v.size());
@@ -505,14 +495,14 @@ public class ValueAPITest {
             assertTrue(value.canInstantiate());
             assertTrue(value.hasMembers());
             assertTrue(value.hasArrayElements());
-        });
+        }));
 
         MembersAndArrayAndExecutableAndInstantiable mapAndArrayAndExecutableAndInstantiable = new MembersAndArrayAndExecutableAndInstantiable();
         mapAndArrayAndExecutableAndInstantiable.map.put("foo", "bar");
         mapAndArrayAndExecutableAndInstantiable.array.add(42);
         mapAndArrayAndExecutableAndInstantiable.executableResult = "foobarbaz";
 
-        objectCoercionTest(mapAndArrayAndInstantiable, Map.class, (v) -> {
+        o.add(new ObjectCoercionTest(mapAndArrayAndInstantiable, Map.class, (v) -> {
             assertEquals(42, v.get(0L));
             assertEquals("bar", v.get("foo"));
             assertEquals(2, v.size());
@@ -523,29 +513,21 @@ public class ValueAPITest {
             assertTrue(value.canInstantiate());
             assertTrue(value.hasMembers());
             assertTrue(value.hasArrayElements());
-        });
+        }));
 
-    }
-
-    @SuppressWarnings({"unchecked"})
-    private <T> void objectCoercionTest(Object value, Class<T> expectedType, Consumer<T> validator) {
         Value coerce = context.asValue(new CoerceObject()).getMember("coerce");
-        T result = (T) context.asValue(value).as(Object.class);
-        if (result != null) {
-            assertTrue("expected " + expectedType + " but was " + result.getClass(), expectedType.isInstance(result));
-        } else if (value != null) {
-            fail("expected " + expectedType + " but was null");
+
+        for (ObjectCoercionTest test : o) {
+            Object result = context.asValue(test.value).as(Object.class);
+            assertTrue(test.toString(), test.isExpectedType(result));
+            test.validator.accept(result);
+
+            coerce.execute(test.value, test.validator);
+
+            assertValue(context, context.asValue(test.value));
+            assertValue(context, context.asValue(result));
         }
 
-        if (validator == null) {
-            assertEquals(value, result);
-        } else {
-            validator.accept(result);
-            coerce.execute(value, validator);
-        }
-
-        assertValue(context, context.asValue(value));
-        assertValue(context, context.asValue(result));
     }
 
     public static class CoerceObject {
@@ -553,6 +535,35 @@ public class ValueAPITest {
         public <T> Object coerce(T value, Consumer<T> o) {
             o.accept(value);
             return value;
+        }
+
+    }
+
+    private static class ObjectCoercionTest {
+
+        final Object value;
+        final Class<?> expectedType;
+
+        final Consumer<Object> validator;
+
+        @SuppressWarnings("unchecked")
+        public <T> ObjectCoercionTest(Object value, Class<T> expectedType, Consumer<T> validator) {
+            this.value = value;
+            this.expectedType = expectedType;
+            if (validator == null) {
+                this.validator = (v) -> assertEquals(value, v);
+            } else {
+                this.validator = (Consumer<Object>) validator;
+            }
+        }
+
+        boolean isExpectedType(Object result) {
+            return expectedType.isInstance(result) || (value == null && result == null);
+        }
+
+        @Override
+        public String toString() {
+            return "ObjectCoercionTest [value=" + value + ", expectedType=" + expectedType + "]";
         }
 
     }
@@ -565,6 +576,22 @@ public class ValueAPITest {
 
     private static class FieldAccess {
         @SuppressWarnings("unused") public EmptyObject member;
+    }
+
+    public static class MemberAccess {
+
+        public Object execute(@SuppressWarnings("unused") int value) {
+            return "int";
+        }
+
+        public Object execute(@SuppressWarnings("unused") double value) {
+            return "double";
+        }
+
+        @SuppressWarnings("unused")
+        public Object execute(Object... o) {
+            return "varArgs";
+        }
     }
 
     private static interface ProxyInterface {
