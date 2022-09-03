@@ -63,8 +63,8 @@ import javax.tools.FileObject;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.service.ServiceProvider;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.service.ServiceProvider;
 
 import com.oracle.graal.compiler.gen.NodeMatchRules;
 import com.oracle.graal.compiler.match.ComplexMatchResult;
@@ -604,7 +604,7 @@ public class MatchProcessor extends AbstractProcessor {
     }
 
     private void createProviderFile(String pkg, String providerClassName, Element... originatingElements) throws IOException {
-        String filename = "META-INF/jvmci.providers/" + pkg + "." + providerClassName;
+        String filename = "META-INF/providers/" + pkg + "." + providerClassName;
         FileObject file = processingEnv.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", filename, originatingElements);
         PrintWriter writer = new PrintWriter(new OutputStreamWriter(file.openOutputStream(), "UTF-8"));
         writer.println(MatchStatementSet.class.getName());

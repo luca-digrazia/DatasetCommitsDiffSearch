@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.compiler.gen;
 
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.compiler.match.MatchableNode;
 import com.oracle.graal.graph.Node;
@@ -49,7 +49,6 @@ import com.oracle.graal.nodes.calc.MulNode;
 import com.oracle.graal.nodes.calc.NarrowNode;
 import com.oracle.graal.nodes.calc.ObjectEqualsNode;
 import com.oracle.graal.nodes.calc.OrNode;
-import com.oracle.graal.nodes.calc.PointerEqualsNode;
 import com.oracle.graal.nodes.calc.ReinterpretNode;
 import com.oracle.graal.nodes.calc.SignExtendNode;
 import com.oracle.graal.nodes.calc.SubNode;
@@ -76,7 +75,6 @@ import com.oracle.graal.nodes.memory.WriteNode;
 @MatchableNode(nodeClass = AndNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = FloatEqualsNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = FloatLessThanNode.class, inputs = {"x", "y"}, commutative = true)
-@MatchableNode(nodeClass = PointerEqualsNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = AddNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = IntegerBelowNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = IntegerEqualsNode.class, inputs = {"x", "y"}, commutative = true)

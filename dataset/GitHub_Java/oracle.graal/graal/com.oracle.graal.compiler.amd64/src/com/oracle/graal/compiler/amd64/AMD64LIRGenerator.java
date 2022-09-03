@@ -42,28 +42,30 @@ import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.WORD;
 import static com.oracle.graal.lir.LIRValueUtil.asConstantValue;
 import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
-import static jdk.vm.ci.code.ValueUtil.isAllocatableValue;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isAllocatableValue;
+import static jdk.internal.jvmci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isStackSlotValue;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.amd64.AMD64Kind;
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.amd64.AMD64;
+import jdk.internal.jvmci.amd64.AMD64Kind;
+import jdk.internal.jvmci.code.Architecture;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterConfig;
+import jdk.internal.jvmci.code.RegisterValue;
+import jdk.internal.jvmci.code.StackSlotValue;
+import jdk.internal.jvmci.code.VirtualStackSlot;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.PlatformKind;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
@@ -84,7 +86,6 @@ import com.oracle.graal.lir.LabelRef;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.SwitchStrategy;
 import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.amd64.AMD64AddressValue;
 import com.oracle.graal.lir.amd64.AMD64ArrayEqualsOp;
 import com.oracle.graal.lir.amd64.AMD64BinaryConsumer;
@@ -126,9 +127,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     private static class RegisterBackupPair {
         public final Register register;
-        public final VirtualStackSlot backupSlot;
+        public final StackSlotValue backupSlot;
 
-        RegisterBackupPair(Register register, VirtualStackSlot backupSlot) {
+        RegisterBackupPair(Register register, StackSlotValue backupSlot) {
             this.register = register;
             this.backupSlot = backupSlot;
         }
@@ -243,12 +244,12 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             default:
                 RegisterBackupPair backup = getScratchRegister(input.getPlatformKind());
                 Register scratchRegister = backup.register;
-                VirtualStackSlot backupSlot = backup.backupSlot;
+                StackSlotValue backupSlot = backup.backupSlot;
                 return createStackMove(result, input, scratchRegister, backupSlot);
         }
     }
 
-    protected LIRInstruction createStackMove(AllocatableValue result, AllocatableValue input, Register scratchRegister, AllocatableValue backupSlot) {
+    protected LIRInstruction createStackMove(AllocatableValue result, AllocatableValue input, Register scratchRegister, StackSlotValue backupSlot) {
         return new AMD64StackMove(result, input, scratchRegister, backupSlot);
     }
 
@@ -310,9 +311,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAddress(AllocatableValue stackslot) {
+    public Variable emitAddress(StackSlotValue address) {
         Variable result = newVariable(LIRKind.value(target().arch.getWordKind()));
-        append(new StackLeaOp(result, stackslot));
+        append(new StackLeaOp(result, address));
         return result;
     }
 

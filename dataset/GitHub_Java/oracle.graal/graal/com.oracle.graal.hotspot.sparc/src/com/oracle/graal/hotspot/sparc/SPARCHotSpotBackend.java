@@ -22,19 +22,19 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCAssembler.isGlobalRegister;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.NOT_ANNUL;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_NOT_TAKEN;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Xcc;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.NotEqual;
 import static com.oracle.graal.compiler.common.GraalOptions.ZapStackOnMethodEntry;
-import static jdk.vm.ci.code.CallingConvention.Type.JavaCall;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
-import static jdk.vm.ci.sparc.SPARC.g0;
-import static jdk.vm.ci.sparc.SPARC.g5;
-import static jdk.vm.ci.sparc.SPARC.sp;
+import static jdk.internal.jvmci.code.CallingConvention.Type.JavaCall;
+import static jdk.internal.jvmci.code.ValueUtil.asRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.hotspot.HotSpotVMConfig.config;
+import static jdk.internal.jvmci.sparc.SPARC.g0;
+import static jdk.internal.jvmci.sparc.SPARC.g5;
+import static jdk.internal.jvmci.sparc.SPARC.isGlobalRegister;
+import static jdk.internal.jvmci.sparc.SPARC.sp;
 
 import java.lang.reflect.Field;
 import java.util.HashSet;
@@ -43,16 +43,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.code.DataSection;
-import jdk.vm.ci.code.DataSection.Data;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.CompilationResult;
+import jdk.internal.jvmci.code.DataSection;
+import jdk.internal.jvmci.code.DataSection.Data;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterConfig;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
+import jdk.internal.jvmci.meta.JavaType;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
 import sun.misc.Unsafe;
 
 import com.oracle.graal.asm.Assembler;
@@ -61,9 +61,9 @@ import com.oracle.graal.asm.sparc.SPARCAddress;
 import com.oracle.graal.asm.sparc.SPARCAssembler;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.sparc.SPARCArithmeticLIRGenerator;
 import com.oracle.graal.compiler.sparc.SPARCNodeMatchRules;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugMetric;
@@ -135,7 +135,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
     @Override
     public LIRGeneratorTool newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes) {
-        return new SPARCHotSpotLIRGenerator(new SPARCArithmeticLIRGenerator(), getProviders(), config(), cc, lirGenRes);
+        return new SPARCHotSpotLIRGenerator(getProviders(), config(), cc, lirGenRes);
     }
 
     @Override
@@ -175,7 +175,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
                         try (ScratchRegister sc = masm.getScratchRegister()) {
                             Register scratch = sc.getRegister();
                             assert afterFrameInit || isGlobalRegister(scratch) : "Only global (g1-g7) registers are allowed if the frame was not initialized here. Got register " + scratch;
-                            masm.setx(address.getDisplacement(), scratch, false);
+                            new Setx(address.getDisplacement(), scratch).emit(masm);
                             masm.stx(g0, new SPARCAddress(sp, scratch));
                         }
                     }
@@ -211,7 +211,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
                 try (ScratchRegister sc = masm.getScratchRegister()) {
                     Register scratch = sc.getRegister();
                     assert isGlobalRegister(scratch) : "Only global registers are allowed before save. Got register " + scratch;
-                    masm.setx(stackpoinerChange, scratch, false);
+                    new Setx(stackpoinerChange, scratch).emit(masm);
                     masm.save(sp, scratch, sp);
                 }
             }
@@ -507,7 +507,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     @Override
     public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        return new SPARCHotSpotRegisterAllocationConfig(registerConfigNonNull);
+        return new RegisterAllocationConfig(registerConfigNonNull);
     }
 
     private static final Unsafe UNSAFE = initUnsafe();

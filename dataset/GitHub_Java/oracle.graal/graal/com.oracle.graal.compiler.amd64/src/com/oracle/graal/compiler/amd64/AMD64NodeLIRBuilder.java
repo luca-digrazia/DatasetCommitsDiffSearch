@@ -23,17 +23,16 @@
 
 package com.oracle.graal.compiler.amd64;
 
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.amd64.AMD64;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.JavaType;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.compiler.gen.NodeLIRBuilder;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.amd64.AMD64BreakpointOp;
 import com.oracle.graal.lir.amd64.AMD64Call;
-import com.oracle.graal.lir.amd64.AMD64PauseOp;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
 import com.oracle.graal.nodes.BreakpointNode;
 import com.oracle.graal.nodes.DeoptimizingNode;
@@ -41,7 +40,6 @@ import com.oracle.graal.nodes.FixedNode;
 import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.IfNode;
 import com.oracle.graal.nodes.IndirectCallTargetNode;
-import com.oracle.graal.nodes.PauseNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.FixedBinaryNode;
@@ -86,7 +84,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
                 if (((fixedWithNextNode instanceof IntegerDivNode) || (fixedWithNextNode instanceof IntegerRemNode)) && fixedWithNextNode.getClass() != divRem.getClass()) {
                     FixedBinaryNode otherDivRem = (FixedBinaryNode) fixedWithNextNode;
                     if (otherDivRem.getX() == divRem.getX() && otherDivRem.getY() == divRem.getY() && !hasOperand(otherDivRem)) {
-                        Value[] results = ((AMD64ArithmeticLIRGenerator) gen.getArithmetic()).emitIntegerDivRem(operand(divRem.getX()), operand(divRem.getY()), state((DeoptimizingNode) valueNode));
+                        Value[] results = ((AMD64LIRGenerator) gen).emitIntegerDivRem(operand(divRem.getX()), operand(divRem.getY()), state((DeoptimizingNode) valueNode));
                         if (divRem instanceof IntegerDivNode) {
                             setResult(divRem, results[0]);
                             setResult(otherDivRem, results[1]);
@@ -113,11 +111,6 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
         Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMapBuilder().getRegisterConfig().getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false),
                         node.arguments());
         append(new AMD64BreakpointOp(parameters));
-    }
-
-    @Override
-    public void visitPauseNode(PauseNode node) {
-        append(new AMD64PauseOp());
     }
 
     @Override

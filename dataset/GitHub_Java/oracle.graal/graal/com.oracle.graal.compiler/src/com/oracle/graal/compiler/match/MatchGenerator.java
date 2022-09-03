@@ -22,14 +22,20 @@
  */
 package com.oracle.graal.compiler.match;
 
-import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.gen.NodeMatchRules;
 
 /**
  * Code generator for complex match patterns.
- *
- * @returns null if the match can't be generated or a {@link ComplexMatchResult} that can be
- *          evaluated during LIR generation to produce the final LIR value.
  */
 public interface MatchGenerator {
-    ComplexMatchResult match(NodeLIRBuilder gen);
+    /**
+     * @returns null if the match can't be generated or a {@link ComplexMatchResult} that can be
+     *          evaluated during LIR generation to produce the final LIR value.
+     */
+    ComplexMatchResult match(NodeMatchRules matchRules, Object... args);
+
+    /**
+     * @return a descriptive name meaningful to the user.
+     */
+    String getName();
 }

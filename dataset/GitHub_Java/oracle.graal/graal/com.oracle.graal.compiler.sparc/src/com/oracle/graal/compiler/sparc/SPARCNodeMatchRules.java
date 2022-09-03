@@ -23,14 +23,14 @@
 
 package com.oracle.graal.compiler.sparc;
 
-import static jdk.vm.ci.sparc.SPARCKind.BYTE;
-import static jdk.vm.ci.sparc.SPARCKind.XWORD;
-import static jdk.vm.ci.sparc.SPARCKind.HWORD;
-import static jdk.vm.ci.sparc.SPARCKind.WORD;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.sparc.SPARCKind;
+import static jdk.internal.jvmci.sparc.SPARCKind.BYTE;
+import static jdk.internal.jvmci.sparc.SPARCKind.DWORD;
+import static jdk.internal.jvmci.sparc.SPARCKind.HWORD;
+import static jdk.internal.jvmci.sparc.SPARCKind.WORD;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.sparc.SPARCKind;
 
 import com.oracle.graal.compiler.gen.NodeMatchRules;
 import com.oracle.graal.compiler.match.ComplexMatchResult;
@@ -65,7 +65,7 @@ public class SPARCNodeMatchRules extends NodeMatchRules {
         if (fromBits == toBits) {
             return null;
         } else if (toBits > WORD.getSizeInBits()) {
-            toKind = XWORD;
+            toKind = DWORD;
         } else if (toBits > HWORD.getSizeInBits()) {
             toKind = WORD;
         } else if (toBits > BYTE.getSizeInBits()) {
@@ -88,7 +88,7 @@ public class SPARCNodeMatchRules extends NodeMatchRules {
         SPARCKind localToKind = toKind;
         return builder -> {
             Value v = getLIRGeneratorTool().emitSignExtendLoad(LIRKind.value(localFromKind), operand(access.getAddress()), getState(access));
-            return getArithmeticLIRGenerator().emitReinterpret(LIRKind.value(localToKind), v);
+            return getLIRGeneratorTool().emitReinterpret(LIRKind.value(localToKind), v);
         };
     }
 
@@ -99,7 +99,7 @@ public class SPARCNodeMatchRules extends NodeMatchRules {
         if (fromBits == toBits) {
             return null;
         } else if (toBits > WORD.getSizeInBits()) {
-            toKind = XWORD;
+            toKind = DWORD;
         } else if (toBits > HWORD.getSizeInBits()) {
             toKind = WORD;
         } else if (toBits > BYTE.getSizeInBits()) {
@@ -122,8 +122,8 @@ public class SPARCNodeMatchRules extends NodeMatchRules {
         SPARCKind localToKind = toKind;
         return builder -> {
             // Loads are always zero extending load
-            Value v = getArithmeticLIRGenerator().emitLoad(LIRKind.value(localFromKind), operand(access.getAddress()), getState(access));
-            return getArithmeticLIRGenerator().emitReinterpret(LIRKind.value(localToKind), v);
+            Value v = getLIRGeneratorTool().emitLoad(LIRKind.value(localFromKind), operand(access.getAddress()), getState(access));
+            return getLIRGeneratorTool().emitReinterpret(LIRKind.value(localToKind), v);
         };
     }
 
@@ -142,9 +142,5 @@ public class SPARCNodeMatchRules extends NodeMatchRules {
     @Override
     public SPARCLIRGenerator getLIRGeneratorTool() {
         return (SPARCLIRGenerator) super.getLIRGeneratorTool();
-    }
-
-    protected SPARCArithmeticLIRGenerator getArithmeticLIRGenerator() {
-        return (SPARCArithmeticLIRGenerator) getLIRGeneratorTool().getArithmetic();
     }
 }

@@ -26,9 +26,9 @@ import static com.oracle.graal.compiler.common.BackendOptions.ConstructionSSAlir
 import static com.oracle.graal.compiler.common.GraalOptions.MatchExpressions;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.LogVerbose;
 import static com.oracle.graal.lir.LIR.verifyBlock;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isLegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.asRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isLegal;
+import static jdk.internal.jvmci.code.ValueUtil.isRegister;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -36,19 +36,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.code.ValueUtil;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.PlatformKind;
+import jdk.internal.jvmci.meta.Value;
 
-import com.oracle.graal.compiler.common.BackendOptions;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -79,7 +78,6 @@ import com.oracle.graal.lir.gen.PhiResolver;
 import com.oracle.graal.nodes.AbstractBeginNode;
 import com.oracle.graal.nodes.AbstractEndNode;
 import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.DeoptimizingNode;
 import com.oracle.graal.nodes.DirectCallTargetNode;
 import com.oracle.graal.nodes.FixedNode;
@@ -107,6 +105,7 @@ import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.nodes.cfg.ControlFlowGraph;
 import com.oracle.graal.nodes.extended.IntegerSwitchNode;
 import com.oracle.graal.nodes.extended.SwitchNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 import com.oracle.graal.nodes.spi.NodeValueMap;
@@ -117,7 +116,6 @@ import com.oracle.graal.nodes.virtual.VirtualObjectNode;
  */
 public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGenerationDebugContext {
 
-    private final boolean allowObjectConstantToStackMove;
     private final NodeMap<Value> nodeOperands;
     private final DebugInfoBuilder debugInfoBuilder;
 
@@ -140,7 +138,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
         assert nodeMatchRules.lirBuilder == null;
         nodeMatchRules.lirBuilder = this;
-        allowObjectConstantToStackMove = BackendOptions.UserOptions.AllowObjectConstantToStackMove.getValue();
     }
 
     public NodeMatchRules getNodeMatchRules() {
@@ -283,8 +280,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     private Value[] createPhiOut(AbstractMergeNode merge, AbstractEndNode pred) {
         List<Value> values = new ArrayList<>();
         for (PhiNode phi : merge.valuePhis()) {
-            ValueNode node = phi.valueAt(pred);
-            Value value = operand(node);
+            Value value = operand(phi.valueAt(pred));
             assert value != null;
             if (isRegister(value)) {
                 /*
@@ -292,14 +288,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                  * new Variable.
                  */
                 value = gen.emitMove(value);
-            } else if (!allowObjectConstantToStackMove && node instanceof ConstantNode && !value.getLIRKind().isValue()) {
-                /*
-                 * Object constants are not allowed as inputs for PHIs. Explicitly create a copy of
-                 * this value to force it into a register. The new variable is only used in the PHI.
-                 */
-                Variable result = gen.newVariable(value.getLIRKind());
-                gen.emitMove(result, value);
-                value = result;
             }
             values.add(value);
         }
@@ -439,6 +427,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         }
         if (node instanceof LIRLowerable) {
             ((LIRLowerable) node).generate(this);
+        } else if (node instanceof ArithmeticLIRLowerable) {
+            ((ArithmeticLIRLowerable) node).generate(this, gen);
         } else {
             throw JVMCIError.shouldNotReachHere("node is not LIRLowerable: " + node);
         }

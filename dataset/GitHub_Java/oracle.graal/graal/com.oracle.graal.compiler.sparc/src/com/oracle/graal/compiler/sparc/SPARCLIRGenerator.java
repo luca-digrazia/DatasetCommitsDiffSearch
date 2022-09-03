@@ -32,20 +32,21 @@ import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fcmpd;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fcmps;
 import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
-import static jdk.vm.ci.sparc.SPARCKind.SINGLE;
-import static jdk.vm.ci.sparc.SPARCKind.XWORD;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.sparc.SPARC;
-import jdk.vm.ci.sparc.SPARCKind;
+import static jdk.internal.jvmci.code.ValueUtil.isStackSlotValue;
+import static jdk.internal.jvmci.sparc.SPARCKind.DWORD;
+import static jdk.internal.jvmci.sparc.SPARCKind.SINGLE;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.StackSlotValue;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.PlatformKind;
+import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.sparc.SPARC;
+import jdk.internal.jvmci.sparc.SPARCKind;
 
 import com.oracle.graal.asm.sparc.SPARCAssembler;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
@@ -65,7 +66,6 @@ import com.oracle.graal.lir.LabelRef;
 import com.oracle.graal.lir.StandardOp.NoOp;
 import com.oracle.graal.lir.SwitchStrategy;
 import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGenerator;
 import com.oracle.graal.lir.gen.SpillMoveFactoryBase;
@@ -160,7 +160,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 return JavaConstant.forShort((short) dead);
             case WORD:
                 return JavaConstant.forInt((int) dead);
-            case XWORD:
+            case DWORD:
                 return JavaConstant.forLong(dead);
             case SINGLE:
             case V32_BYTE:
@@ -257,9 +257,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAddress(AllocatableValue stackslot) {
+    public Variable emitAddress(StackSlotValue address) {
         Variable result = newVariable(LIRKind.value(target().arch.getWordKind()));
-        append(new StackLoadAddressOp(result, stackslot));
+        append(new StackLoadAddressOp(result, address));
         return result;
     }
 
@@ -430,10 +430,10 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         int compareBytes = cmpKind.getSizeInBytes();
         // SPARC compares 32 or 64 bits
         if (compareBytes < left.getPlatformKind().getSizeInBytes()) {
-            left = arithmeticLIRGen.emitSignExtend(left, compareBytes * 8, XWORD.getSizeInBytes() * 8);
+            left = arithmeticLIRGen.emitSignExtend(left, compareBytes * 8, DWORD.getSizeInBytes() * 8);
         }
         if (compareBytes < right.getPlatformKind().getSizeInBytes()) {
-            right = arithmeticLIRGen.emitSignExtend(right, compareBytes * 8, XWORD.getSizeInBytes() * 8);
+            right = arithmeticLIRGen.emitSignExtend(right, compareBytes * 8, DWORD.getSizeInBytes() * 8);
         }
         append(SPARCOP3Op.newBinaryVoid(Subcc, left, right));
         return mirrored;
@@ -501,7 +501,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         append(new TableSwitchOp(lowKey, defaultTarget, targets, tmp, newVariable(LIRKind.value(target().arch.getWordKind()))));
     }
 
-    protected VirtualStackSlot getTempSlot(LIRKind kind) {
+    protected StackSlotValue getTempSlot(LIRKind kind) {
         return getResult().getFrameMapBuilder().allocateSpillSlot(kind);
     }
 
@@ -545,12 +545,12 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     public void emitNullCheck(Value address, LIRFrameState state) {
         PlatformKind kind = address.getPlatformKind();
-        assert kind == XWORD : address + " - " + kind + " not an object!";
+        assert kind == DWORD : address + " - " + kind + " not an object!";
         append(new NullCheckOp(asAddressValue(address), state));
     }
 
     public void emitLoadConstantTableBase() {
-        constantTableBase = newVariable(LIRKind.value(XWORD));
+        constantTableBase = newVariable(LIRKind.value(DWORD));
         int nextPosition = getResult().getLIR().getLIRforBlock(getCurrentBlock()).size();
         NoOp placeHolder = append(new NoOp(getCurrentBlock(), nextPosition));
         loadConstantTableBaseOp = new SPARCLoadConstantTableBaseOp(constantTableBase, placeHolder);

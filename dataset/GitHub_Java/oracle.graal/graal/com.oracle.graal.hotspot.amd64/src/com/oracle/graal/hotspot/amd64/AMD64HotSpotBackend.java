@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,37 +24,39 @@ package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.compiler.common.GraalOptions.CanOmitFrame;
 import static com.oracle.graal.compiler.common.GraalOptions.ZapStackOnMethodEntry;
-import static jdk.vm.ci.amd64.AMD64.r10;
-import static jdk.vm.ci.amd64.AMD64.rax;
-import static jdk.vm.ci.amd64.AMD64.rsp;
-import static jdk.vm.ci.code.CallingConvention.Type.JavaCallee;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
+import static jdk.internal.jvmci.amd64.AMD64.r10;
+import static jdk.internal.jvmci.amd64.AMD64.rax;
+import static jdk.internal.jvmci.amd64.AMD64.rsp;
+import static jdk.internal.jvmci.code.CallingConvention.Type.JavaCallee;
+import static jdk.internal.jvmci.code.ValueUtil.asRegister;
+import static jdk.internal.jvmci.hotspot.HotSpotVMConfig.config;
 
+import java.lang.reflect.Field;
 import java.util.Set;
 
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.amd64.AMD64;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.CompilationResult;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterConfig;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
+import jdk.internal.jvmci.meta.JavaType;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import sun.misc.Unsafe;
 
 import com.oracle.graal.asm.Assembler;
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.amd64.AMD64Address;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.amd64.AMD64NodeMatchRules;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.compiler.gen.BytecodeLIRBuilder;
+import com.oracle.graal.compiler.gen.BytecodeParserTool;
 import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.hotspot.HotSpotDataBuilder;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.HotSpotHostBackend;
-import com.oracle.graal.hotspot.HotSpotLIRGenerationResult;
 import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.stubs.Stub;
@@ -64,7 +66,6 @@ import com.oracle.graal.lir.amd64.AMD64FrameMap;
 import com.oracle.graal.lir.amd64.AMD64FrameMapBuilder;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
-import com.oracle.graal.lir.asm.DataBuilder;
 import com.oracle.graal.lir.asm.FrameContext;
 import com.oracle.graal.lir.framemap.FrameMap;
 import com.oracle.graal.lir.framemap.FrameMapBuilder;
@@ -94,13 +95,13 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public LIRGeneratorTool newLIRGenerator(LIRGenerationResult lirGenRes) {
-        return new AMD64HotSpotLIRGenerator(getProviders(), config(), lirGenRes);
+    public LIRGeneratorTool newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes) {
+        return new AMD64HotSpotLIRGenerator(getProviders(), config(), cc, lirGenRes);
     }
 
     @Override
-    public LIRGenerationResult newLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, StructuredGraph graph, Object stub) {
-        return new HotSpotLIRGenerationResult(compilationUnitName, lir, frameMapBuilder, makeCallingConvention(graph, (Stub) stub), stub);
+    public LIRGenerationResult newLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, ResolvedJavaMethod method, Object stub) {
+        return new AMD64HotSpotLIRGenerationResult(compilationUnitName, lir, frameMapBuilder, stub);
     }
 
     @Override
@@ -109,11 +110,39 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    protected void bangStackWithOffset(CompilationResultBuilder crb, int bangOffset) {
-        AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
-        int pos = asm.position();
-        asm.movl(new AMD64Address(rsp, -bangOffset), AMD64.rax);
-        assert asm.position() - pos >= PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE;
+    public BytecodeLIRBuilder newBytecodeLIRBuilder(LIRGeneratorTool gen, BytecodeParserTool parser) {
+        return new AMD64HotSpotBytecodeLIRBuilder(gen, parser);
+
+    }
+
+    /**
+     * Emits code to do stack overflow checking.
+     *
+     * @param afterFrameInit specifies if the stack pointer has already been adjusted to allocate
+     *            the current frame
+     * @param isVerifiedEntryPoint specifies if the code buffer is currently at the verified entry
+     *            point
+     */
+    protected static void emitStackOverflowCheck(CompilationResultBuilder crb, int pagesToBang, boolean afterFrameInit, boolean isVerifiedEntryPoint) {
+        if (pagesToBang > 0) {
+
+            AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
+            int frameSize = crb.frameMap.frameSize();
+            if (frameSize > 0) {
+                int lastFramePage = frameSize / UNSAFE.pageSize();
+                // emit multiple stack bangs for methods with frames larger than a page
+                for (int i = 0; i <= lastFramePage; i++) {
+                    int disp = (i + pagesToBang) * UNSAFE.pageSize();
+                    if (afterFrameInit) {
+                        disp -= frameSize;
+                    }
+                    crb.blockComment("[stack overflow check]");
+                    int pos = asm.position();
+                    asm.movl(new AMD64Address(rsp, -disp), AMD64.rax);
+                    assert i > 0 || !isVerifiedEntryPoint || asm.position() - pos >= PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE;
+                }
+            }
+        }
     }
 
     /**
@@ -152,10 +181,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
                 }
             } else {
                 int verifiedEntryPointOffset = asm.position();
-                if (!isStub) {
-                    emitStackOverflowCheck(crb);
-                    // assert asm.position() - verifiedEntryPointOffset >=
-                    // PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE;
+                if (!isStub && pagesToBang > 0) {
+                    emitStackOverflowCheck(crb, pagesToBang, false, true);
+                    assert asm.position() - verifiedEntryPointOffset >= PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE;
                 }
                 if (!isStub && asm.position() == verifiedEntryPointOffset) {
                     asm.subqWide(rsp, frameSize);
@@ -198,7 +226,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         // - has no incoming arguments passed on the stack
         // - has no deoptimization points
         // - makes no foreign calls (which require an aligned stack)
-        HotSpotLIRGenerationResult gen = (HotSpotLIRGenerationResult) lirGenRen;
+        AMD64HotSpotLIRGenerationResult gen = (AMD64HotSpotLIRGenerationResult) lirGenRen;
         LIR lir = gen.getLIR();
         assert gen.getDeoptimizationRescueSlot() == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
         boolean omitFrame = CanOmitFrame.getValue() && !frameMap.frameNeedsAllocating() && !lir.hasArgInCallerFrame() && !gen.hasForeignCall();
@@ -206,10 +234,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         Stub stub = gen.getStub();
         Assembler masm = createAssembler(frameMap);
         HotSpotFrameContext frameContext = new HotSpotFrameContext(stub != null, omitFrame);
-        DataBuilder dataBuilder = new HotSpotDataBuilder(getCodeCache().getTarget());
-        CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, dataBuilder, frameContext, compilationResult);
+        CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, frameContext, compilationResult);
         crb.setTotalFrameSize(frameMap.totalFrameSize());
-        crb.setMaxInterpreterFrameSize(gen.getMaxInterpreterFrameSize());
         StackSlot deoptimizationRescueSlot = gen.getDeoptimizationRescueSlot();
         if (deoptimizationRescueSlot != null && stub == null) {
             crb.compilationResult.setCustomStackAreaOffset(frameMap.offsetForStackSlot(deoptimizationRescueSlot));
@@ -316,5 +342,21 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
     public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
         return new AMD64HotSpotRegisterAllocationConfig(registerConfigNonNull);
+    }
+
+    private static final Unsafe UNSAFE = initUnsafe();
+
+    private static Unsafe initUnsafe() {
+        try {
+            return Unsafe.getUnsafe();
+        } catch (SecurityException se) {
+            try {
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                return (Unsafe) theUnsafe.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe", e);
+            }
+        }
     }
 }

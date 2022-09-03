@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,24 @@
  */
 package com.oracle.graal.compiler.match;
 
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
+import static com.oracle.graal.debug.GraalDebugConfig.Options.LogVerbose;
 
-import java.lang.reflect.*;
-import java.util.*;
+import java.util.List;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.gen.*;
+import jdk.internal.jvmci.meta.Value;
+
+import com.oracle.graal.compiler.gen.NodeLIRBuilder;
 import com.oracle.graal.compiler.match.MatchPattern.MatchResultCode;
 import com.oracle.graal.compiler.match.MatchPattern.Result;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.Verbosity;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.graph.GraalGraphJVMCIError;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodeinfo.Verbosity;
 
 /**
  * A named {@link MatchPattern} along with a {@link MatchGenerator} that can be evaluated to replace
- * one or more {@link ValueNode}s with a single {@link Value}.
+ * one or more {@link Node}s with a single {@link Value}.
  */
 
 public class MatchStatement {
@@ -60,14 +59,14 @@ public class MatchStatement {
     /**
      * The method in the {@link NodeLIRBuilder} subclass that will actually do the code emission.
      */
-    private Method generatorMethod;
+    private MatchGenerator generatorMethod;
 
     /**
      * The name of arguments in the order they are expected to be passed to the generator method.
      */
     private String[] arguments;
 
-    public MatchStatement(String name, MatchPattern pattern, Method generator, String[] arguments) {
+    public MatchStatement(String name, MatchPattern pattern, MatchGenerator generator, String[] arguments) {
         this.name = name;
         this.pattern = pattern;
         this.generatorMethod = generator;
@@ -83,7 +82,7 @@ public class MatchStatement {
      * @return true if the statement matched something and set a {@link ComplexMatchResult} to be
      *         evaluated by the NodeLIRBuilder.
      */
-    public boolean generate(NodeLIRBuilder builder, int index, ValueNode node, List<ScheduledNode> nodes) {
+    public boolean generate(NodeLIRBuilder builder, int index, Node node, List<Node> nodes) {
         assert index == nodes.indexOf(node);
         // Check that the basic shape matches
         Result result = pattern.matchShape(node, this);
@@ -94,16 +93,19 @@ public class MatchStatement {
         MatchContext context = new MatchContext(builder, this, index, node, nodes);
         result = pattern.matchUsage(node, context);
         if (result == Result.OK) {
-            try {
-                // Invoke the generator method and set the result if it's non null.
-                ComplexMatchResult value = (ComplexMatchResult) generatorMethod.invoke(builder, buildArgList(context));
-                if (value != null) {
-                    context.setResult(value);
-                    MatchStatementSuccess.increment();
-                    return true;
-                }
-            } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-                throw new GraalInternalError(e);
+            // Invoke the generator method and set the result if it's non null.
+            ComplexMatchResult value = generatorMethod.match(builder.getNodeMatchRules(), buildArgList(context));
+            if (value != null) {
+                context.setResult(value);
+                MatchStatementSuccess.increment();
+                Debug.metric("MatchStatement[%s]", getName()).increment();
+                return true;
+            }
+            // The pattern matched but some other code generation constraint disallowed code
+            // generation for the pattern.
+            if (LogVerbose.getValue()) {
+                Debug.log("while matching %s|%s %s %s returned null", context.getRoot().toString(Verbosity.Id), context.getRoot().getClass().getSimpleName(), getName(), generatorMethod.getName());
+                Debug.log("with nodes %s", formatMatch(node));
             }
         } else {
             if (LogVerbose.getValue() && result.code != MatchResultCode.WRONG_CLASS) {
@@ -115,8 +117,7 @@ public class MatchStatement {
 
     /**
      * @param context
-     * @return the ValueNodes captured by the match rule in the order expected by the
-     *         generatorMethod
+     * @return the Nodes captured by the match rule in the order expected by the generatorMethod
      */
     private Object[] buildArgList(MatchContext context) {
         Object[] result = new Object[arguments.length];
@@ -126,14 +127,14 @@ public class MatchStatement {
             } else {
                 result[i] = context.namedNode(arguments[i]);
                 if (result[i] == null) {
-                    throw new GraalGraphInternalError("Can't find named node %s", arguments[i]);
+                    throw new GraalGraphJVMCIError("Can't find named node %s", arguments[i]);
                 }
             }
         }
         return result;
     }
 
-    public String formatMatch(ValueNode root) {
+    public String formatMatch(Node root) {
         return pattern.formatMatch(root);
     }
 
@@ -143,5 +144,10 @@ public class MatchStatement {
 
     public String getName() {
         return name;
+    }
+
+    @Override
+    public String toString() {
+        return pattern.toString();
     }
 }
