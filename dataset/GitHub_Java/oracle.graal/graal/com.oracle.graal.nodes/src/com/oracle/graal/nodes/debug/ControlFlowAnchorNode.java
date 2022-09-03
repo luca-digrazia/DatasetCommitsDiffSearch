@@ -22,18 +22,22 @@
  */
 package com.oracle.graal.nodes.debug;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-/**
- * This node prevents control flow optimizations. It is never duplicated or merged with other
- * control flow anchors.
- */
-@NodeInfo
-public class ControlFlowAnchorNode extends FixedWithNextNode implements LIRLowerable {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.Invoke;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public final class ControlFlowAnchorNode extends FixedWithNextNode implements LIRLowerable, ControlFlowAnchored {
+
+    public static final NodeClass<ControlFlowAnchorNode> TYPE = NodeClass.create(ControlFlowAnchorNode.class);
 
     private static class Unique {
     }
@@ -41,7 +45,7 @@ public class ControlFlowAnchorNode extends FixedWithNextNode implements LIRLower
     protected Unique unique;
 
     public ControlFlowAnchorNode() {
-        super(StampFactory.forVoid());
+        super(TYPE, StampFactory.forVoid());
         this.unique = new Unique();
     }
 
@@ -52,12 +56,13 @@ public class ControlFlowAnchorNode extends FixedWithNextNode implements LIRLower
         this();
     }
 
+    @Override
     public void generate(NodeLIRBuilderTool generator) {
         // do nothing
     }
 
     @Override
     protected void afterClone(Node other) {
-        assert false : this + " should never be cloned";
+        assert other.graph() != null && other.graph() != graph() : this + " should never be cloned in the same graph";
     }
 }
