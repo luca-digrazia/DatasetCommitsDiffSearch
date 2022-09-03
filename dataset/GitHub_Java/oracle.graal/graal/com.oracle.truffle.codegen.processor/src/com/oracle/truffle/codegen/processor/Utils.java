@@ -55,17 +55,9 @@ public class Utils {
         return boxedType;
     }
 
-    public static List<TypeMirror> asTypeMirrors(List<? extends Element> elements) {
-        List<TypeMirror> types = new ArrayList<>(elements.size());
-        for (Element element : elements) {
-            types.add(element.asType());
-        }
-        return types;
-    }
-
     public static List<AnnotationMirror> collectAnnotations(ProcessorContext context, AnnotationMirror markerAnnotation, String elementName, Element element,
                     Class<? extends Annotation> annotationClass) {
-        List<AnnotationMirror> result = Utils.getAnnotationValueList(AnnotationMirror.class, markerAnnotation, elementName);
+        List<AnnotationMirror> result = Utils.getAnnotationValueList(markerAnnotation, elementName);
         AnnotationMirror explicit = Utils.findAnnotationMirror(context.getEnvironment(), element, annotationClass);
         if (explicit != null) {
             result.add(explicit);
@@ -173,46 +165,6 @@ public class Utils {
 
     public static Set<Modifier> modifiers(Modifier... modifier) {
         return new LinkedHashSet<>(Arrays.asList(modifier));
-    }
-
-    public static String getTypeId(TypeMirror mirror) {
-        switch (mirror.getKind()) {
-            case BOOLEAN:
-                return "Boolean";
-            case BYTE:
-                return "Byte";
-            case CHAR:
-                return "Char";
-            case DOUBLE:
-                return "Double";
-            case FLOAT:
-                return "Float";
-            case SHORT:
-                return "Short";
-            case INT:
-                return "Int";
-            case LONG:
-                return "Long";
-            case DECLARED:
-                return ((DeclaredType) mirror).asElement().getSimpleName().toString();
-            case ARRAY:
-                return getTypeId(((ArrayType) mirror).getComponentType()) + "Array";
-            case VOID:
-                return "Void";
-            case WILDCARD:
-                StringBuilder b = new StringBuilder();
-                WildcardType type = (WildcardType) mirror;
-                if (type.getExtendsBound() != null) {
-                    b.append("Extends").append(getTypeId(type.getExtendsBound()));
-                } else if (type.getSuperBound() != null) {
-                    b.append("Super").append(getTypeId(type.getExtendsBound()));
-                }
-                return b.toString();
-            case TYPEVAR:
-                return "Any";
-            default:
-                throw new RuntimeException("Unknown type specified " + mirror.getKind() + " mirror: " + mirror);
-        }
     }
 
     public static String getSimpleName(TypeElement element) {
@@ -476,32 +428,29 @@ public class Utils {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> List<T> getAnnotationValueList(Class<T> expectedListType, AnnotationMirror mirror, String name) {
-        List<? extends AnnotationValue> values = getAnnotationValue(List.class, mirror, name);
+    public static <T> List<T> getAnnotationValueList(AnnotationMirror mirror, String name) {
         List<T> result = new ArrayList<>();
-
+        List<? extends AnnotationValue> values = (List<? extends AnnotationValue>) getAnnotationValue(mirror, name).getValue();
         for (AnnotationValue value : values) {
-            result.add(resolveAnnotationValue(expectedListType, value));
+            result.add((T) value.getValue());
         }
         return result;
     }
 
-    public static <T> T getAnnotationValue(Class<T> expectedType, AnnotationMirror mirror, String name) {
-        return resolveAnnotationValue(expectedType, getAnnotationValue(mirror, name));
+    public static TypeMirror getAnnotationValueType(AnnotationMirror mirror, String name) {
+        return (TypeMirror) getAnnotationValue(mirror, name).getValue();
     }
 
-    @SuppressWarnings({"unchecked"})
-    private static <T> T resolveAnnotationValue(Class<T> expectedType, AnnotationValue value) {
-        Object unboxedValue = value.accept(new AnnotationValueVisitorImpl(), null);
-        if (unboxedValue != null) {
-            if (expectedType == TypeMirror.class && unboxedValue instanceof String) {
-                return null;
-            }
-            if (!expectedType.isAssignableFrom(unboxedValue.getClass())) {
-                throw new ClassCastException(unboxedValue.getClass().getName() + " not assignable from " + expectedType.getName());
-            }
-        }
-        return (T) unboxedValue;
+    public static TypeMirror getAnnotationValueTypeMirror(AnnotationMirror mirror, String name) {
+        return (TypeMirror) getAnnotationValue(mirror, name).getValue();
+    }
+
+    public static String getAnnotationValueString(AnnotationMirror mirror, String name) {
+        return (String) getAnnotationValue(mirror, name).getValue();
+    }
+
+    public static int getAnnotationValueInt(AnnotationMirror mirror, String name) {
+        return (int) getAnnotationValue(mirror, name).getValue();
     }
 
     public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name) {
@@ -521,77 +470,7 @@ public class Utils {
         if (value == null) {
             value = valueMethod.getDefaultValue();
         }
-
         return value;
-    }
-
-    private static class AnnotationValueVisitorImpl extends AbstractAnnotationValueVisitor7<Object, Void> {
-
-        @Override
-        public Object visitBoolean(boolean b, Void p) {
-            return Boolean.valueOf(b);
-        }
-
-        @Override
-        public Object visitByte(byte b, Void p) {
-            return Byte.valueOf(b);
-        }
-
-        @Override
-        public Object visitChar(char c, Void p) {
-            return c;
-        }
-
-        @Override
-        public Object visitDouble(double d, Void p) {
-            return d;
-        }
-
-        @Override
-        public Object visitFloat(float f, Void p) {
-            return f;
-        }
-
-        @Override
-        public Object visitInt(int i, Void p) {
-            return i;
-        }
-
-        @Override
-        public Object visitLong(long i, Void p) {
-            return i;
-        }
-
-        @Override
-        public Object visitShort(short s, Void p) {
-            return s;
-        }
-
-        @Override
-        public Object visitString(String s, Void p) {
-            return s;
-        }
-
-        @Override
-        public Object visitType(TypeMirror t, Void p) {
-            return t;
-        }
-
-        @Override
-        public Object visitEnumConstant(VariableElement c, Void p) {
-            return c.getConstantValue();
-        }
-
-        @Override
-        public Object visitAnnotation(AnnotationMirror a, Void p) {
-            return a;
-        }
-
-        @Override
-        public Object visitArray(List<? extends AnnotationValue> vals, Void p) {
-            return vals;
-        }
-
     }
 
     public static boolean getAnnotationValueBoolean(AnnotationMirror mirror, String name) {
@@ -712,14 +591,6 @@ public class Utils {
         }
         String qualified1 = getQualifiedName(type1);
         String qualified2 = getQualifiedName(type2);
-
-        if (type1.getKind() == TypeKind.ARRAY || type2.getKind() == TypeKind.ARRAY) {
-            if (type1.getKind() == TypeKind.ARRAY && type2.getKind() == TypeKind.ARRAY) {
-                return typeEquals(((ArrayType) type1).getComponentType(), ((ArrayType) type2).getComponentType());
-            } else {
-                return false;
-            }
-        }
         return qualified1.equals(qualified2);
     }
 
@@ -748,7 +619,7 @@ public class Utils {
             return true;
         }
 
-        // search for any super types
+        // search for any supertypes
         TypeElement exceptionTypeElement = fromTypeMirror(exceptionType);
         List<TypeElement> superTypes = getSuperTypes(exceptionTypeElement);
         for (TypeElement typeElement : superTypes) {
@@ -777,7 +648,7 @@ public class Utils {
         Set<String> typeSuperSet = new HashSet<>(getQualifiedSuperTypeNames(fromTypeMirror(type)));
         String typeName = getQualifiedName(type);
         if (!typeSuperSet.contains(Throwable.class.getCanonicalName()) && !typeName.equals(Throwable.class.getCanonicalName())) {
-            throw new IllegalArgumentException("Given type does not extend Throwable.");
+            throw new IllegalArgumentException("Given does not extend Throwable.");
         }
         return typeSuperSet.contains(RuntimeException.class.getCanonicalName()) || typeName.equals(RuntimeException.class.getCanonicalName());
     }
