@@ -35,6 +35,8 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.Visualizer;
+import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.instrumentation.InstrumentationTestLanguage.BaseNode;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -43,7 +45,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine.Instrument;
 
-@SuppressWarnings("deprecation")
 public class InstrumentationTest extends AbstractInstrumentationTest {
 
     /*
@@ -250,6 +251,22 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         @Override
         protected boolean isObjectOfLanguage(Object object) {
             return false;
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        protected Visualizer getVisualizer() {
+            return null;
+        }
+
+        @Override
+        protected boolean isInstrumentable(Node node) {
+            return false;
+        }
+
+        @Override
+        protected WrapperNode createWrapperNode(Node node) {
+            return null;
         }
 
         @Override
@@ -869,6 +886,22 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         @Override
         protected boolean isObjectOfLanguage(Object object) {
             return false;
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        protected Visualizer getVisualizer() {
+            return null;
+        }
+
+        @Override
+        protected boolean isInstrumentable(Node node) {
+            return false;
+        }
+
+        @Override
+        protected WrapperNode createWrapperNode(Node node) {
+            return null;
         }
 
         @Override

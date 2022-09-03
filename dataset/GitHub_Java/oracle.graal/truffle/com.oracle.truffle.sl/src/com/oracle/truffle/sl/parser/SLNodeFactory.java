@@ -48,6 +48,8 @@ import java.util.Map;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.sl.nodes.SLExpressionNode;
@@ -203,12 +205,12 @@ public class SLNodeFactory {
         return (statement instanceof SLIfNode) || (statement instanceof SLWhileNode);
     }
 
-    private void flattenBlocks(Iterable<? extends SLStatementNode> bodyNodes, List<SLStatementNode> flattenedNodes) {
-        for (SLStatementNode n : bodyNodes) {
+    private void flattenBlocks(Iterable<? extends Node> bodyNodes, List<SLStatementNode> flattenedNodes) {
+        for (Node n : bodyNodes) {
             if (n instanceof SLBlockNode) {
-                flattenBlocks(((SLBlockNode) n).getStatements(), flattenedNodes);
+                flattenBlocks(n.getChildren(), flattenedNodes);
             } else {
-                flattenedNodes.add(n);
+                flattenedNodes.add((SLStatementNode) n);
             }
         }
     }
@@ -363,7 +365,8 @@ public class SLNodeFactory {
     /**
      * Returns a {@link SLReadLocalVariableNode} if this read is a local variable or a
      * {@link SLFunctionLiteralNode} if this read is global. In Simple, the only global names are
-     * functions.
+     * functions. </br> There is currently no instrumentation{@linkplain Instrumenter
+     * Instrumentation} for this node.
      *
      * @param nameToken The name of the variable/function being read
      * @return either:
