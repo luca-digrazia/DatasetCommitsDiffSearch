@@ -35,10 +35,12 @@ import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.Stub;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 
 import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
@@ -69,16 +71,16 @@ public class SPARCHotSpotBackend extends HotSpotBackend {
      */
     protected static void emitStackOverflowCheck(TargetMethodAssembler tasm, boolean afterFrameInit) {
         if (StackShadowPages.getValue() > 0) {
-            // SPARCMacroAssembler masm = (SPARCMacroAssembler) tasm.asm;
+            SPARCMacroAssembler masm = (SPARCMacroAssembler) tasm.asm;
             final int frameSize = tasm.frameMap.frameSize();
             if (frameSize > 0) {
                 int lastFramePage = frameSize / unsafe.pageSize();
                 // emit multiple stack bangs for methods with frames larger than a page
                 for (int i = 0; i <= lastFramePage; i++) {
-                    // int disp = (i + StackShadowPages.getValue()) * unsafe.pageSize();
-                    // if (afterFrameInit) {
-                    // disp -= frameSize;
-                    // }
+                    int disp = (i + StackShadowPages.getValue()) * unsafe.pageSize();
+                    if (afterFrameInit) {
+                        disp -= frameSize;
+                    }
                     tasm.blockComment("[stack overflow check]");
                     // FIXME currently doesn't work; maybe frame size is wrong
                     // new Ldx(new SPARCAddress(sp, -disp), g0).emit(masm);
@@ -147,7 +149,7 @@ public class SPARCHotSpotBackend extends HotSpotBackend {
 
     @Override
     public void emitCode(TargetMethodAssembler tasm, LIRGenerator lirGen, ResolvedJavaMethod installedCodeOwner) {
-        SPARCMacroAssembler masm = (SPARCMacroAssembler) tasm.asm;
+        SPARCMacroAssembler asm = (SPARCMacroAssembler) tasm.asm;
         FrameMap frameMap = tasm.frameMap;
         RegisterConfig regConfig = frameMap.registerConfig;
         HotSpotVMConfig config = runtime().config;
@@ -162,13 +164,12 @@ public class SPARCHotSpotBackend extends HotSpotBackend {
             Register receiver = asRegister(cc.getArgument(0));
             SPARCAddress src = new SPARCAddress(receiver, config.hubOffset);
 
-            new Ldx(src, g0).emit(masm);
-            new Cmp(inlineCacheKlass, g0).emit(masm);
-            new Bpne(CC.Xcc, unverifiedStub).emit(masm);
-            new Nop().emit(masm);  // delay slot
+// new Ldx(asm, src, dst);
+// new Cmp(asm, inlineCacheKlass, dst);
+            new Bpne(CC.Xcc, unverifiedStub).emit(asm);
         }
 
-        masm.align(config.codeEntryAlignment);
+        asm.align(config.codeEntryAlignment);
         tasm.recordMark(Marks.MARK_OSR_ENTRY);
         tasm.recordMark(Marks.MARK_VERIFIED_ENTRY);
 
@@ -189,9 +190,8 @@ public class SPARCHotSpotBackend extends HotSpotBackend {
         }
 
         if (unverifiedStub != null) {
-            masm.bind(unverifiedStub);
+            asm.bind(unverifiedStub);
 // SPARCCall.directJmp(tasm, asm, runtime().lookupForeignCall(IC_MISS_HANDLER));
-            throw new InternalError("g0 must be scratch register");
         }
     }
 }
