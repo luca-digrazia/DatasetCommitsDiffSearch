@@ -40,7 +40,6 @@ import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.context.LLVMContext;
 import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMPhiManager.Phi;
 import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMSymbolResolver;
 
@@ -69,10 +68,8 @@ public class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
 
     private final int argCount;
 
-    private final FunctionDefinition function;
-
     public LLVMBitcodeFunctionVisitor(LLVMBitcodeVisitor module, FrameDescriptor frame, Map<String, Integer> labels,
-                    Map<InstructionBlock, List<Phi>> phis, NodeFactoryFacade factoryFacade, int argCount, LLVMSymbolResolver symbolResolver, FunctionDefinition functionDefinition) {
+                    Map<InstructionBlock, List<Phi>> phis, NodeFactoryFacade factoryFacade, int argCount, LLVMSymbolResolver symbolResolver) {
         this.module = module;
         this.frame = frame;
         this.labels = labels;
@@ -80,7 +77,6 @@ public class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
         this.symbolResolver = symbolResolver;
         this.factoryFacade = factoryFacade;
         this.argCount = argCount;
-        this.function = functionDefinition;
     }
 
     public void addInstruction(LLVMNode node) {
@@ -106,10 +102,6 @@ public class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
 
     public LLVMContext getContext() {
         return module.getContext();
-    }
-
-    public FunctionDefinition getFunction() {
-        return function;
     }
 
     public LLVMBitcodeVisitor getModule() {
