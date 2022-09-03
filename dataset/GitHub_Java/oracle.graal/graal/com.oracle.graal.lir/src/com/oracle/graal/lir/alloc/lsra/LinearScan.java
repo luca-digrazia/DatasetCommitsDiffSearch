@@ -651,7 +651,8 @@ public class LinearScan {
     }
 
     @SuppressWarnings("try")
-    protected void allocate(TargetDescription target, LIRGenerationResult lirGenRes, MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig) {
+    protected void allocate(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
+                    MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig) {
 
         /*
          * This is the point to enable debug logging for the whole register allocation.
@@ -659,17 +660,17 @@ public class LinearScan {
         try (Indent indent = Debug.logAndIndent("LinearScan allocate")) {
             AllocationContext context = new AllocationContext(spillMoveFactory, registerAllocationConfig);
 
-            createLifetimeAnalysisPhase().apply(target, lirGenRes, context);
+            createLifetimeAnalysisPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
 
             try (Scope s = Debug.scope("AfterLifetimeAnalysis", (Object) intervals)) {
                 sortIntervalsBeforeAllocation();
 
-                createRegisterAllocationPhase().apply(target, lirGenRes, context);
+                createRegisterAllocationPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
 
                 if (LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue()) {
-                    createOptimizeSpillPositionPhase().apply(target, lirGenRes, context);
+                    createOptimizeSpillPositionPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
                 }
-                createResolveDataFlowPhase().apply(target, lirGenRes, context);
+                createResolveDataFlowPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
 
                 sortIntervalsAfterAllocation();
 
@@ -677,8 +678,8 @@ public class LinearScan {
                     verify();
                 }
                 beforeSpillMoveElimination();
-                createSpillMoveEliminationPhase().apply(target, lirGenRes, context);
-                createAssignLocationsPhase().apply(target, lirGenRes, context);
+                createSpillMoveEliminationPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
+                createAssignLocationsPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
 
                 if (DetailedAsserts.getValue()) {
                     verifyIntervals();

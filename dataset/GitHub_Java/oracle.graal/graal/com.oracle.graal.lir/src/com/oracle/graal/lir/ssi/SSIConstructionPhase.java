@@ -22,6 +22,9 @@
  */
 package com.oracle.graal.lir.ssi;
 
+import java.util.List;
+
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.lir.alloc.lsra.LinearScanLifetimeAnalysisPhase;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.phases.AllocationPhase;
@@ -39,7 +42,8 @@ import jdk.vm.ci.code.TargetDescription;
 public final class SSIConstructionPhase extends AllocationPhase {
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
+                    AllocationContext context) {
         assert SSAUtil.verifySSAForm(lirGenRes.getLIR());
         new SSIBuilder(lirGenRes.getLIR()).build();
     }
