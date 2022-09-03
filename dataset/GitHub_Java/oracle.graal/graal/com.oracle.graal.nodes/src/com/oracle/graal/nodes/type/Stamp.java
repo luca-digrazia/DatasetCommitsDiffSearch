@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.type;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.types.*;
 
 /**
  * A stamp is the basis for a type system over the nodes in a graph.
@@ -40,11 +40,13 @@ public abstract class Stamp {
         return kind;
     }
 
-    /**
-     * Returns the type of the stamp, guaranteed to be non-null. In some cases, this requires the lookup of class meta
-     * data, therefore the {@link MetaAccessProvider} is mandatory.
-     */
-    public abstract ResolvedJavaType javaType(MetaAccessProvider metaAccess);
+    public ScalarTypeQuery scalarType() {
+        return null;
+    }
+
+    public ObjectTypeQuery objectType() {
+        return null;
+    }
 
     public boolean nonNull() {
         return false;
@@ -52,19 +54,5 @@ public abstract class Stamp {
 
     public abstract boolean alwaysDistinct(Stamp other);
 
-    /**
-     * Returns the union of this stamp and the given stamp. Typically used to create stamps for {@link PhiNode}s.
-     *
-     * @param other The stamp that will enlarge this stamp.
-     * @return The union of this stamp and the given stamp.
-     */
     public abstract Stamp meet(Stamp other);
-
-    /**
-     * Returns the intersection of this stamp and the given stamp.
-     *
-     * @param other The stamp that will tighten this stamp.
-     * @return The intersection of this stamp and the given stamp.
-     */
-    public abstract Stamp join(Stamp other);
 }
