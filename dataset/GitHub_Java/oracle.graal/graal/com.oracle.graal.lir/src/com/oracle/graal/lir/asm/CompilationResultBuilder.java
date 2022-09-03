@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,6 +50,9 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.VMConstant;
 import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionType;
+import jdk.vm.ci.options.OptionValue;
 
 import com.oracle.graal.asm.AbstractAddress;
 import com.oracle.graal.asm.Assembler;
@@ -62,9 +65,6 @@ import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LabelRef;
 import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
 
 /**
  * Fills in a {@link CompilationResult} as its code is being assembled.
@@ -147,7 +147,7 @@ public class CompilationResultBuilder {
     /**
      * Sets the {@linkplain CompilationResult#setTargetCode(byte[], int) code} and
      * {@linkplain CompilationResult#recordExceptionHandler(int, int) exception handler} fields of
-     * the compilation result and then {@linkplain #closeCompilationResult() closes} it.
+     * the compilation result.
      */
     public void finish() {
         int position = asm.position();
@@ -160,14 +160,6 @@ public class CompilationResultBuilder {
                 compilationResult.recordExceptionHandler(codeOffset, ei.exceptionEdge.label().position());
             }
         }
-        closeCompilationResult();
-    }
-
-    /**
-     * Calls {@link CompilationResult#close()} on {@link #compilationResult}.
-     */
-    protected void closeCompilationResult() {
-        compilationResult.close();
     }
 
     public void recordExceptionHandlers(int pcOffset, LIRFrameState info) {
@@ -249,6 +241,7 @@ public class CompilationResultBuilder {
     public int asIntConst(Value value) {
         assert isJavaConstant(value) && asJavaConstant(value).getJavaKind().isNumericInteger();
         JavaConstant constant = asJavaConstant(value);
+        assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
         long c = constant.asLong();
         if (!NumUtil.isInt(c)) {
             throw JVMCIError.shouldNotReachHere();
@@ -262,6 +255,7 @@ public class CompilationResultBuilder {
     public float asFloatConst(Value value) {
         assert isJavaConstant(value) && asJavaConstant(value).getJavaKind() == JavaKind.Float;
         JavaConstant constant = asJavaConstant(value);
+        assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
         return constant.asFloat();
     }
 
@@ -271,6 +265,7 @@ public class CompilationResultBuilder {
     public long asLongConst(Value value) {
         assert isJavaConstant(value) && asJavaConstant(value).getJavaKind() == JavaKind.Long;
         JavaConstant constant = asJavaConstant(value);
+        assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
         return constant.asLong();
     }
 
@@ -280,6 +275,7 @@ public class CompilationResultBuilder {
     public double asDoubleConst(Value value) {
         assert isJavaConstant(value) && asJavaConstant(value).getJavaKind() == JavaKind.Double;
         JavaConstant constant = asJavaConstant(value);
+        assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
         return constant.asDouble();
     }
 
@@ -421,9 +417,9 @@ public class CompilationResultBuilder {
         }
     }
 
-    public void resetForEmittingCode() {
+    public void reset() {
         asm.reset();
-        compilationResult.resetForEmittingCode();
+        compilationResult.reset();
         if (exceptionInfoList != null) {
             exceptionInfoList.clear();
         }
