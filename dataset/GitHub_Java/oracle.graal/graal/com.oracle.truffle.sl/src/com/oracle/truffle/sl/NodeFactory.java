@@ -63,7 +63,7 @@ public class NodeFactory {
     }
 
     public TypedNode createStringLiteral(String value) {
-        return new StringLiteralNode(value);
+        return StringLiteralNodeFactory.create(value);
     }
 
     public StatementNode createAssignment(String name, TypedNode right) {
@@ -112,9 +112,9 @@ public class NodeFactory {
 
     public TypedNode createNumericLiteral(String value) {
         try {
-            return new IntegerLiteralNode(Integer.parseInt(value));
+            return IntegerLiteralNodeFactory.create(Integer.parseInt(value));
         } catch (NumberFormatException ex) {
-            return new BigIntegerLiteralNode(new BigInteger(value));
+            return BigIntegerLiteralNodeFactory.create(new BigInteger(value));
         }
     }
 

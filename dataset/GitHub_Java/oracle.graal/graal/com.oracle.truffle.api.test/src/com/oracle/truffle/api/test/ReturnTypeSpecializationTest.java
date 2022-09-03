@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -62,7 +62,6 @@ public class ReturnTypeSpecializationTest {
         @Child TestChildNode right;
 
         public TestRootNode(TestChildNode left, TestChildNode right) {
-            super(null);
             this.left = adoptChild(left);
             this.right = adoptChild(right);
         }
@@ -75,10 +74,6 @@ public class ReturnTypeSpecializationTest {
     }
 
     abstract class TestChildNode extends Node {
-
-        public TestChildNode() {
-            super(null);
-        }
 
         abstract Object execute(VirtualFrame frame);
 
@@ -125,11 +120,11 @@ public class ReturnTypeSpecializationTest {
                 try {
                     frame.setInt(slot, result);
                 } catch (FrameSlotTypeException e) {
-                    frame.setObject(slot, result);
+                    FrameUtil.setObjectSafe(frame, slot, result);
                     replace(new ObjectAssignLocal(slot, value));
                 }
             } catch (UnexpectedResultException e) {
-                frame.setObject(slot, e.getResult());
+                FrameUtil.setObjectSafe(frame, slot, e.getResult());
                 replace(new ObjectAssignLocal(slot, value));
             }
             return null;
@@ -148,7 +143,11 @@ public class ReturnTypeSpecializationTest {
         @Override
         Object execute(VirtualFrame frame) {
             Object o = value.execute(frame);
-            frame.setObject(slot, o);
+            try {
+                frame.setObject(slot, o);
+            } catch (FrameSlotTypeException e) {
+                FrameUtil.setObjectSafe(frame, slot, o);
+            }
             return null;
         }
     }

@@ -43,10 +43,9 @@ public final class DefaultVirtualFrame implements VirtualFrame {
         this.tags = new byte[descriptor.getSize()];
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public <T extends Arguments> T getArguments(Class<T> clazz) {
-        return (T) arguments;
+    public Arguments getArguments() {
+        return arguments;
     }
 
     @Override
@@ -200,10 +199,5 @@ public final class DefaultVirtualFrame implements VirtualFrame {
             locals = Arrays.copyOf(locals, newSize);
             tags = Arrays.copyOf(tags, newSize);
         }
-    }
-
-    @Override
-    public boolean isInitialized(FrameSlot slot) {
-        return (this.tags[slot.getIndex()] != FrameSlotKind.Illegal.ordinal());
     }
 }
