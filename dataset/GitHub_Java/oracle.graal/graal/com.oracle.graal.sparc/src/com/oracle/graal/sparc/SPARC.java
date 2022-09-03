@@ -25,6 +25,7 @@ package com.oracle.graal.sparc;
 import static com.oracle.graal.api.code.MemoryBarriers.*;
 
 import java.nio.*;
+import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.Register.RegisterCategory;
@@ -122,51 +123,90 @@ public class SPARC extends Architecture {
     };
     // @formatter:on
 
-    public static final RegisterCategory FPU = new RegisterCategory("FPU", cpuRegisters.length);
+    public static final RegisterCategory FPUs = new RegisterCategory("FPUs", cpuRegisters.length);
+    public static final RegisterCategory FPUd = new RegisterCategory("FPUd", cpuRegisters.length + 32);
 
     // Floating point registers
-    public static final Register f0 = new Register(32, 0, "f0", FPU);
-    public static final Register f1 = new Register(33, 1, "f1", FPU);
-    public static final Register f2 = new Register(34, 2, "f2", FPU);
-    public static final Register f3 = new Register(35, 3, "f3", FPU);
-    public static final Register f4 = new Register(36, 4, "f4", FPU);
-    public static final Register f5 = new Register(37, 5, "f5", FPU);
-    public static final Register f6 = new Register(38, 6, "f6", FPU);
-    public static final Register f7 = new Register(39, 7, "f7", FPU);
+    public static final Register f0 = new Register(32, 0, "f0", FPUs);
+    public static final Register f1 = new Register(33, 1, "f1", FPUs);
+    public static final Register f2 = new Register(34, 2, "f2", FPUs);
+    public static final Register f3 = new Register(35, 3, "f3", FPUs);
+    public static final Register f4 = new Register(36, 4, "f4", FPUs);
+    public static final Register f5 = new Register(37, 5, "f5", FPUs);
+    public static final Register f6 = new Register(38, 6, "f6", FPUs);
+    public static final Register f7 = new Register(39, 7, "f7", FPUs);
 
-    public static final Register f8 = new Register(40, 8, "f8", FPU);
-    public static final Register f9 = new Register(41, 9, "f9", FPU);
-    public static final Register f10 = new Register(42, 10, "f10", FPU);
-    public static final Register f11 = new Register(43, 11, "f11", FPU);
-    public static final Register f12 = new Register(44, 12, "f12", FPU);
-    public static final Register f13 = new Register(45, 13, "f13", FPU);
-    public static final Register f14 = new Register(46, 14, "f14", FPU);
-    public static final Register f15 = new Register(47, 15, "f15", FPU);
+    public static final Register f8 = new Register(40, 8, "f8", FPUs);
+    public static final Register f9 = new Register(41, 9, "f9", FPUs);
+    public static final Register f10 = new Register(42, 10, "f10", FPUs);
+    public static final Register f11 = new Register(43, 11, "f11", FPUs);
+    public static final Register f12 = new Register(44, 12, "f12", FPUs);
+    public static final Register f13 = new Register(45, 13, "f13", FPUs);
+    public static final Register f14 = new Register(46, 14, "f14", FPUs);
+    public static final Register f15 = new Register(47, 15, "f15", FPUs);
 
-    public static final Register f16 = new Register(48, 16, "f16", FPU);
-    public static final Register f17 = new Register(49, 17, "f17", FPU);
-    public static final Register f18 = new Register(50, 18, "f18", FPU);
-    public static final Register f19 = new Register(51, 19, "f19", FPU);
-    public static final Register f20 = new Register(52, 20, "f20", FPU);
-    public static final Register f21 = new Register(53, 21, "f21", FPU);
-    public static final Register f22 = new Register(54, 22, "f22", FPU);
-    public static final Register f23 = new Register(55, 23, "f23", FPU);
+    public static final Register f16 = new Register(48, 16, "f16", FPUs);
+    public static final Register f17 = new Register(49, 17, "f17", FPUs);
+    public static final Register f18 = new Register(50, 18, "f18", FPUs);
+    public static final Register f19 = new Register(51, 19, "f19", FPUs);
+    public static final Register f20 = new Register(52, 20, "f20", FPUs);
+    public static final Register f21 = new Register(53, 21, "f21", FPUs);
+    public static final Register f22 = new Register(54, 22, "f22", FPUs);
+    public static final Register f23 = new Register(55, 23, "f23", FPUs);
 
-    public static final Register f24 = new Register(56, 24, "f24", FPU);
-    public static final Register f25 = new Register(57, 25, "f25", FPU);
-    public static final Register f26 = new Register(58, 26, "f26", FPU);
-    public static final Register f27 = new Register(59, 27, "f27", FPU);
-    public static final Register f28 = new Register(60, 28, "f28", FPU);
-    public static final Register f29 = new Register(61, 29, "f29", FPU);
-    public static final Register f30 = new Register(62, 30, "f30", FPU);
-    public static final Register f31 = new Register(63, 31, "f31", FPU);
+    public static final Register f24 = new Register(56, 24, "f24", FPUs);
+    public static final Register f25 = new Register(57, 25, "f25", FPUs);
+    public static final Register f26 = new Register(58, 26, "f26", FPUs);
+    public static final Register f27 = new Register(59, 27, "f27", FPUs);
+    public static final Register f28 = new Register(60, 28, "f28", FPUs);
+    public static final Register f29 = new Register(61, 29, "f29", FPUs);
+    public static final Register f30 = new Register(62, 30, "f30", FPUs);
+    public static final Register f31 = new Register(63, 31, "f31", FPUs);
+
+    public static final Register d0 = new Register(32, getDoubleEncoding(0), "d0", FPUs);
+    public static final Register d2 = new Register(34, getDoubleEncoding(2), "d2", FPUs);
+    public static final Register d4 = new Register(36, getDoubleEncoding(4), "d4", FPUs);
+    public static final Register d6 = new Register(38, getDoubleEncoding(6), "d6", FPUs);
+    public static final Register d8 = new Register(40, getDoubleEncoding(8), "d8", FPUs);
+    public static final Register d10 = new Register(42, getDoubleEncoding(10), "d10", FPUs);
+    public static final Register d12 = new Register(44, getDoubleEncoding(12), "d12", FPUs);
+    public static final Register d14 = new Register(46, getDoubleEncoding(14), "d14", FPUs);
+
+    public static final Register d16 = new Register(48, getDoubleEncoding(16), "d16", FPUs);
+    public static final Register d18 = new Register(50, getDoubleEncoding(18), "d18", FPUs);
+    public static final Register d20 = new Register(52, getDoubleEncoding(20), "d20", FPUs);
+    public static final Register d22 = new Register(54, getDoubleEncoding(22), "d22", FPUs);
+    public static final Register d24 = new Register(56, getDoubleEncoding(24), "d24", FPUs);
+    public static final Register d26 = new Register(58, getDoubleEncoding(26), "d26", FPUs);
+    public static final Register d28 = new Register(60, getDoubleEncoding(28), "d28", FPUs);
+    public static final Register d30 = new Register(62, getDoubleEncoding(28), "d28", FPUs);
+
+    public static final Register d32 = new Register(64, getDoubleEncoding(32), "d32", FPUd);
+    public static final Register d34 = new Register(65, getDoubleEncoding(34), "d34", FPUd);
+    public static final Register d36 = new Register(66, getDoubleEncoding(36), "d36", FPUd);
+    public static final Register d38 = new Register(67, getDoubleEncoding(38), "d38", FPUd);
+    public static final Register d40 = new Register(68, getDoubleEncoding(40), "d40", FPUd);
+    public static final Register d42 = new Register(69, getDoubleEncoding(42), "d42", FPUd);
+    public static final Register d44 = new Register(70, getDoubleEncoding(44), "d44", FPUd);
+    public static final Register d46 = new Register(71, getDoubleEncoding(46), "d46", FPUd);
+
+    public static final Register d48 = new Register(72, getDoubleEncoding(48), "d48", FPUd);
+    public static final Register d50 = new Register(73, getDoubleEncoding(50), "d50", FPUd);
+    public static final Register d52 = new Register(74, getDoubleEncoding(52), "d52", FPUd);
+    public static final Register d54 = new Register(75, getDoubleEncoding(54), "d54", FPUd);
+    public static final Register d56 = new Register(76, getDoubleEncoding(56), "d56", FPUd);
+    public static final Register d58 = new Register(77, getDoubleEncoding(58), "d58", FPUd);
+    public static final Register d60 = new Register(78, getDoubleEncoding(60), "d60", FPUd);
+    public static final Register d62 = new Register(79, getDoubleEncoding(62), "d62", FPUd);
 
     // @formatter:off
     public static final Register[] fpuRegisters = {
         f0,  f1,  f2,  f3,  f4,  f5,  f6,  f7,
         f8,  f9,  f10, f11, f12, f13, f14, f15,
         f16, f17, f18, f19, f20, f21, f22, f23,
-        f24, f25, f26, f27, f28, f29, f30, f31
+        f24, f25, f26, f27, f28, f29, f30, f31,
+        d32, d34, d36, d38, d40, d42, d44, d46,
+        d48, d50, d52, d54, d56, d58, d60, d62
     };
     // @formatter:on
 
@@ -181,7 +221,9 @@ public class SPARC extends Architecture {
         f0,  f1,  f2,  f3,  f4,  f5,  f6,  f7,
         f8,  f9,  f10, f11, f12, f13, f14, f15,
         f16, f17, f18, f19, f20, f21, f22, f23,
-        f24, f25, f26, f27, f28, f29, f30, f31
+        f24, f25, f26, f27, f28, f29, f30, f31,
+        d32, d34, d36, d38, d40, d42, d44, d46,
+        d48, d50, d52, d54, d56, d58, d60, d62
     };
     // @formatter:on
 
@@ -196,12 +238,15 @@ public class SPARC extends Architecture {
     public static final int FLOAT_REGISTER_COUNT = 64;
 
     /**
-     * Alignment for valid memory access
+     * Alignment for valid memory access.
      */
     public static final int MEMORY_ACCESS_ALIGN = 4;
 
-    public SPARC() {
+    public final Set<CPUFeature> features;
+
+    public SPARC(Set<CPUFeature> features) {
         super("SPARC", 8, ByteOrder.BIG_ENDIAN, false, allRegisters, LOAD_STORE | STORE_STORE, 1, r31.encoding + FLOAT_REGISTER_COUNT + 1, 8);
+        this.features = features;
     }
 
     @Override
@@ -211,7 +256,7 @@ public class SPARC extends Architecture {
         }
 
         Kind kind = (Kind) lirKind;
-        if (category == CPU) {
+        if (category.equals(CPU)) {
             switch (kind) {
                 case Boolean:
                 case Byte:
@@ -222,21 +267,19 @@ public class SPARC extends Architecture {
                 case Object:
                     return true;
             }
-        } else if (category == FPU) {
-            switch (kind) {
-                case Float:
-                case Double:
-                    return true;
-            }
+        } else if (category.equals(FPUs) && kind.equals(Kind.Float)) {
+            return true;
+        } else if (category.equals(FPUd) && kind.equals(Kind.Double)) {
+            return true;
         }
         return false;
     }
 
     @Override
     public PlatformKind getLargestStorableKind(RegisterCategory category) {
-        if (category == CPU) {
+        if (category.equals(CPU)) {
             return Kind.Long;
-        } else if (category == FPU) {
+        } else if (category.equals(FPUs)) {
             return Kind.Double;
         } else {
             return Kind.Illegal;
@@ -245,5 +288,47 @@ public class SPARC extends Architecture {
 
     public static int spillSlotSize(TargetDescription td, PlatformKind kind) {
         return Math.max(td.getSizeInBytes(kind), MEMORY_ACCESS_ALIGN);
+    }
+
+    public static int getDoubleEncoding(int reg) {
+        assert reg < 64 && ((reg & 1) == 0);
+        // ignore v8 assertion for now
+        return (reg & 0x1e) | ((reg & 0x20) >> 5);
+    }
+
+    public static boolean isCPURegister(Register r) {
+        return r.getRegisterCategory().equals(CPU);
+    }
+
+    public static boolean isCPURegister(Register... regs) {
+        for (Register reg : regs) {
+            if (!isCPURegister(reg)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static boolean isSingleFloatRegister(Register r) {
+        return r.name.startsWith("f");
+    }
+
+    public static boolean isDoubleFloatRegister(Register r) {
+        return r.name.startsWith("d");
+    }
+
+    public Set<CPUFeature> getFeatures() {
+        return features;
+    }
+
+    public boolean hasFeature(CPUFeature feature) {
+        return features.contains(feature);
+    }
+
+    public enum CPUFeature {
+        VIS1,
+        VIS2,
+        VIS3,
+        CBCOND
     }
 }

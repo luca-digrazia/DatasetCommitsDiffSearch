@@ -206,9 +206,7 @@ final class MoveResolver {
 
         insertionBuffer.append(insertIdx, allocator.getSpillMoveFactory().createMove(toOpr, fromOpr));
 
-        if (Debug.isLogEnabled()) {
-            Debug.log("insert move from %s to %s at %d", fromInterval, toInterval, insertIdx);
-        }
+        Debug.log("insert move from %s to %s at %d", fromInterval, toInterval, insertIdx);
     }
 
     private void insertMove(Value fromOpr, Interval toInterval) {
@@ -218,9 +216,7 @@ final class MoveResolver {
         AllocatableValue toOpr = toInterval.operand;
         insertionBuffer.append(insertIdx, allocator.getSpillMoveFactory().createMove(toOpr, fromOpr));
 
-        if (Debug.isLogEnabled()) {
-            Debug.log("insert move from value %s to %s at %d", fromOpr, toInterval, insertIdx);
-        }
+        Debug.log("insert move from value %s to %s at %d", fromOpr, toInterval, insertIdx);
     }
 
     private void resolveMappings() {
@@ -290,9 +286,7 @@ final class MoveResolver {
                 }
                 spillInterval.assignLocation(spillSlot);
 
-                if (Debug.isLogEnabled()) {
-                    Debug.log("created new Interval for spilling: %s", spillInterval);
-                }
+                Debug.log("created new Interval for spilling: %s", spillInterval);
 
                 // insert a move from register to stack and update the mapping
                 insertMove(fromInterval, spillInterval);
@@ -334,9 +328,7 @@ final class MoveResolver {
     void addMapping(Interval fromInterval, Interval toInterval) {
 
         if (isIllegal(toInterval.location()) && toInterval.canMaterialize()) {
-            if (Debug.isLogEnabled()) {
-                Debug.log("no store to rematerializable interval %s needed", toInterval);
-            }
+            Debug.log("no store to rematerializable interval %s needed", toInterval);
             return;
         }
         if (isIllegal(fromInterval.location()) && fromInterval.canMaterialize()) {
@@ -345,9 +337,7 @@ final class MoveResolver {
             addMapping(rematValue, toInterval);
             return;
         }
-        if (Debug.isLogEnabled()) {
-            Debug.log("add move mapping from %s to %s", fromInterval, toInterval);
-        }
+        Debug.log("add move mapping from %s to %s", fromInterval, toInterval);
 
         assert !fromInterval.operand.equals(toInterval.operand) : "from and to interval equal: " + fromInterval;
         assert fromInterval.kind().equals(toInterval.kind());
@@ -357,9 +347,7 @@ final class MoveResolver {
     }
 
     void addMapping(Value fromOpr, Interval toInterval) {
-        if (Debug.isLogEnabled()) {
-            Debug.log("add move mapping from %s to %s", fromOpr, toInterval);
-        }
+        Debug.log("add move mapping from %s to %s", fromOpr, toInterval);
 
         assert isConstant(fromOpr) : "only for constants";
 

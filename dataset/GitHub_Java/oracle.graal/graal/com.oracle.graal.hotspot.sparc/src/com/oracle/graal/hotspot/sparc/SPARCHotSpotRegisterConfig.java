@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,20 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.sparc.SPARC.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
+import java.util.concurrent.*;
 
-import com.oracle.graal.sparc.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.sparc.*;
 
 public class SPARCHotSpotRegisterConfig implements RegisterConfig {
 
@@ -40,7 +43,7 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
 
     private final Register[] allocatable;
 
-    private final HashMap<PlatformKind, Register[]> categorized = new HashMap<>();
+    private final Map<PlatformKind, Register[]> categorized = new ConcurrentHashMap<>(20);
 
     private final RegisterAttributes[] attributesMap;
 
@@ -57,11 +60,23 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
         ArrayList<Register> list = new ArrayList<>();
         for (Register reg : getAllocatableRegisters()) {
             if (architecture.canStoreValue(reg.getRegisterCategory(), kind)) {
-                list.add(reg);
+                // Special treatment for double precision
+                // TODO: This is wasteful it uses only half of the registers as float.
+                if (kind == Kind.Double) {
+                    if (reg.name.startsWith("d")) {
+                        list.add(reg);
+                    }
+                } else if (kind == Kind.Float) {
+                    if (reg.name.startsWith("f")) {
+                        list.add(reg);
+                    }
+                } else {
+                    list.add(reg);
+                }
             }
         }
 
-        Register[] ret = list.toArray(new Register[0]);
+        Register[] ret = list.toArray(new Register[list.size()]);
         categorized.put(kind, ret);
         return ret;
     }
@@ -71,9 +86,28 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
         return attributesMap.clone();
     }
 
-    private final Register[] javaGeneralParameterRegisters;
-    private final Register[] nativeGeneralParameterRegisters;
+    private final Register[] cpuCallerParameterRegisters = {o0, o1, o2, o3, o4, o5};
+    private final Register[] cpuCalleeParameterRegisters = {i0, i1, i2, i3, i4, i5};
+
     private final Register[] fpuParameterRegisters = {f0, f1, f2, f3, f4, f5, f6, f7};
+    private final Register[] fpuDoubleParameterRegisters = {d0, null, d2, null, d4, null, d6, null};
+    // @formatter:off
+    private final Register[] callerSaveRegisters =
+                   {g1, g2, g3, g4, g5, g6, g7,
+                    o0, o1, o2, o3, o4, o5, o7,
+                    f0,  f1,  f2,  f3,  f4,  f5,  f6,  f7,
+                    f8,  f9,  f10, f11, f12, f13, f14, f15,
+                    f16, f17, f18, f19, f20, f21, f22, f23,
+                    f24, f25, f26, f27, f28, f29, f30, f31,
+                    d32, d34, d36, d38, d40, d42, d44, d46,
+                    d48, d50, d52, d54, d56, d58, d60, d62};
+    // @formatter:on
+
+    /**
+     * Registers saved by the callee. This lists all L and I registers which are saved in the
+     * register window. {@link FrameMap} uses this array to calculate the spill area size.
+     */
+    private final Register[] calleeSaveRegisters = {l0, l1, l2, l3, l4, l5, l6, l7, i0, i1, i2, i3, i4, i5, i6, i7};
 
     private final CalleeSaveLayout csl;
 
@@ -88,23 +122,41 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
 
     private static Register[] initAllocatable(boolean reserveForHeapBase) {
         Register[] registers = null;
-        // @formatter:off
         if (reserveForHeapBase) {
-            registers = new Register[] {
-                    // TODO this is not complete
+            // @formatter:off
+            registers = new Register[]{
+                        // TODO this is not complete
+                        // o7 cannot be used as register because it is always overwritten on call
+                        // and the current register handler would ignore this fact if the called
+                        // method still does not modify registers, in fact o7 is modified by the Call instruction
+                        // There would be some extra handlin necessary to be able to handle the o7 properly for local usage
+                        o0, o1, o2, o3, o4, o5, /*o6, o7,*/
                         l0, l1, l2, l3, l4, l5, l6, l7,
-                        i0, i1, i2, i3, i4, i5, /*i6,*/ i7,
-                        f0, f1, f2, f3, f4, f5, f6, f7
-                      };
+                        i0, i1, i2, i3, i4, i5, /*i6,*/ /*i7,*/
+                        //f0, f1, f2, f3, f4, f5, f6, f7,
+                        f8,  f9,  f10, f11, f12, f13, f14, f15,
+                        f16, f17, f18, f19, f20, f21, f22, f23,
+                        f24, f25, f26, f27, f28, f29, f30, f31,
+                        d32, d34, d36, d38, d40, d42, d44, d46,
+                        d48, d50, d52, d54, d56, d58, d60, d62
+            };
+            // @formatter:on
         } else {
-            registers = new Register[] {
-                    // TODO this is not complete
+            // @formatter:off
+            registers = new Register[]{
+                        // TODO this is not complete
+                        o0, o1, o2, o3, o4, o5, /*o6, o7,*/
                         l0, l1, l2, l3, l4, l5, l6, l7,
-                        i0, i1, i2, i3, i4, i5, /*i6,*/ i7,
-                        f0, f1, f2, f3, f4, f5, f6, f7
-                      };
+                        i0, i1, i2, i3, i4, i5, /*i6,*/ /*i7,*/
+//                        f0, f1, f2, f3, f4, f5, f6, f7
+                        f8,  f9,  f10, f11, f12, f13, f14, f15,
+                        f16, f17, f18, f19, f20, f21, f22, f23,
+                        f24, f25, f26, f27, f28, f29, f30, f31,
+                        d32, d34, d36, d38, d40, d42, d44, d46,
+                        d48, d50, d52, d54, d56, d58, d60, d62
+            };
+            // @formatter:on
         }
-       // @formatter:on
 
         if (RegisterPressure.getValue() != null) {
             String[] names = RegisterPressure.getValue().split(",");
@@ -118,20 +170,26 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
         return registers;
     }
 
-    public SPARCHotSpotRegisterConfig(Architecture architecture, HotSpotVMConfig config) {
-        this.architecture = architecture;
+    public SPARCHotSpotRegisterConfig(TargetDescription target, HotSpotVMConfig config) {
+        this(target, initAllocatable(config.useCompressedOops));
+    }
 
-        javaGeneralParameterRegisters = new Register[]{i0, i1, i2, i3, i4, i5};
-        nativeGeneralParameterRegisters = new Register[]{i0, i1, i2, i3, i4, i5};
+    public SPARCHotSpotRegisterConfig(TargetDescription target, Register[] allocatable) {
+        this.architecture = target.arch;
 
-        csl = null;
-        allocatable = initAllocatable(config.useCompressedOops);
+        csl = new CalleeSaveLayout(target, -1, -1, target.arch.getWordSize(), calleeSaveRegisters);
+        this.allocatable = allocatable.clone();
         attributesMap = RegisterAttributes.createMap(this, SPARC.allRegisters);
     }
 
     @Override
     public Register[] getCallerSaveRegisters() {
-        return getAllocatableRegisters();
+        return callerSaveRegisters;
+    }
+
+    @Override
+    public boolean areAllAllocatableRegistersCallerSaved() {
+        return false;
     }
 
     @Override
@@ -141,20 +199,21 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
 
     @Override
     public CallingConvention getCallingConvention(Type type, JavaType returnType, JavaType[] parameterTypes, TargetDescription target, boolean stackOnly) {
-        if (type == Type.NativeCall) {
-            return callingConvention(nativeGeneralParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
+        if (type == Type.JavaCall || type == Type.NativeCall) {
+            return callingConvention(cpuCallerParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
         }
-        // On x64, parameter locations are the same whether viewed
-        // from the caller or callee perspective
-        return callingConvention(javaGeneralParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
+        if (type == Type.JavaCallee) {
+            return callingConvention(cpuCalleeParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
+        }
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     public Register[] getCallingConventionRegisters(Type type, Kind kind) {
-        if (architecture.canStoreValue(FPU, kind)) {
+        if (architecture.canStoreValue(FPUs, kind) || architecture.canStoreValue(FPUd, kind)) {
             return fpuParameterRegisters;
         }
         assert architecture.canStoreValue(CPU, kind);
-        return type == Type.NativeCall ? nativeGeneralParameterRegisters : javaGeneralParameterRegisters;
+        return type == Type.JavaCallee ? cpuCalleeParameterRegisters : cpuCallerParameterRegisters;
     }
 
     private CallingConvention callingConvention(Register[] generalParameterRegisters, JavaType returnType, JavaType[] parameterTypes, Type type, TargetDescription target, boolean stackOnly) {
@@ -177,14 +236,24 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
                 case Object:
                     if (!stackOnly && currentGeneral < generalParameterRegisters.length) {
                         Register register = generalParameterRegisters[currentGeneral++];
-                        locations[i] = register.asValue(kind);
+                        locations[i] = register.asValue(target.getLIRKind(kind));
+                    }
+                    break;
+                case Double:
+                    if (!stackOnly && currentFloating < fpuParameterRegisters.length) {
+                        if (currentFloating % 2 != 0) {
+                            // Make register number even to be a double reg
+                            currentFloating++;
+                        }
+                        Register register = fpuDoubleParameterRegisters[currentFloating];
+                        currentFloating += 2; // Only every second is a double register
+                        locations[i] = register.asValue(target.getLIRKind(kind));
                     }
                     break;
                 case Float:
-                case Double:
                     if (!stackOnly && currentFloating < fpuParameterRegisters.length) {
                         Register register = fpuParameterRegisters[currentFloating++];
-                        locations[i] = register.asValue(kind);
+                        locations[i] = register.asValue(target.getLIRKind(kind));
                     }
                     break;
                 default:
@@ -192,18 +261,25 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
             }
 
             if (locations[i] == null) {
-                locations[i] = StackSlot.get(kind.getStackKind(), currentStackOffset, !type.out);
-                currentStackOffset += Math.max(target.arch.getSizeInBytes(kind), target.wordSize);
+                // Stack slot is always aligned to its size in bytes but minimum wordsize
+                int typeSize = SPARC.spillSlotSize(target, kind);
+                currentStackOffset = NumUtil.roundUp(currentStackOffset, typeSize);
+                locations[i] = StackSlot.get(target.getLIRKind(kind.getStackKind()), currentStackOffset, !type.out);
+                currentStackOffset += typeSize;
             }
         }
 
         Kind returnKind = returnType == null ? Kind.Void : returnType.getKind();
-        AllocatableValue returnLocation = returnKind == Kind.Void ? Value.ILLEGAL : getReturnRegister(returnKind).asValue(returnKind);
+        AllocatableValue returnLocation = returnKind == Kind.Void ? Value.ILLEGAL : getReturnRegister(returnKind, type).asValue(target.getLIRKind(returnKind.getStackKind()));
         return new CallingConvention(currentStackOffset, returnLocation, locations);
     }
 
     @Override
     public Register getReturnRegister(Kind kind) {
+        return getReturnRegister(kind, Type.JavaCallee);
+    }
+
+    private static Register getReturnRegister(Kind kind, Type type) {
         switch (kind) {
             case Boolean:
             case Byte:
@@ -212,10 +288,11 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
             case Int:
             case Long:
             case Object:
-                return i0;
+                return type == Type.JavaCallee ? i0 : o0;
             case Float:
-            case Double:
                 return f0;
+            case Double:
+                return d0;
             case Void:
             case Illegal:
                 return null;
