@@ -29,23 +29,41 @@
  */
 package com.oracle.truffle.llvm.parser;
 
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.parser.model.ModelModule;
-import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
-
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceModel;
+import com.oracle.truffle.llvm.parser.model.ModelModule;
+import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
+
 public final class BitcodeParserResult {
     private final ModelModule model;
+    private final LLVMPhiManager phis;
+    private final StackAllocation stackAllocation;
+    private final LLVMLabelList labels;
 
-    private BitcodeParserResult(ModelModule model) {
+    private BitcodeParserResult(ModelModule model, LLVMPhiManager phis, StackAllocation stackAllocation, LLVMLabelList labels) {
         this.model = model;
+        this.phis = phis;
+        this.stackAllocation = stackAllocation;
+        this.labels = labels;
     }
 
     public ModelModule getModel() {
         return model;
+    }
+
+    public LLVMPhiManager getPhis() {
+        return phis;
+    }
+
+    public StackAllocation getStackAllocation() {
+        return stackAllocation;
+    }
+
+    public LLVMLabelList getLabels() {
+        return labels;
     }
 
     public List<String> getLibraries() {
@@ -56,14 +74,16 @@ public final class BitcodeParserResult {
         return model.getLibraryPaths();
     }
 
-    public static BitcodeParserResult getFromSource(Source source, ByteBuffer bytes) throws IOException {
-        assert bytes != null;
-        if (!LLVMScanner.isSupportedFile(bytes)) {
-            throw new IOException("Unsupported file: " + source.getName());
-        }
+    public static BitcodeParserResult getFromSource(Source source, ByteBuffer bytes) {
+        final ModelModule model = LLVMScanner.parse(bytes);
 
-        final ModelModule model = LLVMScanner.parse(source, bytes);
+        // extract SourceSection and LLVMSourceType objects from metadata
+        SourceModel.generate(model, source);
 
-        return new BitcodeParserResult(model);
+        final LLVMPhiManager phis = LLVMPhiManager.generate(model);
+        final StackAllocation stackAllocation = StackAllocation.generate(model);
+        final LLVMLabelList labels = LLVMLabelList.generate(model);
+
+        return new BitcodeParserResult(model, phis, stackAllocation, labels);
     }
 }
