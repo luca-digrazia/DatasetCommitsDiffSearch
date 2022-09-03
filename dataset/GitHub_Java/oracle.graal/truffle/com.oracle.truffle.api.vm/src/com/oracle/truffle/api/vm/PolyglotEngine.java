@@ -55,6 +55,8 @@ import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -113,7 +115,7 @@ public class PolyglotEngine {
     private final OutputStream out;
     private final EventConsumer<?>[] handlers;
     private final Map<String, Object> globals;
-    @SuppressWarnings("deprecation") private final com.oracle.truffle.api.instrument.Instrumenter instrumenter;
+    private final Instrumenter instrumenter; // old instrumentation
     private final Object instrumentationHandler; // new instrumentation
     private final Map<String, Instrument> instruments;
     private final List<Object[]> config;
@@ -311,7 +313,7 @@ public class PolyglotEngine {
          * {@link com.oracle.truffle.api.TruffleLanguage#createContext(com.oracle.truffle.api.TruffleLanguage.Env)
          * initial execution state} correctly.
          *
-         * {@link com.oracle.truffle.api.vm.PolyglotEngineSnippets#initializeWithParameters}
+         * {@codesnippet config.specify}
          *
          * If the same key is specified multiple times for the same language, the previous values
          * are replaced and just the last one remains.
@@ -1108,9 +1110,7 @@ public class PolyglotEngine {
         return null;
     }
 
-    @SuppressWarnings("deprecation")
-    @Deprecated
-    TruffleLanguage<?> findLanguage(com.oracle.truffle.api.instrument.Probe probe) {
+    TruffleLanguage<?> findLanguage(Probe probe) {
         return findLanguage(SPI.findLanguage(probe));
     }
 
@@ -1160,9 +1160,7 @@ public class PolyglotEngine {
         }
 
         @Override
-        protected Env attachEnv(Object obj, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn,
-                        @SuppressWarnings("deprecation") com.oracle.truffle.api.instrument.Instrumenter instrumenter,
-                        Map<String, Object> config) {
+        protected Env attachEnv(Object obj, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Instrumenter instrumenter, Map<String, Object> config) {
             PolyglotEngine vm = (PolyglotEngine) obj;
             return super.attachEnv(vm, language, stdOut, stdErr, stdIn, instrumenter, config);
         }
@@ -1182,10 +1180,8 @@ public class PolyglotEngine {
             return super.languageGlobal(env);
         }
 
-        @SuppressWarnings("deprecation")
-        @Deprecated
         @Override
-        protected com.oracle.truffle.api.instrument.Instrumenter createInstrumenter(Object vm) {
+        protected Instrumenter createInstrumenter(Object vm) {
             return super.createInstrumenter(vm);
         }
 
@@ -1194,10 +1190,8 @@ public class PolyglotEngine {
             return super.createInstrumentationHandler(vm, out, err, in);
         }
 
-        @SuppressWarnings("deprecation")
-        @Deprecated
         @Override
-        protected com.oracle.truffle.api.instrument.Instrumenter getInstrumenter(Object obj) {
+        protected Instrumenter getInstrumenter(Object obj) {
             final PolyglotEngine vm = (PolyglotEngine) obj;
             return vm.instrumenter;
         }
@@ -1228,10 +1222,8 @@ public class PolyglotEngine {
             super.disposeInstrument(instrumentationHandler, key, cleanupRequired);
         }
 
-        @SuppressWarnings("deprecation")
-        @Deprecated
         @Override
-        protected Class<? extends TruffleLanguage> findLanguage(com.oracle.truffle.api.instrument.Probe probe) {
+        protected Class<? extends TruffleLanguage> findLanguage(Probe probe) {
             return super.findLanguage(probe);
         }
 
@@ -1285,22 +1277,4 @@ public class PolyglotEngine {
             return super.toString(language, env, obj);
         }
     } // end of SPIAccessor
-}
-
-class PolyglotEngineSnippets {
-    abstract class YourLang extends TruffleLanguage<Object> {
-        public static final String MIME_TYPE = "application/my-test-lang";
-    }
-
-    public static PolyglotEngine initializeWithParameters() {
-        // @formatter:off
-        // BEGIN: com.oracle.truffle.api.vm.PolyglotEngineSnippets#initializeWithParameters
-        String[] args = {"--kernel", "Kernel.som", "--instrument", "dyn-metrics"};
-        PolyglotEngine.Builder builder = PolyglotEngine.newBuilder();
-        builder.config(YourLang.MIME_TYPE, "CMD_ARGS", args);
-        PolyglotEngine vm = builder.build();
-        // END: com.oracle.truffle.api.vm.PolyglotEngineSnippets#initializeWithParameters
-        // @formatter:on
-        return vm;
-    }
 }

@@ -69,7 +69,6 @@ import com.oracle.truffle.api.source.Source;
  *
  * <pre>
  * &#064;Registration(name = Coverage.NAME, version = Coverage.VERSION, instrumentType = Coverage.TYPE)
- * &#064;RequiredTags(&quot;EXPRESSION&quot;)
  * public final class Coverage extends TruffleInstrument {
  * 
  *     public static final String NAME = &quot;sample-coverage&quot;;
@@ -81,22 +80,22 @@ import com.oracle.truffle.api.source.Source;
  *     &#064;Override
  *     protected void onCreate(Env env, Instrumenter instrumenter) {
  *         instrumenter.attachFactory(SourceSectionFilter.newBuilder() //
- *                         .tagIs(&quot;EXPRESSION&quot;).build(), new EventNodeFactory() {
- *                             public EventNode create(final EventContext context) {
- *                                 return new EventNode() {
- *                                     &#064;CompilationFinal private boolean visited;
+ *         .tagIs(&quot;EXPRESSION&quot;).build(), new EventNodeFactory() {
+ *             public EventNode create(final EventContext context) {
+ *                 return new EventNode() {
+ *                     &#064;CompilationFinal private boolean visited;
  * 
- *                                     &#064;Override
- *                                     public void onReturnValue(VirtualFrame vFrame, Object result) {
- *                                         if (!visited) {
- *                                             CompilerDirectives.transferToInterpreterAndInvalidate();
- *                                             visited = true;
- *                                             coverage.add(context.getInstrumentedSourceSection());
- *                                         }
- *                                     }
- *                                 };
- *                             }
- *                         });
+ *                     &#064;Override
+ *                     public void onReturnValue(VirtualFrame vFrame, Object result) {
+ *                         if (!visited) {
+ *                             CompilerDirectives.transferToInterpreterAndInvalidate();
+ *                             visited = true;
+ *                             coverage.add(context.getInstrumentedSourceSection());
+ *                         }
+ *                     }
+ *                 };
+ *             }
+ *         });
  *     }
  * 
  *     &#064;Override
