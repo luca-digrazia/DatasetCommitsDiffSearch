@@ -180,7 +180,11 @@ public final class JavaInterop {
      */
     public static Object asJavaObject(TruffleObject foreignObject) {
         JavaObject javaObject = (JavaObject) foreignObject;
-        return javaObject.isClass() ? javaObject.clazz : javaObject.obj;
+        Object object = javaObject.obj;
+        if (object == null && javaObject.clazz != null) {
+            return javaObject.clazz;
+        }
+        return object;
     }
 
     @CompilerDirectives.TruffleBoundary
