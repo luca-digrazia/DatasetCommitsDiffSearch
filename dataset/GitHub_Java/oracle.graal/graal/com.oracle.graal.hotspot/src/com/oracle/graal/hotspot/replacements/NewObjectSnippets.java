@@ -138,7 +138,7 @@ public class NewObjectSnippets implements Snippets {
     public static final ProfileMode PROFILE_MODE = ProfileMode.AllocatedTypes;
 
     @Fold
-    static String createName(String path, String typeContext) {
+    private static String createName(String path, String typeContext) {
         switch (PROFILE_MODE) {
             case AllocatingMethods:
                 return "";
@@ -155,7 +155,7 @@ public class NewObjectSnippets implements Snippets {
     }
 
     @Fold
-    static boolean doProfile() {
+    private static boolean doProfile() {
         return ProfileAllocations.getValue();
     }
 
@@ -204,7 +204,7 @@ public class NewObjectSnippets implements Snippets {
         return piCast(verifyOop(result), StampFactory.forNodeIntrinsic());
     }
 
-    @NodeIntrinsic(value = ForeignCallNode.class, returnStampIsNonNull = true)
+    @NodeIntrinsic(ForeignCallNode.class)
     public static native Object newInstance(@ConstantNodeParameter ForeignCallDescriptor descriptor, KlassPointer hub);
 
     @Snippet
@@ -270,20 +270,20 @@ public class NewObjectSnippets implements Snippets {
         return result;
     }
 
-    @NodeIntrinsic(value = ForeignCallNode.class, returnStampIsNonNull = true)
+    @NodeIntrinsic(ForeignCallNode.class)
     public static native Object newArray(@ConstantNodeParameter ForeignCallDescriptor descriptor, KlassPointer hub, int length, boolean fillContents);
 
     public static final ForeignCallDescriptor DYNAMIC_NEW_ARRAY = new ForeignCallDescriptor("dynamic_new_array", Object.class, Class.class, int.class);
     public static final ForeignCallDescriptor DYNAMIC_NEW_INSTANCE = new ForeignCallDescriptor("dynamic_new_instance", Object.class, Class.class);
 
-    @NodeIntrinsic(value = ForeignCallNode.class, returnStampIsNonNull = true)
+    @NodeIntrinsic(ForeignCallNode.class)
     public static native Object dynamicNewArrayStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Class<?> elementType, int length);
 
     public static Object dynamicNewInstanceStub(Class<?> elementType) {
         return dynamicNewInstanceStubCall(DYNAMIC_NEW_INSTANCE, elementType);
     }
 
-    @NodeIntrinsic(value = ForeignCallNode.class, returnStampIsNonNull = true)
+    @NodeIntrinsic(ForeignCallNode.class)
     public static native Object dynamicNewInstanceStubCall(@ConstantNodeParameter ForeignCallDescriptor descriptor, Class<?> elementType);
 
     @Snippet
@@ -342,7 +342,7 @@ public class NewObjectSnippets implements Snippets {
         return newArrayCall(HotSpotBackend.NEW_MULTI_ARRAY, hub, rank, dims);
     }
 
-    @NodeIntrinsic(value = ForeignCallNode.class, returnStampIsNonNull = true)
+    @NodeIntrinsic(ForeignCallNode.class)
     public static native Object newArrayCall(@ConstantNodeParameter ForeignCallDescriptor descriptor, Word hub, int rank, Word dims);
 
     /**
