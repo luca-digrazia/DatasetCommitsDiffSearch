@@ -22,9 +22,9 @@
  */
 package com.oracle.truffle.object;
 
-import com.oracle.truffle.api.object.Property;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
+
+import com.oracle.truffle.api.object.*;
 
 /**
  * Immutable property map.

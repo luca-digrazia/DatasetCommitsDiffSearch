@@ -22,17 +22,9 @@
  */
 package com.oracle.truffle.object;
 
-import com.oracle.truffle.api.object.Property;
-import java.util.AbstractSet;
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Deque;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
+
+import com.oracle.truffle.api.object.*;
 
 /**
  * Implementation of {@link PropertyMap} as a reverse-order cons (snoc) list.
