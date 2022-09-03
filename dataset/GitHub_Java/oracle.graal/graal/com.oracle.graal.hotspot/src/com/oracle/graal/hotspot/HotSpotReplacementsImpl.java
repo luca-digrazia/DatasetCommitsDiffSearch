@@ -22,13 +22,15 @@
  */
 package com.oracle.graal.hotspot;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import java.lang.reflect.*;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.hotspot.word.HotSpotOperation;
-import com.oracle.graal.phases.util.Providers;
-import com.oracle.graal.replacements.ReplacementsImpl;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * Filters certain method substitutions based on whether there is underlying hardware support for
@@ -36,12 +38,36 @@ import com.oracle.graal.replacements.ReplacementsImpl;
  */
 public class HotSpotReplacementsImpl extends ReplacementsImpl {
 
-    public HotSpotReplacementsImpl(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
+    private final HotSpotVMConfig config;
+
+    public HotSpotReplacementsImpl(Providers providers, SnippetReflectionProvider snippetReflection, HotSpotVMConfig config, TargetDescription target) {
         super(providers, snippetReflection, target);
+        this.config = config;
     }
 
     @Override
     protected boolean hasGenericInvocationPluginAnnotation(ResolvedJavaMethod method) {
         return method.getAnnotation(HotSpotOperation.class) != null || super.hasGenericInvocationPluginAnnotation(method);
+    }
+
+    @Override
+    protected ResolvedJavaMethod registerMethodSubstitution(ClassReplacements cr, Executable originalMethod, Method substituteMethod) {
+        final Class<?> substituteClass = substituteMethod.getDeclaringClass();
+        if (substituteClass == IntegerSubstitutions.class || substituteClass == LongSubstitutions.class) {
+            if (substituteMethod.getName().equals("numberOfLeadingZeros")) {
+                if (config.useCountLeadingZerosInstruction) {
+                    return null;
+                }
+            } else if (substituteMethod.getName().equals("numberOfTrailingZeros")) {
+                if (config.useCountTrailingZerosInstruction) {
+                    return null;
+                }
+            }
+        } else if (substituteClass == CRC32Substitutions.class) {
+            if (!config.useCRC32Intrinsics) {
+                return null;
+            }
+        }
+        return super.registerMethodSubstitution(cr, originalMethod, substituteMethod);
     }
 }
