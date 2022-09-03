@@ -34,7 +34,6 @@ import javax.lang.model.util.*;
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.ParameterSpec.Cardinality;
-import com.oracle.truffle.codegen.processor.typesystem.*;
 
 public abstract class TemplateMethodParser<T extends Template, E extends TemplateMethod> {
 
@@ -68,10 +67,6 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
 
     public ProcessorContext getContext() {
         return context;
-    }
-
-    public TypeSystemData getTypeSystem() {
-        return template.getTypeSystem();
     }
 
     public abstract MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror);
@@ -115,7 +110,13 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
                 valid = false;
             }
         }
-        Collections.sort(parsedMethods);
+        Collections.sort(parsedMethods, new Comparator<TemplateMethod>() {
+
+            @Override
+            public int compare(TemplateMethod o1, TemplateMethod o2) {
+                return o1.getMethodName().compareTo(o2.getMethodName());
+            }
+        });
 
         if (!valid && parseNullOnError) {
             return null;
@@ -129,25 +130,27 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
             return null;
         }
 
-        methodSpecification.applyTypeDefinitions("types");
-
         String id = method.getSimpleName().toString();
         AnnotationMirror idAnnotation = Utils.findAnnotationMirror(context.getEnvironment(), method, NodeId.class);
         if (idAnnotation != null) {
             id = Utils.getAnnotationValue(String.class, idAnnotation, "value");
         }
 
+        List<TypeDef> typeDefs = createTypeDefinitions(methodSpecification.getReturnType(), methodSpecification.getParameters());
+
         ParameterSpec returnTypeSpec = methodSpecification.getReturnType();
+        List<ParameterSpec> parameterSpecs = new ArrayList<>();
+        parameterSpecs.addAll(methodSpecification.getParameters());
 
         ActualParameter returnTypeMirror = matchParameter(returnTypeSpec, method.getReturnType(), template, 0, false);
         if (returnTypeMirror == null) {
             if (emitErrors) {
                 E invalidMethod = create(new TemplateMethod(id, template, methodSpecification, method, annotation, returnTypeMirror, Collections.<ActualParameter> emptyList()));
-                String expectedReturnType = returnTypeSpec.toSignatureString(true);
+                String expectedReturnType = createTypeSignature(returnTypeSpec, typeDefs, true);
                 String actualReturnType = Utils.getSimpleName(method.getReturnType());
 
                 String message = String.format("The provided return type \"%s\" does not match expected return type \"%s\".\nExpected signature: \n %s", actualReturnType, expectedReturnType,
-                                methodSpecification.toSignatureString(method.getSimpleName().toString()));
+                                createExpectedSignature(method.getSimpleName().toString(), returnTypeSpec, parameterSpecs, typeDefs));
                 invalidMethod.addError(message);
                 return invalidMethod;
             } else {
@@ -156,16 +159,17 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
         }
 
         List<TypeMirror> parameterTypes = new ArrayList<>();
+        parameterTypes.addAll(methodSpecification.getImplicitTypes());
         for (VariableElement var : method.getParameters()) {
             parameterTypes.add(var.asType());
         }
 
-        List<ActualParameter> parameters = parseParameters(methodSpecification, parameterTypes);
+        List<ActualParameter> parameters = parseParameters(parameterTypes, parameterSpecs, methodSpecification.getImplicitTypes().size());
         if (parameters == null) {
             if (isEmitErrors()) {
                 E invalidMethod = create(new TemplateMethod(id, template, methodSpecification, method, annotation, returnTypeMirror, Collections.<ActualParameter> emptyList()));
                 String message = String.format("Method signature %s does not match to the expected signature: \n%s", createActualSignature(methodSpecification, method),
-                                methodSpecification.toSignatureString(method.getSimpleName().toString()));
+                                createExpectedSignature(method.getSimpleName().toString(), returnTypeSpec, parameterSpecs, typeDefs));
                 invalidMethod.addError(message);
                 return invalidMethod;
             } else {
@@ -177,162 +181,223 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
     }
 
     private static String createActualSignature(MethodSpec spec, ExecutableElement method) {
-        StringBuilder b = new StringBuilder("(");
-        String sep = "";
-        for (TypeMirror implicitType : spec.getImplicitRequiredTypes()) {
-            b.append(sep);
-            b.append("implicit " + Utils.getSimpleName(implicitType));
-            sep = ", ";
+        List<String> types = new ArrayList<>();
+        for (TypeMirror implicitType : spec.getImplicitTypes()) {
+            types.add("implicit " + Utils.getSimpleName(implicitType));
         }
         for (VariableElement var : method.getParameters()) {
-            b.append(sep);
-            b.append(Utils.getSimpleName(var.asType()));
-            sep = ", ";
+            types.add(Utils.getSimpleName(var.asType()));
+        }
+
+        StringBuilder b = new StringBuilder("(");
+        for (Iterator<String> iterator = types.iterator(); iterator.hasNext();) {
+            b.append(iterator.next());
+            if (iterator.hasNext()) {
+                b.append(", ");
+            }
         }
         b.append(")");
         return b.toString();
     }
 
-    private List<ActualParameter> parseParameters(MethodSpec spec, List<TypeMirror> parameterTypes) {
-        List<ActualParameter> parsedParams = new ArrayList<>();
-        ConsumableListIterator<TypeMirror> types = new ConsumableListIterator<>(parameterTypes);
+    private List<ActualParameter> parseParameters(List<TypeMirror> types, List<ParameterSpec> parameterSpecs, int hiddenCount) {
+        Iterator<? extends TypeMirror> parameterIterator = types.iterator();
+        Iterator<? extends ParameterSpec> specificationIterator = parameterSpecs.iterator();
 
-        // parse optional parameters
-        ConsumableListIterator<ParameterSpec> optionals = new ConsumableListIterator<>(spec.getOptional());
-        for (TypeMirror type : types) {
-            int oldIndex = types.getIndex();
-            int optionalCount = 1;
-            for (ParameterSpec paramspec : optionals) {
-                ActualParameter optionalParam = matchParameter(paramspec, type, template, 0, false);
-                if (optionalParam != null) {
-                    optionals.consume(optionalCount);
-                    types.consume();
-                    parsedParams.add(optionalParam);
-                    break;
-                }
-                optionalCount++;
-            }
-            if (oldIndex == types.getIndex()) {
-                // nothing found anymore skip optional
-                break;
-            }
-        }
+        TypeMirror parameter = parameterIterator.hasNext() ? parameterIterator.next() : null;
+        ParameterSpec specification = specificationIterator.hasNext() ? specificationIterator.next() : null;
 
-        List<TypeMirror> typesWithImplicit = new ArrayList<>(spec.getImplicitRequiredTypes());
-        typesWithImplicit.addAll(types.toList());
-        types = new ConsumableListIterator<>(typesWithImplicit);
-
+        int globalParameterIndex = 0;
         int specificationParameterIndex = 0;
-        ConsumableListIterator<ParameterSpec> required = new ConsumableListIterator<>(spec.getRequired());
-        while (required.get() != null || types.get() != null) {
-            if (required.get() == null || types.get() == null) {
-                if (required.get() != null && required.get().getCardinality() == Cardinality.MULTIPLE) {
-                    required.consume();
+        List<ActualParameter> resolvedParameters = new ArrayList<>();
+        while (parameter != null || specification != null) {
+            if (parameter == null || specification == null) {
+                if (specification != null && (specification.isOptional() || specification.getCardinality() == Cardinality.MULTIPLE)) {
+                    specification = specificationIterator.hasNext() ? specificationIterator.next() : null;
                     specificationParameterIndex = 0;
                     continue;
                 }
-                break;
-            }
-            boolean implicit = types.getIndex() < spec.getImplicitRequiredTypes().size();
-            ActualParameter resolvedParameter = matchParameter(required.get(), types.get(), template, specificationParameterIndex, implicit);
-            if (resolvedParameter == null) {
-                if (required.get().getCardinality() == Cardinality.MULTIPLE) {
-                    required.consume();
-                    continue;
-                }
-                // direct mismatch but required -> error
                 return null;
-            } else {
-                parsedParams.add(resolvedParameter);
-                types.consume();
-                if (required.get().getCardinality() == Cardinality.ONE) {
-                    required.consume();
+            }
+
+            boolean hidden = globalParameterIndex < hiddenCount;
+            ActualParameter resolvedParameter = matchParameter(specification, parameter, template, specificationParameterIndex, hidden);
+            if (resolvedParameter == null) {
+                // mismatch
+                if (specification.isOptional()) {
+                    specification = specificationIterator.hasNext() ? specificationIterator.next() : null;
                     specificationParameterIndex = 0;
-                } else if (required.get().getCardinality() == Cardinality.MULTIPLE) {
+                } else {
+                    return null;
+                }
+            } else {
+                resolvedParameters.add(resolvedParameter);
+
+                // match
+                if (specification.getCardinality() == Cardinality.ONE) {
+                    parameter = parameterIterator.hasNext() ? parameterIterator.next() : null;
+                    specification = specificationIterator.hasNext() ? specificationIterator.next() : null;
+                    globalParameterIndex++;
+                    specificationParameterIndex = 0;
+                } else if (specification.getCardinality() == Cardinality.MULTIPLE) {
+                    parameter = parameterIterator.hasNext() ? parameterIterator.next() : null;
+                    globalParameterIndex++;
                     specificationParameterIndex++;
                 }
             }
         }
-
-        if (!types.toList().isEmpty()) {
-            // additional types -> error
-            return null;
-        }
-
-        if (!required.toList().isEmpty() && !spec.isVariableRequiredArguments()) {
-            // additional specifications -> error
-            return null;
-        }
-
-        // success!
-        return parsedParams;
+        return resolvedParameters;
     }
 
-    private ActualParameter matchParameter(ParameterSpec specification, TypeMirror mirror, Template originalTemplate, int index, boolean implicit) {
+    private ActualParameter matchParameter(ParameterSpec specification, TypeMirror mirror, Template typeSystem, int index, boolean hidden) {
         TypeMirror resolvedType = mirror;
         if (hasError(resolvedType)) {
-            resolvedType = context.resolveNotYetCompiledType(mirror, originalTemplate);
+            resolvedType = context.resolveNotYetCompiledType(mirror, typeSystem);
         }
 
         if (!specification.matches(resolvedType)) {
             return null;
         }
+        return new ActualParameter(specification, resolvedType, index, hidden);
+    }
 
-        TypeData resolvedTypeData = getTypeSystem().findTypeData(resolvedType);
-        if (resolvedTypeData != null) {
-            return new ActualParameter(specification, resolvedTypeData, index, implicit);
-        } else {
-            return new ActualParameter(specification, resolvedType, index, implicit);
+    protected List<TypeDef> createTypeDefinitions(ParameterSpec returnType, List<? extends ParameterSpec> parameters) {
+        List<TypeDef> typeDefs = new ArrayList<>();
+
+        List<ParameterSpec> allParams = new ArrayList<>();
+        allParams.add(returnType);
+        allParams.addAll(parameters);
+
+        int defIndex = 0;
+        for (ParameterSpec spec : allParams) {
+            List<TypeMirror> allowedTypes = spec.getAllowedTypes();
+            List<TypeMirror> types = spec.getAllowedTypes();
+            if (types != null && allowedTypes.size() > 1) {
+                TypeDef foundDef = null;
+                for (TypeDef def : typeDefs) {
+                    if (allowedTypes.equals(def.getTypes())) {
+                        foundDef = def;
+                        break;
+                    }
+                }
+                if (foundDef == null) {
+                    foundDef = new TypeDef(types, "Types" + defIndex);
+                    typeDefs.add(foundDef);
+                    defIndex++;
+                }
+
+                foundDef.getParameters().add(spec);
+            }
+        }
+
+        return typeDefs;
+    }
+
+    protected static class TypeDef {
+
+        private final List<TypeMirror> types;
+        private final String name;
+        private final List<ParameterSpec> parameters = new ArrayList<>();
+
+        public TypeDef(List<TypeMirror> types, String name) {
+            this.types = types;
+            this.name = name;
+        }
+
+        public List<ParameterSpec> getParameters() {
+            return parameters;
+        }
+
+        public List<TypeMirror> getTypes() {
+            return types;
+        }
+
+        public String getName() {
+            return name;
         }
     }
 
-    /* Helper class for parsing. */
-    private static class ConsumableListIterator<E> implements Iterable<E> {
+    public static String createExpectedSignature(String methodName, ParameterSpec returnType, List<? extends ParameterSpec> parameters, List<TypeDef> typeDefs) {
+        StringBuilder b = new StringBuilder();
 
-        private final List<E> data;
-        private int index;
+        b.append("    ");
+        b.append(createTypeSignature(returnType, typeDefs, true));
 
-        public ConsumableListIterator(List<E> data) {
-            this.data = data;
-        }
+        b.append(" ");
+        b.append(methodName);
+        b.append("(");
 
-        public E get() {
-            if (index >= data.size()) {
-                return null;
+        for (int i = 0; i < parameters.size(); i++) {
+            ParameterSpec specification = parameters.get(i);
+            if (specification.isOptional()) {
+                b.append("[");
             }
-            return data.get(index);
+            if (specification.getCardinality() == Cardinality.MULTIPLE) {
+                b.append("{");
+            }
+
+            b.append(createTypeSignature(specification, typeDefs, false));
+
+            if (specification.isOptional()) {
+                b.append("]");
+            }
+
+            if (specification.getCardinality() == Cardinality.MULTIPLE) {
+                b.append("}");
+            }
+
+            if (i < parameters.size() - 1) {
+                b.append(", ");
+            }
+
         }
 
-        public E consume() {
-            return consume(1);
-        }
+        b.append(")");
 
-        public E consume(int count) {
-            if (index + count <= data.size()) {
-                index += count;
-                return get();
-            } else {
-                throw new ArrayIndexOutOfBoundsException(count + 1);
+        if (!typeDefs.isEmpty()) {
+            b.append("\n\n");
+
+            String lineSep = "";
+            for (TypeDef def : typeDefs) {
+                b.append(lineSep);
+                b.append("    <").append(def.getName()).append(">");
+                b.append(" = {");
+                String separator = "";
+                for (TypeMirror type : def.getTypes()) {
+                    b.append(separator).append(Utils.getSimpleName(type));
+                    separator = ", ";
+                }
+                b.append("}");
+                lineSep = "\n";
+
             }
         }
+        return b.toString();
+    }
 
-        public int getIndex() {
-            return index;
-        }
-
-        @Override
-        public Iterator<E> iterator() {
-            return toList().iterator();
-        }
-
-        public List<E> toList() {
-            if (index < data.size()) {
-                return data.subList(index, data.size());
-            } else {
-                return Collections.<E> emptyList();
+    private static String createTypeSignature(ParameterSpec spec, List<TypeDef> typeDefs, boolean typeOnly) {
+        StringBuilder builder = new StringBuilder();
+        if (spec.getAllowedTypes().size() > 1) {
+            TypeDef foundTypeDef = null;
+            for (TypeDef typeDef : typeDefs) {
+                if (typeDef.getParameters().contains(spec)) {
+                    foundTypeDef = typeDef;
+                    break;
+                }
             }
+            if (foundTypeDef != null) {
+                builder.append("<" + foundTypeDef.getName() + ">");
+            }
+        } else if (spec.getAllowedTypes().size() == 1) {
+            builder.append(Utils.getSimpleName(spec.getAllowedTypes().get(0)));
+        } else {
+            builder.append("void");
         }
-
+        if (!typeOnly) {
+            builder.append(" ");
+            builder.append(spec.getName());
+        }
+        return builder.toString();
     }
 
 }
