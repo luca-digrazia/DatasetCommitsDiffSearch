@@ -22,10 +22,7 @@
  */
 package com.oracle.truffle.codegen.processor.node;
 
-import java.util.*;
-
 import com.oracle.truffle.api.codegen.*;
-import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
 
 public class SpecializationData extends TemplateMethod {
@@ -33,20 +30,17 @@ public class SpecializationData extends TemplateMethod {
     private final int order;
     private final boolean generic;
     private final boolean uninitialized;
-    private final List<SpecializationThrowsData> exceptions;
+    private final SpecializationThrowsData[] exceptions;
     private SpecializationGuardData[] guards;
     private ShortCircuitData[] shortCircuits;
     private boolean useSpecializationsForGeneric = true;
     private NodeData node;
 
-    private final boolean synthetic;
-
-    public SpecializationData(TemplateMethod template, int order, List<SpecializationThrowsData> exceptions) {
+    public SpecializationData(TemplateMethod template, int order, SpecializationThrowsData[] exceptions) {
         super(template);
         this.order = order;
         this.generic = false;
         this.uninitialized = false;
-        this.synthetic = false;
         this.exceptions = exceptions;
 
         for (SpecializationThrowsData exception : exceptions) {
@@ -54,34 +48,13 @@ public class SpecializationData extends TemplateMethod {
         }
     }
 
-    public SpecializationData(TemplateMethod template, boolean generic, boolean uninitialized, boolean synthetic) {
+    public SpecializationData(TemplateMethod template, boolean generic, boolean uninitialized) {
         super(template);
         this.order = Specialization.DEFAULT_ORDER;
         this.generic = generic;
         this.uninitialized = uninitialized;
-        this.exceptions = Collections.emptyList();
+        this.exceptions = new SpecializationThrowsData[0];
         this.guards = new SpecializationGuardData[0];
-        this.synthetic = synthetic;
-    }
-
-    public boolean hasRewrite(ProcessorContext context) {
-        if (getExceptions().size() > 0) {
-            return true;
-        }
-        if (getGuards().length > 0) {
-            return true;
-        }
-        for (ActualParameter parameter : getParameters()) {
-            NodeFieldData field = getNode().findField(parameter.getSpecification().getName());
-            if (field == null) {
-                continue;
-            }
-            ExecutableTypeData type = field.getNodeData().findExecutableType(parameter.getActualTypeData(field.getNodeData().getTypeSystem()));
-            if (type.hasUnexpectedValue(context)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     public NodeData getNode() {
@@ -96,10 +69,6 @@ public class SpecializationData extends TemplateMethod {
         this.guards = guards;
     }
 
-    public boolean isSynthetic() {
-        return synthetic;
-    }
-
     public int getOrder() {
         return order;
     }
@@ -112,7 +81,7 @@ public class SpecializationData extends TemplateMethod {
         return uninitialized;
     }
 
-    public List<SpecializationThrowsData> getExceptions() {
+    public SpecializationThrowsData[] getExceptions() {
         return exceptions;
     }
 
@@ -137,10 +106,10 @@ public class SpecializationData extends TemplateMethod {
     }
 
     public SpecializationData findNextSpecialization() {
-        List<SpecializationData> specializations = node.getSpecializations();
-        for (int i = 0; i < specializations.size() - 1; i++) {
-            if (specializations.get(i) == this) {
-                return specializations.get(i + 1);
+        SpecializationData[] specializations = node.getSpecializations();
+        for (int i = 0; i < specializations.length - 1; i++) {
+            if (specializations[i] == this) {
+                return specializations[i + 1];
             }
         }
         return null;
