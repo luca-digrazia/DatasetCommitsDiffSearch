@@ -77,7 +77,6 @@ import com.oracle.svm.driver.MacroOption.EnabledOption;
 import com.oracle.svm.driver.MacroOption.MacroOptionKind;
 import com.oracle.svm.driver.MacroOption.Registry;
 import com.oracle.svm.graal.hosted.GraalFeature;
-import com.oracle.svm.hosted.ClassInitializationFeature;
 import com.oracle.svm.hosted.FeatureHandler;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.image.AbstractBootImage.NativeImageKind;
@@ -150,8 +149,6 @@ public class NativeImage {
     static final String oHDynamicProxyConfigurationResources = oH(DynamicProxyFeature.Options.DynamicProxyConfigurationResources);
     static final String oHJNIConfigurationFiles = oH(SubstrateOptions.JNIConfigurationFiles);
     static final String oHJNIConfigurationResources = oH(SubstrateOptions.JNIConfigurationResources);
-    static final String oHDelayClassInitialization = oH(ClassInitializationFeature.Options.DelayClassInitialization);
-    static final String oHRerunClassInitialization = oH(ClassInitializationFeature.Options.RerunClassInitialization);
     static final String oHInterfacesForJNR = oH + "InterfacesForJNR=";
 
     static final String oHMaxRuntimeCompileMethods = oH(GraalFeature.Options.MaxRuntimeCompileMethods);
@@ -745,8 +742,6 @@ public class NativeImage {
         consolidateListArgs(imageBuilderArgs, oHJNIConfigurationFiles, ",", canonicalizedPathStr);
         consolidateListArgs(imageBuilderArgs, oHJNIConfigurationResources, ",", Function.identity());
         consolidateListArgs(imageBuilderArgs, oHFeatures, ",", Function.identity());
-        consolidateListArgs(imageBuilderArgs, oHDelayClassInitialization, ",", Function.identity());
-        consolidateListArgs(imageBuilderArgs, oHRerunClassInitialization, ",", Function.identity());
 
         BiFunction<String, String, String> takeLast = (a, b) -> b;
         consolidateArgs(imageBuilderArgs, oHPath, Function.identity(), canonicalizedPathStr, () -> null, takeLast);
