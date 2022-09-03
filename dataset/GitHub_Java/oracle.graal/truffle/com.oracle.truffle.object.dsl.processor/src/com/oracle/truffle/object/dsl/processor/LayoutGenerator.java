@@ -143,9 +143,7 @@ public class LayoutGenerator {
             stream.println("import java.util.concurrent.atomic.AtomicReference;");
         }
 
-        if (!layout.hasBuilder()) {
-            stream.println("import com.oracle.truffle.api.CompilerAsserts;");
-        }
+        stream.println("import com.oracle.truffle.api.CompilerAsserts;");
         stream.println("import com.oracle.truffle.api.dsl.GeneratedBy;");
 
         if (needsBoundary) {
@@ -466,6 +464,12 @@ public class LayoutGenerator {
             stream.println(") {");
         }
 
+        for (PropertyModel property : layout.getAllShapeProperties()) {
+            if (!property.getType().getKind().isPrimitive() && !property.isNullable()) {
+                stream.printf("        assert %s != null;%n", property.getName());
+            }
+        }
+
         stream.printf("        return LAYOUT.createShape(new %sType(", layout.getName());
 
         if (layout.hasShapeProperties()) {
@@ -505,7 +509,6 @@ public class LayoutGenerator {
     }
 
     private void generateFactory(final PrintStream stream) {
-        // The shortcut factory when there are no shape properties
         if (!layout.hasShapeProperties()) {
             stream.println("    @Override");
             stream.printf("    public DynamicObject create%s(", layout.getName());
@@ -548,11 +551,6 @@ public class LayoutGenerator {
             stream.println("    ");
         }
 
-        // The full factory
-        final boolean builder = layout.hasBuilder();
-        final String methodName = builder ? "build" : "create" + layout.getName();
-        final String returnType = builder ? "Object[]" : "DynamicObject";
-
         if (layout.hasShapeProperties()) {
             stream.println("    @Override");
             stream.print("    public");
@@ -565,10 +563,8 @@ public class LayoutGenerator {
         }
 
         if (layout.hasInstanceProperties()) {
-            stream.printf(" %s %s(%n", returnType, methodName);
-            if (!builder) {
-                stream.println("            DynamicObjectFactory factory,");
-            }
+            stream.printf(" DynamicObject create%s(%n", layout.getName());
+            stream.println("            DynamicObjectFactory factory,");
 
             for (PropertyModel property : layout.getAllInstanceProperties()) {
                 stream.printf("            %s %s", property.getType().toString(), property.getName());
@@ -580,18 +576,15 @@ public class LayoutGenerator {
                 }
             }
         } else {
-            String factoryArg = builder ? "" : "DynamicObjectFactory factory";
-            stream.printf(" %s %s(%s) {%n", returnType, methodName, factoryArg);
+            stream.printf(" DynamicObject create%s(DynamicObjectFactory factory) {%n", layout.getName());
         }
 
-        if (!builder) {
-            stream.println("        assert factory != null;");
-            stream.println("        CompilerAsserts.partialEvaluationConstant(factory);");
-            stream.printf("        assert creates%s(factory);%n", layout.getName());
+        stream.println("        assert factory != null;");
+        stream.println("        CompilerAsserts.partialEvaluationConstant(factory);");
+        stream.printf("        assert creates%s(factory);%n", layout.getName());
 
-            for (PropertyModel property : layout.getAllInstanceProperties()) {
-                stream.printf("        assert factory.getShape().hasProperty(%s_IDENTIFIER);%n", NameUtils.identifierToConstant(property.getName()));
-            }
+        for (PropertyModel property : layout.getAllInstanceProperties()) {
+            stream.printf("        assert factory.getShape().hasProperty(%s_IDENTIFIER);%n", NameUtils.identifierToConstant(property.getName()));
         }
 
         for (PropertyModel property : layout.getAllInstanceProperties()) {
@@ -601,11 +594,7 @@ public class LayoutGenerator {
         }
 
         if (layout.hasInstanceProperties()) {
-            if (builder) {
-                stream.println("        return new Object[] { ");
-            } else {
-                stream.println("        return factory.newInstance(");
-            }
+            stream.println("        return factory.newInstance(");
 
             for (PropertyModel property : layout.getAllInstanceProperties()) {
                 if (property.isVolatile()) {
@@ -621,17 +610,13 @@ public class LayoutGenerator {
                 }
 
                 if (property == layout.getAllProperties().get(layout.getAllProperties().size() - 1)) {
-                    stream.println(builder ? " };" : ");");
+                    stream.println(");");
                 } else {
                     stream.println(",");
                 }
             }
         } else {
-            if (builder) {
-                stream.println("        return new Object[0];");
-            } else {
-                stream.println("        return factory.newInstance();");
-            }
+            stream.println("        return factory.newInstance();");
         }
 
         stream.println("    }");
@@ -675,19 +660,17 @@ public class LayoutGenerator {
         stream.printf(" boolean is%s(ObjectType objectType) {%n", layout.getName());
         stream.printf("        return objectType instanceof %sType;%n", layout.getName());
         stream.println("    }");
+        stream.println("    ");
 
-        if (!layout.hasBuilder()) {
-            stream.println("    ");
-            stream.printf("    private");
+        stream.printf("    private");
 
-            if (!layout.hasObjectTypeGuard()) {
-                stream.printf(" static");
-            }
-
-            stream.printf(" boolean creates%s(DynamicObjectFactory factory) {%n", layout.getName());
-            stream.printf("        return is%s(factory.getShape().getObjectType());%n", layout.getName());
-            stream.println("    }");
+        if (!layout.hasObjectTypeGuard()) {
+            stream.printf(" static");
         }
+
+        stream.printf(" boolean creates%s(DynamicObjectFactory factory) {%n", layout.getName());
+        stream.printf("        return is%s(factory.getShape().getObjectType());%n", layout.getName());
+        stream.println("    }");
         stream.println("    ");
     }
 
