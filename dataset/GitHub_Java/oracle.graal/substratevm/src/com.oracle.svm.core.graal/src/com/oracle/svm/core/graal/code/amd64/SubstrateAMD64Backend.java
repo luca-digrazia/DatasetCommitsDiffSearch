@@ -772,7 +772,7 @@ public class SubstrateAMD64Backend extends Backend {
     }
 
     private static boolean useLinearPointerCompression() {
-        return SubstrateOptions.SpawnIsolates.getValue();
+        return SubstrateOptions.UseLinearPointerCompression.getValue() && SubstrateOptions.UseHeapBaseRegister.getValue();
     }
 
     @Override
