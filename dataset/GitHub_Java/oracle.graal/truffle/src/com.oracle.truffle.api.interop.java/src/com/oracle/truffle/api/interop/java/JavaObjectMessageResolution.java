@@ -54,12 +54,7 @@ class JavaObjectMessageResolution {
             if (obj == null) {
                 return 0;
             }
-            try {
-                return Array.getLength(obj);
-            } catch (IllegalArgumentException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedMessageException.raise(Message.GET_SIZE);
-            }
+            return Array.getLength(obj);
         }
 
     }
@@ -129,21 +124,11 @@ class JavaObjectMessageResolution {
         }
     }
 
-    @Resolve(message = "IS_INSTANTIABLE")
-    abstract static class IsInstantiableObjectNode extends Node {
-
-        public Object access(JavaObject receiver) {
-            if (TruffleOptions.AOT) {
-                return false;
-            }
-            return receiver.isClass() && JavaClassDesc.forClass(receiver.clazz).lookupConstructor() != null;
-        }
-    }
-
     @Resolve(message = "NEW")
     abstract static class NewNode extends Node {
         @Child private ExecuteMethodNode doExecute;
         @Child private ToJavaNode toJava;
+        private static final TypeAndClass<Integer> INT_TYPE = new TypeAndClass<>(null, int.class);
 
         public Object access(JavaObject receiver, Object[] args) {
             if (TruffleOptions.AOT) {
@@ -159,7 +144,7 @@ class JavaObjectMessageResolution {
                         CompilerDirectives.transferToInterpreterAndInvalidate();
                         toJava = insert(ToJavaNode.create());
                     }
-                    int length = (int) toJava.execute(args[0], int.class, null, receiver.languageContext);
+                    int length = (int) toJava.execute(args[0], INT_TYPE, receiver.languageContext);
                     return JavaInterop.asTruffleObject(Array.newInstance(receiver.clazz.getComponentType(), length), receiver.languageContext);
                 }
 
@@ -211,7 +196,7 @@ class JavaObjectMessageResolution {
     }
 
     @Resolve(message = "READ")
-    abstract static class ReadNode extends Node {
+    abstract static class ReadFieldNode extends Node {
 
         @Child private ArrayReadNode read = ArrayReadNode.create();
 
@@ -238,7 +223,7 @@ class JavaObjectMessageResolution {
     }
 
     @Resolve(message = "WRITE")
-    abstract static class WriteNode extends Node {
+    abstract static class WriteFieldNode extends Node {
 
         @Child private ToJavaNode toJava = ToJavaNode.create();
         @Child private ArrayWriteNode write = ArrayWriteNode.create();
@@ -256,7 +241,7 @@ class JavaObjectMessageResolution {
             if (f == null) {
                 throw UnknownIdentifierException.raise(name);
             }
-            Object convertedValue = toJava.execute(value, f.getType(), f.getGenericType(), receiver.languageContext);
+            Object convertedValue = toJava.execute(value, new TypeAndClass<>(f.getGenericType(), f.getType()), receiver.languageContext);
             JavaInteropReflect.setField(obj, f, convertedValue);
             return JavaObject.NULL;
         }
@@ -265,7 +250,7 @@ class JavaObjectMessageResolution {
         @SuppressWarnings("unchecked")
         private Object accessMap(JavaObject receiver, String name, Object value) {
             Map<Object, Object> map = (Map<Object, Object>) receiver.obj;
-            Object convertedValue = toJava.execute(value, Object.class, null, receiver.languageContext);
+            Object convertedValue = toJava.execute(value, TypeAndClass.ANY, receiver.languageContext);
             return map.put(name, convertedValue);
         }
 
@@ -273,18 +258,6 @@ class JavaObjectMessageResolution {
             return write.executeWithTarget(receiver, index, value);
         }
 
-    }
-
-    @Resolve(message = "HAS_KEYS")
-    abstract static class HasKeysNode extends Node {
-
-        public Object access(JavaObject receiver) {
-            if (receiver.obj instanceof Map) {
-                return true;
-            } else {
-                return !TruffleOptions.AOT;
-            }
-        }
     }
 
     @Resolve(message = "KEYS")
