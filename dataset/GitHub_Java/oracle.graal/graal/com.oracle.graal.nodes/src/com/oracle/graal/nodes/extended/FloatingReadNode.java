@@ -51,7 +51,7 @@ public final class FloatingReadNode extends FloatingAccessNode implements Iterab
         this.lastLocationAccess = lastLocationAccess;
     }
 
-    public Node getLastLocationAccess() {
+    public Node lastLocationAccess() {
         return lastLocationAccess;
     }
 
@@ -90,7 +90,7 @@ public final class FloatingReadNode extends FloatingAccessNode implements Iterab
 
     @Override
     public boolean verify() {
-        Node lla = getLastLocationAccess();
+        Node lla = lastLocationAccess();
         assert lla == null || isMemoryCheckPoint(lla) || isMemoryPhi(lla) || isMemoryProxy(lla) : "lastLocationAccess of " + this + " should be a MemoryCheckpoint, but is " + lla;
         return super.verify();
     }
