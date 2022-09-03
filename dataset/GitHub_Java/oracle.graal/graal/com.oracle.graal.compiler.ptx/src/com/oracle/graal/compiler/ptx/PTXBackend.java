@@ -74,7 +74,7 @@ public class PTXBackend extends Backend {
 
         AbstractAssembler masm = new PTXAssembler(target, frameMap.registerConfig);
         HotSpotFrameContext frameContext = omitFrame ? null : new HotSpotFrameContext();
-        TargetMethodAssembler tasm = new TargetMethodAssembler(target, runtime(), frameMap, masm, frameContext);
+        TargetMethodAssembler tasm = new TargetMethodAssembler(target, runtime(), frameMap, masm, frameContext, lir.stubs);
         tasm.setFrameSize(frameMap.frameSize());
         tasm.compilationResult.setCustomStackAreaOffset(frameMap.offsetToCustomArea());
         return tasm;
