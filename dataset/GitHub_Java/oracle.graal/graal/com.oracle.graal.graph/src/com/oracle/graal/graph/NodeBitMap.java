@@ -32,7 +32,6 @@ public final class NodeBitMap implements NodeIterable<Node> {
     private long[] bits;
     private int nodeCount;
     private final NodeIdAccessor nodeIdAccessor;
-    private int counter;
 
     public NodeBitMap(Graph graph) {
         nodeCount = graph.nodeIdCount();
@@ -42,10 +41,6 @@ public final class NodeBitMap implements NodeIterable<Node> {
 
     private static int sizeForNodeCount(int nodeCount) {
         return (nodeCount + Long.SIZE - 1) >> SHIFT;
-    }
-
-    public int getCounter() {
-        return counter;
     }
 
     private NodeBitMap(NodeBitMap other) {
@@ -65,20 +60,6 @@ public final class NodeBitMap implements NodeIterable<Node> {
     public boolean isMarked(Node node) {
         assert check(node, false);
         int id = nodeIdAccessor.getNodeId(node);
-        return isMarked(id);
-    }
-
-    public boolean checkAndMarkInc(Node node) {
-        if (!isMarked(node)) {
-            this.counter++;
-            this.mark(node);
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    public boolean isMarked(int id) {
         return (bits[id >> SHIFT] & (1L << id)) != 0;
     }
 
@@ -86,7 +67,7 @@ public final class NodeBitMap implements NodeIterable<Node> {
         assert check(node, true);
         int id = nodeIdAccessor.getNodeId(node);
         checkGrow(id);
-        return isMarked(id);
+        return (bits[id >> SHIFT] & (1L << id)) != 0;
     }
 
     public void mark(Node node) {
@@ -142,9 +123,8 @@ public final class NodeBitMap implements NodeIterable<Node> {
 
     public void grow() {
         nodeCount = Math.max(nodeCount, graph().nodeIdCount());
-        int newLength = sizeForNodeCount(nodeCount);
+        int newLength = Math.max((bits.length * 3 / 2) + 1, sizeForNodeCount(nodeCount));
         if (newLength > bits.length) {
-            newLength = Math.max(newLength, (bits.length * 3 / 2) + 1);
             bits = Arrays.copyOf(bits, newLength);
         }
     }
