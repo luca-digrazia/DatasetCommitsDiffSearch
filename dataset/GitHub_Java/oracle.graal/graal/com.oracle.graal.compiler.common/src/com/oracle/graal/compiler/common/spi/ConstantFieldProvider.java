@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.common.spi;
 
-import com.oracle.graal.options.OptionValues;
-
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
@@ -33,8 +31,6 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 public interface ConstantFieldProvider {
 
     public interface ConstantFieldTool<T> {
-
-        OptionValues getOptions();
 
         JavaConstant readValue();
 

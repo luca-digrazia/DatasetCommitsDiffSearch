@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,17 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.spi.LIRKindTool;
+
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.MemoryAccessProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
- * A stamp is the basis for a type system over the nodes in a graph.
+ * A stamp is the basis for a type system.
  */
 public abstract class Stamp {
 
@@ -40,30 +46,28 @@ public abstract class Stamp {
     public abstract ResolvedJavaType javaType(MetaAccessProvider metaAccess);
 
     public boolean alwaysDistinct(Stamp other) {
-        return !join(other).isLegal();
+        return join(other).isEmpty();
     }
 
     /**
-     * Gets a Java {@link Kind} that can be used to store a value of this stamp on the Java bytecode
-     * stack. Returns {@link Kind#Illegal} if a value of this stamp can not be stored on the
-     * bytecode stack.
+     * Gets a Java {@link JavaKind} that can be used to store a value of this stamp on the Java
+     * bytecode stack. Returns {@link JavaKind#Illegal} if a value of this stamp can not be stored
+     * on the bytecode stack.
      */
-    public abstract Kind getStackKind();
+    public abstract JavaKind getStackKind();
 
     /**
-     * Gets a platform dependent {@link PlatformKind} that can be used to store a value of this
-     * stamp.
+     * Gets a platform dependent {@link LIRKind} that can be used to store a value of this stamp.
      */
-    public abstract PlatformKind getPlatformKind(PlatformKindTool tool);
+    public abstract LIRKind getLIRKind(LIRKindTool tool);
 
     /**
-     * Returns the union of this stamp and the given stamp. Typically used to create stamps for
-     * {@link ValuePhiNode}s.
+     * Returns the union of this stamp and the given stamp. Typically used to create stamps for phi
+     * nodes.
      *
      * @param other The stamp that will enlarge this stamp.
      * @return The union of this stamp and the given stamp.
      */
-    @SuppressWarnings("javadoc")
     public abstract Stamp meet(Stamp other);
 
     /**
@@ -84,9 +88,18 @@ public abstract class Stamp {
     /**
      * Returns a stamp of the same kind, but with no allowed values.
      *
-     * {@link #illegal()} is the neutral element of the {@link #meet(Stamp)} operation.
+     * {@link #empty()} is the neutral element of the {@link #meet(Stamp)} operation.
      */
-    public abstract Stamp illegal();
+    public abstract Stamp empty();
+
+    /**
+     * If it is possible to represent single value stamps of this kind, this method returns the
+     * stamp representing the single value c. stamp.constant(c).asConstant() should be equal to c.
+     * <p>
+     * If it is not possible to represent single value stamps, this method returns a stamp that
+     * includes c, and is otherwise as narrow as possible.
+     */
+    public abstract Stamp constant(Constant c, MetaAccessProvider meta);
 
     /**
      * Test whether two stamps have the same base type.
@@ -94,9 +107,23 @@ public abstract class Stamp {
     public abstract boolean isCompatible(Stamp other);
 
     /**
+     * Check that the constant {@code other} is compatible with this stamp.
+     *
+     * @param constant
+     */
+    public abstract boolean isCompatible(Constant constant);
+
+    /**
      * Test whether this stamp has legal values.
      */
-    public abstract boolean isLegal();
+    public abstract boolean hasValues();
+
+    /**
+     * Tests whether this stamp represents an illegal value.
+     */
+    public final boolean isEmpty() {
+        return !hasValues();
+    }
 
     /**
      * If this stamp represents a single value, the methods returns this single value. It returns
@@ -107,5 +134,44 @@ public abstract class Stamp {
      */
     public Constant asConstant() {
         return null;
+    }
+
+    /**
+     * Read a value of this stamp from memory.
+     */
+    public abstract Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement);
+
+    /**
+     * Tries to improve this stamp with the stamp given as parameter. If successful, returns the new
+     * improved stamp. Otherwise, returns a stamp equal to this.
+     *
+     * @param other the stamp that should be used to improve this stamp
+     * @return the newly improved stamp or a stamp equal to {@code this} if an improvement was not
+     *         possible
+     */
+    public abstract Stamp improveWith(Stamp other);
+
+    /**
+     * Tries to improve this stamp with the stamp given as parameter. If successful, returns the new
+     * improved stamp. Otherwise, returns null.
+     *
+     * @param other the stamp that should be used to improve this stamp
+     * @return the newly improved stamp or {@code null} if an improvement was not possible
+     */
+    public final Stamp tryImproveWith(Stamp other) {
+        Stamp improved = improveWith(other);
+        if (improved.equals(this)) {
+            return null;
+        }
+        return improved;
+    }
+
+    public boolean neverDistinct(Stamp other) {
+        Constant constant = this.asConstant();
+        if (constant != null) {
+            Constant otherConstant = other.asConstant();
+            return otherConstant != null && constant.equals(otherConstant);
+        }
+        return false;
     }
 }

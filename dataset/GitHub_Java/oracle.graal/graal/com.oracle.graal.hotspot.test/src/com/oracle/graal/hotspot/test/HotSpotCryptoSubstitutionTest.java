@@ -24,6 +24,7 @@ package com.oracle.graal.hotspot.test;
 
 import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
 import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
+import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -36,6 +37,10 @@ import java.security.SecureRandom;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+
+import jdk.vm.ci.code.CompiledCode;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -51,9 +56,6 @@ import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.phases.OptimisticOptimizations;
 
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
 /**
  * Tests the intrinsification of certain crypto methods.
  */
@@ -61,7 +63,8 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
 
     @Override
     protected InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
-        return getBackend().createDefaultInstalledCode(method, compResult);
+        CompiledCode compiledCode = getBackend().createCompiledCode(method, compResult);
+        return getCodeCache().setDefaultCode(method, compiledCode);
     }
 
     SecretKey aesKey;
@@ -139,7 +142,7 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
                     Assert.assertNotNull(getCode(installedCodeOwner, graph, true));
                     atLeastOneCompiled = true;
                 } else {
-                    Assert.assertFalse(runtime().getVMConfig().useAESIntrinsics);
+                    Assert.assertFalse(config().useAESIntrinsics);
                 }
             }
         }

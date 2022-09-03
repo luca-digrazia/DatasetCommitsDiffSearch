@@ -47,10 +47,4 @@ public interface CanonicalizerTool {
      * {@link Node#hasNoUsages()}.
      */
     boolean allUsagesAvailable();
-
-    /**
-     * Indicates whether the target platform supports comparison of integers of a particular bit
-     * width. This check is used by canonicalizations that might introduce subword compares.
-     */
-    boolean supportSubwordCompare(int bits);
 }
