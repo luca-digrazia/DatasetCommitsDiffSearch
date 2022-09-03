@@ -31,10 +31,6 @@ import java.io.StringReader;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.spi.FileTypeDetector;
-import java.util.Collection;
-import java.util.ServiceLoader;
 
 final class FileSourceImpl extends Content implements Content.CreateURI {
     private final File file;
@@ -100,16 +96,6 @@ final class FileSourceImpl extends Content implements Content.CreateURI {
 
     @Override
     String findMimeType() throws IOException {
-        final Path filePath = file.toPath();
-        Collection<ClassLoader> loaders = SourceAccessor.ENGINE.allLoaders();
-        for (ClassLoader l : loaders) {
-            for (FileTypeDetector detector : ServiceLoader.load(FileTypeDetector.class, l)) {
-                String mimeType = detector.probeContentType(filePath);
-                if (mimeType != null) {
-                    return mimeType;
-                }
-            }
-        }
-        return Files.probeContentType(filePath);
+        return Files.probeContentType(file.toPath());
     }
 }
