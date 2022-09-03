@@ -22,26 +22,24 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static jdk.internal.jvmci.hotspot.InitTimer.*;
+import static com.oracle.jvmci.hotspot.InitTimer.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.amd64.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.runtime.*;
-import jdk.internal.jvmci.service.*;
-
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.amd64.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.java.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.amd64.*;
+import com.oracle.jvmci.amd64.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.runtime.*;
+import com.oracle.jvmci.service.*;
 
 @ServiceProvider(HotSpotBackendFactory.class)
 public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
@@ -77,7 +75,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
             try (InitTimer rt = timer("create Lowerer provider")) {
                 lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers, target);
             }
-            HotSpotStampProvider stampProvider = new HotSpotStampProvider(target.wordKind);
+            HotSpotStampProvider stampProvider = new HotSpotStampProvider();
             Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, stampProvider);
 
             try (InitTimer rt = timer("create SnippetReflection provider")) {
@@ -87,7 +85,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
                 replacements = createReplacements(runtime, p, snippetReflection);
             }
             try (InitTimer rt = timer("create WordTypes")) {
-                wordTypes = new HotSpotWordTypes(metaAccess, target.wordKind, stampProvider.createHubStamp(false), MethodPointerStamp.method());
+                wordTypes = new HotSpotWordTypes(metaAccess, target.wordKind);
             }
             try (InitTimer rt = timer("create GraphBuilderPhase plugins")) {
                 plugins = createGraphBuilderPlugins(runtime, target, constantReflection, foreignCalls, metaAccess, snippetReflection, replacements, wordTypes, stampProvider);
@@ -129,7 +127,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
     }
 
     protected HotSpotSuitesProvider createSuites(HotSpotGraalRuntimeProvider runtime, Plugins plugins, CodeCacheProvider codeCache, HotSpotRegistersProvider registers) {
-        return new HotSpotSuitesProvider(new AMD64SuitesProvider(plugins), runtime, new AMD64HotSpotAddressLowering(codeCache, runtime.getConfig().getOopEncoding().base,
+        return new HotSpotSuitesProvider(new DefaultSuitesProvider(plugins), runtime, new AMD64HotSpotAddressLowering(codeCache, runtime.getConfig().getOopEncoding().base,
                         registers.getHeapBaseRegister()));
     }
 

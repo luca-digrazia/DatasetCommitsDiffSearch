@@ -24,13 +24,6 @@ package com.oracle.graal.hotspot.sparc;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.runtime.*;
-import jdk.internal.jvmci.service.*;
-import jdk.internal.jvmci.sparc.*;
-
 import com.oracle.graal.compiler.sparc.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.*;
@@ -40,6 +33,12 @@ import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.sparc.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.runtime.*;
+import com.oracle.jvmci.service.*;
+import com.oracle.jvmci.sparc.*;
 
 @ServiceProvider(HotSpotBackendFactory.class)
 public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
@@ -99,9 +98,6 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
         Set<Register> callerSavedRegisters = new HashSet<>();
         Collections.addAll(callerSavedRegisters, regConfig.getCalleeSaveLayout().registers);
         Collections.addAll(callerSavedRegisters, SPARC.fpuRegisters);
-        callerSavedRegisters.add(SPARC.g1);
-        callerSavedRegisters.add(SPARC.g4);
-        callerSavedRegisters.add(SPARC.g5);
         Value[] nativeABICallerSaveRegisters = new Value[callerSavedRegisters.size()];
         int i = 0;
         for (Register reg : callerSavedRegisters) {

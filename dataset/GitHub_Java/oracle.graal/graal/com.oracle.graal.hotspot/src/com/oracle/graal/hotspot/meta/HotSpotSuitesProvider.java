@@ -51,7 +51,7 @@ public class HotSpotSuitesProvider implements SuitesProvider {
     protected final HotSpotGraalRuntimeProvider runtime;
 
     private final AddressLowering addressLowering;
-    private final SuitesProvider defaultSuitesProvider;
+    private final DefaultSuitesProvider defaultSuitesProvider;
 
     private class SuitesSupplier implements OptionSupplier<Suites> {
 
@@ -73,7 +73,7 @@ public class HotSpotSuitesProvider implements SuitesProvider {
 
     }
 
-    public HotSpotSuitesProvider(SuitesProvider defaultSuitesProvider, HotSpotGraalRuntimeProvider runtime, AddressLowering addressLowering) {
+    public HotSpotSuitesProvider(DefaultSuitesProvider defaultSuitesProvider, HotSpotGraalRuntimeProvider runtime, AddressLowering addressLowering) {
         this.runtime = runtime;
         this.addressLowering = addressLowering;
         this.defaultSuitesProvider = defaultSuitesProvider;
