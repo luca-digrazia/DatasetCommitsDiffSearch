@@ -349,13 +349,13 @@ public final class CompilationStatisticsListener extends AbstractDebugCompilatio
                 } else {
                     callCountDirectDispatched++;
                 }
-                if (decision != null && decision.getProfile().getCallNode().isCallTargetCloned()) {
+                if (decision.getProfile().getCallNode().isCallTargetCloned()) {
                     callCountDirectCloned++;
                 } else {
                     callCountDirectNotCloned++;
                 }
             } else if (node instanceof IndirectCallNode) {
-                callCountIndirect++;
+                callCountDirectInlined++;
             } else if (node instanceof LoopNode) {
                 loopCount++;
             }
