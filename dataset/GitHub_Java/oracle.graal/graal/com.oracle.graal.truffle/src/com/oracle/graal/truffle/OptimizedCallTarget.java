@@ -136,9 +136,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         } else {
             this.compilationProfile = new CompilationProfile();
         }
-        if (sourceCallTarget != null) {
-            cloneIndex = sourceCallTarget.getNextCloneIndex();
-        }
+        cloneIndex = sourceCallTarget != null ? sourceCallTarget.getNextCloneIndex() : 0;
     }
 
     private static GraalTruffleRuntime runtime() {
