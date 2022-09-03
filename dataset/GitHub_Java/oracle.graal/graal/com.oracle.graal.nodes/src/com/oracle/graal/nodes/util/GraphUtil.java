@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
@@ -43,12 +42,12 @@ public class GraphUtil {
         }
     };
 
-    public static void killCFG(Node node, SimplifierTool tool) {
+    public static void killCFG(Node node) {
         assert node.isAlive();
         if (node instanceof AbstractEndNode) {
             // We reached a control flow end.
             AbstractEndNode end = (AbstractEndNode) node;
-            killEnd(end, tool);
+            killEnd(end);
         } else {
             // Normal control flow node.
             /*
@@ -58,17 +57,13 @@ public class GraphUtil {
              * while processing one branch.
              */
             for (Node successor : node.successors()) {
-                killCFG(successor, tool);
+                killCFG(successor);
             }
         }
         propagateKill(node);
     }
 
-    public static void killCFG(Node node) {
-        killCFG(node, null);
-    }
-
-    private static void killEnd(AbstractEndNode end, SimplifierTool tool) {
+    private static void killEnd(AbstractEndNode end) {
         MergeNode merge = end.merge();
         if (merge != null) {
             merge.removeEnd(end);
@@ -90,17 +85,12 @@ public class GraphUtil {
                     killCFG(loopBody);
                 }
                 begin.safeDelete();
-            } else if (merge instanceof LoopBeginNode && ((LoopBeginNode) merge).loopEnds().isEmpty()) {
-                // not a loop anymore
-                if (tool != null) {
-                    merge.phis().forEach(phi -> phi.usages().forEach(usage -> tool.addToWorkList(usage)));
-                }
+            } else if (merge instanceof LoopBeginNode && ((LoopBeginNode) merge).loopEnds().isEmpty()) { // not
+                                                                                                         // a
+                                                                                                         // loop
+                                                                                                         // anymore
                 graph.reduceDegenerateLoopBegin((LoopBeginNode) merge);
-            } else if (merge.phiPredecessorCount() == 1) {
-                // not a merge anymore
-                if (tool != null) {
-                    merge.phis().forEach(phi -> phi.usages().forEach(usage -> tool.addToWorkList(usage)));
-                }
+            } else if (merge.phiPredecessorCount() == 1) { // not a merge anymore
                 graph.reduceTrivialMerge(merge);
             }
         }
