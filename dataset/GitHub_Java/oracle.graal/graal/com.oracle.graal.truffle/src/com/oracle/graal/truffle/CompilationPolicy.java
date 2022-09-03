@@ -31,21 +31,17 @@ public class CompilationPolicy {
     private int loopAndInvokeCounter;
     private long prevTimestamp;
 
+    private final int initialInvokeCounter;
     private final int compilationThreshold;
-    private final String name;
 
-    public CompilationPolicy(final int compilationThreshold, final int initialInvokeCounter, final String name) {
+    public CompilationPolicy(final int compilationThreshold, final int initialInvokeCounter) {
         this.invokeCounter = initialInvokeCounter;
         this.loopAndInvokeCounter = compilationThreshold;
         this.originalInvokeCounter = compilationThreshold;
-        this.prevTimestamp = System.nanoTime();
+        this.prevTimestamp = System.currentTimeMillis();
 
         this.compilationThreshold = compilationThreshold;
-        this.name = name;
-    }
-
-    public String getName() {
-        return this.name;
+        this.initialInvokeCounter = initialInvokeCounter;
     }
 
     public int getInvokeCounter() {
@@ -60,7 +56,7 @@ public class CompilationPolicy {
         return loopAndInvokeCounter;
     }
 
-    public void reportCompilationInvalidated() {
+    public void compilationInvalidated() {
         int invalidationReprofileCount = TruffleInvalidationReprofileCount.getValue();
         invokeCounter = invalidationReprofileCount;
         if (TruffleFunctionInlining.getValue()) {
@@ -68,12 +64,12 @@ public class CompilationPolicy {
         }
     }
 
-    public void reportInterpreterCall() {
+    public void countInterpreterCall() {
         invokeCounter--;
         loopAndInvokeCounter--;
     }
 
-    public void reportCallInlined(int minInvokesAfterInlining) {
+    public void inlined(int minInvokesAfterInlining) {
         invokeCounter = minInvokesAfterInlining;
         int inliningReprofileCount = TruffleInliningReprofileCount.getValue();
         loopAndInvokeCounter = inliningReprofileCount;
@@ -84,7 +80,7 @@ public class CompilationPolicy {
         loopAndInvokeCounter = Math.max(0, loopAndInvokeCounter - count);
     }
 
-    public void notifyNodeReplaced() {
+    public void nodeReplaced() {
         // delay compilation until tree is deemed stable enough
         int replaceBackoff = TruffleReplaceReprofileCount.getValue();
         if (loopAndInvokeCounter < replaceBackoff) {
@@ -92,26 +88,22 @@ public class CompilationPolicy {
         }
     }
 
-    public boolean shouldCompileOrInline() {
+    public boolean compileOrInline() {
         if (invokeCounter <= 0 && loopAndInvokeCounter <= 0) {
             if (TruffleUseTimeForCompilationDecision.getValue()) {
-                long timestamp = System.nanoTime();
-                long timespan = (timestamp - prevTimestamp);
-                if (timespan < (TruffleCompilationDecisionTime.getValue())) {
+                long timestamp = System.currentTimeMillis();
+                if ((timestamp - prevTimestamp) < TruffleCompilationDecisionTime.getValue()) {
                     return true;
                 }
+                this.invokeCounter = initialInvokeCounter;
                 this.loopAndInvokeCounter = compilationThreshold;
                 this.originalInvokeCounter = compilationThreshold;
                 this.prevTimestamp = timestamp;
-                if (TruffleCompilationDecisionTimePrintFail.getValue()) {
-                    // Checkstyle: stop
-                    System.out.println(name + ": timespan  " + (timespan / 1000000) + " ms  larger than threshold");
-                    // Checkstyle: resume
-                }
             } else {
                 return true;
             }
         }
         return false;
     }
+
 }
