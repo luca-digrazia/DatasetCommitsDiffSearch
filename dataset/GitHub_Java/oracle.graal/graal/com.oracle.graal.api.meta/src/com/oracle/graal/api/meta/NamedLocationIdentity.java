@@ -29,7 +29,7 @@ import com.oracle.graal.api.meta.Kind.FormatWithToString;
 /**
  * A {@link LocationIdentity} with a name.
  */
-public final class NamedLocationIdentity extends LocationIdentity implements FormatWithToString {
+public final class NamedLocationIdentity implements LocationIdentity, FormatWithToString {
 
     /**
      * Map for asserting all {@link NamedLocationIdentity} instances have a unique name.
@@ -112,7 +112,6 @@ public final class NamedLocationIdentity extends LocationIdentity implements For
         return name + (immutable ? ":immutable" : ":mutable");
     }
 
-    @Override
     public boolean isImmutable() {
         return immutable;
     }
