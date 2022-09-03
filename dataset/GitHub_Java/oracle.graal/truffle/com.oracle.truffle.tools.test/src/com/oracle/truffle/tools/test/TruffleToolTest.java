@@ -130,7 +130,7 @@ public class TruffleToolTest {
         return instrumenter;
     }
 
-    private static final class DummyTruffleTool extends Instrumenter.Tool<DummyTruffleTool> {
+    private static final class DummyTruffleTool extends Instrumenter.Tool {
 
         @Override
         protected boolean internalInstall() {

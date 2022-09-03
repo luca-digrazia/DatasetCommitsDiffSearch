@@ -30,12 +30,11 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.lang.reflect.Field;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.TruffleVM;
 import com.oracle.truffle.tools.NodeExecCounter;
 import com.oracle.truffle.tools.NodeExecCounter.NodeExecutionCount;
 
@@ -43,62 +42,61 @@ public class NodeExecCounterTest {
 
     @Test
     public void testNoExecution() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
-        final PolyglotEngine vm = PolyglotEngine.newBuilder().build();
-        final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
+        final TruffleVM vm = TruffleVM.newVM().build();
+        final Field field = TruffleVM.class.getDeclaredField("instrumenter");
         field.setAccessible(true);
         final Instrumenter instrumenter = (Instrumenter) field.get(vm);
         final NodeExecCounter tool = new NodeExecCounter();
-        assertEquals(0, tool.getCounts().length);
+        assertEquals(tool.getCounts().length, 0);
         instrumenter.install(tool);
-        assertEquals(0, tool.getCounts().length);
+        assertEquals(tool.getCounts().length, 0);
         tool.setEnabled(false);
-        assertEquals(0, tool.getCounts().length);
+        assertEquals(tool.getCounts().length, 0);
         tool.setEnabled(true);
-        assertEquals(0, tool.getCounts().length);
+        assertEquals(tool.getCounts().length, 0);
         tool.reset();
-        assertEquals(0, tool.getCounts().length);
+        assertEquals(tool.getCounts().length, 0);
         tool.dispose();
-        assertEquals(0, tool.getCounts().length);
+        assertEquals(tool.getCounts().length, 0);
     }
 
     void checkCounts(NodeExecCounter execTool, int addCount, int valueCount) {
         NodeExecutionCount[] counts = execTool.getCounts();
-        assertEquals(2, counts.length);
+        assertEquals(counts.length, 2);
         for (NodeExecutionCount counter : counts) {
             if (counter.nodeClass() == ToolTestUtil.TestAdditionNode.class) {
-                assertEquals(addCount, counter.executionCount());
+                assertEquals(counter.executionCount(), addCount);
             } else if (counter.nodeClass() == ToolTestUtil.TestValueNode.class) {
-                assertEquals(valueCount, counter.executionCount());
+                assertEquals(counter.executionCount(), valueCount);
             } else {
                 fail("correct classes counted");
             }
         }
     }
 
-    @Ignore("GRAAL-1385")
     @Test
     public void testCounting() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, IOException {
-        final PolyglotEngine vm = PolyglotEngine.newBuilder().build();
-        final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
+        final TruffleVM vm = TruffleVM.newVM().build();
+        final Field field = TruffleVM.class.getDeclaredField("instrumenter");
         field.setAccessible(true);
         final Instrumenter instrumenter = (Instrumenter) field.get(vm);
         final Source source = ToolTestUtil.createTestSource("testCounting");
         final NodeExecCounter execTool = new NodeExecCounter();
         instrumenter.install(execTool);
 
-        assertEquals(0, execTool.getCounts().length);
+        assertEquals(execTool.getCounts().length, 0);
 
-        assertEquals(13, vm.eval(source).get());
+        assertEquals(vm.eval(source).get(), 13);
 
         checkCounts(execTool, 1, 2);
 
         for (int i = 0; i < 99; i++) {
-            assertEquals(13, vm.eval(source).get());
+            assertEquals(vm.eval(source).get(), 13);
         }
         checkCounts(execTool, 100, 200);
 
         execTool.setEnabled(false);
-        assertEquals(13, vm.eval(source).get());
+        assertEquals(vm.eval(source).get(), 13);
         checkCounts(execTool, 100, 200);
 
         execTool.dispose();

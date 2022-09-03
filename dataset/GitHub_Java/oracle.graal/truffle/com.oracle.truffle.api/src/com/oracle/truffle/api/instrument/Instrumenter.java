@@ -29,7 +29,6 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -123,7 +122,7 @@ public final class Instrumenter {
      * language-agnostic management of individual execution environments is added to the platform,
      * installation will be (optionally) specific to a single execution environment.
      */
-    public abstract static class Tool<T extends Tool<?>> {
+    public abstract static class Tool {
         // TODO (mlvdv) still thinking about the most appropriate name for this class of tools
 
         private ToolState toolState = ToolState.UNINSTALLED;
@@ -235,7 +234,7 @@ public final class Instrumenter {
     private final Object vm;
 
     /** Tools that have been created, but not yet disposed. */
-    Set<Tool<? extends Tool<?>>> tools = new HashSet<>();
+    private final Set<Tool> tools = Collections.synchronizedSet(new LinkedHashSet<Tool>());
 
     private final Set<ASTProber> astProbers = Collections.synchronizedSet(new LinkedHashSet<ASTProber>());
 
@@ -545,12 +544,10 @@ public final class Instrumenter {
     /**
      * Connects the tool to some part of the Truffle runtime, and enable data collection to start.
      *
-     * @return the tool
      * @throws IllegalStateException if the tool has previously been installed or has been disposed.
      */
-    public <T extends Tool<?>> T install(T tool) {
+    public void install(Tool tool) {
         tool.install(this);
-        return tool;
     }
 
     @SuppressWarnings("unused")
