@@ -56,6 +56,13 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget {
     int getCompiledCodeSize();
 
     /**
+     * Returns an estimate how complex it is to compile this method.
+     * 
+     * @return A value >= 0, where higher means more complex.
+     */
+    int getCompilationComplexity();
+
+    /**
      * Returns the {@link ResolvedJavaType} object representing the class or interface that declares
      * this method.
      */
@@ -78,12 +85,6 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget {
      * be included in the returned mask.
      */
     int getModifiers();
-
-    /**
-     * Determines if this method is a synthetic method as defined by the Java Language
-     * Specification.
-     */
-    boolean isSynthetic();
 
     /**
      * Checks whether this method is a class initializer.

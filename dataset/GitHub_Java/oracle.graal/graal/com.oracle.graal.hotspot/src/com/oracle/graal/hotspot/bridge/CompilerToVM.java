@@ -150,11 +150,11 @@ public interface CompilerToVM {
     /**
      * Installs the result of a compilation into the code cache.
      * 
-     * @param compiledCode the result of a compilation
+     * @param compResult the result of a compilation
      * @param code the details of the installed CodeBlob are written to this object
      * @return the outcome of the installation as a {@link CodeInstallResult}.
      */
-    CodeInstallResult installCode(HotSpotCompiledCode compiledCode, HotSpotInstalledCode code, SpeculationLog cache);
+    CodeInstallResult installCode(HotSpotCompilationResult compResult, HotSpotInstalledCode code, SpeculationLog cache);
 
     void initializeConfiguration(HotSpotVMConfig config);
 
@@ -167,8 +167,6 @@ public interface CompilerToVM {
     ResolvedJavaType getResolvedType(Class<?> javaClass);
 
     HotSpotResolvedJavaField[] getInstanceFields(HotSpotResolvedObjectType klass);
-
-    HotSpotResolvedJavaMethod[] getMethods(HotSpotResolvedObjectType klass);
 
     boolean hasFinalizableSubclass(HotSpotResolvedObjectType klass);
 
@@ -193,7 +191,7 @@ public interface CompilerToVM {
 
     HotSpotResolvedJavaField getJavaField(Field reflectionField);
 
-    long getMaxCallTargetOffset(long address);
+    long getMaxCallTargetOffset(long stub);
 
     String disassembleCodeBlob(long codeBlob);
 

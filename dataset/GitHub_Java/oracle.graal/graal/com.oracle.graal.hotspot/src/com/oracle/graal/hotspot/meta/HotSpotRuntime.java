@@ -123,6 +123,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     private LoadExceptionObjectSnippets.Templates exceptionObjectSnippets;
 
     private final Map<Descriptor, HotSpotRuntimeCallTarget> runtimeCalls = new HashMap<>();
+    private final Map<ResolvedJavaMethod, Stub> stubs = new HashMap<>();
 
     /**
      * The offset from the origin of an array to the first element.
@@ -576,30 +577,31 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         boxingSnippets = new BoxingSnippets.Templates(this, replacements, graalRuntime.getTarget());
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(this, replacements, graalRuntime.getTarget());
 
-        link(new NewInstanceStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_INSTANCE)));
-        link(new NewArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_ARRAY)));
-        link(new NewMultiArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_MULTI_ARRAY)));
-        link(new RegisterFinalizerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(REGISTER_FINALIZER)));
-        link(new ThreadIsInterruptedStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(THREAD_IS_INTERRUPTED)));
-        link(new IdentityHashCodeStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(IDENTITY_HASHCODE)));
-        link(new ExceptionHandlerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(EXCEPTION_HANDLER)));
-        link(new UnwindExceptionToCallerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(UNWIND_EXCEPTION_TO_CALLER)));
-        link(new VerifyOopStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(VERIFY_OOP)));
-        link(new OSRMigrationEndStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(OSR_MIGRATION_END)));
-        link(new MonitorEnterStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(MONITORENTER)));
-        link(new MonitorExitStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(MONITOREXIT)));
-        link(new CreateNullPointerExceptionStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(CREATE_NULL_POINTER_EXCEPTION)));
-        link(new CreateOutOfBoundsExceptionStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(CREATE_OUT_OF_BOUNDS_EXCEPTION)));
-        link(new LogPrimitiveStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(LOG_PRIMITIVE)));
-        link(new LogObjectStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(LOG_OBJECT)));
-        link(new LogPrintfStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(LOG_PRINTF)));
-        link(new VMErrorStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(VM_ERROR)));
-        link(new WriteBarrierPreStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(WRITE_BARRIER_PRE)));
-        link(new WriteBarrierPostStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(WRITE_BARRIER_POST)));
+        registerStub(new NewInstanceStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_INSTANCE)));
+        registerStub(new NewArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_ARRAY)));
+        registerStub(new NewMultiArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_MULTI_ARRAY)));
+        registerStub(new RegisterFinalizerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(REGISTER_FINALIZER)));
+        registerStub(new ThreadIsInterruptedStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(THREAD_IS_INTERRUPTED)));
+        registerStub(new IdentityHashCodeStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(IDENTITY_HASHCODE)));
+        registerStub(new ExceptionHandlerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(EXCEPTION_HANDLER)));
+        registerStub(new UnwindExceptionToCallerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(UNWIND_EXCEPTION_TO_CALLER)));
+        registerStub(new VerifyOopStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(VERIFY_OOP)));
+        registerStub(new OSRMigrationEndStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(OSR_MIGRATION_END)));
+        registerStub(new MonitorEnterStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(MONITORENTER)));
+        registerStub(new MonitorExitStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(MONITOREXIT)));
+        registerStub(new CreateNullPointerExceptionStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(CREATE_NULL_POINTER_EXCEPTION)));
+        registerStub(new CreateOutOfBoundsExceptionStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(CREATE_OUT_OF_BOUNDS_EXCEPTION)));
+        registerStub(new LogPrimitiveStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(LOG_PRIMITIVE)));
+        registerStub(new LogObjectStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(LOG_OBJECT)));
+        registerStub(new LogPrintfStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(LOG_PRINTF)));
+        registerStub(new VMErrorStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(VM_ERROR)));
+        registerStub(new WriteBarrierPreStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(WRITE_BARRIER_PRE)));
+        registerStub(new WriteBarrierPostStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(WRITE_BARRIER_POST)));
     }
 
-    private static void link(Stub stub) {
+    private void registerStub(Stub stub) {
         stub.getLinkage().setStub(stub);
+        stubs.put(stub.getMethod(), stub);
     }
 
     public HotSpotGraalRuntime getGraalRuntime() {
@@ -771,8 +773,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
                     HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
                     if (!hsMethod.getDeclaringClass().isInterface()) {
-                        int vtableEntryOffset = hsMethod.vtableEntryOffset();
-                        if (vtableEntryOffset > 0) {
+                        if (hsMethod.hasVtableEntry()) {
+                            int vtableEntryOffset = hsMethod.vtableEntryOffset();
                             assert vtableEntryOffset > 0;
                             ReadNode hub = this.createReadHub(tool, graph, wordKind, receiver);
                             ReadNode metaspaceMethod = createReadVirtualMethod(graph, wordKind, hub, hsMethod);
@@ -1047,6 +1049,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     private static ReadNode createReadVirtualMethod(StructuredGraph graph, Kind wordKind, ValueNode hub, ResolvedJavaMethod method) {
         HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
         assert !hsMethod.getDeclaringClass().isInterface();
+        assert hsMethod.hasVtableEntry();
 
         int vtableEntryOffset = hsMethod.vtableEntryOffset();
         assert vtableEntryOffset > 0;
@@ -1106,11 +1109,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         return barrierType;
     }
 
-    private static ConstantLocationNode createFieldLocation(StructuredGraph graph, HotSpotResolvedJavaField field) {
+    protected static ConstantLocationNode createFieldLocation(StructuredGraph graph, HotSpotResolvedJavaField field) {
         return ConstantLocationNode.create(field, field.getKind(), field.offset(), graph);
     }
 
-    private IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index) {
+    protected IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index) {
         int scale = this.graalRuntime.getTarget().arch.getSizeInBytes(elementKind);
         return IndexedLocationNode.create(LocationNode.getArrayLocation(elementKind), elementKind, getArrayBaseOffset(elementKind), index, graph, scale);
     }
@@ -1126,6 +1129,16 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     public ResolvedJavaType lookupJavaType(Class<?> clazz) {
         return HotSpotResolvedObjectType.fromClass(clazz);
+    }
+
+    /**
+     * Gets the stub corresponding to a given method.
+     * 
+     * @return the stub {@linkplain Stub#getMethod() implemented} by {@code method} or null if
+     *         {@code method} does not implement a stub
+     */
+    public Stub asStub(ResolvedJavaMethod method) {
+        return stubs.get(method);
     }
 
     public HotSpotRuntimeCallTarget lookupRuntimeCall(Descriptor descriptor) {

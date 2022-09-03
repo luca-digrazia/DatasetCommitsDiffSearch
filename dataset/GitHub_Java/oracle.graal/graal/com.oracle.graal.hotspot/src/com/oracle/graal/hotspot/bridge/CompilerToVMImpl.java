@@ -35,11 +35,11 @@ import com.oracle.graal.hotspot.meta.*;
  */
 public class CompilerToVMImpl implements CompilerToVM {
 
-    private native int installCode0(HotSpotCompiledCode compiledCode, HotSpotInstalledCode code, boolean[] triggeredDeoptimizations);
+    private native int installCode0(HotSpotCompilationResult comp, HotSpotInstalledCode code, boolean[] triggeredDeoptimizations);
 
     @Override
-    public CodeInstallResult installCode(HotSpotCompiledCode compiledCode, HotSpotInstalledCode code, SpeculationLog speculationLog) {
-        return CodeInstallResult.values()[installCode0(compiledCode, code, (speculationLog == null) ? null : speculationLog.getRawMap())];
+    public CodeInstallResult installCode(HotSpotCompilationResult comp, HotSpotInstalledCode code, SpeculationLog speculationLog) {
+        return CodeInstallResult.values()[installCode0(comp, code, (speculationLog == null) ? null : speculationLog.getRawMap())];
     }
 
     @Override
@@ -127,11 +127,10 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native int getCompiledCodeSize(long metaspaceMethod);
 
     @Override
-    public native long getMaxCallTargetOffset(long address);
+    public native long getMaxCallTargetOffset(long stub);
 
-    // The HotSpot disassembler seems not to be thread safe so it's better to synchronize its usage
     @Override
-    public synchronized native String disassembleCodeBlob(long codeBlob);
+    public native String disassembleCodeBlob(long codeBlob);
 
     @Override
     public native byte[] getCode(long codeBlob);
