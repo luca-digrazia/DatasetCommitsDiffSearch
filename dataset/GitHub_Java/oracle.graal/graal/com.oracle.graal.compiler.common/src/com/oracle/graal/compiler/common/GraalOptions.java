@@ -22,10 +22,7 @@
  */
 package com.oracle.graal.compiler.common;
 
-import jdk.internal.jvmci.options.Option;
-import jdk.internal.jvmci.options.OptionType;
-import jdk.internal.jvmci.options.OptionValue;
-import jdk.internal.jvmci.options.StableOptionValue;
+import jdk.internal.jvmci.options.*;
 
 /**
  * This class encapsulates options that control the behavior of the Graal compiler.
@@ -141,6 +138,10 @@ public final class GraalOptions {
     @Option(help = "Perform platform dependent validation of the Java heap at returns", type = OptionType.Debug)
     public static final OptionValue<Boolean> VerifyHeapAtReturn = new OptionValue<>(false);
 
+    // Ideal graph visualizer output settings
+    @Option(help = "Dump IdealGraphVisualizer output in binary format", type = OptionType.Debug)
+    public static final OptionValue<Boolean> PrintBinaryGraphs = new OptionValue<>(true);
+
     @Option(help = "Output probabilities for fixed nodes during binary graph dumping", type = OptionType.Debug)
     public static final OptionValue<Boolean> PrintGraphProbabilities = new OptionValue<>(false);
 
@@ -153,15 +154,8 @@ public final class GraalOptions {
     @Option(help = "Enable dumping to the IdealGraphVisualizer.", type = OptionType.Debug)
     public static final OptionValue<Boolean> PrintIdealGraph = new OptionValue<>(true);
 
-    // Ideal graph visualizer output settings
-    @Option(help = "Dump IdealGraphVisualizer output in binary format", type = OptionType.Debug)
-    public static final OptionValue<Boolean> PrintBinaryGraphs = new OptionValue<>(true);
-
-    @Option(help = "Print Ideal graphs as opposed to sending them over the network.", type = OptionType.Debug)
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> PrintIdealGraphFile = new OptionValue<>(false);
-
-    @Option(help = "The directory into which to dump the Ideal graph files.")
-    public static final OptionValue<String> DumpPath = new OptionValue<>("");
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<String> PrintIdealGraphAddress = new OptionValue<>("127.0.0.1");
@@ -311,8 +305,4 @@ public final class GraalOptions {
             return enabled;
         }
     };
-
-    @Option(help = "Enable compiler decision queries")
-    public static final OptionValue<Boolean> UseGraalQueries = new OptionValue<>(false);
-
 }
