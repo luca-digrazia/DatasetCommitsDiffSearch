@@ -28,6 +28,8 @@ import java.util.concurrent.atomic.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
+
 import com.oracle.graal.debug.*;
 
 import jdk.internal.jvmci.meta.*;
@@ -224,12 +226,17 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         return object instanceof List<?> && ((List<?>) object).size() > 0 && ((List<?>) object).get(0) instanceof AbstractBlockBase<?>;
     }
 
-    /** Lazy initialization to delay service lookup until disassembler is actually needed. */
-    static class DisassemblerHolder {
-        private static final DisassemblerProvider disassembler;
+    private static DisassemblerProvider disassembler;
 
-        static {
-            DisassemblerProvider selected = null;
+    private static final DisassemblerProvider NOP_DISASSEMBLER = new DisassemblerProvider() {
+        public String getName() {
+            return null;
+        }
+    };
+
+    private static DisassemblerProvider getDisassembler() {
+        if (disassembler == null) {
+            DisassemblerProvider selected = NOP_DISASSEMBLER;
             for (DisassemblerProvider d : Services.load(DisassemblerProvider.class)) {
                 String name = d.getName().toLowerCase();
                 if (name.contains("hcf") || name.contains("hexcodefile")) {
@@ -237,19 +244,13 @@ public class CFGPrinterObserver implements DebugDumpHandler {
                     break;
                 }
             }
-            if (selected == null) {
-                selected = new DisassemblerProvider() {
-                    public String getName() {
-                        return "nop";
-                    }
-                };
-            }
             disassembler = selected;
         }
+        return disassembler;
     }
 
     private static String disassemble(CodeCacheProvider codeCache, CompilationResult compResult, InstalledCode installedCode) {
-        DisassemblerProvider dis = DisassemblerHolder.disassembler;
+        DisassemblerProvider dis = getDisassembler();
         if (installedCode != null) {
             return dis.disassembleInstalledCode(codeCache, compResult, installedCode);
         }
