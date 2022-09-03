@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.graph.Graph.isModificationCountsEnabled;
+import static com.oracle.graal.graph.Graph.*;
 
-import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.graph.iterators.*;
 
 class NodeUsageIterable implements NodeIterable<Node> {
 
@@ -34,9 +34,8 @@ class NodeUsageIterable implements NodeIterable<Node> {
         this.node = node;
     }
 
-    @Override
     public NodeUsageIterator iterator() {
-        if (isModificationCountsEnabled()) {
+        if (MODIFICATION_COUNTS_ENABLED) {
             return new NodeUsageWithModCountIterator(node);
         } else {
             return new NodeUsageIterator(node);
