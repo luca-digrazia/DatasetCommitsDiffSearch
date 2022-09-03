@@ -22,7 +22,10 @@
  */
 package com.oracle.truffle.api.profiles;
 
-import java.net.URLClassLoader;
+import com.oracle.truffle.api.source.Source;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import org.junit.runners.BlockJUnit4ClassRunner;
 import org.junit.runners.model.InitializationError;
 
@@ -46,18 +49,47 @@ public final class SeparateClassloaderTestRunner extends BlockJUnit4ClassRunner 
         }
     }
 
-    private static class TestClassLoader extends URLClassLoader {
-        public TestClassLoader() {
-            super(((URLClassLoader) getSystemClassLoader()).getURLs());
+    private static class TestClassLoader extends ClassLoader {
+        TestClassLoader() {
         }
 
         @Override
         public Class<?> loadClass(String name) throws ClassNotFoundException {
             if (name.startsWith(Profile.class.getPackage().getName())) {
-                return super.findClass(name);
+                return findClass(name);
+            }
+            if (name.contains("ContextStore")) {
+                return findClass(name);
+            }
+            if (name.contains(Source.class.getPackage().getName())) {
+                return findClass(name);
             }
             return super.loadClass(name);
         }
-    }
 
+        @Override
+        protected Class<?> findClass(String name) throws ClassNotFoundException {
+            String res = name.replace('.', '/') + ".class";
+            InputStream is = getResourceAsStream(res);
+            if (is == null) {
+                throw new ClassNotFoundException(name);
+            }
+            ByteArrayOutputStream os = new ByteArrayOutputStream();
+            byte[] arr = new byte[4096];
+            for (;;) {
+                int len;
+                try {
+                    len = is.read(arr);
+                } catch (IOException ex) {
+                    throw new ClassNotFoundException(name);
+                }
+                if (len < 0) {
+                    break;
+                }
+                os.write(arr, 0, len);
+            }
+            arr = os.toByteArray();
+            return defineClass(name, arr, 0, arr.length, getClass().getProtectionDomain());
+        }
+    }
 }
