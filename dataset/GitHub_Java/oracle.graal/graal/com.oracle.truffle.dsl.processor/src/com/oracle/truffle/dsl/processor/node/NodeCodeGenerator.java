@@ -214,23 +214,20 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 if (method.getModifiers().contains(STATIC)) {
                     builder.type(targetClass.asType());
                 } else {
-                    ActualParameter firstParameter = null;
+                    ActualParameter parameter = null;
                     for (ActualParameter searchParameter : targetMethod.getParameters()) {
                         if (searchParameter.getSpecification().isSignature()) {
-                            firstParameter = searchParameter;
+                            parameter = searchParameter;
                             break;
                         }
                     }
-                    if (firstParameter == null) {
-                        throw new AssertionError();
-                    }
-
-                    ActualParameter sourceParameter = sourceMethod.findParameter(firstParameter.getLocalName());
+                    ActualParameter sourceParameter = sourceMethod.findParameter(parameter.getLocalName());
+                    assert parameter != null;
 
                     if (castedValues && sourceParameter != null) {
-                        builder.string(valueName(sourceParameter, firstParameter));
+                        builder.string(valueName(sourceParameter, parameter));
                     } else {
-                        builder.string(valueName(firstParameter));
+                        builder.string(valueName(parameter));
                     }
                 }
             }
@@ -2635,9 +2632,6 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 }
 
                 CodeExecutableElement superConstructor = createSuperConstructor(clazz, constructor);
-                if (superConstructor == null) {
-                    continue;
-                }
                 CodeTree body = superConstructor.getBodyTree();
                 CodeTreeBuilder builder = superConstructor.createBuilder();
                 builder.tree(body);

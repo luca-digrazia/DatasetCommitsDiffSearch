@@ -29,7 +29,7 @@ import org.junit.*;
 
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.dsl.test.BinaryNodeTest.BinaryNode;
-import com.oracle.truffle.api.dsl.test.PolymorphicTest2Factory.Polymorphic1Factory;
+import com.oracle.truffle.api.dsl.test.PolymorphicTest2Factory.Node1Factory;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.nodes.*;
 
@@ -38,27 +38,28 @@ public class PolymorphicTest2 {
     @Test
     public void testMultipleTypes() {
         /* Tests the unexpected polymorphic case. */
-        TestRootNode<Polymorphic1> node = TestHelper.createRoot(Polymorphic1Factory.getInstance());
+        TestRootNode<Node1> node = TestHelper.createRoot(Node1Factory.getInstance());
         assertEquals(21, executeWith(node, false, false));
         assertEquals(42, executeWith(node, 21, 21));
         assertEquals("(boolean,int)", executeWith(node, false, 42));
-        assertEquals(NodeCost.POLYMORPHIC, node.getNode().getCost());
+        assertEquals(NodeCost.NONE, node.getNode().getCost());
     }
 
     @SuppressWarnings("unused")
-    abstract static class Polymorphic1 extends BinaryNode {
+    @PolymorphicLimit(3)
+    abstract static class Node1 extends BinaryNode {
 
-        @Specialization
+        @Specialization(order = 1)
         int add(int left, int right) {
             return 42;
         }
 
-        @Specialization
+        @Specialization(order = 2)
         int add(boolean left, boolean right) {
             return 21;
         }
 
-        @Specialization
+        @Specialization(order = 4)
         String add(boolean left, int right) {
             return "(boolean,int)";
         }

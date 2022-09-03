@@ -343,6 +343,13 @@ public class GraphPrintVisitor {
         LinkedHashMap<String, Node> nodes = new LinkedHashMap<>();
         NodeClass nodeClass = NodeClass.get(node.getClass());
 
+        if (node instanceof CallNode) {
+            CallNode callNode = ((CallNode) node);
+            RootNode inlinedRoot = callNode.getCurrentRootNode();
+            if (inlinedRoot != null && callNode.isInlined()) {
+                nodes.put("inlinedRoot", inlinedRoot);
+            }
+        }
         for (NodeField field : nodeClass.getFields()) {
             NodeFieldKind kind = field.getKind();
             if (kind == NodeFieldKind.CHILD || kind == NodeFieldKind.CHILDREN) {
@@ -387,15 +394,6 @@ public class GraphPrintVisitor {
     public interface GraphPrintHandler {
 
         void visit(Object node, GraphPrintAdapter gPrinter);
-    }
-
-    public interface ChildSupplier {
-
-        /** Supplies an additional child if available. */
-        Object startNode(Object callNode);
-
-        void endNode(Object callNode);
-
     }
 
     @Retention(RetentionPolicy.RUNTIME)
