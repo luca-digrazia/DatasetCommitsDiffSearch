@@ -33,7 +33,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -388,14 +387,13 @@ public class BenchmarkCounters {
     private static final LocationIdentity COUNTER_LOCATION = NamedLocationIdentity.mutable("COUNTER_LOCATION");
 
     @NodeInfo(nameTemplate = "CounterIndex")
-    private static final class CounterIndexNode extends FloatingNode implements LIRLowerable {
+    private static class CounterIndexNode extends FloatingNode implements LIRLowerable {
 
-        public static final NodeClass TYPE = NodeClass.get(CounterIndexNode.class);
         protected final Object counter;
         protected final int countersSize;
 
         protected CounterIndexNode(Stamp stamp, DynamicCounterNode counter, int countersSize) {
-            super(TYPE, stamp);
+            super(stamp);
             this.countersSize = countersSize;
             this.counter = counter;
         }
