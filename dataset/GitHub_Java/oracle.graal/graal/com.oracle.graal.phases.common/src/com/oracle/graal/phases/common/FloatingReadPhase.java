@@ -84,9 +84,7 @@ public class FloatingReadPhase extends Phase {
         @Override
         protected void processNode(FixedNode node, Set<Object> currentState) {
             if (node instanceof MemoryCheckpoint) {
-                for (Object identity : ((MemoryCheckpoint) node).getLocationIdentities()) {
-                    currentState.add(identity);
-                }
+                currentState.add(((MemoryCheckpoint) node).getLocationIdentity());
             }
         }
 
@@ -126,39 +124,37 @@ public class FloatingReadPhase extends Phase {
 
         @Override
         protected void processNode(FixedNode node, MemoryMap state) {
-            if (node instanceof FloatableAccessNode) {
-                processFloatable((FloatableAccessNode) node, state);
+            if (node instanceof ReadNode) {
+                processRead((ReadNode) node, state);
             } else if (node instanceof MemoryCheckpoint) {
                 processCheckpoint((MemoryCheckpoint) node, state);
             }
         }
 
         private void processCheckpoint(MemoryCheckpoint checkpoint, MemoryMap state) {
-            for (Object identity : checkpoint.getLocationIdentities()) {
-                if (identity == LocationNode.ANY_LOCATION) {
-                    state.lastMemorySnapshot.clear();
-                }
-                state.lastMemorySnapshot.put(identity, (ValueNode) checkpoint);
+            if (checkpoint.getLocationIdentity() == LocationNode.ANY_LOCATION) {
+                state.lastMemorySnapshot.clear();
             }
+            state.lastMemorySnapshot.put(checkpoint.getLocationIdentity(), (ValueNode) checkpoint);
         }
 
-        private void processFloatable(FloatableAccessNode accessNode, MemoryMap state) {
-            StructuredGraph graph = (StructuredGraph) accessNode.graph();
-            assert accessNode.getNullCheck() == false;
-            Object locationIdentity = accessNode.location().locationIdentity();
+        private void processRead(ReadNode readNode, MemoryMap state) {
+            StructuredGraph graph = (StructuredGraph) readNode.graph();
+            assert readNode.getNullCheck() == false;
+            Object locationIdentity = readNode.location().locationIdentity();
             if (locationIdentity != LocationNode.UNKNOWN_LOCATION) {
                 ValueNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
-                FloatingAccessNode floatingNode = accessNode.asFloatingNode(lastLocationAccess);
-                floatingNode.setNullCheck(accessNode.getNullCheck());
+                FloatingReadNode floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.location(), lastLocationAccess, readNode.stamp(), readNode.dependencies()));
+                floatingRead.setNullCheck(readNode.getNullCheck());
                 ValueAnchorNode anchor = null;
-                for (GuardNode guard : accessNode.dependencies().filter(GuardNode.class)) {
+                for (GuardNode guard : readNode.dependencies().filter(GuardNode.class)) {
                     if (anchor == null) {
                         anchor = graph.add(new ValueAnchorNode());
-                        graph.addAfterFixed(accessNode, anchor);
+                        graph.addAfterFixed(readNode, anchor);
                     }
                     anchor.addAnchoredNode(guard);
                 }
-                graph.replaceFixedWithFloating(accessNode, floatingNode);
+                graph.replaceFixedWithFloating(readNode, floatingRead);
             }
         }
 
@@ -186,7 +182,7 @@ public class FloatingReadPhase extends Phase {
                         } else if (merged == null) {
                             merged = last;
                         } else {
-                            PhiNode phi = merge.graph().add(new PhiNode(PhiType.Memory, merge, key));
+                            PhiNode phi = merge.graph().add(new PhiNode(PhiType.Memory, merge));
                             for (int j = 0; j < mergedStatesCount; j++) {
                                 phi.addInput(merged);
                             }
@@ -204,21 +200,7 @@ public class FloatingReadPhase extends Phase {
 
         @Override
         protected MemoryMap afterSplit(BeginNode node, MemoryMap oldState) {
-            MemoryMap result = new MemoryMap(oldState);
-            if (node.predecessor() instanceof InvokeWithExceptionNode) {
-                /*
-                 * InvokeWithException cannot be the lastLocationAccess for a FloatingReadNode.
-                 * Since it is both the invoke and a control flow split, the scheduler cannot
-                 * schedule anything immediately the invoke. It can only schedule in the normal or
-                 * exceptional successor - and we have to tell the scheduler here which side it
-                 * needs to choose by putting in the location identity on both successors.
-                 */
-                InvokeWithExceptionNode checkpoint = (InvokeWithExceptionNode) node.predecessor();
-                for (Object identity : checkpoint.getLocationIdentities()) {
-                    result.lastMemorySnapshot.put(identity, node);
-                }
-            }
-            return result;
+            return new MemoryMap(oldState);
         }
 
         @Override
@@ -232,7 +214,7 @@ public class FloatingReadPhase extends Phase {
 
             Map<Object, PhiNode> phis = new HashMap<>();
             for (Object location : modifiedLocations) {
-                PhiNode phi = loop.graph().add(new PhiNode(PhiType.Memory, loop, location));
+                PhiNode phi = loop.graph().add(new PhiNode(PhiType.Memory, loop));
                 phi.addInput(initialState.getLastLocationAccess(location));
                 phis.put(location, phi);
                 initialState.lastMemorySnapshot.put(location, phi);
@@ -246,16 +228,6 @@ public class FloatingReadPhase extends Phase {
                     Object key = phiEntry.getKey();
                     PhiNode phi = phiEntry.getValue();
                     phi.initializeValueAt(endIndex, entry.getValue().getLastLocationAccess(key));
-                }
-            }
-            for (Map.Entry<LoopExitNode, MemoryMap> entry : loopInfo.exitStates.entrySet()) {
-                LoopExitNode exit = entry.getKey();
-                MemoryMap state = entry.getValue();
-                for (Object location : modifiedLocations) {
-                    ValueNode lastAccessAtExit = state.lastMemorySnapshot.get(location);
-                    if (lastAccessAtExit != null) {
-                        state.lastMemorySnapshot.put(location, ProxyNode.forMemory(lastAccessAtExit, exit, location, (StructuredGraph) loop.graph()));
-                    }
                 }
             }
             return loopInfo.exitStates;
