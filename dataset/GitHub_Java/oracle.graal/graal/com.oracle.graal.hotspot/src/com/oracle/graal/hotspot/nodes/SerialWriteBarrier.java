@@ -24,18 +24,19 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 
 @NodeInfo
 public class SerialWriteBarrier extends WriteBarrier {
 
     public static final NodeClass<SerialWriteBarrier> TYPE = NodeClass.create(SerialWriteBarrier.class);
 
-    public SerialWriteBarrier(AddressNode address, boolean precise) {
-        this(TYPE, address, precise);
+    public SerialWriteBarrier(ValueNode object, LocationNode location, boolean precise) {
+        this(TYPE, object, location, precise);
     }
 
-    protected SerialWriteBarrier(NodeClass<? extends SerialWriteBarrier> c, AddressNode address, boolean precise) {
-        super(c, address, null, precise);
+    protected SerialWriteBarrier(NodeClass<? extends SerialWriteBarrier> c, ValueNode object, LocationNode location, boolean precise) {
+        super(c, object, null, location, precise);
     }
 }
