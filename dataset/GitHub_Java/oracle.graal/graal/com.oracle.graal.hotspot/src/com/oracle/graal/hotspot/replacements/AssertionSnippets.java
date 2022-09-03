@@ -65,7 +65,10 @@ public class AssertionSnippets implements Snippets {
     }
 
     @NodeIntrinsic(ForeignCallNode.class)
-    static native void vmMessageC(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
+    private static native void vmMessageC(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
+
+    @NodeIntrinsic(StubForeignCallNode.class)
+    private static native void stubVmMessageC(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
 
     public static class Templates extends AbstractTemplates {
 

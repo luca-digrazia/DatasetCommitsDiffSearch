@@ -154,7 +154,7 @@ public class NewObjectSnippets implements Snippets {
     public static Object allocateInstanceDynamic(Class<?> type, @ConstantParameter boolean fillContents, @ConstantParameter Register threadRegister, @ConstantParameter String typeContext) {
         Word hub = loadWordFromObject(type, klassOffset());
         if (probability(FAST_PATH_PROBABILITY, !hub.equal(Word.zero()))) {
-            if (probability(FAST_PATH_PROBABILITY, isInstanceKlassFullyInitialized(hub))) {
+            if (probability(FAST_PATH_PROBABILITY, isKlassFullyInitialized(hub))) {
                 int layoutHelper = readLayoutHelper(hub);
                 /*
                  * src/share/vm/oops/klass.hpp: For instances, layout helper is a positive number,
@@ -420,14 +420,13 @@ public class NewObjectSnippets implements Snippets {
 
             Arguments args = new Arguments(allocateArray, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("hub", hub);
-            ValueNode length = newArrayNode.length();
-            args.add("length", length.isAlive() ? length : graph.addOrUniqueWithInputs(length));
+            args.add("length", newArrayNode.length());
             args.add("prototypeMarkWord", arrayType.prototypeMarkWord());
             args.addConst("headerSize", headerSize);
             args.addConst("log2ElementSize", log2ElementSize);
             args.addConst("fillContents", newArrayNode.fillContents());
             args.addConst("threadRegister", registers.getThreadRegister());
-            args.addConst("maybeUnroll", length.isConstant());
+            args.addConst("maybeUnroll", newArrayNode.length().isConstant());
             args.addConst("typeContext", ProfileAllocations.getValue() ? toJavaName(arrayType, false) : "");
 
             SnippetTemplate template = template(args);
@@ -446,11 +445,9 @@ public class NewObjectSnippets implements Snippets {
         }
 
         public void lower(DynamicNewArrayNode newArrayNode, HotSpotRegistersProvider registers, LoweringTool tool) {
-            StructuredGraph graph = newArrayNode.graph();
             Arguments args = new Arguments(allocateArrayDynamic, newArrayNode.graph().getGuardsStage(), tool.getLoweringStage());
             args.add("elementType", newArrayNode.getElementType());
-            ValueNode length = newArrayNode.length();
-            args.add("length", length.isAlive() ? length : graph.addOrUniqueWithInputs(length));
+            args.add("length", newArrayNode.length());
             args.addConst("fillContents", newArrayNode.fillContents());
             args.addConst("threadRegister", registers.getThreadRegister());
 
