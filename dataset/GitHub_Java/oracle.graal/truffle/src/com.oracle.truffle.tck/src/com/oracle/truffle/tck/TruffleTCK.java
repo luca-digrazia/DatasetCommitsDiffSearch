@@ -1392,7 +1392,8 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        Object fn = new Object();
+        TruffleObject fn = JavaInterop.asTruffleFunction(LongBinaryOperation.class, new MaxMinObject(true));
+
         Object ret = apply.execute(fn).get();
         assertSameTruffleObject("The same value returned", fn, ret);
     }
@@ -1950,7 +1951,6 @@ public abstract class TruffleTCK {
 
         TruffleObject truffleObject = (TruffleObject) apply.execute().get();
         assertIsObjectOfLanguage(truffleObject);
-
         MessageInterface object = JavaInterop.asJavaObject(MessageInterface.class, truffleObject);
 
         Assert.assertEquals(true, object.isExecutable());
@@ -2337,7 +2337,6 @@ public abstract class TruffleTCK {
     }
 
     private void assertIsObjectOfLanguage(Object obj) throws Exception {
-        enterTCK(); // hack to ensure entered
         PolyglotRuntime.Instrument instr = vm().getRuntime().getInstruments().get(TckInstrument.ID);
         TruffleLanguage.Env env = TruffleTCKAccessor.engineAccess().getEnvForInstrument(instr, null, mimeType());
         assertTrue(obj.toString(), TruffleTCKAccessor.langAccess().isObjectOfLanguage(env, obj));
