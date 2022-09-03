@@ -22,34 +22,32 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
 
-import java.util.*;
+import java.util.EnumSet;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.meta.AllocatableValue;
 
-import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.CompositeValue;
+import com.oracle.graal.lir.InstructionValueConsumer;
+import com.oracle.graal.lir.InstructionValueProcedure;
+import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
 /**
  * Represents a {@link #register} which has a shadow copy on the {@link #stackslot stack}.
- * <p>
- * Note: {@link ShadowedRegisterValue} does not follow the contract of {@link CompositeValue}, for
- * instance the {@link #forEachComponent} does not visit {@link #register} or {@link #stackslot} but
- * the {@link CompositeValue} itself. Therefore it should be only used in the context of the
- * {@link TraceRegisterAllocationPhase}.
  */
-final class ShadowedRegisterValue extends CompositeValue {
-    private static final EnumSet<OperandFlag> flags = EnumSet.of(COMPOSITE);
+public final class ShadowedRegisterValue extends CompositeValue {
     private static final EnumSet<OperandFlag> registerFlags = EnumSet.of(REG);
     private static final EnumSet<OperandFlag> stackslotFlags = EnumSet.of(STACK);
 
     @Component({REG}) protected RegisterValue register;
-    @Component({STACK}) protected StackSlotValue stackslot;
+    @Component({STACK}) protected AllocatableValue stackslot;
 
-    public ShadowedRegisterValue(RegisterValue register, StackSlotValue stackslot) {
+    public ShadowedRegisterValue(RegisterValue register, AllocatableValue stackslot) {
         super(register.getLIRKind());
         assert (register.getLIRKind().equals(stackslot.getLIRKind()));
         this.register = register;
@@ -60,20 +58,49 @@ final class ShadowedRegisterValue extends CompositeValue {
         return register;
     }
 
-    public StackSlotValue getStackSlot() {
+    public AllocatableValue getStackSlot() {
         return stackslot;
     }
 
     @Override
-    public Value forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
-        /* TODO(jeisl) This is a hack to be able to replace the composite value with the register. */
-        return proc.doValue(inst, this, mode, flags);
+    public CompositeValue forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
+        RegisterValue newRegister = (RegisterValue) proc.doValue(inst, register, mode, registerFlags);
+        AllocatableValue newStackSlot = (AllocatableValue) proc.doValue(inst, stackslot, mode, stackslotFlags);
+        if (register.equals(newRegister) || stackslot.equals(newStackSlot)) {
+            return this;
+        }
+        return new ShadowedRegisterValue(newRegister, newStackSlot);
     }
 
     @Override
     protected void visitEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
         proc.visitValue(inst, register, mode, registerFlags);
         proc.visitValue(inst, stackslot, mode, stackslotFlags);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (this == obj) {
+            return true;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        ShadowedRegisterValue other = (ShadowedRegisterValue) obj;
+        assert register != null;
+        assert stackslot != null;
+        assert other.register != null;
+        assert other.stackslot != null;
+        if (!register.equals(other.register)) {
+            return false;
+        }
+        if (!stackslot.equals(other.stackslot)) {
+            return false;
+        }
+        return true;
     }
 
 }

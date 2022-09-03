@@ -37,7 +37,6 @@ import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.graal.lir.alloc.trace.ShadowedRegisterValue;
@@ -249,20 +248,11 @@ public class TraceGlobalMoveResolutionMappingTest {
     }
 
     @Test
-    @Ignore("Cannot express mapping dependencies (yet)")
     public void testStack2Shadowed0() {
         addMapping(s(2), sd(r1, 1));
         assertSize(2);
         assertContains(s(2), v(r1));
         assertContains(v(r1), s(1));
-    }
-
-    @Test
-    public void testStack2Shadowed0WorkArount() {
-        addMapping(s(2), sd(r1, 1));
-        assertSize(2);
-        assertContains(s(2), v(r1));
-        assertContains(s(2), s(1));
     }
 
     @Test
