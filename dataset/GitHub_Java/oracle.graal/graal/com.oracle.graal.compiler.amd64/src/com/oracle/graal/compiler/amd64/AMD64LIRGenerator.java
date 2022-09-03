@@ -1451,10 +1451,10 @@ public abstract class AMD64LIRGenerator extends LIRGenerator implements AMD64Ari
     }
 
     @Override
-    public void emitReturn(JavaKind kind, Value input) {
+    public void emitReturn(Value input) {
         AllocatableValue operand = Value.ILLEGAL;
         if (input != null) {
-            operand = resultOperandFor(kind, input.getLIRKind());
+            operand = resultOperandFor(input.getLIRKind());
             emitMove(operand, input);
         }
         append(new ReturnOp(operand));
