@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.jtt.optimize;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 public class ConvertCompare extends JTTTest {
     public static boolean test(int a, float d) {
