@@ -353,13 +353,13 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
 
         static final long STATIC_V_OFFSET;
 
-        static final int ARRAY_OFFSET;
+        static int ARRAY_OFFSET;
 
-        static final int ARRAY_SHIFT;
+        static int ARRAY_SHIFT;
 
         static {
             try {
-                Field staticVField = UnsafeReplacementsTest.JdkInternalMiscUnsafeAccessTestBoolean.class.getDeclaredField("staticV");
+                Field staticVField = UnsafeReplacementsTest.JdkInternalMiscUnsafeAccessTestBoolean.class.getDeclaredField("static_v");
                 STATIC_V_BASE = unsafe.staticFieldBase(staticVField);
                 STATIC_V_OFFSET = unsafe.staticFieldOffset(staticVField);
             } catch (Exception e) {
@@ -378,7 +378,7 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
             ARRAY_SHIFT = 31 - Integer.numberOfLeadingZeros(ascale);
         }
 
-        static boolean staticV;
+        static boolean static_v;
 
         boolean v;
 
@@ -411,7 +411,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
             }
         }
 
-        // Checkstyle: stop
         @BytecodeParserForceInline
         public static void testAccess(Object base, long offset) {
             // Advanced compare
@@ -508,6 +507,5 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
             }
 
         }
-        // Checkstyle: resume
     }
 }
