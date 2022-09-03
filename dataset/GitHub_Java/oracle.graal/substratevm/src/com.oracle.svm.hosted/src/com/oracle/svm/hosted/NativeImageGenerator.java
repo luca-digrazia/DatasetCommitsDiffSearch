@@ -471,8 +471,10 @@ public class NativeImageGenerator {
                     Platform platform = defaultPlatform(loader.getClassLoader());
 
                     TargetDescription target = createTarget(platform);
+                    CompressEncoding compressEncoding = new CompressEncoding(SubstrateOptions.UseHeapBaseRegister.getValue() ? 1 : 0, 0);
                     ImageSingletons.add(Platform.class, platform);
                     ImageSingletons.add(TargetDescription.class, target);
+                    ImageSingletons.add(CompressEncoding.class, compressEncoding);
                     if (javaMainSupport != null) {
                         ImageSingletons.add(JavaMainSupport.class, javaMainSupport);
                     }
@@ -513,9 +515,9 @@ public class NativeImageGenerator {
                     ImageSingletons.add(AnnotationSubstitutionProcessor.class, annotationSubstitutions);
                     annotationSubstitutions.init();
 
-                    UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = new UnsafeAutomaticSubstitutionProcessor(annotationSubstitutions, originalSnippetReflection);
+                    UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = new UnsafeAutomaticSubstitutionProcessor(annotationSubstitutions);
                     ImageSingletons.add(UnsafeAutomaticSubstitutionProcessor.class, automaticSubstitutions);
-                    automaticSubstitutions.init(loader, originalMetaAccess);
+                    automaticSubstitutions.init(originalMetaAccess);
 
                     CEnumCallWrapperSubstitutionProcessor cEnumProcessor = new CEnumCallWrapperSubstitutionProcessor();
 
@@ -1027,7 +1029,7 @@ public class NativeImageGenerator {
         SubstrateGraphBuilderPlugins.registerInvocationPlugins(pluginsMetaAccess, providers.getConstantReflection(), hostedSnippetReflection, plugins.getInvocationPlugins(),
                         replacementBytecodeProvider, analysis);
 
-        featureHandler.forEachGraalFeature(feature -> feature.registerInvocationPlugins(providers, hostedSnippetReflection, plugins.getInvocationPlugins(), analysis, hosted));
+        featureHandler.forEachGraalFeature(feature -> feature.registerInvocationPlugins(providers, hostedSnippetReflection, plugins.getInvocationPlugins(), hosted));
 
         providers.setGraphBuilderPlugins(plugins);
         replacements.setGraphBuilderPlugins(plugins);
