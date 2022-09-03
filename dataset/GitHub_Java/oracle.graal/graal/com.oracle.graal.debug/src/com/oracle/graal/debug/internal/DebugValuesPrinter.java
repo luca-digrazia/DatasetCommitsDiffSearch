@@ -245,9 +245,7 @@ public class DebugValuesPrinter {
             }
         }
 
-        List<DebugValueMap> children = scope.map.getChildren();
-        for (int i = 0; i < children.size(); i++) {
-            DebugValueMap child = children.get(i);
+        for (DebugValueMap child : scope.map.getChildren()) {
             printMapComputerReadable(log, new DebugValueScope(scope, child), debugValues);
         }
     }
@@ -263,10 +261,8 @@ public class DebugValuesPrinter {
             }
         }
 
-        List<DebugValueMap> children = scope.map.getChildren();
-        for (int i = 0; i < children.size(); i++) {
-            DebugValueMap child = children.get(i);
-            printMapHumanReadable(log, new DebugValueScope(scope, child), debugValues);
+        for (DebugValueMap child : scope.map.getChildren()) {
+            printMap(log, new DebugValueScope(scope, child), debugValues);
         }
     }
 
