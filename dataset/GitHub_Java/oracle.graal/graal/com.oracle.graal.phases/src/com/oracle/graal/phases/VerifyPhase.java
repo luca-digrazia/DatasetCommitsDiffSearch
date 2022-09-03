@@ -26,16 +26,16 @@ import com.oracle.graal.nodes.*;
 
 /***
  * This phase serves as a verification, in order to check the graph for certain properties. The
- * {@link #verify(StructuredGraph, Object)} method will be used as an assertion, and implements the
- * actual check. Instead of returning false, it is also valid to throw an {@link AssertionError} in
- * the implemented {@link #verify(StructuredGraph, Object)} method.
+ * {@link #verify(StructuredGraph)} method will be used as an assertion, and implements the actual
+ * check. Instead of returning false, it is also valid to throw an {@link AssertionError} in the
+ * implemented {@link #verify(StructuredGraph)} method.
  */
-public abstract class VerifyPhase<C> extends BasePhase<C> {
+public abstract class VerifyPhase extends Phase {
 
     @Override
-    protected final void run(StructuredGraph graph, C context) {
-        assert verify(graph, context);
+    protected final void run(StructuredGraph graph) {
+        assert verify(graph);
     }
 
-    protected abstract boolean verify(StructuredGraph graph, C context);
+    protected abstract boolean verify(StructuredGraph graph);
 }
