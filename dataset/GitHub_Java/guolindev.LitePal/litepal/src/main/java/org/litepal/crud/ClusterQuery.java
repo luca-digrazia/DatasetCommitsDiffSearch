@@ -18,14 +18,8 @@ package org.litepal.crud;
 
 import java.util.List;
 
-import org.litepal.LitePal;
-import org.litepal.crud.async.AverageExecutor;
-import org.litepal.crud.async.CountExecutor;
-import org.litepal.crud.async.FindExecutor;
-import org.litepal.crud.async.FindMultiExecutor;
 import org.litepal.tablemanager.Connector;
 import org.litepal.util.BaseUtility;
-import org.litepal.util.DBUtility;
 
 /**
  * Allows developers to query tables with cluster style.
@@ -194,23 +188,9 @@ public class ClusterQuery {
 		return find(modelClass, false);
 	}
 
-    /**
-     * Basically same as {@link #find(Class)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query and the object type to return as a list.
-     * @return A FindMultiExecutor instance.
-     */
-    public <T> FindMultiExecutor findAsync(final Class<T> modelClass) {
-        return findAsync(modelClass, false);
-    }
-
 	/**
 	 * It is mostly same as {@link org.litepal.crud.ClusterQuery#find(Class)} but an isEager
 	 * parameter. If set true the associated models will be loaded as well.
-     * <br>
-     * Note that isEager will only work for one deep level relation, considering the query efficiency.
-     * You have to implement on your own if you need to load multiple deepness of relation at once.
 	 * 
 	 * @param modelClass
 	 *            Which table to query and the object type to return as a list.
@@ -231,37 +211,6 @@ public class ClusterQuery {
 		}
 		return queryHandler.onFind(modelClass, mColumns, mConditions, mOrderBy, limit, isEager);
 	}
-
-    /**
-     * Basically same as {@link #find(Class, boolean)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query and the object type to return as a list.
-     * @param isEager
-     *            True to load the associated models, false not.
-     * @return A FindMultiExecutor instance.
-     */
-    public <T> FindMultiExecutor findAsync(final Class<T> modelClass, final boolean isEager) {
-        final FindMultiExecutor executor = new FindMultiExecutor();
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                synchronized (DataSupport.class) {
-                    final List<T> t = find(modelClass, isEager);
-                    if (executor.getListener() != null) {
-                        LitePal.getHandler().post(new Runnable() {
-                            @Override
-                            public void run() {
-                                executor.getListener().onFinish(t);
-                            }
-                        });
-                    }
-                }
-            }
-        };
-        executor.submit(runnable);
-        return executor;
-    }
 
     /**
      * Finds the first record by the cluster parameters. You can use the below
@@ -285,22 +234,8 @@ public class ClusterQuery {
     }
 
     /**
-     * Basically same as {@link #findFirst(Class)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query and the object type to return.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor findFirstAsync(Class<T> modelClass) {
-        return findFirstAsync(modelClass, false);
-    }
-
-    /**
      * It is mostly same as {@link org.litepal.crud.ClusterQuery#findFirst(Class)} but an isEager
      * parameter. If set true the associated models will be loaded as well.
-     * <br>
-     * Note that isEager will only work for one deep level relation, considering the query efficiency.
-     * You have to implement on your own if you need to load multiple deepness of relation at once.
      *
      * @param modelClass
      *            Which table to query and the object type to return.
@@ -314,37 +249,6 @@ public class ClusterQuery {
             return list.get(0);
         }
         return null;
-    }
-
-    /**
-     * Basically same as {@link #findFirst(Class, boolean)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query and the object type to return.
-     * @param isEager
-     *            True to load the associated models, false not.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor findFirstAsync(final Class<T> modelClass, final boolean isEager) {
-        final FindExecutor executor = new FindExecutor();
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                synchronized (DataSupport.class) {
-                    final T t = findFirst(modelClass, isEager);
-                    if (executor.getListener() != null) {
-                        LitePal.getHandler().post(new Runnable() {
-                            @Override
-                            public void run() {
-                                executor.getListener().onFinish(t);
-                            }
-                        });
-                    }
-                }
-            }
-        };
-        executor.submit(runnable);
-        return executor;
     }
 
     /**
@@ -369,22 +273,8 @@ public class ClusterQuery {
     }
 
     /**
-     * Basically same as {@link #findLast(Class)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query and the object type to return.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor findLastAsync(Class<T> modelClass) {
-        return findLastAsync(modelClass, false);
-    }
-
-    /**
      * It is mostly same as {@link org.litepal.crud.ClusterQuery#findLast(Class)} but an isEager
      * parameter. If set true the associated models will be loaded as well.
-     * <br>
-     * Note that isEager will only work for one deep level relation, considering the query efficiency.
-     * You have to implement on your own if you need to load multiple deepness of relation at once.
      *
      * @param modelClass
      *            Which table to query and the object type to return.
@@ -399,37 +289,6 @@ public class ClusterQuery {
             return list.get(size - 1);
         }
         return null;
-    }
-
-    /**
-     * Basically same as {@link #findLast(Class, boolean)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query and the object type to return.
-     * @param isEager
-     *            True to load the associated models, false not.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor findLastAsync(final Class<T> modelClass, final boolean isEager) {
-        final FindExecutor executor = new FindExecutor();
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                synchronized (DataSupport.class) {
-                    final T t = findLast(modelClass, isEager);
-                    if (executor.getListener() != null) {
-                        LitePal.getHandler().post(new Runnable() {
-                            @Override
-                            public void run() {
-                                executor.getListener().onFinish(t);
-                            }
-                        });
-                    }
-                }
-            }
-        };
-        executor.submit(runnable);
-        return executor;
     }
 
 	/**
@@ -454,17 +313,6 @@ public class ClusterQuery {
 		return count(BaseUtility.changeCase(modelClass.getSimpleName()));
 	}
 
-    /**
-     * Basically same as {@link #count(Class)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query from by class.
-     * @return A CountExecutor instance.
-     */
-    public CountExecutor countAsync(Class<?> modelClass) {
-        return countAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())));
-    }
-
 	/**
 	 * Count the records.
 	 * 
@@ -487,35 +335,6 @@ public class ClusterQuery {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
 		return queryHandler.onCount(tableName, mConditions);
 	}
-
-    /**
-     * Basically same as {@link #count(String)} but pending to a new thread for executing.
-     *
-     * @param tableName
-     *            Which table to query from.
-     * @return A CountExecutor instance.
-     */
-    public CountExecutor countAsync(final String tableName) {
-        final CountExecutor executor = new CountExecutor();
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                synchronized (DataSupport.class) {
-                    final int count = count(tableName);
-                    if (executor.getListener() != null) {
-                        LitePal.getHandler().post(new Runnable() {
-                            @Override
-                            public void run() {
-                                executor.getListener().onFinish(count);
-                            }
-                        });
-                    }
-                }
-            }
-        };
-        executor.submit(runnable);
-        return executor;
-    }
 
 	/**
 	 * Calculates the average value on a given column.
@@ -540,19 +359,6 @@ public class ClusterQuery {
 		return average(BaseUtility.changeCase(modelClass.getSimpleName()), column);
 	}
 
-    /**
-     * Basically same as {@link #average(Class, String)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query from by class.
-     * @param column
-     *            The based on column to calculate.
-     * @return A AverageExecutor instance.
-     */
-    public AverageExecutor averageAsync(final Class<?> modelClass, final String column) {
-        return averageAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), column);
-    }
-
 	/**
 	 * Calculates the average value on a given column.
 	 * 
@@ -576,37 +382,6 @@ public class ClusterQuery {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
 		return queryHandler.onAverage(tableName, column, mConditions);
 	}
-
-    /**
-     * Basically same as {@link #average(String, String)} but pending to a new thread for executing.
-     *
-     * @param tableName
-     *            Which table to query from.
-     * @param column
-     *            The based on column to calculate.
-     * @return A AverageExecutor instance.
-     */
-    public AverageExecutor averageAsync(final String tableName, final String column) {
-        final AverageExecutor executor = new AverageExecutor();
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                synchronized (DataSupport.class) {
-                    final double average = average(tableName, column);
-                    if (executor.getListener() != null) {
-                        LitePal.getHandler().post(new Runnable() {
-                            @Override
-                            public void run() {
-                                executor.getListener().onFinish(average);
-                            }
-                        });
-                    }
-                }
-            }
-        };
-        executor.submit(runnable);
-        return executor;
-    }
 
 	/**
 	 * Calculates the maximum value on a given column. The value is returned
@@ -633,21 +408,6 @@ public class ClusterQuery {
 	public synchronized <T> T max(Class<?> modelClass, String columnName, Class<T> columnType) {
 		return max(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
 	}
-
-    /**
-     * Basically same as {@link #max(Class, String, Class)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query from by class.
-     * @param columnName
-     *            The based on column to calculate.
-     * @param columnType
-     *            The type of the based on column.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor maxAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
-        return maxAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), columnName, columnType);
-    }
 
 	/**
 	 * Calculates the maximum value on a given column. The value is returned
@@ -676,39 +436,6 @@ public class ClusterQuery {
 		return queryHandler.onMax(tableName, columnName, mConditions, columnType);
 	}
 
-    /**
-     * Basically same as {@link #max(String, String, Class)} but pending to a new thread for executing.
-     *
-     * @param tableName
-     *            Which table to query from.
-     * @param columnName
-     *            The based on column to calculate.
-     * @param columnType
-     *            The type of the based on column.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor maxAsync(final String tableName, final String columnName, final Class<T> columnType) {
-        final FindExecutor executor = new FindExecutor();
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                synchronized (DataSupport.class) {
-                    final T t = max(tableName, columnName, columnType);
-                    if (executor.getListener() != null) {
-                        LitePal.getHandler().post(new Runnable() {
-                            @Override
-                            public void run() {
-                                executor.getListener().onFinish(t);
-                            }
-                        });
-                    }
-                }
-            }
-        };
-        executor.submit(runnable);
-        return executor;
-    }
-
 	/**
 	 * Calculates the minimum value on a given column. The value is returned
 	 * with the same data type of the column.
@@ -734,21 +461,6 @@ public class ClusterQuery {
 	public synchronized <T> T min(Class<?> modelClass, String columnName, Class<T> columnType) {
 		return min(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
 	}
-
-    /**
-     * Basically same as {@link #min(Class, String, Class)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query from by class.
-     * @param columnName
-     *            The based on column to calculate.
-     * @param columnType
-     *            The type of the based on column.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor minAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
-        return minAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), columnName, columnType);
-    }
 
 	/**
 	 * Calculates the minimum value on a given column. The value is returned
@@ -777,39 +489,6 @@ public class ClusterQuery {
 		return queryHandler.onMin(tableName, columnName, mConditions, columnType);
 	}
 
-    /**
-     * Basically same as {@link #min(String, String, Class)} but pending to a new thread for executing.
-     *
-     * @param tableName
-     *            Which table to query from.
-     * @param columnName
-     *            The based on column to calculate.
-     * @param columnType
-     *            The type of the based on column.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor minAsync(final String tableName, final String columnName, final Class<T> columnType) {
-        final FindExecutor executor = new FindExecutor();
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                synchronized (DataSupport.class) {
-                    final T t = min(tableName, columnName, columnType);
-                    if (executor.getListener() != null) {
-                        LitePal.getHandler().post(new Runnable() {
-                            @Override
-                            public void run() {
-                                executor.getListener().onFinish(t);
-                            }
-                        });
-                    }
-                }
-            }
-        };
-        executor.submit(runnable);
-        return executor;
-    }
-
 	/**
 	 * Calculates the sum of values on a given column. The value is returned
 	 * with the same data type of the column.
@@ -836,22 +515,7 @@ public class ClusterQuery {
 		return sum(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
 	}
 
-    /**
-     * Basically same as {@link #sum(Class, String, Class)} but pending to a new thread for executing.
-     *
-     * @param modelClass
-     *            Which table to query from by class.
-     * @param columnName
-     *            The based on column to calculate.
-     * @param columnType
-     *            The type of the based on column.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor sumAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
-        return sumAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), columnName, columnType);
-    }
-
-    /**
+	/**
 	 * Calculates the sum of values on a given column. The value is returned
 	 * with the same data type of the column.
 	 * 
@@ -877,38 +541,5 @@ public class ClusterQuery {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
 		return queryHandler.onSum(tableName, columnName, mConditions, columnType);
 	}
-
-    /**
-     * Basically same as {@link #sum(String, String, Class)} but pending to a new thread for executing.
-     *
-     * @param tableName
-     *            Which table to query from.
-     * @param columnName
-     *            The based on column to calculate.
-     * @param columnType
-     *            The type of the based on column.
-     * @return A FindExecutor instance.
-     */
-    public <T> FindExecutor sumAsync(final String tableName, final String columnName, final Class<T> columnType) {
-        final FindExecutor executor = new FindExecutor();
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                synchronized (DataSupport.class) {
-                    final T t = sum(tableName, columnName, columnType);
-                    if (executor.getListener() != null) {
-                        LitePal.getHandler().post(new Runnable() {
-                            @Override
-                            public void run() {
-                                executor.getListener().onFinish(t);
-                            }
-                        });
-                    }
-                }
-            }
-        };
-        executor.submit(runnable);
-        return executor;
-    }
 
 }
