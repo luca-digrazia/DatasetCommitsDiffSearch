@@ -298,7 +298,7 @@ public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLow
                             }
                         }
                         if (tool != null) {
-                            tool.addToWorkList(otherPhi.usages());
+                            otherPhi.usages().forEach(tool::addToWorkList);
                         }
                         otherPhi.replaceAtUsages(phi);
                         GraphUtil.killWithUnusedFloatingInputs(otherPhi);

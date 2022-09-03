@@ -56,7 +56,7 @@ public class LoopPhiCanonicalizerTest extends GraalCompilerTest {
 
     @Test
     public void test() {
-        StructuredGraph graph = parseEager("loopSnippet");
+        StructuredGraph graph = parse("loopSnippet");
         NodePredicate loopPhis = node -> node instanceof PhiNode && ((PhiNode) node).merge() instanceof LoopBeginNode;
 
         PhaseContext context = new PhaseContext(getProviders(), null);
