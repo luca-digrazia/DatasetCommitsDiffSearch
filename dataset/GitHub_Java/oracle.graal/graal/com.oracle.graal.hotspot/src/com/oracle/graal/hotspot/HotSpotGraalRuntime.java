@@ -126,7 +126,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
         }
 
         if (Log.getValue() == null && !areScopedMetricsOrTimersEnabled() && Dump.getValue() == null && Verify.getValue() == null) {
-            if (MethodFilter.getValue() != null && !Debug.isEnabled()) {
+            if (MethodFilter.getValue() != null) {
                 TTY.println("WARNING: Ignoring MethodFilter option since Log, Meter, Time, TrackMemUse, Dump and Verify options are all null");
             }
         }
@@ -148,8 +148,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
             }
         }
 
-        if (Debug.areUnconditionalMetricsEnabled() || Debug.areUnconditionalTimersEnabled() || (Debug.isEnabled() && areScopedMetricsOrTimersEnabled()) ||
-                        (Debug.isEnabled() && Debug.isMethodFilteringEnabled())) {
+        if (Debug.areUnconditionalMetricsEnabled() || Debug.areUnconditionalTimersEnabled() || (Debug.isEnabled() && areScopedMetricsOrTimersEnabled())) {
             // This must be created here to avoid loading the DebugValuesPrinter class
             // during shutdown() which in turn can cause a deadlock
             debugValuesPrinter = new DebugValuesPrinter();
@@ -181,7 +180,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
         return backend;
     }
 
-    @Override
     public HotSpotProviders getHostProviders() {
         return getHostBackend().getProviders();
     }
@@ -210,12 +208,10 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
         return null;
     }
 
-    @Override
     public HotSpotBackend getHostBackend() {
         return hostBackend;
     }
 
-    @Override
     public <T extends Architecture> Backend getBackend(Class<T> arch) {
         assert arch != Architecture.class;
         return backends.get(arch);
