@@ -56,8 +56,8 @@ public class Graph {
     private int deletedNodeCount;
     private GraphEventLog eventLog;
 
-    NodeChangedListener inputChangedListener;
-    NodeChangedListener usagesDroppedToZeroListener;
+    NodeChangedListener inputChanged;
+    NodeChangedListener usagesDroppedZero;
     private final HashMap<CacheEntry, Node> cachedNodes = new HashMap<>();
 
     private static final class CacheEntry {
@@ -250,54 +250,24 @@ public class Graph {
         void nodeChanged(Node node);
     }
 
-    private static class ChainedNodeChangedListener implements NodeChangedListener {
-
-        NodeChangedListener head;
-        NodeChangedListener next;
-
-        ChainedNodeChangedListener(NodeChangedListener head, NodeChangedListener next) {
-            this.head = head;
-            this.next = next;
-        }
-
-        public void nodeChanged(Node node) {
-            head.nodeChanged(node);
-            next.nodeChanged(node);
-        }
-    }
-
-    public void trackInputChange(NodeChangedListener listener) {
-        if (inputChangedListener == null) {
-            inputChangedListener = listener;
-        } else {
-            inputChangedListener = new ChainedNodeChangedListener(listener, inputChangedListener);
-        }
+    public void trackInputChange(NodeChangedListener inputChangedListener) {
+        assert this.inputChanged == null;
+        this.inputChanged = inputChangedListener;
     }
 
     public void stopTrackingInputChange() {
-        assert inputChangedListener != null;
-        if (inputChangedListener instanceof ChainedNodeChangedListener) {
-            inputChangedListener = ((ChainedNodeChangedListener) inputChangedListener).next;
-        } else {
-            inputChangedListener = null;
-        }
+        assert inputChanged != null;
+        inputChanged = null;
     }
 
-    public void trackUsagesDroppedZero(NodeChangedListener listener) {
-        if (usagesDroppedToZeroListener == null) {
-            usagesDroppedToZeroListener = listener;
-        } else {
-            usagesDroppedToZeroListener = new ChainedNodeChangedListener(listener, usagesDroppedToZeroListener);
-        }
+    public void trackUsagesDroppedZero(NodeChangedListener usagesDroppedZeroListener) {
+        assert this.usagesDroppedZero == null;
+        this.usagesDroppedZero = usagesDroppedZeroListener;
     }
 
     public void stopTrackingUsagesDroppedZero() {
-        assert usagesDroppedToZeroListener != null;
-        if (usagesDroppedToZeroListener instanceof ChainedNodeChangedListener) {
-            usagesDroppedToZeroListener = ((ChainedNodeChangedListener) usagesDroppedToZeroListener).next;
-        } else {
-            usagesDroppedToZeroListener = null;
-        }
+        assert usagesDroppedZero != null;
+        usagesDroppedZero = null;
     }
 
     /**
@@ -361,7 +331,7 @@ public class Graph {
             int minCount = Integer.MAX_VALUE;
             Node minCountNode = null;
             for (Node input : node.inputs()) {
-                if (input != null && input.recordsUsages()) {
+                if (input != null) {
                     int estimate = input.getUsageCountUpperBound();
                     if (estimate == 0) {
                         return null;
