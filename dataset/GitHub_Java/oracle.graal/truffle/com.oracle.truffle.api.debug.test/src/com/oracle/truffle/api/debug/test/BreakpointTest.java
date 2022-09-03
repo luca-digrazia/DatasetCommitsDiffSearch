@@ -36,33 +36,21 @@ import org.junit.Test;
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.source.Source;
-import java.io.File;
 
-@SuppressWarnings("deprecation")
 public class BreakpointTest extends AbstractDebugTest {
 
     @Test
     public void testBreak() throws Throwable {
-        testBreak(false);
-        testBreak(true);
-    }
-
-    private void testBreak(boolean onUri) throws Throwable {
-        final Source block = TestSource.createBlock12("testBreak" + (onUri ? "Uri" : ""));
+        final Source block = TestSource.createBlock12("testBreak");
         final Breakpoint[] breakpoints = new Breakpoint[block.getLineCount() + 1];
         final Debugger debugger = getDebugger();
-        if (onUri) {
-            breakpoints[4] = debugger.setLineBreakpoint(0, block.getURI(), 4, false);
-        } else {
-            breakpoints[4] = debugger.setLineBreakpoint(0, block.createLineLocation(4), false);
-        }
+        breakpoints[4] = debugger.setLineBreakpoint(0, block.createLineLocation(4), false);
         expectExecutionEvent().resume();
         expectSuspendedEvent().checkState(4, true, "STATEMENT").resume();
         getEngine().eval(block);
         assertExecutedOK();
         assertTrue(breakpoints[4].isEnabled());
         assertEquals(breakpoints[4].getHitCount(), 1);
-        breakpoints[4].dispose();
     }
 
     @Test
@@ -88,28 +76,15 @@ public class BreakpointTest extends AbstractDebugTest {
 
     @Test
     public void testBreakOneShot() throws Throwable {
-        testBreakOneShot(false);
-        testBreakOneShot(true);
-    }
-
-    public void testBreakOneShot(final boolean onUri) throws Throwable {
-        final Source block = TestSource.createBlock12("testBreakOneShot" + (onUri ? "Uri" : ""));
+        final Source block = TestSource.createBlock12("testBreakOneShot");
         final Breakpoint[] breakpoints = new Breakpoint[block.getLineCount() + 1];
         final Debugger debugger = getDebugger();
-        if (onUri) {
-            breakpoints[4] = debugger.setLineBreakpoint(0, block.getURI(), 4, true);
-        } else {
-            breakpoints[4] = debugger.setLineBreakpoint(0, block.createLineLocation(4), true);
-        }
+        breakpoints[4] = debugger.setLineBreakpoint(0, block.createLineLocation(4), true);
         expectExecutionEvent().resume();
         expectSuspendedEvent().checkState(4, true, "STATEMENT").run(new Runnable() {
             public void run() {
                 try {
-                    if (onUri) {
-                        breakpoints[6] = debugger.setLineBreakpoint(0, block.getURI(), 6, false);
-                    } else {
-                        breakpoints[6] = debugger.setLineBreakpoint(0, block.createLineLocation(6), false);
-                    }
+                    breakpoints[6] = debugger.setLineBreakpoint(0, block.createLineLocation(6), false);
                 } catch (IOException e) {
                     fail("breakpoint");
                 }
@@ -122,8 +97,6 @@ public class BreakpointTest extends AbstractDebugTest {
         assertEquals(breakpoints[4].getHitCount(), 1);
         assertTrue(breakpoints[6].isEnabled());
         assertEquals(breakpoints[6].getHitCount(), 1);
-        breakpoints[4].dispose();
-        breakpoints[6].dispose();
     }
 
     @Test
@@ -151,21 +124,5 @@ public class BreakpointTest extends AbstractDebugTest {
         assertEquals(breakpoints[6].getHitCount(), 0);
         assertFalse(breakpoints[8].isEnabled());
         assertEquals(breakpoints[8].getHitCount(), 0);
-    }
-
-    @Test
-    public void testURIBreak() throws Throwable {
-        File loopFile = TestSource.createCallLoop3File();
-        final Debugger debugger = getDebugger();
-        Breakpoint breakpoint = debugger.setLineBreakpoint(0, loopFile.toURI(), 4, false);
-        expectExecutionEvent().resume();
-        for (int i = 0; i < 3; i++) {
-            expectSuspendedEvent().checkState(4, true, "STATEMENT").resume();
-        }
-        getEngine().eval(Source.fromFileName(loopFile.getAbsolutePath()));
-        assertExecutedOK();
-        assertTrue(breakpoint.isEnabled());
-        assertEquals(breakpoint.getHitCount(), 3);
-        breakpoint.dispose();
     }
 }
