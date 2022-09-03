@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,8 +25,8 @@ package org.graalvm.compiler.replacements.test;
 import java.util.Objects;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
-import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.Scope;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.DebugConfigScope;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -149,8 +147,7 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
     public void testFieldOffsetMergeNonLiveBasePointer() {
         thrown.expect(GraalError.class);
         thrown.expectMessage(UNKNOWN_REFERENCE_AT_SAFEPOINT_MSG);
-        DebugContext debug = getDebugContext();
-        try (Scope s = debug.disable()) {
+        try (DebugConfigScope s = Debug.setConfig(Debug.silentConfig())) {
             // Run a couple times to encourage objects to move
             for (int i = 0; i < 4; i++) {
                 Result r = new Result();
@@ -174,8 +171,7 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
     public void testFieldOffsetMergeLiveBasePointer() {
         thrown.expect(GraalError.class);
         thrown.expectMessage(UNKNOWN_REFERENCE_AT_SAFEPOINT_MSG);
-        DebugContext debug = getDebugContext();
-        try (Scope s = debug.disable()) {
+        try (DebugConfigScope s = Debug.setConfig(Debug.silentConfig())) {
             // Run a couple times to encourage objects to move
             for (int i = 0; i < 4; i++) {
                 Result r = new Result();
@@ -266,8 +262,8 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
     }
 
     @Override
-    protected void checkHighTierGraph(StructuredGraph graph) {
+    protected boolean checkHighTierGraph(StructuredGraph graph) {
         assert graph.getNodes().filter(WordCastNode.class).count() > 0 : "DerivedOopTest.toLong should be intrinsified";
-        super.checkHighTierGraph(graph);
+        return super.checkHighTierGraph(graph);
     }
 }
