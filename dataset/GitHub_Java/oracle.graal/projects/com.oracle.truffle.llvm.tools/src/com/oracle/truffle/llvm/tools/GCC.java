@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.tools;
 
 import java.io.File;
 
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.tools.util.ProcessUtil;
 
 public final class GCC extends CompilerBase {
@@ -40,7 +39,7 @@ public final class GCC extends CompilerBase {
     }
 
     public static void compileObjectToMachineCode(File objectFile, File executable) {
-        String linkCommand = Mx.executeGetGCCProgramPath("gcc") + " " + objectFile.getAbsolutePath() + " -o " + executable.getAbsolutePath() + " -lm -lgfortran -lgmp";
+        String linkCommand = "gcc-4.6 " + objectFile.getAbsolutePath() + " -o " + executable.getAbsolutePath() + " -lm -lgfortran -lgmp";
         ProcessUtil.executeNativeCommandZeroReturn(linkCommand);
         executable.setExecutable(true);
     }
@@ -48,16 +47,15 @@ public final class GCC extends CompilerBase {
     public static void compileToLLVMIR(File toBeCompiled, File destinationFile) {
         String tool;
         if (ProgrammingLanguage.C.isFile(toBeCompiled)) {
-            tool = Mx.executeGetGCCProgramPath("gcc") + " -std=gnu99";
+            tool = "gcc-4.6 -std=gnu99";
         } else if (ProgrammingLanguage.FORTRAN.isFile(toBeCompiled)) {
-            tool = Mx.executeGetGCCProgramPath("gfortran").toString();
+            tool = "gfortran-4.6";
         } else if (ProgrammingLanguage.C_PLUS_PLUS.isFile(toBeCompiled)) {
-            tool = Mx.executeGetGCCProgramPath("g++").toString();
+            tool = "g++-4.6";
         } else {
             throw new AssertionError(toBeCompiled);
         }
-        String[] command = new String[]{tool, "-I " + LLVMBaseOptionFacade.getProjectRoot() + "/../include", "-S", dragonEggOption(), "-fplugin-arg-dragonegg-emit-ir", "-o " + destinationFile,
-                        toBeCompiled.getAbsolutePath()};
+        String[] command = new String[]{tool, "-S", dragonEggOption(), "-fplugin-arg-dragonegg-emit-ir", "-o " + destinationFile, toBeCompiled.getAbsolutePath()};
         ProcessUtil.executeNativeCommandZeroReturn(command);
     }
 
