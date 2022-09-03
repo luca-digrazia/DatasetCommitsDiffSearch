@@ -95,9 +95,6 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
             CompilerAsserts.partialEvaluationConstant(basicBlockIndex);
             LLVMBasicBlockNode bb = bodyNodes[basicBlockIndex];
 
-            // lazily insert the basic block into the AST
-            bb = bb.initialize();
-
             // execute all statements
             bb.execute(frame);
 
@@ -247,6 +244,12 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
                 assert noPhisNecessary(retNode);
                 nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
                 basicBlockIndex = retNode.getSuccessor();
+                continue outer;
+            } else if (controlFlowNode instanceof LLVMBasicBlockNode.RepeatBlockNode) {
+                assert noPhisNecessary(controlFlowNode);
+                // appears only after a new basic block was just inserted
+                // intended successor is the just inserted basic block
+                // do not execute nullers or phis here
                 continue outer;
             } else if (controlFlowNode instanceof LLVMResumeNode) {
                 LLVMResumeNode resumeNode = (LLVMResumeNode) controlFlowNode;

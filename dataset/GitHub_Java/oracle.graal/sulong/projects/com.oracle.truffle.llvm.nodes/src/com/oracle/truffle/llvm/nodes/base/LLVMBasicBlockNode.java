@@ -37,7 +37,6 @@ import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.profiles.BranchProfile;
-import com.oracle.truffle.llvm.nodes.control.LLVMBrUnconditionalNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
@@ -55,7 +54,9 @@ public class LLVMBasicBlockNode extends LLVMStatementNode {
 
     public static LLVMBasicBlockNode createLazyBasicBlock(LLVMStatementNode[] statements, LLVMControlFlowNode termInstruction, int blockId, String blockName) {
         final LLVMBasicBlockNode block = new LLVMBasicBlockNode(statements, termInstruction, blockId, blockName);
-        return new LazyBlock(block);
+        final LLVMStatementNode[] lazyBlockInsert = new LLVMStatementNode[]{new InsertBlockNode(block)};
+        final LLVMControlFlowNode executeInsertedBlock = new RepeatBlockNode();
+        return new LLVMBasicBlockNode(lazyBlockInsert, executeInsertedBlock, blockId, blockName);
     }
 
     @Children private final LLVMStatementNode[] statements;
@@ -75,11 +76,6 @@ public class LLVMBasicBlockNode extends LLVMStatementNode {
         this.blockId = blockId;
         this.blockName = blockName;
         successorExecutionCount = termInstruction.needsBranchProfiling() ? new long[termInstruction.getSuccessorCount()] : null;
-    }
-
-    public LLVMBasicBlockNode initialize() {
-        // this block is already initialized
-        return this;
     }
 
     @Override
@@ -171,27 +167,41 @@ public class LLVMBasicBlockNode extends LLVMStatementNode {
         successorExecutionCount[successorIndex]++;
     }
 
-    private static final class NoPhiNode extends LLVMStatementNode {
+    public static final class RepeatBlockNode extends LLVMControlFlowNode {
+
+        private RepeatBlockNode() {
+            super(null);
+        }
+
         @Override
-        public void execute(VirtualFrame frame) {
+        public int getSuccessorCount() {
+            return 1;
+        }
+
+        @Override
+        public LLVMStatementNode getPhiNode(int successorIndex) {
+            return null;
         }
     }
 
-    private static final class LazyBlock extends LLVMBasicBlockNode {
+    private static final class InsertBlockNode extends LLVMStatementNode {
 
         private final LLVMBasicBlockNode materializedBlock;
 
-        private LazyBlock(LLVMBasicBlockNode materializedBlock) {
-            super(new LLVMStatementNode[0], LLVMBrUnconditionalNode.create(materializedBlock.getBlockId(), new NoPhiNode(), null), materializedBlock.getBlockId(), materializedBlock.getBlockName());
+        private InsertBlockNode(LLVMBasicBlockNode materializedBlock) {
             this.materializedBlock = materializedBlock;
         }
 
         @Override
-        public LLVMBasicBlockNode initialize() {
+        public void execute(VirtualFrame frame) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            replace(materializedBlock, "Lazily Inserting LLVM Basic Block");
+            final LLVMBasicBlockNode currentBlock = NodeUtil.findParent(this, LLVMBasicBlockNode.class);
+            if (currentBlock == null) {
+                // this should never happen
+                throw new IllegalStateException("Tried to insert orphaned LLVM Basic Block!");
+            }
+            currentBlock.replace(materializedBlock, "Lazily Inserting LLVM Basic Block");
             notifyInserted(materializedBlock);
-            return materializedBlock;
         }
     }
 }
