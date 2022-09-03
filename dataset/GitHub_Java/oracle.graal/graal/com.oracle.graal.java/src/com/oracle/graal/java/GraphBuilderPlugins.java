@@ -45,10 +45,6 @@ public interface GraphBuilderPlugins {
         FloatingNode interceptParameter(int index);
     }
 
-    public interface InlineInvokePlugin extends GraphBuilderPlugin {
-        boolean shouldInlineInvoke(ResolvedJavaMethod method, int depth);
-    }
-
     /**
      * Plugin for handling a method invocation.
      */
@@ -87,20 +83,6 @@ public interface GraphBuilderPlugins {
          */
         default boolean apply(GraphBuilderContext builder, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
             throw invalidHandler(builder, arg1, arg2, arg3);
-        }
-
-        default boolean apply(GraphBuilderContext builder, ValueNode[] args) {
-            if (args.length == 0) {
-                return apply(builder);
-            } else if (args.length == 1) {
-                return apply(builder, args[0]);
-            } else if (args.length == 2) {
-                return apply(builder, args[0], args[1]);
-            } else if (args.length == 3) {
-                return apply(builder, args[0], args[1], args[2]);
-            } else {
-                throw invalidHandler(builder, args);
-            }
         }
 
         default Error invalidHandler(@SuppressWarnings("unused") GraphBuilderContext builder, ValueNode... args) {

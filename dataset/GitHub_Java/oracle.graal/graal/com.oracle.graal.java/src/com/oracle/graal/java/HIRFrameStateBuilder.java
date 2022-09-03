@@ -31,7 +31,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
 import com.oracle.graal.java.GraphBuilderPlugins.ParameterPlugin;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -235,7 +234,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
             return currentValue;
 
         } else if (currentValue != otherValue) {
-            assert !(block instanceof LoopBeginNode) : "Phi functions for loop headers are create eagerly for changed locals and all stack slots";
+            assert !(block instanceof LoopBeginNode) : "Phi functions for loop headers are create eagerly for all locals and stack slots";
             if (otherValue == null || otherValue.isDeleted() || currentValue.getKind() != otherValue.getKind()) {
                 return null;
             }
@@ -272,11 +271,9 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
         }
     }
 
-    public void insertLoopPhis(LocalLiveness liveness, int loopId, LoopBeginNode loopBegin) {
+    public void insertLoopPhis(LoopBeginNode loopBegin) {
         for (int i = 0; i < localsSize(); i++) {
-            if (liveness.localIsChangedInLoop(loopId, i)) {
-                storeLocal(i, createLoopPhi(loopBegin, localAt(i)));
-            }
+            storeLocal(i, createLoopPhi(loopBegin, localAt(i)));
         }
         for (int i = 0; i < stackSize(); i++) {
             storeStack(i, createLoopPhi(loopBegin, stackAt(i)));

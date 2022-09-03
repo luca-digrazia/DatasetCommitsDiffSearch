@@ -1010,6 +1010,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             public <T extends FloatingNode> T append(T v) {
+                assert !(v instanceof ConstantNode);
                 T added = currentGraph.unique(v);
                 return added;
             }
