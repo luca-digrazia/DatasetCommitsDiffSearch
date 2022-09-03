@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,8 @@ package com.oracle.graal.hotspot;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.hotspot.meta.*;
 
+import edu.umd.cs.findbugs.annotations.*;
+
 /**
  * {@link HotSpotCompiledCode} destined for installation as an nmethod.
  */
@@ -34,11 +36,32 @@ public final class HotSpotCompiledNmethod extends HotSpotCompiledCode {
     public final HotSpotResolvedJavaMethod method;
     public final int entryBCI;
     public final int id;
+    public final long graalEnv;
+
+    /**
+     * May be set by VM if code installation fails. It will describe in more detail why installation
+     * failed (e.g., exactly which dependency failed).
+     */
+    @SuppressFBWarnings("UWF_UNWRITTEN_FIELD") private String installationFailureMessage;
 
     public HotSpotCompiledNmethod(HotSpotResolvedJavaMethod method, CompilationResult compResult) {
+        this(method, compResult, 0L);
+    }
+
+    public HotSpotCompiledNmethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long graalEnv) {
         super(compResult);
         this.method = method;
         this.entryBCI = compResult.getEntryBCI();
         this.id = compResult.getId();
+        this.graalEnv = graalEnv;
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + "[" + id + ":" + method.format("%H.%n(%p)%r@") + entryBCI + "]";
+    }
+
+    public String getInstallationFailureMessage() {
+        return installationFailureMessage;
     }
 }
