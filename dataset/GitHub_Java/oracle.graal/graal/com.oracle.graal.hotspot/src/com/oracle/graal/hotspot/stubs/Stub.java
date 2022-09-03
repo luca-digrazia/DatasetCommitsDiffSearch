@@ -56,7 +56,7 @@ public abstract class Stub {
     /**
      * The linkage information for a call to this stub from compiled code.
      */
-    protected final HotSpotForeignCallLinkage linkage;
+    protected final HotSpotRuntimeCallTarget linkage;
 
     /**
      * The code installed for the stub.
@@ -100,7 +100,7 @@ public abstract class Stub {
      * 
      * @param linkage linkage details for a call to the stub
      */
-    public Stub(HotSpotRuntime runtime, Replacements replacements, HotSpotForeignCallLinkage linkage) {
+    public Stub(HotSpotRuntime runtime, Replacements replacements, HotSpotRuntimeCallTarget linkage) {
         this.linkage = linkage;
         this.runtime = runtime;
         this.replacements = replacements;
@@ -109,7 +109,7 @@ public abstract class Stub {
     /**
      * Gets the linkage for a call to this stub from compiled code.
      */
-    public HotSpotForeignCallLinkage getLinkage() {
+    public HotSpotRuntimeCallTarget getLinkage() {
         return linkage;
     }
 
@@ -164,8 +164,8 @@ public abstract class Stub {
                         @Override
                         public InstalledCode call() {
                             Stub stub = Stub.this;
-                            HotSpotRuntimeStub installedCode = new HotSpotRuntimeStub(stub);
-                            HotSpotCompiledCode hsCompResult = new HotSpotCompiledRuntimeStub(stub, compResult);
+                            HotSpotInstalledCode installedCode = new HotSpotInstalledCode(stub);
+                            HotSpotCompilationResult hsCompResult = new HotSpotCompilationResult(stub, compResult);
                             CodeInstallResult result = graalRuntime().getCompilerToVM().installCode(hsCompResult, installedCode, null);
                             if (result != CodeInstallResult.OK) {
                                 throw new GraalInternalError("Error installing stub %s: %s", Stub.this, result);
@@ -173,9 +173,8 @@ public abstract class Stub {
                             if (Debug.isDumpEnabled()) {
                                 Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
                             }
-                            if (Debug.isLogEnabled()) {
-                                Debug.log("%s", runtime.disassemble(installedCode));
-                            }
+                            // TTY.println(stub.toString());
+                            // TTY.println(runtime.disassemble(installedCode));
                             return installedCode;
                         }
                     });
