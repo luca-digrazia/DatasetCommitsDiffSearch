@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Iterator;
-import java.util.List;
 
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 
@@ -34,13 +33,7 @@ public final class TraceBuilderResult<T extends AbstractBlockBase<T>> {
     private final ArrayList<Trace<T>> traces;
     private final int[] blockToTrace;
 
-    static <T extends AbstractBlockBase<T>> TraceBuilderResult<T> create(List<T> blocks, ArrayList<Trace<T>> traces, int[] blockToTrace) {
-        TraceBuilderResult<T> traceBuilderResult = new TraceBuilderResult<>(traces, blockToTrace);
-        traceBuilderResult.numberTraces(blocks);
-        return traceBuilderResult;
-    }
-
-    private TraceBuilderResult(ArrayList<Trace<T>> traces, int[] blockToTrace) {
+    TraceBuilderResult(ArrayList<Trace<T>> traces, int[] blockToTrace) {
         this.traces = traces;
         this.blockToTrace = blockToTrace;
     }
@@ -117,10 +110,10 @@ public final class TraceBuilderResult<T extends AbstractBlockBase<T>> {
         return handled.cardinality() == expectedLength;
     }
 
-    private void numberTraces(List<T> blocks) {
+    void numberTraces() {
         for (int i = 0; i < traces.size(); i++) {
             traces.get(i).setId(i);
         }
-        assert verify(this, blocks.size());
     }
+
 }
