@@ -24,7 +24,6 @@ package org.graalvm.compiler.core.target;
 
 import java.util.ArrayList;
 
-import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.asm.Assembler;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
@@ -45,6 +44,7 @@ import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.phases.tiers.SuitesProvider;
 import org.graalvm.compiler.phases.tiers.TargetProvider;
 import org.graalvm.compiler.phases.util.Providers;
+import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.CodeCacheProvider;
@@ -206,7 +206,7 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
                         DebugContext.Activation a = debug.activate()) {
             preCodeInstallationTasks(tasks, compilationResult);
 
-            InstalledCode installedCode;
+            InstalledCode installedCode = null;
             try {
                 CompiledCode compiledCode = createCompiledCode(method, compilationRequest, compilationResult);
                 installedCode = getProviders().getCodeCache().installCode(method, compiledCode, predefinedInstalledCode, speculationLog, isDefault);
@@ -318,7 +318,7 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
         }
 
         /**
-         * Invoked after {@link #preProcess} when code installation fails.
+         * Invoked after preProcess in the case that the code installation fails.
          */
         @SuppressWarnings("unused")
         public void installFailed(Throwable t) {
