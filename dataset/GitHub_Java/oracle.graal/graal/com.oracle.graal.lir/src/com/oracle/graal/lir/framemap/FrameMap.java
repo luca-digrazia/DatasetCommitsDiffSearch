@@ -26,15 +26,15 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.Architecture;
+import jdk.internal.jvmci.code.BailoutException;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.CodeCacheProvider;
+import jdk.internal.jvmci.code.RegisterConfig;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.asm.NumUtil;
 
@@ -181,9 +181,7 @@ public abstract class FrameMap {
      * @param size the initial frame size to be aligned
      * @return the aligned frame size
      */
-    protected int alignFrameSize(int size) {
-        return NumUtil.roundUp(size, getTarget().stackAlignment);
-    }
+    protected abstract int alignFrameSize(int size);
 
     /**
      * Computes the final size of this frame. After this method has been called, methods that change
@@ -240,9 +238,7 @@ public abstract class FrameMap {
      * @param additionalOffset
      * @return A spill slot denoting the reserved memory area.
      */
-    protected StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset) {
-        return StackSlot.get(kind, -spillSize + additionalOffset, true);
-    }
+    protected abstract StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset);
 
     /**
      * Returns the spill slot size for the given {@link LIRKind}. The default value is the size in
@@ -252,7 +248,7 @@ public abstract class FrameMap {
      * @return the size in bytes
      */
     public int spillSlotSize(LIRKind kind) {
-        return kind.getPlatformKind().getSizeInBytes();
+        return getTarget().getSizeInBytes(kind.getPlatformKind());
     }
 
     /**
