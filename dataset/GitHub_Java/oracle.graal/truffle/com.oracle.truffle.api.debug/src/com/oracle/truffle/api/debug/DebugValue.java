@@ -24,10 +24,19 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.TruffleLanguage;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.java.JavaInterop;
+import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * Represents a value accessed using the debugger API. Please note that values can become invalid
@@ -36,16 +45,13 @@ import com.oracle.truffle.api.nodes.RootNode;
  * value becomes invalid then setting or getting a value will throw an {@link IllegalStateException}
  * . {@link DebugValue} instances neither support equality or preserve identity.
  * <p>
- * Clients can access the debug value only on the execution thread where the suspended event of the
+ * Clients may access the debug value only on the execution thread where the suspended event of the
  * stack frame was created and notification received; access from other threads will throw
  * {@link IllegalStateException}.
  *
  * @since 0.17
  */
-public abstract class DebugValue /* TODO: future API implements Iterable<DebugValue> */ {
-
-    @SuppressWarnings("rawtypes")
-    abstract Class<? extends TruffleLanguage> getLanguage();
+public abstract class DebugValue {
 
     abstract Object get();
 
@@ -106,6 +112,132 @@ public abstract class DebugValue /* TODO: future API implements Iterable<DebugVa
     public abstract boolean isWriteable();
 
     /**
+     * Provides properties representing an internal structure of this value. The returned collection
+     * is not thread-safe. If the value is not {@link #isReadable() readable} then an
+     * {@link IllegalStateException} is thrown.
+     *
+     * @return a collection of property values, or </code>null</code> when the value does not have
+     *         any concept of properties.
+     * @since 0.19
+     */
+    @SuppressWarnings("unchecked")
+    public final Collection<DebugValue> getProperties() {
+        if (!isReadable()) {
+            throw new IllegalStateException("Value is not readable");
+        }
+        Object value = get();
+        Collection<DebugValue> properties = null;
+        if (value instanceof TruffleObject) {
+            Map<Object, Object> map = JavaInterop.asJavaObject(Map.class, (TruffleObject) value);
+            if (map != null) {
+                try {
+                    properties = new ValuePropertiesCollection(getDebugger(), getSourceRoot(), map.entrySet());
+                } catch (Exception ex) {
+                    if (isUnsupportedException(ex)) {
+                        // Not supported, no properties
+                    } else {
+                        throw ex;
+                    }
+                }
+            }
+        }
+        return properties;
+    }
+
+    private static boolean isUnsupportedException(Throwable ex) {
+        return ex instanceof InteropException || ex.getCause() != null && isUnsupportedException(ex.getCause());
+    }
+
+    /*
+     * TODO future API: Find a property value based on a String name. In general, not all properties
+     * may have String names. Use this for lookup of a value of some known String-based property.
+     * DebugValue findProperty(String name)
+     */
+
+    /**
+     * Returns <code>true</code> if this value represents an array, <code>false</code> otherwise.
+     *
+     * @since 0.19
+     */
+    public final boolean isArray() {
+        Object value = get();
+        if (value instanceof TruffleObject) {
+            TruffleObject to = (TruffleObject) value;
+            return JavaInterop.isArray(to);
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Provides array elements when this value represents an array. To test if this value represents
+     * an array, check {@link #isArray()}.
+     *
+     * @return a list of array elements, or <code>null</code> when the value does not represent an
+     *         array.
+     * @since 0.19
+     */
+    @SuppressWarnings("unchecked")
+    public final List<DebugValue> getArray() {
+        List<DebugValue> arrayList = null;
+        Object value = get();
+        if (value instanceof TruffleObject) {
+            TruffleObject to = (TruffleObject) value;
+            if (JavaInterop.isArray(to)) {
+                List<Object> array = JavaInterop.asJavaObject(List.class, (TruffleObject) value);
+                arrayList = new ValueInteropList(getDebugger(), getSourceRoot(), array);
+            }
+        }
+        return arrayList;
+    }
+
+    /**
+     * Get a meta-object of this value, if any. The meta-object represents a description of the
+     * value, reveals it's kind and it's features.
+     *
+     * @return a value representing the meta-object, or <code>null</code>
+     * @since 0.22
+     */
+    public final DebugValue getMetaObject() {
+        Object obj = get();
+        if (obj == null) {
+            return null;
+        }
+        obj = getDebugger().getEnv().findMetaObject(getSourceRoot(), obj);
+        if (obj == null) {
+            return null;
+        } else {
+            return new HeapValue(getDebugger(), getSourceRoot(), obj);
+        }
+    }
+
+    /**
+     * Get a source location where this value is declared, if any.
+     *
+     * @return a source location of the object, or <code>null</code>
+     * @since 0.22
+     */
+    public final SourceSection getSourceLocation() {
+        Object obj = get();
+        if (obj == null) {
+            return null;
+        }
+        return getDebugger().getEnv().findSourceLocation(getSourceRoot(), obj);
+    }
+
+    abstract Debugger getDebugger();
+
+    abstract RootNode getSourceRoot();
+
+    final LanguageInfo getLanguageInfo() {
+        RootNode root = getSourceRoot();
+        if (root != null) {
+            return root.getLanguageInfo();
+        }
+        return null;
+    }
+
+    /**
      * Returns a string representation of the debug value.
      *
      * @since 0.17
@@ -125,19 +257,7 @@ public abstract class DebugValue /* TODO: future API implements Iterable<DebugVa
      * on FrameSlot.
      */
 
-    /*
-     * TODO future API: public abstract int getLength(); We could already implement this using
-     * interop, but without beeing able to iterate the values it does not make much sense.
-     */
-
-    /*
-     * TODO future API: public Iterator<DebugValue> iterator() for this we need a way to get key
-     * names of an object using interop.
-     */
-    /* TODO future API: public abstract boolean getValue(String); */
-
-    @SuppressWarnings("rawtypes")
-    static final class HeapValue extends DebugValue {
+    static class HeapValue extends DebugValue {
 
         // identifies the debugger and engine
         private final Debugger debugger;
@@ -151,11 +271,6 @@ public abstract class DebugValue /* TODO: future API implements Iterable<DebugVa
             this.value = value;
         }
 
-        @Override
-        Class<? extends TruffleLanguage> getLanguage() {
-            return Debugger.ACCESSOR.findLanguage(sourceRoot);
-        }
-
         @SuppressWarnings("unchecked")
         @Override
         public <T> T as(Class<T> clazz) {
@@ -163,11 +278,12 @@ public abstract class DebugValue /* TODO: future API implements Iterable<DebugVa
                 throw new IllegalStateException("Value is not readable");
             }
             if (clazz == String.class) {
+                Object val = get();
                 String stringValue;
                 if (sourceRoot == null) {
-                    stringValue = value.toString();
+                    stringValue = val.toString();
                 } else {
-                    stringValue = debugger.getEnv().toString(sourceRoot, value);
+                    stringValue = debugger.getEnv().toString(sourceRoot, val);
                 }
                 return (T) stringValue;
             }
@@ -197,6 +313,59 @@ public abstract class DebugValue /* TODO: future API implements Iterable<DebugVa
         @Override
         public boolean isWriteable() {
             return false;
+        }
+
+        @Override
+        Debugger getDebugger() {
+            return debugger;
+        }
+
+        @Override
+        RootNode getSourceRoot() {
+            return sourceRoot;
+        }
+
+    }
+
+    static final class PropertyValue extends HeapValue {
+
+        private final Map.Entry<Object, Object> property;
+
+        PropertyValue(Debugger debugger, RootNode root, Map.Entry<Object, Object> property) {
+            super(debugger, root, null);
+            this.property = property;
+        }
+
+        @Override
+        Object get() {
+            return property.getValue();
+        }
+
+        @Override
+        public String getName() {
+            String name;
+            RootNode sourceRoot = getSourceRoot();
+            Object propertyKey = property.getKey();
+            if (propertyKey instanceof String) {
+                name = (String) propertyKey;
+            } else {
+                if (sourceRoot == null) {
+                    name = Objects.toString(propertyKey);
+                } else {
+                    name = getDebugger().getEnv().toString(sourceRoot, propertyKey);
+                }
+            }
+            return name;
+        }
+
+        @Override
+        public boolean isWriteable() {
+            return true; // Suppose that yes...
+        }
+
+        @Override
+        public void set(DebugValue value) {
+            property.setValue(value.get());
         }
 
     }
@@ -232,12 +401,6 @@ public abstract class DebugValue /* TODO: future API implements Iterable<DebugVa
             throw new UnsupportedOperationException();
         }
 
-        @SuppressWarnings("rawtypes")
-        @Override
-        Class<? extends TruffleLanguage> getLanguage() {
-            return origin.findCurrentLanguage();
-        }
-
         @Override
         Object get() {
             origin.verifyValidState(false);
@@ -247,8 +410,8 @@ public abstract class DebugValue /* TODO: future API implements Iterable<DebugVa
         @Override
         public void set(DebugValue value) {
             origin.verifyValidState(false);
-            if (value.getLanguage() != getLanguage()) {
-                throw new IllegalStateException(String.format("Languages of set values do not match %s != %s.", value.getLanguage(), getLanguage()));
+            if (value.getLanguageInfo() != getLanguageInfo()) {
+                throw new IllegalStateException(String.format("Languages of set values do not match %s != %s.", value.getLanguageInfo(), getLanguageInfo()));
             }
             MaterializedFrame frame = origin.findTruffleFrame();
             frame.setObject(slot, value.get());
@@ -270,6 +433,16 @@ public abstract class DebugValue /* TODO: future API implements Iterable<DebugVa
         public boolean isWriteable() {
             origin.verifyValidState(false);
             return true;
+        }
+
+        @Override
+        Debugger getDebugger() {
+            return origin.event.getSession().getDebugger();
+        }
+
+        @Override
+        RootNode getSourceRoot() {
+            return origin.findCurrentRoot();
         }
 
     }

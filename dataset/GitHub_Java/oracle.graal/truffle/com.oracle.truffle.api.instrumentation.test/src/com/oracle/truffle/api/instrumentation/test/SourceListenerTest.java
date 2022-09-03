@@ -39,7 +39,7 @@ import com.oracle.truffle.api.instrumentation.SourceSectionFilter.IndexRange;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.api.vm.PolyglotEngine.Instrument;
+import com.oracle.truffle.api.vm.PolyglotRuntime;
 
 public class SourceListenerTest extends AbstractInstrumentationTest {
 
@@ -59,19 +59,26 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
     }
 
     private void testLoadSourceImpl(int runTimes) throws IOException {
-        Instrument instrument = engine.getInstruments().get("testLoadSource1");
+        int initialQueryCount = InstrumentationTestLanguage.getRootSourceSectionQueryCount();
+
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testLoadSource1");
         Source source1 = lines("STATEMENT(EXPRESSION, EXPRESSION)");
         // running the same source multiple times should not have any effect on the test result.
         for (int i = 0; i < runTimes; i++) {
             run(source1);
         }
 
+        Assert.assertEquals("unexpected getSourceSection calls without source listeners", initialQueryCount, InstrumentationTestLanguage.getRootSourceSectionQueryCount());
+
         instrument.setEnabled(true);
         TestLoadSource1 impl = instrument.lookup(TestLoadSource1.class);
-        Source source2 = lines("STATEMENT(EXPRESSION)");
+        Source source2 = lines("ROOT(DEFINE(f1, STATEMENT(EXPRESSION)), DEFINE(f2, STATEMENT)," +
+                        "BLOCK(CALL(f1), CALL(f2)))");
         for (int i = 0; i < runTimes; i++) {
             run(source2);
         }
+
+        Assert.assertNotEquals("expecting getSourceSection calls because of source listeners", initialQueryCount, InstrumentationTestLanguage.getRootSourceSectionQueryCount());
 
         assertEvents(impl.onlyNewEvents, source2);
         assertEvents(impl.allEvents, source1, source2);
@@ -126,7 +133,7 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
     @Test
     public void testLoadSourceException() throws IOException {
-        engine.getInstruments().get("testLoadSourceException").setEnabled(true);
+        engine.getRuntime().getInstruments().get("testLoadSourceException").setEnabled(true);
         run("");
         Assert.assertTrue(getErr().contains("TestLoadSourceExceptionClass"));
     }
@@ -156,7 +163,7 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
     @Test
     public void testAllowOnlySourceQueries() throws IOException {
-        Instrument instrument = engine.getInstruments().get("testAllowOnlySourceQueries");
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testAllowOnlySourceQueries");
         instrument.setEnabled(true);
         Source source = lines("");
         run(source);

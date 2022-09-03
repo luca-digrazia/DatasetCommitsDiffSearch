@@ -60,9 +60,6 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotRuntime;
 import java.util.Map;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
 
 public class InstrumentationTest extends AbstractInstrumentationTest {
 
@@ -83,25 +80,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public static class MetadataInstrument extends TruffleInstrument {
         @Override
         protected void onCreate(Env env) {
-        }
-    }
-
-    @Registration(name = "name", version = "version", id = "testBrokenRegistration", services = Runnable.class)
-    public static class BrokenRegistrationInstrument extends TruffleInstrument {
-        @Override
-        protected void onCreate(Env env) {
-        }
-    }
-
-    @Test
-    public void forgetsToRegisterADeclaredService() throws Exception {
-        PolyglotRuntime.Instrument handle = engine.getRuntime().getInstruments().get("testBrokenRegistration");
-        assertNotNull(handle);
-        handle.setEnabled(true);
-        Runnable r = handle.lookup(Runnable.class);
-        assertNull("The service isn't there", r);
-        if (!err.toString().contains("declares service java.lang.Runnable but doesn't register it")) {
-            fail(err.toString());
         }
     }
 
@@ -989,7 +967,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         engine.dispose();
         assertEquals(0, service.onDisposeCalls);
         forked.dispose();
-        forked.getRuntime().dispose();
         // dispose if all engines are disposed
         assertEquals(1, service.onDisposeCalls);
         engine = null; // avoid disposal in @After event

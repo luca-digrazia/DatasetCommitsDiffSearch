@@ -164,8 +164,8 @@ final class InstrumentationHandler {
         visitRoot(root, new InsertWrappersVisitor(executionBindings));
     }
 
-    void addInstrument(Object key, Class<?> clazz, String[] expectedServices) {
-        addInstrumenter(key, new InstrumentClientInstrumenter(sourceVM, clazz, out, err, in), expectedServices);
+    void addInstrument(Object key, Class<?> clazz) {
+        addInstrumenter(key, new InstrumentClientInstrumenter(sourceVM, clazz, out, err, in));
     }
 
     void disposeInstrumenter(Object key, boolean cleanupRequired) {
@@ -415,12 +415,12 @@ final class InstrumentationHandler {
         }
     }
 
-    private void addInstrumenter(Object key, AbstractInstrumenter instrumenter, String[] expectedServices) throws AssertionError {
+    private void addInstrumenter(Object key, AbstractInstrumenter instrumenter) throws AssertionError {
         Object previousKey = instrumenterMap.putIfAbsent(key, instrumenter);
         if (previousKey != null) {
             throw new AssertionError("Instrumenter already present.");
         }
-        instrumenter.initialize(expectedServices);
+        instrumenter.initialize();
     }
 
     private static Collection<EventBinding<?>> filterBindingsForInstrumenter(Collection<EventBinding<?>> bindings, AbstractInstrumenter instrumenter) {
@@ -845,7 +845,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        void initialize(String[] expectedServices) {
+        void initialize() {
             if (TRACE) {
                 trace("Initialize instrument %s class %s %n", instrument, instrumentClass);
             }
@@ -858,16 +858,6 @@ final class InstrumentationHandler {
             }
             try {
                 services = env.onCreate(instrument);
-                if (expectedServices != null) {
-                    LOOP: for (String name : expectedServices) {
-                        for (Object obj : services) {
-                            if (findType(name, obj.getClass())) {
-                                continue LOOP;
-                            }
-                        }
-                        failInstrumentInitialization(String.format("%s declares service %s but doesn't register it", instrumentClass.getName(), name), null);
-                    }
-                }
             } catch (Throwable e) {
                 failInstrumentInitialization(String.format("Failed calling onCreate of instrument class %s", instrumentClass.getName()), e);
                 return;
@@ -875,24 +865,6 @@ final class InstrumentationHandler {
             if (TRACE) {
                 trace("Initialized instrument %s class %s %n", instrument, instrumentClass);
             }
-        }
-
-        private boolean findType(String name, Class<?> type) {
-            if (type == null) {
-                return false;
-            }
-            if (type.getName().equals(name)) {
-                return true;
-            }
-            if (findType(name, type.getSuperclass())) {
-                return true;
-            }
-            for (Class<?> inter : type.getInterfaces()) {
-                if (findType(name, inter)) {
-                    return true;
-                }
-            }
-            return false;
         }
 
         private void failInstrumentInitialization(String message, Throwable t) {
@@ -993,7 +965,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        void initialize(String[] expectedServices) {
+        void initialize() {
             // nothing to do
         }
 
@@ -1015,7 +987,7 @@ final class InstrumentationHandler {
      */
     abstract class AbstractInstrumenter extends Instrumenter {
 
-        abstract void initialize(String[] expectedServices);
+        abstract void initialize();
 
         abstract void dispose();
 
@@ -1335,8 +1307,8 @@ final class InstrumentationHandler {
             }
 
             @Override
-            public void addInstrument(Object instrumentationHandler, Object key, Class<?> instrumentClass, String[] expectedServices) {
-                ((InstrumentationHandler) instrumentationHandler).addInstrument(key, instrumentClass, expectedServices);
+            public void addInstrument(Object instrumentationHandler, Object key, Class<?> instrumentClass) {
+                ((InstrumentationHandler) instrumentationHandler).addInstrument(key, instrumentClass);
             }
 
             @Override

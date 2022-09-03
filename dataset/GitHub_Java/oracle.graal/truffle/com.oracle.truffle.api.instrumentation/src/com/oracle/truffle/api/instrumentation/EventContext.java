@@ -27,9 +27,10 @@ package com.oracle.truffle.api.instrumentation;
 import java.io.IOException;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.LanguageInfo;
+import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.AccessorInstrumentHandler;
+import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -101,8 +102,11 @@ public final class EventContext {
     public CallTarget parseInContext(Source source, String... argumentNames) throws IOException {
         Node instrumentedNode = getInstrumentedNode();
         LanguageInfo languageInfo = instrumentedNode.getRootNode().getLanguageInfo();
-        assert languageInfo != null : "instrumented nodes must be assocated with a language info";
-        return AccessorInstrumentHandler.langAccess().parse(AccessorInstrumentHandler.langAccess().getEnv(languageInfo), source, instrumentedNode, argumentNames);
+        if (languageInfo == null) {
+            throw new IllegalArgumentException("No language available for given node.");
+        }
+        Env env = AccessorInstrumentHandler.engineAccess().getEnvForInstrument(languageInfo);
+        return AccessorInstrumentHandler.langAccess().parse(env, source, instrumentedNode, argumentNames);
     }
 
     /**

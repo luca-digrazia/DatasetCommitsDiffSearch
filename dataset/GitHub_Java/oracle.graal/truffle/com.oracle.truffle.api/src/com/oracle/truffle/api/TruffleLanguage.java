@@ -50,7 +50,6 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.ReadOnlyArrayList;
-import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
@@ -74,45 +73,56 @@ import com.oracle.truffle.api.source.SourceSection;
  * initialized for the lifetime of the engine and is isolated from the environment in any other
  * engine instance.
  * <p>
- * A new {@link TruffleLanguage language implementation} instance is instantiated for each runtime
- * that is created using the {@linkplain com.oracle.truffle.api.vm.PolyglotRuntime.Builder#build()
- * runtime builder}. If an engine is created without a runtime then the language implementation
- * instance is created for each engine.
+ * A new {@link TruffleLanguage language implementation} instance is instantiated for each engine
+ * that is created using the {@linkplain com.oracle.truffle.api.vm.PolyglotEngine.Builder#build()
+ * engine builder}. The same language implementation instance is shared between multiple
+ * {@linkplain com.oracle.truffle.api.vm.PolyglotEngine#fork() forked} engine instances. When a fork
+ * is requested and a context instance was already {@link #createContext(Env) created}, then the
+ * language implementation will be asked to create a fork from an existing context by calling
+ * {@link #forkContext(Object)}. Else, if the language is used for the first time, then a new
+ * context instance is {@link #createContext(Env) created} instead.
  * <p>
- * Global state can be shared between multiple context instances by saving them as in a field of the
+ * State can be shared between multiple forked context instances by saving them as in a field of the
  * {@link TruffleLanguage} subclass. The implementation needs to ensure data isolation between the
  * contexts. However ASTs or assumptions can be shared across multiple contexts if modifying them
- * does not affect language semantics. Languages are strongly discouraged from using static mutable
- * state in their languages. Instead language implementation instances should be used instead.
- * <p>
- * The methods in {@link TruffleLanguage} might be invoked from multiple threads. However, one
- * context instance is guaranteed to be invoked only from one single thread. Therefore context
- * objects don't need to be thread-safe. Code that is shared using the {@link TruffleLanguage}
- * instance needs to be prepared to be accessed from multiple threads.
+ * does not affect language semantics.
  * <p>
  * Whenever an engine is disposed then each initialized context will be disposed
  * {@link #disposeContext(Object) disposed}.
  *
  * <h4>Cardinalities</h4>
  *
- * <i>One</i> host virtual machine depends on other system instances using the following
+ * <i>One</i> language implementation instance refers to other classes using the following
  * cardinalities:
+ * <ul>
+ * <li><i>many</i> {@linkplain #createContext(Env) created} language contexts
+ * <li><i>many</i> {@linkplain #forkContext(Object) forked} language contexts
+ * <li><i>many</i> {@linkplain TruffleRuntime#createCallTarget(RootNode) created} {@link CallTarget
+ * call targets} potentially shared between contexts.
+ * </ul>
  *
- * <pre>
- * K = number of installed languages
- * I = number of installed instruments
- * N = unbounded
+ * <h4>Context Mutability</h4>
  *
- * - 1:Host VM Processs
- *   - N:PolyglotRuntime
- *     - K:TruffleLanguage
- *     - I:PolyglotRuntime.Instrument
- *       - 1:TruffleInstrument
- *   - N:PolyglotEngine
- *     - 1:Thread
- *     - K:PolyglotEngine.Language
- *       - 1:Language Context
- * </pre>
+ * The {@link #getContextReference() current} context can vary between
+ * {@link RootNode#execute(VirtualFrame) executions}. Therefore the current context should not be
+ * stored in a field of the AST unless every context reference is known to be always
+ * {@link ContextReference#isFinal() final}.
+ *
+ * The context reference is always final if the following conditions apply:
+ * <ul>
+ * <li>{@link TruffleLanguage#forkContext(Object) Forking} the context always throws
+ * {@link UnsupportedOperationException} (default behavior) or ensures that all ASTs stored in the
+ * context are copied without references to the original context.
+ * <li>No AST is shared across context instances. In other words the {@link TruffleLanguage}
+ * instance is not used to share ASTs between context instances.
+ * </ul>
+ * These conditions are not verified by the framework, therefore it is recommended to insert an
+ * assertion if the context is assumed always {@link ContextReference#isFinal() final}.
+ * <p>
+ * If one of the conditions is not satisfied then the language implementation needs to be prepared
+ * for varying context instances i.e. {@link ContextReference#isFinal()} needs to be checked to
+ * remain <code>true</code> while the context reference is stored in the AST. If a reference becomes
+ * non-final all fields directly storing the current context must be cleared.
  *
  * <h4>Language Configuration</h4>
  *
@@ -162,7 +172,7 @@ import com.oracle.truffle.api.source.SourceSection;
 public abstract class TruffleLanguage<C> {
 
     // get and isFinal are frequent operations -> cache the engine access call
-    @CompilationFinal private LanguageInfo languageInfo;
+    @CompilationFinal private Env env;
     @CompilationFinal private ContextReference<C> reference;
     @CompilationFinal private boolean singletonLanguage;
 
@@ -252,7 +262,7 @@ public abstract class TruffleLanguage<C> {
      * @return internal data of the language in given environment
      * @since 0.8 or earlier
      */
-    protected abstract C createContext(Env env);
+    protected abstract C createContext(@SuppressWarnings("hiding") Env env);
 
     /**
      * Perform any complex initialization. The
@@ -644,10 +654,15 @@ public abstract class TruffleLanguage<C> {
      * tried to be created or accessed outside of the execution of an engine.
      * <p>
      * The returned reference identity is undefined. It might either return always the same instance
-     * or a new reference for each invocation of the method. Please note that the current context
-     * might vary between {@link RootNode#execute(VirtualFrame) executions} if resources or code is
-     * shared between multiple contexts.
+     * or a new reference for each invocation of the method.
+     * <p>
+     * Please note that the current context can vary between {@link RootNode#execute(VirtualFrame)
+     * executions}. Therefore the current context should not be stored in a field of an AST unless
+     * the context reference is known to be always {@link ContextReference#isFinal() final} for your
+     * language. For further details on final contexts please refer to the javadoc in
+     * {@link ContextReference#isFinal()}.
      *
+     * @see ContextReference#isFinal()
      * @since 0.25
      */
     public final ContextReference<C> getContextReference() {
@@ -657,11 +672,11 @@ public abstract class TruffleLanguage<C> {
         return reference;
     }
 
-    void initialize(LanguageInfo language, boolean singleton) {
+    void initialize(Env initEnv, boolean singleton) {
         this.singletonLanguage = singleton;
         if (!singleton) {
-            this.languageInfo = language;
-            this.reference = new ContextReference<>(API.nodes().getEngineObject(languageInfo));
+            this.env = initEnv;
+            this.reference = new ContextReference<>(env.languageShared);
         }
     }
 
@@ -681,6 +696,56 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
+     * Represents public information about this language.
+     *
+     * @since 0.25
+     */
+    public static final class Info {
+
+        private final String name;
+        private final String version;
+        private final Set<String> mimeTypes;
+        final Env env;
+
+        private Info(Env env, String name, String version, Set<String> mimeTypes) {
+            this.name = name;
+            this.version = version;
+            this.mimeTypes = mimeTypes;
+            this.env = env;
+        }
+
+        /**
+         * Returns the unique name of the language. This name is equivalent to the name returned by
+         * {@link com.oracle.truffle.api.vm.PolyglotEngine.Language#getName()}.
+         *
+         * @since 0.25
+         */
+        public String getName() {
+            return name;
+        }
+
+        /**
+         * Returns the version of the language. This version is equivalent to the name returned by
+         * {@link com.oracle.truffle.api.vm.PolyglotEngine.Language#getVersion()}.
+         *
+         * @since 0.25
+         */
+        public String getVersion() {
+            return version;
+        }
+
+        /**
+         * Returns the MIME types supported by this language. This set is equivalent to the set
+         * returned by {@link com.oracle.truffle.api.vm.PolyglotEngine.Language#getMimeTypes()}.
+         *
+         * @since 0.25
+         */
+        public Set<String> getMimeTypes() {
+            return mimeTypes;
+        }
+    }
+
+    /**
      * Represents execution environment of the {@link TruffleLanguage}. Each active
      * {@link TruffleLanguage} receives instance of the environment before any code is executed upon
      * it. The environment has knowledge of all active languages and can exchange symbols between
@@ -690,35 +755,64 @@ public abstract class TruffleLanguage<C> {
      */
     public static final class Env {
 
-        private final Object vmObject;
-        private final LanguageInfo language;
-        private final TruffleLanguage<Object> spi;
+        private final Object languageShared;
+        private final TruffleLanguage<Object> lang;
         private final InputStream in;
         private final OutputStream err;
         private final OutputStream out;
         private final Map<String, Object> config;
         private List<Object> services;
-        @CompilationFinal private Object context;
+        private TruffleLanguage.Info info;
 
-        @SuppressWarnings("unchecked")
-        private Env(Object vmObject, LanguageInfo language, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config) {
-            this.vmObject = vmObject;
-            this.language = language;
-            this.spi = (TruffleLanguage<Object>) API.nodes().getLanguageSpi(language);
+        private Env(Object languageShared, TruffleLanguage<Object> lang, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config) {
+            this.languageShared = languageShared;
             this.in = in;
             this.err = err;
             this.out = out;
+            this.lang = lang;
             this.config = config;
         }
 
-        TruffleLanguage<Object> getSpi() {
-            return spi;
-        }
-
         void checkDisposed() {
-            if (AccessAPI.engineAccess().isDisposed(vmObject)) {
+            if (AccessAPI.engineAccess().isDisposed(languageShared)) {
                 throw new IllegalStateException("Language environment is already disposed.");
             }
+        }
+
+        /**
+         * Forks all initialized language contexts and creates a {@link CallTarget call target} that
+         * executes the given {@link CallTarget call target} within the newly forked context. Throws
+         * {@link UnsupportedOperationException} if one of the initialized languages does not
+         * support {@link TruffleLanguage#forkContext(Object) forking}. All arguments passed when
+         * {@link CallTarget#call(Object...) calling} the returned target are provided as
+         * {@link VirtualFrame#getArguments() arguments} within the
+         * {@link RootNode#execute(VirtualFrame)} implementation of the given {@link RootNode}.
+         * <p>
+         * If possible make sure to {@link #disposeFork(CallTarget) dispose} the fork if it is not
+         * longer used. If not disposed manually then the fork is disposed automatically with the
+         * current context.
+         * <p>
+         * Example usage:{@link TruffleLanguageSnippets#forkLanguageContext}
+         *
+         * @see com.oracle.truffle.api.vm.PolyglotEngine#fork()
+         * @since 0.25
+         */
+        /* NOT NOW */
+        CallTarget createFork(CallTarget root) throws UnsupportedOperationException {
+            checkDisposed();
+            return AccessAPI.engineAccess().fork(languageShared, root);
+        }
+
+        /**
+         * Throws {@link IllegalArgumentException} if the given {@link CallTarget call target} does
+         * not originate from {@link #createFork(CallTarget)}.
+         *
+         * @since 0.25
+         */
+        /* NOT NOW */
+        void disposeFork(CallTarget forkTarget) {
+            checkDisposed();
+            AccessAPI.engineAccess().disposeFork(languageShared, forkTarget);
         }
 
         /**
@@ -733,7 +827,7 @@ public abstract class TruffleLanguage<C> {
          */
         public Object importSymbol(String globalName) {
             checkDisposed();
-            Iterator<? extends Object> it = AccessAPI.engineAccess().importSymbols(vmObject, this, globalName).iterator();
+            Iterator<? extends Object> it = AccessAPI.engineAccess().importSymbols(languageShared, this, globalName).iterator();
             return it.hasNext() ? it.next() : null;
         }
 
@@ -752,7 +846,7 @@ public abstract class TruffleLanguage<C> {
          */
         public Iterable<? extends Object> importSymbols(String globalName) {
             checkDisposed();
-            return AccessAPI.engineAccess().importSymbols(vmObject, this, globalName);
+            return AccessAPI.engineAccess().importSymbols(languageShared, this, globalName);
         }
 
         /**
@@ -767,7 +861,7 @@ public abstract class TruffleLanguage<C> {
          */
         public boolean isMimeTypeSupported(String mimeType) {
             checkDisposed();
-            return AccessAPI.engineAccess().isMimeTypeSupported(vmObject, mimeType);
+            return AccessAPI.engineAccess().isMimeTypeSupported(languageShared, mimeType);
         }
 
         /**
@@ -786,7 +880,7 @@ public abstract class TruffleLanguage<C> {
          */
         public CallTarget parse(Source source, String... argumentNames) {
             checkDisposed();
-            return AccessAPI.engineAccess().getEnvForLanguage(vmObject, source.getMimeType()).spi.parse(source, null, null, argumentNames);
+            return AccessAPI.engineAccess().getEnvForLanguage(languageShared, source.getMimeType()).lang.parse(source, null, null, argumentNames);
         }
 
         /**
@@ -885,37 +979,37 @@ public abstract class TruffleLanguage<C> {
         @TruffleBoundary
         <E extends TruffleLanguage> E getLanguage(Class<E> languageClass) {
             checkDisposed();
-            if (languageClass != spi.getClass()) {
+            if (languageClass != lang.getClass()) {
                 throw new IllegalArgumentException("Invalid access to language " + languageClass + ".");
             }
-            return languageClass.cast(spi);
+            return languageClass.cast(lang);
         }
 
-        Object findExportedSymbol(String globalName, boolean onlyExplicit) {
-            return spi.findExportedSymbol(context, globalName, onlyExplicit);
+        Object findExportedSymbol(Object context, String globalName, boolean onlyExplicit) {
+            return lang.findExportedSymbol(context, globalName, onlyExplicit);
         }
 
-        Object getLanguageGlobal() {
-            return spi.getLanguageGlobal(context);
+        Object getLanguageGlobal(Object context) {
+            return lang.getLanguageGlobal(context);
         }
 
-        Object findMetaObject(Object obj) {
+        Object findMetaObject(Object context, Object obj) {
             final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
-            return spi.findMetaObject(context, rawValue);
+            return lang.findMetaObject(context, rawValue);
         }
 
-        SourceSection findSourceLocation(Object obj) {
+        SourceSection findSourceLocation(Object context, Object obj) {
             final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
-            return spi.findSourceLocation(context, rawValue);
+            return lang.findSourceLocation(context, rawValue);
         }
 
-        void dispose() {
-            spi.disposeContext(context);
+        void dispose(Object context) {
+            lang.disposeContext(context);
         }
 
-        void postInit() {
+        void postInit(Object context) {
             try {
-                spi.initializeContext(context);
+                lang.initializeContext(context);
             } catch (RuntimeException ex) {
                 throw ex;
             } catch (Exception ex) {
@@ -923,13 +1017,13 @@ public abstract class TruffleLanguage<C> {
             }
         }
 
-        String toStringIfVisible(Object value, boolean checkVisibility) {
+        String toStringIfVisible(Object context, Object value, boolean checkVisibility) {
             if (checkVisibility) {
-                if (!spi.isVisible(context, value)) {
+                if (!lang.isVisible(context, value)) {
                     return null;
                 }
             }
-            return spi.toString(context, value);
+            return lang.toString(context, value);
         }
 
     }
@@ -939,8 +1033,11 @@ public abstract class TruffleLanguage<C> {
      * created using {@link TruffleLanguage#getContextReference()} and the current context can be
      * accessed using the {@link ContextReference#get()} method of the returned reference.
      * <p>
-     * Please note that the current context might vary between {@link RootNode#execute(VirtualFrame)
-     * executions} if resources or code is shared between multiple contexts.
+     * Please note that the current context returned by {@link ContextReference#get()} can vary
+     * between {@link RootNode#execute(VirtualFrame) executions}. Therefore the current context
+     * should not be stored in a field of an AST unless the context reference is known to be always
+     * {@link ContextReference#isFinal() final} for your language. For further details on final
+     * contexts please refer to the javadoc in {@link ContextReference#isFinal()}.
      *
      * @since 0.25
      */
@@ -958,15 +1055,34 @@ public abstract class TruffleLanguage<C> {
          * creation} or in the language class constructor an {@link IllegalStateException} is
          * thrown. This methods is designed to be called safely from compiled code paths.
          * <p>
-         * Please note that the current context might vary between
-         * {@link RootNode#execute(VirtualFrame) executions} if resources or code is shared between
-         * multiple contexts.
+         * Please note that the current context can vary between
+         * {@link RootNode#execute(VirtualFrame) executions}. Therefore the current context should
+         * not be stored in a field of an AST unless the context reference is known to be always
+         * {@link ContextReference#isFinal() final} for your language. For further details please
+         * refer to the Context Mutability section in the {@link TruffleLanguage} javadoc.
          *
          * @since 0.25
          */
         @SuppressWarnings("unchecked")
         public C get() {
             return (C) AccessAPI.engineAccess().contextReferenceGet(languageShared);
+        }
+
+                        /**
+                         * Returns <code>true</code> if this reference is expected to always return
+                         * the same context instance. It returns <code>false</code> if the context
+                         * returned by {@link #get()} can differ between
+                         * {@link RootNode#execute(VirtualFrame) executions}. Therefore the current
+                         * context should not be stored in a field of an AST unless the context
+                         * reference is known to be always {@link ContextReference#isFinal() final}
+                         * for the language. A context reference that that is non-final will never
+                         * become final again. For further details please refer to the Context
+                         * Mutability section in the {@link TruffleLanguage} javadoc.
+                         *
+                         * @since 0.25
+                         */
+                        /* NOTNOW public */ boolean isFinal() {
+            return AccessAPI.engineAccess().contextReferenceFinal(languageShared);
         }
 
     }
@@ -983,10 +1099,6 @@ public abstract class TruffleLanguage<C> {
             return API.instrumentSupport();
         }
 
-        static Nodes nodesAccess() {
-            return API.nodes();
-        }
-
         @Override
         protected LanguageSupport languageSupport() {
             return new LanguageImpl();
@@ -1000,41 +1112,34 @@ public abstract class TruffleLanguage<C> {
 
     static final class LanguageImpl extends Accessor.LanguageSupport {
 
+        @SuppressWarnings("unchecked")
         @Override
-        public LanguageInfo initializeLanguage(Object vm, TruffleLanguage<?> language, boolean legacyLanguage, String name, String version, Set<String> mimeTypes) {
-            LanguageInfo info = AccessAPI.nodesAccess().createLanguageInfo(vm, language, name, version, mimeTypes);
-            language.initialize(info, legacyLanguage);
-            return info;
-        }
-
-        @Override
-        public Object getContext(Env env) {
-            return env.context;
-        }
-
-        @Override
-        public Env createEnv(Object vmObject, LanguageInfo language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config) {
-            Env env = new Env(vmObject, language, stdOut, stdErr, stdIn, config);
+        public Env createEnv(Object languageShared, TruffleLanguage<?> language, boolean legacyLanguage, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config,
+                        String name,
+                        String version, Set<String> mimeTypes) {
+            Env env = new Env(languageShared, (TruffleLanguage<Object>) language, stdOut, stdErr, stdIn, config);
+            Info info = new Info(env, name, version, mimeTypes);
+            env.info = info;
             LinkedHashSet<Object> collectedServices = new LinkedHashSet<>();
-            AccessAPI.instrumentAccess().collectEnvServices(collectedServices, API.nodes().getEngineObject(language), language);
+            AccessAPI.instrumentAccess().collectEnvServices(collectedServices, languageShared, info);
             env.services = new ArrayList<>(collectedServices);
-            env.context = env.getSpi().createContext(env);
+            language.initialize(env, legacyLanguage);
             return env;
         }
 
         @Override
-        public void postInitEnv(Env env) {
-            env.postInit();
+        public void postInitEnv(Env env, Object context) {
+            env.postInit(context);
         }
 
         @Override
         public CallTarget parse(Env env, Source code, Node context, String... argumentNames) {
-            return env.getSpi().parse(code, context, null, argumentNames);
+            return env.lang.parse(code, context, null, argumentNames);
         }
 
         @Override
-        public LanguageInfo getLanguageInfo(Env env) {
-            return env.language;
+        public Info getInfo(Env env) {
+            return env.info;
         }
 
         @Override
@@ -1044,13 +1149,13 @@ public abstract class TruffleLanguage<C> {
                 throw new IllegalArgumentException("Cannot evaluate in context using a node that is not yet adopated using a RootNode.");
             }
 
-            LanguageInfo info = rootNode.getLanguageInfo();
-            if (info == null) {
+            Env env = rootNode.getLanguageInfo().env;
+            if (env == null) {
                 throw new IllegalArgumentException("Cannot evaluate in context using a without an associated TruffleLanguage.");
             }
 
             final Source source = Source.newBuilder(code).name("eval in context").mimeType("content/unknown").build();
-            CallTarget target = API.nodes().getLanguageSpi(info).parse(source, node, mFrame);
+            CallTarget target = env.lang.parse(source, node, mFrame);
 
             RootNode exec;
             if (target instanceof RootCallTarget) {
@@ -1173,53 +1278,91 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public Object findExportedSymbol(TruffleLanguage.Env env, String globalName, boolean onlyExplicit) {
-            return env.findExportedSymbol(globalName, onlyExplicit);
+        public Object findExportedSymbol(TruffleLanguage.Env env, Object context, String globalName, boolean onlyExplicit) {
+            return env.findExportedSymbol(context, globalName, onlyExplicit);
         }
 
         @Override
-        public LanguageInfo getLanguageInfo(TruffleLanguage<?> language) {
-            return language.languageInfo;
+        public Info getLanguageInfo(TruffleLanguage<?> language) {
+            return language.env.info;
         }
 
         @Override
         @SuppressWarnings("rawtypes")
-        public LanguageInfo getLegacyLanguageInfo(Class<? extends TruffleLanguage> languageClass) {
+        public Info getLegacyLanguageInfo(Class<? extends TruffleLanguage> languageClass) {
             Object vm = AccessAPI.engineAccess().getCurrentVM();
             if (vm == null) {
                 return null;
             }
             Env env = AccessAPI.engineAccess().findEnv(vm, languageClass, false);
             if (env != null) {
-                return env.language;
+                return env.info;
             } else {
                 return null;
             }
         }
 
         @Override
-        public Object languageGlobal(TruffleLanguage.Env env) {
-            return env.getLanguageGlobal();
+        public TruffleLanguage<?> getLanguage(Env env) {
+            return env.lang;
         }
 
         @Override
-        public void dispose(Env env) {
-            env.dispose();
+        public Env getEnv(Info info) {
+            return info.env;
         }
 
         @Override
-        public String toStringIfVisible(Env env, Object value, boolean checkVisibility) {
-            return env.toStringIfVisible(value, checkVisibility);
+        public Object languageGlobal(TruffleLanguage.Env env, Object context) {
+            return env.getLanguageGlobal(context);
         }
 
         @Override
-        public Object findMetaObject(Env env, Object obj) {
-            return env.findMetaObject(obj);
+        public Object createContext(Env env) {
+            return env.lang.createContext(env);
         }
 
         @Override
-        public SourceSection findSourceLocation(Env env, Object obj) {
-            return env.findSourceLocation(obj);
+        public Object forkContext(Env env, Object context) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void dispose(Env env, Object context) {
+            env.dispose(context);
+        }
+
+        @Override
+        public String toStringIfVisible(Env env, Object context, Object value, boolean checkVisibility, boolean resolveContext) {
+            return env.toStringIfVisible(resolveContext(env, context, resolveContext), value, checkVisibility);
+        }
+
+        @Override
+        public Object findMetaObject(Env env, Object context, Object obj, boolean resolveContext) {
+            return env.findMetaObject(resolveContext(env, context, resolveContext), obj);
+        }
+
+        @Override
+        public SourceSection findSourceLocation(Env env, Object context, Object obj, boolean resolveContext) {
+            return env.findSourceLocation(resolveContext(env, context, resolveContext), obj);
+        }
+
+        private static Object resolveContext(Env env, Object context, boolean resolveContext) {
+            if (context == null && resolveContext) {
+                TruffleLanguage<Object> lang = env.lang;
+                if (lang.env == null) {
+                    // legacy mode to get to he current context
+                    return lang.findContext(lang.createFindContextNode());
+                } else {
+                    return lang.getContextReference().get();
+                }
+            }
+            return context;
+        }
+
+        @Override
+        public Object getLanguageShared(Info info) {
+            return info.env.languageShared;
         }
 
     }
@@ -1247,6 +1390,51 @@ class TruffleLanguageSnippets {
     }
 
     // @formatter:off
+    abstract
+    // BEGIN: TruffleLanguageSnippets#forkLanguageContext
+    class MyForkingLanguage extends TruffleLanguage<Context> {
+
+        @Override
+        protected Context createContext(Env env) {
+            if (Boolean.TRUE.equals(env.getConfig().get("fork"))) {
+                return forkContext((Context) env.getConfig().get("context"));
+            }
+            return new Context(env);
+        }
+
+        private Context forkContext(Context context) {
+            // our language needs to support forking
+            return context.fork();
+        }
+
+        void forkLanguageContext(Env env) {
+            Context originalContext = getContextReference().get();
+            CallTarget target = env.createFork(
+                            Truffle.getRuntime().createCallTarget(
+                                            new RootNode(this) {
+
+                final ContextReference<Context> reference = getContextReference();
+
+                @Override
+                public Object execute(VirtualFrame frame) {
+                    Context forkedContext = reference.get();
+                    // we have a forked context to use
+                    assert forkedContext != originalContext;
+                    return forkedContext;
+                }
+            }));
+
+            // we can call many times. the fork is only created once.
+            target.call();
+            target.call();
+            target.call();
+
+            // we can dispose the forked context if we know we don't need it
+            env.disposeFork(target);
+        }
+    }
+    // END: TruffleLanguageSnippets#forkLanguageContext
+
     abstract
     // BEGIN: TruffleLanguageSnippets.MyLanguage#createContext
     class MyLanguage extends TruffleLanguage<Context> {
