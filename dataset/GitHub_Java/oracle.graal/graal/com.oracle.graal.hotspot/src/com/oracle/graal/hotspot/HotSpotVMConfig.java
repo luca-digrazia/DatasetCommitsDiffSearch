@@ -329,11 +329,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int klassOffset;
 
     /**
-     * The offset of the injected array klass field in a {@link Class}.
-     */
-    public int arrayKlassOffset;
-
-    /**
      * The offset of the injected graal_mirror field in a {@link Class}.
      */
     public int graalMirrorInClassOffset;
