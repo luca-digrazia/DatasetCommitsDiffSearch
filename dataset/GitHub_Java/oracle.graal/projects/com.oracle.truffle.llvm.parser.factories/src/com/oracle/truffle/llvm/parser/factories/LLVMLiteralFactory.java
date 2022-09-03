@@ -77,11 +77,13 @@ import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI16Arr
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI32ArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI64ArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI8ArrayLiteralNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMAccessGlobalVariableStorageNodeGen;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableStorage;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
@@ -138,14 +140,6 @@ public final class LLVMLiteralFactory {
                 return new LLVMFloatLiteralNode(-1);
             case DOUBLE:
                 return new LLVMDoubleLiteralNode(-1);
-            case I1_POINTER:
-            case I8_POINTER:
-            case I16_POINTER:
-            case I32_POINTER:
-            case I64_POINTER:
-            case HALF_POINTER:
-            case FLOAT_POINTER:
-            case DOUBLE_POINTER:
             case ADDRESS:
                 return new LLVMAddressLiteralNode(LLVMAddress.createUndefinedAddress());
             case FUNCTION_ADDRESS:
@@ -196,14 +190,6 @@ public final class LLVMLiteralFactory {
             case I64:
                 long val = Long.decode(stringValue);
                 return new LLVMI64LiteralNode(val);
-            case I1_POINTER:
-            case I8_POINTER:
-            case I16_POINTER:
-            case I32_POINTER:
-            case I64_POINTER:
-            case HALF_POINTER:
-            case FLOAT_POINTER:
-            case DOUBLE_POINTER:
             case ADDRESS:
                 if (stringValue.equals("null")) {
                     return new LLVMAddressLiteralNode(LLVMAddress.fromLong(0));
@@ -372,16 +358,14 @@ public final class LLVMLiteralFactory {
                 return new LLVMFloatLiteralNode((float) value);
             case DOUBLE:
                 return new LLVMDoubleLiteralNode((double) value);
-            case I1_POINTER:
-            case I8_POINTER:
-            case I16_POINTER:
-            case I32_POINTER:
-            case I64_POINTER:
-            case HALF_POINTER:
-            case FLOAT_POINTER:
-            case DOUBLE_POINTER:
             case ADDRESS:
-                return new LLVMAddressLiteralNode((LLVMAddress) value);
+                if (value instanceof LLVMAddress) {
+                    return new LLVMAddressLiteralNode((LLVMAddress) value);
+                } else if (value instanceof LLVMGlobalVariableStorage) {
+                    return LLVMAccessGlobalVariableStorageNodeGen.create((LLVMGlobalVariableStorage) value);
+                } else {
+                    throw new AssertionError(value.getClass());
+                }
             case FUNCTION_ADDRESS:
                 return LLVMFunctionLiteralNodeGen.create((LLVMFunctionDescriptor) value);
             default:
@@ -418,14 +402,6 @@ public final class LLVMLiteralFactory {
             case ARRAY:
             case STRUCT:
                 return LLVMAddressArrayCopyNodeGen.create(arrayValues.toArray(new LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
-            case I1_POINTER:
-            case I8_POINTER:
-            case I16_POINTER:
-            case I32_POINTER:
-            case I64_POINTER:
-            case HALF_POINTER:
-            case FLOAT_POINTER:
-            case DOUBLE_POINTER:
             case ADDRESS:
                 return LLVMAddressArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
             case FUNCTION_ADDRESS:

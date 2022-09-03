@@ -38,11 +38,11 @@ import com.intel.llvm.ireditor.lLVM_IR.SimpleConstant;
 import com.intel.llvm.ireditor.lLVM_IR.ValueRef;
 import com.intel.llvm.ireditor.types.ResolvedAnyIntegerType;
 import com.intel.llvm.ireditor.types.ResolvedType;
-import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
+import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableStorage;
 
 /*
  * http://llvm.org/docs/LangRef.html#constant-expressions
@@ -51,7 +51,7 @@ public final class LLVMConstantEvaluator {
 
     private static LLVMParserRuntime runtime;
 
-    public static Object evaluateConstant(LLVMParserRuntimeTextual curRuntime, Constant index) {
+    public static Object evaluateConstant(LLVMParserRuntime curRuntime, Constant index) {
         LLVMConstantEvaluator.runtime = curRuntime;
         ResolvedType type = curRuntime.resolve(index);
         if (!(type instanceof ResolvedAnyIntegerType)) {
@@ -78,8 +78,7 @@ public final class LLVMConstantEvaluator {
     }
 
     private static Object evaluateGlobalVariable(GlobalVariable ref) {
-        com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable globalVariable = LLVMToBitcodeAdapter.resolveGlobalVariable((LLVMParserRuntimeTextual) runtime, ref);
-        Object addr = runtime.getGlobalAddress(globalVariable);
+        Object addr = runtime.getGlobalAddress(ref);
         assert addr != null;
         return addr;
     }
@@ -121,14 +120,14 @@ public final class LLVMConstantEvaluator {
     }
 
     private static boolean isAddress(Object obj) {
-        return obj instanceof LLVMAddress || obj instanceof LLVMGlobalVariableDescriptor;
+        return obj instanceof LLVMAddress || obj instanceof LLVMGlobalVariableStorage;
     }
 
     private static long asLongAddress(Object obj) {
         if (obj instanceof LLVMAddress) {
             return ((LLVMAddress) obj).getVal();
-        } else if (obj instanceof LLVMGlobalVariableDescriptor) {
-            return ((LLVMGlobalVariableDescriptor) obj).getNativeStorage().getVal();
+        } else if (obj instanceof LLVMGlobalVariableStorage) {
+            return ((LLVMGlobalVariableStorage) obj).getNativeStorage().getVal();
         } else {
             throw new AssertionError(obj);
         }
