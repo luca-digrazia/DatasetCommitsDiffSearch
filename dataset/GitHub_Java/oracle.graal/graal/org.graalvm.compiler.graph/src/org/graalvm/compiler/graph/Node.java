@@ -304,7 +304,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
      * @return an {@link NodeIterable iterable} for all non-null successor edges.
      */
     public NodeIterable<Node> successors() {
-        assert !this.isDeleted();
+        assert !this.isDeleted() : this;
         return nodeClass.getSuccessorIterable(this);
     }
 
@@ -328,7 +328,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         if (usage1 == null) {
             return 1;
         }
-        return INLINE_USAGE_COUNT + extraUsagesCount;
+        return 2 + extraUsagesCount;
     }
 
     /**
@@ -391,45 +391,30 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     private void movUsageFromEndTo(int destIndex) {
-        if (destIndex >= INLINE_USAGE_COUNT) {
-            movUsageFromEndToExtraUsages(destIndex - INLINE_USAGE_COUNT);
+        int lastIndex = this.getUsageCount() - 1;
+        if (destIndex == 0) {
+            if (lastIndex == 0) {
+                usage0 = null;
+                return;
+            } else if (lastIndex == 1) {
+                usage0 = usage1;
+                usage1 = null;
+                return;
+            } else {
+                usage0 = extraUsages[lastIndex - INLINE_USAGE_COUNT];
+            }
         } else if (destIndex == 1) {
-            movUsageFromEndToIndexOne();
+            if (lastIndex == 1) {
+                usage1 = null;
+                return;
+            }
+            usage1 = extraUsages[lastIndex - INLINE_USAGE_COUNT];
         } else {
-            assert destIndex == 0;
-            movUsageFromEndToIndexZero();
+            Node n = extraUsages[lastIndex - INLINE_USAGE_COUNT];
+            extraUsages[destIndex - INLINE_USAGE_COUNT] = n;
         }
-    }
-
-    private void movUsageFromEndToExtraUsages(int destExtraIndex) {
+        extraUsages[lastIndex - INLINE_USAGE_COUNT] = null;
         this.extraUsagesCount--;
-        Node n = extraUsages[extraUsagesCount];
-        extraUsages[destExtraIndex] = n;
-        extraUsages[extraUsagesCount] = null;
-    }
-
-    private void movUsageFromEndToIndexZero() {
-        if (extraUsagesCount > 0) {
-            this.extraUsagesCount--;
-            usage0 = extraUsages[extraUsagesCount];
-            extraUsages[extraUsagesCount] = null;
-        } else if (usage1 != null) {
-            usage0 = usage1;
-            usage1 = null;
-        } else {
-            usage0 = null;
-        }
-    }
-
-    private void movUsageFromEndToIndexOne() {
-        if (extraUsagesCount > 0) {
-            this.extraUsagesCount--;
-            usage1 = extraUsages[extraUsagesCount];
-            extraUsages[extraUsagesCount] = null;
-        } else {
-            assert usage1 != null;
-            usage1 = null;
-        }
     }
 
     /**
@@ -440,21 +425,20 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
      */
     public boolean removeUsage(Node node) {
         assert node != null;
-        // For large graphs, usage removal is performance critical.
-        // Furthermore, it is critical that this method maintains the invariant that the usage list
-        // has no null element preceding a non-null element.
+        // It is critical that this method maintains the invariant that
+        // the usage list has no null element preceding a non-null element
         incUsageModCount();
         if (usage0 == node) {
-            movUsageFromEndToIndexZero();
+            this.movUsageFromEndTo(0);
             return true;
         }
         if (usage1 == node) {
-            movUsageFromEndToIndexOne();
+            this.movUsageFromEndTo(1);
             return true;
         }
         for (int i = this.extraUsagesCount - 1; i >= 0; i--) {
             if (extraUsages[i] == node) {
-                movUsageFromEndToExtraUsages(i);
+                this.movUsageFromEndTo(i + INLINE_USAGE_COUNT);
                 return true;
             }
         }
@@ -553,9 +537,8 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         assert assertTrue(id == INITIAL_ID, "unexpected id: %d", id);
         this.graph = newGraph;
         newGraph.register(this);
-        NodeClass<? extends Node> nc = nodeClass;
-        nc.registerAtInputsAsUsage(this);
-        nc.registerAtSuccessorsAsPredecessor(this);
+        this.getNodeClass().registerAtInputsAsUsage(this);
+        this.getNodeClass().registerAtSuccessorsAsPredecessor(this);
     }
 
     /**
@@ -605,7 +588,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     public final void replaceAtUsages(Node other) {
-        replaceAtAllUsages(other, (Node) null);
+        replaceAtUsages(other, null, null);
     }
 
     public final void replaceAtUsages(Node other, Predicate<Node> filter) {
@@ -623,60 +606,22 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     protected void replaceAtUsages(Node other, Predicate<Node> filter, Node toBeDeleted) {
-        if (filter == null) {
-            replaceAtAllUsages(other, toBeDeleted);
-        } else {
-            replaceAtMatchingUsages(other, filter, toBeDeleted);
-        }
-    }
-
-    protected void replaceAtAllUsages(Node other, Node toBeDeleted) {
-        assert checkReplaceWith(other);
-        if (usage0 == null) {
-            return;
-        }
-        replaceAtUsage(other, toBeDeleted, usage0);
-        usage0 = null;
-
-        if (usage1 == null) {
-            return;
-        }
-        replaceAtUsage(other, toBeDeleted, usage1);
-        usage1 = null;
-
-        if (extraUsagesCount <= 0) {
-            return;
-        }
-        for (int i = 0; i < extraUsagesCount; i++) {
-            Node usage = extraUsages[i];
-            replaceAtUsage(other, toBeDeleted, usage);
-        }
-        this.extraUsages = NO_NODES;
-        this.extraUsagesCount = 0;
-    }
-
-    private void replaceAtUsage(Node other, Node toBeDeleted, Node usage) {
-        boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
-        assert assertTrue(result, "not found in inputs, usage: %s", usage);
-        /*
-         * Don't notify for nodes which are about to be deleted.
-         */
-        if (toBeDeleted == null || usage != toBeDeleted) {
-            maybeNotifyInputChanged(usage);
-        }
-        if (other != null) {
-            other.addUsage(usage);
-        }
-    }
-
-    private void replaceAtMatchingUsages(Node other, Predicate<Node> filter, Node toBeDeleted) {
-        assert filter != null;
         assert checkReplaceWith(other);
         int i = 0;
         while (i < this.getUsageCount()) {
             Node usage = this.getUsageAt(i);
             if (filter == null || filter.test(usage)) {
-                replaceAtUsage(other, toBeDeleted, usage);
+                boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
+                assert assertTrue(result, "not found in inputs, usage: %s", usage);
+                /*
+                 * Don't notify for nodes which are about to be deleted.
+                 */
+                if (toBeDeleted == null || usage != toBeDeleted) {
+                    maybeNotifyInputChanged(usage);
+                }
+                if (other != null) {
+                    other.addUsage(usage);
+                }
                 this.movUsageFromEndTo(i);
             } else {
                 ++i;
@@ -696,7 +641,21 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
 
     public void replaceAtMatchingUsages(Node other, NodePredicate usagePredicate) {
         assert checkReplaceWith(other);
-        replaceAtMatchingUsages(other, usagePredicate, null);
+        int index = 0;
+        while (index < this.getUsageCount()) {
+            Node usage = getUsageAt(index);
+            if (usagePredicate.apply(usage)) {
+                boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
+                assert assertTrue(result, "not found in inputs, usage: %s", usage);
+                if (other != null) {
+                    maybeNotifyInputChanged(usage);
+                    other.addUsage(usage);
+                }
+                this.movUsageFromEndTo(index);
+            } else {
+                index++;
+            }
+        }
     }
 
     public void replaceAtUsages(InputType type, Node other) {
@@ -714,7 +673,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         if (graph != null) {
             assert !graph.isFrozen();
             NodeEventListener listener = graph.nodeEventListener;
-            if (listener != null) {
+            if (listener != null && node.isAlive()) {
                 listener.inputChanged(node);
             }
             if (Fingerprint.ENABLED) {

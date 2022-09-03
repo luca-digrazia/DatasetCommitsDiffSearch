@@ -25,7 +25,6 @@ package org.graalvm.compiler.replacements;
 import static java.util.FormattableFlags.ALTERNATE;
 import static org.graalvm.compiler.core.common.LocationIdentity.any;
 import static org.graalvm.compiler.debug.Debug.applyFormattingFlagsAndWidth;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.DebugStubsAndSnippets;
 import static org.graalvm.compiler.graph.iterators.NodePredicates.isNotA;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
@@ -58,9 +57,7 @@ import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Debug.Scope;
-import org.graalvm.compiler.debug.internal.DebugScope;
 import org.graalvm.compiler.debug.DebugCloseable;
-import org.graalvm.compiler.debug.DebugConfig;
 import org.graalvm.compiler.debug.DebugCounter;
 import org.graalvm.compiler.debug.DebugTimer;
 import org.graalvm.compiler.debug.GraalError;
@@ -85,8 +82,8 @@ import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.PhiNode;
+import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.PiNode.Placeholder;
-import org.graalvm.compiler.nodes.PiNode.PlaceholderStamp;
 import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StartNode;
 import org.graalvm.compiler.nodes.StateSplit;
@@ -635,8 +632,7 @@ public class SnippetTemplate {
             SnippetTemplate template = Options.UseSnippetTemplateCache.getValue(options) && args.cacheable ? templates.get(args.cacheKey) : null;
             if (template == null) {
                 SnippetTemplates.increment();
-                DebugConfig config = DebugStubsAndSnippets.getValue(options) ? DebugScope.getConfig() : Debug.silentConfig();
-                try (DebugCloseable a = SnippetTemplateCreationTime.start(); Scope s = Debug.sandbox("SnippetSpecialization", config, args.info.method)) {
+                try (DebugCloseable a = SnippetTemplateCreationTime.start(); Scope s = Debug.scope("SnippetSpecialization", args.info.method)) {
                     template = new SnippetTemplate(options, providers, snippetReflection, args);
                     if (Options.UseSnippetTemplateCache.getValue(options) && args.cacheable) {
                         templates.put(args.cacheKey, template);
@@ -817,15 +813,11 @@ public class SnippetTemplate {
 
             ArrayList<StateSplit> curSideEffectNodes = new ArrayList<>();
             ArrayList<DeoptimizingNode> curDeoptNodes = new ArrayList<>();
-            ArrayList<ValueNode> curPlaceholderStampedNodes = new ArrayList<>();
+            ArrayList<ValueNode> curStampNodes = new ArrayList<>();
             for (Node node : snippetCopy.getNodes()) {
-                if (node instanceof ValueNode) {
-                    ValueNode valueNode = (ValueNode) node;
-                    if (valueNode.stamp() == PlaceholderStamp.singleton()) {
-                        curPlaceholderStampedNodes.add(valueNode);
-                    }
+                if (node instanceof ValueNode && ((ValueNode) node).stamp() == StampFactory.forNodeIntrinsic()) {
+                    curStampNodes.add((ValueNode) node);
                 }
-
                 if (node instanceof StateSplit) {
                     StateSplit stateSplit = (StateSplit) node;
                     FrameState frameState = stateSplit.stateAfter();
@@ -932,7 +924,7 @@ public class SnippetTemplate {
 
             this.sideEffectNodes = curSideEffectNodes;
             this.deoptNodes = curDeoptNodes;
-            this.placeholderStampedNodes = curPlaceholderStampedNodes;
+            this.stampNodes = curStampNodes;
 
             nodes = new ArrayList<>(snippet.getNodeCount());
             for (Node node : snippet.getNodes()) {
@@ -1051,9 +1043,9 @@ public class SnippetTemplate {
     private final ArrayList<DeoptimizingNode> deoptNodes;
 
     /**
-     * Nodes that have a stamp originating from a {@link Placeholder}.
+     * The nodes that inherit the {@link ValueNode#stamp()} from the replacee during instantiation.
      */
-    private final ArrayList<ValueNode> placeholderStampedNodes;
+    private final ArrayList<ValueNode> stampNodes;
 
     /**
      * The nodes to be inlined when this specialization is instantiated.
@@ -1503,14 +1495,14 @@ public class SnippetTemplate {
     }
 
     private void updateStamps(ValueNode replacee, UnmodifiableEconomicMap<Node, Node> duplicates) {
-        for (ValueNode node : placeholderStampedNodes) {
-            ValueNode dup = (ValueNode) duplicates.get(node);
-            Stamp replaceeStamp = replacee.stamp();
-            if (node instanceof Placeholder) {
-                Placeholder placeholderDup = (Placeholder) dup;
-                placeholderDup.makeReplacement(replaceeStamp);
+        for (ValueNode stampNode : stampNodes) {
+            Node stampDup = duplicates.get(stampNode);
+            if (stampDup instanceof PiNode.Placeholder) {
+                PiNode.Placeholder placeholder = (Placeholder) stampDup;
+                PiNode pi = placeholder.getReplacement(replacee.stamp());
+                placeholder.replaceAndDelete(pi);
             } else {
-                dup.setStamp(replaceeStamp);
+                ((ValueNode) stampDup).setStamp(replacee.stamp());
             }
         }
         for (ParameterNode paramNode : snippet.getNodes(ParameterNode.TYPE)) {

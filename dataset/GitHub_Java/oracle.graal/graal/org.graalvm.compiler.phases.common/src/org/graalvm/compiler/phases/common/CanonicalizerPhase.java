@@ -450,7 +450,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
             public void deleteBranch(Node branch) {
                 FixedNode fixedBranch = (FixedNode) branch;
                 fixedBranch.predecessor().replaceFirstSuccessor(fixedBranch, null);
-                GraphUtil.killCFG(fixedBranch);
+                GraphUtil.killCFG(fixedBranch, this);
             }
 
             @Override
