@@ -26,7 +26,11 @@ package com.oracle.truffle.api;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -38,7 +42,6 @@ import java.util.WeakHashMap;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.frame.FrameInstance;
-import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.FindContextNode;
@@ -398,6 +401,11 @@ public abstract class TruffleLanguage<C> {
             return in;
         }
 
+        @Deprecated
+        public Reader stdIn() {
+            return new InputStreamReader(in);
+        }
+
         /**
          * Standard output writer for {@link com.oracle.truffle.api.vm.PolyglotEngine} this language
          * is being executed in.
@@ -408,6 +416,11 @@ public abstract class TruffleLanguage<C> {
             return out;
         }
 
+        @Deprecated
+        public Writer stdOut() {
+            return new OutputStreamWriter(out);
+        }
+
         /**
          * Standard error writer for {@link com.oracle.truffle.api.vm.PolyglotEngine} this language
          * is being executed in.
@@ -416,6 +429,11 @@ public abstract class TruffleLanguage<C> {
          */
         public OutputStream err() {
             return err;
+        }
+
+        @Deprecated
+        public Writer stdErr() {
+            return new OutputStreamWriter(err);
         }
 
         public Instrumenter instrumenter() {
@@ -476,7 +494,7 @@ public abstract class TruffleLanguage<C> {
             final Env env = findLanguage(vm, languageType);
             final TruffleLanguage<?> lang = findLanguage(env);
             final Source source = Source.fromText(code, "eval in context");
-            return lang.evalInContext(source, n, frame.getFrame(FrameAccess.READ_ONLY, true).materialize());
+            return lang.evalInContext(source, n, frame.getFrame(null, true).materialize());
         }
 
         @Override
