@@ -150,8 +150,6 @@ public final class GraalOptions {
     public static final OptionValue<Integer> PrintIdealGraphPort = new OptionValue<>(4444);
     @Option(help = "")
     public static final OptionValue<Integer> PrintBinaryGraphPort = new OptionValue<>(4445);
-    @Option(help = "")
-    public static final OptionValue<Boolean> PrintIdealGraphSchedule = new OptionValue<>(false);
 
     // Other printing settings
     @Option(help = "")
@@ -176,7 +174,11 @@ public final class GraalOptions {
     public static final OptionValue<String> DecompileAfterPhase = new OptionValue<>(null);
 
     // HotSpot command line options
-    @Option(help = "Print inlining optimizations")
+    @Option(help = "")
+    public static final OptionValue<Boolean> HotSpotPrintCompilation = new OptionValue<>(false);
+    @Option(help = "")
+    public static final OptionValue<Boolean> HotSpotCIPrintCompilerName = new OptionValue<>(false);
+    @Option(help = "")
     public static final OptionValue<Boolean> HotSpotPrintInlining = new OptionValue<>(false);
 
     // Register allocator debugging
