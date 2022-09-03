@@ -449,13 +449,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         Variable input = load(inputVal);
         if (isCompressCandidate(access)) {
             if (runtime().config.useCompressedOops && kind == Kind.Object) {
-                if (input.getKind() == Kind.Object) {
-                    Variable scratch = newVariable(Kind.Long);
-                    append(new StoreCompressedPointer(kind, storeAddress, input, scratch, state, runtime().config.narrowOopBase, runtime().config.narrowOopShift, runtime().config.logMinObjAlignment));
-                } else {
-                    // the input oop is already compressed
-                    append(new StoreOp(input.getKind(), storeAddress, input, state));
-                }
+                Variable scratch = newVariable(Kind.Long);
+                append(new StoreCompressedPointer(kind, storeAddress, input, scratch, state, runtime().config.narrowOopBase, runtime().config.narrowOopShift, runtime().config.logMinObjAlignment));
             } else if (runtime().config.useCompressedKlassPointers && kind == Kind.Long) {
                 Variable scratch = newVariable(Kind.Long);
                 append(new StoreCompressedPointer(kind, storeAddress, input, scratch, state, runtime().config.narrowKlassBase, runtime().config.narrowKlassShift, runtime().config.logKlassAlignment));
