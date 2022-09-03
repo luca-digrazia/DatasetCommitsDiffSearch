@@ -26,20 +26,20 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
 
 /**
- * Common interface for all HotSpot {@link JavaType} implementations.
+ * Common base class for all HotSpot {@link JavaType} implementations.
  */
 public abstract class HotSpotJavaType extends CompilerObject implements JavaType {
-    private static final long serialVersionUID = -4252886265301910771L;
-    protected String name;
 
-    @Override
-    public final String name() {
-        return name;
+    private static final long serialVersionUID = -4252886265301910771L;
+
+    private final String name;
+
+    public HotSpotJavaType(String name) {
+        this.name = name;
     }
 
-    /**
-     * Gets the object representing the C++ klassOop for this type.
-     * Such a value cannot be safely exposed to Java code.
-     */
-    public abstract HotSpotKlassOop klassOop();
+    @Override
+    public final String getName() {
+        return name;
+    }
 }
