@@ -72,37 +72,39 @@ final class TraceLinearScanWalker {
             return fixed;
         }
 
+        /**
+         * Sets the fixed list.
+         */
+        public void setFixed(FixedInterval list) {
+            fixed = list;
+        }
+
+        /**
+         * Adds an interval to a list sorted by {@linkplain FixedInterval#currentFrom() current
+         * from} positions.
+         *
+         * @param interval the interval to add
+         */
         public void addToListSortedByCurrentFromPositions(FixedInterval interval) {
-            fixed = TraceLinearScanWalker.addToListSortedByCurrentFromPositions(getFixed(), interval);
+            FixedInterval list = getFixed();
+            FixedInterval prev = null;
+            FixedInterval cur = list;
+            while (cur.currentFrom() < interval.currentFrom()) {
+                prev = cur;
+                cur = cur.next;
+            }
+            FixedInterval result = list;
+            if (prev == null) {
+                // add to head of list
+                result = interval;
+            } else {
+                // add before 'cur'
+                prev.next = interval;
+            }
+            interval.next = cur;
+            setFixed(result);
         }
 
-    }
-
-    /**
-     * Adds an interval to a list sorted by {@linkplain FixedInterval#currentFrom() current from}
-     * positions.
-     *
-     * @param list the list
-     * @param interval the interval to add
-     * @return the new head of the list
-     */
-    private static FixedInterval addToListSortedByCurrentFromPositions(FixedInterval list, FixedInterval interval) {
-        FixedInterval prev = null;
-        FixedInterval cur = list;
-        while (cur.currentFrom() < interval.currentFrom()) {
-            prev = cur;
-            cur = cur.next;
-        }
-        FixedInterval result = list;
-        if (prev == null) {
-            // add to head of list
-            result = interval;
-        } else {
-            // add before 'cur'
-            prev.next = interval;
-        }
-        interval.next = cur;
-        return result;
     }
 
     private static final class AnyList {
@@ -123,94 +125,82 @@ final class TraceLinearScanWalker {
             return any;
         }
 
+        /**
+         * Sets the any list.
+         */
+        public void setAny(TraceInterval list) {
+            any = list;
+        }
+
+        /**
+         * Adds an interval to a list sorted by {@linkplain TraceInterval#from() current from}
+         * positions.
+         *
+         * @param interval the interval to add
+         */
         public void addToListSortedByFromPositions(TraceInterval interval) {
-            any = TraceLinearScanWalker.addToListSortedByFromPositions(getAny(), interval);
+            TraceInterval list = getAny();
+            TraceInterval prev = null;
+            TraceInterval cur = list;
+            while (cur.from() < interval.from()) {
+                prev = cur;
+                cur = cur.next;
+            }
+            TraceInterval result = list;
+            if (prev == null) {
+                // add to head of list
+                result = interval;
+            } else {
+                // add before 'cur'
+                prev.next = interval;
+            }
+            interval.next = cur;
+            setAny(result);
         }
 
+        /**
+         * Adds an interval to a list sorted by {@linkplain TraceInterval#from() start} positions
+         * and {@linkplain TraceInterval#firstUsage(RegisterPriority) first usage} positions.
+         *
+         * @param interval the interval to add
+         */
         public void addToListSortedByStartAndUsePositions(TraceInterval interval) {
-            any = TraceLinearScanWalker.addToListSortedByStartAndUsePositions(getAny(), interval);
+            TraceInterval list = getAny();
+            TraceInterval prev = null;
+            TraceInterval cur = list;
+            while (cur.from() < interval.from() || (cur.from() == interval.from() && cur.firstUsage(RegisterPriority.None) < interval.firstUsage(RegisterPriority.None))) {
+                prev = cur;
+                cur = cur.next;
+            }
+            if (prev == null) {
+                list = interval;
+            } else {
+                prev.next = interval;
+            }
+            interval.next = cur;
+            setAny(list);
         }
 
+        /**
+         * Removes an interval from a list.
+         *
+         * @param i the interval to remove
+         */
         public void removeAny(TraceInterval i) {
-            any = TraceLinearScanWalker.removeAny(getAny(), i);
+            TraceInterval list = getAny();
+            TraceInterval prev = null;
+            TraceInterval cur = list;
+            while (cur != i) {
+                assert cur != null && cur != TraceInterval.EndMarker : "interval has not been found in list: " + i;
+                prev = cur;
+                cur = cur.next;
+            }
+            if (prev == null) {
+                setAny(cur.next);
+            } else {
+                prev.next = cur.next;
+            }
         }
-
-    }
-
-    /**
-     * Adds an interval to a list sorted by {@linkplain TraceInterval#from() current from}
-     * positions.
-     *
-     * @param list the list
-     * @param interval the interval to add
-     * @return the new head of the list
-     */
-    private static TraceInterval addToListSortedByFromPositions(TraceInterval list, TraceInterval interval) {
-        TraceInterval prev = null;
-        TraceInterval cur = list;
-        while (cur.from() < interval.from()) {
-            prev = cur;
-            cur = cur.next;
-        }
-        TraceInterval result = list;
-        if (prev == null) {
-            // add to head of list
-            result = interval;
-        } else {
-            // add before 'cur'
-            prev.next = interval;
-        }
-        interval.next = cur;
-        return result;
-    }
-
-    /**
-     * Adds an interval to a list sorted by {@linkplain TraceInterval#from() start} positions and
-     * {@linkplain TraceInterval#firstUsage(RegisterPriority) first usage} positions.
-     *
-     * @param list the list
-     * @param interval the interval to add
-     * @return the new head of the list
-     */
-    private static TraceInterval addToListSortedByStartAndUsePositions(TraceInterval list, TraceInterval interval) {
-        TraceInterval newHead = list;
-        TraceInterval prev = null;
-        TraceInterval cur = newHead;
-        while (cur.from() < interval.from() || (cur.from() == interval.from() && cur.firstUsage(RegisterPriority.None) < interval.firstUsage(RegisterPriority.None))) {
-            prev = cur;
-            cur = cur.next;
-        }
-        if (prev == null) {
-            newHead = interval;
-        } else {
-            prev.next = interval;
-        }
-        interval.next = cur;
-        return newHead;
-    }
-
-    /**
-     * Removes an interval from a list.
-     *
-     * @param list the list
-     * @param interval the interval to remove
-     * @return the new head of the list
-     */
-    private static TraceInterval removeAny(TraceInterval list, TraceInterval interval) {
-        TraceInterval newHead = list;
-        TraceInterval prev = null;
-        TraceInterval cur = newHead;
-        while (cur != interval) {
-            assert cur != null && cur != TraceInterval.EndMarker : "interval has not been found in list: " + interval;
-            prev = cur;
-            cur = cur.next;
-        }
-        if (prev == null) {
-            newHead = cur.next;
-        } else {
-            prev.next = cur.next;
-        }
-        return newHead;
     }
 
     private Register[] availableRegs;
@@ -1422,9 +1412,9 @@ final class TraceLinearScanWalker {
                 // remove cur from list
                 if (prevprev == null) {
                     if (state == State.Active) {
-                        activeFixedList.fixed = next;
+                        activeFixedList.setFixed(next);
                     } else {
-                        inactiveFixedList.fixed = next;
+                        inactiveFixedList.setFixed(next);
                     }
                 } else {
                     prevprev.next = next;
@@ -1481,7 +1471,7 @@ final class TraceLinearScanWalker {
             if (cur.to() <= from) {
                 // remove cur from list
                 if (prevprev == null) {
-                    activeAnyList.any = next;
+                    activeAnyList.setAny(next);
                 } else {
                     prevprev.next = next;
                 }
@@ -1511,7 +1501,7 @@ final class TraceLinearScanWalker {
                 return null;
             }
 
-            unhandledAnyList.any = currentInterval.next;
+            unhandledAnyList.setAny(currentInterval.next);
             currentInterval.next = TraceInterval.EndMarker;
             return currentInterval;
         }
