@@ -129,13 +129,13 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
         return valueName(parameter) + "Cast";
     }
 
-    private void addInternalValueParameters(CodeExecutableElement method, TemplateMethod specialization, boolean forceFrame, boolean disableFrame, boolean evaluated) {
-        if (forceFrame && !disableFrame && specialization.getSpecification().findParameterSpec("frame") != null) {
+    private void addInternalValueParameters(CodeExecutableElement method, TemplateMethod specialization, boolean forceFrame, boolean evaluated) {
+        if (forceFrame && specialization.getSpecification().findParameterSpec("frame") != null) {
             method.addParameter(new CodeVariableElement(getContext().getTruffleTypes().getFrame(), "frameValue"));
         }
         for (Parameter parameter : specialization.getParameters()) {
             ParameterSpec spec = parameter.getSpecification();
-            if ((disableFrame || forceFrame) && spec.getName().equals("frame")) {
+            if (forceFrame && spec.getName().equals("frame")) {
                 continue;
             }
             if (spec.isLocal()) {
@@ -152,13 +152,13 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
     }
 
     private static void addInternalValueParameterNames(CodeTreeBuilder builder, TemplateMethod source, TemplateMethod specialization, String unexpectedValueName, boolean forceFrame,
-                    boolean disableFrame, Map<String, String> customNames) {
-        if (forceFrame && !disableFrame && specialization.getSpecification().findParameterSpec("frame") != null) {
+                    Map<String, String> customNames) {
+        if (forceFrame && specialization.getSpecification().findParameterSpec("frame") != null) {
             builder.string("frameValue");
         }
         for (Parameter parameter : specialization.getParameters()) {
             ParameterSpec spec = parameter.getSpecification();
-            if ((disableFrame || forceFrame) && spec.getName().equals("frame")) {
+            if (forceFrame && spec.getName().equals("frame")) {
                 continue;
             }
 
@@ -322,12 +322,12 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
     /**
      * <pre>
      * variant1 $condition != null
-     *
+     * 
      * $type $name = defaultValue($type);
      * if ($condition) {
      *     $name = $value;
      * }
-     *
+     * 
      * variant2 $condition != null
      * $type $name = $value;
      * </pre>
@@ -1034,7 +1034,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
         private Element createInfoMessage(NodeData node) {
             CodeExecutableElement method = new CodeExecutableElement(modifiers(PROTECTED, STATIC), getContext().getType(String.class), CREATE_INFO);
             method.addParameter(new CodeVariableElement(getContext().getType(String.class), "message"));
-            addInternalValueParameters(method, node.getGenericSpecialization(), false, false, false);
+            addInternalValueParameters(method, node.getGenericSpecialization(), false, false);
 
             CodeTreeBuilder builder = method.createBuilder();
 
@@ -1089,7 +1089,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
 
         private CodeExecutableElement createCachedExecute(NodeData node, SpecializationData polymorph) {
             CodeExecutableElement cachedExecute = new CodeExecutableElement(modifiers(PROTECTED, ABSTRACT), polymorph.getReturnType().getType(), EXECUTE_CHAINED);
-            addInternalValueParameters(cachedExecute, polymorph, true, false, false);
+            addInternalValueParameters(cachedExecute, polymorph, true, false);
 
             ExecutableTypeData sourceExecutableType = node.findExecutableType(polymorph.getReturnType().getTypeSystemType(), 0);
             boolean sourceThrowsUnexpected = sourceExecutableType != null && sourceExecutableType.hasUnexpectedValue(getContext());
@@ -1244,13 +1244,12 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             NodeData node = getModel().getNode();
             SpecializationData generic = node.getGenericSpecialization();
             CodeExecutableElement method = new CodeExecutableElement(modifiers(PROTECTED), generic.getReturnType().getType(), EXECUTE_UNINITIALIZED);
-            addInternalValueParameters(method, generic, true, false, false);
+            addInternalValueParameters(method, generic, true, false);
             CodeTreeBuilder builder = method.createBuilder();
 
-            boolean needsFrame = node.isFrameUsedByAnyGuard(getContext());
             CodeTreeBuilder createSpecializationCall = builder.create();
             createSpecializationCall.startCall(SPECIALIZE);
-            addInternalValueParameterNames(createSpecializationCall, generic, generic, null, needsFrame, !needsFrame, null);
+            addInternalValueParameterNames(createSpecializationCall, generic, generic, null, node.isFrameUsedByAnyGuard(getContext()), null);
             createSpecializationCall.end();
             builder.declaration(baseClassName(node), "newNode", createSpecializationCall);
 
@@ -1270,7 +1269,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             builder.startReturn();
             builder.startStaticCall(context.getTruffleTypes().getDslShare(), "rewriteUninitialized").string("this").string("newNode").end();
             builder.string(".").startCall(EXECUTE_CHAINED);
-            addInternalValueParameterNames(builder, generic, generic, null, true, false, null);
+            addInternalValueParameterNames(builder, generic, generic, null, true, null);
             builder.end();
             builder.end();
 
@@ -1284,7 +1283,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
         private CodeTree createInfoCall(CodeTreeBuilder parent, SpecializationData specialization, String reason) {
             CodeTreeBuilder builder = parent.create();
             builder.startCall(CREATE_INFO).string(reason);
-            addInternalValueParameterNames(builder, specialization, specialization, null, false, false, null);
+            addInternalValueParameterNames(builder, specialization, specialization, null, false, null);
             builder.end();
             return builder.getRoot();
         }
@@ -1294,17 +1293,16 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
 
             SpecializationData generic = node.getGenericSpecialization();
             CodeExecutableElement method = new CodeExecutableElement(modifiers(PROTECTED, FINAL), generic.getReturnType().getType(), REWRITE);
-            addInternalValueParameters(method, generic, true, false, false);
+            addInternalValueParameters(method, generic, true, false);
             method.addParameter(new CodeVariableElement(getContext().getType(String.class), "reason"));
 
-            boolean needsFrame = node.isFrameUsedByAnyGuard(getContext());
             CodeTreeBuilder builder = method.createBuilder();
 
             builder.startStatement().startStaticCall(context.getTruffleTypes().getCompilerAsserts(), "neverPartOfCompilation").end().end();
             String baseClassName = baseClassName(getModel().getNode());
             CodeTreeBuilder createSpecializationCall = builder.create();
             createSpecializationCall.startCall(SPECIALIZE);
-            addInternalValueParameterNames(createSpecializationCall, generic, generic, null, needsFrame, !needsFrame, null);
+            addInternalValueParameterNames(createSpecializationCall, generic, generic, null, node.isFrameUsedByAnyGuard(getContext()), null);
             createSpecializationCall.end();
             builder.declaration(baseClassName, "newNode", createSpecializationCall);
 
@@ -1330,7 +1328,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
 
             builder.startReturn();
             builder.startCall("returnNode", EXECUTE_CHAINED);
-            addInternalValueParameterNames(builder, node.getGenericSpecialization(), node.getGenericSpecialization(), null, true, false, null);
+            addInternalValueParameterNames(builder, node.getGenericSpecialization(), node.getGenericSpecialization(), null, true, null);
             builder.end();
             builder.end();
 
@@ -1365,7 +1363,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
                 method.getAnnotationMirrors().add(new CodeAnnotationMirror(getContext().getTruffleTypes().getSlowPath()));
             }
 
-            addInternalValueParameters(method, node.getGenericSpecialization(), needsFrame, !needsFrame, false);
+            addInternalValueParameters(method, node.getGenericSpecialization(), needsFrame, false);
             final CodeTreeBuilder builder = method.createBuilder();
             builder.tree(createExecuteTree(builder, node.getGenericSpecialization(), group, new CodeBlock<SpecializationData>() {
 
@@ -2231,7 +2229,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
 
             CodeTreeBuilder execute = new CodeTreeBuilder(builder);
             execute.startCall("next0", EXECUTE_CHAINED);
-            addInternalValueParameterNames(execute, specialization, polymorphic, param.getLocalName(), true, false, null);
+            addInternalValueParameterNames(execute, specialization, polymorphic, param.getLocalName(), true, null);
             execute.end();
 
             TypeData sourceType = polymorphic.getReturnType().getTypeSystemType();
@@ -2347,7 +2345,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             SpecializationData generic = node.getGenericSpecialization();
             CodeTreeBuilder specializeCall = new CodeTreeBuilder(parent);
             specializeCall.startCall(REWRITE);
-            addInternalValueParameterNames(specializeCall, generic, node.getGenericSpecialization(), exceptionParam != null ? exceptionParam.getLocalName() : null, true, false, null);
+            addInternalValueParameterNames(specializeCall, generic, node.getGenericSpecialization(), exceptionParam != null ? exceptionParam.getLocalName() : null, true, null);
             specializeCall.doubleQuote(reason);
             specializeCall.end().end();
 
@@ -2669,17 +2667,17 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
 
             if (specialization.isPolymorphic()) {
                 builder.startReturn().startCall("this.next0", EXECUTE_CHAINED);
-                addInternalValueParameterNames(builder, polymorphic, polymorphic, null, true, false, null);
+                addInternalValueParameterNames(builder, polymorphic, polymorphic, null, true, null);
                 builder.end().end();
             } else if (specialization.isUninitialized()) {
                 builder.tree(createDeoptimizeUninitialized(node, builder));
                 builder.startReturn().startCall("this", EXECUTE_UNINITIALIZED);
-                addInternalValueParameterNames(builder, polymorphic, polymorphic, null, true, false, null);
+                addInternalValueParameterNames(builder, polymorphic, polymorphic, null, true, null);
                 builder.end().end();
             } else {
                 CodeTreeBuilder elseBuilder = new CodeTreeBuilder(builder);
                 elseBuilder.startReturn().startCall("this.next0", EXECUTE_CHAINED);
-                addInternalValueParameterNames(elseBuilder, polymorphic, polymorphic, null, true, false, null);
+                addInternalValueParameterNames(elseBuilder, polymorphic, polymorphic, null, true, null);
                 elseBuilder.end().end();
 
                 builder.tree(createExecuteTree(builder, polymorphic, SpecializationGroup.create(specialization), new CodeBlock<SpecializationData>() {
@@ -2866,11 +2864,11 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             CodeTreeBuilder returnBuilder = new CodeTreeBuilder(parent);
             if (specialization.isPolymorphic()) {
                 returnBuilder.startCall("next0", EXECUTE_CHAINED);
-                addInternalValueParameterNames(returnBuilder, specialization, specialization, null, true, false, null);
+                addInternalValueParameterNames(returnBuilder, specialization, specialization, null, true, null);
                 returnBuilder.end();
             } else if (specialization.isUninitialized()) {
                 returnBuilder.startCall(EXECUTE_UNINITIALIZED);
-                addInternalValueParameterNames(returnBuilder, specialization, specialization, null, true, false, null);
+                addInternalValueParameterNames(returnBuilder, specialization, specialization, null, true, null);
                 returnBuilder.end();
             } else if (specialization.getMethod() == null && !node.needsRewrites(context)) {
                 emitEncounteredSynthetic(builder, specialization);

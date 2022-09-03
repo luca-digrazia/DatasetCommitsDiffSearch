@@ -52,11 +52,10 @@ public class NodeData extends Template implements Comparable<NodeData> {
     private Map<Integer, List<ExecutableTypeData>> executableTypes;
 
     private final NodeExecutionData thisExecution;
-    private final boolean generateFactory;
 
     public NodeData(ProcessorContext context, TypeElement type, String shortName, TypeSystemData typeSystem, List<NodeChildData> children, List<NodeExecutionData> executions,
-                    List<NodeFieldData> fields, List<String> assumptions, boolean generateFactory) {
-        super(context, type, null);
+                    List<NodeFieldData> fields, List<String> assumptions) {
+        super(context, type, null, null);
         this.nodeId = type.getSimpleName().toString();
         this.shortName = shortName;
         this.typeSystem = typeSystem;
@@ -66,15 +65,10 @@ public class NodeData extends Template implements Comparable<NodeData> {
         this.assumptions = assumptions;
         this.thisExecution = new NodeExecutionData(new NodeChildData(null, null, "this", getNodeType(), getNodeType(), null, Cardinality.ONE), -1, false);
         this.thisExecution.getChild().setNode(this);
-        this.generateFactory = generateFactory;
     }
 
     public NodeData(ProcessorContext context, TypeElement type) {
-        this(context, type, null, null, null, null, null, null, false);
-    }
-
-    public boolean isGenerateFactory() {
-        return generateFactory;
+        this(context, type, null, null, null, null, null, null);
     }
 
     public NodeExecutionData getThisExecution() {
@@ -96,35 +90,6 @@ public class NodeData extends Template implements Comparable<NodeData> {
 
     public List<NodeExecutionData> getChildExecutions() {
         return childExecutions;
-    }
-
-    public Set<TypeData> findSpecializedTypes(NodeExecutionData execution) {
-        Set<TypeData> types = new HashSet<>();
-        for (SpecializationData specialization : getSpecializations()) {
-            if (!specialization.isSpecialized()) {
-                continue;
-            }
-            List<Parameter> parameters = specialization.findByExecutionData(execution);
-            for (Parameter parameter : parameters) {
-                TypeData type = parameter.getTypeSystemType();
-                if (type == null) {
-                    throw new AssertionError();
-                }
-                types.add(type);
-            }
-        }
-        return types;
-    }
-
-    public Collection<TypeData> findSpecializedReturnTypes() {
-        Set<TypeData> types = new HashSet<>();
-        for (SpecializationData specialization : getSpecializations()) {
-            if (!specialization.isSpecialized()) {
-                continue;
-            }
-            types.add(specialization.getReturnType().getTypeSystemType());
-        }
-        return types;
     }
 
     public int getSignatureSize() {
@@ -266,13 +231,13 @@ public class NodeData extends Template implements Comparable<NodeData> {
         return null;
     }
 
-    public List<NodeData> getNodesWithFactories() {
+    public List<NodeData> getNodeDeclaringChildren() {
         List<NodeData> nodeChildren = new ArrayList<>();
         for (NodeData child : getEnclosingNodes()) {
-            if (child.needsFactory() && child.isGenerateFactory()) {
+            if (child.needsFactory()) {
                 nodeChildren.add(child);
             }
-            nodeChildren.addAll(child.getNodesWithFactories());
+            nodeChildren.addAll(child.getNodeDeclaringChildren());
         }
         return nodeChildren;
     }
@@ -382,7 +347,7 @@ public class NodeData extends Template implements Comparable<NodeData> {
 
     public SpecializationData getGenericSpecialization() {
         for (SpecializationData specialization : specializations) {
-            if (specialization.isFallback()) {
+            if (specialization.isGeneric()) {
                 return specialization;
             }
         }
