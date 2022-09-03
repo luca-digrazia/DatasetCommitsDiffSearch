@@ -27,12 +27,15 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.Properties;
 
-import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.bytecode.InterpreterToVM;
+import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.MethodInfo;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
+import com.oracle.truffle.espresso.runtime.Utils;
 
 @EspressoIntrinsics
 public class Target_java_lang_System {
@@ -45,7 +48,7 @@ public class Target_java_lang_System {
 
     @Intrinsic
     public static @Type(Properties.class) StaticObject initProperties(@Type(Properties.class) StaticObject props) {
-        EspressoContext context = EspressoLanguage.getCurrentContext();
+        EspressoContext context = Utils.getContext();
         final String[] importedProps = new String[]{
                         "java.version",
                         "java.vendor",
@@ -92,17 +95,17 @@ public class Target_java_lang_System {
 
     @Intrinsic
     public static void setIn0(@Type(InputStream.class) StaticObjectImpl in) {
-        EspressoLanguage.getCurrentContext().getMeta().knownKlass(System.class).staticField("in").set(in);
+        Utils.getContext().getMeta().knownKlass(System.class).staticField("in").set(in);
     }
 
     @Intrinsic
     public static void setOut0(@Type(PrintStream.class) StaticObject out) {
-        EspressoLanguage.getCurrentContext().getMeta().knownKlass(System.class).staticField("out").set(out);
+        Utils.getContext().getMeta().knownKlass(System.class).staticField("out").set(out);
     }
 
     @Intrinsic
     public static void setErr0(@Type(PrintStream.class) StaticObject err) {
-        EspressoLanguage.getCurrentContext().getMeta().knownKlass(System.class).staticField("err").set(err);
+        Utils.getContext().getMeta().knownKlass(System.class).staticField("err").set(err);
     }
 
     @Intrinsic

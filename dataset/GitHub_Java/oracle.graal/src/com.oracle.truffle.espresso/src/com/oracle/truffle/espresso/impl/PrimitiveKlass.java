@@ -29,7 +29,6 @@ import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 
 /**
  * Implementation of {@link Klass} for primitive types.
@@ -98,8 +97,8 @@ public final class PrimitiveKlass extends Klass {
     }
 
     @Override
-    public StaticObject getClassLoader() {
-        return StaticObject.NULL; // BCL
+    public Object getClassLoader() {
+        return null; // BCL
     }
 
     @Override

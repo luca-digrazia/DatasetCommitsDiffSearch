@@ -279,12 +279,9 @@ public final class Meta {
                     int v = (int) boxed;
                     assert v == 0 || v == 1;
                     return v != 0;
-                case Byte:
-                    return (byte) (int) boxed;
-                case Char:
-                    return (char) (int) boxed;
-                case Short:
-                    return (short) (int) boxed;
+                case Byte: return (byte) (int) boxed;
+                case Char: return (char) (int) boxed;
+                case Short: return (short) (int) boxed;
             }
         }
         return boxed;
@@ -593,7 +590,7 @@ public final class Meta {
          */
         @CompilerDirectives.TruffleBoundary
         public Object invoke(Object self, Object... args) {
-            assert args.length == method.getSignature().getParameterCount(false);
+            assert args.length == method.getSignature().getParameterCount(!method.isStatic());
             assert !isStatic() || ((StaticObjectImpl) self).isStatic();
             Meta meta = method.getContext().getMeta();
 

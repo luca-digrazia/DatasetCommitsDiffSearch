@@ -23,20 +23,22 @@
 
 package com.oracle.truffle.espresso.impl;
 
+import static com.oracle.truffle.espresso.impl.EspressoVMConfig.config;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.ModifiersProvider;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 
 /**
- * Represents a resolved Espresso field. FieldInfo instances can be safely compared using ==.
+ * Represents a resolved Espresso field.
  */
 public class FieldInfo implements ModifiersProvider {
 
     public static final FieldInfo[] EMPTY_ARRAY = new FieldInfo[0];
 
     private final Klass holder;
-    private final TypeDescriptor typeDescriptor;
+    private TypeDescriptor typeDescriptor;
     private final String name;
     private final int offset;
     private final short index;
@@ -64,6 +66,22 @@ public class FieldInfo implements ModifiersProvider {
         return typeDescriptor.toKind();
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj instanceof FieldInfo) {
+            FieldInfo that = (FieldInfo) obj;
+            if (that.offset != this.offset || that.isStatic() != this.isStatic()) {
+                return false;
+            } else if (this.holder.equals(that.holder)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public Klass getType() {
         if (type == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -72,8 +90,17 @@ public class FieldInfo implements ModifiersProvider {
         return type;
     }
 
+    @Override
+    public int hashCode() {
+        return holder.hashCode() ^ offset;
+    }
+
     public int getModifiers() {
         return modifiers & ModifiersProvider.jvmFieldModifiers();
+    }
+
+    public boolean isInternal() {
+        return (modifiers & config().jvmAccFieldInternal) != 0;
     }
 
     public Klass getDeclaringClass() {
@@ -95,6 +122,19 @@ public class FieldInfo implements ModifiersProvider {
     @Override
     public String toString() {
         return "EspressoField<" + getDeclaringClass() + "." + getName() + ">";
+    }
+
+    public boolean isSynthetic() {
+        return (config().jvmAccSynthetic & modifiers) != 0;
+    }
+
+    /**
+     * Checks if this field has the {@link Stable} annotation.
+     *
+     * @return true if field has {@link Stable} annotation, false otherwise
+     */
+    public boolean isStable() {
+        return (config().jvmAccFieldStable & modifiers) != 0;
     }
 
     public int getFlags() {
