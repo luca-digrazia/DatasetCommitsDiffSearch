@@ -97,7 +97,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime implements 
 
     @Override
     public String getName() {
-        return "Graal Truffle Runtime";
+        return "Graal Truffle Engine";
     }
 
     private volatile Lazy lazy;
