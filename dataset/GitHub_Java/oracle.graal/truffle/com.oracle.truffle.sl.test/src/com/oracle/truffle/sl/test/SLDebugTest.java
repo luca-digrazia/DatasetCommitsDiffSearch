@@ -60,7 +60,6 @@ import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.ExecutionEvent;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -465,7 +464,6 @@ public class SLDebugTest {
                 Assert.assertEquals(isBefore, suspendedEvent.isHaltedBefore());
                 final MaterializedFrame frame = suspendedEvent.getFrame();
                 final FrameDescriptor frameDescriptor = frame.getFrameDescriptor();
-                final FrameInstance frameInstance = suspendedEvent.getStack().get(0);
 
                 Assert.assertEquals(expectedFrame.length / 2, frameDescriptor.getSize());
                 for (int i = 0; i < expectedFrame.length; i = i + 2) {
@@ -477,7 +475,7 @@ public class SLDebugTest {
                     if (expectedValue == UNASSIGNED) {
                         Assert.assertEquals(slotValue, frameDescriptor.getDefaultValue());
                     } else {
-                        Assert.assertEquals(expectedValue, suspendedEvent.toString(slotValue, frameInstance));
+                        Assert.assertEquals(expectedValue, suspendedEvent.toString(0, slotValue));
                     }
                 }
                 run.removeFirst().run();
