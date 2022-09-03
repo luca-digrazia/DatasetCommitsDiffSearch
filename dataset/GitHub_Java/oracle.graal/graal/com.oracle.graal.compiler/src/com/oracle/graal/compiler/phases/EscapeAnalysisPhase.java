@@ -38,13 +38,13 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.max.criutils.*;
 
+
 public class EscapeAnalysisPhase extends Phase {
 
     /**
      * Encapsulates the state of the virtual object, which is updated while traversing the control flow graph.
      */
-    private static class BlockExitState implements MergeableState<BlockExitState> {
-
+    public static class BlockExitState implements MergeableState<BlockExitState> {
         public final ValueNode[] fieldState;
         public final VirtualObjectNode virtualObject;
         public final Graph graph;
@@ -115,17 +115,16 @@ public class EscapeAnalysisPhase extends Phase {
         }
     }
 
-    private static class EscapementFixup {
+
+    public static class EscapementFixup {
 
         private final Map<Object, Integer> fields = new HashMap<>();
         private final EscapeOp op;
         private final StructuredGraph graph;
         private final FixedWithNextNode node;
         private EscapeField[] escapeFields;
-        private final int id;
 
-        public EscapementFixup(int id, EscapeOp op, StructuredGraph graph, FixedWithNextNode node) {
-            this.id = id;
+        public EscapementFixup(EscapeOp op, StructuredGraph graph, FixedWithNextNode node) {
             this.op = op;
             this.graph = graph;
             this.node = node;
@@ -152,7 +151,7 @@ public class EscapeAnalysisPhase extends Phase {
                 fields.put(escapeFields[i].representation(), i);
             }
             assert node.objectStamp().isExactType();
-            final VirtualObjectNode virtual = graph.add(new VirtualObjectNode(id, node.objectStamp().type(), escapeFields.length));
+            final VirtualObjectNode virtual = graph.add(new VirtualObjectNode(node.objectStamp().type(), escapeFields));
             if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
                 TTY.println("new virtual object: " + virtual);
             }
@@ -171,7 +170,6 @@ public class EscapeAnalysisPhase extends Phase {
             if (virtual.fieldsCount() > 0) {
                 final BlockExitState startState = new BlockExitState(escapeFields, virtual);
                 new PostOrderNodeIterator<BlockExitState>(next, startState) {
-
                     @Override
                     protected void node(FixedNode curNode) {
                         op.updateState(virtual, curNode, fields, state.fieldState);
@@ -190,10 +188,6 @@ public class EscapeAnalysisPhase extends Phase {
         }
     }
 
-
-    private int virtualIds = 0;
-
-
     private final TargetDescription target;
     private final GraalCodeCacheProvider runtime;
     private final Assumptions assumptions;
@@ -210,7 +204,7 @@ public class EscapeAnalysisPhase extends Phase {
         this.optimisticOpts = optimisticOpts;
     }
 
-    private static class EscapeRecord {
+    public static class EscapeRecord {
 
         public final Node node;
         public final ArrayList<Node> escapesThrough = new ArrayList<>();
@@ -386,7 +380,7 @@ public class EscapeAnalysisPhase extends Phase {
     }
 
     protected void removeAllocation(StructuredGraph graph, FixedWithNextNode node, EscapeOp op) {
-        new EscapementFixup(virtualIds++, op, graph, node).apply();
+        new EscapementFixup(op, graph, node).apply();
 
         for (PhiNode phi : node.graph().getNodes(PhiNode.class)) {
             ValueNode simpleValue = phi;
