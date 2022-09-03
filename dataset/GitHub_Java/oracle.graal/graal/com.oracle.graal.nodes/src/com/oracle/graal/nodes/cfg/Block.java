@@ -27,12 +27,11 @@ import java.util.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 
-public final class Block implements AbstractBlock<Block> {
-
-    protected final AbstractBeginNode beginNode;
+public final class Block {
 
     protected int id;
 
+    protected BeginNode beginNode;
     protected FixedNode endNode;
     protected Loop loop;
 
@@ -46,10 +45,8 @@ public final class Block implements AbstractBlock<Block> {
     private boolean align;
     private int linearScanNumber;
 
-    protected Block(AbstractBeginNode node) {
-        this.beginNode = node;
-
-        this.id = ControlFlowGraph.BLOCK_ID_INITIAL;
+    protected Block() {
+        id = ControlFlowGraph.BLOCK_ID_INITIAL;
         this.linearScanNumber = -1;
     }
 
@@ -57,7 +54,7 @@ public final class Block implements AbstractBlock<Block> {
         return id;
     }
 
-    public AbstractBeginNode getBeginNode() {
+    public BeginNode getBeginNode() {
         return beginNode;
     }
 
@@ -82,7 +79,7 @@ public final class Block implements AbstractBlock<Block> {
     }
 
     public boolean isExceptionEntry() {
-        return getBeginNode() instanceof ExceptionObjectNode;
+        return getBeginNode().next() instanceof ExceptionObjectNode;
     }
 
     public Block getFirstPredecessor() {
@@ -150,7 +147,7 @@ public final class Block implements AbstractBlock<Block> {
             } else {
                 cur = ((FixedWithNextNode) cur).next();
             }
-            assert !(cur instanceof AbstractBeginNode);
+            assert !(cur instanceof BeginNode);
             return result;
         }
 
@@ -207,6 +204,10 @@ public final class Block implements AbstractBlock<Block> {
             return false;
         }
         return dominator.isDominatedBy(block);
+    }
+
+    public double getProbability() {
+        return getBeginNode().probability();
     }
 
     public int getLinearScanNumber() {
