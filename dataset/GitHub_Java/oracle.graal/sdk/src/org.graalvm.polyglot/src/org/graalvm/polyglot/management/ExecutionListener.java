@@ -172,7 +172,7 @@ public final class ExecutionListener implements AutoCloseable {
 
     private final Object impl;
 
-    private ExecutionListener(Object impl) {
+    ExecutionListener(Object impl) {
         this.impl = impl;
     }
 
@@ -242,6 +242,7 @@ public final class ExecutionListener implements AutoCloseable {
         /**
          * Set a listener that is notified when an execution of an element is entered.
          *
+         * @param listener
          * @since 1.0
          */
         public Builder onEnter(Consumer<ExecutionEvent> listener) {
@@ -253,7 +254,8 @@ public final class ExecutionListener implements AutoCloseable {
          * Set a listener that is notified when an execution of an element was entered and
          * completed.
          *
-         * @since 1.0
+         * @param listener
+         * @return
          */
         public Builder onReturn(Consumer<ExecutionEvent> listener) {
             this.onReturn = listener;
@@ -261,7 +263,7 @@ public final class ExecutionListener implements AutoCloseable {
         }
 
         /**
-         * Set an addition filter execution events by source. By default all sources are included.
+         * Set an addition filter execution events by source. By default all sources are include.
          * Source predicates must be stable, i.e. always return the same result for a source. The
          * filter predicate may be invoked on multiple threads at the same time.
          *
@@ -279,7 +281,8 @@ public final class ExecutionListener implements AutoCloseable {
          * included. Root name predicates must be stable and always return the same result for
          * source. The filter predicate may be invoked on multiple threads at the same time.
          *
-         * @since 1.0
+         * @param predicate
+         * @return
          */
         public Builder rootNameFilter(Predicate<String> predicate) {
             this.rootNameFilter = predicate;
@@ -339,8 +342,8 @@ public final class ExecutionListener implements AutoCloseable {
          * @param enabled <code>true</code> if enabled, else <code>false</code>
          * @since 1.0
          */
-        public Builder collectInputValues(boolean enabled) {
-            this.collectInputValues = enabled;
+        public Builder collectInputValues(boolean value) {
+            this.collectInputValues = value;
             return this;
         }
 
@@ -383,9 +386,8 @@ public final class ExecutionListener implements AutoCloseable {
          * Execution listeners cannot be attached to engines that were statically looked up using
          * <code>
          * Context.{@link Context#getCurrent() getCurrent()}.{@link Context#getEngine() getEngine()}
-         * </code>. For security reasons only the original
-         * {@link org.graalvm.polyglot.Context.Builder#build() creator} of the context or engine is
-         * allowed to perform this action.
+         * </code>. For security reasons only the original {@link Context.Builder#build() creator}
+         * of the context or engine is allowed to do perform this action.
          * <p>
          * {@link Builder#attach(Engine) Attaching} and {@link #close() closing} execution listeners
          * are expensive operations and typically require to traverse through all loaded code. Code
@@ -395,7 +397,7 @@ public final class ExecutionListener implements AutoCloseable {
          *
          * @throws PolyglotException if one of the provided filter predicate fails.
          * @param engine the engine to attach to
-         * @return the attached closable execution listener.
+         * @returns the attached closable execution listener.
          * @since 1.0
          */
         public ExecutionListener attach(Engine engine) {
@@ -415,7 +417,7 @@ public final class ExecutionListener implements AutoCloseable {
             impl.setMonitoring(new MonitoringAccessImpl());
             return impl.getExecutionListenerImpl();
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to initialize execution listener class.", e);
+            throw new IllegalStateException("Failed to initilize execution listener class.", e);
         }
     }
 
