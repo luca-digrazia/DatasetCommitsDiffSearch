@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,12 +28,9 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.Visualizer;
-import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import java.io.IOException;
 
 @TruffleLanguage.Registration(name = "Hash", mimeType = "application/x-test-hash", version = "1.0")
 public class HashLanguage extends TruffleLanguage<Env> {
@@ -45,7 +42,7 @@ public class HashLanguage extends TruffleLanguage<Env> {
     }
 
     @Override
-    protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
+    protected CallTarget parse(Source code, Node context, String... argumentNames) {
         return Truffle.getRuntime().createCallTarget(new HashNode(this, code));
     }
 
@@ -65,25 +62,8 @@ public class HashLanguage extends TruffleLanguage<Env> {
     }
 
     @Override
-    protected Visualizer getVisualizer() {
-        return null;
-    }
-
-    @Override
-    protected boolean isInstrumentable(Node node) {
-        return false;
-    }
-
-    @Override
-    protected WrapperNode createWrapperNode(Node node) {
+    protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
-        throw new UnsupportedOperationException("Not supported yet."); // To change body of
-                                                                       // generated methods, choose
-                                                                       // Tools | Templates.
     }
 
     private static class HashNode extends RootNode {
@@ -91,7 +71,7 @@ public class HashLanguage extends TruffleLanguage<Env> {
         private final Source code;
         private final int id;
 
-        public HashNode(HashLanguage hash, Source code) {
+        HashNode(HashLanguage hash, Source code) {
             super(hash.getClass(), null, null);
             this.code = code;
             id = ++counter;
