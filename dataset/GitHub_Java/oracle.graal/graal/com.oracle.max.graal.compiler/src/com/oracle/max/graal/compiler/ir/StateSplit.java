@@ -34,25 +34,41 @@ import com.sun.cri.ci.*;
  */
 public abstract class StateSplit extends FixedNodeWithNext {
 
-    @NodeInput
-    private FrameState stateAfter;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_STATE_AFTER = 0;
 
-    public FrameState stateAfter() {
-        return stateAfter;
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setStateAfter(FrameState x) {
-        updateUsages(stateAfter, x);
-        stateAfter = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The state for this instruction.
+     */
+    public FrameState stateAfter() {
+        return (FrameState) inputs().get(super.inputCount() + INPUT_STATE_AFTER);
+    }
+
+    public FrameState setStateAfter(FrameState n) {
+        return (FrameState) inputs().set(super.inputCount() + INPUT_STATE_AFTER, n);
     }
 
     /**
      * Creates a new state split with the specified value type.
      * @param kind the type of the value that this instruction produces
+     * @param inputCount
+     * @param successorCount
      * @param graph
      */
-    public StateSplit(CiKind kind, Graph graph) {
-        super(kind, graph);
+    public StateSplit(CiKind kind, int inputCount, int successorCount, Graph graph) {
+        super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
     }
 
     public boolean needsStateAfter() {
