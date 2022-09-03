@@ -26,10 +26,11 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 
 /**
- * Represents a value that is yet to be bound to a machine location (such as
- * a {@link RegisterValue} or {@link StackSlot}) by a register allocator.
+ * Represents a value that is yet to be bound to a machine location (such as a {@link RegisterValue}
+ * or {@link StackSlot}) by a register allocator.
  */
-public final class Variable extends Value {
+public final class Variable extends AllocatableValue {
+
     private static final long serialVersionUID = 4507578431686109809L;
 
     /**
@@ -37,31 +38,48 @@ public final class Variable extends Value {
      */
     public final int index;
 
-    /**
-     * The type of register that this variable needs to get assigned.
-     */
-    public final Register.RegisterFlag flag;
+    private String name;
 
     /**
      * Creates a new variable.
+     * 
      * @param kind
      * @param index
      */
-    public Variable(Kind kind, int index, Register.RegisterFlag flag) {
+    public Variable(PlatformKind kind, int index) {
         super(kind);
-        assert kind == kind.stackKind() : "Variables can be only created for stack kinds";
         assert index >= 0;
         this.index = index;
-        this.flag = flag;
     }
 
-    @Override
-    public int hashCode() {
-        return (index << 4) | kind.ordinal();
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
     }
 
     @Override
     public String toString() {
-        return "v" + index + kindSuffix();
+        if (name != null) {
+            return name;
+        } else {
+            return "v" + index + getKindSuffix();
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        return 71 * super.hashCode() + index;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof Variable) {
+            Variable other = (Variable) obj;
+            return super.equals(other) && index == other.index;
+        }
+        return false;
     }
 }
