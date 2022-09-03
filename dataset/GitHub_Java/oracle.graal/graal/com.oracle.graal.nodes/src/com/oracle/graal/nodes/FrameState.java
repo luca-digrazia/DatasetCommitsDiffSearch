@@ -40,7 +40,7 @@ import com.oracle.graal.nodes.virtual.*;
  *
  * This can be used as debug or deoptimization information.
  */
-@NodeInfo(nameTemplate = "@{p#method/s}:{p#bci}")
+@NodeInfo(nameTemplate = "FrameState@{p#method/s}:{p#bci}")
 public final class FrameState extends VirtualState implements IterableNodeType {
     public static final NodeClass<FrameState> TYPE = NodeClass.create(FrameState.class);
 
@@ -223,23 +223,14 @@ public final class FrameState extends VirtualState implements IterableNodeType {
     }
 
     /**
-     * Creates a copy of this frame state with one stack element of type {@code popKind} popped from
-     * the stack.
+     * Creates a copy of this frame state with one stack element of type popKind popped from the
+     * stack and the values in pushedValues pushed on the stack. The pushedValues will be formatted
+     * correctly in slot encoding: a long or double will be followed by a null slot.
      */
     public FrameState duplicateModifiedDuringCall(int newBci, Kind popKind) {
         return duplicateModified(newBci, rethrowException, true, popKind);
     }
 
-    public FrameState duplicateModifiedBeforeCall(int newBci, Kind popKind, ValueNode... pushedValues) {
-        return duplicateModified(newBci, rethrowException, false, popKind, pushedValues);
-    }
-
-    /**
-     * Creates a copy of this frame state with one stack element of type {@code popKind} popped from
-     * the stack and the values in {@code pushedValues} pushed on the stack. The
-     * {@code pushedValues} will be formatted correctly in slot encoding: a long or double will be
-     * followed by a null slot.
-     */
     public FrameState duplicateModified(int newBci, boolean newRethrowException, Kind popKind, ValueNode... pushedValues) {
         return duplicateModified(newBci, newRethrowException, duringCall, popKind, pushedValues);
     }
