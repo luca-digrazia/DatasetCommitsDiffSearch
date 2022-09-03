@@ -37,7 +37,7 @@ public class NodeData extends Template {
     private final String nodeId;
     private NodeData declaringNode;
     private List<NodeData> declaredNodes = new ArrayList<>();
-    private boolean nodeContainer;
+    private boolean splitByMethodName;
 
     private TypeSystemData typeSystem;
     private List<NodeChildData> children;
@@ -46,14 +46,11 @@ public class NodeData extends Template {
     private ParameterSpec instanceParameterSpec;
 
     private List<SpecializationData> specializations;
-    private List<SpecializationData> polymorphicSpecializations;
     private List<SpecializationListenerData> specializationListeners;
     private Map<Integer, List<ExecutableTypeData>> executableTypes;
     private List<ShortCircuitData> shortCircuits;
     private List<String> assumptions;
-    private List<CreateCastData> casts;
 
-    private int polymorphicDepth = -1;
     private String shortName;
 
     public NodeData(TypeElement type, String id) {
@@ -77,22 +74,6 @@ public class NodeData extends Template {
         this.assumptions = splitSource.assumptions;
     }
 
-    public int getPolymorphicDepth() {
-        return polymorphicDepth;
-    }
-
-    void setPolymorphicDepth(int polymorphicDepth) {
-        this.polymorphicDepth = polymorphicDepth;
-    }
-
-    public List<CreateCastData> getCasts() {
-        return casts;
-    }
-
-    void setCasts(List<CreateCastData> casts) {
-        this.casts = casts;
-    }
-
     void setShortName(String shortName) {
         this.shortName = shortName;
     }
@@ -101,8 +82,8 @@ public class NodeData extends Template {
         return shortName;
     }
 
-    public boolean isNodeContainer() {
-        return nodeContainer;
+    public boolean isSplitByMethodName() {
+        return splitByMethodName;
     }
 
     void setTypeSystem(TypeSystemData typeSystem) {
@@ -117,8 +98,8 @@ public class NodeData extends Template {
         return fields;
     }
 
-    void setNodeContainer(boolean splitByMethodName) {
-        this.nodeContainer = splitByMethodName;
+    void setSplitByMethodName(boolean splitByMethodName) {
+        this.splitByMethodName = splitByMethodName;
     }
 
     @Override
@@ -151,9 +132,6 @@ public class NodeData extends Template {
         }
         if (fields != null) {
             containerChildren.addAll(fields);
-        }
-        if (casts != null) {
-            containerChildren.addAll(casts);
         }
         return containerChildren;
     }
@@ -252,9 +230,6 @@ public class NodeData extends Template {
         methods.addAll(getSpecializationListeners());
         methods.addAll(getExecutableTypes());
         methods.addAll(getShortCircuits());
-        if (getCasts() != null) {
-            methods.addAll(getCasts());
-        }
 
         return methods;
     }
@@ -281,10 +256,6 @@ public class NodeData extends Template {
             if (!type.getType().isVoid()) {
                 return type;
             }
-        }
-
-        for (ExecutableTypeData type : types) {
-            return type;
         }
         return null;
     }
@@ -372,15 +343,6 @@ public class NodeData extends Template {
         return null;
     }
 
-    public SpecializationData getUninitializedSpecialization() {
-        for (SpecializationData specialization : specializations) {
-            if (specialization.isUninitialized()) {
-                return specialization;
-            }
-        }
-        return null;
-    }
-
     @Override
     public TypeSystemData getTypeSystem() {
         return typeSystem;
@@ -404,10 +366,7 @@ public class NodeData extends Template {
         dumpProperty(builder, indent, "fields", getChildren());
         dumpProperty(builder, indent, "executableTypes", getExecutableTypes());
         dumpProperty(builder, indent, "specializations", getSpecializations());
-        dumpProperty(builder, indent, "polymorphicDepth", getPolymorphicDepth());
-        dumpProperty(builder, indent, "polymorphic", getPolymorphicSpecializations());
         dumpProperty(builder, indent, "assumptions", getAssumptions());
-        dumpProperty(builder, indent, "casts", getCasts());
         dumpProperty(builder, indent, "messages", collectMessages());
         if (getDeclaredNodes().size() > 0) {
             builder.append(String.format("\n%s  children = [", indent));
@@ -513,14 +472,6 @@ public class NodeData extends Template {
         }
     }
 
-    void setPolymorphicSpecializations(List<SpecializationData> polymorphicSpecializations) {
-        this.polymorphicSpecializations = polymorphicSpecializations;
-    }
-
-    public List<SpecializationData> getPolymorphicSpecializations() {
-        return polymorphicSpecializations;
-    }
-
     void setSpecializationListeners(List<SpecializationListenerData> specializationListeners) {
         this.specializationListeners = specializationListeners;
     }
@@ -536,17 +487,6 @@ public class NodeData extends Template {
     @Override
     public String toString() {
         return getClass().getSimpleName() + "[" + getNodeId() + "]";
-    }
-
-    public CreateCastData findCast(String name) {
-        if (getCasts() != null) {
-            for (CreateCastData cast : getCasts()) {
-                if (cast.getChildNames().contains(name)) {
-                    return cast;
-                }
-            }
-        }
-        return null;
     }
 
 }
