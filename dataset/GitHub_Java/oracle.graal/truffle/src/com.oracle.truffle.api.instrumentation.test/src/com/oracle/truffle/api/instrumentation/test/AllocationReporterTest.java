@@ -73,6 +73,7 @@ import com.oracle.truffle.api.instrumentation.AllocationListener;
 import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -858,6 +859,12 @@ public class AllocationReporterTest {
                     default:
                         return new TruffleObject() {
                             @Override
+                            public ForeignAccess getForeignAccess() {
+                                // For tests only
+                                return null;
+                            }
+
+                            @Override
                             public String toString() {
                                 return "NewObject";
                             }
@@ -880,6 +887,11 @@ public class AllocationReporterTest {
             return integer.bitCount() / 8;
         }
 
+        @Override
+        public ForeignAccess getForeignAccess() {
+            // For test only
+            return null;
+        }
     }
 
     private static final class AllocationInfo {
