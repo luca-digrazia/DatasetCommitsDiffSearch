@@ -26,7 +26,7 @@ import java.util.concurrent.*;
 
 import junit.framework.Assert;
 
-import org.junit.Test;
+import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
@@ -99,6 +99,7 @@ public class EliminateNestedCheckCastsTest extends GraalCompilerTest {
         return sum + a3.x3;
     }
 
+    @Ignore
     @Test
     public void test5() {
         StructuredGraph graph = compileSnippet("test5Snippet", 2, 1);
