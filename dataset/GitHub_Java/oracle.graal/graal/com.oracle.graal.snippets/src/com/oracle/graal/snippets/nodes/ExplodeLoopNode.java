@@ -27,13 +27,13 @@ import java.util.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.snippets.Snippet.VarargsParameter;
+import com.oracle.graal.snippets.Snippet.Parameter;
 
 /**
  * Placeholder node to denote to snippet preparation that the following loop
  * must be completely unrolled.
  *
- * @see VarargsParameter
+ * @see Parameter#multiple()
  */
 public final class ExplodeLoopNode extends FixedWithNextNode {
 
