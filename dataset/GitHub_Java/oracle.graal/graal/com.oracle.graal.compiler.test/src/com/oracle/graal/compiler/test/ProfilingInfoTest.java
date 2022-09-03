@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.compiler.test;
 
+import static org.junit.Assert.*;
+
 import java.io.*;
 import java.lang.reflect.*;
 
@@ -33,39 +35,38 @@ import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 public class ProfilingInfoTest extends GraalCompilerTest {
 
     private static final int N = 100;
-    private static final double DELTA = 1d / Integer.MAX_VALUE;
 
     @Test
     public void testBranchTakenProbability() {
         ProfilingInfo info = profile("branchProbabilitySnippet", 0);
-        Assert.assertEquals(0.0, info.getBranchTakenProbability(1), DELTA);
-        Assert.assertEquals(N, info.getExecutionCount(1));
-        Assert.assertEquals(-1.0, info.getBranchTakenProbability(8), DELTA);
-        Assert.assertEquals(0, info.getExecutionCount(8));
+        assertEquals(0.0, info.getBranchTakenProbability(1));
+        assertEquals(N, info.getExecutionCount(1));
+        assertEquals(-1.0, info.getBranchTakenProbability(8));
+        assertEquals(0, info.getExecutionCount(8));
 
         info = profile("branchProbabilitySnippet", 1);
-        Assert.assertEquals(1.0, info.getBranchTakenProbability(1), DELTA);
-        Assert.assertEquals(N, info.getExecutionCount(1));
-        Assert.assertEquals(0.0, info.getBranchTakenProbability(8), DELTA);
-        Assert.assertEquals(N, info.getExecutionCount(8));
+        assertEquals(1.0, info.getBranchTakenProbability(1));
+        assertEquals(N, info.getExecutionCount(1));
+        assertEquals(0.0, info.getBranchTakenProbability(8));
+        assertEquals(N, info.getExecutionCount(8));
 
         info = profile("branchProbabilitySnippet", 2);
-        Assert.assertEquals(1.0, info.getBranchTakenProbability(1), DELTA);
-        Assert.assertEquals(N, info.getExecutionCount(1));
-        Assert.assertEquals(1.0, info.getBranchTakenProbability(8), DELTA);
-        Assert.assertEquals(N, info.getExecutionCount(8));
+        assertEquals(1.0, info.getBranchTakenProbability(1));
+        assertEquals(N, info.getExecutionCount(1));
+        assertEquals(1.0, info.getBranchTakenProbability(8));
+        assertEquals(N, info.getExecutionCount(8));
 
         continueProfiling(3 * N, "branchProbabilitySnippet", 0);
-        Assert.assertEquals(0.25, info.getBranchTakenProbability(1), DELTA);
-        Assert.assertEquals(4 * N, info.getExecutionCount(1));
-        Assert.assertEquals(1.0, info.getBranchTakenProbability(8), DELTA);
-        Assert.assertEquals(N, info.getExecutionCount(8));
+        assertEquals(0.25, info.getBranchTakenProbability(1));
+        assertEquals(4 * N, info.getExecutionCount(1));
+        assertEquals(1.0, info.getBranchTakenProbability(8));
+        assertEquals(N, info.getExecutionCount(8));
 
         resetProfile("branchProbabilitySnippet");
-        Assert.assertEquals(-1.0, info.getBranchTakenProbability(1), DELTA);
-        Assert.assertEquals(0, info.getExecutionCount(1));
-        Assert.assertEquals(-1.0, info.getBranchTakenProbability(8), DELTA);
-        Assert.assertEquals(0, info.getExecutionCount(8));
+        assertEquals(-1.0, info.getBranchTakenProbability(1));
+        assertEquals(0, info.getExecutionCount(1));
+        assertEquals(-1.0, info.getBranchTakenProbability(8));
+        assertEquals(0, info.getExecutionCount(8));
     }
 
     public static int branchProbabilitySnippet(int value) {
@@ -81,16 +82,16 @@ public class ProfilingInfoTest extends GraalCompilerTest {
     @Test
     public void testSwitchProbabilities() {
         ProfilingInfo info = profile("switchProbabilitySnippet", 0);
-        Assert.assertArrayEquals(new double[]{1.0, 0.0, 0.0}, info.getSwitchProbabilities(1), DELTA);
+        assertEquals(new double[]{1.0, 0.0, 0.0}, info.getSwitchProbabilities(1));
 
         info = profile("switchProbabilitySnippet", 1);
-        Assert.assertArrayEquals(new double[]{0.0, 1.0, 0.0}, info.getSwitchProbabilities(1), DELTA);
+        assertEquals(new double[]{0.0, 1.0, 0.0}, info.getSwitchProbabilities(1));
 
         info = profile("switchProbabilitySnippet", 2);
-        Assert.assertArrayEquals(new double[]{0.0, 0.0, 1.0}, info.getSwitchProbabilities(1), DELTA);
+        assertEquals(new double[]{0.0, 0.0, 1.0}, info.getSwitchProbabilities(1));
 
         resetProfile("switchProbabilitySnippet");
-        Assert.assertNull(info.getSwitchProbabilities(1));
+        assertNull(info.getSwitchProbabilities(1));
     }
 
     public static int switchProbabilitySnippet(int value) {
@@ -146,66 +147,66 @@ public class ProfilingInfoTest extends GraalCompilerTest {
 
         ProfilingInfo info = profile(methodName, "ABC");
         JavaTypeProfile typeProfile = info.getTypeProfile(bci);
-        Assert.assertEquals(0.0, typeProfile.getNotRecordedProbability(), DELTA);
-        Assert.assertEquals(1, typeProfile.getTypes().length);
-        Assert.assertEquals(stringType, typeProfile.getTypes()[0].getType());
-        Assert.assertEquals(1.0, typeProfile.getTypes()[0].getProbability(), DELTA);
+        assertEquals(0.0, typeProfile.getNotRecordedProbability());
+        assertEquals(1, typeProfile.getTypes().length);
+        assertEquals(stringType, typeProfile.getTypes()[0].getType());
+        assertEquals(1.0, typeProfile.getTypes()[0].getProbability());
 
         continueProfiling(methodName, new StringBuilder());
         typeProfile = info.getTypeProfile(bci);
-        Assert.assertEquals(0.0, typeProfile.getNotRecordedProbability(), DELTA);
-        Assert.assertEquals(2, typeProfile.getTypes().length);
-        Assert.assertEquals(stringType, typeProfile.getTypes()[0].getType());
-        Assert.assertEquals(stringBuilderType, typeProfile.getTypes()[1].getType());
-        Assert.assertEquals(0.5, typeProfile.getTypes()[0].getProbability(), DELTA);
-        Assert.assertEquals(0.5, typeProfile.getTypes()[1].getProbability(), DELTA);
+        assertEquals(0.0, typeProfile.getNotRecordedProbability());
+        assertEquals(2, typeProfile.getTypes().length);
+        assertEquals(stringType, typeProfile.getTypes()[0].getType());
+        assertEquals(stringBuilderType, typeProfile.getTypes()[1].getType());
+        assertEquals(0.5, typeProfile.getTypes()[0].getProbability());
+        assertEquals(0.5, typeProfile.getTypes()[1].getProbability());
 
         resetProfile(methodName);
         typeProfile = info.getTypeProfile(bci);
-        Assert.assertNull(typeProfile);
+        assertNull(typeProfile);
     }
 
     @Test
     public void testExceptionSeen() {
         // NullPointerException
         ProfilingInfo info = profile("nullPointerExceptionSnippet", 5);
-        Assert.assertEquals(TriState.FALSE, info.getExceptionSeen(1));
+        assertEquals(TriState.FALSE, info.getExceptionSeen(1));
 
         info = profile("nullPointerExceptionSnippet", (Object) null);
-        Assert.assertEquals(TriState.TRUE, info.getExceptionSeen(1));
+        assertEquals(TriState.TRUE, info.getExceptionSeen(1));
 
         resetProfile("nullPointerExceptionSnippet");
-        Assert.assertEquals(TriState.FALSE, info.getExceptionSeen(1));
+        assertEquals(TriState.FALSE, info.getExceptionSeen(1));
 
         // ArrayOutOfBoundsException
         info = profile("arrayIndexOutOfBoundsExceptionSnippet", new int[1]);
-        Assert.assertEquals(TriState.FALSE, info.getExceptionSeen(2));
+        assertEquals(TriState.FALSE, info.getExceptionSeen(2));
 
         info = profile("arrayIndexOutOfBoundsExceptionSnippet", new int[0]);
-        Assert.assertEquals(TriState.TRUE, info.getExceptionSeen(2));
+        assertEquals(TriState.TRUE, info.getExceptionSeen(2));
 
         resetProfile("arrayIndexOutOfBoundsExceptionSnippet");
-        Assert.assertEquals(TriState.FALSE, info.getExceptionSeen(2));
+        assertEquals(TriState.FALSE, info.getExceptionSeen(2));
 
         // CheckCastException
         info = profile("checkCastExceptionSnippet", "ABC");
-        Assert.assertEquals(TriState.FALSE, info.getExceptionSeen(1));
+        assertEquals(TriState.FALSE, info.getExceptionSeen(1));
 
         info = profile("checkCastExceptionSnippet", 5);
-        Assert.assertEquals(TriState.TRUE, info.getExceptionSeen(1));
+        assertEquals(TriState.TRUE, info.getExceptionSeen(1));
 
         resetProfile("checkCastExceptionSnippet");
-        Assert.assertEquals(TriState.FALSE, info.getExceptionSeen(1));
+        assertEquals(TriState.FALSE, info.getExceptionSeen(1));
 
         // Invoke with exception
         info = profile("invokeWithExceptionSnippet", false);
-        Assert.assertEquals(TriState.FALSE, info.getExceptionSeen(1));
+        assertEquals(TriState.FALSE, info.getExceptionSeen(1));
 
         info = profile("invokeWithExceptionSnippet", true);
-        Assert.assertEquals(TriState.TRUE, info.getExceptionSeen(1));
+        assertEquals(TriState.TRUE, info.getExceptionSeen(1));
 
         resetProfile("invokeWithExceptionSnippet");
-        Assert.assertEquals(TriState.FALSE, info.getExceptionSeen(1));
+        assertEquals(TriState.FALSE, info.getExceptionSeen(1));
     }
 
     public static int nullPointerExceptionSnippet(Object obj) {
@@ -251,19 +252,19 @@ public class ProfilingInfoTest extends GraalCompilerTest {
     @Test
     public void testNullSeen() {
         ProfilingInfo info = profile("instanceOfSnippet", 1);
-        Assert.assertEquals(TriState.FALSE, info.getNullSeen(1));
+        assertEquals(TriState.FALSE, info.getNullSeen(1));
 
         continueProfiling("instanceOfSnippet", "ABC");
-        Assert.assertEquals(TriState.FALSE, info.getNullSeen(1));
+        assertEquals(TriState.FALSE, info.getNullSeen(1));
 
         continueProfiling("instanceOfSnippet", (Object) null);
-        Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
+        assertEquals(TriState.TRUE, info.getNullSeen(1));
 
         continueProfiling("instanceOfSnippet", 0.0);
-        Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
+        assertEquals(TriState.TRUE, info.getNullSeen(1));
 
         resetProfile("instanceOfSnippet");
-        Assert.assertEquals(TriState.FALSE, info.getNullSeen(1));
+        assertEquals(TriState.FALSE, info.getNullSeen(1));
     }
 
     private ProfilingInfo profile(String methodName, Object... args) {
@@ -291,7 +292,7 @@ public class ProfilingInfoTest extends GraalCompilerTest {
             try {
                 method.invoke(null, args);
             } catch (Throwable e) {
-                Assert.fail("method should not throw an exception: " + e.toString());
+                fail("method should not throw an exception: " + e.toString());
             }
         }
 
