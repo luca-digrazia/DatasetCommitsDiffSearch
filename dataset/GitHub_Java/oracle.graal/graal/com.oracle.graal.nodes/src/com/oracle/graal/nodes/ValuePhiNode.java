@@ -35,13 +35,34 @@ public class ValuePhiNode extends PhiNode {
 
     @Input protected NodeInputList<ValueNode> values;
 
-    public ValuePhiNode(Stamp stamp, MergeNode merge) {
+    /**
+     * Create a value phi with the specified stamp.
+     *
+     * @param stamp the stamp of the value
+     * @param merge the merge that the new phi belongs to
+     */
+    public static ValuePhiNode create(Stamp stamp, MergeNode merge) {
+        return USE_GENERATED_NODES ? new ValuePhiNodeGen(stamp, merge) : new ValuePhiNode(stamp, merge);
+    }
+
+    protected ValuePhiNode(Stamp stamp, MergeNode merge) {
         super(stamp, merge);
         assert stamp != StampFactory.forVoid();
         values = new NodeInputList<>(this);
     }
 
-    public ValuePhiNode(Stamp stamp, MergeNode merge, ValueNode[] values) {
+    /**
+     * Create a value phi with the specified stamp and the given values.
+     *
+     * @param stamp the stamp of the value
+     * @param merge the merge that the new phi belongs to
+     * @param values the initial values of the phi
+     */
+    public static ValuePhiNode create(Stamp stamp, MergeNode merge, ValueNode[] values) {
+        return USE_GENERATED_NODES ? new ValuePhiNodeGen(stamp, merge, values) : new ValuePhiNode(stamp, merge, values);
+    }
+
+    protected ValuePhiNode(Stamp stamp, MergeNode merge, ValueNode[] values) {
         super(stamp, merge);
         assert stamp != StampFactory.forVoid();
         this.values = new NodeInputList<>(this, values);

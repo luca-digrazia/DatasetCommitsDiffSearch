@@ -81,15 +81,11 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
                 for (int i = 0; i < constantLength; i++) {
                     state[i] = defaultForKind;
                 }
-                VirtualObjectNode virtualObject = createVirtualArrayNode(constantLength);
+                VirtualObjectNode virtualObject = VirtualArrayNode.create(elementType(), constantLength);
                 tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList());
                 tool.replaceWithVirtual(virtualObject);
             }
         }
-    }
-
-    protected VirtualArrayNode createVirtualArrayNode(int constantLength) {
-        return VirtualArrayNode.create(elementType(), constantLength);
     }
 
     /* Factored out in a separate method so that subclasses can override it. */

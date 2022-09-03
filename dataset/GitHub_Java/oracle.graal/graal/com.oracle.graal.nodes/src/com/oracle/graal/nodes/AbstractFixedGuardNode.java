@@ -33,9 +33,9 @@ import com.oracle.graal.nodes.util.*;
 public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, GuardingNode {
 
     @Input(InputType.Condition) protected LogicNode condition;
-    protected DeoptimizationReason reason;
-    protected DeoptimizationAction action;
-    protected boolean negated;
+    private final DeoptimizationReason reason;
+    private final DeoptimizationAction action;
+    private boolean negated;
 
     public LogicNode condition() {
         return condition;

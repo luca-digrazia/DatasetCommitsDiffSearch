@@ -43,6 +43,10 @@ public class MergeNode extends BeginStateSplitNode implements IterableNodeType, 
         return USE_GENERATED_NODES ? new MergeNodeGen() : new MergeNode();
     }
 
+    public static Class<? extends MergeNode> getGenClass() {
+        return USE_GENERATED_NODES ? MergeNodeGen.class : MergeNode.class;
+    }
+
     protected MergeNode() {
     }
 
