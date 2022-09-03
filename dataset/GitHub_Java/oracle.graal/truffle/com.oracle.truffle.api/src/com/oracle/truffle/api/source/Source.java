@@ -378,8 +378,7 @@ public abstract class Source {
      */
     public static Source fromBytes(byte[] bytes, int byteIndex, int length, String description, Charset charset) {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromBytes from compiled code");
-        Content content = new BytesSourceImpl(description, bytes, byteIndex, length, charset);
-        return new Impl(content);
+        return new BytesSourceImpl(description, bytes, byteIndex, length, charset);
     }
 
     // TODO (mlvdv) enable per-file choice whether to cache?
@@ -516,10 +515,6 @@ public abstract class Source {
      */
     public String getCode() {
         return content().getCode();
-    }
-
-    final int getCodeLength() {
-        return content() == null ? getCode().length() : content().getCodeLength();
     }
 
     /**
@@ -706,7 +701,7 @@ public abstract class Source {
     }
 
     void checkRange(int charIndex, int length) {
-        if (!(charIndex >= 0 && length >= 0 && charIndex + length <= getCodeLength())) {
+        if (!(charIndex >= 0 && length >= 0 && charIndex + length <= getCode().length())) {
             throw new IllegalArgumentException("text positions out of range");
         }
     }
