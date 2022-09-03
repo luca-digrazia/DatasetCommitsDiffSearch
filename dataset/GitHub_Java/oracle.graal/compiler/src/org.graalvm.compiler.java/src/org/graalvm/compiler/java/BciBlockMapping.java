@@ -75,9 +75,6 @@ import static org.graalvm.compiler.bytecode.Bytecodes.JSR;
 import static org.graalvm.compiler.bytecode.Bytecodes.JSR_W;
 import static org.graalvm.compiler.bytecode.Bytecodes.LALOAD;
 import static org.graalvm.compiler.bytecode.Bytecodes.LASTORE;
-import static org.graalvm.compiler.bytecode.Bytecodes.LDC;
-import static org.graalvm.compiler.bytecode.Bytecodes.LDC2_W;
-import static org.graalvm.compiler.bytecode.Bytecodes.LDC_W;
 import static org.graalvm.compiler.bytecode.Bytecodes.LDIV;
 import static org.graalvm.compiler.bytecode.Bytecodes.LOOKUPSWITCH;
 import static org.graalvm.compiler.bytecode.Bytecodes.LREM;
@@ -691,10 +688,7 @@ public final class BciBlockMapping {
                 case PUTSTATIC:
                 case GETSTATIC:
                 case PUTFIELD:
-                case GETFIELD:
-                case LDC:
-                case LDC_W:
-                case LDC2_W: {
+                case GETFIELD: {
                     /*
                      * All bytecodes that can trigger lazy class initialization via a
                      * ClassInitializationPlugin (allocations, static field access) must be listed

@@ -272,6 +272,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         this.componentHub = componentHub;
         this.sourceFileName = sourceFileName;
         this.genericInfo = GenericInfo.forEmpty();
+        this.annotatedSuperInfo = AnnotatedSuperInfo.forEmpty();
         this.isStatic = isStatic;
         this.isSynthetic = isSynthetic;
         this.classloader = classLoader;
@@ -326,18 +327,8 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public AnnotatedSuperInfo getAnnotatedSuperInfo() {
-        return annotatedSuperInfo;
-    }
-
-    @Platforms(Platform.HOSTED_ONLY.class)
     public void setInterfacesEncoding(Object interfacesEncoding) {
         this.interfacesEncoding = interfacesEncoding;
-    }
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public Object getInterfacesEncoding() {
-        return interfacesEncoding;
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)

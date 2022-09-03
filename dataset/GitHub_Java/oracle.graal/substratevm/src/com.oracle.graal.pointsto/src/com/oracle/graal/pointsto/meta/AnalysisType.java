@@ -181,12 +181,8 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
          * AnalysisField objects, directly here because that could lead to a deadlock.
          */
         for (ResolvedJavaField field : wrapped.getInstanceFields(false)) {
-            try {
-                /* Eagerly resolve the field declared type. */
-                field.getType();
-            } catch (NoClassDefFoundError e) {
-                throw new UnsupportedFeatureException("field's type is not available: " + field.getDeclaringClass().toJavaName() + "." + field.getName() + ": " + e);
-            }
+            /* Eagerly resolve the field declared type. */
+            field.getType();
         }
 
         /* Ensure the super types as well as the component type (for arrays) is created too. */

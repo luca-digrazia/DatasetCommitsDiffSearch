@@ -32,7 +32,6 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import org.graalvm.compiler.core.common.NumUtil;
-import org.graalvm.compiler.serviceprovider.BufferUtil;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.RelocatedPointer;
 
@@ -72,12 +71,6 @@ public final class RelocatableBuffer {
 
     public RelocatableBuffer.Info addPCRelativeRelocationWithAddend(int key, int relocationSize, Long explicitAddend, Object targetObject) {
         final RelocatableBuffer.Info info = infoFactory(ObjectFile.RelocationKind.PC_RELATIVE, relocationSize, explicitAddend, targetObject);
-        final RelocatableBuffer.Info result = putInfo(key, info);
-        return result;
-    }
-
-    public RelocatableBuffer.Info addRelocation(int key, ObjectFile.RelocationKind relocationKind, int relocationSize, Long explicitAddend, Object targetObject) {
-        final RelocatableBuffer.Info info = infoFactory(relocationKind, relocationSize, explicitAddend, targetObject);
         final RelocatableBuffer.Info result = putInfo(key, info);
         return result;
     }
@@ -134,7 +127,7 @@ public final class RelocatableBuffer {
     }
 
     public RelocatableBuffer setPosition(final int newPosition) {
-        BufferUtil.asBaseBuffer(getBuffer()).position(newPosition);
+        getBuffer().position(newPosition);
         return this;
     }
 
@@ -256,10 +249,5 @@ public final class RelocatableBuffer {
          * code (text section) or constants (rodata section) relocation.
          */
         private final Object targetObject;
-
-        @Override
-        public String toString() {
-            return "RelocatableBuffer.Info(targetObject=" + targetObject + " relocationSize=" + relocationSize + " relocationKind=" + relocationKind + " explicitAddend=" + explicitAddend + ")";
-        }
     }
 }
