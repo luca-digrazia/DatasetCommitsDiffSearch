@@ -26,6 +26,7 @@ import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
@@ -45,7 +46,6 @@ import com.oracle.graal.lir.LIRInstruction.StateProcedure;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.options.*;
 import com.oracle.graal.phases.util.*;
 
 /**
@@ -55,13 +55,6 @@ import com.oracle.graal.phases.util.*;
  * Hanspeter Moessenboeck.
  */
 public final class LinearScan {
-
-    static class Options {
-        // @formatter:off
-        @Option(help = "The trace level for the linear scan register allocator")
-        public static final OptionValue<Integer> TraceLinearScanLevel = new OptionValue<>(0);
-        // @formatter:on
-    }
 
     final TargetDescription target;
     final LIR ir;
@@ -165,8 +158,6 @@ public final class LinearScan {
      */
     private final int firstVariableNumber;
 
-    private final int traceLevel;
-
     public LinearScan(TargetDescription target, LIR ir, LIRGenerator gen, FrameMap frameMap) {
         this.target = target;
         this.ir = ir;
@@ -179,11 +170,6 @@ public final class LinearScan {
         this.firstVariableNumber = registers.length;
         this.variables = new ArrayList<>(ir.numVariables() * 3 / 2);
         this.blockData = new BlockMap<>(ir.cfg);
-        traceLevel = Options.TraceLinearScanLevel.getValue();
-    }
-
-    int getTraceLevel() {
-        return traceLevel;
     }
 
     public int getFirstLirInstructionId(Block block) {
@@ -518,7 +504,7 @@ public final class LinearScan {
 
     // called once before assignment of register numbers
     void eliminateSpillMoves() {
-        if (getTraceLevel() >= 3) {
+        if (TraceLinearScanLevel.getValue() >= 3) {
             TTY.println(" Eliminating unnecessary spill moves");
         }
 
@@ -527,7 +513,7 @@ public final class LinearScan {
         Interval interval;
         interval = createUnhandledLists(mustStoreAtDefinition, null).first;
         if (DetailedAsserts.getValue()) {
-            checkIntervals(interval, getTraceLevel());
+            checkIntervals(interval);
         }
 
         LIRInsertionBuffer insertionBuffer = new LIRInsertionBuffer();
@@ -552,7 +538,7 @@ public final class LinearScan {
                     if (!isRegister(curInterval.location()) && curInterval.alwaysInMemory()) {
                         // move target is a stack slot that is always correct, so eliminate
                         // instruction
-                        if (getTraceLevel() >= 4) {
+                        if (TraceLinearScanLevel.getValue() >= 4) {
                             TTY.println("eliminating move from interval %d to %d", operandNumber(move.getInput()), operandNumber(move.getResult()));
                         }
                         instructions.set(j, null); // null-instructions are deleted by assignRegNum
@@ -578,7 +564,7 @@ public final class LinearScan {
 
                         insertionBuffer.append(j + 1, ir.spillMoveFactory.createMove(toLocation, fromLocation));
 
-                        if (getTraceLevel() >= 4) {
+                        if (TraceLinearScanLevel.getValue() >= 4) {
                             StackSlot slot = interval.spillSlot();
                             TTY.println("inserting move after definition of interval %d to stack slot %s at opId %d", interval.operandNumber, slot, opId);
                         }
@@ -596,7 +582,7 @@ public final class LinearScan {
         assert interval == Interval.EndMarker : "missed an interval";
     }
 
-    private static void checkIntervals(Interval interval, int traceLevel) {
+    private static void checkIntervals(Interval interval) {
         Interval prev = null;
         Interval temp = interval;
         while (temp != Interval.EndMarker) {
@@ -610,7 +596,7 @@ public final class LinearScan {
             assert temp.spillDefinitionPos() >= temp.from() : "invalid order";
             assert temp.spillDefinitionPos() <= temp.from() + 2 : "only intervals defined once at their start-pos can be optimized";
 
-            if (traceLevel >= 4) {
+            if (TraceLinearScanLevel.getValue() >= 4) {
                 TTY.println("interval %d (from %d to %d) must be stored at %d", temp.operandNumber, temp.from(), temp.to(), temp.spillDefinitionPos());
             }
 
@@ -712,7 +698,7 @@ public final class LinearScan {
                             int operandNum = operandNumber(operand);
                             if (!liveKill.get(operandNum)) {
                                 liveGen.set(operandNum);
-                                if (getTraceLevel() >= 4) {
+                                if (TraceLinearScanLevel.getValue() >= 4) {
                                     TTY.println("  Setting liveGen for operand %d at instruction %d", operandNum, op.id());
                                 }
                             }
@@ -734,7 +720,7 @@ public final class LinearScan {
                         int operandNum = operandNumber(operand);
                         if (!liveKill.get(operandNum)) {
                             liveGen.set(operandNum);
-                            if (getTraceLevel() >= 4) {
+                            if (TraceLinearScanLevel.getValue() >= 4) {
                                 TTY.println("  Setting liveGen for LIR opId %d, operand %d because of state for %s", op.id(), operandNum, op);
                             }
                         }
@@ -777,7 +763,7 @@ public final class LinearScan {
             blockData.get(block).liveIn = new BitSet(liveSize);
             blockData.get(block).liveOut = new BitSet(liveSize);
 
-            if (getTraceLevel() >= 4) {
+            if (TraceLinearScanLevel.getValue() >= 4) {
                 TTY.println("liveGen  B%d %s", block.getId(), blockData.get(block).liveGen);
                 TTY.println("liveKill B%d %s", block.getId(), blockData.get(block).liveKill);
             }
@@ -866,7 +852,7 @@ public final class LinearScan {
                     liveIn.or(blockData.get(block).liveGen);
                 }
 
-                if (getTraceLevel() >= 4) {
+                if (TraceLinearScanLevel.getValue() >= 4) {
                     traceLiveness(changeOccurredInBlock, iterationCount, block);
                 }
             }
@@ -988,7 +974,7 @@ public final class LinearScan {
         if (!isProcessed(operand)) {
             return;
         }
-        if (getTraceLevel() >= 2 && kind == null) {
+        if (TraceLinearScanLevel.getValue() >= 2 && kind == null) {
             TTY.println(" use %s from %d to %d (%s)", operand, from, to, registerPriority.name());
         }
 
@@ -1007,7 +993,7 @@ public final class LinearScan {
         if (!isProcessed(operand)) {
             return;
         }
-        if (getTraceLevel() >= 2) {
+        if (TraceLinearScanLevel.getValue() >= 2) {
             TTY.println(" temp %s tempPos %d (%s)", operand, tempPos, RegisterPriority.MustHaveRegister.name());
         }
 
@@ -1028,7 +1014,7 @@ public final class LinearScan {
         if (!isProcessed(operand)) {
             return;
         }
-        if (getTraceLevel() >= 2) {
+        if (TraceLinearScanLevel.getValue() >= 2) {
             TTY.println(" def %s defPos %d (%s)", operand, defPos, registerPriority.name());
         }
 
@@ -1049,7 +1035,7 @@ public final class LinearScan {
             // also add register priority for dead intervals
             interval.addRange(defPos, defPos + 1);
             interval.addUsePos(defPos, registerPriority);
-            if (getTraceLevel() >= 2) {
+            if (TraceLinearScanLevel.getValue() >= 2) {
                 TTY.println("Warning: def of operand %s at %d occurs without use", operand, defPos);
             }
         }
@@ -1110,7 +1096,7 @@ public final class LinearScan {
                     assert blockForId(op.id()).getPredecessorCount() == 0 : "move from stack must be in first block";
                     assert isVariable(move.getResult()) : "result of move must be a variable";
 
-                    if (getTraceLevel() >= 4) {
+                    if (TraceLinearScanLevel.getValue() >= 4) {
                         TTY.println("found move from stack slot %s to %s", slot, move.getResult());
                     }
                 }
@@ -1140,7 +1126,7 @@ public final class LinearScan {
                             from.setLocationHint(to);
                         }
 
-                        if (getTraceLevel() >= 4) {
+                        if (TraceLinearScanLevel.getValue() >= 4) {
                             TTY.println("operation at opId %d: added hint from interval %d to %d", op.id(), from.operandNumber, to.operandNumber);
                         }
                         return registerHint;
@@ -1173,7 +1159,7 @@ public final class LinearScan {
             for (int operandNum = live.nextSetBit(0); operandNum >= 0; operandNum = live.nextSetBit(operandNum + 1)) {
                 assert live.get(operandNum) : "should not stop here otherwise";
                 AllocatableValue operand = operandFor(operandNum);
-                if (getTraceLevel() >= 2) {
+                if (TraceLinearScanLevel.getValue() >= 2) {
                     TTY.println("live in %s to %d", operand, blockTo + 2);
                 }
 
@@ -1201,7 +1187,7 @@ public final class LinearScan {
                             addTemp(r.asValue(), opId, RegisterPriority.None, Kind.Illegal);
                         }
                     }
-                    if (getTraceLevel() >= 4) {
+                    if (TraceLinearScanLevel.getValue() >= 4) {
                         TTY.println("operation destroys all caller-save registers");
                     }
                 }
@@ -1452,7 +1438,7 @@ public final class LinearScan {
         Interval result = interval.getSplitChildAtOpId(opId, mode, this);
 
         if (result != null) {
-            if (getTraceLevel() >= 4) {
+            if (TraceLinearScanLevel.getValue() >= 4) {
                 TTY.println("Split child at pos " + opId + " of interval " + interval.toString() + " is " + result.toString());
             }
             return result;
@@ -1506,7 +1492,7 @@ public final class LinearScan {
 
     void resolveFindInsertPos(Block fromBlock, Block toBlock, MoveResolver moveResolver) {
         if (fromBlock.getSuccessorCount() <= 1) {
-            if (getTraceLevel() >= 4) {
+            if (TraceLinearScanLevel.getValue() >= 4) {
                 TTY.println("inserting moves at end of fromBlock B%d", fromBlock.getId());
             }
 
@@ -1520,7 +1506,7 @@ public final class LinearScan {
             }
 
         } else {
-            if (getTraceLevel() >= 4) {
+            if (TraceLinearScanLevel.getValue() >= 4) {
                 TTY.println("inserting moves at beginning of toBlock B%d", toBlock.getId());
             }
 
@@ -1565,7 +1551,7 @@ public final class LinearScan {
 
                     // prevent optimization of two consecutive blocks
                     if (!blockCompleted.get(pred.getLinearScanNumber()) && !blockCompleted.get(sux.getLinearScanNumber())) {
-                        if (getTraceLevel() >= 3) {
+                        if (TraceLinearScanLevel.getValue() >= 3) {
                             TTY.println(" optimizing empty block B%d (pred: B%d, sux: B%d)", block.getId(), pred.getId(), sux.getId());
                         }
                         blockCompleted.set(block.getLinearScanNumber());
@@ -1592,7 +1578,7 @@ public final class LinearScan {
                     // check for duplicate edges between the same blocks (can happen with switch
                     // blocks)
                     if (!alreadyResolved.get(toBlock.getLinearScanNumber())) {
-                        if (getTraceLevel() >= 3) {
+                        if (TraceLinearScanLevel.getValue() >= 3) {
                             TTY.println(" processing edge between B%d and B%d", fromBlock.getId(), toBlock.getId());
                         }
                         alreadyResolved.set(toBlock.getLinearScanNumber());
@@ -1671,7 +1657,7 @@ public final class LinearScan {
     }
 
     void computeOopMap(IntervalWalker iw, LIRInstruction op, BitSet registerRefMap, BitSet frameRefMap) {
-        if (getTraceLevel() >= 3) {
+        if (TraceLinearScanLevel.getValue() >= 3) {
             TTY.println("creating oop map at opId %d", op.id());
         }
 
@@ -1880,7 +1866,7 @@ public final class LinearScan {
     }
 
     void printIntervals(String label) {
-        if (getTraceLevel() >= 1) {
+        if (TraceLinearScanLevel.getValue() >= 1) {
             int i;
             TTY.println();
             TTY.println(label);
@@ -1910,27 +1896,27 @@ public final class LinearScan {
 
     boolean verify() {
         // (check that all intervals have a correct register and that no registers are overwritten)
-        if (getTraceLevel() >= 2) {
+        if (TraceLinearScanLevel.getValue() >= 2) {
             TTY.println(" verifying intervals *");
         }
         verifyIntervals();
 
-        if (getTraceLevel() >= 2) {
+        if (TraceLinearScanLevel.getValue() >= 2) {
             TTY.println(" verifying that no oops are in fixed intervals *");
         }
         // verifyNoOopsInFixedIntervals();
 
-        if (getTraceLevel() >= 2) {
+        if (TraceLinearScanLevel.getValue() >= 2) {
             TTY.println(" verifying that unpinned constants are not alive across block boundaries");
         }
         verifyConstants();
 
-        if (getTraceLevel() >= 2) {
+        if (TraceLinearScanLevel.getValue() >= 2) {
             TTY.println(" verifying register allocation *");
         }
         verifyRegisters();
 
-        if (getTraceLevel() >= 2) {
+        if (TraceLinearScanLevel.getValue() >= 2) {
             TTY.println(" no errors found *");
         }
 
@@ -2082,7 +2068,7 @@ public final class LinearScan {
 
             // visit all operands where the liveAtEdge bit is set
             for (int operandNum = liveAtEdge.nextSetBit(0); operandNum >= 0; operandNum = liveAtEdge.nextSetBit(operandNum + 1)) {
-                if (getTraceLevel() >= 4) {
+                if (TraceLinearScanLevel.getValue() >= 4) {
                     TTY.println("checking interval %d of block B%d", operandNum, block.getId());
                 }
                 Value operand = operandFor(operandNum);
