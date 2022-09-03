@@ -79,14 +79,14 @@ public class LitePalSupport {
 	 * The identify of each model. LitePal will generate the value
 	 * automatically. Do not try to assign or modify it.
 	 */
-	private long baseObjId;
+	long baseObjId;
 
 	/**
 	 * A map contains all the associated models' id with M2O or O2O
 	 * associations. Each corresponding table of these models contains a foreign
 	 * key column.
 	 */
-	private Map<String, Set<Long>> associatedModelsMapWithFK;
+    private Map<String, Set<Long>> associatedModelsMapWithFK;
 
 	/**
 	 * A map contains all the associated models' id with M2O or O2O association.
@@ -94,19 +94,19 @@ public class LitePalSupport {
 	 * column. Instead self model has a foreign key column in the corresponding
 	 * table.
 	 */
-	private Map<String, Long> associatedModelsMapWithoutFK;
+    private Map<String, Long> associatedModelsMapWithoutFK;
 
 	/**
 	 * A map contains all the associated models' id with M2M association.
 	 */
-	private Map<String, List<Long>> associatedModelsMapForJoinTable;
+	Map<String, List<Long>> associatedModelsMapForJoinTable;
 
 	/**
 	 * When updating a model and the associations breaks between current model
 	 * and others, if current model holds a foreign key, it need to be cleared.
 	 * This list holds all the foreign key names that need to clear.
 	 */
-	private List<String> listToClearSelfFK;
+    private List<String> listToClearSelfFK;
 
 	/**
 	 * When updating a model and the associations breaks between current model
@@ -114,13 +114,13 @@ public class LitePalSupport {
 	 * exists. This list holds all the associated table names that need to
 	 * clear.
 	 */
-	private List<String> listToClearAssociatedFK;
+    private List<String> listToClearAssociatedFK;
 
 	/**
 	 * A list holds all the field names which need to be updated into default
 	 * value of model.
 	 */
-	private List<String> fieldsToSetToDefault;
+    private List<String> fieldsToSetToDefault;
 
 	/**
 	 * Deletes the record in the database. The record must be saved already.<br>
@@ -137,20 +137,20 @@ public class LitePalSupport {
 	 * 
 	 * @return The number of rows affected. Including cascade delete rows.
 	 */
-	public synchronized int delete() {
-		SQLiteDatabase db = Connector.getDatabase();
-		db.beginTransaction();
-		try {
-//			DeleteHandler deleteHandler = new DeleteHandler(db);
-//			int rowsAffected = deleteHandler.onDelete(this);
-//			baseObjId = 0;
-//			db.setTransactionSuccessful();
-//            return rowsAffected;
-            // TODO
-            return 0;
-        } finally {
-			db.endTransaction();
-		}
+	public int delete() {
+	    synchronized (LitePalSupport.class) {
+            SQLiteDatabase db = Connector.getDatabase();
+            db.beginTransaction();
+            try {
+                DeleteHandler deleteHandler = new DeleteHandler(db);
+                int rowsAffected = deleteHandler.onDelete(this);
+                baseObjId = 0;
+                db.setTransactionSuccessful();
+                return rowsAffected;
+            } finally {
+                db.endTransaction();
+            }
+        }
 	}
 
     /**
@@ -201,17 +201,17 @@ public class LitePalSupport {
 	 *            Which record to update.
 	 * @return The number of rows affected.
 	 */
-	public synchronized int update(long id) {
-		try {
-//			UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
-//			int rowsAffected = updateHandler.onUpdate(this, id);
-//			getFieldsToSetToDefault().clear();
-//			return rowsAffected;
-            // TODO
-            return 0;
-		} catch (Exception e) {
-			throw new LitePalSupportException(e.getMessage(), e);
-		}
+	public int update(long id) {
+        synchronized (LitePalSupport.class) {
+            try {
+                UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
+                int rowsAffected = updateHandler.onUpdate(this, id);
+                getFieldsToSetToDefault().clear();
+                return rowsAffected;
+            } catch (Exception e) {
+                throw new LitePalSupportException(e.getMessage(), e);
+            }
+        }
 	}
 
     /**
@@ -272,17 +272,17 @@ public class LitePalSupport {
 	 *            all rows.
 	 * @return The number of rows affected.
 	 */
-	public synchronized int updateAll(String... conditions) {
-		try {
-//			UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
-//			int rowsAffected = updateHandler.onUpdateAll(this, conditions);
-//			getFieldsToSetToDefault().clear();
-//			return rowsAffected;
-            // TODO
-            return 0;
-		} catch (Exception e) {
-			throw new LitePalSupportException(e.getMessage(), e);
-		}
+	public int updateAll(String... conditions) {
+        synchronized (LitePalSupport.class) {
+            try {
+                UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
+                int rowsAffected = updateHandler.onUpdateAll(this, conditions);
+                getFieldsToSetToDefault().clear();
+                return rowsAffected;
+            } catch (Exception e) {
+                throw new LitePalSupportException(e.getMessage(), e);
+            }
+        }
 	}
 
     /**
@@ -344,14 +344,14 @@ public class LitePalSupport {
 	 * @return If the model is saved successfully, return true. Any exception
 	 *         happens, return false.
 	 */
-	public synchronized boolean save() {
-		try {
-			saveThrows();
-			return true;
-		} catch (Exception e) {
-			e.printStackTrace();
-			return false;
-		}
+	public boolean save() {
+        try {
+            saveThrows();
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
 	}
 
     /**
@@ -405,20 +405,21 @@ public class LitePalSupport {
 	 * 
 	 * @throws LitePalSupportException
 	 */
-	public synchronized void saveThrows() {
-		SQLiteDatabase db = Connector.getDatabase();
-		db.beginTransaction();
-		try {
-			SaveHandler saveHandler = new SaveHandler(db);
-//			saveHandler.onSave(this);
-            // TODO
-			clearAssociatedData();
-			db.setTransactionSuccessful();
-		} catch (Exception e) {
-			throw new LitePalSupportException(e.getMessage(), e);
-		} finally {
-			db.endTransaction();
-		}
+	public void saveThrows() {
+        synchronized (LitePalSupport.class) {
+            SQLiteDatabase db = Connector.getDatabase();
+            db.beginTransaction();
+            try {
+                SaveHandler saveHandler = new SaveHandler(db);
+                saveHandler.onSave(this);
+                clearAssociatedData();
+                db.setTransactionSuccessful();
+            } catch (Exception e) {
+                throw new LitePalSupportException(e.getMessage(), e);
+            } finally {
+                db.endTransaction();
+            }
+        }
 	}
 
     /**
@@ -426,7 +427,7 @@ public class LitePalSupport {
      * Use {@link #saveOrUpdate(String...)} instead.
      */
     @Deprecated
-    public synchronized boolean saveIfNotExist(String... conditions) {
+    public boolean saveIfNotExist(String... conditions) {
         if (!LitePal.isExist(getClass(), conditions)) {
             return save();
         }
@@ -465,31 +466,32 @@ public class LitePalSupport {
      * @return If the model saved or updated successfully, return true. Otherwise return false.
      */
     @SuppressWarnings("unchecked")
-    public synchronized boolean saveOrUpdate(String... conditions) {
-        if (conditions == null) {
-            return save();
-        }
-        List<LitePalSupport> list = (List<LitePalSupport>) LitePal.where(conditions).find(getClass());
-        if (list.isEmpty()) {
-            return save();
-        } else {
-            SQLiteDatabase db = Connector.getDatabase();
-            db.beginTransaction();
-            try {
-                for (LitePalSupport support : list) {
-                    baseObjId = support.getBaseObjId();
-                    SaveHandler saveHandler = new SaveHandler(db);
-//                    saveHandler.onSave(this);
-                    // TODO
-                    clearAssociatedData();
+    public boolean saveOrUpdate(String... conditions) {
+        synchronized (LitePalSupport.class) {
+            if (conditions == null) {
+                return save();
+            }
+            List<LitePalSupport> list = (List<LitePalSupport>) LitePal.where(conditions).find(getClass());
+            if (list.isEmpty()) {
+                return save();
+            } else {
+                SQLiteDatabase db = Connector.getDatabase();
+                db.beginTransaction();
+                try {
+                    for (LitePalSupport support : list) {
+                        baseObjId = support.getBaseObjId();
+                        SaveHandler saveHandler = new SaveHandler(db);
+                        saveHandler.onSave(this);
+                        clearAssociatedData();
+                    }
+                    db.setTransactionSuccessful();
+                    return true;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return false;
+                } finally {
+                    db.endTransaction();
                 }
-                db.setTransactionSuccessful();
-                return true;
-            } catch (Exception e) {
-                e.printStackTrace();
-                return false;
-            } finally {
-                db.endTransaction();
             }
         }
     }
