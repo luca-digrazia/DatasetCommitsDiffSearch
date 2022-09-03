@@ -139,7 +139,7 @@ public class GraphUtil {
         node.safeDelete();
 
         for (Node in : floatingInputs) {
-            if (in.isAlive() && in.hasNoUsages()) {
+            if (in.isAlive() && in.usages().isEmpty()) {
                 killWithUnusedFloatingInputs(in);
             }
         }
@@ -149,7 +149,7 @@ public class GraphUtil {
         if (fixed instanceof StateSplit) {
             FrameState stateAfter = ((StateSplit) fixed).stateAfter();
             ((StateSplit) fixed).setStateAfter(null);
-            if (stateAfter.hasNoUsages()) {
+            if (stateAfter.usages().isEmpty()) {
                 killWithUnusedFloatingInputs(stateAfter);
             }
         }
@@ -379,7 +379,7 @@ public class GraphUtil {
     }
 
     public static boolean tryKillUnused(Node node) {
-        if (node.isAlive() && isFloatingNode().apply(node) && node.hasNoUsages()) {
+        if (node.isAlive() && isFloatingNode().apply(node) && node.usages().isEmpty()) {
             killWithUnusedFloatingInputs(node);
             return true;
         }
@@ -446,7 +446,7 @@ public class GraphUtil {
 
     /**
      * Returns an iterator that will return the given node followed by all its predecessors, up
-     * until the point where {@link Node#predecessor()} returns null.
+     * until the point where {@link Node#predecessor()} returns null;
      *
      * @param start the node at which to start iterating
      */

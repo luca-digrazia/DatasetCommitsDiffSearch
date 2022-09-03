@@ -37,17 +37,17 @@ import com.oracle.graal.nodes.virtual.*;
 @NodeInfo
 public class BasicObjectCloneNode extends MacroStateSplitNode implements VirtualizableAllocation, ArrayLengthProvider {
 
-    public BasicObjectCloneNode(Invoke invoke) {
+    public static BasicObjectCloneNode create(Invoke invoke) {
+        return USE_GENERATED_NODES ? new BasicObjectCloneNodeGen(invoke) : new BasicObjectCloneNode(invoke);
+    }
+
+    protected BasicObjectCloneNode(Invoke invoke) {
         super(invoke);
     }
 
     @Override
     public boolean inferStamp() {
-        Stamp objectStamp = getObject().stamp();
-        if (objectStamp instanceof ObjectStamp) {
-            objectStamp = objectStamp.join(StampFactory.objectNonNull());
-        }
-        return updateStamp(objectStamp);
+        return updateStamp(getObject().stamp());
     }
 
     public ValueNode getObject() {
@@ -113,7 +113,7 @@ public class BasicObjectCloneNode extends MacroStateSplitNode implements Virtual
                 ValueNode[] state = new ValueNode[fields.length];
                 final LoadFieldNode[] loads = new LoadFieldNode[fields.length];
                 for (int i = 0; i < fields.length; i++) {
-                    state[i] = loads[i] = new LoadFieldNode(obj, fields[i]);
+                    state[i] = loads[i] = LoadFieldNode.create(obj, fields[i]);
                     tool.addNode(loads[i]);
                 }
                 tool.createVirtualObject(newVirtual, state, Collections.<MonitorIdNode> emptyList());
@@ -123,7 +123,7 @@ public class BasicObjectCloneNode extends MacroStateSplitNode implements Virtual
     }
 
     protected VirtualInstanceNode createVirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity) {
-        return new VirtualInstanceNode(type, hasIdentity);
+        return VirtualInstanceNode.create(type, hasIdentity);
     }
 
     @Override

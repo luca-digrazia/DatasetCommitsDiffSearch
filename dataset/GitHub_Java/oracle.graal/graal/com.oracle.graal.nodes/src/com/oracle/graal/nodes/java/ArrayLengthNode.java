@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,7 +46,11 @@ public class ArrayLengthNode extends FixedWithNextNode implements Canonicalizabl
         return array;
     }
 
-    public ArrayLengthNode(ValueNode array) {
+    public static ArrayLengthNode create(ValueNode array) {
+        return USE_GENERATED_NODES ? new ArrayLengthNodeGen(array) : new ArrayLengthNode(array);
+    }
+
+    protected ArrayLengthNode(ValueNode array) {
         super(StampFactory.positiveInt());
         this.array = array;
     }
@@ -73,7 +77,7 @@ public class ArrayLengthNode extends FixedWithNextNode implements Canonicalizabl
         }
         if (originalValue instanceof ValueProxyNode) {
             ValueProxyNode proxy = (ValueProxyNode) originalValue;
-            return new ValueProxyNode(reproxyValue(proxy.getOriginalNode(), value), proxy.proxyPoint());
+            return ValueProxyNode.create(reproxyValue(proxy.getOriginalNode(), value), proxy.proxyPoint());
         } else if (originalValue instanceof ValueProxy) {
             ValueProxy proxy = (ValueProxy) originalValue;
             return reproxyValue(proxy.getOriginalNode(), value);
@@ -95,7 +99,7 @@ public class ArrayLengthNode extends FixedWithNextNode implements Canonicalizabl
         }
         ValueNode array = GraphUtil.unproxify(originalArray);
         if (constantReflection != null && array.isConstant() && !array.isNullConstant()) {
-            JavaConstant constantValue = array.asJavaConstant();
+            Constant constantValue = array.asConstant();
             if (constantValue != null && constantValue.isNonNull()) {
                 Integer constantLength = constantReflection.readArrayLength(constantValue);
                 if (constantLength != null) {

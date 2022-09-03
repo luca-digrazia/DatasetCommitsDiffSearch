@@ -40,7 +40,7 @@ import com.oracle.graal.nodes.virtual.*;
 public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, PiPushable, Virtualizable, GuardingNode {
 
     public static ReadNode create(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
-        return new ReadNode(object, location, stamp, barrierType);
+        return USE_GENERATED_NODES ? new ReadNodeGen(object, location, stamp, barrierType) : new ReadNode(object, location, stamp, barrierType);
     }
 
     protected ReadNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
@@ -48,7 +48,7 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
     }
 
     public static ReadNode create(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
-        return new ReadNode(object, location, stamp, guard, barrierType);
+        return USE_GENERATED_NODES ? new ReadNodeGen(object, location, stamp, guard, barrierType) : new ReadNode(object, location, stamp, guard, barrierType);
     }
 
     protected ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
@@ -56,7 +56,8 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
     }
 
     public static ReadNode create(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
-        return new ReadNode(object, location, stamp, guard, barrierType, nullCheck, stateBefore);
+        return USE_GENERATED_NODES ? new ReadNodeGen(object, location, stamp, guard, barrierType, nullCheck, stateBefore) : new ReadNode(object, location, stamp, guard, barrierType, nullCheck,
+                        stateBefore);
     }
 
     protected ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
@@ -64,7 +65,7 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
     }
 
     public static ReadNode create(ValueNode object, ValueNode location, ValueNode guard, BarrierType barrierType) {
-        return new ReadNode(object, location, guard, barrierType);
+        return USE_GENERATED_NODES ? new ReadNodeGen(object, location, guard, barrierType) : new ReadNode(object, location, guard, barrierType);
     }
 
     protected ReadNode(ValueNode object, ValueNode location, ValueNode guard, BarrierType barrierType) {
@@ -120,11 +121,12 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
         MetaAccessProvider metaAccess = tool.getMetaAccess();
         if (tool.canonicalizeReads()) {
             if (metaAccess != null && object != null && object.isConstant()) {
-                if ((location.getLocationIdentity().isImmutable()) && location instanceof ConstantLocationNode) {
+                if ((location.getLocationIdentity() == LocationIdentity.FINAL_LOCATION || location.getLocationIdentity() == LocationIdentity.ARRAY_LENGTH_LOCATION) &&
+                                location instanceof ConstantLocationNode) {
                     long displacement = ((ConstantLocationNode) location).getDisplacement();
-                    JavaConstant base = object.asJavaConstant();
+                    Constant base = object.asConstant();
                     if (base != null) {
-                        JavaConstant constant;
+                        Constant constant;
                         if (read.stamp() instanceof PrimitiveStamp) {
                             PrimitiveStamp stamp = (PrimitiveStamp) read.stamp();
                             constant = tool.getConstantReflection().readRawConstant(stamp.getStackKind(), base, displacement, stamp.getBits());
