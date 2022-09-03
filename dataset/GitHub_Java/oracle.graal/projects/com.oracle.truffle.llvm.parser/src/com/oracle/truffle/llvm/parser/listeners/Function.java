@@ -933,7 +933,7 @@ public final class Function implements ParserListener {
         int vector2 = getIndex(args[i++]);
         int mask = getIndex(args[i]);
 
-        Type subtype = ((VectorType) vectorType).getElementType();
+        PrimitiveType subtype = ((VectorType) vectorType).getElementType();
         int length = ((VectorType) function.getValueType(mask)).getNumberOfElements();
         Type type = new VectorType(subtype, length);
 
