@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,8 +22,6 @@
  */
 package com.oracle.svm.core.graal.meta;
 
-import org.graalvm.compiler.core.common.CompressEncoding;
-
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MemoryAccessProvider;
@@ -33,11 +29,9 @@ import jdk.vm.ci.meta.MemoryAccessProvider;
 public interface SubstrateMemoryAccessProvider extends MemoryAccessProvider {
 
     /**
-     * Reads a <b>compressed</b> Java {@link Object} reference using a base address, a displacement
-     * and the encoding of the reference.
-     *
-     * @see #readObjectConstant(Constant, long)
+     * Reads a <b>compressed</b> Java {@link Object} reference using a base address and a
+     * displacement, similar to {@link #readObjectConstant(Constant, long)}.
      */
-    JavaConstant readNarrowObjectConstant(Constant baseConstant, long displacement, CompressEncoding encoding);
+    JavaConstant readNarrowObjectConstant(Constant baseConstant, long displacement);
 
 }
