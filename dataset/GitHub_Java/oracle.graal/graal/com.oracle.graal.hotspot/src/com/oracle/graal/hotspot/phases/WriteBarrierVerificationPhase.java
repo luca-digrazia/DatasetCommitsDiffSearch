@@ -63,11 +63,10 @@ public class WriteBarrierVerificationPhase extends Phase {
         if (hasAttachedBarrier(write)) {
             return;
         }
-        NodeFlood frontier = write.graph().createNodeFlood();
+        Deque<Node> frontier = new ArrayDeque<>();
         expandFrontier(frontier, write);
-        Iterator<Node> iterator = frontier.iterator();
-        while (iterator.hasNext()) {
-            Node currentNode = iterator.next();
+        while (!frontier.isEmpty()) {
+            Node currentNode = frontier.removeFirst();
             assert !isSafepoint(currentNode) : "Write barrier must be present";
             if (!(currentNode instanceof SerialWriteBarrier) || ((currentNode instanceof SerialWriteBarrier) && !validateBarrier(write, (SerialWriteBarrier) currentNode))) {
                 expandFrontier(frontier, currentNode);
@@ -87,10 +86,14 @@ public class WriteBarrierVerificationPhase extends Phase {
         return false;
     }
 
-    private static void expandFrontier(NodeFlood frontier, Node node) {
+    private static void expandFrontier(Deque<Node> frontier, Node node) {
         for (Node previousNode : node.cfgPredecessors()) {
             if (previousNode != null) {
-                frontier.add(previousNode);
+                // Control split nodes are processed only once.
+                if ((previousNode instanceof ControlSplitNode) && frontier.contains(previousNode)) {
+                    continue;
+                }
+                frontier.addFirst(previousNode);
             }
         }
     }
@@ -99,7 +102,7 @@ public class WriteBarrierVerificationPhase extends Phase {
         /*
          * LoopBegin nodes are also treated as safepoints since a bottom-up analysis is performed
          * and loop safepoints are placed before LoopEnd nodes. Possible elimination of write
-         * barriers inside loops, derived from writes outside loops, can not be permitted.
+         * barriers inside loops, derived from writes, outside the loops can not be permitted.
          */
         return ((node instanceof DeoptimizingNode) && ((DeoptimizingNode) node).canDeoptimize()) || (node instanceof LoopBeginNode);
     }
