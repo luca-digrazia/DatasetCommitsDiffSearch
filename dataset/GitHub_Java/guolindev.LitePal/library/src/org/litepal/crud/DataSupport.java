@@ -596,8 +596,7 @@ public class DataSupport {
 	 *            Which records to query. Or do not pass it to find all records.
 	 * @return An object list with found data from database, or an empty list.
 	 */
-	public static synchronized <T> List<T> findAll(Class<T> modelClass, boolean isEager,
-			long... ids) {
+	public static synchronized <T> List<T> findAll(Class<T> modelClass, boolean isEager, long... ids) {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
 		return queryHandler.onFindAll(modelClass, isEager, ids);
 	}
@@ -641,12 +640,6 @@ public class DataSupport {
 	 * The data in other tables which is referenced with the record will be
 	 * removed too.
 	 * 
-	 * <pre>
-	 * DataSupport.delete(Person.class, 1);
-	 * </pre>
-	 * 
-	 * This means that the record 1 in person table will be removed.
-	 * 
 	 * @param modelClass
 	 *            Which table to delete from by class.
 	 * @param id
@@ -670,15 +663,7 @@ public class DataSupport {
 	/**
 	 * Deletes all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL DELETE statement and sends
-	 * it to the database.
-	 * 
-	 * <pre>
-	 * DataSupport.deleteAll(Person.class, &quot;name = ? and age = ?&quot;, &quot;Tom&quot;, &quot;14&quot;);
-	 * </pre>
-	 * 
-	 * This means that all the records which name is Tom and age is 14 will be
-	 * removed.<br>
-	 * 
+	 * it to the database.<br>
 	 * Note that this method won't delete the referenced data in other tables.
 	 * You should remove those values by your own.
 	 * 
@@ -701,15 +686,7 @@ public class DataSupport {
 	/**
 	 * Deletes all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL DELETE statement and sends
-	 * it to the database.
-	 * 
-	 * <pre>
-	 * DataSupport.deleteAll(&quot;person&quot;, &quot;name = ? and age = ?&quot;, &quot;Tom&quot;, &quot;14&quot;);
-	 * </pre>
-	 * 
-	 * This means that all the records which name is Tom and age is 14 will be
-	 * removed.<br>
-	 * 
+	 * it to the database.<br>
 	 * Note that this method won't delete the referenced data in other tables.
 	 * You should remove those values by your own.
 	 * 
@@ -734,14 +711,6 @@ public class DataSupport {
 	 * Updates the corresponding record by id with ContentValues. Returns the
 	 * number of affected rows.
 	 * 
-	 * <pre>
-	 * ContentValues cv = new ContentValues();
-	 * cv.put(&quot;name&quot;, &quot;Jim&quot;);
-	 * DataSupport.update(Person.class, cv, 1);
-	 * </pre>
-	 * 
-	 * This means that the name of record 1 will be updated into Jim.<br>
-	 * 
 	 * @param modelClass
 	 *            Which table to update by class.
 	 * @param values
@@ -761,15 +730,6 @@ public class DataSupport {
 	 * supplied. This method constructs a single SQL UPDATE statement and sends
 	 * it to the database.
 	 * 
-	 * <pre>
-	 * ContentValues cv = new ContentValues();
-	 * cv.put(&quot;name&quot;, &quot;Jim&quot;);
-	 * DataSupport.update(Person.class, cv, &quot;name = ?&quot;, &quot;Tom&quot;);
-	 * </pre>
-	 * 
-	 * This means that all the records which name is Tom will be updated into
-	 * Jim.
-	 * 
 	 * @param modelClass
 	 *            Which table to update by class.
 	 * @param values
@@ -785,8 +745,7 @@ public class DataSupport {
 	 *            all rows.
 	 * @return The number of rows affected.
 	 */
-	public static synchronized int updateAll(Class<?> modelClass, ContentValues values,
-			String... conditions) {
+	public static synchronized int updateAll(Class<?> modelClass, ContentValues values, String... conditions) {
 		return updateAll(BaseUtility.changeCase(modelClass.getSimpleName()), values, conditions);
 	}
 
@@ -794,15 +753,6 @@ public class DataSupport {
 	 * Updates all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL UPDATE statement and sends
 	 * it to the database.
-	 * 
-	 * <pre>
-	 * ContentValues cv = new ContentValues();
-	 * cv.put(&quot;name&quot;, &quot;Jim&quot;);
-	 * DataSupport.update(&quot;person&quot;, cv, &quot;name = ?&quot;, &quot;Tom&quot;);
-	 * </pre>
-	 * 
-	 * This means that all the records which name is Tom will be updated into
-	 * Jim.
 	 * 
 	 * @param tableName
 	 *            Which table to update.
@@ -819,8 +769,7 @@ public class DataSupport {
 	 *            all rows.
 	 * @return The number of rows affected.
 	 */
-	public static synchronized int updateAll(String tableName, ContentValues values,
-			String... conditions) {
+	public static synchronized int updateAll(String tableName, ContentValues values, String... conditions) {
 		UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
 		return updateHandler.onUpdateAll(tableName, values, conditions);
 	}
@@ -868,14 +817,6 @@ public class DataSupport {
 	 * The data in other tables which is referenced with the record will be
 	 * removed too.
 	 * 
-	 * <pre>
-	 * Person person;
-	 * ....
-	 * if (person.isSaved()) {
-	 * 		person.delete();
-	 * }
-	 * </pre>
-	 * 
 	 * @return The number of rows affected. Including cascade delete rows.
 	 */
 	public synchronized int delete() {
@@ -894,16 +835,7 @@ public class DataSupport {
 
 	/**
 	 * Updates the corresponding record by id. Use setXxx to decide which
-	 * columns to update.
-	 * 
-	 * <pre>
-	 * Person person = new Person();
-	 * person.setName(&quot;Jim&quot;);
-	 * person.update(1);
-	 * </pre>
-	 * 
-	 * This means that the name of record 1 will be updated into Jim.<br>
-	 * 
+	 * columns to update. <br>
 	 * <b>Note: </b> 1. If you set a default value to a field, the corresponding
 	 * column won't be updated. Use {@link #setToDefault(String)} to update
 	 * columns into default value. 2. This method couldn't update foreign key in
@@ -923,17 +855,7 @@ public class DataSupport {
 	/**
 	 * Updates all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL UPDATE statement and sends
-	 * it to the database.
-	 * 
-	 * <pre>
-	 * Person person = new Person();
-	 * person.setName(&quot;Jim&quot;);
-	 * person.updateAll(&quot;name = ?&quot;, &quot;Tom&quot;);
-	 * </pre>
-	 * 
-	 * This means that all the records which name is Tom will be updated into
-	 * Jim.<br>
-	 * 
+	 * it to the database.<br>
 	 * <b>Note: <b> 1. If you set a default value to a field, the corresponding
 	 * column won't be updated. Use {@link #setToDefault(String)} to update
 	 * columns into default value. 2. This method couldn't update foreign key in
@@ -1112,8 +1034,7 @@ public class DataSupport {
 	 *            The id of associated model.
 	 */
 	void addAssociatedModelForJoinTable(String associatedModelName, long associatedId) {
-		Set<Long> associatedIdsM2MSet = getAssociatedModelsMapForJoinTable().get(
-				associatedModelName);
+		Set<Long> associatedIdsM2MSet = getAssociatedModelsMapForJoinTable().get(associatedModelName);
 		if (associatedIdsM2MSet == null) {
 			associatedIdsM2MSet = new HashSet<Long>();
 			associatedIdsM2MSet.add(associatedId);
@@ -1132,8 +1053,7 @@ public class DataSupport {
 	 *            The name of associated model.
 	 */
 	void addEmptyModelForJoinTable(String associatedModelName) {
-		Set<Long> associatedIdsM2MSet = getAssociatedModelsMapForJoinTable().get(
-				associatedModelName);
+		Set<Long> associatedIdsM2MSet = getAssociatedModelsMapForJoinTable().get(associatedModelName);
 		if (associatedIdsM2MSet == null) {
 			associatedIdsM2MSet = new HashSet<Long>();
 			associatedModelsMapForJoinTable.put(associatedModelName, associatedIdsM2MSet);
