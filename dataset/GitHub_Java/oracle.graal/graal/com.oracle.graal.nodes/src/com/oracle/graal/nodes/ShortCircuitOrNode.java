@@ -25,7 +25,6 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 
-@NodeInfo
 public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, Canonicalizable.Binary<LogicNode> {
 
     @Input(InputType.Condition) private LogicNode x;
@@ -86,6 +85,11 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
         } else {
             return this;
         }
+    }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        return canonical(tool, getX(), getY());
     }
 
     public LogicNode canonical(CanonicalizerTool tool, LogicNode forX, LogicNode forY) {
