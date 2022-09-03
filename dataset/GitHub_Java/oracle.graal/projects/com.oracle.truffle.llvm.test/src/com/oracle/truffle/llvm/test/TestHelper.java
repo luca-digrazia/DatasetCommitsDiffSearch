@@ -39,8 +39,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOption;
+import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.tools.Clang;
 import com.oracle.truffle.llvm.tools.Clang.ClangOptions;
 import com.oracle.truffle.llvm.tools.GCC;
@@ -164,13 +163,12 @@ public class TestHelper {
             String javaHome = System.getProperty("java.home");
             String javaBin = javaHome + File.separator + "bin" + File.separator + "java";
             String classpath = System.getProperty("java.class.path");
-            String jvmciClasspath = System.getProperty("jvmci.class.path.append");
             String className = RemoteLLVMTester.class.getCanonicalName();
-            String bootClassPath = LLVMBaseOptionFacade.getRemoteTestBootClassPath();
-            String debugOption = asOption(LLVMBaseOption.DEBUG.getKey(), "false");
-            String projectRootOption = asOption(LLVMBaseOption.PROJECT_ROOT.getKey(), LLVMBaseOptionFacade.getProjectRoot());
+            String bootClassPath = LLVMOptions.getRemoteTestBootClassPath();
+            String debugOption = asOption(LLVMOptions.Property.DEBUG.getKey(), "false");
+            String projectRootOption = asOption(LLVMOptions.Property.PROJECT_ROOT.getKey(), LLVMOptions.getProjectRoot());
             String options = debugOption + " " + projectRootOption;
-            String command = javaBin + " -cp " + classpath + " " + bootClassPath + " -Djvmci.class.path.append=" + jvmciClasspath + " " + options + " " + className;
+            String command = javaBin + " -cp " + classpath + " " + bootClassPath + " " + options + " " + className;
             Process process = Runtime.getRuntime().exec(command);
             return process;
         } catch (Exception e) {

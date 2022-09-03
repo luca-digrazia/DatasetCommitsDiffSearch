@@ -44,10 +44,10 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.test.spec.SpecificationEntry;
 import com.oracle.truffle.llvm.test.spec.SpecificationFileReader;
 import com.oracle.truffle.llvm.test.spec.TestSpecification;
@@ -122,8 +122,8 @@ public abstract class TestSuiteBase {
 
     @After
     public void displaySummary() {
-        if (LLVMBaseOptionFacade.debugEnabled()) {
-            if (LLVMBaseOptionFacade.discoveryTestModeEnabled()) {
+        if (LLVMOptions.debugEnabled()) {
+            if (LLVMOptions.discoveryTestModeEnabled()) {
                 printList("succeeding tests:", succeedingTests);
             } else {
                 printList("failing tests:", failingTests);
@@ -137,7 +137,7 @@ public abstract class TestSuiteBase {
 
     @AfterClass
     public static void displayEndSummary() {
-        if (!LLVMBaseOptionFacade.discoveryTestModeEnabled()) {
+        if (!LLVMOptions.discoveryTestModeEnabled()) {
             printList("failing tests:", failingTests);
         }
     }
@@ -152,16 +152,6 @@ public abstract class TestSuiteBase {
     }
 
     public static class TestCaseGeneratorImpl implements TestCaseGenerator {
-
-        private boolean withOptimizations;
-
-        public TestCaseGeneratorImpl(boolean withOptimizations) {
-            this.withOptimizations = withOptimizations;
-        }
-
-        public TestCaseGeneratorImpl() {
-            withOptimizations = true;
-        }
 
         @Override
         public TestCaseFiles getBitCodeTestCaseFiles(SpecificationEntry bitCodeFile) {
@@ -187,10 +177,8 @@ public abstract class TestSuiteBase {
                     try {
                         TestCaseFiles compiledFiles = TestHelper.compileToLLVMIRWithClang(toBeCompiledFile, dest, toBeCompiled.getFlags(), builder);
                         files.add(compiledFiles);
-                        if (withOptimizations) {
-                            TestCaseFiles optimized = getOptimizedTestCase(compiledFiles);
-                            files.add(optimized);
-                        }
+                        TestCaseFiles optimized = getOptimizedTestCase(compiledFiles);
+                        files.add(optimized);
                     } catch (Exception e) {
                         return Collections.emptyList();
                     }
@@ -217,9 +205,9 @@ public abstract class TestSuiteBase {
     protected static List<TestCaseFiles[]> getTestCasesFromConfigFile(File configFile, File testSuite, TestCaseGenerator gen) throws IOException, AssertionError {
         TestSpecification testSpecification = SpecificationFileReader.readSpecificationFolder(configFile, testSuite);
         List<SpecificationEntry> includedFiles = testSpecification.getIncludedFiles();
-        if (LLVMBaseOptionFacade.discoveryTestModeEnabled()) {
+        if (LLVMOptions.discoveryTestModeEnabled()) {
             List<SpecificationEntry> excludedFiles = testSpecification.getExcludedFiles();
-            File absoluteDiscoveryPath = new File(testSuite.getAbsolutePath(), LLVMBaseOptionFacade.getTestDiscoveryPath());
+            File absoluteDiscoveryPath = new File(testSuite.getAbsolutePath(), LLVMOptions.getTestDiscoveryPath());
             assert absoluteDiscoveryPath.exists() : absoluteDiscoveryPath.toString();
             LLVMLogger.info("\tcollect files");
             List<File> filesToRun = getFilesRecursively(absoluteDiscoveryPath, gen);

@@ -46,7 +46,6 @@ import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReaso
 @RunWith(Parameterized.class)
 public class TestGCCSuite extends TestSuiteBase {
 
-    private static final int UNSIGNED_BYTE_MAX_VALUE = 0xff;
     private TestCaseFiles tuple;
     private File byteCodeFile;
 
@@ -76,7 +75,7 @@ public class TestGCCSuite extends TestSuiteBase {
                 t.printStackTrace();
                 throw new LLVMUnsupportedException(UnsupportedReason.CLANG_ERROR);
             }
-            int truffleResult = truncate(LLVM.executeMain(byteCodeFile));
+            int truffleResult = LLVM.executeMain(byteCodeFile);
             boolean undefinedReturnCode = tuple.hasFlag(TestCaseFlag.UNDEFINED_RETURN_CODE);
             boolean pass = true;
             if (!undefinedReturnCode) {
@@ -90,10 +89,6 @@ public class TestGCCSuite extends TestSuiteBase {
             recordError(tuple, e);
             throw e;
         }
-    }
-
-    private static int truncate(int retValue) {
-        return retValue & UNSIGNED_BYTE_MAX_VALUE;
     }
 
 }

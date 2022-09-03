@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.test;
 
 import java.io.File;
 import java.util.Collections;
-import java.util.Objects;
 import java.util.Set;
 
 import com.oracle.truffle.llvm.tools.util.PathUtil;
@@ -116,7 +115,7 @@ public final class TestCaseFiles {
 
     @Override
     public int hashCode() {
-        return Objects.hash(originalFile, bitCodeFile, expectedResult);
+        return originalFile.hashCode() + bitCodeFile.hashCode() + expectedResult.hashCode();
     }
 
     @Override
