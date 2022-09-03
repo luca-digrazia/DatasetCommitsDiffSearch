@@ -54,74 +54,22 @@ abstract class SerializeArgumentNode extends Node {
         return ForeignAccess.sendIsNull(isNull, object);
     }
 
-    protected static Node createIsBoxed() {
-        return Message.IS_BOXED.createNode();
-    }
-
-    protected static Node createUnbox() {
-        return Message.UNBOX.createNode();
-    }
-
-    abstract static class SerializeSimpleArgumentNode extends SerializeArgumentNode {
+    abstract static class SerializeUnboxingArgumentNode extends SerializeArgumentNode {
 
         protected final LibFFIType argType;
 
-        SerializeSimpleArgumentNode(LibFFIType argType) {
+        SerializeUnboxingArgumentNode(LibFFIType argType) {
             this.argType = argType;
         }
 
-        @Specialization
-        protected boolean serializeByte(NativeArgumentBuffer buffer, byte arg) {
-            argType.serialize(buffer, arg);
-            return true;
+        @SuppressWarnings("unused")
+        protected boolean isSpecialized(TruffleObject arg) {
+            return false;
         }
 
-        @Specialization
-        protected boolean serializeBoolean(NativeArgumentBuffer buffer, boolean arg) {
-            argType.serialize(buffer, arg);
-            return true;
-        }
-
-        @Specialization
-        protected boolean serializeShort(NativeArgumentBuffer buffer, short arg) {
-            argType.serialize(buffer, arg);
-            return true;
-        }
-
-        @Specialization
-        protected boolean serializeChar(NativeArgumentBuffer buffer, char arg) {
-            argType.serialize(buffer, arg);
-            return true;
-        }
-
-        @Specialization
-        protected boolean serializeInt(NativeArgumentBuffer buffer, int arg) {
-            argType.serialize(buffer, arg);
-            return true;
-        }
-
-        @Specialization
-        protected boolean serializeLong(NativeArgumentBuffer buffer, long arg) {
-            argType.serialize(buffer, arg);
-            return true;
-        }
-
-        @Specialization
-        protected boolean serializeFloat(NativeArgumentBuffer buffer, float arg) {
-            argType.serialize(buffer, arg);
-            return true;
-        }
-
-        @Specialization
-        protected boolean serializeDouble(NativeArgumentBuffer buffer, double arg) {
-            argType.serialize(buffer, arg);
-            return true;
-        }
-
-        @Specialization(guards = {"checkIsBoxed(isBoxed, arg)"})
+        @Specialization(guards = {"!isSpecialized(arg)"})
         @SuppressWarnings("unused")
         protected boolean serializeUnbox(NativeArgumentBuffer buffer, TruffleObject arg,
-                        @Cached("createIsBoxed()") Node isBoxed,
                         @Cached("createUnbox()") Node unbox,
                         @Cached("argType.createSerializeArgumentNode()") SerializeArgumentNode serialize) {
             try {
@@ -133,8 +81,63 @@ abstract class SerializeArgumentNode extends Node {
             }
         }
 
-        protected static boolean checkIsBoxed(Node isBoxed, TruffleObject object) {
-            return ForeignAccess.sendIsBoxed(isBoxed, object);
+        protected static Node createUnbox() {
+            return Message.UNBOX.createNode();
+        }
+    }
+
+    abstract static class SerializeSimpleArgumentNode extends SerializeUnboxingArgumentNode {
+
+        SerializeSimpleArgumentNode(LibFFIType argType) {
+            super(argType);
+        }
+
+        @Specialization(insertBefore = "serializeUnbox")
+        protected boolean serializeByte(NativeArgumentBuffer buffer, byte arg) {
+            argType.serialize(buffer, arg);
+            return true;
+        }
+
+        @Specialization(insertBefore = "serializeUnbox")
+        protected boolean serializeBoolean(NativeArgumentBuffer buffer, boolean arg) {
+            argType.serialize(buffer, arg);
+            return true;
+        }
+
+        @Specialization(insertBefore = "serializeUnbox")
+        protected boolean serializeShort(NativeArgumentBuffer buffer, short arg) {
+            argType.serialize(buffer, arg);
+            return true;
+        }
+
+        @Specialization(insertBefore = "serializeUnbox")
+        protected boolean serializeChar(NativeArgumentBuffer buffer, char arg) {
+            argType.serialize(buffer, arg);
+            return true;
+        }
+
+        @Specialization(insertBefore = "serializeUnbox")
+        protected boolean serializeInt(NativeArgumentBuffer buffer, int arg) {
+            argType.serialize(buffer, arg);
+            return true;
+        }
+
+        @Specialization(insertBefore = "serializeUnbox")
+        protected boolean serializeLong(NativeArgumentBuffer buffer, long arg) {
+            argType.serialize(buffer, arg);
+            return true;
+        }
+
+        @Specialization(insertBefore = "serializeUnbox")
+        protected boolean serializeFloat(NativeArgumentBuffer buffer, float arg) {
+            argType.serialize(buffer, arg);
+            return true;
+        }
+
+        @Specialization(insertBefore = "serializeUnbox")
+        protected boolean serializeDouble(NativeArgumentBuffer buffer, double arg) {
+            argType.serialize(buffer, arg);
+            return true;
         }
     }
 
@@ -245,15 +248,18 @@ abstract class SerializeArgumentNode extends Node {
         }
     }
 
-    abstract static class SerializeStringArgumentNode extends SerializeArgumentNode {
-
-        final LibFFIType argType;
+    abstract static class SerializeStringArgumentNode extends SerializeUnboxingArgumentNode {
 
         SerializeStringArgumentNode(LibFFIType type) {
-            this.argType = type;
+            super(type);
         }
 
-        @Specialization(guards = "checkNull(isNull, obj)")
+        @Override
+        protected boolean isSpecialized(TruffleObject arg) {
+            return arg instanceof NativeString;
+        }
+
+        @Specialization(insertBefore = "serializeUnbox", guards = "checkNull(isNull, obj)")
         @SuppressWarnings("unused")
         protected boolean serializeNull(NativeArgumentBuffer buffer, TruffleObject obj,
                         @Cached("createIsNull()") Node isNull) {
@@ -261,39 +267,16 @@ abstract class SerializeArgumentNode extends Node {
             return true;
         }
 
-        @Specialization
+        @Specialization(insertBefore = "serializeUnbox")
         protected boolean serializeString(NativeArgumentBuffer buffer, String string) {
             argType.serialize(buffer, string);
             return true;
         }
 
-        @Specialization
+        @Specialization(insertBefore = "serializeUnbox")
         protected boolean serializeNativeString(NativeArgumentBuffer buffer, NativeString string) {
             argType.serialize(buffer, string);
             return true;
-        }
-
-        @Specialization(guards = {"checkIsBoxed(isBoxed, arg)"})
-        @SuppressWarnings("unused")
-        protected boolean serializeUnbox(NativeArgumentBuffer buffer, TruffleObject arg,
-                        @Cached("createIsBoxed()") Node isBoxed,
-                        @Cached("createUnbox()") Node unbox,
-                        @Cached("argType.createSerializeArgumentNode()") SerializeArgumentNode serialize) {
-            try {
-                Object unboxed = ForeignAccess.sendUnbox(unbox, arg);
-                return serialize.execute(buffer, unboxed);
-            } catch (UnsupportedMessageException ex) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedTypeException.raise(ex, new Object[]{arg});
-            }
-        }
-
-        static boolean checkIsBoxed(Node isBoxed, TruffleObject arg) {
-            if (arg instanceof NativeString) {
-                return false;
-            } else {
-                return ForeignAccess.sendIsBoxed(isBoxed, arg);
-            }
         }
     }
 
