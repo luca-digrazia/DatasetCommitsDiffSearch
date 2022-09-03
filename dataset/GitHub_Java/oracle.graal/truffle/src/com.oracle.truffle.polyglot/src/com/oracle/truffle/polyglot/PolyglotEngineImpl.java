@@ -46,9 +46,6 @@ import static com.oracle.truffle.polyglot.VMAccessor.LANGUAGE;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.lang.ref.Reference;
-import java.lang.ref.ReferenceQueue;
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -74,7 +71,6 @@ import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.io.FileSystem;
-import org.graalvm.polyglot.io.MessageTransport;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -93,7 +89,6 @@ import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.ThreadsListener;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.polyglot.PolyglotContextImpl.ContextWeakReference;
 
 class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractEngineImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
@@ -138,8 +133,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     boolean boundEngine;    // effectively final
     Handler logHandler;     // effectively final
     final Exception createdLocation = DEBUG_MISSING_CLOSE ? new Exception() : null;
-    private final Set<ContextWeakReference> contexts = new LinkedHashSet<>();
-    final ReferenceQueue<PolyglotContextImpl> contextsReferenceQueue = new ReferenceQueue<>();
+    private final Set<PolyglotContextImpl> contexts = new LinkedHashSet<>();
     private PolyglotContextImpl preInitializedContext;
 
     PolyglotLanguage hostLanguage;
@@ -155,14 +149,15 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     Map<String, Level> logLevels;    // effectively final
 
     PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, Map<String, String> options, boolean useSystemProperties, ClassLoader contextClassLoader,
-                    boolean boundEngine, MessageTransport messageInterceptor, Handler logHandler) {
-        this(impl, out, err, in, options, useSystemProperties, contextClassLoader, boundEngine, false, messageInterceptor, logHandler);
+                    boolean boundEngine, Handler logHandler) {
+        this(impl, out, err, in, options, useSystemProperties, contextClassLoader, boundEngine, false, logHandler);
     }
 
     private PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, Map<String, String> options, boolean useSystemProperties,
-                    ClassLoader contextClassLoader, boolean boundEngine, boolean preInitialization, MessageTransport messageInterceptor, Handler logHandler) {
+                    ClassLoader contextClassLoader,
+                    boolean boundEngine, boolean preInitialization, Handler logHandler) {
         super(impl);
-        this.instrumentationHandler = INSTRUMENT.createInstrumentationHandler(this, out, err, in, messageInterceptor);
+        this.instrumentationHandler = INSTRUMENT.createInstrumentationHandler(this, out, err, in);
         this.impl = impl;
         this.out = out;
         this.err = err;
@@ -598,38 +593,21 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     }
 
     void addContext(PolyglotContextImpl context) {
-        workContextReferenceQueue();
         assert Thread.holdsLock(this);
-        contexts.add(context.weakReference);
+        contexts.add(context);
     }
 
     synchronized void removeContext(PolyglotContextImpl context) {
-        // should never be remove twice
-        assert !context.weakReference.removed;
-        context.weakReference.removed = true;
-        contexts.remove(context.weakReference);
-        workContextReferenceQueue();
-    }
-
-    private void workContextReferenceQueue() {
-        Reference<?> ref;
-        while ((ref = contextsReferenceQueue.poll()) != null) {
-            ContextWeakReference contextRef = (ContextWeakReference) ref;
-            if (!contextRef.removed) {
-                for (PolyglotLanguageInstance instance : contextRef.freeInstances) {
-                    instance.language.freeInstance(instance);
-                }
-            }
-        }
+        contexts.remove(context);
     }
 
     void reportAllLanguageContexts(ContextsListener listener) {
-        List<PolyglotContextImpl> allContexts;
+        PolyglotContextImpl[] allContexts;
         synchronized (this) {
             if (contexts.isEmpty()) {
                 return;
             }
-            allContexts = collectAliveContexts();
+            allContexts = contexts.toArray(new PolyglotContextImpl[contexts.size()]);
         }
         for (PolyglotContextImpl context : allContexts) {
             listener.onContextCreated(context.truffleContext);
@@ -649,12 +627,12 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     }
 
     void reportAllContextThreads(ThreadsListener listener) {
-        List<PolyglotContextImpl> allContexts;
+        PolyglotContextImpl[] allContexts;
         synchronized (this) {
             if (contexts.isEmpty()) {
                 return;
             }
-            allContexts = collectAliveContexts();
+            allContexts = contexts.toArray(new PolyglotContextImpl[contexts.size()]);
         }
         for (PolyglotContextImpl context : allContexts) {
             Thread[] threads;
@@ -717,8 +695,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
 
     synchronized void ensureClosed(boolean cancelIfExecuting, boolean ignoreCloseFailure) {
         if (!closed) {
-            workContextReferenceQueue();
-            List<PolyglotContextImpl> localContexts = collectAliveContexts();
+            PolyglotContextImpl[] localContexts = contexts.toArray(new PolyglotContextImpl[0]);
             /*
              * Check ahead of time for open contexts to fail early and avoid closing only some
              * contexts.
@@ -775,27 +752,10 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                     }
                 }
             }
-            if (logHandler != null) {
-                logHandler.close();
-            }
+
             ENGINES.remove(this);
             closed = true;
         }
-    }
-
-    private List<PolyglotContextImpl> collectAliveContexts() {
-        Thread.holdsLock(this);
-        ContextWeakReference[] localContextsRefs = contexts.toArray(new ContextWeakReference[0]);
-        List<PolyglotContextImpl> localContexts = new ArrayList<>(contexts.size());
-        for (ContextWeakReference ref : localContextsRefs) {
-            PolyglotContextImpl context = ref.get();
-            if (context != null) {
-                localContexts.add(context);
-            } else {
-                contexts.remove(ref);
-            }
-        }
-        return localContexts;
     }
 
     @Override
@@ -851,7 +811,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     }
 
     static PolyglotEngineImpl preInitialize(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, ClassLoader contextClassLoader, Handler logHandler) {
-        final PolyglotEngineImpl engine = new PolyglotEngineImpl(impl, out, err, in, new HashMap<>(), true, contextClassLoader, true, true, null, logHandler);
+        final PolyglotEngineImpl engine = new PolyglotEngineImpl(impl, out, err, in, new HashMap<>(), true, contextClassLoader, true, true, logHandler);
         synchronized (engine) {
             try {
                 engine.preInitializedContext = PolyglotContextImpl.preInitialize(engine);
@@ -885,8 +845,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                     PrintStream out = System.out;
                     out.println("Missing close on vm shutdown: ");
                     out.print(" InitializedLanguages:");
-                    for (WeakReference<PolyglotContextImpl> ref : engine.contexts) {
-                        PolyglotContextImpl context = ref.get();
+                    for (PolyglotContextImpl context : engine.contexts) {
                         for (PolyglotLanguageContext langContext : context.contexts) {
                             if (langContext.env != null) {
                                 out.print(langContext.language.getId());
@@ -926,7 +885,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             this.instrumenter = (Instrumenter) INSTRUMENT.getEngineInstrumenter(instrumentationHandler);
         }
 
-        void waitForClosing(List<PolyglotContextImpl> localContexts) {
+        void waitForClosing(PolyglotContextImpl... localContexts) {
             boolean cancelling = false;
             for (PolyglotContextImpl context : localContexts) {
                 if (context.cancelling) {
@@ -1023,7 +982,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     @SuppressWarnings({"all"})
     public synchronized Context createContext(OutputStream configOut, OutputStream configErr, InputStream configIn, boolean allowHostAccess,
                     boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading,
-                    Predicate<String> classFilter, Map<String, String> options, Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream) {
+                    Predicate<String> classFilter, Map<String, String> options, Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Handler logHandler) {
         checkState();
         if (boundEngine && preInitializedContext == null && !contexts.isEmpty()) {
             throw new IllegalArgumentException("Automatically created engines cannot be used to create more than one context. " +
@@ -1055,8 +1014,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             useErr = INSTRUMENT.createDelegatingOutput(configErr, this.err);
         }
 
-        Handler useHandler = PolyglotLogHandler.asHandler(logHandlerOrStream);
-        useHandler = useHandler != null ? useHandler : logHandler;
+        Handler useHandler = logHandler != null ? logHandler : this.logHandler;
         useHandler = useHandler != null ? useHandler : PolyglotLogHandler.createStreamHandler(useErr, false, true);
 
         final InputStream useIn = configIn == null ? this.in : configIn;
@@ -1072,7 +1030,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         } else {
             // don't add contexts for preinitialized contexts as they have been added already
             assert Thread.holdsLock(this);
-            assert contexts.contains(context.weakReference);
+            assert contexts.contains(context);
         }
 
         Context api = impl.getAPIAccess().newContext(context);
