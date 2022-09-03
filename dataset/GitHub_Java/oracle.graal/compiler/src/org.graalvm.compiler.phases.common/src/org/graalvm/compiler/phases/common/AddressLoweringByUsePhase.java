@@ -23,10 +23,10 @@
  */
 package org.graalvm.compiler.phases.common;
 
+import jdk.vm.ci.meta.JavaKind;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PrefetchAllocateNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -36,10 +36,9 @@ import org.graalvm.compiler.nodes.memory.FloatingReadNode;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
+import org.graalvm.compiler.nodes.memory.address.RawAddressNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.phases.Phase;
-
-import jdk.vm.ci.meta.JavaKind;
 
 /**
  * Created by adinn on 09/05/17.
@@ -67,22 +66,22 @@ public class AddressLoweringByUsePhase extends Phase {
             AddressNode lowered;
             if (node instanceof ReadNode) {
                 ReadNode readNode = (ReadNode) node;
-                Stamp stamp = readNode.stamp(NodeView.DEFAULT);
+                Stamp stamp = readNode.stamp();
                 address = readNode.getAddress();
                 lowered = lowering.lower(readNode, stamp, address);
             } else if (node instanceof JavaReadNode) {
                 JavaReadNode javaReadNode = (JavaReadNode) node;
-                Stamp stamp = javaReadNode.stamp(NodeView.DEFAULT);
+                Stamp stamp = javaReadNode.stamp();
                 address = javaReadNode.getAddress();
                 lowered = lowering.lower(javaReadNode, stamp, address);
             } else if (node instanceof FloatingReadNode) {
                 FloatingReadNode floatingReadNode = (FloatingReadNode) node;
-                Stamp stamp = floatingReadNode.stamp(NodeView.DEFAULT);
+                Stamp stamp = floatingReadNode.stamp();
                 address = floatingReadNode.getAddress();
                 lowered = lowering.lower(floatingReadNode, stamp, address);
             } else if (node instanceof AbstractWriteNode) {
                 AbstractWriteNode abstractWriteNode = (AbstractWriteNode) node;
-                Stamp stamp = abstractWriteNode.value().stamp(NodeView.DEFAULT);
+                Stamp stamp = abstractWriteNode.value().stamp();
                 address = abstractWriteNode.getAddress();
                 lowered = lowering.lower(abstractWriteNode, stamp, address);
             } else if (node instanceof PrefetchAllocateNode) {
@@ -109,7 +108,7 @@ public class AddressLoweringByUsePhase extends Phase {
         // now replace any remaining unlowered address nodes
         for (Node node : graph.getNodes()) {
             AddressNode lowered;
-            if (node instanceof OffsetAddressNode) {
+            if (node instanceof RawAddressNode || node instanceof OffsetAddressNode) {
                 AddressNode address = (AddressNode) node;
                 lowered = lowering.lower(address);
             } else {
