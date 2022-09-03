@@ -54,11 +54,10 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         private FixedWithNextNode lastFixedNode;
         private ControlFlowGraph cfg;
 
-        public LoweringToolImpl(PhaseContext context, GuardingNode guardAnchor, NodeBitMap activeGuards, FixedWithNextNode lastFixedNode, ControlFlowGraph cfg) {
+        public LoweringToolImpl(PhaseContext context, GuardingNode guardAnchor, NodeBitMap activeGuards, ControlFlowGraph cfg) {
             this.context = context;
             this.guardAnchor = guardAnchor;
             this.activeGuards = activeGuards;
-            this.lastFixedNode = lastFixedNode;
             this.cfg = cfg;
         }
 
@@ -217,10 +216,11 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
         private void process(final Block b, final NodeBitMap activeGuards, final GuardingNode anchor) {
 
-            final LoweringToolImpl loweringTool = new LoweringToolImpl(context, anchor, activeGuards, b.getBeginNode(), schedule.getCFG());
+            final LoweringToolImpl loweringTool = new LoweringToolImpl(context, anchor, activeGuards, schedule.getCFG());
 
             // Lower the instructions of this block.
             List<ScheduledNode> nodes = schedule.nodesFor(b);
+            loweringTool.setLastFixedNode(b.getBeginNode());
             for (Node node : nodes) {
 
                 if (node.isDeleted()) {
