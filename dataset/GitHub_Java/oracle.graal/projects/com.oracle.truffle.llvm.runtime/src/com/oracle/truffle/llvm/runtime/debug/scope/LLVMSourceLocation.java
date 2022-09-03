@@ -35,8 +35,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -116,18 +114,12 @@ public abstract class LLVMSourceLocation {
 
     private static String asFileName(String path) {
         CompilerAsserts.neverPartOfCompilation();
-        if (path == null) {
-            return UNAVAILABLE_SECTION.getSource().getName();
-        }
-        String name = path;
+        String filename = path;
         try {
-            final Path asPath = Paths.get(name).getFileName();
-            if (asPath != null) {
-                name = asPath.toString();
-            }
-        } catch (InvalidPathException ignored) {
+            filename = Paths.get(path).getFileName().toString();
+        } catch (Throwable ignored) {
         }
-        return name;
+        return filename;
     }
 
     private String describeFile() {
