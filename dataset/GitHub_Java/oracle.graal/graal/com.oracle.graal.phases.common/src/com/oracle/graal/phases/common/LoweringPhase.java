@@ -36,7 +36,6 @@ import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
@@ -78,7 +77,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
         @Override
         public GuardingNode createNullCheckGuard(GuardedNode guardedNode, ValueNode object) {
-            if (ObjectStamp.isObjectNonNull(object)) {
+            if (object.objectStamp().nonNull()) {
                 // Short cut creation of null check guard if the object is known to be non-null.
                 return null;
             }
@@ -232,6 +231,13 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     AbstractBeginNode beginNode = b.getBeginNode();
                     if (node == beginNode) {
                         loweringTool.setLastFixedNode(beginNode);
+                    } else if (node instanceof Lowerable) {
+                        // Handles cases where there are lowerable nodes scheduled before the begin
+                        // node.
+                        BeginNode newBegin = node.graph().add(new BeginNode());
+                        beginNode.replaceAtPredecessor(newBegin);
+                        newBegin.setNext(beginNode);
+                        loweringTool.setLastFixedNode(newBegin);
                     } else {
                         continue;
                     }
