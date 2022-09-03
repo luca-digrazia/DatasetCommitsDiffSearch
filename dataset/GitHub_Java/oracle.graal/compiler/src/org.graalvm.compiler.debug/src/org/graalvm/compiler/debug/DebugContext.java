@@ -712,20 +712,6 @@ public final class DebugContext implements AutoCloseable {
         }
     }
 
-    /**
-     * Determines if scopes are enabled and this context is in a non-top-level scope.
-     */
-    public boolean inNestedScope() {
-        if (immutable.scopesEnabled) {
-            if (currentScope == null) {
-                // In an active DisabledScope
-                return true;
-            }
-            return !currentScope.isTopLevel();
-        }
-        return immutable.scopesEnabled && currentScope == null;
-    }
-
     class DisabledScope implements DebugContext.Scope {
         final boolean savedMetricsEnabled;
         final ScopeImpl savedScope;
@@ -1701,6 +1687,13 @@ public final class DebugContext implements AutoCloseable {
 
     public DebugConfig getConfig() {
         return currentConfig;
+    }
+
+    /**
+     * Creates an object for counting value frequencies.
+     */
+    public static DebugHistogram createHistogram(String name) {
+        return new DebugHistogramImpl(name);
     }
 
     /**
