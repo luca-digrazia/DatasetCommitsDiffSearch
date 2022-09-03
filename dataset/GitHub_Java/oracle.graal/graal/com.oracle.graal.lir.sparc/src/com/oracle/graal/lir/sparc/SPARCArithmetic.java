@@ -264,10 +264,10 @@ public enum SPARCArithmetic {
                     new Add(asIntReg(src2), -(tasm.asIntConst(src1)), asIntReg(dst)).emit(masm);
                     break;
                 case IAND:
-                    throw GraalInternalError.unimplemented();
+                    throw new InternalError("NYI");
                 case IDIV:
                     assert isSimm13(tasm.asIntConst(src1));
-                    throw GraalInternalError.unimplemented();
+                    throw new InternalError("NYI");
                     // new Sdivx(masm, asIntReg(src1), asIntReg(src2),
                     // asIntReg(dst));
                 case FSUB:
@@ -311,14 +311,6 @@ public enum SPARCArithmetic {
                     assert isSimm13(tasm.asIntConst(src2));
                     new Xor(asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst)).emit(masm);
                     break;
-                case LADD:
-                    assert isSimm13(tasm.asIntConst(src2));
-                    new Add(asLongReg(src1), tasm.asIntConst(src2), asLongReg(dst)).emit(masm);
-                    break;
-                case LSUB:
-                    assert isSimm13(tasm.asIntConst(src2));
-                    new Sub(asLongReg(src1), tasm.asIntConst(src2), asLongReg(dst)).emit(masm);
-                    break;
                 case LMUL:
                     assert isSimm13(tasm.asIntConst(src2));
                     new Mulx(asLongReg(src1), tasm.asIntConst(src2), asLongReg(dst)).emit(masm);
@@ -326,10 +318,6 @@ public enum SPARCArithmetic {
                 case LXOR:
                     assert isSimm13(tasm.asIntConst(src2));
                     new Add(asLongReg(src1), tasm.asIntConst(src2), asLongReg(dst)).emit(masm);
-                    break;
-                case LSHL:
-                    assert isSimm13(tasm.asIntConst(src2));
-                    new Sll(asLongReg(src1), tasm.asIntConst(src2), asLongReg(dst)).emit(masm);
                     break;
                 case LUSHR:
                     assert isSimm13(tasm.asIntConst(src2));
@@ -377,7 +365,7 @@ public enum SPARCArithmetic {
                     new Sra(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                     break;
                 case IREM:
-                    throw GraalInternalError.unimplemented();
+                    throw new InternalError("NYI");
                 case LADD:
                     new Add(asLongReg(src1), asLongReg(src2), asLongReg(dst)).emit(masm);
                     break;
@@ -412,7 +400,7 @@ public enum SPARCArithmetic {
                 case LUDIV:
                 case LUREM:
                 case LREM:
-                    throw GraalInternalError.unimplemented();
+                    throw new InternalError("NYI");
                 case FADD:
                     new Fadds(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst)).emit(masm);
                     break;
@@ -426,7 +414,7 @@ public enum SPARCArithmetic {
                     new Fdivs(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst)).emit(masm);
                     break;
                 case FREM:
-                    throw GraalInternalError.unimplemented();
+                    throw new InternalError("NYI");
                 case DADD:
                     new Faddd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
                     break;
@@ -440,7 +428,7 @@ public enum SPARCArithmetic {
                     new Fdivd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
                     break;
                 case DREM:
-                    throw GraalInternalError.unimplemented();
+                    throw new InternalError("NYI");
                 default:
                     throw GraalInternalError.shouldNotReachHere("missing: " + opcode);
             }
@@ -519,7 +507,7 @@ public enum SPARCArithmetic {
                 rk = result.getKind();
                 xsk = x.getKind().getStackKind();
                 ysk = y.getKind().getStackKind();
-                assert rk == Kind.Int && xsk == Kind.Int && ysk == Kind.Int;
+                assert rk == Kind.Int && xsk == Kind.Int && ysk == Kind.Int : "opcode=" + opcode + ", rk=" + rk + ", xsk=" + xsk + ", ysk=" + ysk;
                 break;
             case LADD:
             case LSUB:
@@ -529,18 +517,13 @@ public enum SPARCArithmetic {
             case LAND:
             case LOR:
             case LXOR:
-                rk = result.getKind();
-                xk = x.getKind();
-                yk = y.getKind();
-                assert rk == Kind.Long && xk == Kind.Long && yk == Kind.Long;
-                break;
             case LSHL:
             case LSHR:
             case LUSHR:
                 rk = result.getKind();
                 xk = x.getKind();
                 yk = y.getKind();
-                assert rk == Kind.Long && xk == Kind.Long && (yk == Kind.Int || yk == Kind.Long);
+                assert rk == Kind.Long && xk == Kind.Long && yk == Kind.Long;
                 break;
             case FADD:
             case FSUB:
@@ -560,10 +543,10 @@ public enum SPARCArithmetic {
                 rk = result.getKind();
                 xk = x.getKind();
                 yk = y.getKind();
-                assert rk == Kind.Double && xk == Kind.Double && yk == Kind.Double : "opcode=" + opcode + ", result kind=" + rk + ", x kind=" + xk + ", y kind=" + yk;
+                assert rk == Kind.Double && xk == Kind.Double && yk == Kind.Double;
                 break;
             default:
-                throw GraalInternalError.shouldNotReachHere("missing: " + opcode);
+                throw new InternalError("NYI: " + opcode);
         }
     }
 }

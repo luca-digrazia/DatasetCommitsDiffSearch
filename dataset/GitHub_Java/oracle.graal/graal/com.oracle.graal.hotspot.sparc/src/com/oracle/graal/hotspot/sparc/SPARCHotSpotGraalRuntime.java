@@ -53,7 +53,7 @@ final class SPARCHotSpotGraalRuntime extends HotSpotGraalRuntime {
     protected TargetDescription createTarget() {
         final int stackFrameAlignment = 16;
         final int implicitNullCheckLimit = 4096;
-        final boolean inlineObjects = true;
+        final boolean inlineObjects = false;  // TODO We might want to change this later.
         return new TargetDescription(createArchitecture(), true, stackFrameAlignment, implicitNullCheckLimit, inlineObjects);
     }
 

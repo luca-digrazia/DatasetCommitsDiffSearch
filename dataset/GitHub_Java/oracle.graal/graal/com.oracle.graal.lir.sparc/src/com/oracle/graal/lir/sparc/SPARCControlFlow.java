@@ -73,9 +73,6 @@ public class SPARCControlFlow {
                 case GT:
                     new Bpg(CC.Xcc, destination.label()).emit(masm);
                     break;
-                case AT:
-                    new Bpgu(CC.Xcc, destination.label()).emit(masm);
-                    break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }

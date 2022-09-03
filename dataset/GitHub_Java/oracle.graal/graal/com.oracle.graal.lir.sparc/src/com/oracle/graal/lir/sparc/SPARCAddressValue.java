@@ -45,7 +45,6 @@ public class SPARCAddressValue extends CompositeValue {
 
     public SPARCAddressValue(PlatformKind kind, AllocatableValue base, AllocatableValue index, int displacement) {
         super(kind);
-        assert isIllegal(index) || displacement == 0;
         this.base = base;
         this.index = index;
         this.displacement = displacement;
