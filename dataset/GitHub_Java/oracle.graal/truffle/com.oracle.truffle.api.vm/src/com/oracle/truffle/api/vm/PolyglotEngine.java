@@ -129,7 +129,7 @@ public class PolyglotEngine {
     private final List<Object[]> config;
     private final Object[] debugger = {null};
     private final ContextStore context;
-    private volatile boolean disposed;
+    private boolean disposed;
 
     static final boolean JDK8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
 
@@ -949,8 +949,8 @@ public class PolyglotEngine {
     public final class Instrument {
 
         private final InstrumentCache info;
-        private final Object instrumentLock = new Object();
-        private volatile boolean enabled;
+
+        private boolean enabled;
 
         Instrument(InstrumentCache cache) {
             this.info = cache;
@@ -1013,40 +1013,32 @@ public class PolyglotEngine {
          * @since 0.9
          */
         public void setEnabled(final boolean enabled) {
-            if (disposed) {
-                throw new IllegalStateException("Engine has already been disposed");
-            }
-
+            assert checkThread();
             if (this.enabled != enabled) {
-                synchronized (instrumentLock) {
-                    if (this.enabled != enabled) {
-                        if (executor == null) {
-                            setEnabledImpl(enabled, true);
-                        } else {
-                            ComputeInExecutor<Void> compute = new ComputeInExecutor<Void>(executor) {
-                                @Override
-                                protected Void compute() throws IOException {
-                                    setEnabledImpl(enabled, true);
-                                    return null;
-                                }
-                            };
-                            try {
-                                compute.perform();
-                            } catch (IOException ex) {
-                                throw new IllegalStateException(ex);
-                            }
-                        }
-                        this.enabled = enabled;
+                ComputeInExecutor<Void> compute = new ComputeInExecutor<Void>(executor) {
+                    @Override
+                    protected Void compute() throws IOException {
+                        setEnabledImpl(enabled, true);
+                        return null;
                     }
+
+                };
+                try {
+                    compute.perform();
+                } catch (IOException ex) {
+                    throw new IllegalStateException(ex);
                 }
             }
         }
 
         void setEnabledImpl(final boolean enabled, boolean cleanup) {
-            if (enabled) {
-                Access.INSTRUMENT.addInstrument(instrumentationHandler, this, getCache().getInstrumentationClass());
-            } else {
-                Access.INSTRUMENT.disposeInstrument(instrumentationHandler, this, cleanup);
+            if (this.enabled != enabled) { // check again for thread safety
+                if (enabled) {
+                    Access.INSTRUMENT.addInstrument(instrumentationHandler, this, getCache().getInstrumentationClass());
+                } else {
+                    Access.INSTRUMENT.disposeInstrument(instrumentationHandler, this, cleanup);
+                }
+                this.enabled = enabled;
             }
         }
 
@@ -1253,15 +1245,6 @@ public class PolyglotEngine {
             @Override
             public Env findEnv(Object obj, Class<? extends TruffleLanguage> languageClass) {
                 PolyglotEngine vm = (PolyglotEngine) obj;
-                return vm.findEnv(languageClass);
-            }
-
-            @Override
-            public Env findEnv(Class<? extends TruffleLanguage> languageClass) {
-                final PolyglotEngine vm = (PolyglotEngine) ExecutionImpl.findVM();
-                if (vm == null) {
-                    throw new IllegalStateException("Accessor.findEnv access to vm");
-                }
                 return vm.findEnv(languageClass);
             }
 

@@ -24,13 +24,10 @@
  */
 package com.oracle.truffle.api.impl;
 
+import com.oracle.truffle.api.Assumption;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Map;
-import java.util.Set;
-
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -42,6 +39,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Communication between PolyglotEngine, TruffleLanguage API/SPI, and other services.
@@ -77,9 +76,6 @@ public abstract class Accessor {
         public abstract Env findEnv(Object vm, Class<? extends TruffleLanguage> languageClass);
 
         @SuppressWarnings("rawtypes")
-        public abstract Env findEnv(Class<? extends TruffleLanguage> languageClass);
-
-        @SuppressWarnings("rawtypes")
         public abstract TruffleLanguage<?> findLanguageImpl(Object known, Class<? extends TruffleLanguage> languageClass, String mimeType);
 
         public abstract Object getInstrumentationHandler(Object vm);
@@ -98,7 +94,7 @@ public abstract class Accessor {
     public abstract static class LanguageSupport {
         public abstract Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Object instrumenter, Map<String, Object> config);
 
-        public abstract Object eval(TruffleLanguage<?> l, Source s, Map<Source, CallTarget> cache);
+        public abstract Object eval(TruffleLanguage<?> l, Source s, Map<Source, CallTarget> cache) throws IOException;
 
         public abstract Object evalInContext(Object vm, Object ev, String code, Node node, MaterializedFrame frame) throws IOException;
 
@@ -135,8 +131,6 @@ public abstract class Accessor {
         public abstract void detachLanguageFromInstrumentation(Object vm, Env context);
 
         public abstract void onFirstExecution(RootNode rootNode);
-
-        public abstract void onLoad(RootNode rootNode);
     }
 
     public abstract static class OldInstrumentSupport {
@@ -175,8 +169,8 @@ public abstract class Accessor {
             }
 
             @Override
-            protected CallTarget parse(Source code, Node context, String... argumentNames) {
-                throw new IllegalStateException();
+            protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
+                throw new IOException();
             }
 
             @Override
