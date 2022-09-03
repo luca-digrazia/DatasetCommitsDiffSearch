@@ -22,23 +22,23 @@
  */
 package com.oracle.graal.lir.asm;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
-import java.util.function.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.CompilationResult.*;
-import jdk.internal.jvmci.code.DataSection.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CompilationResult.ConstantReference;
+import com.oracle.graal.api.code.CompilationResult.DataSectionReference;
+import com.oracle.graal.api.code.DataSection.Data;
+import com.oracle.graal.api.code.DataSection.DataBuilder;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.options.*;
 
 /**
  * Fills in a {@link CompilationResult} as its code is being assembled.
@@ -88,9 +88,6 @@ public class CompilationResultBuilder {
     private List<ExceptionInfo> exceptionInfoList;
 
     private final IdentityHashMap<Constant, Data> dataCache;
-
-    private Consumer<LIRInstruction> beforeOp;
-    private Consumer<LIRInstruction> afterOp;
 
     public CompilationResultBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, Assembler asm, FrameContext frameContext, CompilationResult compilationResult) {
         this.target = codeCache.getTarget();
@@ -217,7 +214,7 @@ public class CompilationResultBuilder {
         assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
         long c = constant.asLong();
         if (!NumUtil.isInt(c)) {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
         return (int) c;
     }
@@ -372,14 +369,8 @@ public class CompilationResultBuilder {
             }
 
             try {
-                if (beforeOp != null) {
-                    beforeOp.accept(op);
-                }
                 emitOp(this, op);
-                if (afterOp != null) {
-                    afterOp.accept(op);
-                }
-            } catch (JVMCIError e) {
+            } catch (GraalInternalError e) {
                 throw e.addContext("lir instruction", block + "@" + op.id() + " " + op + "\n" + lir.codeEmittingOrder());
             }
         }
@@ -389,9 +380,9 @@ public class CompilationResultBuilder {
         try {
             op.emitCode(crb);
         } catch (AssertionError t) {
-            throw new JVMCIError(t);
+            throw new GraalInternalError(t);
         } catch (RuntimeException t) {
-            throw new JVMCIError(t);
+            throw new GraalInternalError(t);
         }
     }
 
@@ -404,10 +395,5 @@ public class CompilationResultBuilder {
         if (dataCache != null) {
             dataCache.clear();
         }
-    }
-
-    public void setOpCallback(Consumer<LIRInstruction> beforeOp, Consumer<LIRInstruction> afterOp) {
-        this.beforeOp = beforeOp;
-        this.afterOp = afterOp;
     }
 }
