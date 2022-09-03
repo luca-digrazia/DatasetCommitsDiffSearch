@@ -31,7 +31,6 @@ import java.util.BitSet;
 import java.util.Formatter;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.SuppressFBWarnings;
 import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
@@ -72,6 +71,8 @@ import com.oracle.graal.nodes.memory.MemoryCheckpoint;
 import com.oracle.graal.nodes.memory.MemoryNode;
 import com.oracle.graal.nodes.memory.MemoryPhiNode;
 import com.oracle.graal.phases.Phase;
+
+import jdk.vm.ci.meta.LocationIdentity;
 
 public final class SchedulePhase extends Phase {
 
