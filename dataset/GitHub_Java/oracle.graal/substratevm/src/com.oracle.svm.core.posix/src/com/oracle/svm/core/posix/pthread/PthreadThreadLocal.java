@@ -43,13 +43,10 @@ public final class PthreadThreadLocal<T extends WordBase> {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code. Too early for safepoints.")
-    public boolean initialize() {
+    public void initialize() {
         CIntPointer keyPtr = StackValue.get(CIntPointer.class);
-        if (Pthread.pthread_key_create(keyPtr, WordFactory.nullPointer()) != 0) {
-            return false;
-        }
+        PthreadVMLockSupport.checkResult(Pthread.pthread_key_create(keyPtr, WordFactory.nullPointer()), "pthread_key_create");
         key = keyPtr.read();
-        return true;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.")

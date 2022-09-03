@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,25 +24,28 @@
  */
 package com.oracle.svm.core.posix.darwin;
 
+import static com.oracle.svm.core.posix.headers.Time.gettimeofday;
 import static com.oracle.svm.core.posix.headers.darwin.DarwinTime.mach_absolute_time;
 import static com.oracle.svm.core.posix.headers.darwin.DarwinTime.mach_timebase_info;
 
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
-import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.posix.headers.Time;
 import com.oracle.svm.core.posix.headers.Time.timeval;
 import com.oracle.svm.core.posix.headers.Time.timezone;
 import com.oracle.svm.core.posix.headers.darwin.DarwinTime.MachTimebaseInfo;
 
+@Platforms(Platform.DARWIN.class)
 @TargetClass(java.lang.System.class)
-final class Target_java_lang_System_Darwin {
+final class Target_java_lang_System {
 
     @Substitute
     @Uninterruptible(reason = "Does basic math after a few simple system calls")
@@ -72,7 +75,7 @@ final class Target_java_lang_System_Darwin {
         /* High precision time is not available, fall back to low precision. */
         timeval timeval = StackValue.get(timeval.class);
         timezone timezone = WordFactory.nullPointer();
-        Time.NoTransitions.gettimeofday(timeval, timezone);
+        gettimeofday(timeval, timezone);
         return timeval.tv_sec() * 1_000_000_000L + timeval.tv_usec() * 1_000L;
     }
 
@@ -82,7 +85,8 @@ final class Target_java_lang_System_Darwin {
     }
 }
 
-/** Additional static-like fields for {@link Target_java_lang_System_Darwin}. */
+/** Additional static-like fields for {@link Target_java_lang_System}. */
+@Platforms(Platform.DARWIN.class)
 final class Util_java_lang_System {
     boolean timeBaseValid = false;
     boolean fastTime = false;
@@ -93,6 +97,7 @@ final class Util_java_lang_System {
     }
 }
 
+@Platforms(Platform.DARWIN.class)
 @AutomaticFeature
 class DarwinSubsitutionsFeature implements Feature {
 
