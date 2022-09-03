@@ -225,6 +225,7 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.SIPUSH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.SWAP;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
+import static com.oracle.truffle.espresso.meta.Meta.meta;
 
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
@@ -925,7 +926,7 @@ public class EspressoRootNode extends RootNode {
                         stack.pushObject(allocateInstance(resolveType(bs.currentBC(curBCI), bs.readCPI(curBCI))));
                         break;
                     case NEWARRAY:
-                        stack.pushObject(InterpreterToVM.allocateNativeArray(bs.readByte(curBCI), stack.popInt()));
+                        stack.pushObject(vm.allocateNativeArray(bs.readByte(curBCI), stack.popInt()));
                         break;
                     case ANEWARRAY:
                         stack.pushObject(
@@ -993,11 +994,17 @@ public class EspressoRootNode extends RootNode {
                 } else {
                     throw e;
                 }
-            } catch (VirtualMachineError e) {
-                // TODO(peterssen): Host should not throw invalid VME (not in the boot classpath).
+            } catch (ArrayIndexOutOfBoundsException | StackOverflowError e) {
+                // TODO(peterssen): Handle VM errors like SOE or OutOfMemoryError avoiding allocations and calls.
                 CompilerDirectives.transferToInterpreter();
                 Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-                StaticObject ex = meta.createEx(e.getClass());
+                StaticObject ex;
+                if (e instanceof StackOverflowError) {
+                    ex = meta.STACK_OVERFLOW_ERROR.allocateInstance();
+                    meta(ex).method("<init>", void.class).invokeDirect();
+                } else {
+                    ex = meta.createEx(ArrayIndexOutOfBoundsException.class);
+                }
                 ExceptionHandler handler = resolveExceptionHandlers(bs.currentBCI(curBCI), ex);
                 if (handler != null) {
                     stack.clear();
@@ -1312,11 +1319,6 @@ public class EspressoRootNode extends RootNode {
         return switchHelper.defaultTarget(); // key not found.
     }
 
-    /**
-     * The switch lookup can be efficiently implemented using a binary search. It was intentionally
-     * replaced by a linear search to help partial evaluation infer control flow structure
-     * correctly.
-     */
     @ExplodeLoop
     private static int tableSwitch(OperandStack stack, BytecodeStream bs, int curBCI) {
         BytecodeTableSwitch switchHelper = new BytecodeTableSwitch(bs, bs.currentBCI(curBCI));
@@ -1334,6 +1336,12 @@ public class EspressoRootNode extends RootNode {
         }
         CompilerAsserts.partialEvaluationConstant(switchHelper.defaultTarget());
         return switchHelper.defaultTarget();
+
+//        if (index < low || index > high) {
+//            return switchHelper.defaultTarget();
+//        } else {
+//            return switchHelper.targetAt(index - low);
+//        }
     }
 
     private Object checkCast(Object instance, Klass typeToCheck) {
