@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,7 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompila
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationRepeats;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompileOnly;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilerThreads;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleEnableInfopoints;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentBoundaries;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentBranches;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleProfilingEnabled;
@@ -77,7 +78,6 @@ import org.graalvm.compiler.truffle.debug.TraceCompilationPolymorphismListener;
 import org.graalvm.compiler.truffle.debug.TraceInliningListener;
 import org.graalvm.compiler.truffle.debug.TraceSplittingListener;
 import org.graalvm.compiler.truffle.phases.InstrumentPhase;
-import org.graalvm.util.CollectionsUtil;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
@@ -147,8 +147,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     private final Supplier<GraalRuntime> graalRuntime;
     private final GraalTVMCI tvmci = new GraalTVMCI();
 
-    private volatile GraalTestTVMCI testTvmci;
-
     /**
      * The instrumentation object is used by the Truffle instrumentation to count executions. The
      * value is lazily initialized the first time it is requested because it depends on the Truffle
@@ -176,17 +174,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     protected GraalTVMCI getTvmci() {
         return tvmci;
-    }
-
-    protected TVMCI.Test<?> getTestTvmci() {
-        if (testTvmci == null) {
-            synchronized (this) {
-                if (testTvmci == null) {
-                    testTvmci = new GraalTestTVMCI(this);
-                }
-            }
-        }
-        return testTvmci;
     }
 
     public abstract TruffleCompiler getTruffleCompiler();
@@ -402,8 +389,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             return capability.cast(tvmci);
         } else if (capability == LayoutFactory.class) {
             return capability.cast(loadObjectLayoutFactory());
-        } else if (capability == TVMCI.Test.class) {
-            return capability.cast(getTestTvmci());
         }
         try {
             Iterator<T> services = GraalServices.load(capability).iterator();
@@ -667,7 +652,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     public abstract void reinstallStubs();
 
     public final boolean enableInfopoints() {
-        return platformEnableInfopoints();
+        /* Currently infopoints can change code generation so don't enable them automatically */
+        return platformEnableInfopoints() && TruffleCompilerOptions.getValue(TruffleEnableInfopoints);
     }
 
     protected abstract boolean platformEnableInfopoints();
@@ -701,24 +687,24 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     private static Object loadObjectLayoutFactory() {
-        ServiceLoader<LayoutFactory> graalLoader = ServiceLoader.load(LayoutFactory.class, GraalTruffleRuntime.class.getClassLoader());
-        if (Java8OrEarlier) {
-            return loadBestObjectLayoutFactory(graalLoader);
-        } else {
+        ServiceLoader<LayoutFactory> serviceLoader = ServiceLoader.load(LayoutFactory.class, GraalTruffleRuntime.class.getClassLoader());
+        LayoutFactory bestLayoutFactory = loadBestObjectLayoutFactory(null, serviceLoader);
+        if (!Java8OrEarlier) {
             /*
              * The Graal module (i.e., jdk.internal.vm.compiler) is loaded by the platform class
              * loader on JDK 9. Its module dependencies such as Truffle are supplied via
-             * --module-path which means they are loaded by the app class loader. As such, we need
-             * to search the app class loader path as well.
+             * --module-path which means they loaded by the app class loader. As such, we need to
+             * search the app class loader path as well.
              */
-            ServiceLoader<LayoutFactory> appLoader = ServiceLoader.load(LayoutFactory.class, LayoutFactory.class.getClassLoader());
-            return loadBestObjectLayoutFactory(CollectionsUtil.concat(graalLoader, appLoader));
+            serviceLoader = ServiceLoader.load(LayoutFactory.class, LayoutFactory.class.getClassLoader());
+            bestLayoutFactory = loadBestObjectLayoutFactory(bestLayoutFactory, serviceLoader);
         }
+        return bestLayoutFactory;
     }
 
-    protected static LayoutFactory loadBestObjectLayoutFactory(Iterable<LayoutFactory> serviceLoaders) {
-        LayoutFactory bestLayoutFactory = null;
-        for (LayoutFactory currentLayoutFactory : serviceLoaders) {
+    protected static LayoutFactory loadBestObjectLayoutFactory(LayoutFactory currentBestLayoutFactory, ServiceLoader<LayoutFactory> serviceLoader) {
+        LayoutFactory bestLayoutFactory = currentBestLayoutFactory;
+        for (LayoutFactory currentLayoutFactory : serviceLoader) {
             if (bestLayoutFactory == null) {
                 bestLayoutFactory = currentLayoutFactory;
             } else if (currentLayoutFactory.getPriority() >= bestLayoutFactory.getPriority()) {

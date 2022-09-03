@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
@@ -43,8 +44,7 @@ import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.ValueInstructionVisitor;
 import com.oracle.truffle.llvm.parser.util.LLVMFrameIDs;
-import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.VoidType;
+import com.oracle.truffle.llvm.runtime.types.MetaType;
 
 public final class StackAllocation {
 
@@ -55,6 +55,7 @@ public final class StackAllocation {
     private StackAllocation(Map<String, FrameDescriptor> frameDescriptors) {
         this.frameDescriptors = frameDescriptors;
         rootFrame = new FrameDescriptor();
+        rootFrame.addFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID);
     }
 
     public FrameDescriptor getFrame(String functionName) {
@@ -63,6 +64,10 @@ public final class StackAllocation {
 
     public FrameDescriptor getRootFrame() {
         return rootFrame;
+    }
+
+    public FrameSlot getRootStackSlot() {
+        return rootFrame.findFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID);
     }
 
     static StackAllocation generate(ModelModule model) {
@@ -82,13 +87,13 @@ public final class StackAllocation {
         @Override
         public void visit(FunctionDefinition functionDefinition) {
             final FrameDescriptor frame = new FrameDescriptor();
-            if (!(functionDefinition.getType().getReturnType() instanceof VoidType)) {
+            if (functionDefinition.getReturnType() != MetaType.VOID) {
                 frame.addFrameSlot(LLVMFrameIDs.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
             }
-            frame.addFrameSlot(LLVMFrameIDs.FUNCTION_EXCEPTION_VALUE_FRAME_SLOT_ID, FrameSlotKind.Object);
+            frame.addFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
 
             for (FunctionParameter parameter : functionDefinition.getParameters()) {
-                frame.addFrameSlot(parameter.getName(), Type.getFrameSlotKind(parameter.getType()));
+                frame.addFrameSlot(parameter.getName(), parameter.getType().getFrameSlotKind());
             }
 
             final StackAllocationFunctionVisitor functionVisitor = new StackAllocationFunctionVisitor(frame);
@@ -109,7 +114,7 @@ public final class StackAllocation {
         @Override
         public void visitValueInstruction(ValueInstruction valueInstruction) {
             final String slotName = valueInstruction.getName();
-            final FrameSlotKind slotKind = Type.getFrameSlotKind(valueInstruction.getType());
+            final FrameSlotKind slotKind = valueInstruction.getType().getFrameSlotKind();
             frame.addFrameSlot(slotName, slotKind);
         }
 

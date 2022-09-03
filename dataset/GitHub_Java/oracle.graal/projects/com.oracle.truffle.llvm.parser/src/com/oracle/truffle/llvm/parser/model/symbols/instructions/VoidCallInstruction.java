@@ -32,28 +32,35 @@ package com.oracle.truffle.llvm.parser.model.symbols.instructions;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
-import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
-import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
-import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.model.enums.Linkage;
+import com.oracle.truffle.llvm.parser.model.enums.Visibility;
 import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.MetadataConstant;
 import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitor;
+import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 
-public final class VoidCallInstruction extends VoidInstruction implements Call {
+public final class VoidCallInstruction extends Instruction implements Call {
+
+    private final Linkage linkage;
+
+    private final Visibility visibility;
 
     private Symbol target;
 
     private final List<Symbol> arguments;
 
-    private final AttributesCodeEntry paramAttr;
-
-    private VoidCallInstruction(AttributesCodeEntry paramAtt) {
+    private VoidCallInstruction(Linkage linkage, Visibility visibility) {
         arguments = new ArrayList<>();
-        this.paramAttr = paramAtt;
+        this.linkage = linkage;
+        this.visibility = visibility;
+    }
+
+    @Override
+    public Type getType() {
+        return MetaType.VOID;
     }
 
     @Override
@@ -77,18 +84,18 @@ public final class VoidCallInstruction extends VoidInstruction implements Call {
     }
 
     @Override
-    public AttributesGroup getFunctionAttributesGroup() {
-        return paramAttr.getFunctionAttributesGroup();
+    public Linkage getLinkage() {
+        return linkage;
     }
 
     @Override
-    public AttributesGroup getReturnAttributesGroup() {
-        return paramAttr.getReturnAttributesGroup();
+    public Visibility getVisibility() {
+        return visibility;
     }
 
     @Override
-    public AttributesGroup getParameterAttributesGroup(int idx) {
-        return paramAttr.getParameterAttributesGroup(idx);
+    public boolean isTerminating() {
+        return false;
     }
 
     @Override
@@ -103,21 +110,14 @@ public final class VoidCallInstruction extends VoidInstruction implements Call {
         }
     }
 
-    public static VoidCallInstruction fromSymbols(Symbols symbols, int targetIndex, int[] arguments, AttributesCodeEntry paramAttr) {
-        final VoidCallInstruction inst = new VoidCallInstruction(paramAttr);
+    public static VoidCallInstruction fromSymbols(Symbols symbols, int targetIndex, int[] arguments, long visibility, long linkage) {
+        final VoidCallInstruction inst = new VoidCallInstruction(Linkage.decode(linkage), Visibility.decode(visibility));
         inst.target = symbols.getSymbol(targetIndex, inst);
-        final Type[] argTypes;
-        if (inst.target instanceof FunctionDefinition) {
-            argTypes = ((FunctionDefinition) (inst.target)).getType().getArgumentTypes();
-        } else if (inst.target instanceof FunctionDeclaration) {
-            argTypes = ((FunctionDeclaration) (inst.target)).getType().getArgumentTypes();
-        } else {
-            argTypes = null;
-        }
-        if (argTypes != null) {
+        if (inst.target instanceof FunctionType) {
+            Type[] types = ((FunctionType) (inst.target)).getArgumentTypes();
             for (int i = 0; i < arguments.length; i++) {
-                // TODO: why is it possible to have more arguments than argument types?
-                if (argTypes.length > i && argTypes[i] == MetaType.METADATA) {
+                // TODO: why it's possible to have more arguments than argument types?
+                if (types.length > i && types[i] instanceof MetaType) {
                     inst.arguments.add(new MetadataConstant(arguments[i]));
                 } else {
                     inst.arguments.add(symbols.getSymbol(arguments[i], inst));

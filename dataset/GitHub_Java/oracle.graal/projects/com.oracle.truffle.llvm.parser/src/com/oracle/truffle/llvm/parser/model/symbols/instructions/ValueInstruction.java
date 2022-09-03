@@ -39,8 +39,6 @@ public abstract class ValueInstruction extends Instruction implements ValueSymbo
 
     private String name = LLVMIdentifier.UNKNOWN;
 
-    private boolean isSourceVariable = false;
-
     ValueInstruction(Type type) {
         this.type = type;
     }
@@ -56,15 +54,17 @@ public abstract class ValueInstruction extends Instruction implements ValueSymbo
     }
 
     @Override
+    public boolean hasName() {
+        return true;
+    }
+
+    @Override
+    public boolean isTerminating() {
+        return false;
+    }
+
+    @Override
     public void setName(String name) {
         this.name = LLVMIdentifier.toLocalIdentifier(name);
-    }
-
-    public boolean isSourceVariable() {
-        return isSourceVariable;
-    }
-
-    public void setSourceVariable(boolean isSourceVariable) {
-        this.isSourceVariable = isSourceVariable;
     }
 }
