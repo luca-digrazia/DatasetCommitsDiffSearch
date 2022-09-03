@@ -29,6 +29,7 @@
  */
 package uk.ac.man.cs.llvm.ir.module;
 
+import java.util.Arrays;
 import java.util.List;
 
 import uk.ac.man.cs.llvm.ir.module.records.MetadataRecord;
@@ -84,7 +85,7 @@ public class MetadataV32 extends Metadata {
                 break;
 
             case OLD_FN_NODE:
-                createOldFnNode(); // TODO: implement
+                createOldFnNode(args);
                 break;
 
             default:
@@ -194,7 +195,7 @@ public class MetadataV32 extends Metadata {
         }
     }
 
-    protected void createOldFnNode() {
+    protected void createOldFnNode(long[] args) {
         // TODO: implement
     }
 
