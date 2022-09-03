@@ -319,9 +319,6 @@ final class JNIFunctions {
             name = "L" + name + ";";
         }
         Class<?> clazz = JNIReflectionDictionary.singleton().getClassObjectByName(name);
-        if (clazz == null) {
-            throw new NoClassDefFoundError(name);
-        }
         return JNIThreadLocalHandles.get().create(clazz);
     }
 
@@ -1002,31 +999,14 @@ final class JNIFunctions {
             Class<?> clazz = JNIObjectHandles.getObject(hclazz);
             String name = CTypeConversion.toJavaString(cname);
             String signature = CTypeConversion.toJavaString(csig);
-            JNIMethodId methodID = JNIReflectionDictionary.singleton().getMethodID(clazz, name, signature, isStatic);
-            if (methodID.isNull()) {
-                String message = clazz.getName() + "." + name + signature;
-                JNIMethodId candidate = JNIReflectionDictionary.singleton().getMethodID(clazz, name, signature, !isStatic);
-                if (candidate.isNonNull()) {
-                    if (isStatic) {
-                        message += " (found matching non-static method that would be returned by GetMethodID)";
-                    } else {
-                        message += " (found matching static method that would be returned by GetStaticMethodID)";
-                    }
-                }
-                throw new NoSuchMethodError(message);
-            }
-            return methodID;
+            return JNIReflectionDictionary.singleton().getMethodID(clazz, name, signature, isStatic);
         }
 
         static JNIFieldId getFieldID(JNIObjectHandle hclazz, CCharPointer cname, CCharPointer csig) {
             // TODO: check signature
             Class<?> clazz = JNIObjectHandles.getObject(hclazz);
             String name = CTypeConversion.toJavaString(cname);
-            JNIFieldId fieldID = JNIReflectionDictionary.singleton().getFieldID(clazz, name);
-            if (fieldID.isNull()) {
-                throw new NoSuchFieldError(clazz.getName() + '.' + name);
-            }
-            return fieldID;
+            return JNIReflectionDictionary.singleton().getFieldID(clazz, name);
         }
 
         static CShortPointer pinStringAndGetChars(JNIObjectHandle hstr, CCharPointer isCopy) {

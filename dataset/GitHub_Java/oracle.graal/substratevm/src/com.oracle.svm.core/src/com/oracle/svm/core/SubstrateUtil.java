@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,6 @@ package com.oracle.svm.core;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.graalvm.compiler.api.replacements.Fold;
@@ -47,6 +46,7 @@ import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.amd64.FrameAccess;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
@@ -314,9 +314,7 @@ public class SubstrateUtil {
 
     @NeverInline("catch implicit exceptions")
     private static void dumpDeoptStubPointer(Log log) {
-        if (DeoptimizationSupport.enabled()) {
-            log.string("DeoptStubPointer address: ").zhex(DeoptimizationSupport.getDeoptStubPointer().rawValue()).newline().newline();
-        }
+        log.string("DeoptStubPointer address: ").zhex(DeoptimizationSupport.getDeoptStubPointer().rawValue()).newline().newline();
     }
 
     @NeverInline("catch implicit exceptions")
@@ -347,7 +345,7 @@ public class SubstrateUtil {
                     log.string("Found matching Anchor:").zhex(anchor.rawValue()).newline();
                     Pointer lastSp = anchor.getLastJavaSP();
                     log.string("LastJavaSP ").zhex(lastSp.rawValue()).newline();
-                    CodePointer lastIp = FrameAccess.singleton().readReturnAddress(lastSp);
+                    CodePointer lastIp = FrameAccess.readReturnAddress(lastSp);
                     log.string("LastJavaIP ").zhex(lastIp.rawValue()).newline();
                 }
             }
@@ -383,27 +381,25 @@ public class SubstrateUtil {
     }
 
     static void dumpRuntimeCompilation(Log log) {
-        if (DeoptimizationSupport.enabled()) {
-            log.newline().string("RuntimeCodeCache dump:").newline();
-            log.indent(true);
-            try {
-                dumpRecentRuntimeCodeCacheOperations(log);
-            } catch (Exception e) {
-                dumpException(log, "dumpRecentRuntimeCodeCacheOperations", e);
-            }
-            log.newline();
-            try {
-                dumpRuntimeCodeCacheTable(log);
-            } catch (Exception e) {
-                dumpException(log, "dumpRuntimeCodeCacheTable", e);
-            }
-            log.indent(false);
+        log.newline().string("RuntimeCodeCache dump:").newline();
+        log.indent(true);
+        try {
+            dumpRecentRuntimeCodeCacheOperations(log);
+        } catch (Exception e) {
+            dumpException(log, "dumpRecentRuntimeCodeCacheOperations", e);
+        }
+        log.newline();
+        try {
+            dumpRuntimeCodeCacheTable(log);
+        } catch (Exception e) {
+            dumpException(log, "dumpRuntimeCodeCacheTable", e);
+        }
+        log.indent(false);
 
-            try {
-                dumpRecentDeopts(log);
-            } catch (Exception e) {
-                dumpException(log, "dumpRecentDeopts", e);
-            }
+        try {
+            dumpRecentDeopts(log);
+        } catch (Exception e) {
+            dumpException(log, "dumpRecentDeopts", e);
         }
     }
 
