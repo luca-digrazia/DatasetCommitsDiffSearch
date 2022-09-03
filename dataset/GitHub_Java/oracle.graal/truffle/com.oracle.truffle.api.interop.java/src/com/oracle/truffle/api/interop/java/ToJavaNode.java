@@ -119,7 +119,7 @@ abstract class ToJavaNode extends Node {
             obj = foreignObject;
         } else {
             if (!clazz.isInterface()) {
-                throw new ClassCastException();
+                throw new IllegalArgumentException();
             }
             if (clazz == List.class && hasSize) {
                 TypeAndClass<?> elementType = type.getParameterType(0);
