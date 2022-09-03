@@ -492,8 +492,13 @@ public class InliningUtil extends ValueMergeUtil {
      * @return the set of nodes to canonicalize
      */
     @SuppressWarnings("try")
-    public static EconomicSet<Node> inlineForCanonicalization(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, ResolvedJavaMethod inlineeMethod, String reason, String phase) {
-        return inlineForCanonicalization(invoke, inlineGraph, receiverNullCheck, inlineeMethod, null, reason, phase);
+    public static EconomicSet<Node> inlineForCanonicalization(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, ResolvedJavaMethod inlineeMethod) {
+        return inlineForCanonicalization(invoke, inlineGraph, receiverNullCheck, inlineeMethod, null);
+    }
+
+    public static EconomicSet<Node> inlineForCanonicalization(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, ResolvedJavaMethod inlineeMethod,
+                    Consumer<UnmodifiableEconomicMap<Node, Node>> duplicatesConsumer) {
+        return inlineForCanonicalization(invoke, inlineGraph, receiverNullCheck, inlineeMethod, duplicatesConsumer, "", "");
     }
 
     @SuppressWarnings("try")
