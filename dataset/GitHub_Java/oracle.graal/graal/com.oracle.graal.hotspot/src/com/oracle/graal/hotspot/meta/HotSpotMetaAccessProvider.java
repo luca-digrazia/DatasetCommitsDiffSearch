@@ -40,9 +40,9 @@ import com.oracle.graal.hotspot.replacements.*;
  */
 public class HotSpotMetaAccessProvider implements MetaAccessProvider {
 
-    protected final HotSpotGraalRuntimeProvider runtime;
+    protected final HotSpotGraalRuntime runtime;
 
-    public HotSpotMetaAccessProvider(HotSpotGraalRuntimeProvider runtime) {
+    public HotSpotMetaAccessProvider(HotSpotGraalRuntime runtime) {
         this.runtime = runtime;
     }
 

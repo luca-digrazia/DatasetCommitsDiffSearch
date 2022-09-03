@@ -479,6 +479,7 @@ public class NewObjectSnippets implements Snippets {
 
         private static int instanceSize(HotSpotResolvedObjectType type) {
             int size = type.instanceSize();
+            assert (size % wordSize()) == 0;
             assert size >= 0;
             return size;
         }
