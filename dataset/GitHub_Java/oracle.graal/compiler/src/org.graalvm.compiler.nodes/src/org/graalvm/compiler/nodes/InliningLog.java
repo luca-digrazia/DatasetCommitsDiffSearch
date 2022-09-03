@@ -24,13 +24,10 @@ package org.graalvm.compiler.nodes;
 
 import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class InliningLog {
     public static final class BytecodePositionWithId extends BytecodePosition {
@@ -99,20 +96,12 @@ public class InliningLog {
             return phase;
         }
 
-        public BytecodePositionWithId getPosition() {
+        public BytecodePosition getPosition() {
             return position;
         }
 
         public InliningLog getChildLog() {
             return childLog;
-        }
-    }
-
-    private static class Callsite {
-        public Map<BytecodePositionWithId, Callsite> children;
-
-        Callsite() {
-            this.children = new HashMap<>();
         }
     }
 
@@ -133,28 +122,21 @@ public class InliningLog {
 
     public String formatAsList() {
         StringBuilder builder = new StringBuilder();
-        formatAsList("", null, decisions, builder);
+        formatAsList("", decisions, builder);
         return builder.toString();
     }
 
-    private void formatAsList(String phasePrefix, BytecodePositionWithId caller, List<Decision> decisions, StringBuilder builder) {
+    private void formatAsList(String phasePrefix, List<Decision> decisions, StringBuilder builder) {
         for (Decision decision : decisions) {
             String phaseStack = phasePrefix.equals("") ? decision.getPhase() : phasePrefix + "-" + decision.getPhase();
             String positive = decision.isPositive() ? "inline" : "do not inline";
-            BytecodePositionWithId absolutePosition = decision.getPosition().addCallerWithId(caller);
             String position = "  " + decision.getPosition().toString().replaceAll("\n", "\n  ");
             String line = String.format("<%s> %s: %s\n%s", phaseStack, positive, decision.getReason(), position);
             builder.append(line);
             builder.append(System.lineSeparator());
             if (decision.getChildLog() != null) {
-                formatAsList(phaseStack, absolutePosition, decision.getChildLog().getDecisions(), builder);
+                formatAsList(phaseStack, decision.getChildLog().getDecisions(), builder);
             }
         }
-    }
-
-    public String formatAsTree() {
-        Callsite root = new Callsite();
-
-        throw GraalError.unimplemented();
     }
 }
