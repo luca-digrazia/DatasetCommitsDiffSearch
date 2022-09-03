@@ -1505,9 +1505,6 @@ public abstract class LIRGenerator extends ValueVisitor {
     public void visitLoopEnd(LoopEnd x) {
         setNoResult(x);
         moveToPhi(x.loopBegin(), x);
-        if (GraalOptions.GenSafepoints) {
-            xir.genSafepoint(site(x));
-        }
         lir.jump(getLIRBlock(x.loopBegin()));
     }
 
