@@ -22,14 +22,12 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.ExpandLogicPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.tiers.LowTierContext;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class EconomyLowTier extends PhaseSuite<LowTierContext> {
 
@@ -42,5 +40,6 @@ public class EconomyLowTier extends PhaseSuite<LowTierContext> {
         appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.LOW_TIER));
 
         appendPhase(new ExpandLogicPhase());
+        appendPhase(new RemoveValueProxyPhase());
     }
 }
