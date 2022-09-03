@@ -947,14 +947,16 @@ public final class Debugger {
 
             final List<FrameInstance> frames = new ArrayList<>();
             // Map the Truffle stack for this execution, ignore nested executions
+            // Ignore frames for which no CallNode is available.
+            // The top/current/0 frame is not produced by the iterator; reported separately
             Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<FrameInstance>() {
                 int stackIndex = 1;
 
                 @Override
                 public FrameInstance visitFrame(FrameInstance frameInstance) {
                     if (stackIndex < contextStackDepth) {
-                        if (TRACE && frameInstance.getCallNode() == null) {
-                            contextTrace("frame %d null callNode: %s", stackIndex, frameInstance.getFrame(FrameAccess.READ_ONLY, true));
+                        if (TRACE && frameInstance.getCallNode() != null) {
+                            contextTrace("including frame %d with no callNode: %s", stackIndex, frameInstance.getFrame(FrameAccess.READ_ONLY, true));
                         }
                         frames.add(frameInstance);
                         stackIndex++;
@@ -1042,6 +1044,7 @@ public final class Debugger {
         debugContext = new DebugExecutionContext(execSource, debugContext, depth);
         prepareContinue(depth);
         debugContext.contextTrace("START EXEC ");
+        ACCESSOR.dispatchEvent(engine, new ExecutionEvent(this));
     }
 
     void executionEnded() {
@@ -1073,18 +1076,19 @@ public final class Debugger {
 
         @Override
         protected Closeable executionStart(Object vm, int currentDepth, final boolean initializeDebugger, Source s) {
-            final PolyglotEngine engine = (PolyglotEngine) vm;
-            final Debugger debugger = find(engine, initializeDebugger);
-            if (debugger != null) {
-                debugger.executionStarted(currentDepth, s);
+            final Debugger debugger = find((PolyglotEngine) vm, initializeDebugger);
+            if (debugger == null) {
+                return new Closeable() {
+                    @Override
+                    public void close() throws IOException {
+                    }
+                };
             }
-            ACCESSOR.dispatchEvent(engine, new ExecutionEvent(engine));
+            debugger.executionStarted(currentDepth, s);
             return new Closeable() {
                 @Override
                 public void close() throws IOException {
-                    if (debugger != null) {
-                        debugger.executionEnded();
-                    }
+                    debugger.executionEnded();
                 }
             };
         }
