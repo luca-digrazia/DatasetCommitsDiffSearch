@@ -26,9 +26,6 @@ package com.oracle.truffle.tools.profiler.impl;
 
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.api.vm.PolyglotRuntime;
-import com.oracle.truffle.tools.profiler.CPUTracer;
 import com.oracle.truffle.tools.profiler.MemoryTracer;
 import org.graalvm.options.OptionDescriptors;
 
@@ -64,9 +61,6 @@ public class MemoryTracerInstrument extends TruffleInstrument {
      * @since 0.30
      */
     public static void setFactory(ProfilerToolFactory<MemoryTracer> factory) {
-        if (factory == null || !factory.getClass().getName().startsWith("com.oracle.truffle.tools.profiler")) {
-            throw new IllegalArgumentException("Wrong factory: " + factory);
-        }
         MemoryTracerInstrument.factory = factory;
     }
 
@@ -76,21 +70,7 @@ public class MemoryTracerInstrument extends TruffleInstrument {
             Class.forName(MemoryTracer.class.getName(), true, MemoryTracer.class.getClassLoader());
         } catch (ClassNotFoundException ex) {
             // Can not happen
-            throw new AssertionError();
         }
-    }
-
-    /**
-     * Does a lookup in the runtime instruments of the engine and returns an instance of the {@link CPUTracer}
-     * @since 0.30
-     */
-    public static MemoryTracer getSampler(PolyglotEngine engine) {
-        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get(ID);
-        if (instrument == null) {
-            throw new IllegalStateException("Memory Tracer is not installed.");
-        }
-        instrument.setEnabled(true);
-        return instrument.lookup(MemoryTracer.class);
     }
 
     /**

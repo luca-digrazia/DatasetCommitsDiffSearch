@@ -26,9 +26,6 @@ package com.oracle.truffle.tools.profiler.impl;
 
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.api.vm.PolyglotRuntime;
-import com.oracle.truffle.tools.profiler.CPUSampler;
 import com.oracle.truffle.tools.profiler.CPUTracer;
 import org.graalvm.options.OptionDescriptors;
 
@@ -55,7 +52,7 @@ public class CPUTracerInstrument extends TruffleInstrument {
      *
      * @since 0.30
      */
-    static final String ID = "cputracer";
+    public static final String ID = "cputracer";
     private CPUTracer tracer;
     private static ProfilerToolFactory<CPUTracer> factory;
 
@@ -66,9 +63,6 @@ public class CPUTracerInstrument extends TruffleInstrument {
      * @since 0.30
      */
     public static void setFactory(ProfilerToolFactory<CPUTracer> factory) {
-        if (factory == null || !factory.getClass().getName().startsWith("com.oracle.truffle.tools.profiler")) {
-            throw new IllegalArgumentException("Wrong factory: " + factory);
-        }
         CPUTracerInstrument.factory = factory;
     }
 
@@ -78,21 +72,7 @@ public class CPUTracerInstrument extends TruffleInstrument {
             Class.forName(CPUTracer.class.getName(), true, CPUTracer.class.getClassLoader());
         } catch (ClassNotFoundException ex) {
             // Can not happen
-            throw new AssertionError();
         }
-    }
-
-    /**
-     * Does a lookup in the runtime instruments of the engine and returns an instance of the {@link CPUTracer}
-     * @since 0.30
-     */
-    public static CPUTracer getSampler(PolyglotEngine engine) {
-        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get(ID);
-        if (instrument == null) {
-            throw new IllegalStateException("Tracer is not installed.");
-        }
-        instrument.setEnabled(true);
-        return instrument.lookup(CPUTracer.class);
     }
 
     /**
