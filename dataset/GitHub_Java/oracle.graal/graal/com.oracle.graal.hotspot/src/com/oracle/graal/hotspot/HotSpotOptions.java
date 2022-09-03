@@ -219,10 +219,10 @@ public class HotSpotOptions {
      * Called from VM code once all Graal command line options have been processed by
      * {@link #setOption(String)}.
      * 
-     * @param timeCompilations true if the CITime or CITimeEach HotSpot VM options are set
+     * @param ciTime the value of the CITime HotSpot VM option
      */
-    public static void finalizeOptions(boolean timeCompilations) {
-        if (timeCompilations) {
+    public static void finalizeOptions(boolean ciTime) {
+        if (ciTime) {
             unconditionallyEnableTimerOrMetric(InliningUtil.class, "InlinedBytecodes");
             unconditionallyEnableTimerOrMetric(CompilationTask.class, "CompilationTime");
         }

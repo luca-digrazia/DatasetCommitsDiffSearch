@@ -65,9 +65,6 @@ public class VMToCompilerImpl implements VMToCompiler {
     @Option(help = "Print compilation queue activity periodically")
     private static final OptionValue<Boolean> PrintQueue = new OptionValue<>(false);
 
-    @Option(help = "Print bootstrap progress and summary")
-    private static final OptionValue<Boolean> PrintBootstrap = new OptionValue<>(true);
-
     @Option(help = "Time limit in milliseconds for bootstrap (-1 for no limit)")
     private static final OptionValue<Integer> TimedBootstrap = new OptionValue<>(-1);
 
@@ -84,6 +81,16 @@ public class VMToCompilerImpl implements VMToCompiler {
 
     private final HotSpotGraalRuntime runtime;
 
+    public final HotSpotResolvedPrimitiveType typeBoolean;
+    public final HotSpotResolvedPrimitiveType typeChar;
+    public final HotSpotResolvedPrimitiveType typeFloat;
+    public final HotSpotResolvedPrimitiveType typeDouble;
+    public final HotSpotResolvedPrimitiveType typeByte;
+    public final HotSpotResolvedPrimitiveType typeShort;
+    public final HotSpotResolvedPrimitiveType typeInt;
+    public final HotSpotResolvedPrimitiveType typeLong;
+    public final HotSpotResolvedPrimitiveType typeVoid;
+
     private ThreadPoolExecutor compileQueue;
     private AtomicInteger compileTaskIds = new AtomicInteger();
 
@@ -95,6 +102,22 @@ public class VMToCompilerImpl implements VMToCompiler {
 
     public VMToCompilerImpl(HotSpotGraalRuntime runtime) {
         this.runtime = runtime;
+
+        typeBoolean = new HotSpotResolvedPrimitiveType(Kind.Boolean);
+        typeChar = new HotSpotResolvedPrimitiveType(Kind.Char);
+        typeFloat = new HotSpotResolvedPrimitiveType(Kind.Float);
+        typeDouble = new HotSpotResolvedPrimitiveType(Kind.Double);
+        typeByte = new HotSpotResolvedPrimitiveType(Kind.Byte);
+        typeShort = new HotSpotResolvedPrimitiveType(Kind.Short);
+        typeInt = new HotSpotResolvedPrimitiveType(Kind.Int);
+        typeLong = new HotSpotResolvedPrimitiveType(Kind.Long);
+        typeVoid = new HotSpotResolvedPrimitiveType(Kind.Void);
+    }
+
+    private static void initMirror(HotSpotResolvedPrimitiveType type, long offset) {
+        Class<?> mirror = type.mirror();
+        unsafe.putObject(mirror, offset, type);
+        assert unsafe.getObject(mirror, offset) == type;
     }
 
     public void startCompiler(boolean bootstrapEnabled) throws Throwable {
@@ -102,6 +125,18 @@ public class VMToCompilerImpl implements VMToCompiler {
         FastNodeClassRegistry.initialize();
 
         bootstrapRunning = bootstrapEnabled;
+
+        final HotSpotVMConfig config = runtime.getConfig();
+        long offset = config.graalMirrorInClassOffset;
+        initMirror(typeBoolean, offset);
+        initMirror(typeChar, offset);
+        initMirror(typeFloat, offset);
+        initMirror(typeDouble, offset);
+        initMirror(typeByte, offset);
+        initMirror(typeShort, offset);
+        initMirror(typeInt, offset);
+        initMirror(typeLong, offset);
+        initMirror(typeVoid, offset);
 
         if (LogFile.getValue() != null) {
             try {
@@ -229,11 +264,8 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     public void bootstrap() throws Throwable {
-        if (PrintBootstrap.getValue()) {
-            TTY.print("Bootstrapping Graal");
-            TTY.flush();
-        }
-
+        TTY.print("Bootstrapping Graal");
+        TTY.flush();
         long startTime = System.currentTimeMillis();
 
         boolean firstRun = true;
@@ -267,10 +299,8 @@ public class VMToCompilerImpl implements VMToCompiler {
                 Thread.sleep(100);
                 while (z < compileQueue.getCompletedTaskCount() / 100) {
                     ++z;
-                    if (PrintBootstrap.getValue()) {
-                        TTY.print(".");
-                        TTY.flush();
-                    }
+                    TTY.print(".");
+                    TTY.flush();
                 }
 
                 // Are we out of time?
@@ -291,10 +321,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
         bootstrapRunning = false;
 
-        if (PrintBootstrap.getValue()) {
-            TTY.println(" in %d ms (compiled %d methods)", System.currentTimeMillis() - startTime, compileQueue.getCompletedTaskCount());
-        }
-
+        TTY.println(" in %d ms (compiled %d methods)", System.currentTimeMillis() - startTime, compileQueue.getCompletedTaskCount());
         if (runtime.getGraphCache() != null) {
             runtime.getGraphCache().clear();
         }
@@ -513,12 +540,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public void compileMethod(long metaspaceMethod, final int entryBCI, final boolean blocking) {
-        HotSpotVMConfig config = runtime().getConfig();
-        final long metaspaceConstMethod = unsafe.getAddress(metaspaceMethod + config.methodConstMethodOffset);
-        final long metaspaceConstantPool = unsafe.getAddress(metaspaceConstMethod + config.constMethodConstantsOffset);
-        final long metaspaceKlass = unsafe.getAddress(metaspaceConstantPool + config.constantPoolHolderOffset);
-        final HotSpotResolvedObjectType holder = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
+    public void compileMethod(long metaspaceMethod, final HotSpotResolvedObjectType holder, final int entryBCI, final boolean blocking) {
         final HotSpotResolvedJavaMethod method = holder.createMethod(metaspaceMethod);
         // We have to use a privileged action here because compilations are enqueued from user code
         // which very likely contains unprivileged frames.
@@ -554,11 +576,10 @@ public class VMToCompilerImpl implements VMToCompiler {
             if (method.tryToQueueForCompilation()) {
                 assert method.isQueuedForCompilation();
 
-                final ProfilingInfo profilingInfo = method.getCompilationProfilingInfo(osrCompilation);
-                final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(profilingInfo);
+                final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
                 int id = compileTaskIds.incrementAndGet();
                 HotSpotBackend backend = runtime.getHostBackend();
-                CompilationTask task = CompilationTask.create(backend, createPhasePlan(backend.getProviders(), optimisticOpts, osrCompilation), optimisticOpts, profilingInfo, method, entryBCI, id);
+                CompilationTask task = CompilationTask.create(backend, createPhasePlan(backend.getProviders(), optimisticOpts, osrCompilation), optimisticOpts, method, entryBCI, id);
 
                 if (blocking) {
                     task.runCompilation();
@@ -600,23 +621,23 @@ public class VMToCompilerImpl implements VMToCompiler {
     public ResolvedJavaType createPrimitiveJavaType(int basicType) {
         switch (basicType) {
             case 4:
-                return runtime.typeBoolean;
+                return typeBoolean;
             case 5:
-                return runtime.typeChar;
+                return typeChar;
             case 6:
-                return runtime.typeFloat;
+                return typeFloat;
             case 7:
-                return runtime.typeDouble;
+                return typeDouble;
             case 8:
-                return runtime.typeByte;
+                return typeByte;
             case 9:
-                return runtime.typeShort;
+                return typeShort;
             case 10:
-                return runtime.typeInt;
+                return typeInt;
             case 11:
-                return runtime.typeLong;
+                return typeLong;
             case 14:
-                return runtime.typeVoid;
+                return typeVoid;
             default:
                 throw new IllegalArgumentException("Unknown basic type: " + basicType);
         }
@@ -650,6 +671,40 @@ public class VMToCompilerImpl implements VMToCompiler {
             type = (HotSpotResolvedObjectType) unsafe.getObject(javaMirror, offset);
         }
         return type;
+    }
+
+    @Override
+    public Constant createConstant(Kind kind, long value) {
+        if (kind == Kind.Long) {
+            return Constant.forLong(value);
+        } else if (kind == Kind.Int) {
+            return Constant.forInt((int) value);
+        } else if (kind == Kind.Short) {
+            return Constant.forShort((short) value);
+        } else if (kind == Kind.Char) {
+            return Constant.forChar((char) value);
+        } else if (kind == Kind.Byte) {
+            return Constant.forByte((byte) value);
+        } else if (kind == Kind.Boolean) {
+            return (value == 0) ? Constant.FALSE : Constant.TRUE;
+        } else {
+            throw new IllegalArgumentException();
+        }
+    }
+
+    @Override
+    public Constant createConstantFloat(float value) {
+        return Constant.forFloat(value);
+    }
+
+    @Override
+    public Constant createConstantDouble(double value) {
+        return Constant.forDouble(value);
+    }
+
+    @Override
+    public Constant createConstantObject(Object object) {
+        return Constant.forObject(object);
     }
 
     @Override
