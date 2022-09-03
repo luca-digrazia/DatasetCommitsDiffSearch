@@ -29,17 +29,17 @@ import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG10;
 import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_POW;
 import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_SIN;
 import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_TAN;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
+import com.oracle.graal.graphbuilderconf.ForeignCallPlugin;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.graphbuilderconf.ForeignCallPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import com.oracle.graal.replacements.IntegerSubstitutions;
 import com.oracle.graal.replacements.LongSubstitutions;
 import com.oracle.graal.replacements.nodes.BitCountNode;
@@ -48,13 +48,9 @@ public class SPARCGraphBuilderPlugins {
 
     public static void register(Plugins plugins, ForeignCallsProvider foreignCalls) {
         InvocationPlugins invocationPlugins = plugins.getInvocationPlugins();
-        invocationPlugins.defer(new Runnable() {
-            public void run() {
-                registerIntegerLongPlugins(invocationPlugins, IntegerSubstitutions.class, JavaKind.Int);
-                registerIntegerLongPlugins(invocationPlugins, LongSubstitutions.class, JavaKind.Long);
-                registerMathPlugins(invocationPlugins, foreignCalls);
-            }
-        });
+        registerIntegerLongPlugins(invocationPlugins, IntegerSubstitutions.class, JavaKind.Int);
+        registerIntegerLongPlugins(invocationPlugins, LongSubstitutions.class, JavaKind.Long);
+        registerMathPlugins(invocationPlugins, foreignCalls);
     }
 
     private static void registerIntegerLongPlugins(InvocationPlugins plugins, Class<?> substituteDeclaringClass, JavaKind kind) {
