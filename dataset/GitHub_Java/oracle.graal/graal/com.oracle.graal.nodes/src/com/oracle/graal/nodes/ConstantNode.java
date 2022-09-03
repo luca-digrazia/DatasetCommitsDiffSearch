@@ -103,7 +103,7 @@ public final class ConstantNode extends FloatingNode implements LIRLowerable {
     }
 
     /**
-     * Replaces this node at its usages with another node. If {@link #ConstantNodeRecordsUsages} is
+     * Replaces this node at its usages with another node. If {@value #ConstantNodeRecordsUsages} is
      * false, this is an expensive operation that should only be used in test/verification/AOT code.
      */
     public void replace(StructuredGraph graph, Node replacement) {
@@ -120,12 +120,12 @@ public final class ConstantNode extends FloatingNode implements LIRLowerable {
     }
 
     @Override
-    public void generate(NodeLIRBuiderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
         assert ConstantNodeRecordsUsages : "LIR generator should generate constants per-usage";
-        if (gen.getLIRGeneratorTool().canInlineConstant(value) || onlyUsedInVirtualState()) {
+        if (gen.canInlineConstant(value) || onlyUsedInVirtualState()) {
             gen.setResult(this, value);
         } else {
-            gen.setResult(this, gen.getLIRGeneratorTool().emitMove(value));
+            gen.setResult(this, gen.emitMove(value));
         }
     }
 
@@ -148,16 +148,6 @@ public final class ConstantNode extends FloatingNode implements LIRLowerable {
             return unique(graph, new ConstantNode(constant, StampFactory.forConstant(constant, metaAccess)));
         } else {
             return unique(graph, createPrimitive(constant));
-        }
-    }
-
-    public static ConstantNode forConstant(Stamp stamp, Constant constant, MetaAccessProvider metaAccess, StructuredGraph graph) {
-        if (stamp instanceof PrimitiveStamp) {
-            return forPrimitive(stamp, constant, graph);
-        } else {
-            ConstantNode ret = forConstant(constant, metaAccess, graph);
-            assert ret.stamp().isCompatible(stamp);
-            return ret;
         }
     }
 
@@ -327,13 +317,6 @@ public final class ConstantNode extends FloatingNode implements LIRLowerable {
             default:
                 throw GraalInternalError.shouldNotReachHere("unknown kind " + kind);
         }
-    }
-
-    /**
-     * Returns a node for a constant double that's compatible to a given stamp.
-     */
-    public static ConstantNode forFloatingStamp(Stamp stamp, double value, StructuredGraph graph) {
-        return forFloatingKind(stamp.getStackKind(), value, graph);
     }
 
     public static ConstantNode defaultForKind(Kind kind, StructuredGraph graph) {
