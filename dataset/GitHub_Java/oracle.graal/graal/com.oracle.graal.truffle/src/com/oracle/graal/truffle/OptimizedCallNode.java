@@ -33,7 +33,7 @@ import com.oracle.truffle.api.nodes.NodeUtil.NodeCountFilter;
 /**
  * Call target that is optimized by Graal upon surpassing a specific invocation threshold.
  */
-public abstract class OptimizedCallNode extends DefaultCallNode {
+abstract class OptimizedCallNode extends DefaultCallNode {
 
     protected int callCount;
 
