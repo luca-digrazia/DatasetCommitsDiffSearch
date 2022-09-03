@@ -397,10 +397,13 @@ public final class LIRList {
         if (x.checkBlockFlag(BlockBegin.BlockFlag.ExceptionEntry)) {
             TTY.print("ex ");
         }
-        if (x.isLinearScanLoopHeader()) {
+        if (x.checkBlockFlag(BlockBegin.BlockFlag.BackwardBranchTarget)) {
+            TTY.print("bb ");
+        }
+        if (x.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader)) {
             TTY.print("lh ");
         }
-        if (x.isLinearScanLoopEnd()) {
+        if (x.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd)) {
             TTY.print("le ");
         }
 

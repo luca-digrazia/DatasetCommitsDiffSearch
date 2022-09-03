@@ -67,25 +67,10 @@ public final class LIRBlock {
      */
     public CiBitMap liveKill;
 
-    private int firstLirInstructionID;
-    private int lastLirInstructionID;
+    public int firstLirInstructionID;
+    public int lastLirInstructionID;
     public int exceptionHandlerPCO;
 
-    public int firstLirInstructionId() {
-        return firstLirInstructionID;
-    }
-
-    public void setFirstLirInstructionId(int firstLirInstructionId) {
-        this.firstLirInstructionID = firstLirInstructionId;
-    }
-
-    public int lastLirInstructionId() {
-        return lastLirInstructionID;
-    }
-
-    public void setLastLirInstructionId(int lastLirInstructionId) {
-        this.lastLirInstructionID = lastLirInstructionId;
-    }
 
     public int loopDepth;
     public int loopIndex;

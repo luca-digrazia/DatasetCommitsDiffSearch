@@ -56,7 +56,12 @@ public abstract class Value extends Node {
 
     protected CiValue operand = CiValue.IllegalValue;
 
-    public abstract Merge block();
+    /**
+     * Used by {@link InstructionSubstituter}.
+     */
+    public Value subst;
+
+    public abstract BlockBegin block();
 
     /**
      * Creates a new value with the specified kind.
@@ -82,6 +87,30 @@ public abstract class Value extends Node {
     @Override
     protected Object clone() throws CloneNotSupportedException {
         throw new CloneNotSupportedException();
+    }
+
+    /////////////////
+
+    /**
+     * Gets the instruction that should be substituted for this one. Note that this
+     * method is recursive; if the substituted instruction has a substitution, then
+     * the final substituted instruction will be returned. If there is no substitution
+     * for this instruction, {@code this} will be returned.
+     * @return the substitution for this instruction
+     */
+    public final Value subst() {
+        if (subst == null) {
+            return this;
+        }
+        return subst.subst();
+    }
+
+    /**
+     * Checks whether this instruction has a substitute.
+     * @return {@code true} if this instruction has a substitution.
+     */
+    public final boolean hasSubst() {
+        return subst != null;
     }
 
     /**
@@ -244,6 +273,10 @@ public abstract class Value extends Node {
             builder.append(' ');
         }
         builder.append(getClass().getSimpleName());
+        if (this instanceof Instruction) {
+            builder.append(" @ ");
+            builder.append(((Instruction) this).bci());
+        }
         builder.append(" [").append(flagsToString()).append("]");
         return builder.toString();
     }
