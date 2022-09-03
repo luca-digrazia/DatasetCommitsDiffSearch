@@ -38,6 +38,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -255,8 +256,8 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
-import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.NativeAllocator;
+import com.oracle.truffle.llvm.runtime.NativeIntrinsicProvider;
 import com.oracle.truffle.llvm.runtime.NativeResolver;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
@@ -272,6 +273,7 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
+import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
@@ -1070,7 +1072,7 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createFunctionArgNode(int i) {
+    public LLVMExpressionNode createFunctionArgNode(int i, Class<? extends Node> clazz) {
         return LLVMArgNodeGen.create(i);
     }
 
@@ -1084,9 +1086,7 @@ public class BasicNodeFactory implements NodeFactory {
         final Type resolvedType = ((PointerType) globalVariable.getType()).getPointeeType();
         final String name = globalVariable.getName();
 
-        LLVMContext context = runtime.getContext();
-        NFIContextExtension nfiExtension = context.getContextExtension(NFIContextExtension.class);
-        final NativeResolver nativeResolver = () -> LLVMAddress.fromLong(nfiExtension.getNativeHandle(context, name));
+        final NativeResolver nativeResolver = () -> LLVMAddress.fromLong(runtime.getNativeHandle(name));
 
         final LLVMGlobalVariable descriptor = LLVMGlobalVariable.create(name, nativeResolver, resolvedType);
 
@@ -1444,6 +1444,11 @@ public class BasicNodeFactory implements NodeFactory {
             }
         }
         return false;
+    }
+
+    @Override
+    public NativeIntrinsicProvider getNativeIntrinsicsFactory(LLVMLanguage language, LLVMContext context, DataSpecConverter dataLayout) {
+        return new LLVMNativeIntrinsicsProvider(context, language, dataLayout).collectIntrinsics(this);
     }
 
     @Override

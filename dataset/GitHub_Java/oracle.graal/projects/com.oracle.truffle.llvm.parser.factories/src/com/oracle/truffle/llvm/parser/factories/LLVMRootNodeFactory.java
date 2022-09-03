@@ -29,78 +29,34 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import java.util.Arrays;
-
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.impl.func.LLVMGlobalRootNode;
+import com.oracle.truffle.llvm.nodes.func.LLVMGlobalRootNode;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
-public class LLVMRootNodeFactory {
-
-    public static LLVMGlobalRootNode createGlobalRootNode(LLVMParserRuntime runtime, LLVMNode[] staticInits, RootCallTarget mainCallTarget, LLVMAddress[] allocatedGlobalAddresses, Object[] args,
-                    Source sourceFile, LLVMRuntimeType[] mainTypes) {
-        return new LLVMGlobalRootNode(runtime.getStackPointerSlot(), runtime.getGlobalFrameDescriptor(), LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0()),
-                        staticInits,
-                        mainCallTarget, allocatedGlobalAddresses,
-                        createArgs(sourceFile, args, mainTypes));
+class LLVMRootNodeFactory {
+    static LLVMGlobalRootNode createGlobalRootNode(
+                    LLVMParserRuntime runtime,
+                    RootCallTarget mainCallTarget,
+                    Source sourceFile,
+                    Type[] mainTypes) {
+        return createGlobalRootNode(
+                        runtime.getLanguage(),
+                        runtime.getGlobalFrameDescriptor(),
+                        mainCallTarget,
+                        sourceFile,
+                        mainTypes);
     }
 
-    private static Object[] createArgs(Source sourceFile, Object[] mainArgs, LLVMRuntimeType[] llvmRuntimeTypes) {
-        int argsCount;
-        if (mainArgs == null) {
-            argsCount = 1;
-        } else {
-            argsCount = mainArgs.length + 1;
-        }
-        if (llvmRuntimeTypes.length == 0) {
-            return new Object[0];
-        } else if (llvmRuntimeTypes.length == 1) {
-            return new Object[]{argsCount};
-        } else {
-            Object[] args = new Object[mainArgs.length + 1];
-            args[0] = sourceFile;
-            System.arraycopy(mainArgs, 0, args, 1, mainArgs.length);
-            LLVMAddress allocatedArgsStartAddress = getArgsAsStringArray(args);
-            // Checkstyle: stop magic number check
-            if (llvmRuntimeTypes.length == 2) {
-                return new Object[]{argsCount, allocatedArgsStartAddress};
-            } else if (llvmRuntimeTypes.length == 3) {
-                LLVMAddress posixEnvPointer = LLVMAddress.NULL_POINTER;
-                return new Object[]{argsCount, allocatedArgsStartAddress, posixEnvPointer};
-            } else {
-                throw new AssertionError(sourceFile + " " + Arrays.toString(mainArgs) + " " + Arrays.toString(llvmRuntimeTypes));
-            }
-            // Checkstyle: resume magic number check
-        }
+    private static LLVMGlobalRootNode createGlobalRootNode(
+                    LLVMLanguage language,
+                    FrameDescriptor frame,
+                    RootCallTarget mainCallTarget,
+                    Source sourceFile,
+                    Type[] mainTypes) {
+        return new LLVMGlobalRootNode(language, frame, sourceFile, mainTypes, mainCallTarget);
     }
-
-    private static LLVMAddress getArgsAsStringArray(Object... args) {
-        String[] stringArgs = getStringArgs(args);
-        int argsMemory = stringArgs.length * LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
-        LLVMAddress allocatedArgsStartAddress = LLVMHeap.allocateMemory(argsMemory);
-        LLVMAddress allocatedArgs = allocatedArgsStartAddress;
-        for (int i = 0; i < stringArgs.length; i++) {
-            String string = stringArgs[i];
-            LLVMAddress allocatedCString = LLVMHeap.allocateCString(string);
-            LLVMMemory.putAddress(allocatedArgs, allocatedCString);
-            allocatedArgs = allocatedArgs.increment(LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE);
-        }
-        return allocatedArgsStartAddress;
-    }
-
-    private static String[] getStringArgs(Object... args) {
-        String[] stringArgs = new String[args.length];
-        for (int i = 0; i < args.length; i++) {
-            stringArgs[i] = args[i].toString();
-        }
-        return stringArgs;
-    }
-
 }

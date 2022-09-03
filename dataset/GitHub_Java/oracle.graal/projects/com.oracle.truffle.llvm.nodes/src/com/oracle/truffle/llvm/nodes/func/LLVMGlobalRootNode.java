@@ -69,17 +69,18 @@ public class LLVMGlobalRootNode extends RootNode {
 
     @Child private LLVMDispatchNode executeDestructor = LLVMDispatchNodeGen.create(new FunctionType(VoidType.INSTANCE, new Type[]{null, new PointerType(null)}, false));
     private final DirectCallNode main;
-    @Child private LLVMPrepareArgumentsNode prepareArguments;
+    @Child LLVMPrepareArgumentsNode prepareArguments;
 
-    public LLVMGlobalRootNode(LLVMLanguage language, FrameDescriptor descriptor, Source source, Type returnType, Type[] types, CallTarget main) {
+    public LLVMGlobalRootNode(LLVMLanguage language, FrameDescriptor descriptor, Source source, Type[] types, CallTarget main) {
         super(language, descriptor);
         this.main = Truffle.getRuntime().createDirectCallNode(main);
-        this.prepareArguments = new LLVMPrepareArgumentsNode(source, returnType, types);
+        this.prepareArguments = new LLVMPrepareArgumentsNode(source, types);
     }
 
     @Override
     @ExplodeLoop
     public Object execute(VirtualFrame frame) {
+        assert getContext().getThreadingStack().checkThread();
         try (StackPointer basePointer = getContext().getThreadingStack().getStack().takeStackPointer()) {
             try {
                 Object result = null;
@@ -164,4 +165,5 @@ public class LLVMGlobalRootNode extends RootNode {
     public final LLVMContext getContext() {
         return getRootNode().getLanguage(LLVMLanguage.class).getContextReference().get();
     }
+
 }
