@@ -130,7 +130,6 @@ public class MultiThreadedLanguageTest {
         try {
             valueConsumer.accept(value);
         } catch (UnsupportedOperationException e) {
-        } catch (ClassCastException e) {
         }
     }
 
@@ -392,8 +391,8 @@ public class MultiThreadedLanguageTest {
                 }
                 service.shutdown();
                 /*
-                 * We need to join all threads as unfortunately the executor service does not guarantee that all
-                 * threads are immediately shutdown.
+                 * We need to join all threads as unfortunately the executor service does not
+                 * guarantee that all threads are immediately shutdown.
                  */
                 try {
                     for (Thread t : createdThreads) {
