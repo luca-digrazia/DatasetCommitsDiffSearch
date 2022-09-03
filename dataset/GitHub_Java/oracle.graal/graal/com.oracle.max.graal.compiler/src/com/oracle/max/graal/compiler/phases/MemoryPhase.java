@@ -28,7 +28,6 @@ import java.util.Map.Entry;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Phi.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -72,8 +71,8 @@ public class MemoryPhase extends Phase {
             StartNode startNode = b.firstNode().graph().start();
             if (b.firstNode() == startNode) {
                 WriteMemoryCheckpointNode checkpoint = new WriteMemoryCheckpointNode(startNode.graph());
-                checkpoint.setNext((FixedNode) startNode.start());
-                startNode.setStart(checkpoint);
+                checkpoint.setNext((FixedNode) startNode.next());
+                startNode.setNext(checkpoint);
                 mergeForWrite = checkpoint;
                 mergeForRead = checkpoint;
             }
@@ -156,7 +155,8 @@ public class MemoryPhase extends Phase {
                 assert phi.valueCount() <= phi.merge().endCount();
                 return original;
             } else {
-                Phi phi = new Phi(CiKind.Illegal, m, PhiType.Memory, m.graph());
+                Phi phi = new Phi(CiKind.Illegal, m, m.graph());
+                phi.makeDead(); // Phi does not produce a value, it is only a memory phi.
                 for (int i = 0; i < mergeOperationCount + 1; ++i) {
                     phi.addInput(original);
                 }
@@ -315,6 +315,8 @@ public class MemoryPhase extends Phase {
             LoopBegin begin = end.loopBegin();
             Block beginBlock = nodeMap.get(begin);
             MemoryMap memoryMap = memoryMaps[beginBlock.blockID()];
+            assert memoryMap != null : beginBlock.name();
+            assert memoryMap.getLoopEntryMap() != null;
             memoryMap.getLoopEntryMap().resetMergeOperationCount();
             memoryMap.getLoopEntryMap().mergeWith(map, beginBlock);
             Node loopCheckPoint = memoryMap.getLoopCheckPoint();

@@ -23,7 +23,6 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
@@ -34,6 +33,9 @@ import com.sun.cri.ri.*;
  */
 public final class CheckCast extends TypeCheck {
 
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
     /**
      * Creates a new CheckCast instruction.
      * @param targetClass the class being cast to
@@ -41,7 +43,7 @@ public final class CheckCast extends TypeCheck {
      * @param graph
      */
     public CheckCast(Value targetClassInstruction, Value object, Graph graph) {
-        super(targetClassInstruction, object, CiKind.Object, graph);
+        super(targetClassInstruction, object, CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     /**
@@ -91,27 +93,4 @@ public final class CheckCast extends TypeCheck {
     public Node copy(Graph into) {
         return new CheckCast(null, null, into);
     }
-
-    private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
-        @Override
-        public Node canonical(Node node) {
-            CheckCast checkCast = (CheckCast) node;
-            Value object = checkCast.object();
-            RiType exactType = object.exactType();
-            if (exactType != null) {
-                return Constant.forBoolean(exactType.isSubtypeOf(checkCast.targetClass()), node.graph());
-            }
-            CiConstant constant = object.asConstant();
-            if (constant != null) {
-                assert constant.kind == CiKind.Object;
-                if (constant.isNull()) {
-                    return Constant.forBoolean(true, node.graph());
-                } else {
-                    // this should never happen - non-null constants are always expected to provide an exactType
-                    assert false;
-                }
-            }
-            return checkCast;
-        }
-    };
 }

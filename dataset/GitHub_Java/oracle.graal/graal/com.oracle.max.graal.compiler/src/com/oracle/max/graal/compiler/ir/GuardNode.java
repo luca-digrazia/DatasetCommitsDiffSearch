@@ -75,11 +75,6 @@ public final class GuardNode extends FloatingNode {
         return new GuardNode(null, into);
     }
 
-    @Override
-    public boolean valueEqual(Node i) {
-        return i instanceof GuardNode;
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

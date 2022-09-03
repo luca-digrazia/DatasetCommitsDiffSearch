@@ -22,89 +22,43 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.graal.compiler.*;
+import java.util.*;
+
+import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.schedule.*;
-import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
-import com.oracle.max.graal.nodes.spi.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 public class LoweringPhase extends Phase {
 
-    private final GraalRuntime runtime;
+    public static final LoweringOp DELEGATE_TO_RUNTIME = new LoweringOp() {
+        @Override
+        public void lower(Node n, CiLoweringTool tool) {
+            tool.getRuntime().lower(n, tool);
+        }
+    };
 
-    public LoweringPhase(GraalRuntime runtime) {
+    private final RiRuntime runtime;
+
+    public LoweringPhase(RiRuntime runtime) {
         this.runtime = runtime;
     }
 
     @Override
-    protected void run(final StructuredGraph graph) {
+    protected void run(final Graph graph) {
         final IdentifyBlocksPhase s = new IdentifyBlocksPhase(false);
-        s.apply(graph, context);
-        s.calculateAlwaysReachedBlock();
+        s.apply(graph);
 
-        NodeBitMap processed = graph.createNodeBitMap();
-        NodeBitMap activeGuards = graph.createNodeBitMap();
-        processBlock(s.getStartBlock(), activeGuards, processed, null);
-
-        processed.negate();
-        final CiLoweringTool loweringTool = new CiLoweringTool() {
-
-            @Override
-            public Node getGuardAnchor() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public GraalRuntime getRuntime() {
-                return runtime;
-            }
-
-            @Override
-            public Node createGuard(Node condition) {
-                throw new UnsupportedOperationException();
-            }
-        };
-        for (Node node : processed) {
-            if (node instanceof Lowerable) {
-                assert !(node instanceof FixedNode) || node.predecessor() == null;
-                ((Lowerable) node).lower(loweringTool);
-            }
+        List<Block> blocks = s.getBlocks();
+        for (final Block b : blocks) {
+            process(b);
         }
     }
 
-    private void processBlock(Block block, NodeBitMap activeGuards, NodeBitMap processed, FixedNode parentAnchor) {
+    private void process(final Block b) {
 
-        FixedNode anchor = parentAnchor;
-        if (anchor == null) {
-            anchor = block.createAnchor();
-        }
-        process(block, activeGuards, processed, anchor);
-
-        // Process always reached block first.
-        Block alwaysReachedBlock = block.alwaysReachedBlock();
-        if (alwaysReachedBlock != null && alwaysReachedBlock.dominator() == block) {
-            assert alwaysReachedBlock.dominator() == block;
-            processBlock(alwaysReachedBlock, activeGuards, processed, anchor);
-        }
-
-        // Now go for the other dominators.
-        for (Block dominated : block.getDominated()) {
-            if (dominated != alwaysReachedBlock) {
-                assert dominated.dominator() == block;
-                processBlock(dominated, activeGuards, processed, null);
-            }
-        }
-
-        if (parentAnchor == null) {
-            for (GuardNode guard : anchor.usages().filter(GuardNode.class)) {
-                activeGuards.clear(guard);
-            }
-        }
-    }
-
-    private void process(final Block b, final NodeBitMap activeGuards, NodeBitMap processed, final Node anchor) {
-
+        final Node anchor = b.javaBlock().createAnchor();
         final CiLoweringTool loweringTool = new CiLoweringTool() {
 
             @Override
@@ -113,33 +67,32 @@ public class LoweringPhase extends Phase {
             }
 
             @Override
-            public GraalRuntime getRuntime() {
+            public RiRuntime getRuntime() {
                 return runtime;
             }
 
             @Override
             public Node createGuard(Node condition) {
-                FixedNode anchor = (FixedNode) getGuardAnchor();
-                if (GraalOptions.OptEliminateGuards) {
-                    for (Node usage : condition.usages()) {
-                        if (activeGuards.isMarked(usage)) {
-                            return usage;
-                        }
-                    }
-                }
-                GuardNode newGuard = anchor.graph().unique(new GuardNode((BooleanNode) condition, anchor));
-                activeGuards.grow();
-                activeGuards.mark(newGuard);
+                Anchor anchor = (Anchor) getGuardAnchor();
+                GuardNode newGuard = new GuardNode((BooleanNode) condition, anchor.graph());
+                newGuard.setAnchor(anchor);
                 return newGuard;
             }
         };
 
+
         // Lower the instructions of this block.
-        for (final Node node : b.getInstructions()) {
-            processed.mark(node);
-            if (node instanceof Lowerable) {
-                ((Lowerable) node).lower(loweringTool);
+        for (final Node n : b.getInstructions()) {
+            if (n instanceof FixedNode) {
+                LoweringOp op = n.lookup(LoweringOp.class);
+                if (op != null) {
+                    op.lower(n, loweringTool);
+                }
             }
         }
+    }
+
+    public interface LoweringOp extends Op {
+        void lower(Node n, CiLoweringTool tool);
     }
 }

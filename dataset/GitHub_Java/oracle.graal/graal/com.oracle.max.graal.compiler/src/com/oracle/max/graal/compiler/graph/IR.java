@@ -52,12 +52,7 @@ public class IR {
     /**
      * The linear-scan ordered list of blocks.
      */
-    private List<LIRBlock> linearScanOrder;
-
-    /**
-     * The order in which the code is emitted.
-     */
-    private List<LIRBlock> codeEmittingOrder;
+    private List<LIRBlock> orderedBlocks;
 
     /**
      * Creates a new IR instance for the specified compilation.
@@ -143,14 +138,6 @@ public class IR {
             block.setLoopDepth(b.loopDepth());
             block.setLoopIndex(b.loopIndex());
 
-            if (b.isLoopEnd()) {
-                block.setLinearScanLoopEnd();
-            }
-
-            if (b.isLoopHeader()) {
-                block.setLinearScanLoopHeader();
-            }
-
             block.setFirstInstruction(b.firstNode());
             block.setLastInstruction(b.lastNode());
             lirBlocks.add(block);
@@ -166,8 +153,9 @@ public class IR {
             }
         }
 
+        orderedBlocks = lirBlocks;
         valueToBlock = new HashMap<Node, LIRBlock>();
-        for (LIRBlock b : lirBlocks) {
+        for (LIRBlock b : orderedBlocks) {
             for (Node i : b.getInstructions()) {
                 valueToBlock.put(i, b);
             }
@@ -181,12 +169,11 @@ public class IR {
             GraalTimers.COMPUTE_LINEAR_SCAN_ORDER.start();
         }
 
-        ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), compilation.stats.loopCount, startBlock);
-        linearScanOrder = clso.linearScanOrder();
-        codeEmittingOrder = clso.codeEmittingOrder();
+        ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), startBlock);
+        orderedBlocks = clso.linearScanOrder();
 
         int z = 0;
-        for (LIRBlock b : linearScanOrder) {
+        for (LIRBlock b : orderedBlocks) {
             b.setLinearScanNumber(z++);
         }
 
@@ -203,11 +190,7 @@ public class IR {
      * @return the blocks in linear scan order
      */
     public List<LIRBlock> linearScanOrder() {
-        return linearScanOrder;
-    }
-
-    public List<LIRBlock> codeEmittingOrder() {
-        return codeEmittingOrder;
+        return orderedBlocks;
     }
 
     public void printGraph(String phase, Graph graph) {

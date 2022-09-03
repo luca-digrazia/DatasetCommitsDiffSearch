@@ -31,9 +31,11 @@ import com.sun.cri.ci.*;
 
 
 public abstract class WriteBarrier extends FixedNodeWithNext {
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
-    public WriteBarrier(Graph graph) {
-        super(CiKind.Illegal, graph);
+    public WriteBarrier(int inputCount, int successorCount, Graph graph) {
+        super(CiKind.Illegal, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
     }
 
 
