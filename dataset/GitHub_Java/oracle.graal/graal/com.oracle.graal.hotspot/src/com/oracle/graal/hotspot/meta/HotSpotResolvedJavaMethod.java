@@ -135,8 +135,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     @Override
     public int getMaxStackSize() {
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-        long metaspaceConstMethod = unsafe.getLong(metaspaceMethod + config.methodConstMethodOffset);
-        return config.extraStackEntries + (unsafe.getShort(metaspaceConstMethod + config.constMethodMaxStackOffset) & 0xFFFF);
+        return config.extraStackEntries + (unsafe.getShort(metaspaceMethod + config.methodMaxStackOffset) & 0xFFFF);
     }
 
     @Override

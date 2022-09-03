@@ -144,7 +144,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     public int getAccessFlags() {
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-        return unsafe.getInt(null, metaspaceKlass + config.klassAccessFlagsOffset);
+        return unsafe.getInt(metaspaceKlass + config.klassAccessFlagsOffset);
     }
 
     @Override
@@ -166,8 +166,6 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
         if (isArray()) {
             return isFinal(getElementalType(this).getModifiers()) ? this : null;
-        } else if (isInterface()) {
-            return HotSpotGraalRuntime.getInstance().getCompilerToVM().getUniqueImplementor(this);
         } else {
             HotSpotResolvedObjectType type = this;
             while (isAbstract(type.getModifiers())) {
@@ -177,7 +175,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
                 }
                 type = (HotSpotResolvedObjectType) fromMetaspaceKlass(subklass);
             }
-            if (isAbstract(type.getModifiers()) || type.isInterface() || unsafeReadWord(type.metaspaceKlass + config.subklassOffset) != 0) {
+            if (unsafeReadWord(type.metaspaceKlass + config.subklassOffset) != 0) {
                 return null;
             }
             return type;
@@ -468,7 +466,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     public int superCheckOffset() {
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-        return unsafe.getInt(null, metaspaceKlass + config.superCheckOffsetOffset);
+        return unsafe.getInt(metaspaceKlass + config.superCheckOffsetOffset);
     }
 
     public long prototypeMarkWord() {
