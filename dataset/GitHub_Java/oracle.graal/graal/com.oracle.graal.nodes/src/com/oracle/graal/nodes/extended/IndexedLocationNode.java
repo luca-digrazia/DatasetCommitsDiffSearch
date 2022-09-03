@@ -63,7 +63,15 @@ public class IndexedLocationNode extends LocationNode implements Canonicalizable
         return indexScaling;
     }
 
-    public IndexedLocationNode(LocationIdentity identity, long displacement, ValueNode index, int indexScaling) {
+    public static IndexedLocationNode create(LocationIdentity identity, long displacement, ValueNode index, Graph graph, int indexScaling) {
+        return graph.unique(IndexedLocationNode.create(identity, displacement, index, indexScaling));
+    }
+
+    public static IndexedLocationNode create(LocationIdentity identity, long displacement, ValueNode index, int indexScaling) {
+        return new IndexedLocationNode(identity, displacement, index, indexScaling);
+    }
+
+    protected IndexedLocationNode(LocationIdentity identity, long displacement, ValueNode index, int indexScaling) {
         super(StampFactory.forVoid());
         assert index != null;
         assert indexScaling != 0;
@@ -81,7 +89,7 @@ public class IndexedLocationNode extends LocationNode implements Canonicalizable
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (index.isConstant()) {
-            return new ConstantLocationNode(getLocationIdentity(), index.asJavaConstant().asLong() * indexScaling + displacement);
+            return ConstantLocationNode.create(getLocationIdentity(), index.asJavaConstant().asLong() * indexScaling + displacement);
         }
         return this;
     }

@@ -33,7 +33,11 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = ">>")
 public class RightShiftNode extends ShiftNode<Shr> {
 
-    public RightShiftNode(ValueNode x, ValueNode y) {
+    public static RightShiftNode create(ValueNode x, ValueNode y) {
+        return new RightShiftNode(x, y);
+    }
+
+    protected RightShiftNode(ValueNode x, ValueNode y) {
         super(ArithmeticOpTable::getShr, x, y);
     }
 
@@ -45,7 +49,7 @@ public class RightShiftNode extends ShiftNode<Shr> {
         }
 
         if (forX.stamp() instanceof IntegerStamp && ((IntegerStamp) forX.stamp()).isPositive()) {
-            return new UnsignedRightShiftNode(forX, forY);
+            return UnsignedRightShiftNode.create(forX, forY);
         }
 
         if (forY.isConstant()) {
@@ -78,14 +82,14 @@ public class RightShiftNode extends ShiftNode<Shr> {
                              * full shift for this kind
                              */
                             assert total >= mask;
-                            return new RightShiftNode(other.getX(), ConstantNode.forInt(mask));
+                            return RightShiftNode.create(other.getX(), ConstantNode.forInt(mask));
                         }
-                        return new RightShiftNode(other.getX(), ConstantNode.forInt(total));
+                        return RightShiftNode.create(other.getX(), ConstantNode.forInt(total));
                     }
                 }
             }
             if (originalAmout != amount) {
-                return new RightShiftNode(forX, ConstantNode.forInt(amount));
+                return RightShiftNode.create(forX, ConstantNode.forInt(amount));
             }
         }
         return this;
