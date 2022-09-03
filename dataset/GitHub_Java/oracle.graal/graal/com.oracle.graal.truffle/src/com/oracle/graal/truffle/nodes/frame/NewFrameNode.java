@@ -25,60 +25,59 @@ package com.oracle.graal.truffle.nodes.frame;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.*;
 import com.oracle.graal.truffle.nodes.*;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 
 /**
  * Intrinsic node representing the call for creating a frame in the {@link OptimizedCallTarget}
  * class.
  */
-@NodeInfo
 public class NewFrameNode extends FixedWithNextNode implements IterableNodeType, VirtualizableAllocation, Canonicalizable {
 
+    static final ResolvedJavaType FRAME_TYPE = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders().getMetaAccess().lookupJavaType(FrameWithoutBoxing.class);
+
     @Input private ValueNode descriptor;
+    @Input private ValueNode caller;
     @Input private ValueNode arguments;
 
-    public NewFrameNode(Stamp stamp, ValueNode descriptor, ValueNode arguments) {
+    public NewFrameNode(Stamp stamp, ValueNode descriptor, ValueNode caller, ValueNode arguments) {
         super(stamp);
         this.descriptor = descriptor;
+        this.caller = caller;
         this.arguments = arguments;
     }
 
-    public NewFrameNode(ResolvedJavaType frameType, ValueNode descriptor, ValueNode arguments) {
-        this(StampFactory.exactNonNull(frameType), descriptor, arguments);
+    public NewFrameNode(ValueNode descriptor, ValueNode caller, ValueNode arguments) {
+        this(StampFactory.exactNonNull(FRAME_TYPE), descriptor, caller, arguments);
     }
 
     public ValueNode getDescriptor() {
         return descriptor;
     }
 
+    public ValueNode getCaller() {
+        return caller;
+    }
+
     public ValueNode getArguments() {
         return arguments;
     }
 
-    private static SnippetReflectionProvider getSnippetReflection() {
-        /*
-         * This class requires access to the objects encapsulated in Constants, and therefore breaks
-         * the compiler-VM separation of object constants.
-         */
-        return Graal.getRequiredCapability(SnippetReflectionProvider.class);
-    }
-
     private FrameDescriptor getConstantFrameDescriptor() {
         assert descriptor.isConstant() && !descriptor.isNullConstant();
-        return (FrameDescriptor) getSnippetReflection().asObject(descriptor.asConstant());
+        return (FrameDescriptor) descriptor.asConstant().asObject();
     }
 
     private int getFrameSize() {
@@ -147,6 +146,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
         ResolvedJavaField[] frameFields = frameType.getInstanceFields(true);
 
         ResolvedJavaField descriptorField = findField(frameFields, "descriptor");
+        ResolvedJavaField callerField = findField(frameFields, "caller");
         ResolvedJavaField argumentsField = findField(frameFields, "arguments");
         ResolvedJavaField localsField = findField(frameFields, "locals");
         ResolvedJavaField primitiveLocalsField = findField(frameFields, "primitiveLocals");
@@ -163,7 +163,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
 
         if (frameSize > 0) {
             FrameDescriptor frameDescriptor = getConstantFrameDescriptor();
-            ConstantNode objectDefault = ConstantNode.forConstant(getSnippetReflection().forObject(frameDescriptor.getTypeConversion().getDefaultValue()), tool.getMetaAccessProvider(), graph());
+            ConstantNode objectDefault = ConstantNode.forObject(frameDescriptor.getTypeConversion().getDefaultValue(), tool.getMetaAccessProvider(), graph());
             ConstantNode tagDefault = ConstantNode.forByte((byte) 0, graph());
             for (int i = 0; i < frameSize; i++) {
                 objectArrayEntryState[i] = objectDefault;
@@ -177,10 +177,11 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
         tool.createVirtualObject(virtualFramePrimitiveArray, primitiveArrayEntryState, Collections.<MonitorIdNode> emptyList());
         tool.createVirtualObject(virtualFrameTagArray, tagArrayEntryState, Collections.<MonitorIdNode> emptyList());
 
-        assert frameFields.length == 5;
+        assert frameFields.length == 6;
         ValueNode[] frameEntryState = new ValueNode[frameFields.length];
         List<ResolvedJavaField> frameFieldList = Arrays.asList(frameFields);
         frameEntryState[frameFieldList.indexOf(descriptorField)] = getDescriptor();
+        frameEntryState[frameFieldList.indexOf(callerField)] = getCaller();
         frameEntryState[frameFieldList.indexOf(argumentsField)] = getArguments();
         frameEntryState[frameFieldList.indexOf(localsField)] = virtualFrameObjectArray;
         frameEntryState[frameFieldList.indexOf(primitiveLocalsField)] = virtualFramePrimitiveArray;
@@ -232,5 +233,5 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
     }
 
     @NodeIntrinsic
-    public static native FrameWithoutBoxing allocate(@ConstantNodeParameter Class<? extends VirtualFrame> frameType, FrameDescriptor descriptor, Object[] args);
+    public static native FrameWithoutBoxing allocate(FrameDescriptor descriptor, PackedFrame caller, Arguments args);
 }
