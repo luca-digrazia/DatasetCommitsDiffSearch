@@ -33,6 +33,7 @@ import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.GraalError;
@@ -50,7 +51,6 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
-import org.graalvm.compiler.phases.common.RemoveValueProxyPhase;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.replacements.ConstantBindingParameterPlugin;
 import org.graalvm.compiler.replacements.SnippetTemplate;
@@ -94,6 +94,8 @@ public abstract class SnippetStub extends Stub implements Snippets {
         this.method = providers.getMetaAccess().lookupJavaMethod(javaMethod);
     }
 
+    public static final ThreadLocal<StructuredGraph> SnippetGraphUnderConstruction = Assertions.ENABLED ? new ThreadLocal<>() : null;
+
     @Override
     @SuppressWarnings("try")
     protected StructuredGraph getGraph(CompilationIdentifier compilationId) {
@@ -111,21 +113,32 @@ public abstract class SnippetStub extends Stub implements Snippets {
         try (Scope outer = Debug.scope("SnippetStub", graph)) {
             graph.disableUnsafeAccessTracking();
 
-            IntrinsicContext initialIntrinsicContext = new IntrinsicContext(method, method, getReplacementsBytecodeProvider(), INLINE_AFTER_PARSING);
-            GraphBuilderPhase.Instance instance = new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(),
-                            providers.getConstantReflection(), providers.getConstantFieldProvider(),
-                            config, OptimisticOptimizations.NONE,
-                            initialIntrinsicContext);
-            instance.apply(graph);
+            if (SnippetGraphUnderConstruction != null) {
+                assert SnippetGraphUnderConstruction.get() == null : SnippetGraphUnderConstruction.get().toString() + " " + graph;
+                SnippetGraphUnderConstruction.set(graph);
+            }
 
-            for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
-                int index = param.index();
-                if (method.getParameterAnnotation(NonNullParameter.class, index) != null) {
-                    param.setStamp(param.stamp().join(StampFactory.objectNonNull()));
+            try {
+                IntrinsicContext initialIntrinsicContext = new IntrinsicContext(method, method, getReplacementsBytecodeProvider(), INLINE_AFTER_PARSING);
+                GraphBuilderPhase.Instance instance = new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(),
+                                providers.getConstantReflection(), providers.getConstantFieldProvider(),
+                                config, OptimisticOptimizations.NONE,
+                                initialIntrinsicContext);
+                instance.apply(graph);
+
+                for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
+                    int index = param.index();
+                    if (method.getParameterAnnotation(NonNullParameter.class, index) != null) {
+                        param.setStamp(param.stamp().join(StampFactory.objectNonNull()));
+                    }
+                }
+
+            } finally {
+                if (SnippetGraphUnderConstruction != null) {
+                    SnippetGraphUnderConstruction.set(null);
                 }
             }
 
-            new RemoveValueProxyPhase().apply(graph);
             graph.setGuardsStage(GuardsStage.FLOATING_GUARDS);
             CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
             PhaseContext context = new PhaseContext(providers);

@@ -34,7 +34,7 @@ import java.util.function.Consumer;
 
 import org.graalvm.compiler.asm.AbstractAddress;
 import org.graalvm.compiler.asm.Assembler;
-import org.graalvm.compiler.core.common.NumUtil;
+import org.graalvm.compiler.asm.NumUtil;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.code.CompilationResult.CodeAnnotation;
 import org.graalvm.compiler.code.DataSection.Data;
@@ -461,7 +461,7 @@ public class CompilationResultBuilder {
         if (block == null) {
             return;
         }
-        boolean emitComment = Debug.isDumpEnabled(Debug.BASIC_LEVEL) || PrintLIRWithAssembly.getValue(getOptions());
+        boolean emitComment = Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL) || PrintLIRWithAssembly.getValue(getOptions());
         if (emitComment) {
             blockComment(String.format("block B%d %s", block.getId(), block.getLoop()));
         }
