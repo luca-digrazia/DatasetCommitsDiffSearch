@@ -40,10 +40,10 @@
  */
 package com.oracle.truffle.sl.test;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
@@ -55,6 +55,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.runtime.SLFunction;
+import org.openjdk.jmh.annotations.Fork;
 
 @State(value = Scope.Benchmark)
 @Warmup(iterations = 15)
@@ -66,17 +67,18 @@ public class SLPolyglotEngineValueExecuteBenchmark {
     private PolyglotEngine.Value plus;
     private SLFunction slFunction;
 
+    @SuppressWarnings("deprecation")
     @Setup
-    public void prepare() {
+    public void prepare() throws IOException {
         vm = PolyglotEngine.newBuilder().build();
-        vm.eval(Source.newBuilder("function plus(x, y) { return x + y; }").name("plus.sl").mimeType(SLLanguage.MIME_TYPE).build());
+        vm.eval(Source.fromText("function plus(x, y) { return x + y; }", "plus.sl").withMimeType(SLLanguage.MIME_TYPE));
         plus = vm.findGlobalSymbol("plus");
         slFunction = plus.as(SLFunction.class);
     }
 
     @Benchmark
     @OutputTimeUnit(TimeUnit.SECONDS)
-    public long executePlus() {
+    public long executePlus() throws IOException {
         long res = plus.execute(1L, 2L).as(Number.class).longValue();
         if (res != 3) {
             throw new AssertionError();

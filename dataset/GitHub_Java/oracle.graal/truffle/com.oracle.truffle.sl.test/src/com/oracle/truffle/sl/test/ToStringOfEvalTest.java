@@ -40,17 +40,17 @@
  */
 package com.oracle.truffle.sl.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.sl.SLLanguage;
+
+import java.io.IOException;
+import org.junit.After;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import org.junit.Before;
+import org.junit.Test;
 
 public class ToStringOfEvalTest {
     PolyglotEngine engine;
@@ -65,10 +65,11 @@ public class ToStringOfEvalTest {
         engine.dispose();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void checkToStringOnAFunction() {
+    public void checkToStringOnAFunction() throws IOException {
         PolyglotEngine.Language sl = engine.getLanguages().get(SLLanguage.MIME_TYPE);
-        sl.eval(Source.newBuilder("function checkName() {}").name("defineFn").mimeType("content/unknown").build());
+        sl.eval(Source.fromText("function checkName() {}", "defineFn"));
         PolyglotEngine.Value value1 = engine.findGlobalSymbol("checkName");
         PolyglotEngine.Value value2 = engine.findGlobalSymbol("checkName");
 
