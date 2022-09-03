@@ -30,11 +30,11 @@
 package com.oracle.truffle.llvm.runtime.options;
 
 import java.io.PrintStream;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptor;
@@ -93,10 +93,6 @@ public final class SulongEngineOption {
     public static final String PARSE_ONLY_NAME = "llvm.parseOnly";
     public static final String PARSE_ONLY_INFO = "Only parses a bc file; execution is not possible.";
 
-    public static final OptionKey<Boolean> ENABLE_LVI = new OptionKey<>(false);
-    public static final String ENABLE_LVI_NAME = "llvm.enableLVI";
-    public static final String ENABLE_LVI_INFO = "Enable source-level inspection of local variables.";
-
     public static List<OptionDescriptor> describeOptions() {
         ArrayList<OptionDescriptor> options = new ArrayList<>();
         options.add(OptionDescriptor.newBuilder(SulongEngineOption.CONFIGURATION, SulongEngineOption.CONFIGURATION_NAME).help(SulongEngineOption.CONFIGURATION_INFO).category(
@@ -123,7 +119,6 @@ public final class SulongEngineOption {
         options.add(OptionDescriptor.newBuilder(SulongEngineOption.PARSE_ONLY, SulongEngineOption.PARSE_ONLY_NAME).help(
                         SulongEngineOption.PARSE_ONLY_INFO).category(
                                         OptionCategory.EXPERT).build());
-        options.add(OptionDescriptor.newBuilder(SulongEngineOption.ENABLE_LVI, SulongEngineOption.ENABLE_LVI_NAME).help(SulongEngineOption.ENABLE_LVI_INFO).category(OptionCategory.DEBUG).build());
         return options;
     }
 
@@ -139,13 +134,51 @@ public final class SulongEngineOption {
         return "true".equals(option.toLowerCase()) || "stdout".equals(option.toLowerCase()) || "stderr".equals(option.toLowerCase());
     }
 
-    public static List<String> getPolyglotOptionSearchPaths(TruffleLanguage.Env env) {
+    public static String[] getNativeLibraries(TruffleLanguage.Env env) {
+        CompilerAsserts.neverPartOfCompilation();
         String graalHome = System.getProperty("graalvm.home");
         String libraryPathOption = env.getOptions().get(LIBRARY_PATH);
         String[] libraryPath = libraryPathOption.equals("") ? new String[0] : libraryPathOption.split(OPTION_ARRAY_SEPARATOR);
+        String librariesOption = env.getOptions().get(LIBRARIES);
+        String[] userLibraries = librariesOption.equals("") ? new String[0] : librariesOption.split(OPTION_ARRAY_SEPARATOR);
 
+        List<String> searchPaths = getSearchPaths(libraryPath, graalHome);
+
+        List<Path> nativeLibs = new ArrayList<>();
+        addNativeSulonglib(nativeLibs, searchPaths);
+
+        for (String l : userLibraries) {
+            if (l.contains("." + getNativeLibrarySuffix())) {
+                addLibrary(nativeLibs, searchPaths, l);
+            }
+        }
+        return nativeLibs.stream().map(p -> p.toString()).toArray(String[]::new);
+    }
+
+    public static String[] getBitcodeLibraries(TruffleLanguage.Env env) {
+        CompilerAsserts.neverPartOfCompilation();
+        String graalHome = System.getProperty("graalvm.home");
+        String libraryPathOption = env.getOptions().get(LIBRARY_PATH);
+        String[] libraryPath = libraryPathOption.equals("") ? new String[0] : libraryPathOption.split(OPTION_ARRAY_SEPARATOR);
+        String librariesOption = env.getOptions().get(LIBRARIES);
+        String[] userLibraries = librariesOption.equals("") ? new String[0] : librariesOption.split(OPTION_ARRAY_SEPARATOR);
+
+        List<String> searchPaths = getSearchPaths(libraryPath, graalHome);
+
+        List<Path> bcLibs = new ArrayList<>();
+        addBCSulonglib(bcLibs, searchPaths);
+
+        for (String l : userLibraries) {
+            if (l.endsWith(".bc")) {
+                addLibrary(bcLibs, searchPaths, l);
+            }
+        }
+        return bcLibs.stream().map(p -> p.toString()).toArray(String[]::new);
+    }
+
+    private static List<String> getSearchPaths(String[] userPath, String graalHome) {
         List<String> path = new ArrayList<>();
-        path.addAll(Arrays.asList(libraryPath));
+        path.addAll(Arrays.asList(userPath));
 
         if (graalHome != null && !graalHome.equals("")) {
             String[] graalHomePath = new String[]{Paths.get(graalHome).toString(), Paths.get(graalHome, "jre", "languages", "llvm").toString(), Paths.get(graalHome, "languages", "llvm").toString()};
@@ -154,21 +187,35 @@ public final class SulongEngineOption {
         return path;
     }
 
-    public static List<String> getPolyglotOptionNativeLibraries(TruffleLanguage.Env env) {
-        CompilerAsserts.neverPartOfCompilation();
-        String librariesOption = env.getOptions().get(LIBRARIES);
-        String[] userLibraries = librariesOption.equals("") ? new String[0] : librariesOption.split(OPTION_ARRAY_SEPARATOR);
-        return Arrays.stream(userLibraries).filter(l -> l.contains("." + getNativeLibrarySuffix())).collect(Collectors.toList());
+    private static void addNativeSulonglib(List<Path> libs, List<String> path) {
+        String libSulongName = "libsulong." + getNativeLibrarySuffix();
+        addLibrary(libs, path, libSulongName);
     }
 
-    public static List<String> getPolyglotOptionBCLibraries(TruffleLanguage.Env env) {
-        CompilerAsserts.neverPartOfCompilation();
-        String librariesOption = env.getOptions().get(LIBRARIES);
-        String[] userLibraries = librariesOption.equals("") ? new String[0] : librariesOption.split(OPTION_ARRAY_SEPARATOR);
-        return Arrays.stream(userLibraries).filter(l -> l.endsWith(".bc")).collect(Collectors.toList());
+    private static void addBCSulonglib(List<Path> libs, List<String> path) {
+        String libSulongName = "libsulong.bc";
+        addLibrary(libs, path, libSulongName);
     }
 
-    public static String getNativeLibrarySuffix() {
+    private static void addLibrary(List<Path> libs, List<String> path, String lib) {
+        Path libPath = Paths.get(lib);
+        if (libPath.isAbsolute()) {
+            libs.add(libPath);
+            return;
+        }
+
+        for (String p : path) {
+            Path absPath = Paths.get(p, lib);
+            if (absPath.toFile().exists()) {
+                libs.add(absPath);
+                return;
+            }
+        }
+
+        libs.add(Paths.get(lib));
+    }
+
+    private static String getNativeLibrarySuffix() {
         if (System.getProperty("os.name").toLowerCase().contains("mac")) {
             return "dylib";
         } else {
