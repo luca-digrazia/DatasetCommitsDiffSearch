@@ -42,15 +42,19 @@ public class WordCastNode extends FixedWithNextNode implements LIRLowerable, Can
 
     public static WordCastNode wordToObject(ValueNode input, Kind wordKind) {
         assert input.getKind() == wordKind;
-        return new WordCastNode(StampFactory.object(), input);
+        return WordCastNode.create(StampFactory.object(), input);
     }
 
     public static WordCastNode objectToWord(ValueNode input, Kind wordKind) {
-        assert input.stamp() instanceof ObjectStamp;
-        return new WordCastNode(StampFactory.forKind(wordKind), input);
+        assert input.getKind() == Kind.Object;
+        return WordCastNode.create(StampFactory.forKind(wordKind), input);
     }
 
-    public WordCastNode(Stamp stamp, ValueNode input) {
+    public static WordCastNode create(Stamp stamp, ValueNode input) {
+        return USE_GENERATED_NODES ? new WordCastNodeGen(stamp, input) : new WordCastNode(stamp, input);
+    }
+
+    protected WordCastNode(Stamp stamp, ValueNode input) {
         super(stamp);
         this.input = input;
     }
@@ -70,21 +74,18 @@ public class WordCastNode extends FixedWithNextNode implements LIRLowerable, Can
 
     @Override
     public void generate(NodeLIRBuilderTool generator) {
+        assert getKind() != input.getKind();
+        assert generator.getLIRGeneratorTool().target().getSizeInBytes(getKind()) == generator.getLIRGeneratorTool().target().getSizeInBytes(input.getKind());
+
         Value value = generator.operand(input);
         LIRKind kind = generator.getLIRGeneratorTool().getLIRKind(stamp());
-        assert generator.getLIRGeneratorTool().target().getSizeInBytes(kind.getPlatformKind()) == generator.getLIRGeneratorTool().target().getSizeInBytes(value.getPlatformKind());
-
-        if (kind.isValue() && !value.getLIRKind().isValue()) {
+        if (kind.isValue()) {
             // only add reference information, but never drop it
             kind = value.getLIRKind().changeType(kind.getPlatformKind());
         }
 
-        if (kind.equals(value.getLIRKind())) {
-            generator.setResult(this, value);
-        } else {
-            AllocatableValue result = generator.getLIRGeneratorTool().newVariable(kind);
-            generator.getLIRGeneratorTool().emitMove(result, value);
-            generator.setResult(this, result);
-        }
+        AllocatableValue result = generator.getLIRGeneratorTool().newVariable(kind);
+        generator.getLIRGeneratorTool().emitMove(result, value);
+        generator.setResult(this, result);
     }
 }

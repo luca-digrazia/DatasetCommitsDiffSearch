@@ -38,7 +38,11 @@ public class CurrentLockNode extends FixedWithNextNode implements LIRLowerable {
 
     protected int lockDepth;
 
-    public CurrentLockNode(int lockDepth) {
+    public static CurrentLockNode create(int lockDepth) {
+        return USE_GENERATED_NODES ? new CurrentLockNodeGen(lockDepth) : new CurrentLockNode(lockDepth);
+    }
+
+    protected CurrentLockNode(int lockDepth) {
         super(null);
         this.lockDepth = lockDepth;
     }
@@ -47,7 +51,7 @@ public class CurrentLockNode extends FixedWithNextNode implements LIRLowerable {
     public void generate(NodeLIRBuilderTool gen) {
         assert lockDepth != -1;
         HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen.getLIRGeneratorTool();
-        StackSlotValue slot = hsGen.getLockSlot(lockDepth);
+        StackSlot slot = hsGen.getLockSlot(lockDepth);
         // The register allocator cannot handle stack -> register moves so we use an LEA here
         Value result = gen.getLIRGeneratorTool().emitMove(gen.getLIRGeneratorTool().emitAddress(slot));
         gen.setResult(this, result);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,11 +41,20 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
+    public static UnsafeStoreNode create(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
+        return USE_GENERATED_NODES ? new UnsafeStoreNodeGen(object, offset, value, accessKind, locationIdentity) : new UnsafeStoreNode(object, offset, value, accessKind, locationIdentity);
+    }
+
+    protected UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
         this(object, offset, value, accessKind, locationIdentity, null);
     }
 
-    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
+    public static UnsafeStoreNode create(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
+        return USE_GENERATED_NODES ? new UnsafeStoreNodeGen(object, offset, value, accessKind, locationIdentity, stateAfter) : new UnsafeStoreNode(object, offset, value, accessKind, locationIdentity,
+                        stateAfter);
+    }
+
+    protected UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
         super(StampFactory.forVoid(), object, offset, accessKind, locationIdentity);
         this.value = value;
         this.stateAfter = stateAfter;
@@ -81,7 +90,7 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
         if (state != null && state.getState() == EscapeState.Virtual) {
             ValueNode indexValue = tool.getReplacedValue(offset());
             if (indexValue.isConstant()) {
-                long off = indexValue.asJavaConstant().asLong();
+                long off = indexValue.asConstant().asLong();
                 int entryIndex = state.getVirtualObject().entryIndexForOffset(off);
                 if (entryIndex != -1) {
                     Kind entryKind = state.getVirtualObject().entryKind(entryIndex);
@@ -96,7 +105,7 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
                                 Kind nextKind = state.getVirtualObject().entryKind(nextIndex);
                                 if (nextKind == Kind.Int) {
                                     tool.setVirtualEntry(state, entryIndex, value(), true);
-                                    tool.setVirtualEntry(state, nextIndex, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), graph()), true);
+                                    tool.setVirtualEntry(state, nextIndex, ConstantNode.forConstant(Constant.forIllegal(), tool.getMetaAccessProvider(), graph()), true);
                                     tool.delete();
                                 }
                             }
@@ -109,12 +118,12 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
 
     @Override
     protected ValueNode cloneAsFieldAccess(ResolvedJavaField field) {
-        return new StoreFieldNode(object(), field, value(), stateAfter());
+        return StoreFieldNode.create(object(), field, value(), stateAfter());
     }
 
     @Override
     protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
-        return new UnsafeStoreNode(object(), location, value, accessKind(), identity, stateAfter());
+        return UnsafeStoreNode.create(object(), location, value, accessKind(), identity, stateAfter());
     }
 
     public FrameState getState() {

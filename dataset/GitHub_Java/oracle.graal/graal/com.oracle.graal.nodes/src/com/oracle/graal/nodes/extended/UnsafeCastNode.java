@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,18 +42,30 @@ public class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable,
 
     @Input ValueNode object;
 
-    public UnsafeCastNode(ValueNode object, Stamp stamp) {
+    public static UnsafeCastNode create(ValueNode object, Stamp stamp) {
+        return USE_GENERATED_NODES ? new UnsafeCastNodeGen(object, stamp) : new UnsafeCastNode(object, stamp);
+    }
+
+    protected UnsafeCastNode(ValueNode object, Stamp stamp) {
         super(stamp);
         this.object = object;
     }
 
-    public UnsafeCastNode(ValueNode object, Stamp stamp, ValueNode anchor) {
+    public static UnsafeCastNode create(ValueNode object, Stamp stamp, ValueNode anchor) {
+        return USE_GENERATED_NODES ? new UnsafeCastNodeGen(object, stamp, anchor) : new UnsafeCastNode(object, stamp, anchor);
+    }
+
+    protected UnsafeCastNode(ValueNode object, Stamp stamp, ValueNode anchor) {
         super(stamp, (GuardingNode) anchor);
         this.object = object;
     }
 
-    public UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
-        this(object, toType.getKind() == Kind.Object ? StampFactory.object(toType, exactType, nonNull || StampTool.isPointerNonNull(object.stamp()), true) : StampFactory.forKind(toType.getKind()));
+    public static UnsafeCastNode create(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
+        return USE_GENERATED_NODES ? new UnsafeCastNodeGen(object, toType, exactType, nonNull) : new UnsafeCastNode(object, toType, exactType, nonNull);
+    }
+
+    protected UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
+        this(object, toType.getKind() == Kind.Object ? StampFactory.object(toType, exactType, nonNull || StampTool.isObjectNonNull(object.stamp()), true) : StampFactory.forKind(toType.getKind()));
     }
 
     @Override

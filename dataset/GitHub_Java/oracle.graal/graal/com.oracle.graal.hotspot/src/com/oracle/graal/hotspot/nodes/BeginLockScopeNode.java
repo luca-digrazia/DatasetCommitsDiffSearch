@@ -42,7 +42,11 @@ public class BeginLockScopeNode extends AbstractMemoryCheckpoint implements LIRL
 
     protected int lockDepth;
 
-    public BeginLockScopeNode(int lockDepth) {
+    public static BeginLockScopeNode create(int lockDepth) {
+        return USE_GENERATED_NODES ? new BeginLockScopeNodeGen(lockDepth) : new BeginLockScopeNode(lockDepth);
+    }
+
+    protected BeginLockScopeNode(int lockDepth) {
         super(null);
         this.lockDepth = lockDepth;
     }
@@ -61,7 +65,7 @@ public class BeginLockScopeNode extends AbstractMemoryCheckpoint implements LIRL
     public void generate(NodeLIRBuilderTool gen) {
         assert lockDepth != -1;
         HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen.getLIRGeneratorTool();
-        StackSlotValue slot = hsGen.getLockSlot(lockDepth);
+        StackSlot slot = hsGen.getLockSlot(lockDepth);
         Value result = gen.getLIRGeneratorTool().emitAddress(slot);
         gen.setResult(this, result);
     }

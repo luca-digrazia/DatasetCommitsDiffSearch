@@ -40,7 +40,11 @@ public class LoweredAtomicReadAndWriteNode extends FixedAccessNode implements St
     @Input ValueNode newValue;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    public LoweredAtomicReadAndWriteNode(ValueNode object, LocationNode location, ValueNode newValue, BarrierType barrierType) {
+    public static LoweredAtomicReadAndWriteNode create(ValueNode object, LocationNode location, ValueNode newValue, BarrierType barrierType) {
+        return USE_GENERATED_NODES ? new LoweredAtomicReadAndWriteNodeGen(object, location, newValue, barrierType) : new LoweredAtomicReadAndWriteNode(object, location, newValue, barrierType);
+    }
+
+    protected LoweredAtomicReadAndWriteNode(ValueNode object, LocationNode location, ValueNode newValue, BarrierType barrierType) {
         super(object, location, newValue.stamp().unrestricted(), barrierType);
         this.newValue = newValue;
     }

@@ -23,6 +23,7 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
@@ -30,7 +31,8 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
- * Loads an object's hub. The object is not null-checked by this operation.
+ * Loads an object's {@linkplain Representation#ObjectHub hub}. The object is not null-checked by
+ * this operation.
  */
 @NodeInfo
 public class LoadHubNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, Virtualizable {
@@ -41,30 +43,31 @@ public class LoadHubNode extends FloatingGuardedNode implements Lowerable, Canon
         return value;
     }
 
-    public static LoadHubNode create(@InjectedNodeParameter StampProvider stampProvider, ValueNode value) {
-        return new LoadHubNode(hubStamp(stampProvider, value), value, null);
+    public static LoadHubNode create(ValueNode value, Kind kind) {
+        return USE_GENERATED_NODES ? new LoadHubNodeGen(value, kind) : new LoadHubNode(value, kind);
     }
 
-    public static LoadHubNode create(@InjectedNodeParameter StampProvider stampProvider, ValueNode value, ValueNode guard) {
-        return new LoadHubNode(hubStamp(stampProvider, value), value, guard);
+    protected LoadHubNode(ValueNode value, Kind kind) {
+        super(getKind(kind), null);
+        this.value = value;
     }
 
-    private static Stamp hubStamp(StampProvider stampProvider, ValueNode value) {
-        assert value.stamp() instanceof ObjectStamp;
-        return stampProvider.createHubStamp(((ObjectStamp) value.stamp()));
+    public static LoadHubNode create(ValueNode value, Kind kind, ValueNode guard) {
+        return USE_GENERATED_NODES ? new LoadHubNodeGen(value, kind, guard) : new LoadHubNode(value, kind, guard);
     }
 
-    protected LoadHubNode(Stamp stamp, ValueNode value, ValueNode guard) {
-        super(stamp, (GuardingNode) guard);
+    protected LoadHubNode(ValueNode value, Kind kind, ValueNode guard) {
+        super(getKind(kind), (GuardingNode) guard);
         assert value != guard;
         this.value = value;
     }
 
+    private static Stamp getKind(Kind kind) {
+        return kind == Kind.Object ? StampFactory.objectNonNull() : StampFactory.forKind(kind);
+    }
+
     @Override
     public void lower(LoweringTool tool) {
-        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
-            return;
-        }
         tool.getLowerer().lower(this, tool);
     }
 
@@ -87,7 +90,7 @@ public class LoadHubNode extends FloatingGuardedNode implements Lowerable, Canon
             }
 
             if (exactType != null) {
-                return ConstantNode.forConstant(stamp(), exactType.getObjectHub(), metaAccess);
+                return ConstantNode.forConstant(exactType.getEncoding(Representation.ObjectHub), metaAccess);
             }
         }
         return this;
@@ -97,8 +100,8 @@ public class LoadHubNode extends FloatingGuardedNode implements Lowerable, Canon
     public void virtualize(VirtualizerTool tool) {
         State state = tool.getObjectState(value);
         if (state != null) {
-            Constant constantHub = state.getVirtualObject().type().getObjectHub();
-            tool.replaceWithValue(ConstantNode.forConstant(stamp(), constantHub, tool.getMetaAccessProvider(), graph()));
+            Constant constantHub = state.getVirtualObject().type().getEncoding(Representation.ObjectHub);
+            tool.replaceWithValue(ConstantNode.forConstant(constantHub, tool.getMetaAccessProvider(), graph()));
         }
     }
 }

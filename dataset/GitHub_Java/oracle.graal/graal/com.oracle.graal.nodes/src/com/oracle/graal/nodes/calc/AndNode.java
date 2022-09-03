@@ -40,7 +40,7 @@ public class AndNode extends BinaryArithmeticNode implements NarrowableArithmeti
     }
 
     protected AndNode(ValueNode x, ValueNode y) {
-        super(ArithmeticOpTable::getAnd, x, y);
+        super(ArithmeticOpTable.forStamp(x.stamp()).getAnd(), x, y);
     }
 
     @Override
@@ -58,7 +58,7 @@ public class AndNode extends BinaryArithmeticNode implements NarrowableArithmeti
         }
         if (forY.isConstant()) {
             Constant c = forY.asConstant();
-            if (getOp(forX, forY).isNeutral(c)) {
+            if (getOp().isNeutral(c)) {
                 return forX;
             }
 

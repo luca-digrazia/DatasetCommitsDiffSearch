@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,11 +48,19 @@ public class ConditionalNode extends FloatingNode implements Canonicalizable, LI
         return condition;
     }
 
-    public ConditionalNode(LogicNode condition) {
+    public static ConditionalNode create(LogicNode condition) {
+        return USE_GENERATED_NODES ? new ConditionalNodeGen(condition) : new ConditionalNode(condition);
+    }
+
+    protected ConditionalNode(LogicNode condition) {
         this(condition, ConstantNode.forInt(1, condition.graph()), ConstantNode.forInt(0, condition.graph()));
     }
 
-    public ConditionalNode(LogicNode condition, ValueNode trueValue, ValueNode falseValue) {
+    public static ConditionalNode create(LogicNode condition, ValueNode trueValue, ValueNode falseValue) {
+        return USE_GENERATED_NODES ? new ConditionalNodeGen(condition, trueValue, falseValue) : new ConditionalNode(condition, trueValue, falseValue);
+    }
+
+    protected ConditionalNode(LogicNode condition, ValueNode trueValue, ValueNode falseValue) {
         super(trueValue.stamp().meet(falseValue.stamp()));
         assert trueValue.stamp().isCompatible(falseValue.stamp());
         this.condition = condition;
@@ -77,16 +85,16 @@ public class ConditionalNode extends FloatingNode implements Canonicalizable, LI
     public ValueNode canonical(CanonicalizerTool tool) {
         if (condition instanceof LogicNegationNode) {
             LogicNegationNode negated = (LogicNegationNode) condition;
-            return new ConditionalNode(negated.getValue(), falseValue(), trueValue());
+            return ConditionalNode.create(negated.getValue(), falseValue(), trueValue());
         }
 
         // this optimizes the case where a value that can only be 0 or 1 is materialized to 0 or 1
         if (trueValue().isConstant() && falseValue().isConstant() && condition instanceof IntegerEqualsNode) {
             IntegerEqualsNode equals = (IntegerEqualsNode) condition;
-            if (equals.getY().isConstant() && equals.getY().asConstant().equals(JavaConstant.INT_0) && equals.getX().stamp() instanceof IntegerStamp) {
+            if (equals.getY().isConstant() && equals.getY().asConstant().equals(Constant.INT_0) && equals.getX().stamp() instanceof IntegerStamp) {
                 IntegerStamp equalsXStamp = (IntegerStamp) equals.getX().stamp();
                 if (equalsXStamp.upMask() == 1) {
-                    if (trueValue().asConstant().equals(JavaConstant.INT_0) && falseValue().asConstant().equals(JavaConstant.INT_1)) {
+                    if (trueValue().asConstant().equals(Constant.INT_0) && falseValue().asConstant().equals(Constant.INT_1)) {
                         return IntegerConvertNode.convertUnsigned(equals.getX(), stamp());
                     }
                 }
@@ -119,12 +127,20 @@ public class ConditionalNode extends FloatingNode implements Canonicalizable, LI
         generator.emitConditional(this);
     }
 
-    public ConditionalNode(@InjectedNodeParameter StructuredGraph graph, Condition condition, ValueNode x, ValueNode y) {
+    public static ConditionalNode create(@InjectedNodeParameter StructuredGraph graph, Condition condition, ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new ConditionalNodeGen(graph, condition, x, y) : new ConditionalNode(graph, condition, x, y);
+    }
+
+    protected ConditionalNode(StructuredGraph graph, Condition condition, ValueNode x, ValueNode y) {
         this(createCompareNode(graph, condition, x, y));
     }
 
-    public ConditionalNode(ValueNode type, ValueNode object) {
-        this(type.graph().unique(new InstanceOfDynamicNode(type, object)));
+    public static ConditionalNode create(ValueNode type, ValueNode object) {
+        return USE_GENERATED_NODES ? new ConditionalNodeGen(type, object) : new ConditionalNode(type, object);
+    }
+
+    protected ConditionalNode(ValueNode type, ValueNode object) {
+        this(type.graph().unique(InstanceOfDynamicNode.create(type, object)));
     }
 
     @NodeIntrinsic

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,12 +24,12 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.api.meta.LocationIdentity.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodeinfo.*;
@@ -58,15 +58,13 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
     protected boolean disjoint;
     protected boolean uninitialized;
 
-    protected final HotSpotGraalRuntimeProvider runtime;
-
-    public static ArrayCopyCallNode create(@InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length,
-                    Kind elementKind, boolean aligned, boolean disjoint, boolean uninitialized) {
-        return new ArrayCopyCallNode(src, srcPos, dest, destPos, length, elementKind, aligned, disjoint, uninitialized, runtime);
+    public static ArrayCopyCallNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, boolean aligned, boolean disjoint,
+                    boolean uninitialized) {
+        return USE_GENERATED_NODES ? new ArrayCopyCallNodeGen(src, srcPos, dest, destPos, length, elementKind, aligned, disjoint, uninitialized) : new ArrayCopyCallNode(src, srcPos, dest, destPos,
+                        length, elementKind, aligned, disjoint, uninitialized);
     }
 
-    protected ArrayCopyCallNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, boolean aligned, boolean disjoint, boolean uninitialized,
-                    HotSpotGraalRuntimeProvider runtime) {
+    protected ArrayCopyCallNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, boolean aligned, boolean disjoint, boolean uninitialized) {
         super(StampFactory.forVoid());
         assert elementKind != null;
         this.src = src;
@@ -78,12 +76,15 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
         this.aligned = aligned;
         this.disjoint = disjoint;
         this.uninitialized = uninitialized;
-        this.runtime = runtime;
     }
 
-    public static ArrayCopyCallNode create(@InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length,
-                    Kind elementKind, boolean disjoint) {
-        return new ArrayCopyCallNode(src, srcPos, dest, destPos, length, elementKind, false, disjoint, false, runtime);
+    public static ArrayCopyCallNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, boolean disjoint) {
+        return USE_GENERATED_NODES ? new ArrayCopyCallNodeGen(src, srcPos, dest, destPos, length, elementKind, disjoint) : new ArrayCopyCallNode(src, srcPos, dest, destPos, length, elementKind,
+                        disjoint);
+    }
+
+    protected ArrayCopyCallNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, boolean disjoint) {
+        this(src, srcPos, dest, destPos, length, elementKind, false, disjoint, false);
     }
 
     public ValueNode getSource() {
@@ -119,13 +120,13 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
     }
 
     private boolean shouldUnroll() {
-        return getLength().isConstant() && getLength().asJavaConstant().asInt() <= GraalOptions.MaximumEscapeAnalysisArrayLength.getValue();
+        return getLength().isConstant() && getLength().asConstant().asInt() <= GraalOptions.MaximumEscapeAnalysisArrayLength.getValue();
     }
 
     private ValueNode computeBase(ValueNode base, ValueNode pos) {
         FixedWithNextNode basePtr = graph().add(GetObjectAddressNode.create(base));
         graph().addBeforeFixed(this, basePtr);
-        ValueNode loc = IndexedLocationNode.create(getLocationIdentity(), elementKind, runtime.getArrayBaseOffset(elementKind), pos, graph(), runtime.getArrayIndexScale(elementKind));
+        ValueNode loc = IndexedLocationNode.create(getLocationIdentity(), elementKind, arrayBaseOffset(elementKind), pos, graph(), arrayIndexScale(elementKind));
         return graph().unique(ComputeAddressNode.create(basePtr, loc, StampFactory.forKind(Kind.Long)));
     }
 
@@ -184,8 +185,8 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
         return uninitialized;
     }
 
-    boolean isHeapWordAligned(JavaConstant value, Kind kind) {
-        return (runtime.getArrayBaseOffset(kind) + (long) value.asInt() * runtime.getArrayIndexScale(kind)) % runtime.getConfig().heapWordSize == 0;
+    static boolean isHeapWordAligned(Constant value, Kind kind) {
+        return (arrayBaseOffset(kind) + (long) value.asInt() * arrayIndexScale(kind)) % heapWordSize() == 0;
     }
 
     public void updateAlignedDisjoint() {
@@ -194,8 +195,8 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
             // Can treat as disjoint
             disjoint = true;
         }
-        PrimitiveConstant constantSrc = (PrimitiveConstant) srcPos.stamp().asConstant();
-        PrimitiveConstant constantDst = (PrimitiveConstant) destPos.stamp().asConstant();
+        Constant constantSrc = srcPos.stamp().asConstant();
+        Constant constantDst = destPos.stamp().asConstant();
         if (constantSrc != null && constantDst != null) {
             if (!aligned) {
                 aligned = isHeapWordAligned(constantSrc, componentKind) && isHeapWordAligned(constantDst, componentKind);

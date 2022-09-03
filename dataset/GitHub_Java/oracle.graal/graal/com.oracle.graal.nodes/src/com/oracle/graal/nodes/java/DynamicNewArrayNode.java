@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,7 +43,7 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
     @Input ValueNode elementType;
 
     public static DynamicNewArrayNode create(ValueNode elementType, ValueNode length) {
-        return new DynamicNewArrayNode(elementType, length);
+        return USE_GENERATED_NODES ? new DynamicNewArrayNodeGen(elementType, length) : new DynamicNewArrayNode(elementType, length);
     }
 
     protected DynamicNewArrayNode(ValueNode elementType, ValueNode length) {
@@ -51,7 +51,7 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
     }
 
     public static DynamicNewArrayNode create(ValueNode elementType, ValueNode length, boolean fillContents) {
-        return new DynamicNewArrayNode(elementType, length, fillContents);
+        return USE_GENERATED_NODES ? new DynamicNewArrayNodeGen(elementType, length, fillContents) : new DynamicNewArrayNode(elementType, length, fillContents);
     }
 
     protected DynamicNewArrayNode(ValueNode elementType, ValueNode length, boolean fillContents) {
@@ -63,21 +63,13 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
         return elementType;
     }
 
-    protected NewArrayNode forConstantType(ResolvedJavaType type) {
-        ValueNode len = length();
-        NewArrayNode ret = graph().add(NewArrayNode.create(type, len.isAlive() ? len : graph().addOrUniqueWithInputs(len), fillContents()));
-        if (stateBefore() != null) {
-            ret.setStateBefore(stateBefore());
-        }
-        return ret;
-    }
-
     @Override
     public void simplify(SimplifierTool tool) {
         if (isAlive() && elementType.isConstant()) {
             ResolvedJavaType javaType = tool.getConstantReflection().asJavaType(elementType.asConstant());
             if (javaType != null && !javaType.equals(tool.getMetaAccess().lookupJavaType(void.class))) {
-                NewArrayNode newArray = forConstantType(javaType);
+                ValueNode len = length();
+                NewArrayNode newArray = graph().add(NewArrayNode.create(javaType, len.isAlive() ? len : graph().addOrUniqueWithInputs(len), fillContents()));
                 List<Node> snapshot = inputs().snapshot();
                 graph().replaceFixedWithFixed(this, newArray);
                 for (Node input : snapshot) {

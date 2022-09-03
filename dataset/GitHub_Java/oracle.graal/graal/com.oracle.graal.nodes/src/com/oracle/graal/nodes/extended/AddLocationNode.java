@@ -51,12 +51,12 @@ public class AddLocationNode extends LocationNode implements Canonicalizable.Bin
     }
 
     public static AddLocationNode create(LocationNode x, LocationNode y, Graph graph) {
-        assert x.getValueKind().equals(y.getValueKind()) && x.getLocationIdentity().equals(y.getLocationIdentity());
+        assert x.getValueKind().equals(y.getValueKind()) && x.getLocationIdentity() == y.getLocationIdentity();
         return graph.unique(AddLocationNode.create(x, y));
     }
 
     public static AddLocationNode create(ValueNode x, ValueNode y) {
-        return new AddLocationNode(x, y);
+        return USE_GENERATED_NODES ? new AddLocationNodeGen(x, y) : new AddLocationNode(x, y);
     }
 
     protected AddLocationNode(ValueNode x, ValueNode y) {

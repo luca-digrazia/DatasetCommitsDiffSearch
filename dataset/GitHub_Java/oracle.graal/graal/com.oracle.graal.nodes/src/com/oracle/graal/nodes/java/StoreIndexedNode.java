@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,7 +56,19 @@ public class StoreIndexedNode extends AccessIndexedNode implements StateSplit, L
         return value;
     }
 
-    public StoreIndexedNode(ValueNode array, ValueNode index, Kind elementKind, ValueNode value) {
+    /**
+     * Creates a new StoreIndexedNode.
+     *
+     * @param array the node producing the array
+     * @param index the node producing the index
+     * @param elementKind the element type
+     * @param value the value to store into the array
+     */
+    public static StoreIndexedNode create(ValueNode array, ValueNode index, Kind elementKind, ValueNode value) {
+        return USE_GENERATED_NODES ? new StoreIndexedNodeGen(array, index, elementKind, value) : new StoreIndexedNode(array, index, elementKind, value);
+    }
+
+    protected StoreIndexedNode(ValueNode array, ValueNode index, Kind elementKind, ValueNode value) {
         super(StampFactory.forVoid(), array, index, elementKind);
         this.value = value;
     }
@@ -66,10 +78,10 @@ public class StoreIndexedNode extends AccessIndexedNode implements StateSplit, L
         State arrayState = tool.getObjectState(array());
         if (arrayState != null && arrayState.getState() == EscapeState.Virtual) {
             ValueNode indexValue = tool.getReplacedValue(index());
-            int idx = indexValue.isConstant() ? indexValue.asJavaConstant().asInt() : -1;
+            int idx = indexValue.isConstant() ? indexValue.asConstant().asInt() : -1;
             if (idx >= 0 && idx < arrayState.getVirtualObject().entryCount()) {
                 ResolvedJavaType componentType = arrayState.getVirtualObject().type().getComponentType();
-                if (componentType.isPrimitive() || StampTool.isPointerAlwaysNull(value) || componentType.getSuperclass() == null ||
+                if (componentType.isPrimitive() || StampTool.isObjectAlwaysNull(value) || componentType.getSuperclass() == null ||
                                 (StampTool.typeOrNull(value) != null && componentType.isAssignableFrom(StampTool.typeOrNull(value)))) {
                     tool.setVirtualEntry(arrayState, idx, value(), false);
                     tool.delete();

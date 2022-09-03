@@ -25,24 +25,31 @@ package com.oracle.graal.hotspot.replacements;
 import static com.oracle.graal.api.meta.LocationIdentity.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 
-public final class UnsafeArrayCopyNode extends AbstractStateSplit implements Lowerable, MemoryCheckpoint.Single {
+@NodeInfo(allowedUsageTypes = {InputType.Memory})
+public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerable, MemoryCheckpoint.Single {
 
-    @Input private ValueNode src;
-    @Input private ValueNode srcPos;
-    @Input private ValueNode dest;
-    @Input private ValueNode destPos;
-    @Input private ValueNode length;
-    @Input private ValueNode layoutHelper;
+    @Input ValueNode src;
+    @Input ValueNode srcPos;
+    @Input ValueNode dest;
+    @Input ValueNode destPos;
+    @Input ValueNode length;
+    @OptionalInput ValueNode layoutHelper;
 
-    private Kind elementKind;
+    protected Kind elementKind;
 
-    private UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
+    public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
+        return USE_GENERATED_NODES ? new UnsafeArrayCopyNodeGen(src, srcPos, dest, destPos, length, layoutHelper, elementKind) : new UnsafeArrayCopyNode(src, srcPos, dest, destPos, length,
+                        layoutHelper, elementKind);
+    }
+
+    protected UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
         super(StampFactory.forVoid());
         assert layoutHelper == null || elementKind == null;
         this.src = src;
@@ -54,12 +61,45 @@ public final class UnsafeArrayCopyNode extends AbstractStateSplit implements Low
         this.elementKind = elementKind;
     }
 
-    private UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
+    public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
+        return USE_GENERATED_NODES ? new UnsafeArrayCopyNodeGen(src, srcPos, dest, destPos, length, elementKind) : new UnsafeArrayCopyNode(src, srcPos, dest, destPos, length, elementKind);
+    }
+
+    protected UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
         this(src, srcPos, dest, destPos, length, null, elementKind);
     }
 
-    private UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
+    public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
+        return USE_GENERATED_NODES ? new UnsafeArrayCopyNodeGen(src, srcPos, dest, destPos, length, layoutHelper) : new UnsafeArrayCopyNode(src, srcPos, dest, destPos, length, layoutHelper);
+    }
+
+    protected UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
         this(src, srcPos, dest, destPos, length, layoutHelper, null);
+    }
+
+    @Override
+    public ValueNode getArray() {
+        return dest;
+    }
+
+    @Override
+    public ValueNode getIndex() {
+        return destPos;
+    }
+
+    @Override
+    public ValueNode getLength() {
+        return length;
+    }
+
+    @Override
+    public boolean isObjectArray() {
+        return elementKind == Kind.Object;
+    }
+
+    @Override
+    public boolean isInitialization() {
+        return false;
     }
 
     public Kind getElementKind() {
@@ -67,10 +107,10 @@ public final class UnsafeArrayCopyNode extends AbstractStateSplit implements Low
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
-        if (loweringType == LoweringType.AFTER_GUARDS) {
+    public void lower(LoweringTool tool) {
+        if (graph().getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
             UnsafeArrayCopySnippets.Templates templates = tool.getReplacements().getSnippetTemplateCache(UnsafeArrayCopySnippets.Templates.class);
-            templates.lower(this);
+            templates.lower(this, tool);
         }
     }
 
@@ -87,11 +127,10 @@ public final class UnsafeArrayCopyNode extends AbstractStateSplit implements Low
 
     @Override
     public LocationIdentity getLocationIdentity() {
-        if (elementKind == null) {
-            return ANY_LOCATION;
-        } else {
+        if (elementKind != null) {
             return NamedLocationIdentity.getArrayLocation(elementKind);
         }
+        return ANY_LOCATION;
     }
 
     @NodeIntrinsic

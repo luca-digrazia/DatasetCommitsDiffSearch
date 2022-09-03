@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -53,7 +53,11 @@ public class BranchProbabilityNode extends FloatingNode implements Simplifiable,
     @Input ValueNode probability;
     @Input ValueNode condition;
 
-    public BranchProbabilityNode(ValueNode probability, ValueNode condition) {
+    public static BranchProbabilityNode create(ValueNode probability, ValueNode condition) {
+        return USE_GENERATED_NODES ? new BranchProbabilityNodeGen(probability, condition) : new BranchProbabilityNode(probability, condition);
+    }
+
+    protected BranchProbabilityNode(ValueNode probability, ValueNode condition) {
         super(condition.stamp());
         this.probability = probability;
         this.condition = condition;
@@ -70,7 +74,7 @@ public class BranchProbabilityNode extends FloatingNode implements Simplifiable,
     @Override
     public void simplify(SimplifierTool tool) {
         if (probability.isConstant()) {
-            double probabilityValue = probability.asJavaConstant().asDouble();
+            double probabilityValue = probability.asConstant().asDouble();
             if (probabilityValue < 0.0) {
                 throw new GraalInternalError("A negative probability of " + probabilityValue + " is not allowed!");
             } else if (probabilityValue > 1.0) {
@@ -85,7 +89,7 @@ public class BranchProbabilityNode extends FloatingNode implements Simplifiable,
                     }
                     if (other.isConstant()) {
                         double probabilityToSet = probabilityValue;
-                        if (other.asJavaConstant().asInt() == 0) {
+                        if (other.asConstant().asInt() == 0) {
                             probabilityToSet = 1.0 - probabilityToSet;
                         }
                         for (IfNode ifNodeUsages : node.usages().filter(IfNode.class)) {

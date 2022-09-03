@@ -23,12 +23,12 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.LocationNode.Location;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
@@ -36,15 +36,27 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
 
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
+    public static WriteNode create(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
+        return USE_GENERATED_NODES ? new WriteNodeGen(object, value, location, barrierType) : new WriteNode(object, value, location, barrierType);
+    }
+
+    protected WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
         super(object, value, location, barrierType);
     }
 
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
+    public static WriteNode create(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
+        return USE_GENERATED_NODES ? new WriteNodeGen(object, value, location, barrierType, initialization) : new WriteNode(object, value, location, barrierType, initialization);
+    }
+
+    protected WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
         super(object, value, location, barrierType, initialization);
     }
 
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
+    public static WriteNode create(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
+        return USE_GENERATED_NODES ? new WriteNodeGen(object, value, location, barrierType, guard, initialization) : new WriteNode(object, value, location, barrierType, guard, initialization);
+    }
+
+    protected WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
         super(object, value, location, barrierType, guard, initialization);
     }
 
@@ -67,7 +79,18 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simpli
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        throw GraalInternalError.shouldNotReachHere("unexpected WriteNode before PEA");
+        if (location() instanceof ConstantLocationNode) {
+            ConstantLocationNode constantLocation = (ConstantLocationNode) location();
+            State state = tool.getObjectState(object());
+            if (state != null && state.getState() == EscapeState.Virtual) {
+                VirtualObjectNode virtual = state.getVirtualObject();
+                int entryIndex = virtual.entryIndexForOffset(constantLocation.getDisplacement());
+                if (entryIndex != -1 && virtual.entryKind(entryIndex) == constantLocation.getValueKind()) {
+                    tool.setVirtualEntry(state, entryIndex, value(), false);
+                    tool.delete();
+                }
+            }
+        }
     }
 
     public boolean canNullCheck() {

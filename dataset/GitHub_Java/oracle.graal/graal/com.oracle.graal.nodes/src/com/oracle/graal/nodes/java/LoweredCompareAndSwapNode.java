@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -61,7 +61,12 @@ public class LoweredCompareAndSwapNode extends FixedAccessNode implements StateS
         return newValue;
     }
 
-    public LoweredCompareAndSwapNode(ValueNode object, LocationNode location, ValueNode expectedValue, ValueNode newValue, BarrierType barrierType) {
+    public static LoweredCompareAndSwapNode create(ValueNode object, LocationNode location, ValueNode expectedValue, ValueNode newValue, BarrierType barrierType) {
+        return USE_GENERATED_NODES ? new LoweredCompareAndSwapNodeGen(object, location, expectedValue, newValue, barrierType) : new LoweredCompareAndSwapNode(object, location, expectedValue,
+                        newValue, barrierType);
+    }
+
+    protected LoweredCompareAndSwapNode(ValueNode object, LocationNode location, ValueNode expectedValue, ValueNode newValue, BarrierType barrierType) {
         super(object, location, StampFactory.forKind(Kind.Boolean.getStackKind()), barrierType);
         assert expectedValue.getKind() == newValue.getKind();
         this.expectedValue = expectedValue;
@@ -81,7 +86,7 @@ public class LoweredCompareAndSwapNode extends FixedAccessNode implements StateS
     public void generate(NodeLIRBuilderTool gen) {
         assert getNewValue().stamp().isCompatible(getExpectedValue().stamp());
         Value address = location().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
-        Value result = gen.getLIRGeneratorTool().emitCompareAndSwap(address, gen.operand(getExpectedValue()), gen.operand(getNewValue()), JavaConstant.INT_1, JavaConstant.INT_0);
+        Value result = gen.getLIRGeneratorTool().emitCompareAndSwap(address, gen.operand(getExpectedValue()), gen.operand(getNewValue()), Constant.INT_1, Constant.INT_0);
         gen.setResult(this, result);
     }
 }

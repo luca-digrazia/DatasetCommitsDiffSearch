@@ -37,14 +37,18 @@ import com.oracle.graal.word.*;
 @NodeInfo
 public class MonitorCounterNode extends FloatingNode implements LIRLowerable {
 
-    public MonitorCounterNode() {
+    public static MonitorCounterNode create() {
+        return USE_GENERATED_NODES ? new MonitorCounterNodeGen() : new MonitorCounterNode();
+    }
+
+    protected MonitorCounterNode() {
         super(null);
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         assert graph().getNodes().filter(MonitorCounterNode.class).count() == 1 : "monitor counters not canonicalized to single instance";
-        VirtualStackSlot counter = gen.getLIRGeneratorTool().getResult().getFrameMapBuilder().allocateStackSlots(1, new BitSet(0), null);
+        StackSlot counter = gen.getLIRGeneratorTool().getResult().getFrameMap().allocateStackSlots(1, new BitSet(0), null);
         Value result = gen.getLIRGeneratorTool().emitAddress(counter);
         gen.setResult(this, result);
     }

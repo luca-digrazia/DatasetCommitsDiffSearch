@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,17 +43,17 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable 
      * @param elementKind the element type
      */
     public static LoadIndexedNode create(ValueNode array, ValueNode index, Kind elementKind) {
-        return new LoadIndexedNode(createStamp(array, elementKind), array, index, elementKind);
+        return USE_GENERATED_NODES ? new LoadIndexedNodeGen(array, index, elementKind) : new LoadIndexedNode(array, index, elementKind);
     }
 
-    protected LoadIndexedNode(Stamp stamp, ValueNode array, ValueNode index, Kind elementKind) {
-        super(stamp, array, index, elementKind);
+    protected LoadIndexedNode(ValueNode array, ValueNode index, Kind elementKind) {
+        super(createStamp(array, elementKind), array, index, elementKind);
     }
 
     private static Stamp createStamp(ValueNode array, Kind kind) {
         ResolvedJavaType type = StampTool.typeOrNull(array);
         if (kind == Kind.Object && type != null) {
-            return StampFactory.declaredTrusted(type.getComponentType());
+            return StampFactory.declared(type.getComponentType());
         } else {
             return StampFactory.forKind(kind);
         }
@@ -69,7 +69,7 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable 
         State arrayState = tool.getObjectState(array());
         if (arrayState != null && arrayState.getState() == EscapeState.Virtual) {
             ValueNode indexValue = tool.getReplacedValue(index());
-            int idx = indexValue.isConstant() ? indexValue.asJavaConstant().asInt() : -1;
+            int idx = indexValue.isConstant() ? indexValue.asConstant().asInt() : -1;
             if (idx >= 0 && idx < arrayState.getVirtualObject().entryCount()) {
                 tool.replaceWith(arrayState.getEntry(idx));
             }

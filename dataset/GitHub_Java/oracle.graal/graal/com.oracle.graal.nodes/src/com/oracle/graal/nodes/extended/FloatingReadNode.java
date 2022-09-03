@@ -35,12 +35,12 @@ import com.oracle.graal.nodes.spi.*;
  * relative location. This node does not null check the object.
  */
 @NodeInfo
-public class FloatingReadNode extends FloatingAccessNode implements LIRLowerable, Canonicalizable {
+public class FloatingReadNode extends FloatingAccessNode implements IterableNodeType, LIRLowerable, Canonicalizable {
 
     @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
 
     public static FloatingReadNode create(ValueNode object, LocationNode location, MemoryNode lastLocationAccess, Stamp stamp) {
-        return new FloatingReadNode(object, location, lastLocationAccess, stamp);
+        return USE_GENERATED_NODES ? new FloatingReadNodeGen(object, location, lastLocationAccess, stamp) : new FloatingReadNode(object, location, lastLocationAccess, stamp);
     }
 
     protected FloatingReadNode(ValueNode object, LocationNode location, MemoryNode lastLocationAccess, Stamp stamp) {
@@ -48,7 +48,7 @@ public class FloatingReadNode extends FloatingAccessNode implements LIRLowerable
     }
 
     public static FloatingReadNode create(ValueNode object, LocationNode location, MemoryNode lastLocationAccess, Stamp stamp, GuardingNode guard) {
-        return new FloatingReadNode(object, location, lastLocationAccess, stamp, guard);
+        return USE_GENERATED_NODES ? new FloatingReadNodeGen(object, location, lastLocationAccess, stamp, guard) : new FloatingReadNode(object, location, lastLocationAccess, stamp, guard);
     }
 
     protected FloatingReadNode(ValueNode object, LocationNode location, MemoryNode lastLocationAccess, Stamp stamp, GuardingNode guard) {
@@ -56,7 +56,8 @@ public class FloatingReadNode extends FloatingAccessNode implements LIRLowerable
     }
 
     public static FloatingReadNode create(ValueNode object, LocationNode location, MemoryNode lastLocationAccess, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
-        return new FloatingReadNode(object, location, lastLocationAccess, stamp, guard, barrierType);
+        return USE_GENERATED_NODES ? new FloatingReadNodeGen(object, location, lastLocationAccess, stamp, guard, barrierType) : new FloatingReadNode(object, location, lastLocationAccess, stamp,
+                        guard, barrierType);
     }
 
     protected FloatingReadNode(ValueNode object, LocationNode location, MemoryNode lastLocationAccess, Stamp stamp, GuardingNode guard, BarrierType barrierType) {

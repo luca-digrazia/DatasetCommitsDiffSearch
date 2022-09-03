@@ -29,7 +29,11 @@ import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
 public class OSRStartNode extends StartNode implements Lowerable {
-    public OSRStartNode() {
+    public static OSRStartNode create() {
+        return USE_GENERATED_NODES ? new OSRStartNodeGen() : new OSRStartNode();
+    }
+
+    protected OSRStartNode() {
     }
 
     @Override

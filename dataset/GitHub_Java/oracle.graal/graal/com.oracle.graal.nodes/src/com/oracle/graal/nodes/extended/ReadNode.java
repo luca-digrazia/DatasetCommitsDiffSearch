@@ -30,7 +30,6 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
@@ -140,8 +139,8 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
                     }
                 }
             }
-            if (location.getLocationIdentity() == LocationIdentity.ARRAY_LENGTH_LOCATION) {
-                ValueNode length = GraphUtil.arrayLength(object);
+            if (location.getLocationIdentity() == LocationIdentity.ARRAY_LENGTH_LOCATION && object instanceof ArrayLengthProvider) {
+                ValueNode length = ((ArrayLengthProvider) object).length();
                 if (length != null) {
                     // TODO Does this need a PiCastNode to the positive range?
                     return length;
