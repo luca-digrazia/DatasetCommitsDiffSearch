@@ -1243,7 +1243,7 @@ public class GraphDecoder {
     }
 
     private static void insertLoopBegins(MethodScope methodScope, MergeNode merge, EndNode endNode, Set<LoopBeginNode> newLoopBegins) {
-        assert methodScope.loopExplosionMerges.isMarkedAndGrow(merge) : merge;
+        assert methodScope.loopExplosionMerges.contains(merge) : merge;
 
         merge.removeEnd(endNode);
         FixedNode afterMerge = merge.next();
@@ -1258,7 +1258,6 @@ public class GraphDecoder {
             newLoopBegin.setNext(afterMerge);
             newLoopBegin.setStateAfter(stateAfter);
             newLoopBegins.add(newLoopBegin);
-            methodScope.loopExplosionMerges.markAndGrow(newLoopBegin);
         }
         LoopBeginNode loopBegin = (LoopBeginNode) ((EndNode) merge.next()).merge();
         LoopEndNode loopEnd = methodScope.graph.add(new LoopEndNode(loopBegin));
@@ -1368,7 +1367,7 @@ public class GraphDecoder {
                 /* Skip over unnecessary BeginNodes, which will be deleted only later on. */
                 next = ((BeginNode) next).next();
 
-            } else if (next instanceof AbstractEndNode) {
+            } else if (next instanceof EndNode) {
                 /*
                  * A LoopExit needs a valid FrameState that captures the state at the point where we
                  * exit the loop. During graph decoding, we create a FrameState for every exploded
@@ -1376,9 +1375,9 @@ public class GraphDecoder {
                  * little bit: we need to insert the appropriate ProxyNodes for all values that are
                  * created inside the loop and that flow out of the loop.
                  */
-                AbstractEndNode loopExplosionEnd = (AbstractEndNode) next;
+                EndNode loopExplosionEnd = (EndNode) next;
                 AbstractMergeNode loopExplosionMerge = loopExplosionEnd.merge();
-                if (methodScope.loopExplosionMerges.isMarkedAndGrow(loopExplosionMerge)) {
+                if (methodScope.loopExplosionMerges.contains(loopExplosionMerge)) {
                     LoopExitNode loopExit = methodScope.graph.add(new LoopExitNode(loopBegin));
                     next.replaceAtPredecessor(loopExit);
                     loopExit.setNext(next);
