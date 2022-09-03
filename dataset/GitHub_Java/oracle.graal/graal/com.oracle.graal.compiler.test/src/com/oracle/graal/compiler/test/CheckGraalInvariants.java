@@ -123,8 +123,6 @@ public class CheckGraalInvariants extends GraalTest {
                                 StructuredGraph graph = new StructuredGraph(metaAccess.lookupJavaMethod(m));
                                 try (DebugConfigScope s = Debug.setConfig(new DelegatingDebugConfig().disable(INTERCEPT))) {
                                     graphBuilderSuite.apply(graph, context);
-                                    // update phi stamps
-                                    graph.getNodes().filter(PhiNode.class).forEach(PhiNode::inferStamp);
                                     checkGraph(context, graph);
                                 } catch (VerificationError e) {
                                     errors.add(e.getMessage());

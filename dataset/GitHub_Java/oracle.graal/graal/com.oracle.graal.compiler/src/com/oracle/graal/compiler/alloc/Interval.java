@@ -309,11 +309,6 @@ public final class Interval {
         OneSpillStore,
 
         /**
-         * The interval is spilled multiple times.
-         */
-        MultipleSpills,
-
-        /**
          * The interval should be stored immediately after its definition to prevent multiple
          * redundant stores.
          */
@@ -654,7 +649,7 @@ public final class Interval {
     }
 
     void setSpillDefinitionPos(int pos) {
-        assert spillState() == SpillState.MultipleSpills || spillDefinitionPos() == -1 : "cannot set the position twice";
+        assert spillDefinitionPos() == -1 : "cannot set the position twice";
         splitParent().spillDefinitionPos = pos;
     }
 
@@ -1293,9 +1288,5 @@ public final class Interval {
             buf.append(" (remat:").append(getMaterializedValue().toString()).append(")");
         }
         return buf.toString();
-    }
-
-    List<Interval> getSplitChildren() {
-        return Collections.unmodifiableList(splitChildren);
     }
 }

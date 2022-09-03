@@ -201,11 +201,8 @@ public abstract class FrameMap {
      * @return the offset of the stack slot
      */
     public int offsetForStackSlot(StackSlot slot) {
-        // @formatter:off
-        assert (!slot.getRawAddFrameSize() && slot.getRawOffset() <  outgoingSize) ||
-               ( slot.getRawAddFrameSize() && slot.getRawOffset() <  0 && -slot.getRawOffset() <= spillSize) ||
-               ( slot.getRawAddFrameSize() && slot.getRawOffset() >= 0);
-        // @formatter:on
+        assert (!slot.getRawAddFrameSize() && slot.getRawOffset() < outgoingSize) || (slot.getRawAddFrameSize() && slot.getRawOffset() < 0 && -slot.getRawOffset() <= spillSize) ||
+                        (slot.getRawAddFrameSize() && slot.getRawOffset() >= 0);
         if (slot.isInCallerFrame()) {
             accessesCallerFrame = true;
         }

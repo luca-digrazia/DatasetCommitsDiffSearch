@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,10 +26,9 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.criutils.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 
 /**
@@ -111,7 +110,7 @@ final class MoveResolver {
         if (!multipleReadsAllowed) {
             for (i = 0; i < mappingFrom.size(); i++) {
                 Interval interval = mappingFrom.get(i);
-                if (interval != null) {
+                if (interval != null && !isIllegal(interval.location())) {
                     boolean unique = usedRegs.add(interval.location());
                     assert unique : "cannot read from same register twice";
                 }
@@ -121,6 +120,11 @@ final class MoveResolver {
         usedRegs.clear();
         for (i = 0; i < mappingTo.size(); i++) {
             Interval interval = mappingTo.get(i);
+            if (isIllegal(interval.location())) {
+                // After insertion the location may become illegal, so don't check it since multiple
+                // intervals might be illegal.
+                continue;
+            }
             boolean unique = usedRegs.add(interval.location());
             assert unique : "cannot write to same register twice";
         }
@@ -134,7 +138,7 @@ final class MoveResolver {
         }
         for (i = 0; i < mappingTo.size(); i++) {
             Interval interval = mappingTo.get(i);
-            assert !usedRegs.contains(interval.location()) || interval.location() == mappingFrom.get(i).location() : "stack slots used in mappingFrom must be disjoint to mappingTo";
+            assert !usedRegs.contains(interval.location()) || interval.location().equals(mappingFrom.get(i).location()) : "stack slots used in mappingFrom must be disjoint to mappingTo";
         }
 
         return true;
@@ -161,15 +165,15 @@ final class MoveResolver {
     }
 
     /**
-     * Checks if the {@linkplain Interval#location() location} of {@code to} is not blocked
-     * or is only blocked by {@code from}.
+     * Checks if the {@linkplain Interval#location() location} of {@code to} is not blocked or is
+     * only blocked by {@code from}.
      */
     private boolean safeToProcessMove(Interval from, Interval to) {
         Value fromReg = from != null ? from.location() : null;
 
         Value reg = to.location();
         if (isRegister(reg)) {
-            if (registerBlocked(asRegister(reg).number) > 1 || (registerBlocked(asRegister(reg).number) == 1 && reg != fromReg)) {
+            if (registerBlocked(asRegister(reg).number) > 1 || (registerBlocked(asRegister(reg).number) == 1 && !reg.equals(fromReg))) {
                 return false;
             }
         }
@@ -192,30 +196,26 @@ final class MoveResolver {
     }
 
     private void insertMove(Interval fromInterval, Interval toInterval) {
-        assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
-        assert fromInterval.kind() == toInterval.kind() : "move between different types";
+        assert !fromInterval.operand.equals(toInterval.operand) : "from and to interval equal: " + fromInterval;
+        assert fromInterval.kind().equals(toInterval.kind()) : "move between different types";
         assert insertIdx != -1 : "must setup insert position first";
 
-        Value fromOpr = fromInterval.operand;
-        Value toOpr = toInterval.operand;
+        AllocatableValue fromOpr = fromInterval.operand;
+        AllocatableValue toOpr = toInterval.operand;
 
-        insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
+        insertionBuffer.append(insertIdx, allocator.ir.getSpillMoveFactory().createMove(toOpr, fromOpr));
 
-        if (GraalOptions.TraceLinearScanLevel >= 4) {
-            TTY.println("MoveResolver: inserted move from %d (%s) to %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
-        }
+        Debug.log("insert move from %s to %s at %d", fromInterval, toInterval, insertIdx);
     }
 
     private void insertMove(Value fromOpr, Interval toInterval) {
-        assert fromOpr.kind == toInterval.kind() : "move between different types";
+        assert fromOpr.getLIRKind().equals(toInterval.kind()) : "move between different types";
         assert insertIdx != -1 : "must setup insert position first";
 
-        Value toOpr = toInterval.operand;
-        insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
+        AllocatableValue toOpr = toInterval.operand;
+        insertionBuffer.append(insertIdx, allocator.ir.getSpillMoveFactory().createMove(toOpr, fromOpr));
 
-        if (GraalOptions.TraceLinearScanLevel >= 4) {
-            TTY.print("MoveResolver: inserted move from constant %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
-        }
+        Debug.log("insert move from value %s to %s at %d", fromOpr, toInterval, insertIdx);
     }
 
     private void resolveMappings() {
@@ -271,7 +271,8 @@ final class MoveResolver {
                 spillInterval.setKind(fromInterval.kind());
 
                 // add a dummy range because real position is difficult to calculate
-                // Note: this range is a special case when the integrity of the allocation is checked
+                // Note: this range is a special case when the integrity of the allocation is
+                // checked
                 spillInterval.addRange(1, 2);
 
                 // do not allocate a new spill slot for temporary interval, but
@@ -284,9 +285,7 @@ final class MoveResolver {
                 }
                 spillInterval.assignLocation(spillSlot);
 
-                if (GraalOptions.TraceLinearScanLevel >= 4) {
-                    TTY.println("created new Interval %s for spilling", spillInterval.operand);
-                }
+                Debug.log("created new Interval for spilling: %s", spillInterval);
 
                 // insert a move from register to stack and update the mapping
                 insertMove(fromInterval, spillInterval);
@@ -326,21 +325,29 @@ final class MoveResolver {
     }
 
     void addMapping(Interval fromInterval, Interval toInterval) {
-        if (GraalOptions.TraceLinearScanLevel >= 4) {
-            TTY.println("MoveResolver: adding mapping from interval %d (%s) to interval %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
-        }
 
-        assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
-        assert fromInterval.kind() == toInterval.kind();
+        if (isIllegal(toInterval.location()) && toInterval.canMaterialize()) {
+            Debug.log("no store to rematerializable interval %s needed", toInterval);
+            return;
+        }
+        if (isIllegal(fromInterval.location()) && fromInterval.canMaterialize()) {
+            // Instead of a reload, re-materialize the value
+            Value rematValue = fromInterval.getMaterializedValue();
+            addMapping(rematValue, toInterval);
+            return;
+        }
+        Debug.log("add move mapping from %s to %s", fromInterval, toInterval);
+
+        assert !fromInterval.operand.equals(toInterval.operand) : "from and to interval equal: " + fromInterval;
+        assert fromInterval.kind().equals(toInterval.kind());
         mappingFrom.add(fromInterval);
-        mappingFromOpr.add(Value.IllegalValue);
+        mappingFromOpr.add(Value.ILLEGAL);
         mappingTo.add(toInterval);
     }
 
     void addMapping(Value fromOpr, Interval toInterval) {
-        if (GraalOptions.TraceLinearScanLevel >= 4) {
-            TTY.println("MoveResolver: adding mapping from %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
-        }
+        Debug.log("add move mapping from %s to %s", fromOpr, toInterval);
+
         assert isConstant(fromOpr) : "only for constants";
 
         mappingFrom.add(null);
