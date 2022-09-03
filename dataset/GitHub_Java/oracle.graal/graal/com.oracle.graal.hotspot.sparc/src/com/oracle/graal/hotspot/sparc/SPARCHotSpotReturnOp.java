@@ -22,18 +22,15 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.ReturnOp;
-
-import jdk.vm.ci.meta.Value;
 
 /**
  * Returns from a function.
@@ -46,9 +43,9 @@ final class SPARCHotSpotReturnOp extends SPARCHotSpotEpilogueOp {
     @Use({REG, ILLEGAL}) protected Value value;
     @Use({REG}) protected Value safepointPollAddress;
     private final boolean isStub;
-    private final GraalHotSpotVMConfig config;
+    private final HotSpotVMConfig config;
 
-    SPARCHotSpotReturnOp(Value value, boolean isStub, GraalHotSpotVMConfig config, Value safepointPoll) {
+    SPARCHotSpotReturnOp(Value value, boolean isStub, HotSpotVMConfig config, Value safepointPoll) {
         super(TYPE, SIZE);
         this.value = value;
         this.isStub = isStub;

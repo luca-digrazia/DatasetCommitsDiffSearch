@@ -22,22 +22,18 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.sparc.SPARC.g0;
-import jdk.vm.ci.code.InfopointReason;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.AllocatableValue;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.sparc.SPARCAddress;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.lir.sparc.SPARCLIRInstruction;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.sparc.*;
 
 /**
  * Emits a safepoint poll.
@@ -88,7 +84,7 @@ public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            masm.setx(config.safepointPollingAddress, ValueUtil.asRegister(result), false);
+            new Setx(config.safepointPollingAddress, ValueUtil.asRegister(result)).emit(masm);
         }
     }
 }
