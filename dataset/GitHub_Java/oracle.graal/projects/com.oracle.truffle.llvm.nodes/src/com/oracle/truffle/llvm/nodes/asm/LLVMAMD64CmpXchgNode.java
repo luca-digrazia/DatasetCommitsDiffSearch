@@ -36,12 +36,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdateCPAZSOFlagsNode;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteValueNode;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@NodeChildren({@NodeChild(value = "a", type = LLVMExpressionNode.class), @NodeChild(value = "src", type = LLVMExpressionNode.class), @NodeChild(value = "dst", type = LLVMExpressionNode.class)})
-public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
+@NodeChildren({@NodeChild("a"), @NodeChild("src"), @NodeChild("dst")})
+public abstract class LLVMAMD64CmpXchgNode extends LLVMExpressionNode {
     @Child protected LLVMAMD64UpdateCPAZSOFlagsNode flags;
 
     @Child protected LLVMAMD64WriteValueNode out1;
@@ -62,7 +61,7 @@ public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, byte a, byte src, byte dst) {
+        protected Object execute(VirtualFrame frame, byte a, byte src, byte dst) {
             int result = a - dst;
             boolean carry = Byte.toUnsignedInt(a) < Byte.toUnsignedInt(dst);
             boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
@@ -72,6 +71,7 @@ public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
             } else {
                 out2.execute(frame, dst);
             }
+            return null;
         }
     }
 
@@ -81,7 +81,7 @@ public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, short a, short src, short dst) {
+        protected Object execute(VirtualFrame frame, short a, short src, short dst) {
             int result = a - dst;
             boolean carry = Short.toUnsignedInt(a) < Short.toUnsignedInt(dst);
             boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
@@ -91,6 +91,7 @@ public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
             } else {
                 out2.execute(frame, dst);
             }
+            return null;
         }
     }
 
@@ -100,7 +101,7 @@ public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, int a, int src, int dst) {
+        protected Object execute(VirtualFrame frame, int a, int src, int dst) {
             int result = a - dst;
             boolean carry = Integer.compareUnsigned(a, dst) < 0;
             boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
@@ -110,6 +111,7 @@ public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
             } else {
                 out2.execute(frame, dst);
             }
+            return null;
         }
     }
 
@@ -119,7 +121,7 @@ public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, long a, long src, long dst) {
+        protected Object execute(VirtualFrame frame, long a, long src, long dst) {
             long result = a - dst;
             boolean carry = Long.compareUnsigned(a, dst) < 0;
             boolean adjust = (((a ^ dst) ^ result) & 0x10) != 0;
@@ -129,19 +131,21 @@ public abstract class LLVMAMD64CmpXchgNode extends LLVMStatementNode {
             } else {
                 out2.execute(frame, dst);
             }
+            return null;
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, LLVMNativePointer a, LLVMNativePointer src, LLVMNativePointer dst) {
-            long result = a.asNative() - dst.asNative();
-            boolean carry = Long.compareUnsigned(a.asNative(), dst.asNative()) < 0;
-            boolean adjust = (((a.asNative() ^ dst.asNative()) ^ result) & 0x10) != 0;
+        protected Object execute(VirtualFrame frame, LLVMAddress a, LLVMAddress src, LLVMAddress dst) {
+            long result = a.getVal() - dst.getVal();
+            boolean carry = Long.compareUnsigned(a.getVal(), dst.getVal()) < 0;
+            boolean adjust = (((a.getVal() ^ dst.getVal()) ^ result) & 0x10) != 0;
             flags.execute(frame, false, carry, adjust, result);
             if (profile.profile(a.equals(dst))) {
                 out1.execute(frame, src);
             } else {
                 out2.execute(frame, dst);
             }
+            return null;
         }
     }
 }

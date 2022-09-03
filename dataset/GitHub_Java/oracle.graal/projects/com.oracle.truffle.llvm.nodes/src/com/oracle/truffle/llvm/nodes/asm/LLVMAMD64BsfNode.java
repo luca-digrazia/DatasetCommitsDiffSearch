@@ -33,29 +33,32 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteBooleanNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChildren({@NodeChild("src"), @NodeChild("dst")})
 public abstract class LLVMAMD64BsfNode extends LLVMExpressionNode {
-    @Child protected LLVMAMD64WriteBooleanNode zf;
+    @Child protected LLVMAMD64WriteBooleanNode writeZFNode;
+    protected final ConditionProfile profile;
 
-    public LLVMAMD64BsfNode(LLVMAMD64WriteBooleanNode zf) {
-        this.zf = zf;
+    public LLVMAMD64BsfNode(LLVMAMD64WriteBooleanNode writeZFNode) {
+        this.writeZFNode = writeZFNode;
+        profile = ConditionProfile.createCountingProfile();
     }
 
     public abstract static class LLVMAMD64BsfwNode extends LLVMAMD64BsfNode {
-        public LLVMAMD64BsfwNode(LLVMAMD64WriteBooleanNode zf) {
-            super(zf);
+        public LLVMAMD64BsfwNode(LLVMAMD64WriteBooleanNode writeZFNode) {
+            super(writeZFNode);
         }
 
         @Specialization
         protected short executeI16(VirtualFrame frame, short src, short dst) {
-            if (src == 0) {
-                zf.execute(frame, true);
+            if (profile.profile(src == 0)) {
+                writeZFNode.execute(frame, true);
                 return dst;
             } else {
-                zf.execute(frame, false);
+                writeZFNode.execute(frame, false);
                 int val = Short.toUnsignedInt(src);
                 return (short) Integer.numberOfTrailingZeros(val);
             }
@@ -63,34 +66,34 @@ public abstract class LLVMAMD64BsfNode extends LLVMExpressionNode {
     }
 
     public abstract static class LLVMAMD64BsflNode extends LLVMAMD64BsfNode {
-        public LLVMAMD64BsflNode(LLVMAMD64WriteBooleanNode zf) {
-            super(zf);
+        public LLVMAMD64BsflNode(LLVMAMD64WriteBooleanNode writeZFNode) {
+            super(writeZFNode);
         }
 
         @Specialization
         protected int executeI32(VirtualFrame frame, int src, int dst) {
-            if (src == 0) {
-                zf.execute(frame, true);
+            if (profile.profile(src == 0)) {
+                writeZFNode.execute(frame, true);
                 return dst;
             } else {
-                zf.execute(frame, false);
+                writeZFNode.execute(frame, false);
                 return Integer.numberOfTrailingZeros(src);
             }
         }
     }
 
     public abstract static class LLVMAMD64BsfqNode extends LLVMAMD64BsfNode {
-        public LLVMAMD64BsfqNode(LLVMAMD64WriteBooleanNode zf) {
-            super(zf);
+        public LLVMAMD64BsfqNode(LLVMAMD64WriteBooleanNode writeZFNode) {
+            super(writeZFNode);
         }
 
         @Specialization
         protected long executeI64(VirtualFrame frame, long src, long dst) {
-            if (src == 0) {
-                zf.execute(frame, true);
+            if (profile.profile(src == 0)) {
+                writeZFNode.execute(frame, true);
                 return dst;
             } else {
-                zf.execute(frame, false);
+                writeZFNode.execute(frame, false);
                 return Long.numberOfTrailingZeros(src);
             }
         }
