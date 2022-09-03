@@ -73,14 +73,6 @@ public class IntegerStamp extends Stamp {
         return mask;
     }
 
-    public boolean isUnrestricted() {
-        return lowerBound == kind().minValue() && upperBound == kind().maxValue() && mask == defaultMask(kind());
-    }
-
-    public boolean contains(long value) {
-        return value >= lowerBound && value <= upperBound && (value & mask) == (value & defaultMask(kind()));
-    }
-
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
@@ -111,8 +103,6 @@ public class IntegerStamp extends Stamp {
         long meetMask = mask | other.mask;
         if (meetLowerBound == lowerBound && meetUpperBound == upperBound && meetMask == mask) {
             return this;
-        } else if (meetLowerBound == other.lowerBound && meetUpperBound == other.upperBound && meetMask == other.mask) {
-            return other;
         } else {
             return new IntegerStamp(kind(), meetLowerBound, meetUpperBound, meetMask);
         }
@@ -124,7 +114,6 @@ public class IntegerStamp extends Stamp {
         int result = 1;
         result = prime * result + (int) (lowerBound ^ (lowerBound >>> 32));
         result = prime * result + (int) (upperBound ^ (upperBound >>> 32));
-        result = prime * result + (int) (mask ^ (mask >>> 32));
         return result;
     }
 

@@ -26,10 +26,11 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "+")
-public class IntegerAddNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
+public class IntegerAddNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable, TypeFeedbackProvider {
 
     public IntegerAddNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
@@ -79,13 +80,13 @@ public class IntegerAddNode extends IntegerArithmeticNode implements Canonicaliz
 
     public static boolean isIntegerAddition(ValueNode result, ValueNode a, ValueNode b) {
         Kind kind = result.kind();
-        if (kind != a.kind() || kind != b.kind() || !(kind.getStackKind() == Kind.Int || kind == Kind.Long)) {
+        if (kind != a.kind() || kind != b.kind() || !(kind.isInt() || kind.isLong())) {
             return false;
         }
         if (result.isConstant() && a.isConstant() && b.isConstant()) {
-            if (kind.getStackKind() == Kind.Int) {
+            if (kind.isInt()) {
                 return result.asConstant().asInt() == a.asConstant().asInt() + b.asConstant().asInt();
-            } else if (kind == Kind.Long) {
+            } else if (kind.isLong()) {
                 return result.asConstant().asLong() == a.asConstant().asLong() + b.asConstant().asLong();
             }
         } else if (result instanceof IntegerAddNode) {
@@ -106,5 +107,14 @@ public class IntegerAddNode extends IntegerArithmeticNode implements Canonicaliz
             op2 = op;
         }
         gen.setResult(this, gen.emitAdd(op1, op2));
+    }
+
+    @Override
+    public void typeFeedback(TypeFeedbackTool tool) {
+        if (y().isConstant() && !x().isConstant()) {
+            tool.addScalar(this).setTranslated(y().asConstant(), tool.queryScalar(x()));
+        } else if (x().isConstant() && !y().isConstant()) {
+            tool.addScalar(this).setTranslated(x().asConstant(), tool.queryScalar(y()));
+        }
     }
 }

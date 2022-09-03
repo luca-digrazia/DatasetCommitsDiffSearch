@@ -33,7 +33,6 @@ public abstract class LogicNode extends BinaryNode {
 
     /**
      * Constructs a new logic operation node.
-     * 
      * @param x the first input into this node
      * @param y the second input into this node
      */
@@ -45,7 +44,7 @@ public abstract class LogicNode extends BinaryNode {
     public static LogicNode and(ValueNode v1, ValueNode v2) {
         assert v1.kind() == v2.kind() && v1.graph() == v2.graph();
         Graph graph = v1.graph();
-        switch (v1.kind()) {
+        switch(v1.kind()) {
             case Int:
                 return graph.unique(new AndNode(Kind.Int, v1, v2));
             case Long:
@@ -58,7 +57,7 @@ public abstract class LogicNode extends BinaryNode {
     public static LogicNode or(ValueNode v1, ValueNode v2) {
         assert v1.kind() == v2.kind() && v1.graph() == v2.graph();
         Graph graph = v1.graph();
-        switch (v1.kind()) {
+        switch(v1.kind()) {
             case Int:
                 return graph.unique(new OrNode(Kind.Int, v1, v2));
             case Long:
@@ -71,7 +70,7 @@ public abstract class LogicNode extends BinaryNode {
     public static LogicNode xor(ValueNode v1, ValueNode v2) {
         assert v1.kind() == v2.kind() && v1.graph() == v2.graph();
         Graph graph = v1.graph();
-        switch (v1.kind()) {
+        switch(v1.kind()) {
             case Int:
                 return graph.unique(new XorNode(Kind.Int, v1, v2));
             case Long:

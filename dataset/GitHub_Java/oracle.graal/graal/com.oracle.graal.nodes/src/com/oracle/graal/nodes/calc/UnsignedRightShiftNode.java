@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = ">>>")
-public final class UnsignedRightShiftNode extends ShiftNode implements Canonicalizable {
+public final class UnsignedRightShiftNode extends ShiftNode implements Canonicalizable, LIRLowerable {
 
     public UnsignedRightShiftNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
@@ -37,25 +37,12 @@ public final class UnsignedRightShiftNode extends ShiftNode implements Canonical
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.unsignedRightShift(x().stamp(), y().stamp()));
-    }
-
-    @Override
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 2;
-        if (kind() == Kind.Int) {
-            return Constant.forInt(inputs[0].asInt() >>> inputs[1].asInt());
-        } else {
-            assert kind() == Kind.Long;
-            return Constant.forLong(inputs[0].asLong() >>> inputs[1].asLong());
-        }
+        return updateStamp(StampTool.unsignedRightShift(x().integerStamp(), y().integerStamp()));
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && y().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
-        } else if (y().isConstant()) {
+        if (y().isConstant()) {
             int amount = y().asConstant().asInt();
             int originalAmout = amount;
             int mask;
@@ -66,6 +53,14 @@ public final class UnsignedRightShiftNode extends ShiftNode implements Canonical
                 mask = 0x3f;
             }
             amount &= mask;
+            if (x().isConstant()) {
+                if (kind() == Kind.Int) {
+                    return ConstantNode.forInt(x().asConstant().asInt() >>> amount, graph());
+                } else {
+                    assert kind() == Kind.Long;
+                    return ConstantNode.forLong(x().asConstant().asLong() >>> amount, graph());
+                }
+            }
             if (amount == 0) {
                 return x();
             }
@@ -76,7 +71,7 @@ public final class UnsignedRightShiftNode extends ShiftNode implements Canonical
                     if (other instanceof UnsignedRightShiftNode) {
                         int total = amount + otherAmount;
                         if (total != (total & mask)) {
-                            return ConstantNode.forIntegerKind(kind(), 0, graph());
+                            return ConstantNode.forInt(0, graph());
                         }
                         return graph().unique(new UnsignedRightShiftNode(kind(), other.x(), ConstantNode.forInt(total, graph())));
                     } else if (other instanceof LeftShiftNode && otherAmount == amount) {
@@ -97,7 +92,7 @@ public final class UnsignedRightShiftNode extends ShiftNode implements Canonical
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
+    public void generate(LIRGeneratorTool gen) {
         gen.setResult(this, gen.emitUShr(gen.operand(x()), gen.operand(y())));
     }
 }

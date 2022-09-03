@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "|")
-public final class OrNode extends BitLogicNode implements Canonicalizable {
+public final class OrNode extends LogicNode implements Canonicalizable, LIRLowerable {
 
     public OrNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
@@ -37,13 +37,7 @@ public final class OrNode extends BitLogicNode implements Canonicalizable {
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.or(x().stamp(), y().stamp()));
-    }
-
-    @Override
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 2;
-        return Constant.forIntegerKind(kind(), inputs[0].asLong() | inputs[1].asLong(), null);
+        return updateStamp(StampTool.or(x().integerStamp(), y().integerStamp()));
     }
 
     @Override
@@ -55,7 +49,12 @@ public final class OrNode extends BitLogicNode implements Canonicalizable {
             return graph().unique(new OrNode(kind(), y(), x()));
         }
         if (x().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
+            if (kind() == Kind.Int) {
+                return ConstantNode.forInt(x().asConstant().asInt() | y().asConstant().asInt(), graph());
+            } else {
+                assert kind() == Kind.Long;
+                return ConstantNode.forLong(x().asConstant().asLong() | y().asConstant().asLong(), graph());
+            }
         } else if (y().isConstant()) {
             if (kind() == Kind.Int) {
                 int c = y().asConstant().asInt();
@@ -81,7 +80,7 @@ public final class OrNode extends BitLogicNode implements Canonicalizable {
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
+    public void generate(LIRGeneratorTool gen) {
         gen.setResult(this, gen.emitOr(gen.operand(x()), gen.operand(y())));
     }
 }
