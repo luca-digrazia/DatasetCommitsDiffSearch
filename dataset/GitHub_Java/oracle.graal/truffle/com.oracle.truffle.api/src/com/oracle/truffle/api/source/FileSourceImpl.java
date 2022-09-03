@@ -40,6 +40,7 @@ final class FileSourceImpl extends Content {
     private final File file;
     private final String name; // Name used originally to describe the source
     private final String path; // Normalized path description of an actual file
+    private String code; // A cache of the file's contents
 
     FileSourceImpl(File file, String name, String path) {
         this.file = file.getAbsoluteFile();
@@ -112,6 +113,18 @@ final class FileSourceImpl extends Content {
     @Override
     String findMimeType() throws IOException {
         return Files.probeContentType(file.toPath());
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj instanceof FileSourceImpl) {
+            FileSourceImpl other = (FileSourceImpl) obj;
+            return path.equals(other.path);
+        }
+        return false;
     }
 
     @Override
