@@ -44,7 +44,6 @@ public class LLVMProfiledMemMove {
                 long targetPointer = target.getVal();
                 long sourcePointer = source.getVal();
 
-                assert targetPointer >= 0 && sourcePointer >= 0;
                 if (CompilerDirectives.injectBranchProbability(CompilerDirectives.UNLIKELY_PROBABILITY, targetPointer == sourcePointer)) {
                     // nothing todo
                 } else if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, Long.compareUnsigned(targetPointer - sourcePointer, length) >= 0)) {
@@ -66,7 +65,7 @@ public class LLVMProfiledMemMove {
         long targetPointer = target;
         long sourcePointer = source;
         long i64ValuesToWrite = length >> 3;
-        for (int i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i64ValuesToWrite); i++) {
+        for (long i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i64ValuesToWrite); i++) {
             long v64 = LLVMMemory.getI64(sourcePointer);
             LLVMMemory.putI64(targetPointer, v64);
             targetPointer += 8;
@@ -74,7 +73,7 @@ public class LLVMProfiledMemMove {
         }
 
         long i8ValuesToWrite = length & 0x07;
-        for (int i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i8ValuesToWrite); i++) {
+        for (long i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i8ValuesToWrite); i++) {
             byte value = LLVMMemory.getI8(sourcePointer);
             LLVMMemory.putI8(targetPointer, value);
             targetPointer++;
@@ -86,7 +85,7 @@ public class LLVMProfiledMemMove {
         long targetPointer = target + length;
         long sourcePointer = source + length;
         long i64ValuesToWrite = length >> 3;
-        for (int i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i64ValuesToWrite); i++) {
+        for (long i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i64ValuesToWrite); i++) {
             targetPointer -= 8;
             sourcePointer -= 8;
             long v64 = LLVMMemory.getI64(sourcePointer);
@@ -94,7 +93,7 @@ public class LLVMProfiledMemMove {
         }
 
         long i8ValuesToWrite = length & 0x07;
-        for (int i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i8ValuesToWrite); i++) {
+        for (long i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i8ValuesToWrite); i++) {
             targetPointer--;
             sourcePointer--;
             byte value = LLVMMemory.getI8(sourcePointer);
