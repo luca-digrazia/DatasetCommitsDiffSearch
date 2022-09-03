@@ -678,13 +678,7 @@ public class PolyglotEngine {
          * should set the value to the field; the return value should be the actual value of the
          * field when the <code>invoke</code> method returns.
          *
-         * @param args arguments to pass when invoking the symbol; either wrappers of Java primitive
-         *            types (e.g. {@link java.lang.Byte}, {@link java.lang.Short},
-         *            {@link java.lang.Integer}, {@link java.lang.Long}, {@link java.lang.Float},
-         *            {@link java.lang.Double}, {@link java.lang.Character},
-         *            {@link java.lang.Boolean}, and {@link java.lang.String}) or a
-         *            {@link TruffleObject object created} by one of the languages)
-         * 
+         * @param args arguments to pass when invoking the symbol
          * @return symbol wrapper around the value returned by invoking the symbol, never
          *         <code>null</code>
          * @throws IOException signals problem during execution
@@ -795,15 +789,11 @@ public class PolyglotEngine {
          * @return the global object or <code>null</code> if the language does not support such
          *         concept
          */
-        @SuppressWarnings("try")
         public Value getGlobalObject() {
             checkThread();
-            try (Closeable d = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
-                Object res = SPI.languageGlobal(getEnv(true));
-                return res == null ? null : new Value(new TruffleLanguage[]{info.getImpl(true)}, res);
-            } catch (IOException ex) {
-                throw new IllegalStateException(ex);
-            }
+
+            Object res = SPI.languageGlobal(getEnv(true));
+            return res == null ? null : new Value(new TruffleLanguage[]{info.getImpl(true)}, res);
         }
 
         TruffleLanguage<?> getImpl(boolean create) {
