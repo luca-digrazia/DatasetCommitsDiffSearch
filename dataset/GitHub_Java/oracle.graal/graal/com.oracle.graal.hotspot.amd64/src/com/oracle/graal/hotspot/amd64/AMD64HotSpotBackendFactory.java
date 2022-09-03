@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,31 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static jdk.vm.ci.inittimer.InitTimer.timer;
+import static jdk.internal.jvmci.inittimer.InitTimer.timer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
-import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
-import jdk.vm.ci.hotspot.HotSpotMetaAccessProvider;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.inittimer.InitTimer;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.runtime.JVMCIBackend;
+import jdk.internal.jvmci.amd64.AMD64;
+import jdk.internal.jvmci.code.CodeCacheProvider;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterConfig;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.hotspot.HotSpotCodeCacheProvider;
+import jdk.internal.jvmci.hotspot.HotSpotConstantReflectionProvider;
+import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.internal.jvmci.hotspot.HotSpotMetaAccessProvider;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
+import jdk.internal.jvmci.inittimer.InitTimer;
+import jdk.internal.jvmci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.runtime.JVMCIBackend;
+import jdk.internal.jvmci.service.ServiceProvider;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.amd64.AMD64SuitesProvider;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.DefaultHotSpotGraalCompilerFactory;
 import com.oracle.graal.hotspot.HotSpotBackend;
 import com.oracle.graal.hotspot.HotSpotBackendFactory;
@@ -60,12 +64,9 @@ import com.oracle.graal.hotspot.meta.HotSpotSnippetReflectionProvider;
 import com.oracle.graal.hotspot.meta.HotSpotStampProvider;
 import com.oracle.graal.hotspot.meta.HotSpotSuitesProvider;
 import com.oracle.graal.hotspot.word.HotSpotWordTypes;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
 import com.oracle.graal.phases.util.Providers;
 import com.oracle.graal.replacements.amd64.AMD64GraphBuilderPlugins;
-import com.oracle.graal.serviceprovider.ServiceProvider;
-import com.oracle.graal.word.WordTypes;
 
 @ServiceProvider(HotSpotBackendFactory.class)
 public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
@@ -112,21 +113,21 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
             HotSpotStampProvider stampProvider = new HotSpotStampProvider();
             Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, stampProvider);
 
-            try (InitTimer rt = timer("create WordTypes")) {
-                wordTypes = new HotSpotWordTypes(metaAccess, target.wordJavaKind);
-            }
             try (InitTimer rt = timer("create SnippetReflection provider")) {
-                snippetReflection = createSnippetReflection(graalRuntime, constantReflection, wordTypes);
+                snippetReflection = createSnippetReflection(graalRuntime, constantReflection);
             }
             try (InitTimer rt = timer("create Replacements provider")) {
                 replacements = createReplacements(config, p, snippetReflection);
+            }
+            try (InitTimer rt = timer("create WordTypes")) {
+                wordTypes = new HotSpotWordTypes(metaAccess, target.wordJavaKind);
             }
             try (InitTimer rt = timer("create GraphBuilderPhase plugins")) {
                 plugins = createGraphBuilderPlugins(config, target, constantReflection, foreignCalls, metaAccess, snippetReflection, replacements, wordTypes, stampProvider);
                 replacements.setGraphBuilderPlugins(plugins);
             }
             try (InitTimer rt = timer("create Suites provider")) {
-                suites = createSuites(config, graalRuntime, compilerConfiguration, plugins, registers);
+                suites = createSuites(config, graalRuntime, compilerConfiguration, plugins, codeCache, registers);
             }
             providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, suites, registers, snippetReflection, wordTypes, plugins);
         }
@@ -161,17 +162,17 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
     }
 
     protected HotSpotSuitesProvider createSuites(HotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, CompilerConfiguration compilerConfiguration, Plugins plugins,
-                    HotSpotRegistersProvider registers) {
-        return new HotSpotSuitesProvider(new AMD64SuitesProvider(compilerConfiguration, plugins), config, runtime, new AMD64HotSpotAddressLowering(config.getOopEncoding().base,
+                    CodeCacheProvider codeCache, HotSpotRegistersProvider registers) {
+        return new HotSpotSuitesProvider(new AMD64SuitesProvider(compilerConfiguration, plugins), config, runtime, new AMD64HotSpotAddressLowering(codeCache, config.getOopEncoding().base,
                         registers.getHeapBaseRegister()));
     }
 
-    protected HotSpotSnippetReflectionProvider createSnippetReflection(HotSpotGraalRuntimeProvider runtime, HotSpotConstantReflectionProvider constantReflection, WordTypes wordTypes) {
-        return new HotSpotSnippetReflectionProvider(runtime, constantReflection, wordTypes);
+    protected HotSpotSnippetReflectionProvider createSnippetReflection(HotSpotGraalRuntimeProvider runtime, ConstantReflectionProvider constantReflection) {
+        return new HotSpotSnippetReflectionProvider(runtime, constantReflection);
     }
 
     protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntimeProvider runtime, HotSpotMetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls,
-                    HotSpotRegistersProvider registers, HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
+                    HotSpotRegistersProvider registers, ConstantReflectionProvider constantReflection, TargetDescription target) {
         return new AMD64HotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, constantReflection, target);
     }
 
@@ -201,15 +202,15 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         } else {
             /*
              * System V Application Binary Interface, AMD64 Architecture Processor Supplement
-             * 
+             *
              * Draft Version 0.96
-             * 
+             *
              * http://www.uclibc.org/docs/psABI-x86_64.pdf
-             * 
+             *
              * 3.2.1
-             * 
+             *
              * ...
-             * 
+             *
              * This subsection discusses usage of each register. Registers %rbp, %rbx and %r12
              * through %r15 "belong" to the calling function and the called function is required to
              * preserve their values. In other words, a called function must preserve these

@@ -26,22 +26,22 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
-import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
-import jdk.vm.ci.hotspot.HotSpotMetaAccessProvider;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.runtime.JVMCIBackend;
-import jdk.vm.ci.service.ServiceProvider;
-import jdk.vm.ci.sparc.SPARC;
+import jdk.internal.jvmci.code.CodeCacheProvider;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterConfig;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.hotspot.HotSpotCodeCacheProvider;
+import jdk.internal.jvmci.hotspot.HotSpotConstantReflectionProvider;
+import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.internal.jvmci.hotspot.HotSpotMetaAccessProvider;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
+import jdk.internal.jvmci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.runtime.JVMCIBackend;
+import jdk.internal.jvmci.service.ServiceProvider;
+import jdk.internal.jvmci.sparc.SPARC;
 
 import com.oracle.graal.compiler.sparc.SPARCAddressLowering;
-import com.oracle.graal.compiler.sparc.SPARCSuitesProvider;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.DefaultHotSpotGraalCompilerFactory;
 import com.oracle.graal.hotspot.HotSpotBackend;
@@ -59,6 +59,7 @@ import com.oracle.graal.hotspot.meta.HotSpotSnippetReflectionProvider;
 import com.oracle.graal.hotspot.meta.HotSpotStampProvider;
 import com.oracle.graal.hotspot.meta.HotSpotSuitesProvider;
 import com.oracle.graal.hotspot.word.HotSpotWordTypes;
+import com.oracle.graal.java.DefaultSuitesProvider;
 import com.oracle.graal.nodes.spi.LoweringProvider;
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
 import com.oracle.graal.phases.util.Providers;
@@ -108,7 +109,7 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
     }
 
     protected HotSpotSuitesProvider createSuites(HotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, CompilerConfiguration compilerConfiguration, Plugins plugins, CodeCacheProvider codeCache) {
-        return new HotSpotSuitesProvider(new SPARCSuitesProvider(compilerConfiguration, plugins), config, runtime, new SPARCAddressLowering(codeCache));
+        return new HotSpotSuitesProvider(new DefaultSuitesProvider(compilerConfiguration, plugins), config, runtime, new SPARCAddressLowering(codeCache));
     }
 
     protected SPARCHotSpotBackend createBackend(HotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
@@ -116,7 +117,7 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
     }
 
     protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntimeProvider runtime, HotSpotMetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls,
-                    HotSpotRegistersProvider registers, HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
+                    HotSpotRegistersProvider registers, ConstantReflectionProvider constantReflection, TargetDescription target) {
         return new SPARCHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, constantReflection, target);
     }
 
@@ -127,8 +128,8 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
     @SuppressWarnings("unused")
     private static Value[] createNativeABICallerSaveRegisters(HotSpotVMConfig config, RegisterConfig regConfig) {
         Set<Register> callerSavedRegisters = new HashSet<>();
-        Collections.addAll(callerSavedRegisters, SPARC.fpusRegisters);
-        Collections.addAll(callerSavedRegisters, SPARC.fpudRegisters);
+        Collections.addAll(callerSavedRegisters, regConfig.getCalleeSaveRegisters());
+        Collections.addAll(callerSavedRegisters, SPARC.fpuRegisters);
         callerSavedRegisters.add(SPARC.g1);
         callerSavedRegisters.add(SPARC.g4);
         callerSavedRegisters.add(SPARC.g5);
