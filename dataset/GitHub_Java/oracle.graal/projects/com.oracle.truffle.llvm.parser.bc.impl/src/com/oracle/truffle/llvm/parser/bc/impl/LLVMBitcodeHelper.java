@@ -224,11 +224,11 @@ public final class LLVMBitcodeHelper {
         }
         if (type instanceof FloatingPointType) {
             switch (((FloatingPointType) type)) {
-                case HALF:
+                case F16:
                     return LLVMBaseType.HALF;
-                case FLOAT:
+                case F32:
                     return LLVMBaseType.FLOAT;
-                case DOUBLE:
+                case F64:
                     return LLVMBaseType.DOUBLE;
                 case X86_FP80:
                     return LLVMBaseType.X86_FP80;
@@ -302,91 +302,91 @@ public final class LLVMBitcodeHelper {
     }
 
     public static LLVMExpressionNode toCompareVectorNode(CompareOperator operator, Type type, LLVMAddressNode target, LLVMExpressionNode lhs, LLVMExpressionNode rhs) {
-        LLVMBaseType llvmtype = toBaseType(type);
+            LLVMBaseType llvmtype = toBaseType(type);
 
-        switch (operator) {
-            case FP_FALSE:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.FALSE);
-            case FP_ORDERED_EQUAL:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_EQUALS);
-            case FP_ORDERED_GREATER_THAN:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_GREATER_THAN);
-            case FP_ORDERED_GREATER_OR_EQUAL:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_GREATER_EQUALS);
-            case FP_ORDERED_LESS_THAN:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_LESS_THAN);
-            case FP_ORDERED_LESS_OR_EQUAL:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_LESS_EQUALS);
-            case FP_ORDERED_NOT_EQUAL:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_NOT_EQUALS);
+            switch (operator) {
+                case FP_FALSE:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.FALSE);
+                case FP_ORDERED_EQUAL:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_EQUALS);
+                case FP_ORDERED_GREATER_THAN:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_GREATER_THAN);
+                case FP_ORDERED_GREATER_OR_EQUAL:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_GREATER_EQUALS);
+                case FP_ORDERED_LESS_THAN:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_LESS_THAN);
+                case FP_ORDERED_LESS_OR_EQUAL:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_LESS_EQUALS);
+                case FP_ORDERED_NOT_EQUAL:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_NOT_EQUALS);
 
-            case FP_ORDERED:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED);
-            case FP_UNORDERED:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED);
-            case FP_UNORDERED_EQUAL:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_EQUALS);
-            case FP_UNORDERED_GREATER_THAN:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_GREATER_THAN);
-            case FP_UNORDERED_GREATER_OR_EQUAL:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_GREATER_EQUALS);
-            case FP_UNORDERED_LESS_THAN:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_LESS_THAN);
-            case FP_UNORDERED_LESS_OR_EQUAL:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_LESS_EQUALS);
-            case FP_UNORDERED_NOT_EQUAL:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_NOT_EQUALS);
-            case FP_TRUE:
-                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.TRUE);
-            default:
-                break;
-        }
+                case FP_ORDERED:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED);
+                case FP_UNORDERED:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED);
+                case FP_UNORDERED_EQUAL:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_EQUALS);
+                case FP_UNORDERED_GREATER_THAN:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_GREATER_THAN);
+                case FP_UNORDERED_GREATER_OR_EQUAL:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_GREATER_EQUALS);
+                case FP_UNORDERED_LESS_THAN:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_LESS_THAN);
+                case FP_UNORDERED_LESS_OR_EQUAL:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_LESS_EQUALS);
+                 case FP_UNORDERED_NOT_EQUAL:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_NOT_EQUALS);
+                case FP_TRUE:
+                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.TRUE);
+                default:
+                    break;
+            }
 
-        LLVMIntegerComparisonType comparison;
-        switch (operator) {
-            case INT_EQUAL:
-                comparison = LLVMIntegerComparisonType.EQUALS;
-                break;
-            case INT_NOT_EQUAL:
-                comparison = LLVMIntegerComparisonType.NOT_EQUALS;
-                break;
-            case INT_UNSIGNED_GREATER_THAN:
-                comparison = LLVMIntegerComparisonType.UNSIGNED_GREATER_THAN;
-                break;
-            case INT_UNSIGNED_GREATER_OR_EQUAL:
-                comparison = LLVMIntegerComparisonType.UNSIGNED_GREATER_EQUALS;
-                break;
-            case INT_UNSIGNED_LESS_THAN:
-                comparison = LLVMIntegerComparisonType.UNSIGNED_LESS_THAN;
-                break;
-            case INT_UNSIGNED_LESS_OR_EQUAL:
-                comparison = LLVMIntegerComparisonType.UNSIGNED_LESS_EQUALS;
-                break;
-            case INT_SIGNED_GREATER_THAN:
-                comparison = LLVMIntegerComparisonType.SIGNED_GREATER_THAN;
-                break;
-            case INT_SIGNED_GREATER_OR_EQUAL:
-                comparison = LLVMIntegerComparisonType.SIGNED_GREATER_EQUALS;
-                break;
-            case INT_SIGNED_LESS_THAN:
-                comparison = LLVMIntegerComparisonType.SIGNED_LESS_THAN;
-                break;
-            case INT_SIGNED_LESS_OR_EQUAL:
-                comparison = LLVMIntegerComparisonType.SIGNED_LESS_EQUALS;
-                break;
+            LLVMIntegerComparisonType comparison;
+            switch (operator) {
+                case INT_EQUAL:
+                    comparison = LLVMIntegerComparisonType.EQUALS;
+                    break;
+                case INT_NOT_EQUAL:
+                    comparison = LLVMIntegerComparisonType.NOT_EQUALS;
+                    break;
+                case INT_UNSIGNED_GREATER_THAN:
+                    comparison = LLVMIntegerComparisonType.UNSIGNED_GREATER_THAN;
+                    break;
+                case INT_UNSIGNED_GREATER_OR_EQUAL:
+                    comparison = LLVMIntegerComparisonType.UNSIGNED_GREATER_EQUALS;
+                    break;
+                case INT_UNSIGNED_LESS_THAN:
+                    comparison = LLVMIntegerComparisonType.UNSIGNED_LESS_THAN;
+                    break;
+                case INT_UNSIGNED_LESS_OR_EQUAL:
+                    comparison = LLVMIntegerComparisonType.UNSIGNED_LESS_EQUALS;
+                    break;
+                case INT_SIGNED_GREATER_THAN:
+                    comparison = LLVMIntegerComparisonType.SIGNED_GREATER_THAN;
+                    break;
+                case INT_SIGNED_GREATER_OR_EQUAL:
+                    comparison = LLVMIntegerComparisonType.SIGNED_GREATER_EQUALS;
+                    break;
+                case INT_SIGNED_LESS_THAN:
+                    comparison = LLVMIntegerComparisonType.SIGNED_LESS_THAN;
+                    break;
+                case INT_SIGNED_LESS_OR_EQUAL:
+                    comparison = LLVMIntegerComparisonType.SIGNED_LESS_EQUALS;
+                    break;
 
-            default:
-                throw new RuntimeException("Missed a compare operator");
-        }
+                default:
+                    throw new RuntimeException("Missed a compare operator");
+            }
 
-        if (LLVMTypeHelper.isVectorType(llvmtype)) {
-            return LLVMComparisonFactory.createVectorComparison(target, lhs, rhs, llvmtype, comparison);
-        } else {
-            return LLVMComparisonFactory.createIntegerComparison(lhs, rhs, llvmtype, comparison);
-        }
+            if (LLVMTypeHelper.isVectorType(llvmtype)) {
+                return LLVMComparisonFactory.createVectorComparison(target, lhs, rhs, llvmtype, comparison);
+            } else {
+                return LLVMComparisonFactory.createIntegerComparison(lhs, rhs, llvmtype, comparison);
+            }
     }
 
-    public static LLVMExpressionNode toConstantLiteralNode(Symbol value, @SuppressWarnings("unused") int align) {
+    public static LLVMExpressionNode toConstantLiteralNode(Symbol value, int align) {
         if (value instanceof IntegerConstant) {
             IntegerConstant constant = (IntegerConstant) value;
             int bits = ((IntegerType) (constant).getType()).getBitCount();
@@ -408,9 +408,9 @@ public final class LLVMBitcodeHelper {
         if (value instanceof FloatingPointConstant) {
             FloatingPointConstant constant = (FloatingPointConstant) value;
             switch (((FloatingPointType) constant.getType())) {
-                case FLOAT:
+                case F32:
                     return new LLVMFloatLiteralNode(constant.toFloat());
-                case DOUBLE:
+                case F64:
                     return new LLVMDoubleLiteralNode(constant.toDouble());
                 default:
                     break;
@@ -638,26 +638,29 @@ public final class LLVMBitcodeHelper {
                     int offset = 0;
                     for (int j = 0; j < idx; j++) {
                         Type t = ((StructureType) type).getElementType(j);
-                        offset = offset + LLVMBitcodeHelper.getPaddingSize(t, align, offset) + LLVMBitcodeHelper.getSize(t, align);
+                        offset =
+                                offset
+                                + LLVMBitcodeHelper.getPaddingSize(t, align, offset)
+                                + LLVMBitcodeHelper.getSize(t, align);
                     }
                     type = ((StructureType) type).getElementType(idx);
                     offset += LLVMBitcodeHelper.getPaddingSize(type, align, offset);
                     if (offset != 0) {
                         currentAddress = LLVMGetElementPtrFactory.create(
-                                        LLVMBaseType.I32,
-                                        currentAddress,
-                                        new LLVMI32LiteralNode(1),
-                                        offset);
+                                LLVMBaseType.I32,
+                                currentAddress,
+                                new LLVMI32LiteralNode(1),
+                                offset);
                     }
                     continue;
                 }
 
                 if (idx != 0) {
                     currentAddress = LLVMGetElementPtrFactory.create(
-                                    LLVMBaseType.I32,
-                                    currentAddress,
-                                    new LLVMI32LiteralNode(idx),
-                                    LLVMBitcodeHelper.getSize(type, align));
+                            LLVMBaseType.I32,
+                            currentAddress,
+                            new LLVMI32LiteralNode((int) idx),
+                            LLVMBitcodeHelper.getSize(type, align));
                 }
             }
 
@@ -687,9 +690,9 @@ public final class LLVMBitcodeHelper {
         if (value instanceof FloatingPointType) {
             FloatingPointType type = (FloatingPointType) value;
             switch (type) {
-                case FLOAT:
+                case F32:
                     return new LLVMFloatLiteralNode(0.0f);
-                case DOUBLE:
+                case F64:
                     return new LLVMDoubleLiteralNode(0.0);
                 default:
                     break;
@@ -698,7 +701,7 @@ public final class LLVMBitcodeHelper {
         if (value instanceof PointerType) {
             PointerType pointer = (PointerType) value;
             if (pointer.getPointeeType() instanceof FunctionType) {
-                LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createZeroFunctionDescriptor();
+                LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<zero function>", LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
                 return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
             } else {
                 return new LLVMAddressLiteralNode(LLVMAddress.fromLong(0));
@@ -724,11 +727,11 @@ public final class LLVMBitcodeHelper {
 
             LLVMAllocaInstruction allocation = LLVMAllocaInstructionNodeGen.create(getSize(structure.getType(), align), getAlignment(structure.getType(), align), context, stack);
 
-            LLVMStructWriteNode[] nodes = new LLVMStructWriteNode[structure.getElementCount()];
-            int[] offsets = new int[structure.getElementCount()];
+            LLVMStructWriteNode[] nodes = new LLVMStructWriteNode[structure.getLength()];
+            int[] offsets = new int[structure.getLength()];
             int offset = 0;
 
-            for (int i = 0; i < structure.getElementCount(); i++) {
+            for (int i = 0; i < structure.getLength(); i++) {
                 Type element = structure.getElementType(i);
 
                 if (!structure.isPacked()) {
@@ -770,7 +773,7 @@ public final class LLVMBitcodeHelper {
                         if (elementSize == 0) {
                             nodes[i] = new LLVMEmptyStructWriteNode();
                         } else {
-                            LLVMExpressionNode struct = toConstantZeroNode(element, align, context, stack);
+                            LLVMExpressionNode struct = toConstantZeroNode((StructureType) element, align, context, stack);
                             nodes[i] = new LLVMCompoundStructWriteNode((LLVMAddressNode) struct, elementSize);
                         }
                         break;
@@ -836,9 +839,9 @@ public final class LLVMBitcodeHelper {
         }
         if (type instanceof FloatingPointType) {
             switch (((FloatingPointType) type)) {
-                case FLOAT:
+                case F32:
                     return FrameSlotKind.Float;
-                case DOUBLE:
+                case F64:
                     return FrameSlotKind.Double;
                 default:
                     break;
@@ -888,11 +891,11 @@ public final class LLVMBitcodeHelper {
         }
         if (type instanceof FloatingPointType) {
             switch (((FloatingPointType) type)) {
-                case HALF:
+                case F16:
                     return LLVMRuntimeType.HALF;
-                case FLOAT:
+                case F32:
                     return LLVMRuntimeType.FLOAT;
-                case DOUBLE:
+                case F64:
                     return LLVMRuntimeType.DOUBLE;
                 case X86_FP80:
                     return LLVMRuntimeType.X86_FP80;
@@ -979,19 +982,15 @@ public final class LLVMBitcodeHelper {
                 return LLVMStoreNodeFactory.LLVMFloatArrayLiteralNodeGen.create(values.toArray(new LLVMFloatNode[nrElements]), baseTypeSize, target);
             case DOUBLE:
                 return LLVMStoreNodeFactory.LLVMDoubleArrayLiteralNodeGen.create(values.toArray(new LLVMDoubleNode[nrElements]), baseTypeSize, target);
-            // case X86_FP80:
-            // return LLVM80BitFloatArrayLiteralNodeGen.create(values.toArray(new
-            // LLVM80BitFloatNode[nrElements]), baseTypeSize, arrayAlloc);
-            // case ARRAY:
-            // case STRUCT:
-            // return LLVMAddressArrayCopyNodeGen.create(arrayValues.toArray(new
-            // LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
-            // case ADDRESS:
-            // return LLVMAddressArrayLiteralNodeGen.create(arrayValues.toArray(new
-            // LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
-            // case FUNCTION_ADDRESS:
-            // return LLVMFunctionArrayLiteralNodeGen.create(arrayValues.toArray(new
-            // LLVMFunctionNode[nrElements]), baseTypeSize, arrayAlloc);
+//            case X86_FP80:
+//                return LLVM80BitFloatArrayLiteralNodeGen.create(values.toArray(new LLVM80BitFloatNode[nrElements]), baseTypeSize, arrayAlloc);
+//            case ARRAY:
+//            case STRUCT:
+//                return LLVMAddressArrayCopyNodeGen.create(arrayValues.toArray(new LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
+//            case ADDRESS:
+//                return LLVMAddressArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
+//            case FUNCTION_ADDRESS:
+//                return LLVMFunctionArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMFunctionNode[nrElements]), baseTypeSize, arrayAlloc);
             default:
                 throw new AssertionError(llvmElementType);
         }

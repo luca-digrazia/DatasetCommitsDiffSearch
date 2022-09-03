@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.parser.bc.impl;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -50,7 +51,7 @@ import com.oracle.truffle.llvm.nodes.impl.base.LLVMTerminatorNode;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMPhiManager.Phi;
 import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 
-import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
+import uk.ac.man.cs.llvm.ir.model.Block;
 import uk.ac.man.cs.llvm.ir.model.FunctionVisitor;
 import uk.ac.man.cs.llvm.ir.model.GlobalValueSymbol;
 
@@ -60,37 +61,39 @@ public class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
 
     private final FrameDescriptor frame;
 
-    private final Map<InstructionBlock, List<FrameSlot>> slotsToNull;
+    private final Map<Block, List<FrameSlot>> slots;
 
     private final List<LLVMStackFrameNuller[]> nullers = new ArrayList<>();
 
     private final List<LLVMBasicBlockNode> blocks = new ArrayList<>();
 
+    private final Map<String, LLVMExpressionNode> map = new HashMap();
+
     private final Map<String, Integer> labels;
 
-    private final Map<InstructionBlock, List<Phi>> phis;
+    private final Map<Block, List<Phi>> phis;
 
-    private final List<LLVMNode> instructions = new ArrayList<>();
+    private final List<LLVMNode> block = new ArrayList<>();
 
-    public LLVMBitcodeFunctionVisitor(LLVMBitcodeVisitor module, FrameDescriptor frame, Map<InstructionBlock, List<FrameSlot>> slotsToNull, Map<String, Integer> labels, Map<InstructionBlock, List<Phi>> phis) {
+    public LLVMBitcodeFunctionVisitor(LLVMBitcodeVisitor module, FrameDescriptor frame, Map<Block, List<FrameSlot>> slots, Map<String, Integer> labels, Map<Block, List<Phi>> phis) {
         this.module = module;
         this.frame = frame;
-        this.slotsToNull = slotsToNull;
+        this.slots = slots;
         this.labels = labels;
         this.phis = phis;
     }
 
     public void addInstruction(LLVMNode node) {
-        instructions.add(node);
+        block.add(node);
     }
 
-    public void addTerminatingInstruction(LLVMTerminatorNode node, int blockId) {
-        blocks.add(new LLVMBasicBlockNode(getBlock(), node, blockId));
-        instructions.add(node);
+    public void addTerminatingInstruction(LLVMTerminatorNode node) {
+        blocks.add(new LLVMBasicBlockNode(getBlock(), node));
+        block.add(node);
     }
 
     public LLVMNode[] getBlock() {
-        return instructions.toArray(new LLVMNode[instructions.size()]);
+        return block.toArray(new LLVMNode[block.size()]);
     }
 
     public LLVMBasicBlockNode[] getBlocks() {
@@ -133,19 +136,19 @@ public class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
         return nullers.toArray(new LLVMStackFrameNuller[0][]);
     }
 
-    public Map<InstructionBlock, List<Phi>> getPhiManager() {
+    public Map<Block, List<Phi>> getPhiManager() {
         return phis;
     }
 
     @Override
-    public void visit(InstructionBlock block) {
-        this.instructions.clear();
+    public void visit(Block block) {
+        this.block.clear();
 
         block.accept(new LLVMBitcodeInstructionVisitor(this, block));
-        nullers.add(createNullers(slotsToNull.get(block)));
+        nullers.add(createNullers(slots.get(block)));
     }
 
-    private static LLVMStackFrameNuller[] createNullers(List<FrameSlot> slots) {
+    private LLVMStackFrameNuller[] createNullers(List<FrameSlot> slots) {
         if (slots == null || slots.isEmpty()) {
             return new LLVMStackFrameNuller[0];
         }

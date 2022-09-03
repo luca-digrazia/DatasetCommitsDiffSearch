@@ -42,12 +42,11 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMControlFlowAnalysis.LLVMControlFlow;
 
-import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
+import uk.ac.man.cs.llvm.ir.model.Block;
 import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
 import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
 import uk.ac.man.cs.llvm.ir.model.FunctionParameter;
 import uk.ac.man.cs.llvm.ir.model.FunctionVisitor;
-import uk.ac.man.cs.llvm.ir.model.GlobalAlias;
 import uk.ac.man.cs.llvm.ir.model.GlobalConstant;
 import uk.ac.man.cs.llvm.ir.model.GlobalVariable;
 import uk.ac.man.cs.llvm.ir.model.InstructionVisitor;
@@ -92,9 +91,9 @@ public final class LLVMFrameDescriptors {
 
     private final Map<String, FrameDescriptor> descriptors;
 
-    private final Map<String, Map<InstructionBlock, List<FrameSlot>>> slots;
+    private final Map<String, Map<Block, List<FrameSlot>>> slots;
 
-    private LLVMFrameDescriptors(Map<String, FrameDescriptor> descriptors, Map<String, Map<InstructionBlock, List<FrameSlot>>> slots) {
+    private LLVMFrameDescriptors(Map<String, FrameDescriptor> descriptors, Map<String, Map<Block, List<FrameSlot>>> slots) {
         this.descriptors = descriptors;
         this.slots = slots;
     }
@@ -107,7 +106,7 @@ public final class LLVMFrameDescriptors {
         return descriptors.values().iterator().next(); /* Any will do */
     }
 
-    public Map<InstructionBlock, List<FrameSlot>> getSlots(String method) {
+    public Map<Block, List<FrameSlot>> getSlots(String method) {
         return slots.get(method);
     }
 
@@ -117,7 +116,7 @@ public final class LLVMFrameDescriptors {
 
         private final Map<String, FrameDescriptor> descriptors = new HashMap<>();
 
-        private final Map<String, Map<InstructionBlock, List<FrameSlot>>> slots = new HashMap<>();
+        private final Map<String, Map<Block, List<FrameSlot>>> slots = new HashMap<>();
 
         LLVMFrameDescriptorsVisitor(LLVMControlFlowAnalysis cfg) {
             this.cfg = cfg;
@@ -127,12 +126,8 @@ public final class LLVMFrameDescriptors {
             return descriptors;
         }
 
-        public Map<String, Map<InstructionBlock, List<FrameSlot>>> getSlots() {
+        public Map<String, Map<Block, List<FrameSlot>>> getSlots() {
             return slots;
-        }
-
-        @Override
-        public void visit(GlobalAlias alias) {
         }
 
         @Override
@@ -142,7 +137,6 @@ public final class LLVMFrameDescriptors {
         @Override
         public void visit(GlobalVariable variable) {
         }
-
         @Override
         public void visit(FunctionDeclaration method) {
         }
@@ -176,25 +170,25 @@ public final class LLVMFrameDescriptors {
 
         private LLVMControlFlow cfg;
 
-        private final Map<InstructionBlock, List<FrameSlot>> map = new HashMap<>();
+        private final Map<Block, List<FrameSlot>> map = new HashMap<>();
 
-        private InstructionBlock entry = null;
+        private Block entry = null;
 
         LLVMFrameDescriptorsFunctionVisitor(FrameDescriptor frame, LLVMControlFlow cfg) {
             this.frame = frame;
             this.cfg = cfg;
         }
 
-        private List<InstructionBlock> getNondominatingBlocks(InstructionBlock block) {
-            List<InstructionBlock> nondominating = new ArrayList<>();
+        private List<Block> getNondominatingBlocks(Block block) {
+            List<Block> nondominating = new ArrayList<>();
             if (block != entry) {
                 getNondominatingBlocksWorker(block, entry, nondominating);
             }
             return nondominating;
         }
 
-        private void getNondominatingBlocksWorker(InstructionBlock dominator, InstructionBlock block, List<InstructionBlock> nondominating) {
-            for (InstructionBlock blk : cfg.successor(block)) {
+        private void getNondominatingBlocksWorker(Block dominator, Block block, List<Block> nondominating) {
+            for (Block blk : cfg.successor(block)) {
                 if (!nondominating.contains(blk) && !dominator.equals(blk)) {
                     nondominating.add(blk);
                     getNondominatingBlocksWorker(dominator, blk, nondominating);
@@ -202,11 +196,11 @@ public final class LLVMFrameDescriptors {
             }
         }
 
-        public Map<InstructionBlock, List<FrameSlot>> getSlotMap() {
+        public Map<Block, List<FrameSlot>> getSlotMap() {
             return map;
         }
 
-        public List<FrameSlot> getSlots(InstructionBlock block) {
+        public List<FrameSlot> getSlots(Block block) {
             int count = frame.getSize();
 
             block.accept(this);
@@ -214,7 +208,7 @@ public final class LLVMFrameDescriptors {
             return new ArrayList<>(frame.getSlots().subList(count, frame.getSize()));
         }
 
-        private boolean isDominating(InstructionBlock dominator, InstructionBlock block) {
+        private boolean isDominating(Block dominator, Block block) {
             if (dominator.equals(block)) {
                 return true;
             }
@@ -222,26 +216,26 @@ public final class LLVMFrameDescriptors {
         }
 
         @Override
-        public void visit(InstructionBlock block) {
+        public void visit(Block block) {
             if (entry == null) {
                 entry = block;
             }
-            List<InstructionBlock> processed = new ArrayList<>();
+            List<Block> processed = new ArrayList<>();
             List<FrameSlot> slots = new ArrayList<>();
-            Deque<InstructionBlock> currentQueue = new ArrayDeque<>();
-            Set<InstructionBlock> successors = cfg.successor(block);
+            Deque<Block> currentQueue = new ArrayDeque<>();
+            Set<Block> successors = cfg.successor(block);
             currentQueue.push(block);
             while (!currentQueue.isEmpty()) {
-                InstructionBlock blk = currentQueue.pop();
+                Block blk = currentQueue.pop();
                 processed.add(blk);
                 boolean dominates = false;
-                for (InstructionBlock successor : successors) {
+                for (Block successor : successors) {
                     dominates |= isDominating(blk, successor);
                 }
                 if (!dominates) {
                     slots.addAll(getSlots(blk));
-                    Set<InstructionBlock> predecessors = cfg.predecessor(blk);
-                    for (InstructionBlock predecessor : predecessors) {
+                    Set<Block> predecessors = cfg.predecessor(blk);
+                    for (Block predecessor : predecessors) {
                         if (!processed.contains(predecessor)) {
                             currentQueue.push(predecessor);
                         }

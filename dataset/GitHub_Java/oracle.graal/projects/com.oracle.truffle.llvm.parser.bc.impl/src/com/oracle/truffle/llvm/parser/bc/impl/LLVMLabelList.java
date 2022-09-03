@@ -32,11 +32,10 @@ package com.oracle.truffle.llvm.parser.bc.impl;
 import java.util.HashMap;
 import java.util.Map;
 
-import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
+import uk.ac.man.cs.llvm.ir.model.Block;
 import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
 import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
 import uk.ac.man.cs.llvm.ir.model.FunctionVisitor;
-import uk.ac.man.cs.llvm.ir.model.GlobalAlias;
 import uk.ac.man.cs.llvm.ir.model.GlobalConstant;
 import uk.ac.man.cs.llvm.ir.model.GlobalVariable;
 import uk.ac.man.cs.llvm.ir.model.Model;
@@ -72,10 +71,6 @@ public final class LLVMLabelList {
 
         private Map<String, Map<String, Integer>> labels() {
             return labels;
-        }
-
-        @Override
-        public void visit(GlobalAlias alias) {
         }
 
         @Override
@@ -120,7 +115,7 @@ public final class LLVMLabelList {
         }
 
         @Override
-        public void visit(InstructionBlock block) {
+        public void visit(Block block) {
             String name = block.getName();
             if (name.isEmpty() || "entry".equals(name)) {
                 name = "%0";

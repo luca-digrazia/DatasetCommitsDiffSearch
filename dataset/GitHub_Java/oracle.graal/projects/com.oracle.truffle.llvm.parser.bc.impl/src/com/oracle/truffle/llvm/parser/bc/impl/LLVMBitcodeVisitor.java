@@ -80,7 +80,7 @@ import uk.ac.man.cs.llvm.ir.types.Type;
 public class LLVMBitcodeVisitor implements ModelVisitor {
 
     public static LLVMParserResult getMain(Source source, LLVMContext context, LLVMOptimizationConfiguration configuration) {
-        Model model = new Model();
+         Model model = new Model();
 
         new LLVMParser(model).parse(ModuleVersion.LLVM_3_2, source.getPath());
 
@@ -145,37 +145,34 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         String name = method.getName();
 
         LLVMBitcodeFunctionVisitor visitor = new LLVMBitcodeFunctionVisitor(
-                        this,
-                        frames.getDescriptor(name),
-                        frames.getSlots(name),
-                        labels.labels(name),
-                        phis.getPhiMap(name));
+                this,
+                frames.getDescriptor(name),
+                frames.getSlots(name),
+                labels.labels(name),
+                phis.getPhiMap(name));
 
         method.accept(visitor);
 
         return LLVMBlockFactory.createFunctionBlock(
-                        visitor.getReturnSlot(),
-                        visitor.getBlocks(),
-                        null, visitor.getNullers());
+                visitor.getReturnSlot(),
+                visitor.getBlocks(),
+                visitor.getNullers());
     }
 
-    private static List<LLVMNode> createParameters(FrameDescriptor frame, List<FunctionParameter> parameters) {
+    private List<LLVMNode> createParameters(FrameDescriptor frame, List<FunctionParameter> parameters) {
         List<LLVMNode> parameterNodes = new ArrayList<>();
 
         LLVMExpressionNode stack = LLVMFunctionFactory.createFunctionArgNode(0, LLVMBaseType.ADDRESS);
         parameterNodes.add(LLVMFrameReadWriteFactory.createFrameWrite(LLVMBaseType.ADDRESS, stack, frame.findFrameSlot(LLVMBitcodeHelper.STACK_ADDRESS_FRAME_SLOT_ID)));
 
         int argIndex = LLVMCallNode.ARG_START_INDEX;
-        // if (resolve(functionHeader.getRettype()).isStruct()) {
-        // LLVMExpressionNode functionRetParNode =
-        // LLVMFunctionFactory.createFunctionArgNode(argIndex, paramType)e(argIndex++,
-        // LLVMBaseType.STRUCT);
-        // LLVMNode retValue = createAssignment((String) retSlot.getIdentifier(),
-        // functionRetParNode, functionHeader.getRettype());
-        // formalParamInits.add(retValue);
-        // }
+//        if (resolve(functionHeader.getRettype()).isStruct()) {
+//            LLVMExpressionNode functionRetParNode = LLVMFunctionFactory.createFunctionArgNode(argIndex, paramType)e(argIndex++, LLVMBaseType.STRUCT);
+//            LLVMNode retValue = createAssignment((String) retSlot.getIdentifier(), functionRetParNode, functionHeader.getRettype());
+//            formalParamInits.add(retValue);
+//        }
         for (FunctionParameter parameter : parameters) {
-            LLVMBaseType llvmtype = LLVMBitcodeHelper.toBaseType(parameter.getType()).type;
+            LLVMBaseType llvmtype = LLVMBitcodeHelper.toBaseType(parameter.getType());
             LLVMExpressionNode parameterNode = LLVMFunctionFactory.createFunctionArgNode(argIndex++, llvmtype);
             FrameSlot slot = frame.findFrameSlot(parameter.getName());
             parameterNodes.add(LLVMFrameReadWriteFactory.createFrameWrite(llvmtype, parameterNode, slot));
@@ -190,7 +187,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
             LLVMExpressionNode constant = LLVMBitcodeHelper.toConstantNode(global.getValue(), global.getAlign(), this::getGlobalVariable, context, stack);
             if (constant != null) {
                 Type type = ((PointerType) global.getType()).getPointeeType();
-                LLVMBaseType baseType = LLVMBitcodeHelper.toBaseType(type).type;
+                LLVMBaseType baseType = LLVMBitcodeHelper.toBaseType(type);
                 int size = LLVMBitcodeHelper.getSize(type, global.getAlign());
 
                 LLVMAddressLiteralNode globalVarAddress = (LLVMAddressLiteralNode) getGlobalVariable(global);
@@ -203,7 +200,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
                         store = LLVMMemI32CopyFactory.create(globalVarAddress, (LLVMAddressNode) constant, new LLVMI32LiteralNode(size), new LLVMI32LiteralNode(0), new LLVMI1LiteralNode(false));
                     } else {
                         Type t = global.getValue().getType();
-                        store = LLVMMemoryReadWriteFactory.createStore(globalVarAddress, constant, LLVMBitcodeHelper.toBaseType(t).type, LLVMBitcodeHelper.getSize(t, 0));
+                        store = LLVMMemoryReadWriteFactory.createStore(globalVarAddress, constant, LLVMBitcodeHelper.toBaseType(t), LLVMBitcodeHelper.getSize(t, 0));
                     }
                     return store;
                 }
