@@ -63,7 +63,6 @@ import org.graalvm.compiler.nodes.extended.UnsafeLoadNode;
 import org.graalvm.compiler.nodes.java.ArrayLengthNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.type.StampTool;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.replacements.SnippetTemplate;
 import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
@@ -384,8 +383,8 @@ public class ArrayCopySnippets implements Snippets {
 
     public static class Templates extends SnippetTemplate.AbstractTemplates {
 
-        public Templates(OptionValues options, HotSpotProviders providers, TargetDescription target) {
-            super(options, providers, providers.getSnippetReflection(), target);
+        public Templates(HotSpotProviders providers, TargetDescription target) {
+            super(providers, providers.getSnippetReflection(), target);
         }
 
         private ResolvedJavaMethod originalArraycopy() throws GraalError {
