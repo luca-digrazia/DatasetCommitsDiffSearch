@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code ConvertNode} class represents a conversion between primitive types.
  */
-public final class ConvertNode extends FloatingNode implements Canonicalizable, LIRLowerable, Lowerable {
+public final class ConvertNode extends FloatingNode implements Canonicalizable, LIRLowerable {
 
     public enum Op {
         I2L(Int, Long),
@@ -159,11 +159,6 @@ public final class ConvertNode extends FloatingNode implements Canonicalizable, 
                 return false;
         }
         return updateStamp(newStamp);
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
     }
 
     @Override
