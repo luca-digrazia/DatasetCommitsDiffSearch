@@ -33,7 +33,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.ptx.*;
 
 public class PTXMove {
 
@@ -132,7 +131,7 @@ public class PTXMove {
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            load(tasm, masm, result, (PTXAddress) address, state);
+            load(tasm, masm, result, (Address) address, state);
         }
     }
 
@@ -150,7 +149,7 @@ public class PTXMove {
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            store(tasm, masm, (PTXAddress) address, input, state);
+            store(tasm, masm, (Address) address, input, state);
         }
     }
 
@@ -239,9 +238,9 @@ public class PTXMove {
     }
 
     @SuppressWarnings("unused")
-    public static void load(TargetMethodAssembler tasm, PTXAssembler masm, Value result, PTXAddress loadAddr, LIRFrameState info) {
+    public static void load(TargetMethodAssembler tasm, PTXAssembler masm, Value result, Address loadAddr, LIRFrameState info) {
         Register a = asRegister(loadAddr.getBase());
-        long immOff = loadAddr.getDisplacement();
+        int immOff = loadAddr.getDisplacement();
         switch (loadAddr.getKind()) {
             case Int:
                 masm.ld_global_s32(asRegister(result), a, immOff);
@@ -255,9 +254,9 @@ public class PTXMove {
     }
 
     @SuppressWarnings("unused")
-    public static void store(TargetMethodAssembler tasm, PTXAssembler masm, PTXAddress storeAddr, Value input, LIRFrameState info) {
+    public static void store(TargetMethodAssembler tasm, PTXAssembler masm, Address storeAddr, Value input, LIRFrameState info) {
         Register a = asRegister(storeAddr.getBase());
-        long immOff = storeAddr.getDisplacement();
+        int immOff = storeAddr.getDisplacement();
         if (isRegister(input)) {
             switch (storeAddr.getKind()) {
                 case Int:

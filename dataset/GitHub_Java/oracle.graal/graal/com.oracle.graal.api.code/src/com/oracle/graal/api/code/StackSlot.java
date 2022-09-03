@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.api.code;
 
-import java.util.*;
+import static com.oracle.graal.api.meta.Kind.*;
 
 import com.oracle.graal.api.meta.*;
 
@@ -30,7 +30,7 @@ import com.oracle.graal.api.meta.*;
  * Represents a compiler spill slot or an outgoing stack-based argument in a method's frame or an
  * incoming stack-based argument in a method's {@linkplain #isInCallerFrame() caller's frame}.
  */
-public final class StackSlot extends AllocatableValue {
+public final class StackSlot extends Value {
 
     private static final long serialVersionUID = -7725071921307318433L;
 
@@ -46,20 +46,25 @@ public final class StackSlot extends AllocatableValue {
      * @param addFrameSize Specifies if the offset is relative to the stack pointer, or the
      *            beginning of the frame (stack pointer + total frame size).
      */
-    public static StackSlot get(PlatformKind kind, int offset, boolean addFrameSize) {
+    public static StackSlot get(Kind kind, int offset, boolean addFrameSize) {
+        assert kind.getStackKind() == kind;
         assert addFrameSize || offset >= 0;
 
         if (offset % CACHE_GRANULARITY == 0) {
-            StackSlot slot;
+            StackSlot[][] cache;
+            int index = offset / CACHE_GRANULARITY;
             if (!addFrameSize) {
-                slot = OUT_CACHE.lookup(kind, offset);
+                cache = OUT_CACHE;
             } else if (offset >= 0) {
-                slot = IN_CACHE.lookup(kind, offset);
+                cache = IN_CACHE;
             } else {
-                slot = SPILL_CACHE.lookup(kind, offset);
+                cache = SPILL_CACHE;
+                index = -index;
             }
-            if (slot != null) {
-                assert slot.getPlatformKind().equals(kind) && slot.offset == offset && slot.addFrameSize == addFrameSize;
+            StackSlot[] slots = cache[kind.ordinal()];
+            if (index < slots.length) {
+                StackSlot slot = slots[index];
+                assert slot.getKind() == kind && slot.offset == offset && slot.addFrameSize == addFrameSize;
                 return slot;
             }
         }
@@ -67,10 +72,10 @@ public final class StackSlot extends AllocatableValue {
     }
 
     /**
-     * Private constructor to enforce use of {@link #get(PlatformKind, int, boolean)} so that a
-     * cache can be used.
+     * Private constructor to enforce use of {@link #get(Kind, int, boolean)} so that a cache can be
+     * used.
      */
-    private StackSlot(PlatformKind kind, int offset, boolean addFrameSize) {
+    private StackSlot(Kind kind, int offset, boolean addFrameSize) {
         super(kind);
         this.offset = offset;
         this.addFrameSize = addFrameSize;
@@ -102,7 +107,7 @@ public final class StackSlot extends AllocatableValue {
 
     @Override
     public int hashCode() {
-        return getPlatformKind().hashCode() ^ (offset << 4) ^ (addFrameSize ? 15 : 0);
+        return getKind().ordinal() ^ (offset << 4) ^ (addFrameSize ? 15 : 0);
     }
 
     @Override
@@ -112,7 +117,7 @@ public final class StackSlot extends AllocatableValue {
         }
         if (o instanceof StackSlot) {
             StackSlot l = (StackSlot) o;
-            return l.getPlatformKind().equals(getPlatformKind()) && l.offset == offset && l.addFrameSize == addFrameSize;
+            return l.getKind() == getKind() && l.offset == offset && l.addFrameSize == addFrameSize;
         }
         return false;
     }
@@ -134,7 +139,7 @@ public final class StackSlot extends AllocatableValue {
     public StackSlot asOutArg() {
         assert offset >= 0;
         if (addFrameSize) {
-            return get(getPlatformKind(), offset, false);
+            return get(getKind(), offset, false);
         }
         return this;
     }
@@ -145,48 +150,28 @@ public final class StackSlot extends AllocatableValue {
     public StackSlot asInArg() {
         assert offset >= 0;
         if (!addFrameSize) {
-            return get(getPlatformKind(), offset, true);
+            return get(getKind(), offset, true);
         }
         return this;
     }
 
+    private static final int CACHE_GRANULARITY = 8;
     private static final int SPILL_CACHE_PER_KIND_SIZE = 100;
     private static final int PARAM_CACHE_PER_KIND_SIZE = 10;
-    private static final int CACHE_GRANULARITY = 8;
 
-    private static class Cache extends HashMap<PlatformKind, StackSlot[]> {
+    private static final StackSlot[][] SPILL_CACHE = makeCache(SPILL_CACHE_PER_KIND_SIZE, -1, true);
+    private static final StackSlot[][] IN_CACHE = makeCache(PARAM_CACHE_PER_KIND_SIZE, 1, true);
+    private static final StackSlot[][] OUT_CACHE = makeCache(PARAM_CACHE_PER_KIND_SIZE, 1, false);
 
-        private static final long serialVersionUID = 4424132866289682843L;
-
-        private final int cachePerKindSize;
-        private final int sign;
-        private final boolean addFrameSize;
-
-        Cache(int cachePerKindSize, int sign, boolean addFrameSize) {
-            this.cachePerKindSize = cachePerKindSize;
-            this.sign = sign;
-            this.addFrameSize = addFrameSize;
-        }
-
-        StackSlot lookup(PlatformKind kind, int offset) {
-            int index = sign * offset / CACHE_GRANULARITY;
-            StackSlot[] slots = this.get(kind);
-            if (slots == null) {
-                slots = new StackSlot[cachePerKindSize];
-                for (int i = 0; i < cachePerKindSize; i++) {
-                    slots[i] = new StackSlot(kind, sign * i * CACHE_GRANULARITY, addFrameSize);
-                }
-                this.put(kind, slots);
+    private static StackSlot[][] makeCache(int cachePerKindSize, int sign, boolean addFrameSize) {
+        StackSlot[][] cache = new StackSlot[Kind.values().length][];
+        for (Kind kind : new Kind[]{Illegal, Int, Long, Float, Double, Object}) {
+            StackSlot[] slots = new StackSlot[cachePerKindSize];
+            for (int i = 0; i < cachePerKindSize; i++) {
+                slots[i] = new StackSlot(kind, sign * i * CACHE_GRANULARITY, addFrameSize);
             }
-            if (index < slots.length) {
-                return slots[index];
-            } else {
-                return null;
-            }
+            cache[kind.ordinal()] = slots;
         }
+        return cache;
     }
-
-    private static final Cache SPILL_CACHE = new Cache(SPILL_CACHE_PER_KIND_SIZE, -1, true);
-    private static final Cache IN_CACHE = new Cache(PARAM_CACHE_PER_KIND_SIZE, 1, true);
-    private static final Cache OUT_CACHE = new Cache(PARAM_CACHE_PER_KIND_SIZE, 1, false);
 }

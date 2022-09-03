@@ -87,7 +87,18 @@ public class TargetDescription {
      */
     public final int implicitNullCheckLimit;
 
-    public TargetDescription(Architecture arch, boolean isMP, int stackAlignment, int stackBias, int implicitNullCheckLimit, int pageSize, int cacheAlignment, boolean inlineObjects) {
+    /**
+     * Specifies how {@code long} and {@code double} constants are to be stored in
+     * {@linkplain BytecodeFrame frames}. This is useful for VMs such as HotSpot where convention
+     * the interpreter uses is that the second local holds the first raw word of the native long or
+     * double representation. This is actually reasonable, since locals and stack arrays grow
+     * downwards in all implementations. If, on some machine, the interpreter's Java locals or stack
+     * were to grow upwards, the embedded doubles would be word-swapped.)
+     */
+    public final boolean debugInfoDoubleWordsInSecondSlot;
+
+    public TargetDescription(Architecture arch, boolean isMP, int stackAlignment, int stackBias, int implicitNullCheckLimit, int pageSize, int cacheAlignment, boolean inlineObjects,
+                    boolean debugInfoDoubleWordsInSecondSlot) {
         this.arch = arch;
         this.pageSize = pageSize;
         this.isMP = isMP;
@@ -98,6 +109,7 @@ public class TargetDescription {
         this.implicitNullCheckLimit = implicitNullCheckLimit;
         this.cacheAlignment = cacheAlignment;
         this.inlineObjects = inlineObjects;
+        this.debugInfoDoubleWordsInSecondSlot = debugInfoDoubleWordsInSecondSlot;
     }
 
     /**

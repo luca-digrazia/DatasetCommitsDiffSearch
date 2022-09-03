@@ -129,16 +129,7 @@ public class IntegerStamp extends Stamp {
     @Override
     public boolean alwaysDistinct(Stamp otherStamp) {
         IntegerStamp other = (IntegerStamp) otherStamp;
-        if (lowerBound > other.upperBound || upperBound < other.lowerBound) {
-            return true;
-        } else if ((mask & other.mask) == 0 && (lowerBound > 0 || upperBound < 0 || other.lowerBound > 0 || other.upperBound < 0)) {
-            /*
-             * Zero is the only common value if the masks don't overlap. If one of the two values is
-             * less than or greater than zero, they are always distinct.
-             */
-            return true;
-        }
-        return false;
+        return lowerBound > other.upperBound || upperBound < other.lowerBound;
     }
 
     @Override

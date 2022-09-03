@@ -317,13 +317,13 @@ public enum Condition {
      * 
      * @param lt the constant on the left side of the comparison
      * @param rt the constant on the right side of the comparison
-     * @param constantReflection needed to compare constants
+     * @param runtime needed to compare runtime-specific types
      * @return {@link Boolean#TRUE} if the comparison is known to be true, {@link Boolean#FALSE} if
      *         the comparison is known to be false
      */
-    public boolean foldCondition(Constant lt, Constant rt, ConstantReflectionProvider constantReflection) {
+    public boolean foldCondition(Constant lt, Constant rt, CodeCacheProvider runtime) {
         assert lt.getKind() != Kind.Double && lt.getKind() != Kind.Float && rt.getKind() != Kind.Double && rt.getKind() != Kind.Float;
-        return foldCondition(lt, rt, constantReflection, false);
+        return foldCondition(lt, rt, runtime, false);
     }
 
     /**
@@ -331,12 +331,12 @@ public enum Condition {
      * 
      * @param lt the constant on the left side of the comparison
      * @param rt the constant on the right side of the comparison
-     * @param constantReflection needed to compare constants
+     * @param runtime needed to compare runtime-specific types
      * @param unorderedIsTrue true if an undecided float comparison should result in "true"
      * @return true if the comparison is known to be true, false if the comparison is known to be
      *         false
      */
-    public boolean foldCondition(Constant lt, Constant rt, ConstantReflectionProvider constantReflection, boolean unorderedIsTrue) {
+    public boolean foldCondition(Constant lt, Constant rt, MetaAccessProvider runtime, boolean unorderedIsTrue) {
         switch (lt.getKind()) {
             case Boolean:
             case Byte:
@@ -401,9 +401,9 @@ public enum Condition {
             case Object: {
                 switch (this) {
                     case EQ:
-                        return constantReflection.constantEquals(lt, rt);
+                        return runtime.constantEquals(lt, rt);
                     case NE:
-                        return !constantReflection.constantEquals(lt, rt);
+                        return !runtime.constantEquals(lt, rt);
                     default:
                         throw new GraalInternalError("expected condition: %s", this);
                 }

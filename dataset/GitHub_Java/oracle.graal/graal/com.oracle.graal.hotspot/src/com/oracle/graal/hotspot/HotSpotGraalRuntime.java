@@ -141,7 +141,7 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
 
         HotSpotBackend backend = createBackend();
         GraalOptions.StackShadowPages = config.stackShadowPages;
-        compiler = new GraalCompiler(getRuntime(), backend);
+        compiler = new GraalCompiler(getRuntime(), getTarget(), backend);
         if (GraalOptions.CacheGraphs) {
             cache = new HotSpotGraphCache();
         }
@@ -261,9 +261,6 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         }
         if (clazz == DisassemblerProvider.class || clazz == BytecodeDisassemblerProvider.class) {
             return (T) getRuntime();
-        }
-        if (clazz == HotSpotRuntime.class) {
-            return (T) runtime;
         }
         if (clazz == GraalCompiler.class) {
             return (T) getCompiler();

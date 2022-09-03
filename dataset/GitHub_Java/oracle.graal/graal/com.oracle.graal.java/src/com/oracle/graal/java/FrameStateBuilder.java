@@ -33,6 +33,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
@@ -202,16 +203,16 @@ public class FrameStateBuilder {
     }
 
     private void propagateDelete(FloatingNode node) {
-        assert node instanceof PhiNode || node instanceof ProxyNode;
+        assert node instanceof PhiNode || node instanceof ValueProxyNode;
         if (node.isDeleted()) {
             return;
         }
         // Collect all phi functions that use this phi so that we can delete them recursively (after
         // we delete ourselves to avoid circles).
-        List<FloatingNode> propagateUsages = node.usages().filter(FloatingNode.class).filter(isA(PhiNode.class).or(ProxyNode.class)).snapshot();
+        List<FloatingNode> propagateUsages = node.usages().filter(FloatingNode.class).filter(isA(PhiNode.class).or(ValueProxyNode.class)).snapshot();
 
         // Remove the phi function from all FrameStates where it is used and then delete it.
-        assert node.usages().filter(isNotA(FrameState.class).nor(PhiNode.class).nor(ProxyNode.class)).isEmpty() : "phi function that gets deletes must only be used in frame states";
+        assert node.usages().filter(isNotA(FrameState.class).nor(PhiNode.class).nor(ValueProxyNode.class)).isEmpty() : "phi function that gets deletes must only be used in frame states";
         node.replaceAtUsages(null);
         node.safeDelete();
 
@@ -234,21 +235,21 @@ public class FrameStateBuilder {
             ValueNode value = localAt(i);
             if (value != null && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
                 Debug.log(" inserting proxy for %s", value);
-                storeLocal(i, ProxyNode.forValue(value, loopExit, graph));
+                storeLocal(i, graph.unique(new ValueProxyNode(value, loopExit, PhiType.Value)));
             }
         }
         for (int i = 0; i < stackSize(); i++) {
             ValueNode value = stackAt(i);
             if (value != null && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
                 Debug.log(" inserting proxy for %s", value);
-                storeStack(i, ProxyNode.forValue(value, loopExit, graph));
+                storeStack(i, graph.unique(new ValueProxyNode(value, loopExit, PhiType.Value)));
             }
         }
         for (int i = 0; i < locks.length; i++) {
             ValueNode value = locks[i];
             if (value != null && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
                 Debug.log(" inserting proxy for %s", value);
-                locks[i] = ProxyNode.forValue(value, loopExit, graph);
+                locks[i] = graph.unique(new ValueProxyNode(value, loopExit, PhiType.Value));
             }
         }
     }
@@ -258,21 +259,21 @@ public class FrameStateBuilder {
             ValueNode value = localAt(i);
             if (value != null) {
                 Debug.log(" inserting proxy for %s", value);
-                storeLocal(i, ProxyNode.forValue(value, begin, graph));
+                storeLocal(i, graph.unique(new ValueProxyNode(value, begin, PhiType.Value)));
             }
         }
         for (int i = 0; i < stackSize(); i++) {
             ValueNode value = stackAt(i);
             if (value != null) {
                 Debug.log(" inserting proxy for %s", value);
-                storeStack(i, ProxyNode.forValue(value, begin, graph));
+                storeStack(i, graph.unique(new ValueProxyNode(value, begin, PhiType.Value)));
             }
         }
         for (int i = 0; i < locks.length; i++) {
             ValueNode value = locks[i];
             if (value != null) {
                 Debug.log(" inserting proxy for %s", value);
-                locks[i] = ProxyNode.forValue(value, begin, graph);
+                locks[i] = graph.unique(new ValueProxyNode(value, begin, PhiType.Value));
             }
         }
     }
@@ -291,7 +292,7 @@ public class FrameStateBuilder {
     public void cleanupDeletedPhis() {
         for (int i = 0; i < localsSize(); i++) {
             if (localAt(i) != null && localAt(i).isDeleted()) {
-                assert localAt(i) instanceof PhiNode || localAt(i) instanceof ProxyNode : "Only phi and value proxies can be deleted during parsing: " + localAt(i);
+                assert localAt(i) instanceof PhiNode || localAt(i) instanceof ValueProxyNode : "Only phi and value proxies can be deleted during parsing: " + localAt(i);
                 storeLocal(i, null);
             }
         }
