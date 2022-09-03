@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -51,7 +51,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
 import org.junit.After;
 import org.junit.Before;
@@ -65,7 +64,7 @@ public class SLJavaInteropTest {
     @Before
     public void create() {
         os = new ByteArrayOutputStream();
-        context = Context.newBuilder().allowHostAccess(HostAccess.PUBLIC).out(os).build();
+        context = Context.newBuilder().out(os).build();
     }
 
     @After
@@ -77,15 +76,11 @@ public class SLJavaInteropTest {
     public void asFunction() throws Exception {
         String scriptText = "function test() {\n" + "    println(\"Called!\");\n" + "}\n";
         context.eval("sl", scriptText);
-        Value main = lookup("test");
+        Value main = context.lookup("sl", "test");
         Runnable runnable = main.as(Runnable.class);
         runnable.run();
 
         assertEquals("Called!\n", os.toString("UTF-8"));
-    }
-
-    private Value lookup(String symbol) {
-        return context.getBindings("sl").getMember(symbol);
     }
 
     @Test
@@ -94,7 +89,7 @@ public class SLJavaInteropTest {
                         "  println(\"Called with \" + a + \" and \" + b);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Value fn = lookup("values");
+        Value fn = context.lookup("sl", "values");
         PassInValues valuesIn = fn.as(PassInValues.class);
         valuesIn.call("OK", "Fine");
 
@@ -120,10 +115,10 @@ public class SLJavaInteropTest {
                         "  println(\"Called with \" + a[0] + a[1] + \" and \" + b);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Value fn = lookup("values");
+        Value fn = context.lookup("sl", "values");
         PassInArray valuesIn = fn.as(PassInArray.class);
         valuesIn.call(new Object[]{"OK", "Fine"});
-        assertEquals("Called with OKFine and NULL\n", os.toString("UTF-8"));
+        assertEquals("Called with OKFine and null\n", os.toString("UTF-8"));
     }
 
     @Test
@@ -132,7 +127,7 @@ public class SLJavaInteropTest {
                         "  println(\"Called with \" + a + \" and \" + b);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Value fn = lookup("values");
+        Value fn = context.lookup("sl", "values");
         PassInVarArg valuesIn = fn.as(PassInVarArg.class);
 
         valuesIn.call("OK", "Fine");
@@ -145,7 +140,7 @@ public class SLJavaInteropTest {
                         "  println(\"Called with \" + a + \" and \" + b + c);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Value fn = lookup("values");
+        Value fn = context.lookup("sl", "values");
         PassInArgAndVarArg valuesIn = fn.as(PassInArgAndVarArg.class);
 
         valuesIn.call("OK", "Fine", "Well");
@@ -161,7 +156,7 @@ public class SLJavaInteropTest {
                         "  return sum.sum(obj);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Value fn = lookup("values");
+        Value fn = context.lookup("sl", "values");
 
         Sum javaSum = new Sum();
         Object sum = javaSum;
@@ -184,7 +179,7 @@ public class SLJavaInteropTest {
                         "  return sum.sum(obj);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Values fn = lookup("values").as(Values.class);
+        Values fn = context.lookup("sl", "values").as(Values.class);
 
         Sum sum = new Sum();
         Object ret1 = fn.values(sum, "one", 1);
@@ -206,7 +201,7 @@ public class SLJavaInteropTest {
                         "  return sum.sum(obj);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        ValuesRaw fn = lookup("values").as(ValuesRaw.class);
+        ValuesRaw fn = context.lookup("sl", "values").as(ValuesRaw.class);
 
         Sum sum = new Sum();
         Object ret1 = fn.values(sum, "one", 1);
@@ -234,7 +229,7 @@ public class SLJavaInteropTest {
                         "  return obj;\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        DoSums fn = lookup("create").execute().as(DoSums.class);
+        DoSums fn = context.lookup("sl", "create").execute().as(DoSums.class);
 
         Sum sum = new Sum();
         Object ret1 = fn.doSum1(sum, "one", 1);
@@ -253,7 +248,7 @@ public class SLJavaInteropTest {
                         "  sum.sumArray(arr);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Value fn = lookup("values");
+        Value fn = context.lookup("sl", "values");
 
         Sum javaSum = new Sum();
 
@@ -272,7 +267,7 @@ public class SLJavaInteropTest {
                         "  sum.sumArrayArray(arr);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Value fn = lookup("values");
+        Value fn = context.lookup("sl", "values");
 
         Sum javaSum = new Sum();
 
@@ -295,7 +290,7 @@ public class SLJavaInteropTest {
                         "  sum.sumArrayMap(arr);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Value fn = lookup("values");
+        Value fn = context.lookup("sl", "values");
 
         Sum javaSum = new Sum();
 
@@ -318,7 +313,7 @@ public class SLJavaInteropTest {
                         "  sum.sumMapArray(arr);\n" + //
                         "}\n"; //
         context.eval("sl", scriptText);
-        Value fn = lookup("values");
+        Value fn = context.lookup("sl", "values");
 
         Sum javaSum = new Sum();
 
@@ -343,8 +338,8 @@ public class SLJavaInteropTest {
                         "  return map.get(key);\n" +
                         "}\n";
         context.eval("sl", scriptText);
-        Value read = lookup("read");
-        Value write = lookup("write");
+        Value read = context.lookup("sl", "read");
+        Value write = context.lookup("sl", "write");
 
         Map<Object, Object> map = new HashMap<>();
         map.put("a", 42);
@@ -418,13 +413,11 @@ public class SLJavaInteropTest {
     public static class Sum {
         int sum;
 
-        @HostAccess.Export
         public Sum sum(Pair p) {
             sum += p.value();
             return this;
         }
 
-        @HostAccess.Export
         public void sumArray(List<Pair> pairs) {
             Object[] arr = pairs.toArray();
             assertNotNull("Array created", arr);
@@ -433,7 +426,6 @@ public class SLJavaInteropTest {
             }
         }
 
-        @HostAccess.Export
         public void sumArrayArray(List<List<Pair>> pairs) {
             Object[] arr = pairs.toArray();
             assertNotNull("Array created", arr);
@@ -443,7 +435,6 @@ public class SLJavaInteropTest {
             }
         }
 
-        @HostAccess.Export
         public void sumArrayMap(List<List<Map<String, Integer>>> pairs) {
             Object[] arr = pairs.toArray();
             assertNotNull("Array created", arr);
@@ -456,7 +447,6 @@ public class SLJavaInteropTest {
             }
         }
 
-        @HostAccess.Export
         public void sumMapArray(Map<String, List<Pair>> pairs) {
             assertEquals("Two elements", 2, pairs.size());
             Object one = pairs.get("one");

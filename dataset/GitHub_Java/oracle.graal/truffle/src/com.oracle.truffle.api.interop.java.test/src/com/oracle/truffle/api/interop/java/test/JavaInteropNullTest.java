@@ -38,11 +38,10 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.*;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
-@SuppressWarnings("deprecation")
 public class JavaInteropNullTest {
 
     @FunctionalInterface
@@ -54,7 +53,7 @@ public class JavaInteropNullTest {
     class TestRootNode extends RootNode {
 
         private final TruffleObject receiver;
-        @Child Node execute = Message.EXECUTE.createNode();
+        @Child Node execute = Message.createExecute(1).createNode();
 
         TestRootNode(TruffleObject receiver) {
             super(null);
