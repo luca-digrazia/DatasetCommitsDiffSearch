@@ -231,7 +231,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         Map<LLVMFunctionDescriptor, RootCallTarget> parsedFunctions = visit(model, facade);
         LLVMFunctionDescriptor mainFunction = searchFunction(parsedFunctions, "@main");
         RootCallTarget mainCallTarget = parsedFunctions.get(mainFunction);
-        int argParamCount = mainFunction.getParameterTypes().length;
+        int argParamCount = mainFunction.getLlvmParamTypes().length;
         RootNode globalFunction;
         LLVMNode[] staticInits = globalNodes.toArray(new LLVMNode[globalNodes.size()]);
         int argsCount = mainArgs.length + 1;
@@ -260,7 +260,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
             }
         }
         RootCallTarget globalFunctionRoot = Truffle.getRuntime().createCallTarget(globalFunction);
-        RootNode globalRootNode = factoryFacade.createGlobalRootNodeWrapping(globalFunctionRoot, mainFunction.getReturnType());
+        RootNode globalRootNode = factoryFacade.createGlobalRootNodeWrapping(globalFunctionRoot, mainFunction.getLlvmReturnType());
         RootCallTarget wrappedCallTarget = Truffle.getRuntime().createCallTarget(globalRootNode);
         return new ParserResult(wrappedCallTarget, parsedFunctions);
     }
