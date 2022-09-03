@@ -23,46 +23,36 @@
 package com.oracle.graal.compiler.loop;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.lir.cfg.*;
+import com.oracle.graal.nodes.*;
 
 
-public class LoopFragmentWhole extends LoopFragment {
+public class LoopFragmentInsideFrom extends LoopFragmentInside {
+    private final FixedNode point;
 
-    public LoopFragmentWhole(LoopEx loop) {
+    public LoopFragmentInsideFrom(LoopEx loop, FixedNode point) {
         super(loop);
+        this.point = point;
+    }
+
+    // duplicates lazily
+    public LoopFragmentInsideFrom(LoopFragmentInsideFrom original) {
+        super(original);
+        this.point = original.point();
+    }
+
+    public FixedNode point() {
+        return point;
     }
 
     @Override
-    public LoopFragmentWhole duplicate() {
-        // TODO (gd) do not forget to make a FULL loop : do not forget the forward end which is not part of the original loop stricto sensus
-        return null;
+    public LoopFragmentInsideFrom duplicate() {
+        return new LoopFragmentInsideFrom(this);
     }
 
     @Override
     public NodeIterable<Node> nodes() {
-        if (nodes == null) {
-            Loop lirLoop = loop().lirLoop();
-            nodes = LoopFragment.computeNodes(graph(), LoopFragment.toHirBlocks(lirLoop.blocks), LoopFragment.toHirBlocks(lirLoop.exits));
-        }
-        return nodes;
-    }
-
-    @Override
-    protected DuplicationReplacement getDuplicationReplacement() {
+        // TODO Auto-generated method stub
         return null;
-    }
-
-    @Override
-    protected void finishDuplication() {
-        // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public void insertBefore(LoopEx loop) {
-        // TODO Auto-generated method stub
-
     }
 }

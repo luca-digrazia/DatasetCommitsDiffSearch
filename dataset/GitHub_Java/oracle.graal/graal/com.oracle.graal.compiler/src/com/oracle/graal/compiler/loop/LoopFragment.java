@@ -227,11 +227,8 @@ public abstract class LoopFragment {
             newEarlyExit.setNext(newEnd);
             merge.setNext(next);
             FrameState exitState = earlyExit.stateAfter();
-            FrameState state = null;
-            if (exitState != null) {
-                state = exitState.duplicate();
-                merge.setStateAfter(state);
-            }
+            FrameState state = exitState.duplicate();
+            merge.setStateAfter(state);
 
             for (Node anchored : earlyExit.anchored().snapshot()) {
                 anchored.replaceFirstInput(earlyExit, merge);
@@ -255,9 +252,7 @@ public abstract class LoopFragment {
                 } else {
                     replaceWith = vpn.value();
                 }
-                if (state != null) {
-                    state.replaceFirstInput(vpn, replaceWith);
-                }
+                state.replaceFirstInput(vpn, replaceWith);
                 for (Node usage : vpn.usages().snapshot()) {
                     if (usage != exitState && !merge.isPhiAtMerge(usage)) {
                         usage.replaceFirstInput(vpn, replaceWith);
