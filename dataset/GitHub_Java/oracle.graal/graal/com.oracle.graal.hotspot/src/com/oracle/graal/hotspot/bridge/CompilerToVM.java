@@ -78,7 +78,7 @@ public interface CompilerToVM {
      * @param resultHolder the holder of the result is put in element 0 of this array
      * @return the metaspace Method result or 0 is there is no unique concrete method for {@code metaspaceMethod}
      */
-    long getUniqueConcreteMethod(long metaspaceMethod, HotSpotResolvedObjectType[] resultHolder);
+    long getUniqueConcreteMethod(long metaspaceMethod, HotSpotResolvedJavaType[] resultHolder);
 
     /**
      * Gets the invocation count for a method.
@@ -115,17 +115,17 @@ public interface CompilerToVM {
      *         {@code eagerResolve == true}
      * @throws LinkageError if {@code eagerResolve == true} and the resolution failed
      */
-    JavaType lookupType(String name, HotSpotResolvedObjectType accessingClass, boolean eagerResolve);
+    JavaType lookupType(String name, HotSpotResolvedJavaType accessingClass, boolean eagerResolve);
 
-    Object lookupConstantInPool(HotSpotResolvedObjectType pool, int cpi);
+    Object lookupConstantInPool(HotSpotResolvedJavaType pool, int cpi);
 
-    JavaMethod lookupMethodInPool(HotSpotResolvedObjectType pool, int cpi, byte opcode);
+    JavaMethod lookupMethodInPool(HotSpotResolvedJavaType pool, int cpi, byte opcode);
 
-    JavaType lookupTypeInPool(HotSpotResolvedObjectType pool, int cpi);
+    JavaType lookupTypeInPool(HotSpotResolvedJavaType pool, int cpi);
 
-    JavaField lookupFieldInPool(HotSpotResolvedObjectType pool, int cpi, byte opcode);
+    JavaField lookupFieldInPool(HotSpotResolvedJavaType pool, int cpi, byte opcode);
 
-    void lookupReferencedTypeInPool(HotSpotResolvedObjectType pool, int cpi, byte opcode);
+    void lookupReferencedTypeInPool(HotSpotResolvedJavaType pool, int cpi, byte opcode);
 
     /**
      * Installs the result of a compilation into the code cache.
@@ -140,15 +140,15 @@ public interface CompilerToVM {
 
     void initializeConfiguration(HotSpotVMConfig config);
 
-    JavaMethod resolveMethod(HotSpotResolvedObjectType klass, String name, String signature);
+    JavaMethod resolveMethod(HotSpotResolvedJavaType klass, String name, String signature);
 
-    boolean isTypeInitialized(HotSpotResolvedObjectType klass);
+    boolean isTypeInitialized(HotSpotResolvedJavaType klass);
 
-    void initializeType(HotSpotResolvedObjectType klass);
+    void initializeType(HotSpotResolvedJavaType klass);
 
     ResolvedJavaType getResolvedType(Class<?> javaClass);
 
-    HotSpotResolvedJavaField[] getInstanceFields(HotSpotResolvedObjectType klass);
+    HotSpotResolvedJavaField[] getInstanceFields(HotSpotResolvedJavaType klass);
 
     /**
      * Gets the compiled code size for a method.
@@ -165,8 +165,8 @@ public interface CompilerToVM {
      * @param resultHolder the holder of the result is put in element 0 of this array
      * @return the metaspace Method result for {@code reflectionMethod}
      */
-    long getMetaspaceMethod(Method reflectionMethod, HotSpotResolvedObjectType[] resultHolder);
-    long getMetaspaceConstructor(Constructor reflectionConstructor, HotSpotResolvedObjectType[] resultHolder);
+    long getMetaspaceMethod(Method reflectionMethod, HotSpotResolvedJavaType[] resultHolder);
+    long getMetaspaceConstructor(Constructor reflectionConstructor, HotSpotResolvedJavaType[] resultHolder);
 
     HotSpotResolvedJavaField getJavaField(Field reflectionField);
 
@@ -186,5 +186,5 @@ public interface CompilerToVM {
 
     String decodePC(long pc);
 
-    long getPrototypeMarkWord(HotSpotResolvedObjectType hotSpotResolvedJavaType);
+    long getPrototypeMarkWord(HotSpotResolvedJavaType hotSpotResolvedJavaType);
 }

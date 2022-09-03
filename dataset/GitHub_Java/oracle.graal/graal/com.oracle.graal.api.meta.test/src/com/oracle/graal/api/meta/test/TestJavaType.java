@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.api.meta.test;
 
+import static com.oracle.graal.api.meta.test.TestMetaAccessProvider.*;
 import static org.junit.Assert.*;
 
 import org.junit.*;
@@ -31,7 +32,7 @@ import com.oracle.graal.api.meta.*;
 /**
  * Tests for {@link JavaType}.
  */
-public class TestJavaType extends TypeUniverse {
+public class TestJavaType {
 
     public TestJavaType() {
     }

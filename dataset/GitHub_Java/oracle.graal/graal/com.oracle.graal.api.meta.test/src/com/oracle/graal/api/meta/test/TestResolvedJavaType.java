@@ -243,22 +243,20 @@ public class TestResolvedJavaType {
     static void checkConcreteSubtype(ResolvedJavaType type, Class expected) {
         ResolvedJavaType subtype = type.findUniqueConcreteSubtype();
         if (subtype == null) {
-            // findUniqueConcreteSubtype() is conservative
-        } else {
-            if (expected == null) {
-                assertNull(subtype);
-            } else {
-                assertTrue(subtype.isClass(expected));
-            }
+            // The findUniqueConcreteSubtype() method is conservative
+            return;
         }
 
+        if (expected == null) {
+            assertNull(subtype);
+        } else {
+            assertTrue(subtype.isClass(expected));
+        }
         if (!type.isArrayClass()) {
             ResolvedJavaType arrayType = type.getArrayClass();
             ResolvedJavaType arraySubtype = arrayType.findUniqueConcreteSubtype();
             if (arraySubtype != null) {
                 assertEquals(arraySubtype, arrayType);
-            } else {
-                // findUniqueConcreteSubtype() method is conservative
             }
         }
     }
