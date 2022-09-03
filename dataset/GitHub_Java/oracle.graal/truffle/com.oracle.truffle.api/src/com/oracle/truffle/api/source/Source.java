@@ -24,6 +24,7 @@
  */
 package com.oracle.truffle.api.source;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -34,8 +35,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.spi.FileTypeDetector;
 import java.util.Objects;
 
@@ -534,23 +533,21 @@ public abstract class Source {
         fileCacheEnabled = enabled;
     }
 
-    static String read(File file) throws IOException {
-        return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-    }
-
     static String read(Reader reader) throws IOException {
+        final BufferedReader bufferedReader = new BufferedReader(reader);
         final StringBuilder builder = new StringBuilder();
         final char[] buffer = new char[1024];
+
         try {
             while (true) {
-                final int n = reader.read(buffer);
+                final int n = bufferedReader.read(buffer);
                 if (n == -1) {
                     break;
                 }
                 builder.append(buffer, 0, n);
             }
         } finally {
-            reader.close();
+            bufferedReader.close();
         }
         return builder.toString();
     }
@@ -1252,7 +1249,7 @@ public abstract class Source {
             Content holder;
             try {
                 if (origin instanceof File) {
-                    holder = buildFile(content == null);
+                    holder = buildFile();
                 } else if (origin instanceof Reader) {
                     holder = buildReader();
                 } else if (origin instanceof URL) {
@@ -1277,16 +1274,13 @@ public abstract class Source {
             }
         }
 
-        private Content buildFile(boolean read) throws IOException {
+        private Content buildFile() throws IOException {
             final File file = (File) origin;
             File absoluteFile = file.getCanonicalFile();
             FileSourceImpl fileSource = new FileSourceImpl(
                             absoluteFile,
                             name == null ? file.getName() : name,
                             path == null ? absoluteFile.getPath() : path);
-            if (read) {
-                fileSource.readCode();
-            }
             return fileSource;
         }
 
