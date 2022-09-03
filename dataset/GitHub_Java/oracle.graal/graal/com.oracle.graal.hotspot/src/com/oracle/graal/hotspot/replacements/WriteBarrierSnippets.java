@@ -36,6 +36,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
@@ -345,7 +346,7 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("object", writeBarrier.getObject());
             args.add("location", writeBarrier.getLocation());
             args.addConst("usePrecise", writeBarrier.usePrecise());
-            args.addConst("alwaysNull", writeBarrier.alwaysNull());
+            args.addConst("alwaysNull", ObjectStamp.isObjectAlwaysNull(writeBarrier.getValue()));
             template(args).instantiate(providers.getMetaAccess(), writeBarrier, DEFAULT_REPLACER, args);
         }
 
@@ -385,7 +386,7 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("value", writeBarrierPost.getValue());
             args.add("location", writeBarrierPost.getLocation());
             args.addConst("usePrecise", writeBarrierPost.usePrecise());
-            args.addConst("alwaysNull", writeBarrierPost.alwaysNull());
+            args.addConst("alwaysNull", ObjectStamp.isObjectAlwaysNull(writeBarrierPost.getValue()));
             args.addConst("trace", traceBarrier());
             template(args).instantiate(providers.getMetaAccess(), writeBarrierPost, DEFAULT_REPLACER, args);
         }
