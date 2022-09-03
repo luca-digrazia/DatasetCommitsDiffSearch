@@ -251,9 +251,6 @@ public final class PolyglotLauncher extends Launcher {
                 } catch (PolyglotException e) {
                     if (e.isExit()) {
                         throw exit(e.getExitStatus());
-                    } else if (e.isGuestException()) {
-                        e.printStackTrace();
-                        throw exit(1);
                     } else {
                         throw abort(e);
                     }

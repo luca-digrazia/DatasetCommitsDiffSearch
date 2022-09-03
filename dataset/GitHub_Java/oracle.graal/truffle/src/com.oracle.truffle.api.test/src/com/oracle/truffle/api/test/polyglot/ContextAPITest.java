@@ -98,18 +98,14 @@ public class ContextAPITest {
     }
 
     @Test
-    public void testInstrumentOption() {
+    public void testSetOptions() {
         // Instrument options can be set to context builders with implicit engine:
         Context.Builder contextBuilder = Context.newBuilder();
         contextBuilder.option("optiontestinstr1.StringOption1", "Hello");
         contextBuilder.build();
 
-    }
-
-    @Test
-    public void testInstrumentOptionAsContext() {
         // Instrument options are refused by context builders with an existing engine:
-        Context.Builder contextBuilder = Context.newBuilder();
+        contextBuilder = Context.newBuilder();
         contextBuilder.engine(Engine.create());
         contextBuilder.option("optiontestinstr1.StringOption1", "Hello");
         try {
@@ -117,24 +113,8 @@ public class ContextAPITest {
             fail();
         } catch (IllegalArgumentException ex) {
             // O.K.
-            assertEquals("Option optiontestinstr1.StringOption1 is an engine option. Engine level options can only be configured for contexts without a shared engine set. " +
-                            "To resolve this, configure the option when creating the Engine or create a context without a shared engine.", ex.getMessage());
+            assertEquals("Option optiontestinstr1.StringOption1 is supported, but cannot be configured for contexts with a shared engine set." +
+                            " To resolve this, configure the option when creating the Engine.", ex.getMessage());
         }
     }
-
-    @Test
-    public void testInvalidEngineOptionAsContext() {
-        // Instrument options are refused by context builders with an existing engine:
-        Context.Builder contextBuilder = Context.newBuilder();
-        contextBuilder.engine(Engine.create());
-        contextBuilder.option("optiontestinstr1.StringOption1+Typo", "100");
-        try {
-            contextBuilder.build();
-            fail();
-        } catch (IllegalArgumentException ex) {
-            // O.K.
-            assertTrue(ex.getMessage().startsWith("Could not find option with name optiontestinstr1.StringOption1+Typo."));
-        }
-    }
-
 }
