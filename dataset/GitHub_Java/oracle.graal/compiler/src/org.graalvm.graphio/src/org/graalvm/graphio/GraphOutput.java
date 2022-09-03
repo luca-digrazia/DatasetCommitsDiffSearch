@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -121,7 +121,6 @@ public final class GraphOutput<G, M> implements Closeable {
         private GraphBlocks<G, ?, N> blocks = DefaultGraphBlocks.empty();
         private int major = 4;
         private int minor = 0;
-        private boolean autoFlush;
 
         Builder(GraphStructure<G, N, ?, ?> structure) {
             this.structure = structure;
@@ -140,11 +139,6 @@ public final class GraphOutput<G, M> implements Closeable {
         public Builder<G, N, M> protocolVersion(int majorVersion, int minorVersion) {
             this.major = majorVersion;
             this.minor = minorVersion;
-            return this;
-        }
-
-        public Builder<G, N, M> autoFlush(boolean autoFlush) {
-            this.autoFlush = autoFlush;
             return this;
         }
 
@@ -206,14 +200,7 @@ public final class GraphOutput<G, M> implements Closeable {
          * @throws IOException if something goes wrong when writing to the channel
          */
         public GraphOutput<G, M> build(WritableByteChannel channel) throws IOException {
-            return buildImpl(elementsAndLocations, channel, false);
-        }
-        
-        public GraphOutput<G, M> buildShared(WritableByteChannel channel) throws IOException {
-            if (!autoFlush) {
-                throw new IllegalStateException("AutoFlush has to be set.");
-            }
-            return buildImpl(elementsAndLocations, channel, true);
+            return buildImpl(elementsAndLocations, channel);
         }
 
         /**
@@ -236,10 +223,10 @@ public final class GraphOutput<G, M> implements Closeable {
             return buildImpl(elementsAndLocations, parent);
         }
 
-        private <L, P> GraphOutput<G, M> buildImpl(ElementsAndLocations<M, L, P> e, WritableByteChannel channel, boolean shared) throws IOException {
+        private <L, P> GraphOutput<G, M> buildImpl(ElementsAndLocations<M, L, P> e, WritableByteChannel channel) throws IOException {
             // @formatter:off
             ProtocolImpl<G, N, ?, ?, ?, M, ?, ?, ?, ?> p = new ProtocolImpl<>(
-                major, minor, autoFlush, !shared, structure, types, blocks,
+                major, minor, structure, types, blocks,
                 e == null ? null : e.elements,
                 e == null ? null : e.locations, channel
             );
