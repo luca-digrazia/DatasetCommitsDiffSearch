@@ -23,21 +23,22 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
-import static com.oracle.truffle.espresso.meta.Meta.meta;
-
 import java.io.InputStream;
 import java.io.PrintStream;
-import java.util.Map;
 import java.util.Properties;
 
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.EspressoOptions;
+import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
+import com.oracle.truffle.espresso.runtime.StaticObjectWrapper;
+
+import static com.oracle.truffle.espresso.meta.Meta.meta;
 
 @EspressoIntrinsics
 public class Target_java_lang_System {
@@ -52,7 +53,6 @@ public class Target_java_lang_System {
     @Intrinsic
     public static @Type(Properties.class) StaticObject initProperties(@Type(Properties.class) StaticObject props) {
         EspressoContext context = EspressoLanguage.getCurrentContext();
-
         final String[] importedProps = new String[]{
                         "java.version",
                         "java.vendor",
@@ -76,10 +76,8 @@ public class Target_java_lang_System {
                         "file.encoding",
                         "java.library.path",
                         "sun.boot.library.path",
-                        // FIXME(peterssen): Only needed by some tests/examples. Remove once
-                        // dictionary-like options are merged.
-                        "playground.library",
-                        "native.test.lib"
+                        // TODO(peterssen): Remove, only for HelloJNI tests
+                        "playground.library"
         };
 
         Meta.Method.WithInstance setProperty = meta(props).method("setProperty", Object.class, String.class, String.class);
@@ -93,14 +91,13 @@ public class Target_java_lang_System {
                 propValue = System.getProperty(prop);
             }
             if (propValue != null) {
-                setProperty.invoke(prop, propValue);
+                StaticObject guestPropKey = context.getMeta().toGuest(prop);
+                StaticObject guestPropValue = context.getMeta().toGuest(propValue);
+                setProperty.invokeDirect(guestPropKey, guestPropValue);
             }
         }
 
         // setProperty.invoke("sun.misc.URLClassPath.debug", "true");
-        for (Map.Entry<String, String> entry : EspressoLanguage.getCurrentContext().getEnv().getOptions().get(EspressoOptions.Properties).entrySet()) {
-            setProperty.invoke(entry.getKey(), entry.getValue());
-        }
 
         return props;
     }
@@ -132,8 +129,9 @@ public class Target_java_lang_System {
                 assert dest.getClass().isArray();
                 System.arraycopy(src, srcPos, dest, destPos, length);
             }
-        } catch (Exception e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+        } catch (Throwable e) {
+            // TODO(peterssen): Throw guest exception.
+            throw e;
         }
     }
 

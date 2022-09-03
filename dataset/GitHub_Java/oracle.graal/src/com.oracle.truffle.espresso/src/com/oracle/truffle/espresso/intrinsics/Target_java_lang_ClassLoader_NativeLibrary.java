@@ -2,13 +2,14 @@ package com.oracle.truffle.espresso.intrinsics;
 
 import static com.oracle.truffle.espresso.meta.Meta.meta;
 
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.jni.JniVersion;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
@@ -20,7 +21,9 @@ interface NativeLibrary {
 public class Target_java_lang_ClassLoader_NativeLibrary {
 
     private static TruffleObject loadLibrary(String lib) {
-        return com.oracle.truffle.espresso.jni.NativeLibrary.loadLibrary(lib);
+        Source source = Source.newBuilder("nfi", String.format("load(RTLD_LAZY) '%s'", lib), "loadLibrary").build();
+        CallTarget target = EspressoLanguage.getCurrentContext().getEnv().parse(source);
+        return (TruffleObject) target.call();
     }
 
     @Intrinsic(hasReceiver = true)
@@ -34,9 +37,10 @@ public class Target_java_lang_ClassLoader_NativeLibrary {
             throw meta(self).getMeta().throwEx(UnsatisfiedLinkError.class);
         }
         long handle = EspressoLanguage.getCurrentContext().addNativeLibrary(lib);
+        // System.err.println("Loading: " + hostName + " " + handle);
         // TODO(peterssen): Should call JNI_OnLoad, if it exists and get the JNI version, check if
         // compatible. Setting the default version as a workaround.
-        meta(self).field("jniVersion").set(JniVersion.JNI_VERSION_ESPRESSO);
+        meta(self).field("jniVersion").set(0x00010001);
         meta(self).field("handle").set(handle);
         meta(self).field("loaded").set(true);
     }
