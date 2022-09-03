@@ -132,11 +132,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
                         throw new GraalInternalError("Unsupported value for DebugSummaryValue: %s", summary);
                 }
             }
-            if (Debug.areUnconditionalMetricsEnabled() || Debug.areUnconditionalTimersEnabled() || (Debug.isEnabled() && areMetricsOrTimersEnabled())) {
-                // This must be created here to avoid loading the DebugValuesPrinter class
-                // during shutdown() which in turn can cause a deadlock
-                debugValuesPrinter = new DebugValuesPrinter();
-            }
         }
 
         // Complete initialization of backends
@@ -252,7 +247,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
 
     protected final HotSpotVMConfig config;
     private final HotSpotBackend hostBackend;
-    private DebugValuesPrinter debugValuesPrinter;
 
     /**
      * Graal mirrors are stored as a {@link ClassValue} associated with the {@link Class} of the
@@ -525,20 +519,38 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
         }
     }
 
-    @Override
-    public <T> T iterateFrames(ResolvedJavaMethod[] initialMethods, ResolvedJavaMethod[] matchingMethods, int initialSkip, InspectedFrameVisitor<T> visitor) {
+    public Iterable<InspectedFrame> getStackTrace(ResolvedJavaMethod[] initialMethods, ResolvedJavaMethod[] matchingMethods, int initialSkip) {
         final long[] initialMetaMethods = toMeta(initialMethods);
         final long[] matchingMetaMethods = toMeta(matchingMethods);
+        class StackFrameIterator implements Iterator<InspectedFrame> {
 
-        HotSpotStackFrameReference current = compilerToVm.getNextStackFrame(null, initialMetaMethods, initialSkip);
-        while (current != null) {
-            T result = visitor.visitFrame(current);
-            if (result != null) {
-                return result;
+            private HotSpotStackFrameReference current = compilerToVm.getNextStackFrame(null, initialMetaMethods, initialSkip);
+            // we don't want to read ahead if hasNext isn't called
+            private boolean advanced = true;
+
+            public boolean hasNext() {
+                update();
+                return current != null;
             }
-            current = compilerToVm.getNextStackFrame(current, matchingMetaMethods, 0);
+
+            public InspectedFrame next() {
+                update();
+                advanced = false;
+                return current;
+            }
+
+            private void update() {
+                if (!advanced) {
+                    current = compilerToVm.getNextStackFrame(current, matchingMetaMethods, 0);
+                    advanced = true;
+                }
+            }
         }
-        return null;
+        return new Iterable<InspectedFrame>() {
+            public Iterator<InspectedFrame> iterator() {
+                return new StackFrameIterator();
+            }
+        };
     }
 
     private static long[] toMeta(ResolvedJavaMethod[] methods) {
@@ -587,9 +599,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
      */
     @SuppressWarnings("unused")
     private void shutdown() throws Exception {
-        if (debugValuesPrinter != null) {
-            debugValuesPrinter.printDebugValues(ResetDebugValuesAfterBootstrap.getValue() ? "application" : null, false);
-        }
+        new DebugValuesPrinter().printDebugValues(ResetDebugValuesAfterBootstrap.getValue() ? "application" : null, false);
         phaseTransition("final");
 
         SnippetCounter.printGroups(TTY.out().out());
