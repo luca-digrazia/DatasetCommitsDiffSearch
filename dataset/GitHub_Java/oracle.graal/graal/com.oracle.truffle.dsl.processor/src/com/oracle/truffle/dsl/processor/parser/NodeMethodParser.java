@@ -42,8 +42,7 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
     }
 
     protected ParameterSpec createValueParameterSpec(NodeExecutionData execution) {
-        NodeData childNode = execution.getChild().getNodeData();
-        ParameterSpec spec = new ParameterSpec(execution.getName(), nodeTypeMirrors(childNode), nodeTypeIdentifiers(childNode));
+        ParameterSpec spec = new ParameterSpec(execution.getName(), nodeTypeMirrors(execution.getChild().getNodeData()), nodeTypeIdentifiers(execution.getChild().getNodeData()));
         spec.setExecution(execution);
         return spec;
     }

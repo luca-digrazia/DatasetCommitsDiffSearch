@@ -25,7 +25,6 @@ package com.oracle.truffle.dsl.processor.parser;
 import java.lang.annotation.*;
 
 import javax.lang.model.element.*;
-import javax.lang.model.type.*;
 
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.dsl.processor.*;
@@ -40,17 +39,35 @@ class TypeCastParser extends TypeSystemMethodParser<TypeCastData> {
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        TypeMirror targetTypeMirror = ElementUtils.getAnnotationValue(TypeMirror.class, mirror, "value");
-        MethodSpec spec = new MethodSpec(new ParameterSpec("returnType", targetTypeMirror));
-        spec.addRequired(new ParameterSpec("value", getTypeSystem().getGenericType()));
+        TypeData targetType = findTypeByMethodName(method.getSimpleName().toString(), "as");
+        if (targetType == null) {
+            return null;
+        }
+        MethodSpec spec = new MethodSpec(new ParameterSpec("returnType", targetType.getPrimitiveType()));
+        spec.addRequired(new ParameterSpec("value", getTypeSystem().getPrimitiveTypeMirrors(), getTypeSystem().getTypeIdentifiers()));
         return spec;
     }
 
     @Override
     public TypeCastData create(TemplateMethod method, boolean invalid) {
-        TypeData targetType = resolveCastOrCheck(method);
-        TypeData sourceType = getTypeSystem().getGenericTypeData();
-        return new TypeCastData(method, sourceType, targetType);
+        if (invalid) {
+            return new TypeCastData(method, null, null);
+        }
+
+        TypeData targetType = findTypeByMethodName(method, "as");
+        Parameter parameter = method.findParameter("valueValue");
+
+        TypeData sourceType = null;
+        if (parameter != null) {
+            sourceType = getTypeSystem().findTypeData(parameter.getType());
+        }
+        TypeCastData cast = new TypeCastData(method, sourceType, targetType);
+
+        if (targetType != method.getReturnType().getTypeSystemType()) {
+            cast.addError("Cast type %s does not match to the returned type %s.", ElementUtils.getSimpleName(targetType.getPrimitiveType()),
+                            method.getReturnType() != null ? ElementUtils.getSimpleName(method.getReturnType().getTypeSystemType().getPrimitiveType()) : null);
+        }
+        return cast;
     }
 
     @Override

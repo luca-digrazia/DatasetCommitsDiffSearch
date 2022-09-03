@@ -48,7 +48,7 @@ public class ImplicitCastParser extends TypeSystemMethodParser<ImplicitCastData>
         List<TypeMirror> types = getTypeSystem().getPrimitiveTypeMirrors();
         Set<String> identifiers = getTypeSystem().getTypeIdentifiers();
         MethodSpec spec = new MethodSpec(new ParameterSpec("target", types, identifiers));
-        spec.addRequired(new ParameterSpec("source", types, identifiers)).setSignature(true);
+        spec.addRequired(new ParameterSpec("source", types, identifiers));
         return spec;
     }
 
@@ -66,10 +66,6 @@ public class ImplicitCastParser extends TypeSystemMethodParser<ImplicitCastData>
 
         if (targetType.equals(sourceType)) {
             method.addError("Target type and source type of an @%s must not be the same type.", ImplicitCast.class.getSimpleName());
-        }
-
-        if (!method.getMethod().getModifiers().contains(Modifier.STATIC)) {
-            method.addError("@%s annotated method %s must be static.", ImplicitCast.class.getSimpleName(), method.getMethodName());
         }
 
         return new ImplicitCastData(method, sourceType, targetType);

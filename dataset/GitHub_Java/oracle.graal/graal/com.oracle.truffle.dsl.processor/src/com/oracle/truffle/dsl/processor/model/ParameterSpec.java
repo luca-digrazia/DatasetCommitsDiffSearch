@@ -28,6 +28,7 @@ import javax.lang.model.type.*;
 
 import com.oracle.truffle.dsl.processor.java.*;
 import com.oracle.truffle.dsl.processor.model.MethodSpec.TypeDef;
+import com.oracle.truffle.dsl.processor.parser.*;
 
 public class ParameterSpec {
 
@@ -46,16 +47,6 @@ public class ParameterSpec {
     public ParameterSpec(String name, List<TypeMirror> allowedTypes, Set<String> typeIdentifiers) {
         this.name = name;
         this.allowedTypes = allowedTypes;
-        this.allowedTypesIdentifier = typeIdentifiers;
-    }
-
-    public ParameterSpec(String name, List<TypeMirror> allowedTypes) {
-        this.name = name;
-        this.allowedTypes = allowedTypes;
-        Set<String> typeIdentifiers = new HashSet<>();
-        for (TypeMirror type : allowedTypes) {
-            typeIdentifiers.add(ElementUtils.getUniqueIdentifier(type));
-        }
         this.allowedTypesIdentifier = typeIdentifiers;
     }
 

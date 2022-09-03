@@ -38,15 +38,22 @@ class TypeCheckParser extends TypeSystemMethodParser<TypeCheckData> {
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
+        TypeData targetType = findTypeByMethodName(method.getSimpleName().toString(), "is");
+        if (targetType == null) {
+            return null;
+        }
         MethodSpec spec = new MethodSpec(new ParameterSpec("returnType", getContext().getType(boolean.class)));
-        spec.addRequired(new ParameterSpec("value", getTypeSystem().getGenericType()));
+        spec.addRequired(new ParameterSpec("value", getTypeSystem().getPrimitiveTypeMirrors(), getTypeSystem().getTypeIdentifiers()));
         return spec;
     }
 
     @Override
     public TypeCheckData create(TemplateMethod method, boolean invalid) {
-        TypeData targetType = resolveCastOrCheck(method);
-        return new TypeCheckData(method, targetType, targetType);
+        TypeData checkedType = findTypeByMethodName(method, "is");
+        assert checkedType != null;
+        Parameter parameter = method.findParameter("valueValue");
+        assert parameter != null;
+        return new TypeCheckData(method, checkedType, parameter.getTypeSystemType());
     }
 
     @Override
