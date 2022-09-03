@@ -49,11 +49,11 @@ import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 
 final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAllocationPhase {
 
-    private static final IntervalPredicate spilledIntervals = new TraceLinearScan.IntervalPredicate() {
+    private static final IntervalPredicate mustStoreAtDefinition = new TraceLinearScan.IntervalPredicate() {
 
         @Override
         public boolean apply(TraceInterval i) {
-            return i.isSplitParent() && SpillState.IN_MEMORY.contains(i.spillState());
+            return i.isSplitParent() && i.spillState() == SpillState.StoreAtDefinition;
         }
     };
 
@@ -77,7 +77,7 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
              * collect all intervals that must be stored after their definition. The list is sorted
              * by Interval.spillDefinitionPos.
              */
-            TraceInterval interval = allocator.createUnhandledList(spilledIntervals);
+            TraceInterval interval = allocator.createUnhandledList(mustStoreAtDefinition);
             if (DetailedAsserts.getValue()) {
                 checkIntervals(interval);
             }
@@ -128,7 +128,7 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
                              * interval.
                              */
                             assert interval == TraceInterval.EndMarker || interval.spillDefinitionPos() >= opId : "invalid order";
-                            assert interval == TraceInterval.EndMarker || (interval.isSplitParent() && SpillState.IN_MEMORY.contains(interval.spillState())) : "invalid interval";
+                            assert interval == TraceInterval.EndMarker || (interval.isSplitParent() && interval.spillState() == SpillState.StoreAtDefinition) : "invalid interval";
 
                             while (interval != TraceInterval.EndMarker && interval.spillDefinitionPos() == opId) {
                                 if (!interval.canMaterialize()) {
