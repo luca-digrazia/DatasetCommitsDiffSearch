@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,33 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
+import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
+import static com.oracle.graal.lir.LIRValueUtil.isVariable;
+import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static jdk.vm.ci.code.ValueUtil.isIllegal;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.util.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.util.IntList;
+import com.oracle.graal.compiler.common.util.Util;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.Variable;
+
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.meta.ValueKind;
 
 /**
  * Represents an interval in the {@linkplain LinearScan linear scan register allocator}.
@@ -48,7 +63,7 @@ public final class Interval {
         public final Interval first;
         public final Interval second;
 
-        public Pair(Interval first, Interval second) {
+        Pair(Interval first, Interval second) {
             this.first = first;
             this.second = second;
         }
@@ -74,7 +89,7 @@ public final class Interval {
          */
         public Interval stack;
 
-        public RegisterBindingLists(Interval fixed, Interval any, Interval stack) {
+        RegisterBindingLists(Interval fixed, Interval any, Interval stack) {
             this.fixed = fixed;
             this.any = any;
             this.stack = stack;
@@ -95,7 +110,7 @@ public final class Interval {
                 case Stack:
                     return stack;
             }
-            throw GraalInternalError.shouldNotReachHere();
+            throw GraalError.shouldNotReachHere();
         }
 
         /**
@@ -290,7 +305,7 @@ public final class Interval {
     /**
      * Constants used in optimization of spilling of an interval.
      */
-    enum SpillState {
+    public enum SpillState {
         /**
          * Starting state of calculation: no definition found yet.
          */
@@ -329,7 +344,9 @@ public final class Interval {
          * The interval has more than one definition (e.g. resulting from phi moves), so stores to
          * memory are not optimized.
          */
-        NoOptimization
+        NoOptimization;
+
+        public static final EnumSet<SpillState> ALWAYS_IN_MEMORY = EnumSet.of(SpillInDominator, StoreAtDefinition, StartInMemory);
     }
 
     /**
@@ -452,12 +469,12 @@ public final class Interval {
     /**
      * The stack slot to which all splits of this interval are spilled if necessary.
      */
-    private StackSlotValue spillSlot;
+    private AllocatableValue spillSlot;
 
     /**
      * The kind of this interval.
      */
-    private LIRKind kind;
+    private ValueKind<?> kind;
 
     /**
      * The head of the list of ranges describing this interval. This list is sorted by
@@ -529,17 +546,17 @@ public final class Interval {
      * The value with which a spilled child interval can be re-materialized. Currently this must be
      * a Constant.
      */
-    private JavaConstant materializedValue;
+    private Constant materializedValue;
 
     /**
-     * The number of times {@link #addMaterializationValue(JavaConstant)} is called.
+     * The number of times {@link #addMaterializationValue(Constant)} is called.
      */
     private int numMaterializationValuesAdded;
 
     void assignLocation(AllocatableValue newLocation) {
         if (isRegister(newLocation)) {
             assert this.location == null : "cannot re-assign location for " + this;
-            if (newLocation.getLIRKind().equals(LIRKind.Illegal) && !kind.equals(LIRKind.Illegal)) {
+            if (newLocation.getValueKind().equals(LIRKind.Illegal) && !kind.equals(LIRKind.Illegal)) {
                 this.location = asRegister(newLocation).asValue(kind);
                 return;
             }
@@ -548,8 +565,8 @@ public final class Interval {
         } else {
             assert this.location == null || isRegister(this.location) || (isVirtualStackSlot(this.location) && isStackSlot(newLocation)) : "cannot re-assign location for " + this;
             assert isStackSlotValue(newLocation);
-            assert !newLocation.getLIRKind().equals(LIRKind.Illegal);
-            assert newLocation.getLIRKind().equals(this.kind);
+            assert !newLocation.getValueKind().equals(LIRKind.Illegal);
+            assert newLocation.getValueKind().equals(this.kind);
         }
         this.location = newLocation;
     }
@@ -562,12 +579,12 @@ public final class Interval {
         return location;
     }
 
-    public LIRKind kind() {
+    public ValueKind<?> kind() {
         assert !isRegister(operand) : "cannot access type for fixed interval";
         return kind;
     }
 
-    void setKind(LIRKind kind) {
+    public void setKind(ValueKind<?> kind) {
         assert isRegister(operand) || this.kind().equals(LIRKind.Illegal) || this.kind().equals(kind) : "overwriting existing type";
         this.kind = kind;
     }
@@ -576,7 +593,7 @@ public final class Interval {
         return first;
     }
 
-    int from() {
+    public int from() {
         return first.from;
     }
 
@@ -592,11 +609,11 @@ public final class Interval {
         return usePosList.size();
     }
 
-    void setLocationHint(Interval interval) {
+    public void setLocationHint(Interval interval) {
         locationHint = interval;
     }
 
-    boolean isSplitParent() {
+    public boolean isSplitParent() {
         return splitParent == this;
     }
 
@@ -615,11 +632,12 @@ public final class Interval {
     /**
      * Gets the canonical spill slot for this interval.
      */
-    StackSlotValue spillSlot() {
+    public AllocatableValue spillSlot() {
         return splitParent().spillSlot;
     }
 
-    void setSpillSlot(StackSlotValue slot) {
+    public void setSpillSlot(AllocatableValue slot) {
+        assert isStackSlotValue(slot);
         assert splitParent().spillSlot == null || (isVirtualStackSlot(splitParent().spillSlot) && isStackSlot(slot)) : "connot overwrite existing spill slot";
         splitParent().spillSlot = slot;
     }
@@ -645,24 +663,23 @@ public final class Interval {
         return splitParent().spillState;
     }
 
-    int spillDefinitionPos() {
+    public int spillDefinitionPos() {
         return splitParent().spillDefinitionPos;
     }
 
-    void setSpillState(SpillState state) {
+    public void setSpillState(SpillState state) {
         assert state.ordinal() >= spillState().ordinal() : "state cannot decrease";
         splitParent().spillState = state;
     }
 
-    void setSpillDefinitionPos(int pos) {
-        assert spillState() == SpillState.SpillInDominator || spillDefinitionPos() == -1 : "cannot set the position twice";
+    public void setSpillDefinitionPos(int pos) {
+        assert spillState() == SpillState.SpillInDominator || spillState() == SpillState.NoDefinitionFound || spillDefinitionPos() == -1 : "cannot set the position twice";
         splitParent().spillDefinitionPos = pos;
     }
 
     // returns true if this interval has a shadow copy on the stack that is always correct
-    boolean alwaysInMemory() {
-        return (splitParent().spillState == SpillState.SpillInDominator || splitParent().spillState == SpillState.StoreAtDefinition || splitParent().spillState == SpillState.StartInMemory) &&
-                        !canMaterialize();
+    public boolean alwaysInMemory() {
+        return SpillState.ALWAYS_IN_MEMORY.contains(spillState()) && !canMaterialize();
     }
 
     void removeFirstUsePos() {
@@ -737,7 +754,7 @@ public final class Interval {
     /**
      * Sets the value which is used for re-materialization.
      */
-    void addMaterializationValue(JavaConstant value) {
+    public void addMaterializationValue(Constant value) {
         if (numMaterializationValuesAdded == 0) {
             materializedValue = value;
         } else {
@@ -758,7 +775,7 @@ public final class Interval {
     /**
      * Returns a value which can be moved to a register instead of a restore-move from stack.
      */
-    public JavaConstant getMaterializedValue() {
+    public Constant getMaterializedValue() {
         return splitParent().materializedValue;
     }
 
@@ -873,16 +890,18 @@ public final class Interval {
                 Interval lastChild = splitChildren.get(splitChildren.size() - 1);
                 msg.append(" (first = ").append(firstChild).append(", last = ").append(lastChild).append(")");
             }
-            throw new GraalInternalError("Linear Scan Error: %s", msg);
+            throw new GraalError("Linear Scan Error: %s", msg);
         }
 
         if (!splitChildren.isEmpty()) {
             for (Interval interval : splitChildren) {
                 if (interval != result && interval.from() <= opId && opId < interval.to() + toOffset) {
-                    TTY.println(String.format("two valid result intervals found for opId %d: %d and %d", opId, result.operandNumber, interval.operandNumber));
-                    TTY.println(result.logString(allocator));
-                    TTY.println(interval.logString(allocator));
-                    throw new BailoutException("two valid result intervals found");
+                    /*
+                     * Should not happen: Try another compilation as it is very unlikely to happen
+                     * again.
+                     */
+                    throw new GraalError("two valid result intervals found for opId %d: %d and %d\n%s\n", opId, result.operandNumber, interval.operandNumber,
+                                    result.logString(allocator), interval.logString(allocator));
                 }
             }
         }
@@ -1011,7 +1030,7 @@ public final class Interval {
     int previousUsage(RegisterPriority minRegisterPriority, int from) {
         assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
-        int prev = 0;
+        int prev = -1;
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             int usePos = usePosList.usePos(i);
             if (usePos > from) {
@@ -1024,8 +1043,8 @@ public final class Interval {
         return prev;
     }
 
-    void addUsePos(int pos, RegisterPriority registerPriority) {
-        assert covers(pos, LIRInstruction.OperandMode.USE) : "use position not covered by live range";
+    public void addUsePos(int pos, RegisterPriority registerPriority) {
+        assert covers(pos, LIRInstruction.OperandMode.USE) : String.format("use position %d not covered by live range of interval %s", pos, this);
 
         // do not add use positions for precolored intervals because they are never used
         if (registerPriority != RegisterPriority.None && isVariable(operand)) {
@@ -1050,7 +1069,7 @@ public final class Interval {
         }
     }
 
-    void addRange(int from, int to) {
+    public void addRange(int from, int to) {
         assert from < to : "invalid range";
         assert first() == Range.EndMarker || to < first().next.from : "not inserting at begin of interval";
         assert from <= first().to : "not inserting at begin of interval";
@@ -1281,7 +1300,7 @@ public final class Interval {
         buf.append("} uses{");
 
         // print use positions
-        int prev = 0;
+        int prev = -1;
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             assert prev < usePosList.usePos(i) : "use positions not sorted";
             if (i != usePosList.size() - 1) {
