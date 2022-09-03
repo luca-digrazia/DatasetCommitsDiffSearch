@@ -22,41 +22,53 @@
  */
 package com.oracle.graal.nodes.debug.instrumentation;
 
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
+
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.AbstractStateSplit;
 import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.meta.JavaConstant;
-
-@NodeInfo
-public final class InstrumentationBeginNode extends FixedWithNextNode {
+/**
+ * The {@code InstrumentationBeginNode} represents the boundary of the instrumentation. It also
+ * maintains the target of the instrumentation.
+ */
+@NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+public final class InstrumentationBeginNode extends AbstractStateSplit implements LIRLowerable {
 
     public static final NodeClass<InstrumentationBeginNode> TYPE = NodeClass.create(InstrumentationBeginNode.class);
 
-    private final int offset;
-    private final boolean inspectInvocation;
+    @OptionalInput(value = InputType.Unchecked) protected ValueNode target;
+    private final boolean anchored;
 
-    public InstrumentationBeginNode(ValueNode offset, boolean inspectInvocation) {
+    public InstrumentationBeginNode(boolean anchored) {
         super(TYPE, StampFactory.forVoid());
+        this.anchored = anchored;
+        this.target = null;
 
-        if (!(offset instanceof ConstantNode)) {
-            throw GraalError.shouldNotReachHere("should pass constant integer to instrumentationBegin(int)");
-        }
-        JavaConstant constant = ((ConstantNode) offset).asJavaConstant();
-        this.offset = constant == null ? 0 : constant.asInt();
-        this.inspectInvocation = inspectInvocation;
     }
 
-    public int getOffset() {
-        return offset;
+    public boolean isAnchored() {
+        return anchored;
     }
 
-    public boolean inspectInvocation() {
-        return inspectInvocation;
+    public ValueNode getTarget() {
+        return target;
+    }
+
+    public void setTarget(ValueNode target) {
+        updateUsages(this.target, target);
+        this.target = target;
+    }
+
+    @Override
+    public void generate(NodeLIRBuilderTool generator) {
+        // do nothing
     }
 
 }

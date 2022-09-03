@@ -22,206 +22,145 @@
  */
 package com.oracle.graal.nodes.debug.instrumentation;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Map;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
 
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Graph.DuplicationReplacement;
-import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.NodeInputList;
 import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.DeoptimizingFixedWithNextNode;
-import com.oracle.graal.nodes.DeoptimizingNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.FixedNode;
 import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StartNode;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.debug.NewStringNode;
-import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.java.AccessMonitorNode;
+import com.oracle.graal.nodes.spi.VirtualizableAllocation;
 import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.EscapeObjectState;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-
-@NodeInfo
-public class InstrumentationNode extends DeoptimizingFixedWithNextNode implements Virtualizable {
+/**
+ * The {@code InstrumentationNode} is a place holder of the instrumentation in the original graph.
+ * It is generated at the ExtractInstrumentationPhase and substituted at the
+ * InlineInstrumentationPhase. It maintains an instrumentation graph which contains the
+ * instrumentation nodes in the original graph (between InstrumentationBeginNode and
+ * InstrumentationEndNode). Any data dependency of the instrumentation nodes will be transformed
+ * into an input to the InstrumentationNode.
+ */
+@NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+public class InstrumentationNode extends DeoptimizingFixedWithNextNode implements VirtualizableAllocation {
 
     public static final NodeClass<InstrumentationNode> TYPE = NodeClass.create(InstrumentationNode.class);
 
-    @OptionalInput(value = InputType.Association) protected ValueNode target;
+    @OptionalInput(value = InputType.Unchecked) protected ValueNode target;
     @OptionalInput protected NodeInputList<ValueNode> weakDependencies;
 
     protected StructuredGraph instrumentationGraph;
-    protected final int offset;
+    protected final boolean anchored;
 
-    public InstrumentationNode(ValueNode target, int offset) {
-        super(TYPE, StampFactory.forVoid());
+    public InstrumentationNode(ValueNode target, boolean anchored) {
+        this(target, anchored, 0, null);
+    }
+
+    private InstrumentationNode(ValueNode target, boolean anchored, int initialDependencySize, FrameState stateBefore) {
+        super(TYPE, StampFactory.forVoid(), stateBefore);
 
         this.target = target;
-        this.instrumentationGraph = new StructuredGraph(AllowAssumptions.YES);
-        this.offset = offset;
-
-        this.weakDependencies = new NodeInputList<>(this);
+        this.anchored = anchored;
+        this.weakDependencies = new NodeInputList<>(this, initialDependencySize);
     }
 
-    public boolean addInput(Node node) {
-        return weakDependencies.add(node);
-    }
-
-    public ValueNode target() {
+    public ValueNode getTarget() {
         return target;
     }
 
-    public StructuredGraph instrumentationGraph() {
+    public boolean isAnchored() {
+        return anchored;
+    }
+
+    public StructuredGraph getInstrumentationGraph() {
         return instrumentationGraph;
     }
 
-    public int offset() {
-        return offset;
+    public void setInstrumentationGraph(StructuredGraph graph) {
+        this.instrumentationGraph = graph;
+    }
+
+    public void addWeakDependency(ValueNode input) {
+        weakDependencies.add(input);
+    }
+
+    public ValueNode getWeakDependency(int index) {
+        return weakDependencies.get(index);
     }
 
     public NodeInputList<ValueNode> getWeakDependencies() {
         return weakDependencies;
     }
 
+    /**
+     * Clone the InstrumentationNode with the given new target. The weakDependencies will be
+     * initialized with aliased nodes.
+     */
+    private InstrumentationNode cloneWithNewTarget(ValueNode newTarget, VirtualizerTool tool) {
+        InstrumentationNode clone = new InstrumentationNode(newTarget, anchored, weakDependencies.size(), stateBefore);
+        clone.instrumentationGraph = instrumentationGraph;
+        for (int i = 0; i < weakDependencies.size(); i++) {
+            ValueNode input = weakDependencies.get(i);
+            if (!(input instanceof VirtualObjectNode)) {
+                ValueNode alias = tool.getAlias(input);
+                if (alias instanceof VirtualObjectNode) {
+                    clone.weakDependencies.initialize(i, alias);
+                    continue;
+                }
+            }
+            clone.weakDependencies.initialize(i, input);
+        }
+        return clone;
+    }
+
+    private boolean hasAliasedWeakDependency(VirtualizerTool tool) {
+        for (ValueNode input : weakDependencies) {
+            if (!(input instanceof VirtualObjectNode)) {
+                ValueNode alias = tool.getAlias(input);
+                if (alias instanceof VirtualObjectNode) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     @Override
     public void virtualize(VirtualizerTool tool) {
         // InstrumentationNode allows non-materialized inputs. During the inlining of the
-        // InstrumentationNode, non-materialized inputs will be replaced by null.
-        if (!(target == null || (target instanceof VirtualObjectNode))) {
-            ValueNode alias = tool.getAlias(target);
-            if (alias instanceof VirtualObjectNode) {
-                tool.replaceFirstInput(target, alias);
-            }
-        }
-        for (ValueNode input : weakDependencies) {
-            if (input instanceof VirtualObjectNode) {
-                continue;
-            }
-            ValueNode alias = tool.getAlias(input);
-            if (alias instanceof VirtualObjectNode) {
-                tool.replaceFirstInput(input, alias);
-            }
-        }
-    }
-
-    public void onMidTierReconcileInstrumentation() {
-        for (RootNameNode rootNameNode : instrumentationGraph.getNodes().filter(RootNameNode.class)) {
-            NewStringNode runtimeString = new NewStringNode(RootNameNode.genRootName(graph().method()), rootNameNode.stamp());
-            instrumentationGraph.addWithoutUnique(runtimeString);
-            instrumentationGraph.replaceFixedWithFixed(rootNameNode, runtimeString);
-        }
-    }
-
-    public void inlineAt(FixedNode position) {
-        ArrayList<Node> nodes = new ArrayList<>(instrumentationGraph.getNodes().count());
-        final StartNode entryPointNode = instrumentationGraph.start();
-        FixedNode firstCFGNode = entryPointNode.next();
-        ArrayList<ReturnNode> returnNodes = new ArrayList<>(4);
-
-        for (Node node : instrumentationGraph.getNodes()) {
-            if (node == entryPointNode || node == entryPointNode.stateAfter() || node instanceof ParameterNode) {
-                // Do nothing.
-            } else {
-                nodes.add(node);
-                if (node instanceof ReturnNode) {
-                    returnNodes.add((ReturnNode) node);
+        // InstrumentationNode, non-materialized inputs will be replaced by null. The current
+        // InstrumentationNode is replaced with a clone InstrumentationNode, such that the escape
+        // analysis won't materialize non-materialized inputs at this point.
+        InstrumentationNode replacee = null;
+        if (target != null) {
+            if (target instanceof AccessMonitorNode) {
+                AccessMonitorNode monitor = (AccessMonitorNode) target;
+                ValueNode alias = tool.getAlias(monitor.object());
+                if (alias instanceof VirtualObjectNode) {
+                    MonitorProxyNode proxy = new MonitorProxyNode(null, monitor.getMonitorId());
+                    tool.addNode(proxy);
+                    replacee = cloneWithNewTarget(proxy, tool);
+                }
+            } else if (!(target instanceof VirtualObjectNode)) {
+                ValueNode alias = tool.getAlias(target);
+                if (alias instanceof VirtualObjectNode) {
+                    replacee = cloneWithNewTarget(alias, tool);
                 }
             }
         }
-
-        final AbstractBeginNode prevBegin = AbstractBeginNode.prevBegin(position);
-        DuplicationReplacement localReplacement = new DuplicationReplacement() {
-
-            @Override
-            public Node replacement(Node replacement) {
-                if (replacement instanceof ParameterNode) {
-                    ValueNode value = getWeakDependencies().get(((ParameterNode) replacement).index());
-                    if (value == null || value.isDeleted() || value instanceof VirtualObjectNode || value.stamp().getStackKind() != JavaKind.Object) {
-                        return graph().unique(new ConstantNode(JavaConstant.NULL_POINTER, ((ParameterNode) replacement).stamp()));
-                    } else {
-                        return value;
-                    }
-                } else if (replacement == entryPointNode) {
-                    return prevBegin;
-                }
-                return replacement;
-            }
-
-        };
-
-        Map<Node, Node> duplicates = graph().addDuplicates(nodes, instrumentationGraph, instrumentationGraph.getNodeCount(), localReplacement);
-        FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
-        position.replaceAtPredecessor(firstCFGNodeDuplicate);
-
-        if (!returnNodes.isEmpty()) {
-            if (returnNodes.size() == 1) {
-                ReturnNode returnNode = (ReturnNode) duplicates.get(returnNodes.get(0));
-                returnNode.replaceAndDelete(position);
-            } else {
-                ArrayList<ReturnNode> returnDuplicates = new ArrayList<>(returnNodes.size());
-                for (ReturnNode returnNode : returnNodes) {
-                    returnDuplicates.add((ReturnNode) duplicates.get(returnNode));
-                }
-                AbstractMergeNode merge = graph().add(new MergeNode());
-
-                for (ReturnNode returnNode : returnDuplicates) {
-                    EndNode endNode = graph().add(new EndNode());
-                    merge.addForwardEnd(endNode);
-                    returnNode.replaceAndDelete(endNode);
-                }
-
-                merge.setNext(position);
-            }
+        if (replacee == null && hasAliasedWeakDependency(tool)) {
+            replacee = cloneWithNewTarget(target, tool);
         }
-
-        // since we may relocate InstrumentationNodes, the FrameState can be invalid
-        for (Node replacee : duplicates.values()) {
-            if (replacee instanceof FrameState) {
-                FrameState oldState = (FrameState) replacee;
-                FrameState newState = new FrameState(null, oldState.method(), oldState.bci, 0, 0, 0, oldState.rethrowException(), oldState.duringCall(), null,
-                                Collections.<EscapeObjectState> emptyList());
-                graph().addWithoutUnique(newState);
-                oldState.replaceAtUsages(newState);
-            }
-        }
-
-        for (Node replacee : duplicates.values()) {
-            // we cannot assign a random FrameState with valid bci to Invoke because it is used for
-            // resolving virtual call at runtime.
-            if (replacee instanceof DeoptimizingNode && !(replacee instanceof Invoke)) {
-                DeoptimizingNode deoptDup = (DeoptimizingNode) replacee;
-                if (deoptDup.canDeoptimize()) {
-                    if (deoptDup instanceof DeoptimizingNode.DeoptBefore) {
-                        ((DeoptimizingNode.DeoptBefore) deoptDup).setStateBefore(stateBefore());
-                    }
-                    if (deoptDup instanceof DeoptimizingNode.DeoptDuring) {
-                        DeoptimizingNode.DeoptDuring deoptDupDuring = (DeoptimizingNode.DeoptDuring) deoptDup;
-                        assert !deoptDupDuring.hasSideEffect() : "can't use stateBefore as stateDuring for state split " + deoptDupDuring;
-                        deoptDupDuring.setStateDuring(stateBefore());
-                    }
-                    if (deoptDup instanceof DeoptimizingNode.DeoptAfter) {
-                        DeoptimizingNode.DeoptAfter deoptDupAfter = (DeoptimizingNode.DeoptAfter) deoptDup;
-                        assert !deoptDupAfter.hasSideEffect() : "can't use stateBefore as stateAfter for state split " + deoptDupAfter;
-                        deoptDupAfter.setStateAfter(stateBefore());
-                    }
-                }
-            }
+        // in case of modification, we replace with the clone
+        if (replacee != null) {
+            tool.addNode(replacee);
+            tool.replaceWithValue(replacee);
         }
     }
 

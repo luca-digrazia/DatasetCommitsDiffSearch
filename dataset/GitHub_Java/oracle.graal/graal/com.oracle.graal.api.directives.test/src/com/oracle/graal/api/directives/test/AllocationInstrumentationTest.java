@@ -24,6 +24,7 @@ package com.oracle.graal.api.directives.test;
 
 import java.io.IOException;
 
+import jdk.vm.ci.code.InvalidInstalledCodeException;
 import org.junit.Assert;
 import org.junit.Test;
 
