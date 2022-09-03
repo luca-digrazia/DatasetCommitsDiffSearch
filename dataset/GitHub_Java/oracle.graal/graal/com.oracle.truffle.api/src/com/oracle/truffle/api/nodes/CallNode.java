@@ -114,15 +114,11 @@ public abstract class CallNode extends Node {
         registerCallTarget((CallNode) newNode);
     }
 
-    protected static final void registerCallTarget(CallNode newNode) {
+    protected final void registerCallTarget(CallNode newNode) {
         RootNode newRoot = newNode.getCurrentRootNode();
         if (newRoot != null) {
             newRoot.addCachedCallNode(newNode);
         }
-    }
-
-    protected void notifyCallNodeAdded() {
-
     }
 
     /**
@@ -144,7 +140,7 @@ public abstract class CallNode extends Node {
      * @deprecated always returns <code>true</code> now.
      */
     @Deprecated
-    public boolean isInlinable() {
+    public final boolean isInlinable() {
         return true;
     }
 
