@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,10 +28,6 @@ import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
 import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.core.common.GraalOptions.HotSpotPrintInlining;
 import static org.graalvm.compiler.debug.DebugContext.DEFAULT_LOG_STREAM;
-import static org.graalvm.compiler.hotspot.HotSpotGraalRuntime.HotSpotGC.CMS;
-import static org.graalvm.compiler.hotspot.HotSpotGraalRuntime.HotSpotGC.G1;
-import static org.graalvm.compiler.hotspot.HotSpotGraalRuntime.HotSpotGC.Parallel;
-import static org.graalvm.compiler.hotspot.HotSpotGraalRuntime.HotSpotGC.Serial;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -115,7 +109,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     private final HotSpotBackend hostBackend;
     private final GlobalMetrics metricValues = new GlobalMetrics();
     private final List<SnippetCounter.Group> snippetCounterGroups;
-    private final HotSpotGC garbageCollector;
 
     private final EconomicMap<Class<? extends Architecture>, HotSpotBackend> backends = EconomicMap.create(Equivalence.IDENTITY);
 
@@ -133,40 +126,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     private final DiagnosticsOutputDirectory outputDirectory;
     private final Map<ExceptionAction, Integer> compilationProblemsPerAction;
-
-    /**
-     * Constants denoting the GC algorithms available in HotSpot.
-     */
-    public enum HotSpotGC {
-        Serial("UseSerialGC"),
-        Parallel("UseParallelGC", "UseParallelOldGC", "UseParNewGC"),
-        CMS("UseConcMarkSweepGC"),
-        G1("UseG1GC"),
-        Epsilon("UseEpsilonGC"),
-        Z("UseZGC");
-
-        HotSpotGC(String... flags) {
-            this.flags = flags;
-        }
-
-        private final String[] flags;
-
-        public boolean isSelected(GraalHotSpotVMConfig config) {
-            for (String flag : flags) {
-                final boolean notPresent = false;
-                if (config.getFlag(flag, Boolean.class, notPresent)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-    }
-
-    /**
-     * Set of GCs supported by Graal.
-     */
-    private static final HotSpotGC[] SUPPORTED_GCS = {Serial, Parallel, CMS, G1};
 
     /**
      * @param nameQualifier a qualifier to be added to this runtime's {@linkplain #getName() name}
@@ -187,24 +146,11 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         }
         OptionValues options = optionsRef.get();
 
-        HotSpotGC selected = null;
-        for (HotSpotGC gc : SUPPORTED_GCS) {
-            if (gc.isSelected(config)) {
-                selected = gc;
-                break;
-            }
+        if (config.useCMSGC) {
+            // Graal doesn't work with the CMS collector (e.g. GR-6777)
+            // and is deprecated (http://openjdk.java.net/jeps/291).
+            throw new GraalError("Graal does not support the CMS collector");
         }
-        if (selected == null) {
-            for (HotSpotGC gc : HotSpotGC.values()) {
-                if (gc.isSelected(config)) {
-                    selected = gc;
-                    break;
-                }
-            }
-            String unsupportedGC = selected != null ? selected.name() : "<unknown>";
-            throw new GraalError(unsupportedGC + " garbage collector is not supported by Graal");
-        }
-        garbageCollector = selected;
 
         outputDirectory = new DiagnosticsOutputDirectory(options);
         compilationProblemsPerAction = new EnumMap<>(ExceptionAction.class);
@@ -339,10 +285,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
             return (T) getHostProviders().getStampProvider();
         }
         return null;
-    }
-
-    public HotSpotGC getGarbageCollector() {
-        return garbageCollector;
     }
 
     @Override
