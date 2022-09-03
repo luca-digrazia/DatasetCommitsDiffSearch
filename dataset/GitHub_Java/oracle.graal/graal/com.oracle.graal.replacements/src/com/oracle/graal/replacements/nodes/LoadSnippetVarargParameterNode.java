@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
@@ -40,7 +37,7 @@ import com.oracle.graal.replacements.Snippet.VarargsParameter;
 /**
  * Implements the semantics of {@link VarargsParameter}.
  */
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public final class LoadSnippetVarargParameterNode extends FixedWithNextNode implements Canonicalizable {
 
     public static final NodeClass<LoadSnippetVarargParameterNode> TYPE = NodeClass.create(LoadSnippetVarargParameterNode.class);
