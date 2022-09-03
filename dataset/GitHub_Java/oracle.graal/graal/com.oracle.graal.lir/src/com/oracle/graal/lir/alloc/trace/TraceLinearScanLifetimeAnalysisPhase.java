@@ -330,11 +330,8 @@ final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocati
 
                 op.forEachRegisterHint(targetValue, mode, (registerHint, valueMode, valueFlags) -> {
                     if (TraceLinearScan.isVariableOrRegister(registerHint)) {
-                        /*
-                         * TODO (je): clean up
-                         */
-                        final AllocatableValue fromValue;
-                        final AllocatableValue toValue;
+                        AllocatableValue fromValue;
+                        AllocatableValue toValue;
                         /* hints always point from def to use */
                         if (hintAtDef) {
                             fromValue = (AllocatableValue) registerHint;
@@ -343,20 +340,13 @@ final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocati
                             fromValue = (AllocatableValue) targetValue;
                             toValue = (AllocatableValue) registerHint;
                         }
-                        Debug.log("addRegisterHint %s to %s", fromValue, toValue);
-                        final TraceInterval to;
-                        final IntervalHint from;
                         if (isRegister(toValue)) {
-                            if (isRegister(fromValue)) {
-                                // fixed to fixed move
-                                return null;
-                            }
-                            from = getIntervalHint(toValue);
-                            to = allocator.getOrCreateInterval(fromValue);
-                        } else {
-                            to = allocator.getOrCreateInterval(toValue);
-                            from = getIntervalHint(fromValue);
+                            /* fixed register: no need for a hint */
+                            return null;
                         }
+
+                        TraceInterval to = allocator.getOrCreateInterval(toValue);
+                        IntervalHint from = getIntervalHint(fromValue);
 
                         to.setLocationHint(from);
                         if (Debug.isLogEnabled()) {
