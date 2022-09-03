@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.TypeReference;
@@ -59,7 +56,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * input is as narrow or narrower than the {@link PiNode}'s type. The {@link PiNode}, and therefore
  * also the scheduling restriction enforced by the anchor, will go away.
  */
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, IterableNodeType, Canonicalizable, ValueProxy {
 
     public static final NodeClass<PiNode> TYPE = NodeClass.create(PiNode.class);
