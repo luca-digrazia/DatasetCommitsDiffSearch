@@ -33,8 +33,10 @@ import com.oracle.graal.serviceprovider.ServiceProvider;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.TruffleRuntimeAccess;
 
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.runtime.JVMCICompiler;
+import jdk.vm.ci.runtime.services.JVMCICompilerFactory;
 import jdk.vm.ci.services.Services;
 
 @ServiceProvider(TruffleRuntimeAccess.class)
@@ -42,8 +44,8 @@ public class HotSpotTruffleRuntimeAccess implements TruffleRuntimeAccess {
 
     static class Options {
         // @formatter:off
-        @Option(help = "Select a Graal compiler configuration for Truffle compilation (default: use Graal system compiler configuration).")
-        public static final OptionValue<String> TruffleCompilerConfiguration = new OptionValue<>(null);
+        @Option(help = "Select a graal compiler for Truffle compilation (default: use JVMCI system compiler).")
+        public static final OptionValue<String> TruffleCompiler = new OptionValue<>(null);
         // @formatter:on
     }
 
@@ -54,10 +56,29 @@ public class HotSpotTruffleRuntimeAccess implements TruffleRuntimeAccess {
         // initialize JVMCI to make sure the TruffleCompiler option is parsed
         JVMCI.initialize();
 
-        return new HotSpotTruffleRuntime(new LazyGraalRuntime());
+        Supplier<GraalRuntime> lazyRuntime;
+        if (Options.TruffleCompiler.hasDefaultValue()) {
+            lazyRuntime = new LazySystemGraalRuntime();
+        } else {
+            HotSpotGraalCompilerFactory factory = findCompilerFactory(Options.TruffleCompiler.getValue());
+            lazyRuntime = new LazyCustomGraalRuntime(factory);
+        }
+
+        return new HotSpotTruffleRuntime(lazyRuntime);
     }
 
-    private static final class LazyGraalRuntime implements Supplier<GraalRuntime> {
+    private static HotSpotGraalCompilerFactory findCompilerFactory(String name) {
+        for (JVMCICompilerFactory factory : Services.load(JVMCICompilerFactory.class)) {
+            if (factory instanceof HotSpotGraalCompilerFactory) {
+                if (name.equals(factory.getCompilerName())) {
+                    return (HotSpotGraalCompilerFactory) factory;
+                }
+            }
+        }
+        throw new JVMCIError("Graal compiler configuration '%s' not found.", name);
+    }
+
+    private abstract static class LazyGraalRuntime implements Supplier<GraalRuntime> {
 
         private volatile GraalRuntime graalRuntime;
 
@@ -73,14 +94,33 @@ public class HotSpotTruffleRuntimeAccess implements TruffleRuntimeAccess {
             return graalRuntime;
         }
 
-        static GraalJVMCICompiler getCompiler() {
-            if (Options.TruffleCompilerConfiguration.hasDefaultValue()) {
-                JVMCICompiler compiler = JVMCI.getRuntime().getCompiler();
-                if (compiler instanceof GraalJVMCICompiler) {
-                    return (GraalJVMCICompiler) compiler;
-                }
+        protected abstract GraalJVMCICompiler getCompiler();
+    }
+
+    private static final class LazyCustomGraalRuntime extends LazyGraalRuntime {
+
+        private final HotSpotGraalCompilerFactory factory;
+
+        private LazyCustomGraalRuntime(HotSpotGraalCompilerFactory factory) {
+            this.factory = factory;
+        }
+
+        @Override
+        protected GraalJVMCICompiler getCompiler() {
+            return factory.createCompiler(JVMCI.getRuntime());
+        }
+    }
+
+    private static final class LazySystemGraalRuntime extends LazyGraalRuntime {
+
+        @Override
+        protected GraalJVMCICompiler getCompiler() {
+            JVMCICompiler compiler = JVMCI.getRuntime().getCompiler();
+            if (compiler instanceof GraalJVMCICompiler) {
+                return (GraalJVMCICompiler) compiler;
+            } else {
+                throw new JVMCIError("JVMCI system compiler '%s' is not a Graal compiler.", compiler.getClass().getName());
             }
-            return HotSpotGraalCompilerFactory.createCompiler(JVMCI.getRuntime(), Options.TruffleCompilerConfiguration.getValue());
         }
     }
 }
