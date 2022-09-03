@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,15 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import java.util.*;
+import java.util.AbstractList;
+import java.util.Objects;
+import java.util.RandomAccess;
 
-import com.oracle.graal.api.meta.*;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Type describing all pointers to Java objects.
@@ -33,18 +39,19 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
     private final ResolvedJavaType type;
     private final boolean exactType;
-    private final boolean nonNull;
-    private final boolean alwaysNull;
 
     protected AbstractObjectStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull) {
-        super(PointerType.Object);
+        super(nonNull, alwaysNull);
         this.type = type;
         this.exactType = exactType;
-        this.nonNull = nonNull;
-        this.alwaysNull = alwaysNull;
     }
 
     protected abstract AbstractObjectStamp copyWith(ResolvedJavaType newType, boolean newExactType, boolean newNonNull, boolean newAlwaysNull);
+
+    @Override
+    protected final AbstractPointerStamp copyWith(boolean newNonNull, boolean newAlwaysNull) {
+        return copyWith(type, exactType, newNonNull, newAlwaysNull);
+    }
 
     @Override
     public Stamp unrestricted() {
@@ -52,7 +59,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
     }
 
     @Override
-    public Stamp illegal() {
+    public Stamp empty() {
         return copyWith(null, true, true, false);
     }
 
@@ -64,13 +71,13 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
     }
 
     @Override
-    public boolean isLegal() {
+    public boolean hasValues() {
         return !exactType || (type != null && (isConcreteType(type)));
     }
 
     @Override
-    public Kind getStackKind() {
-        return Kind.Object;
+    public JavaKind getStackKind() {
+        return JavaKind.Object;
     }
 
     @Override
@@ -81,24 +88,20 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         return metaAccess.lookupJavaType(Object.class);
     }
 
-    public boolean nonNull() {
-        return nonNull;
-    }
-
-    public boolean alwaysNull() {
-        return alwaysNull;
-    }
-
     public ResolvedJavaType type() {
         return type;
     }
 
     public boolean isExactType() {
-        return exactType;
+        return exactType && type != null;
     }
 
     protected void appendString(StringBuilder str) {
-        str.append(nonNull ? "!" : "").append(exactType ? "#" : "").append(' ').append(type == null ? "-" : type.getName()).append(alwaysNull ? " NULL" : "");
+        if (this.isEmpty()) {
+            str.append(" empty");
+        } else {
+            str.append(nonNull() ? "!" : "").append(exactType ? "#" : "").append(' ').append(type == null ? "-" : type.getName()).append(alwaysNull() ? " NULL" : "");
+        }
     }
 
     @Override
@@ -106,29 +109,26 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         if (this == otherStamp) {
             return this;
         }
-        if (!isCompatible(otherStamp)) {
-            return StampFactory.illegal(Kind.Illegal);
-        }
         AbstractObjectStamp other = (AbstractObjectStamp) otherStamp;
-        if (!isLegal()) {
+        if (isEmpty()) {
             return other;
-        } else if (!other.isLegal()) {
+        } else if (other.isEmpty()) {
             return this;
         }
         ResolvedJavaType meetType;
         boolean meetExactType;
         boolean meetNonNull;
         boolean meetAlwaysNull;
-        if (other.alwaysNull) {
+        if (other.alwaysNull()) {
             meetType = type();
             meetExactType = exactType;
             meetNonNull = false;
-            meetAlwaysNull = alwaysNull;
-        } else if (alwaysNull) {
+            meetAlwaysNull = alwaysNull();
+        } else if (alwaysNull()) {
             meetType = other.type();
             meetExactType = other.exactType;
             meetNonNull = false;
-            meetAlwaysNull = other.alwaysNull;
+            meetAlwaysNull = other.alwaysNull();
         } else {
             meetType = meetTypes(type(), other.type());
             meetExactType = exactType && other.exactType;
@@ -136,13 +136,13 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
                 // meeting two valid exact types may result in a non-exact type
                 meetExactType = Objects.equals(meetType, type) && Objects.equals(meetType, other.type);
             }
-            meetNonNull = nonNull && other.nonNull;
+            meetNonNull = nonNull() && other.nonNull();
             meetAlwaysNull = false;
         }
 
-        if (Objects.equals(meetType, type) && meetExactType == exactType && meetNonNull == nonNull && meetAlwaysNull == alwaysNull) {
+        if (Objects.equals(meetType, type) && meetExactType == exactType && meetNonNull == nonNull() && meetAlwaysNull == alwaysNull()) {
             return this;
-        } else if (Objects.equals(meetType, other.type) && meetExactType == other.exactType && meetNonNull == other.nonNull && meetAlwaysNull == other.alwaysNull) {
+        } else if (Objects.equals(meetType, other.type) && meetExactType == other.exactType && meetNonNull == other.nonNull() && meetAlwaysNull == other.alwaysNull()) {
             return other;
         } else {
             return copyWith(meetType, meetExactType, meetNonNull, meetAlwaysNull);
@@ -166,30 +166,28 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
      * this reason, in some cases a {@code castTo} operation is preferable in order to keep at least
      * the {@link AbstractList} type.
      *
-     * @param to the stamp this stamp should be casted to
-     * @return This stamp casted to the {@code to} stamp
+     * @param other the stamp this stamp should be casted to
+     * @return the new improved stamp or {@code null} if this stamp cannot be improved
      */
-    public Stamp castTo(ObjectStamp to) {
-        return join0(to, true);
+    @Override
+    public Stamp improveWith(Stamp other) {
+        return join0(other, true);
     }
 
-    private Stamp join0(Stamp otherStamp, boolean castToOther) {
+    private Stamp join0(Stamp otherStamp, boolean improve) {
         if (this == otherStamp) {
             return this;
         }
-        if (!isCompatible(otherStamp)) {
-            return StampFactory.illegal(Kind.Illegal);
-        }
         AbstractObjectStamp other = (AbstractObjectStamp) otherStamp;
-        if (!isLegal()) {
+        if (isEmpty()) {
             return this;
-        } else if (!other.isLegal()) {
+        } else if (other.isEmpty()) {
             return other;
         }
 
         ResolvedJavaType joinType;
-        boolean joinAlwaysNull = alwaysNull || other.alwaysNull;
-        boolean joinNonNull = nonNull || other.nonNull;
+        boolean joinAlwaysNull = alwaysNull() || other.alwaysNull();
+        boolean joinNonNull = nonNull() || other.nonNull();
         boolean joinExactType = exactType || other.exactType;
         if (Objects.equals(type, other.type)) {
             joinType = type;
@@ -212,13 +210,14 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
                     joinAlwaysNull = true;
                 }
             } else {
-                if (castToOther) {
-                    joinType = other.type;
-                    joinExactType = other.exactType;
+                if (improve) {
+                    joinType = type;
+                    joinExactType = exactType;
                 } else {
                     joinType = null;
                 }
-                if (joinExactType || (!type.isInterface() && !other.type.isInterface())) {
+
+                if (joinExactType || (!isInterfaceOrArrayOfInterface(type) && !isInterfaceOrArrayOfInterface(other.type))) {
                     joinAlwaysNull = true;
                 }
             }
@@ -228,20 +227,24 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             joinExactType = false;
         }
         if (joinExactType && joinType == null) {
-            return StampFactory.illegal(Kind.Object);
+            return empty();
         }
         if (joinAlwaysNull && joinNonNull) {
-            return StampFactory.illegal(Kind.Object);
+            return empty();
         } else if (joinExactType && !isConcreteType(joinType)) {
-            return StampFactory.illegal(Kind.Object);
+            return empty();
         }
-        if (Objects.equals(joinType, type) && joinExactType == exactType && joinNonNull == nonNull && joinAlwaysNull == alwaysNull) {
+        if (Objects.equals(joinType, type) && joinExactType == exactType && joinNonNull == nonNull() && joinAlwaysNull == alwaysNull()) {
             return this;
-        } else if (Objects.equals(joinType, other.type) && joinExactType == other.exactType && joinNonNull == other.nonNull && joinAlwaysNull == other.alwaysNull) {
+        } else if (Objects.equals(joinType, other.type) && joinExactType == other.exactType && joinNonNull == other.nonNull() && joinAlwaysNull == other.alwaysNull()) {
             return other;
         } else {
             return copyWith(joinType, joinExactType, joinNonNull, joinAlwaysNull);
         }
+    }
+
+    private static boolean isInterfaceOrArrayOfInterface(ResolvedJavaType t) {
+        return t.isInterface() || (t.isArray() && t.getElementalType().isInterface());
     }
 
     public static boolean isConcreteType(ResolvedJavaType type) {
@@ -254,18 +257,55 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         } else if (a == null || b == null) {
             return null;
         } else {
-            return a.findLeastCommonAncestor(b);
+            // The `meetTypes` operation must be commutative. One way to achieve this is to totally
+            // order the types and always call `meetOrderedNonNullTypes` in the same order. We
+            // establish the order by first comparing the hash-codes for performance reasons, and
+            // then comparing the internal names of the types.
+            int hashA = a.getName().hashCode();
+            int hashB = b.getName().hashCode();
+            if (hashA < hashB) {
+                return meetOrderedNonNullTypes(a, b);
+            } else if (hashB < hashA) {
+                return meetOrderedNonNullTypes(b, a);
+            } else {
+                int diff = a.getName().compareTo(b.getName());
+                if (diff <= 0) {
+                    return meetOrderedNonNullTypes(a, b);
+                } else {
+                    return meetOrderedNonNullTypes(b, a);
+                }
+            }
         }
+    }
+
+    private static ResolvedJavaType meetOrderedNonNullTypes(ResolvedJavaType a, ResolvedJavaType b) {
+        ResolvedJavaType result = a.findLeastCommonAncestor(b);
+        if (result.isJavaLangObject() && a.isInterface() && b.isInterface()) {
+            // Both types are incompatible interfaces => search for first possible common
+            // ancestor match among super interfaces.
+            ResolvedJavaType[] interfacesA = a.getInterfaces();
+            ResolvedJavaType[] interfacesB = b.getInterfaces();
+            for (int i = 0; i < interfacesA.length; ++i) {
+                ResolvedJavaType interface1 = interfacesA[i];
+                for (int j = 0; j < interfacesB.length; ++j) {
+                    ResolvedJavaType interface2 = interfacesB[j];
+                    ResolvedJavaType leastCommon = meetTypes(interface1, interface2);
+                    if (leastCommon.isInterface()) {
+                        return leastCommon;
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     @Override
     public int hashCode() {
         final int prime = 31;
         int result = 1;
+        result = prime * result + super.hashCode();
         result = prime * result + (exactType ? 1231 : 1237);
-        result = prime * result + (nonNull ? 1231 : 1237);
-        result = prime * result + (alwaysNull ? 1231 : 1237);
-        result = prime * result + ((type == null) ? 0 : type.hashCode());
+        result = prime * result + ((type == null || type.isJavaLangObject()) ? 0 : type.hashCode());
         return result;
     }
 
@@ -278,16 +318,21 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             return false;
         }
         AbstractObjectStamp other = (AbstractObjectStamp) obj;
-        if (exactType != other.exactType || nonNull != other.nonNull || alwaysNull != other.alwaysNull) {
+        if (exactType != other.exactType) {
             return false;
         }
+        // null == java.lang.Object
         if (type == null) {
-            if (other.type != null) {
+            if (other.type != null && !other.type.isJavaLangObject()) {
+                return false;
+            }
+        } else if (other.type == null) {
+            if (type != null && !type.isJavaLangObject()) {
                 return false;
             }
         } else if (!type.equals(other.type)) {
             return false;
         }
-        return true;
+        return super.equals(other);
     }
 }
