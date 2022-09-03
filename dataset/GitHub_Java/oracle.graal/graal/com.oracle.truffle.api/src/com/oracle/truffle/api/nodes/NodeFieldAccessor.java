@@ -38,8 +38,6 @@ import com.oracle.truffle.api.nodes.NodeUtil.FieldOffsetProvider;
 public abstract class NodeFieldAccessor {
 
     public static enum NodeFieldKind {
-        /** The reference to the {@link NodeClass}. */
-        NODE_CLASS,
         /** The single {@link Node#getParent() parent} field. */
         PARENT,
         /** A field annotated with {@link Child}. */
