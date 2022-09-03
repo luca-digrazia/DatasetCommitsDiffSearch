@@ -36,7 +36,6 @@ public abstract class AccessField extends StateSplit {
 
     private Value object;
     protected final RiField field;
-    private boolean needsPatching;
 
     /**
      * Constructs a new access field object.
@@ -54,7 +53,7 @@ public abstract class AccessField extends StateSplit {
         if (!isLoaded || (C1XOptions.TestPatching && !Modifier.isVolatile(field.accessFlags()))) {
             // require patching if the field is not loaded (i.e. resolved),
             // or if patch testing is turned on (but not if the field is volatile)
-            needsPatching = true;
+            setFlag(Flag.NeedsPatching);
         }
         initFlag(Flag.IsLoaded, isLoaded);
         if (isLoaded && object.isNonNull()) {
@@ -116,7 +115,7 @@ public abstract class AccessField extends StateSplit {
      * @return {@code true} if this field access will require patching
      */
     public boolean needsPatching() {
-        return needsPatching;
+        return checkFlag(Flag.NeedsPatching);
     }
 
     /**

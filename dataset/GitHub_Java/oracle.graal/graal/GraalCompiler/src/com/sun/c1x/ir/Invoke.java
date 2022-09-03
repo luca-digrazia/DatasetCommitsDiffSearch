@@ -22,6 +22,8 @@
  */
 package com.sun.c1x.ir;
 
+import java.lang.reflect.*;
+
 import com.sun.c1x.debug.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;

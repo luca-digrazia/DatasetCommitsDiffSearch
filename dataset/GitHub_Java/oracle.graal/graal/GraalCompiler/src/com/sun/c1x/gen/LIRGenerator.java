@@ -513,7 +513,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitLoadField(LoadField x) {
         RiField field = x.field();
-        boolean needsPatching = !x.isLoaded();
+        boolean needsPatching = x.needsPatching();
         LIRDebugInfo info = null;
         if (needsPatching || x.needsNullCheck()) {
             info = stateFor(x, x.stateBefore());
@@ -804,7 +804,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitStoreField(StoreField x) {
         RiField field = x.field();
-        boolean needsPatching = !x.isLoaded();
+        boolean needsPatching = x.needsPatching();
 
         LIRDebugInfo info = null;
         if (needsPatching || x.needsNullCheck()) {

@@ -22,6 +22,7 @@
  */
 package com.sun.c1x.ir;
 
+import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.bytecode.*;
@@ -29,11 +30,13 @@ import com.sun.cri.ci.*;
 
 /**
  * The {@code ArithmeticOp} class represents arithmetic operations such as addition, subtraction, etc.
+ *
+ * @author Ben L. Titzer
  */
 public final class ArithmeticOp extends Op2 {
 
-    private final FrameState stateBefore;
-    private final boolean isStrictFP;
+    private FrameState stateBefore;
+    private boolean isStrictFP;
 
     /**
      * Creates a new arithmetic operation.
@@ -47,7 +50,21 @@ public final class ArithmeticOp extends Op2 {
     public ArithmeticOp(int opcode, CiKind kind, Value x, Value y, boolean isStrictFP, FrameState stateBefore) {
         super(kind, opcode, x, y);
         this.isStrictFP = isStrictFP;
-        this.stateBefore = stateBefore;
+        if (stateBefore != null) {
+            // state before is only used in the case of a division or remainder,
+            // and isn't needed if the zero check is redundant
+            if (y.isConstant()) {
+                long divisor = y.asConstant().asLong();
+                if (divisor != 0) {
+                    C1XMetrics.ZeroChecksRedundant++;
+                    setFlag(Flag.NoZeroCheck);
+                } else {
+                    this.stateBefore = stateBefore;
+                }
+            } else {
+                this.stateBefore = stateBefore;
+            }
+        }
     }
 
     @Override
@@ -80,6 +97,14 @@ public final class ArithmeticOp extends Op2 {
 
     public boolean isCommutative() {
         return Bytecodes.isCommutative(opcode);
+    }
+
+    public boolean needsZeroCheck() {
+        return !checkFlag(Flag.NoZeroCheck);
+    }
+
+    public void eliminateZeroCheck() {
+        clearRuntimeCheck(Flag.NoZeroCheck);
     }
 
     @Override

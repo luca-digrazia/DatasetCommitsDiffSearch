@@ -49,7 +49,7 @@ public final class StoreField extends AccessField {
     public StoreField(Value object, RiField field, Value value, FrameState stateBefore, boolean isLoaded) {
         super(CiKind.Void, object, field, stateBefore, isLoaded);
         this.value = value;
-        setFlag(Flag.LiveSideEffect);
+        setFlag(Flag.LiveStore);
         if (value.kind != CiKind.Object) {
             setFlag(Flag.NoWriteBarrier);
         }
