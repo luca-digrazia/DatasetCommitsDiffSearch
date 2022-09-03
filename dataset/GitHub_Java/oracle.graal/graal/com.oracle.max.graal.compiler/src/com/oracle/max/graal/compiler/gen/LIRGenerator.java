@@ -466,9 +466,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         emitCompare(x.compare());
         emitBranch(x.compare(), getLIRBlock(x.trueSuccessor()), getLIRBlock(x.falseSuccessor()));
         assert x.defaultSuccessor() == x.falseSuccessor() : "wrong destination above";
-        LIRBlock block = getLIRBlock(x.defaultSuccessor());
-        assert block != null : x;
-        lir.jump(block);
+        lir.jump(getLIRBlock(x.defaultSuccessor()));
     }
 
     public void emitBranch(Compare compare, LIRBlock trueSuccessor, LIRBlock falseSucc) {
