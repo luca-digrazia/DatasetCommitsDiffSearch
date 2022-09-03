@@ -720,19 +720,21 @@ public class PolyglotEngine {
     public class Value {
         private final TruffleLanguage<?>[] language;
         private final ComputeInExecutor<Object> compute;
-        private final Object value;
         private CallTarget target;
 
         Value(TruffleLanguage<?>[] language, ComputeInExecutor<Object> compute) {
             this.language = language;
             this.compute = compute;
-            this.value = null;
         }
 
         Value(TruffleLanguage<?>[] language, final Object value) {
             this.language = language;
-            this.compute = null;
-            this.value = value;
+            this.compute = new ComputeInExecutor<Object>(null) {
+                @Override
+                protected Object compute() throws IOException {
+                    return value;
+                }
+            };
         }
 
         /**
@@ -861,7 +863,7 @@ public class PolyglotEngine {
                 for (;;) {
                     try {
                         if (target == null) {
-                            target = SymbolInvokerImpl.createCallTarget(language[0], compute == null ? value : compute.get(), args);
+                            target = SymbolInvokerImpl.createCallTarget(language[0], compute.get(), args);
                         }
                         return target.call(args);
                     } catch (ArgumentsMishmashException ex) {
@@ -877,13 +879,13 @@ public class PolyglotEngine {
         private Object waitForSymbol() throws IOException {
             assertNoTruffle();
             checkThread();
-            return compute == null ? value : compute.get();
+            return compute.get();
         }
 
         /** @since 0.9 */
         @Override
         public String toString() {
-            return "PolyglotEngine.Value[" + (compute == null ? value : compute) + "]";
+            return "PolyglotEngine.Value[" + compute + "]";
         }
     }
 
