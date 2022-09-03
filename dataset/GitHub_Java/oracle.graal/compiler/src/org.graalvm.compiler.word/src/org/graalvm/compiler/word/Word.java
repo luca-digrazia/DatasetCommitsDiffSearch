@@ -55,12 +55,12 @@ import org.graalvm.word.SignedWord;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
-import org.graalvm.word.impl.WordBoxFactory;
 
-public abstract class Word implements SignedWord, UnsignedWord, Pointer {
+public abstract class Word extends WordFactory implements SignedWord, UnsignedWord, Pointer {
 
     static {
-        BoxFactoryImpl.initialize();
+        assert WordFactory.boxFactory == null : "BoxFactory must be initialized only once.";
+        WordFactory.boxFactory = new BoxFactoryImpl();
     }
 
     public static void ensureInitialized() {
@@ -109,15 +109,10 @@ public abstract class Word implements SignedWord, UnsignedWord, Pointer {
         TO_RAW_VALUE,
     }
 
-    static class BoxFactoryImpl extends WordBoxFactory {
-        static void initialize() {
-            assert boxFactory == null : "BoxFactory must be initialized only once.";
-            boxFactory = new BoxFactoryImpl();
-        }
-
+    public static class BoxFactoryImpl implements BoxFactory {
         @SuppressWarnings("unchecked")
         @Override
-        public <T extends WordBase> T boxImpl(long val) {
+        public <T extends WordBase> T box(long val) {
             return (T) HostedWord.boxLong(val);
         }
     }
@@ -702,55 +697,55 @@ public abstract class Word implements SignedWord, UnsignedWord, Pointer {
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public byte readByte(int offset, LocationIdentity locationIdentity) {
-        return readByte(WordFactory.signed(offset), locationIdentity);
+        return readByte(signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public char readChar(int offset, LocationIdentity locationIdentity) {
-        return readChar(WordFactory.signed(offset), locationIdentity);
+        return readChar(signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public short readShort(int offset, LocationIdentity locationIdentity) {
-        return readShort(WordFactory.signed(offset), locationIdentity);
+        return readShort(signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public int readInt(int offset, LocationIdentity locationIdentity) {
-        return readInt(WordFactory.signed(offset), locationIdentity);
+        return readInt(signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public long readLong(int offset, LocationIdentity locationIdentity) {
-        return readLong(WordFactory.signed(offset), locationIdentity);
+        return readLong(signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public float readFloat(int offset, LocationIdentity locationIdentity) {
-        return readFloat(WordFactory.signed(offset), locationIdentity);
+        return readFloat(signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public double readDouble(int offset, LocationIdentity locationIdentity) {
-        return readDouble(WordFactory.signed(offset), locationIdentity);
+        return readDouble(signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public <T extends WordBase> T readWord(int offset, LocationIdentity locationIdentity) {
-        return readWord(WordFactory.signed(offset), locationIdentity);
+        return readWord(signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public Object readObject(int offset, LocationIdentity locationIdentity) {
-        return readObject(WordFactory.signed(offset), locationIdentity);
+        return readObject(signed(offset), locationIdentity);
     }
 
     @Override
@@ -814,61 +809,61 @@ public abstract class Word implements SignedWord, UnsignedWord, Pointer {
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeByte(int offset, byte val, LocationIdentity locationIdentity) {
-        writeByte(WordFactory.signed(offset), val, locationIdentity);
+        writeByte(signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeChar(int offset, char val, LocationIdentity locationIdentity) {
-        writeChar(WordFactory.signed(offset), val, locationIdentity);
+        writeChar(signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeShort(int offset, short val, LocationIdentity locationIdentity) {
-        writeShort(WordFactory.signed(offset), val, locationIdentity);
+        writeShort(signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeInt(int offset, int val, LocationIdentity locationIdentity) {
-        writeInt(WordFactory.signed(offset), val, locationIdentity);
+        writeInt(signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeLong(int offset, long val, LocationIdentity locationIdentity) {
-        writeLong(WordFactory.signed(offset), val, locationIdentity);
+        writeLong(signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeFloat(int offset, float val, LocationIdentity locationIdentity) {
-        writeFloat(WordFactory.signed(offset), val, locationIdentity);
+        writeFloat(signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeDouble(int offset, double val, LocationIdentity locationIdentity) {
-        writeDouble(WordFactory.signed(offset), val, locationIdentity);
+        writeDouble(signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeWord(int offset, WordBase val, LocationIdentity locationIdentity) {
-        writeWord(WordFactory.signed(offset), val, locationIdentity);
+        writeWord(signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.INITIALIZE)
     public void initializeLong(int offset, long val, LocationIdentity locationIdentity) {
-        initializeLong(WordFactory.signed(offset), val, locationIdentity);
+        initializeLong(signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeObject(int offset, Object val, LocationIdentity locationIdentity) {
-        writeObject(WordFactory.signed(offset), val, locationIdentity);
+        writeObject(signed(offset), val, locationIdentity);
     }
 
     @Override
@@ -929,60 +924,60 @@ public abstract class Word implements SignedWord, UnsignedWord, Pointer {
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public byte readByte(int offset) {
-        return readByte(WordFactory.signed(offset));
+        return readByte(signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public char readChar(int offset) {
-        return readChar(WordFactory.signed(offset));
+        return readChar(signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public short readShort(int offset) {
-        return readShort(WordFactory.signed(offset));
+        return readShort(signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public int readInt(int offset) {
-        return readInt(WordFactory.signed(offset));
+        return readInt(signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public long readLong(int offset) {
-        return readLong(WordFactory.signed(offset));
+        return readLong(signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public float readFloat(int offset) {
-        return readFloat(WordFactory.signed(offset));
+        return readFloat(signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public double readDouble(int offset) {
-        return readDouble(WordFactory.signed(offset));
+        return readDouble(signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public <T extends WordBase> T readWord(int offset) {
-        return readWord(WordFactory.signed(offset));
+        return readWord(signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public Object readObject(int offset) {
-        return readObject(WordFactory.signed(offset));
+        return readObject(signed(offset));
     }
 
     @Operation(opcode = Opcode.READ_HEAP)
     public Object readObject(int offset, BarrierType barrierType) {
-        return readObject(WordFactory.signed(offset), barrierType);
+        return readObject(signed(offset), barrierType);
     }
 
     @Override
@@ -1078,103 +1073,103 @@ public abstract class Word implements SignedWord, UnsignedWord, Pointer {
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeByte(int offset, byte val) {
-        writeByte(WordFactory.signed(offset), val);
+        writeByte(signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeChar(int offset, char val) {
-        writeChar(WordFactory.signed(offset), val);
+        writeChar(signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeShort(int offset, short val) {
-        writeShort(WordFactory.signed(offset), val);
+        writeShort(signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeInt(int offset, int val) {
-        writeInt(WordFactory.signed(offset), val);
+        writeInt(signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeLong(int offset, long val) {
-        writeLong(WordFactory.signed(offset), val);
+        writeLong(signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeFloat(int offset, float val) {
-        writeFloat(WordFactory.signed(offset), val);
+        writeFloat(signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeDouble(int offset, double val) {
-        writeDouble(WordFactory.signed(offset), val);
+        writeDouble(signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeWord(int offset, WordBase val) {
-        writeWord(WordFactory.signed(offset), val);
+        writeWord(signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeObject(int offset, Object val) {
-        writeObject(WordFactory.signed(offset), val);
+        writeObject(signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public int compareAndSwapInt(int offset, int expectedValue, int newValue, LocationIdentity locationIdentity) {
-        return compareAndSwapInt(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
+        return compareAndSwapInt(signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public long compareAndSwapLong(int offset, long expectedValue, long newValue, LocationIdentity locationIdentity) {
-        return compareAndSwapLong(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
+        return compareAndSwapLong(signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public <T extends WordBase> T compareAndSwapWord(int offset, T expectedValue, T newValue, LocationIdentity locationIdentity) {
-        return compareAndSwapWord(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
+        return compareAndSwapWord(signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public Object compareAndSwapObject(int offset, Object expectedValue, Object newValue, LocationIdentity locationIdentity) {
-        return compareAndSwapObject(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
+        return compareAndSwapObject(signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public boolean logicCompareAndSwapInt(int offset, int expectedValue, int newValue, LocationIdentity locationIdentity) {
-        return logicCompareAndSwapInt(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
+        return logicCompareAndSwapInt(signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public boolean logicCompareAndSwapLong(int offset, long expectedValue, long newValue, LocationIdentity locationIdentity) {
-        return logicCompareAndSwapLong(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
+        return logicCompareAndSwapLong(signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public boolean logicCompareAndSwapWord(int offset, WordBase expectedValue, WordBase newValue, LocationIdentity locationIdentity) {
-        return logicCompareAndSwapWord(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
+        return logicCompareAndSwapWord(signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public boolean logicCompareAndSwapObject(int offset, Object expectedValue, Object newValue, LocationIdentity locationIdentity) {
-        return logicCompareAndSwapObject(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
+        return logicCompareAndSwapObject(signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     /**
