@@ -435,9 +435,8 @@ public class AArch64Move {
             try (ScratchRegister r2 = masm.getScratchRegister()) {
                 Register rscratch1 = r1.getRegister();
                 Register rscratch2 = r2.getRegister();
-                // use the slot kind to define the operand size
                 PlatformKind kind = input.getPlatformKind();
-                final int size = kind.getSizeInBytes() * Byte.SIZE;
+                final int size = kind.getSizeInBytes() <= 4 ? 32 : 64;
 
                 // Always perform stack -> stack copies through integer registers
                 crb.blockComment("[stack -> stack copy]");
@@ -467,9 +466,8 @@ public class AArch64Move {
     private static void reg2stack(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
         AArch64Address dest = loadStackSlotAddress(crb, masm, asStackSlot(result), Value.ILLEGAL);
         Register src = asRegister(input);
-        // use the slot kind to define the operand size
-        AArch64Kind kind = (AArch64Kind) result.getPlatformKind();
-        final int size = kind.getSizeInBytes() * Byte.SIZE;
+        AArch64Kind kind = (AArch64Kind) input.getPlatformKind();
+        int size = kind.getSizeInBytes() * Byte.SIZE;
         if (kind.isInteger()) {
             masm.str(size, src, dest);
         } else {
@@ -479,7 +477,6 @@ public class AArch64Move {
 
     private static void stack2reg(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
         AArch64Kind kind = (AArch64Kind) input.getPlatformKind();
-        // use the slot kind to define the operand size
         final int size = kind.getSizeInBytes() * Byte.SIZE;
         if (kind.isInteger()) {
             AArch64Address src = loadStackSlotAddress(crb, masm, asStackSlot(input), result);
