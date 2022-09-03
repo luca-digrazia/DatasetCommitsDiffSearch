@@ -29,17 +29,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.lang.ref.WeakReference;
-import java.util.AbstractCollection;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -68,14 +63,14 @@ final class InstrumentationHandler {
 
     /* Load order needs to be preserved for sources, thats why we cannot use WeakHashMap. */
     private final Map<Source, Void> sources = Collections.synchronizedMap(new WeakHashMap<Source, Void>());
-    private final Collection<Source> sourcesList = new WeakAsyncList<>(16);
+    private final WeakAsyncList<Source> sourcesList = new WeakAsyncList<>(16);
 
-    private final Collection<RootNode> loadedRoots = new WeakAsyncList<>(256);
-    private final Collection<RootNode> executedRoots = new WeakAsyncList<>(64);
+    private final WeakAsyncList<RootNode> loadedRoots = new WeakAsyncList<>(256);
+    private final WeakAsyncList<RootNode> executedRoots = new WeakAsyncList<>(64);
 
-    private final Collection<EventBinding<?>> executionBindings = new EventBindingList(8);
-    private final Collection<EventBinding<?>> sourceSectionBindings = new EventBindingList(8);
-    private final Collection<EventBinding<?>> sourceBindings = new EventBindingList(8);
+    private final EventBindingList executionBindings = new EventBindingList(8);
+    private final EventBindingList sourceSectionBindings = new EventBindingList(8);
+    private final EventBindingList sourceBindings = new EventBindingList(8);
 
     /*
      * Fast lookup of instrumenter instances based on a key provided by the accessor.
@@ -112,7 +107,7 @@ final class InstrumentationHandler {
             synchronized (sources) {
                 if (!sources.containsKey(source)) {
                     sources.put(source, null);
-                    sourcesList.add(source);
+                    sourcesList.add(new WeakReference<>(source));
                     isNewSource = true;
                 }
             }
@@ -121,7 +116,7 @@ final class InstrumentationHandler {
                 notifySourceBindingsLoaded(sourceBindings, source);
             }
         }
-        loadedRoots.add(root);
+        loadedRoots.add(new WeakReference<>(root));
 
         // fast path no bindings attached
         if (!sourceSectionBindings.isEmpty()) {
@@ -137,7 +132,7 @@ final class InstrumentationHandler {
         if (!instrumentationInitialized) {
             initializeInstrumentation();
         }
-        executedRoots.add(root);
+        executedRoots.add(new WeakReference<>(root));
 
         // fast path no bindings attached
         if (executionBindings.isEmpty()) {
@@ -165,7 +160,7 @@ final class InstrumentationHandler {
             disposedInstrumenter.dispose();
 
             if (cleanupRequired) {
-                Collection<EventBinding<?>> disposedExecutionBindings = filterBindingsForInstrumenter(executionBindings, disposedInstrumenter);
+                EventBindingList disposedExecutionBindings = filterBindingsForInstrumenter(executionBindings, disposedInstrumenter);
                 if (!disposedExecutionBindings.isEmpty()) {
                     visitRoots(executedRoots, new DisposeWrappersWithBindingVisitor(disposedExecutionBindings));
                 }
@@ -180,8 +175,14 @@ final class InstrumentationHandler {
         }
     }
 
-    private static void disposeBindingsBulk(Collection<EventBinding<?>> list) {
-        for (EventBinding<?> binding : list) {
+    private static void disposeBindingsBulk(EventBindingList list) {
+        AtomicReferenceArray<EventBinding<?>> bindingArray = list.getArray();
+        for (int i = 0; i < bindingArray.length(); i++) {
+            EventBinding<?> binding = bindingArray.get(i);
+            if (binding == null) {
+                // end of list
+                break;
+            }
             binding.disposeBulk();
         }
     }
@@ -238,7 +239,16 @@ final class InstrumentationHandler {
 
         this.sourceBindings.add(binding);
         if (instrumentationInitialized && notifyLoaded) {
-            for (Source source : sourcesList) {
+            AtomicReferenceArray<WeakReference<Source>> sourcesArray = sourcesList.getArray();
+            for (int i = 0; i < sourcesArray.length(); i++) {
+                WeakReference<Source> ref = sourcesArray.get(i);
+                if (ref == null) {
+                    break;
+                }
+                Source source = ref.get();
+                if (source == null) {
+                    continue;
+                }
                 notifySourceBindingLoaded(binding, source);
             }
         }
@@ -250,8 +260,19 @@ final class InstrumentationHandler {
         return binding;
     }
 
-    private void visitRoots(Collection<RootNode> roots, AbstractNodeVisitor addBindingsVisitor) {
-        for (RootNode root : roots) {
+    private void visitRoots(WeakAsyncList<RootNode> roots, AbstractNodeVisitor addBindingsVisitor) {
+        AtomicReferenceArray<WeakReference<RootNode>> array = roots.getArray();
+        for (int i = 0; i < array.length(); i++) {
+            WeakReference<RootNode> ref = array.get(i);
+            if (ref == null) {
+                // reached end of list
+                break;
+            }
+            RootNode root = ref.get();
+            if (root == null) {
+                // gc'ed
+                continue;
+            }
             visitRoot(root, addBindingsVisitor);
         }
     }
@@ -283,7 +304,16 @@ final class InstrumentationHandler {
         EventChainNode root = null;
         EventChainNode parent = null;
 
-        for (EventBinding<?> binding : executionBindings) {
+        AtomicReferenceArray<EventBinding<?>> bindingsArray = executionBindings.getArray();
+        for (int i = 0; i < bindingsArray.length(); i++) {
+            EventBinding<?> binding = bindingsArray.get(i);
+            if (binding == null) {
+                // end of list
+                break;
+            } else if (binding.isDisposed()) {
+                // non alive element found
+                continue;
+            }
             if (binding.isInstrumentedFull(providedTags, rootNode, instrumentedNode, sourceSection)) {
                 if (TRACE) {
                     trace("  Found binding %s, %s%n", binding.getFilter(), binding.getElement());
@@ -309,10 +339,20 @@ final class InstrumentationHandler {
         return root;
     }
 
-    private static void notifySourceBindingsLoaded(Collection<EventBinding<?>> bindings, Source source) {
-        for (EventBinding<?> binding : bindings) {
+    private static void notifySourceBindingsLoaded(EventBindingList bindings, Source source) {
+        AtomicReferenceArray<EventBinding<?>> bindingArray = bindings.getArray();
+
+        for (int i = 0; i < bindingArray.length(); i++) {
+            EventBinding<?> binding = bindingArray.get(i);
+            if (binding == null) {
+                // end of list
+                break;
+            } else if (binding.isDisposed()) {
+                continue;
+            }
             notifySourceBindingLoaded(binding, source);
         }
+
     }
 
     private static void notifySourceBindingLoaded(EventBinding<?> binding, Source source) {
@@ -367,12 +407,20 @@ final class InstrumentationHandler {
         instrumenterMap.put(key, instrumenter);
     }
 
-    private static Collection<EventBinding<?>> filterBindingsForInstrumenter(Collection<EventBinding<?>> bindings, AbstractInstrumenter instrumenter) {
+    private static EventBindingList filterBindingsForInstrumenter(EventBindingList bindings, AbstractInstrumenter instrumenter) {
         if (bindings.isEmpty()) {
-            return Collections.emptyList();
+            return EventBindingList.EMPTY;
         }
-        Collection<EventBinding<?>> newBindings = new ArrayList<>();
-        for (EventBinding<?> binding : bindings) {
+        EventBindingList newBindings = new EventBindingList(16);
+        AtomicReferenceArray<EventBinding<?>> bindingsArray = bindings.getArray();
+        for (int i = 0; i < bindingsArray.length(); i++) {
+            EventBinding<?> binding = bindingsArray.get(i);
+            if (binding == null) {
+                break;
+            }
+            if (binding.isDisposed()) {
+                continue;
+            }
             if (binding.getInstrumenter() == instrumenter) {
                 newBindings.add(binding);
             }
@@ -612,10 +660,10 @@ final class InstrumentationHandler {
 
     private abstract class AbstractBindingsVisitor extends AbstractNodeVisitor {
 
-        private final Collection<EventBinding<?>> bindings;
+        private final EventBindingList bindings;
         private final boolean visitForEachBinding;
 
-        AbstractBindingsVisitor(Collection<EventBinding<?>> bindings, boolean visitForEachBinding) {
+        AbstractBindingsVisitor(EventBindingList bindings, boolean visitForEachBinding) {
             this.bindings = bindings;
             this.visitForEachBinding = visitForEachBinding;
         }
@@ -631,7 +679,16 @@ final class InstrumentationHandler {
             }
             SourceSection sourceSection = localRoot.getSourceSection();
 
-            for (EventBinding<?> binding : bindings) {
+            // no locking required for the atomic reference arrays
+            AtomicReferenceArray<EventBinding<?>> bindingsArray = bindings.getArray();
+            for (int i = 0; i < bindingsArray.length(); i++) {
+                EventBinding<?> binding = bindingsArray.get(i);
+                if (binding == null) {
+                    break;
+                } else if (binding.isDisposed()) {
+                    continue;
+                }
+
                 if (binding.isInstrumentedRoot(providedTags, localRoot, sourceSection)) {
                     return true;
                 }
@@ -643,7 +700,14 @@ final class InstrumentationHandler {
             SourceSection sourceSection = node.getSourceSection();
             if (isInstrumentableNode(node, sourceSection)) {
                 // no locking required for these atomic reference arrays
-                for (EventBinding<?> binding : bindings) {
+                AtomicReferenceArray<EventBinding<?>> bindingsArray = bindings.getArray();
+                for (int i = 0; i < bindingsArray.length(); i++) {
+                    EventBinding<?> binding = bindingsArray.get(i);
+                    if (binding == null) {
+                        break;
+                    } else if (binding.isDisposed()) {
+                        continue;
+                    }
                     if (binding.isInstrumentedFull(providedTags, root, node, sourceSection)) {
                         if (TRACE) {
                             traceFilterCheck("hit", providedTags, binding, node, sourceSection);
@@ -657,6 +721,7 @@ final class InstrumentationHandler {
                             traceFilterCheck("miss", providedTags, binding, node, sourceSection);
                         }
                     }
+
                 }
             }
             return true;
@@ -694,7 +759,7 @@ final class InstrumentationHandler {
 
     private final class InsertWrappersVisitor extends AbstractBindingsVisitor {
 
-        InsertWrappersVisitor(Collection<EventBinding<?>> bindings) {
+        InsertWrappersVisitor(EventBindingList bindings) {
             super(bindings, false);
         }
 
@@ -706,7 +771,7 @@ final class InstrumentationHandler {
 
     private final class DisposeWrappersWithBindingVisitor extends AbstractBindingsVisitor {
 
-        DisposeWrappersWithBindingVisitor(Collection<EventBinding<?>> bindings) {
+        DisposeWrappersWithBindingVisitor(EventBindingList bindings) {
             super(bindings, false);
         }
 
@@ -732,7 +797,7 @@ final class InstrumentationHandler {
 
     private final class NotifyLoadedListenerVisitor extends AbstractBindingsVisitor {
 
-        NotifyLoadedListenerVisitor(Collection<EventBinding<?>> bindings) {
+        NotifyLoadedListenerVisitor(EventBindingList bindings) {
             super(bindings, true);
         }
 
@@ -995,13 +1060,11 @@ final class InstrumentationHandler {
     }
 
     /**
-     * A list collection data structure that is optimized for fast non-blocking traversals. There is
-     * adds and no explicit removal. Removals are based on a side effect of the element, by
-     * returning <code>null</code> in {@link AbstractAsyncCollection#unwrap(Object)}. Its not
-     * possible to reliably query the {@link AbstractAsyncCollection#nextInsertionIndex} of the
-     * collection, therefore it throws an {@link UnsupportedOperationException}.
+     * A list data structure that is optimized for fast non-blocking traversals. There is no
+     * explicit removal. Removals are based on a side effect of the element. Adds do block and
+     * automatically compact on oveflows.
      */
-    private abstract static class AbstractAsyncCollection<T, R> extends AbstractCollection<R> {
+    private abstract static class AbstractAsyncList<T> {
         /*
          * We use an atomic reference list as we don't want to see holes in the array when appending
          * to it. This allows us to use null as a safe terminator for the array.
@@ -1011,43 +1074,31 @@ final class InstrumentationHandler {
         /*
          * Size can be non volatile as it is not exposed or used for traversal.
          */
-        private int nextInsertionIndex;
+        private int size;
 
-        AbstractAsyncCollection(int initialCapacity) {
+        AbstractAsyncList(int initialCapacity) {
             if (initialCapacity <= 0) {
                 throw new IllegalArgumentException("Invalid initial capacity " + initialCapacity);
             }
             this.values = new AtomicReferenceArray<>(initialCapacity);
         }
 
-        @Override
-        public final synchronized boolean add(R reference) {
-            T wrappedElement = wrap(reference);
-            if (wrappedElement == null) {
+        public final synchronized void add(T reference) {
+            if (reference == null) {
                 // fail early
                 throw new NullPointerException();
             }
-            if (nextInsertionIndex >= values.length()) {
+            if (size >= values.length()) {
                 compact();
             }
-            values.set(nextInsertionIndex++, wrappedElement);
-            return true;
+            values.set(size++, reference);
         }
 
-        @Override
-        public int size() {
-            // size cannot be supported reliably
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public final boolean isEmpty() {
             return values.get(0) == null;
         }
 
-        protected abstract T wrap(R element);
-
-        protected abstract R unwrap(T element);
+        protected abstract boolean isAlive(T element);
 
         private void compact() {
             AtomicReferenceArray<T> localValues = values;
@@ -1060,7 +1111,7 @@ final class InstrumentationHandler {
                 if (ref == null) {
                     break;
                 }
-                if (unwrap(ref) != null) {
+                if (isAlive(ref)) {
                     liveElements++;
                 }
             }
@@ -1076,71 +1127,23 @@ final class InstrumentationHandler {
                 if (ref == null) {
                     break;
                 }
-                if (unwrap(ref) != null) {
+                if (isAlive(ref)) {
                     newValues.set(index++, ref);
                 }
             }
 
-            this.nextInsertionIndex = index;
+            this.size = index;
             this.values = newValues;
+
         }
 
         /**
-         * Returns an iterator which can be traversed without a lock.
+         * Returns an array which can be traversed without a lock. A null element in the list
+         * indicates the end of the list. Non alive elements might be returned by this list as well
+         * and need to be checked during traversal.
          */
-        @Override
-        public Iterator<R> iterator() {
-            return new Iterator<R>() {
-
-                private int index;
-                private R queuedNext;
-
-                public boolean hasNext() {
-                    R next = queuedNext;
-                    if (next == null) {
-                        next = queueNext();
-                        queuedNext = next;
-                    }
-                    return next != null;
-                }
-
-                private R queueNext() {
-                    int localIndex = index;
-                    while (true) {
-                        AtomicReferenceArray<T> array = values;
-                        if (localIndex >= array.length()) {
-                            return null;
-                        }
-                        T localValue = array.get(localIndex);
-                        if (localValue == null) {
-                            return null;
-                        }
-                        localIndex++;
-                        R alive = unwrap(localValue);
-                        if (alive == null) {
-                            continue;
-                        }
-                        index = localIndex;
-                        return alive;
-                    }
-                }
-
-                public R next() {
-                    R next = queuedNext;
-                    if (next == null) {
-                        next = queueNext();
-                        if (next == null) {
-                            throw new NoSuchElementException();
-                        }
-                    }
-                    queuedNext = null;
-                    return next;
-                }
-
-                public void remove() {
-                    throw new UnsupportedOperationException();
-                }
-            };
+        public final AtomicReferenceArray<T> getArray() {
+            return values;
         }
 
     }
@@ -1148,44 +1151,32 @@ final class InstrumentationHandler {
     /**
      * An async list implementation that removes elements whenever a binding was disposed.
      */
-    private static final class EventBindingList extends AbstractAsyncCollection<EventBinding<?>, EventBinding<?>> {
+    private static final class EventBindingList extends AbstractAsyncList<EventBinding<?>> {
+
+        public static final EventBindingList EMPTY = new EventBindingList(1);
 
         EventBindingList(int initialCapacity) {
             super(initialCapacity);
         }
 
         @Override
-        protected EventBinding<?> wrap(EventBinding<?> element) {
-            return element;
+        protected boolean isAlive(EventBinding<?> element) {
+            return !element.isDisposed();
         }
-
-        @Override
-        protected EventBinding<?> unwrap(EventBinding<?> element) {
-            if (element.isDisposed()) {
-                return null;
-            }
-            return element;
-        }
-
     }
 
     /**
      * An async list using weak references.
      */
-    private static final class WeakAsyncList<T> extends AbstractAsyncCollection<WeakReference<T>, T> {
+    private static final class WeakAsyncList<T> extends AbstractAsyncList<WeakReference<T>> {
 
         WeakAsyncList(int initialCapacity) {
             super(initialCapacity);
         }
 
         @Override
-        protected WeakReference<T> wrap(T element) {
-            return new WeakReference<>(element);
-        }
-
-        @Override
-        protected T unwrap(WeakReference<T> element) {
-            return element.get();
+        protected boolean isAlive(WeakReference<T> element) {
+            return element.get() != null;
         }
 
     }

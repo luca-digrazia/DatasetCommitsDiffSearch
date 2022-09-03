@@ -30,6 +30,7 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * Provides the capabilities to attach {@link ExecutionEventNodeFactory} and
@@ -73,7 +74,7 @@ public abstract class Instrumenter {
      * @param includeExistingSources whether or not this listener should be notified for sources
      *            which were already loaded at the time when this listener was attached.
      *
-     * @see LoadSourceEventListener#onLoad(LoadSourceEvent)
+     * @see LoadSourceEventListener#onLoad(Source)
      *
      * @since 0.15
      */
@@ -88,7 +89,7 @@ public abstract class Instrumenter {
      * @param includeExistingSourceSections whether or not this listener should be notified for
      *            sources which were already loaded at the time when this listener was attached.
      *
-     * @see LoadSourceSectionEventListener#onLoad(LoadSourceSectionEvent)
+     * @see LoadSourceSectionEventListener#onLoad(SourceSection, Node)
      *
      * @since 0.15
      */
