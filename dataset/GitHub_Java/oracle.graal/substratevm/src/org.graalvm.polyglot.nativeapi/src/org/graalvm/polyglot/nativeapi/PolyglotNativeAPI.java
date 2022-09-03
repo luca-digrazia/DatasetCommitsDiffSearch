@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -335,7 +333,7 @@ public final class PolyglotNativeAPI {
     public static PolyglotStatus poly_context_builder_allow_create_thread(PolyglotIsolateThread thread, PolyglotContextBuilder context_builder, boolean allow_create_thread) {
         return withHandledErrors(() -> {
             Context.Builder contextBuilder = fetchHandle(context_builder);
-            contextBuilder.allowCreateThread(allow_create_thread);
+            contextBuilder.allowNativeAccess(allow_create_thread);
         });
     }
 
