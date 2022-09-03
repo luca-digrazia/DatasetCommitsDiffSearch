@@ -171,10 +171,8 @@ public class LazyInitializationTest {
     }
 
     private static boolean isGraalClass(String className) {
-        if (className.startsWith("com.oracle.graal.truffle.") || className.startsWith("com.oracle.graal.serviceprovider.")) {
+        if (className.startsWith("com.oracle.graal.truffle.")) {
             // Ignore classes in the com.oracle.graal.truffle package, they are all allowed.
-            // Also ignore classes in the graal serviceprovider package, as they might not be lazily
-            // loaded.
             return false;
         } else {
             return className.startsWith("com.oracle.graal.");
