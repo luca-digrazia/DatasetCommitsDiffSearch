@@ -53,7 +53,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
 
     public interface CustomCanonicalizer {
 
-        Node canonicalize(Node node);
+        ValueNode canonicalize(ValueNode node);
     }
 
     public CanonicalizerPhase(boolean canonicalizeReads) {
@@ -232,8 +232,9 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
 
         public boolean tryCanonicalize(final Node node, NodeClass nodeClass) {
             boolean result = baseTryCanonicalize(node, nodeClass);
-            if (!result && customCanonicalizer != null) {
-                Node canonical = customCanonicalizer.canonicalize(node);
+            if (!result && customCanonicalizer != null && node instanceof ValueNode) {
+                ValueNode valueNode = (ValueNode) node;
+                ValueNode canonical = customCanonicalizer.canonicalize(valueNode);
                 result = performReplacement(node, canonical);
             }
             return result;

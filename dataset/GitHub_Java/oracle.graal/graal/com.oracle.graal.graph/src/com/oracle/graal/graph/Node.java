@@ -595,12 +595,14 @@ public abstract class Node implements Cloneable, Formattable {
         return newNode;
     }
 
+    static int count = 0;
+
     public final Node clone(Graph into) {
         return clone(into, true);
     }
 
     /**
-     * Must be overridden by subclasses that implement {@link Canonicalizable}. The implementation
+     * Must be overridden buy subclasses that implement {@link Canonicalizable}. The implementation
      * in {@link Node} exists to obviate the need to cast a node before invoking
      * {@link Canonicalizable#canonical(CanonicalizerTool)}.
      * 
@@ -611,7 +613,7 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     /**
-     * Must be overridden by subclasses that implement {@link Simplifiable}. The implementation in
+     * Must be overridden buy subclasses that implement {@link Simplifiable}. The implementation in
      * {@link Node} exists to obviate the need to cast a node before invoking
      * {@link Simplifiable#simplify(SimplifierTool)}.
      * 

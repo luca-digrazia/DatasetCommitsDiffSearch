@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,22 +28,22 @@ import com.oracle.graal.graph.spi.*;
 /**
  * Logic node that negates its argument.
  */
-public class LogicNegationNode extends LogicNode implements Canonicalizable {
+public class LogicNegationNode extends LogicNode implements Canonicalizable, IterableNodeType {
 
-    @Input(InputType.Condition) private LogicNode value;
+    @Input private LogicNode input;
 
-    public LogicNegationNode(LogicNode value) {
-        this.value = value;
+    public LogicNegationNode(LogicNode input) {
+        this.input = input;
     }
 
-    public LogicNode getValue() {
-        return value;
+    public LogicNode getInput() {
+        return input;
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (value instanceof LogicNegationNode) {
-            return ((LogicNegationNode) value).getValue();
+        if (input instanceof LogicNegationNode) {
+            return ((LogicNegationNode) input).getInput();
         } else {
             return this;
         }

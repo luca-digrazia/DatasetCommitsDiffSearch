@@ -24,14 +24,13 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.nodes.*;
 
 /**
  * {@link MacroNode Macro node} for {@link Class#getSuperclass()}.
- *
+ * 
  * @see ClassSubstitutions#getSuperclass(Class)
  */
 public class ClassGetSuperclassNode extends MacroNode implements Canonicalizable {
@@ -48,10 +47,10 @@ public class ClassGetSuperclassNode extends MacroNode implements Canonicalizable
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class c = (Class) HotSpotObjectConstant.asObject(javaClass.asConstant());
+            Class c = (Class) javaClass.asConstant().asObject();
             if (c != null) {
                 Class superclass = c.getSuperclass();
-                return ConstantNode.forConstant(HotSpotObjectConstant.forObject(superclass), tool.getMetaAccess(), graph());
+                return ConstantNode.forObject(superclass, tool.runtime(), graph());
             }
         }
         return this;

@@ -33,7 +33,7 @@ import com.oracle.graal.replacements.nodes.*;
 /**
  * {@link MacroNode Macro node} for {@link Class#cast(Object)}.
  * 
- * @see ClassSubstitutions#cast(Class, Object)
+ * @see ClassSubstitutions#isInstance(Class, Object)
  */
 public class ClassCastNode extends MacroNode implements Canonicalizable {
 
@@ -54,7 +54,7 @@ public class ClassCastNode extends MacroNode implements Canonicalizable {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
             ValueNode object = getObject();
-            Class c = (Class) HotSpotObjectConstant.asObject(javaClass.asConstant());
+            Class c = (Class) javaClass.asConstant().asObject();
             if (c != null && !c.isPrimitive()) {
                 HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(c);
                 CheckCastNode checkcast = graph().add(new CheckCastNode(type, object, null, false));

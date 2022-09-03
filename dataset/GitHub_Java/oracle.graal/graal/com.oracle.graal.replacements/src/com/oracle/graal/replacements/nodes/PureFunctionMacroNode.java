@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.*;
  * This node class can be used to create {@link MacroNode}s for simple pure functions like
  * {@link System#identityHashCode(Object)}.
  */
-public abstract class PureFunctionMacroNode extends MacroStateSplitNode implements Canonicalizable {
+public abstract class PureFunctionMacroNode extends MacroNode implements Canonicalizable {
 
     public PureFunctionMacroNode(Invoke invoke) {
         super(invoke);
@@ -50,9 +50,9 @@ public abstract class PureFunctionMacroNode extends MacroStateSplitNode implemen
         } else {
             ValueNode param = arguments.get(0);
             if (param.isConstant()) {
-                Constant constant = evaluate(param.asConstant(), tool.getMetaAccess());
+                Constant constant = evaluate(param.asConstant(), tool.runtime());
                 if (constant != null) {
-                    return ConstantNode.forConstant(constant, tool.getMetaAccess());
+                    return ConstantNode.forConstant(constant, tool.runtime(), graph());
                 }
             }
         }

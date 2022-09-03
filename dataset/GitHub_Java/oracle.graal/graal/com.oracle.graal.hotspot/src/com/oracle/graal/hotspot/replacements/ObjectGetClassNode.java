@@ -49,7 +49,7 @@ public class ObjectGetClassNode extends MacroNode implements Virtualizable, Cano
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (ImmutableCode.getValue()) {
+        if (AOTCompilation.getValue()) {
             return;
         }
         State state = tool.getObjectState(getObject());
@@ -61,7 +61,7 @@ public class ObjectGetClassNode extends MacroNode implements Virtualizable, Cano
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (ImmutableCode.getValue()) {
+        if (AOTCompilation.getValue()) {
             return this;
         }
         if (usages().isEmpty()) {
@@ -72,7 +72,7 @@ public class ObjectGetClassNode extends MacroNode implements Virtualizable, Cano
                 ObjectStamp objectStamp = (ObjectStamp) stamp;
                 if (objectStamp.isExactType()) {
                     Constant clazz = objectStamp.type().getEncoding(Representation.JavaClass);
-                    return ConstantNode.forConstant(clazz, tool.getMetaAccess(), graph());
+                    return ConstantNode.forConstant(clazz, tool.runtime(), graph());
                 }
             }
             return this;

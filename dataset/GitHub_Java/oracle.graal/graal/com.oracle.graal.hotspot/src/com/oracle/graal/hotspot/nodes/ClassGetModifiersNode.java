@@ -24,7 +24,6 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.nodes.*;
@@ -48,7 +47,7 @@ public class ClassGetModifiersNode extends MacroNode implements Canonicalizable 
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class c = (Class) HotSpotObjectConstant.asObject(javaClass.asConstant());
+            Class c = (Class) javaClass.asConstant().asObject();
             if (c != null) {
                 return ConstantNode.forInt(c.getModifiers(), graph());
             }
