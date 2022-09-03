@@ -714,7 +714,7 @@ public final class SourceSectionFilter {
 
         private final EventFilterExpression delegate;
 
-        Not(EventFilterExpression delegate) {
+        public Not(EventFilterExpression delegate) {
             this.delegate = delegate;
         }
 
