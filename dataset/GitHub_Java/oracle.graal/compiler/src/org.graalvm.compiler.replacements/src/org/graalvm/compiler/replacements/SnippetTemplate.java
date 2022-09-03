@@ -25,7 +25,6 @@
 package org.graalvm.compiler.replacements;
 
 import static java.util.FormattableFlags.ALTERNATE;
-import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.compiler.debug.DebugContext.DEFAULT_LOG_STREAM;
 import static org.graalvm.compiler.debug.DebugContext.applyFormattingFlagsAndWidth;
 import static org.graalvm.compiler.debug.DebugOptions.DebugStubsAndSnippets;
@@ -213,9 +212,8 @@ public class SnippetTemplate {
                     constantParameters[0] = true;
                 }
 
-                // Retrieve the names only when assertions are turned on. Parameter annotations are
-                // unsupported in the native image.
-                assert IS_IN_NATIVE_IMAGE || initNames(method, count);
+                // Retrieve the names only when assertions are turned on.
+                assert initNames(method, count);
             }
 
             final boolean[] constantParameters;
@@ -965,9 +963,7 @@ public class SnippetTemplate {
                         }
                         retNode.setMemoryMap(null);
                     }
-                    if (memoryMap != null) {
-                        memoryMap.safeDelete();
-                    }
+                    memoryMap.safeDelete();
                 }
                 if (needsAnchor) {
                     snippetCopy.addAfterFixed(snippetCopy.start(), anchor);
