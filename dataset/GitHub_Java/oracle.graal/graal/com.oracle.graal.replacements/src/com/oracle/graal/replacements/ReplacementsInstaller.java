@@ -151,15 +151,15 @@ public class ReplacementsInstaller {
     /**
      * Installs a method substitution.
      * 
-     * @param originalMember a method or constructor being substituted
+     * @param originalMethod a method or constructor being substituted
      * @param substituteMethod the substitute method
      */
-    protected void installMethodSubstitution(Member originalMember, Method substituteMethod) {
+    protected void installMethodSubstitution(Member originalMethod, Method substituteMethod) {
         substitute = runtime.lookupJavaMethod(substituteMethod);
-        if (originalMember instanceof Method) {
-            original = runtime.lookupJavaMethod((Method) originalMember);
+        if (originalMethod instanceof Method) {
+            original = runtime.lookupJavaMethod((Method) originalMethod);
         } else {
-            original = runtime.lookupJavaConstructor((Constructor) originalMember);
+            original = runtime.lookupJavaConstructor((Constructor) originalMethod);
         }
         try {
             Debug.log("substitution: " + MetaUtil.format("%H.%n(%p)", original) + " --> " + MetaUtil.format("%H.%n(%p)", substitute));
@@ -210,13 +210,16 @@ public class ReplacementsInstaller {
      * Does final processing of a snippet graph.
      */
     protected void finalizeGraph(ResolvedJavaMethod method, StructuredGraph graph) {
-        new AliasResolutionPhase(runtime).apply(graph);
         new NodeIntrinsificationPhase(runtime, pool).apply(graph);
         assert SnippetTemplate.hasConstantParameter(method) || NodeIntrinsificationVerificationPhase.verify(graph);
 
-        new SnippetFrameStateCleanupPhase().apply(graph);
-        new DeadCodeEliminationPhase().apply(graph);
-        new InsertStateAfterPlaceholderPhase().apply(graph);
+        if (substitute == null) {
+            new SnippetFrameStateCleanupPhase().apply(graph);
+            new DeadCodeEliminationPhase().apply(graph);
+            new InsertStateAfterPlaceholderPhase().apply(graph);
+        } else {
+            new DeadCodeEliminationPhase().apply(graph);
+        }
     }
 
     public StructuredGraph makeGraph(final ResolvedJavaMethod method, final SnippetInliningPolicy policy) {
@@ -256,7 +259,6 @@ public class ReplacementsInstaller {
         Debug.dump(graph, "%s: %s", method.getName(), GraphBuilderPhase.class.getSimpleName());
 
         new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
-        new AliasResolutionPhase(runtime).apply(graph);
         new NodeIntrinsificationPhase(runtime, pool).apply(graph);
 
         return graph;
@@ -279,7 +281,6 @@ public class ReplacementsInstaller {
      * Called after all inlining for a given graph is complete.
      */
     protected void afterInlining(StructuredGraph graph) {
-        new AliasResolutionPhase(runtime).apply(graph);
         new NodeIntrinsificationPhase(runtime, pool).apply(graph);
 
         new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
@@ -343,7 +344,7 @@ public class ReplacementsInstaller {
      * @param optional if true, resolution failure returns null
      * @return the resolved class or null if resolution fails and {@code optional} is true
      */
-    static Class resolveType(String className, boolean optional) {
+    private static Class resolveType(String className, boolean optional) {
         try {
             // Need to use launcher class path to handle classes
             // that are not on the boot class path

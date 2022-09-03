@@ -152,9 +152,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                     // to be valid for the entire run of the VM.
                     Assumptions assumptions = new Assumptions(false);
                     ReplacementsInstaller installer = new HotSpotReplacementsInstaller(runtime, assumptions, runtime.getGraalRuntime().getTarget());
-                    for (ReplacementsProvider provider : ServiceLoader.loadInstalled(ReplacementsProvider.class)) {
-                        provider.installReplacements(installer);
-                    }
+                    GraalMethodSubstitutions.installIntrinsics(installer);
                     runtime.installReplacements(graalRuntime.getBackend(), installer, assumptions);
                 }
             });
@@ -439,7 +437,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         if (osrCompilation && bootstrapRunning) {
             // no OSR compilations during bootstrap - the compiler is just too slow at this point,
             // and we know that there are no endless loops
-            return current != null && (current.isInProgress() || !current.isCancelled());
+            return current != null;
         }
 
         if (CompilationTask.withinEnqueue.get()) {
@@ -447,7 +445,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             // java.util.concurrent.BlockingQueue is used to implement the compilation worker
             // queues. If a compiler thread triggers a compilation, then it may be blocked trying
             // to add something to its own queue.
-            return current != null && (current.isInProgress() || !current.isCancelled());
+            return current != null;
         }
         CompilationTask.withinEnqueue.set(Boolean.TRUE);
 
@@ -464,7 +462,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                         // normally compilation tasks will only be re-queued when they get a
                         // priority boost, so cancel the old task and add a new one
                         current.cancel();
-                    } else if (!current.isCancelled()) {
+                    } else {
                         // without a prioritizing compile queue it makes no sense to re-queue the
                         // compilation task
                         return true;
