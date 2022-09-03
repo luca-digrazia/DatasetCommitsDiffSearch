@@ -76,6 +76,7 @@ public class BranchProbabilityNode extends FixedWithNextNode implements Simplifi
     }
 
     @NodeIntrinsic
-    public static native void probability(@ConstantNodeParameter double probability);
+    public static native void probability(@ConstantNodeParameter
+    double probability);
 
 }

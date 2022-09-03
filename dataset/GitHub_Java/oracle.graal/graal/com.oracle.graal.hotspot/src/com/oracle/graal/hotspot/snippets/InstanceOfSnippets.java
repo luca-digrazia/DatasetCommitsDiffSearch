@@ -73,7 +73,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
             return falseValue;
         }
         Word objectHub = loadHub(object);
-        if (objectHub.notEqual(exactHub)) {
+        if (objectHub != exactHub) {
             probability(LIKELY_PROBABILITY);
             exactMiss.inc();
             return falseValue;
@@ -99,7 +99,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
             return falseValue;
         }
         Word objectHub = loadHub(object);
-        if (objectHub.readWord(superCheckOffset).notEqual(hub)) {
+        if (objectHub.readWord(superCheckOffset) != hub) {
             probability(NOT_LIKELY_PROBABILITY);
             displayMiss.inc();
             return falseValue;
@@ -129,7 +129,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
         ExplodeLoopNode.explodeLoop();
         for (int i = 0; i < hints.length; i++) {
             Word hintHub = hints[i];
-            if (hintHub.equal(objectHub)) {
+            if (hintHub == objectHub) {
                 probability(NOT_FREQUENT_PROBABILITY);
                 hintsHit.inc();
                 return trueValue;
