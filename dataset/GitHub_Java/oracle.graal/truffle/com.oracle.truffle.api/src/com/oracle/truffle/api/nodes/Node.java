@@ -30,7 +30,6 @@ import java.util.concurrent.*;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.source.*;
@@ -40,6 +39,7 @@ import com.oracle.truffle.api.utilities.*;
  * Abstract base class for all Truffle nodes.
  */
 public abstract class Node implements NodeInterface, Cloneable {
+
     private final NodeClass nodeClass;
     @CompilationFinal private Node parent;
     @CompilationFinal private SourceSection sourceSection;
@@ -143,6 +143,33 @@ public abstract class Node implements NodeInterface, Cloneable {
             current = current.parent;
         }
         return null;
+    }
+
+    /**
+     * Handles the discovery of the {@link SyntaxNode} that this node is derived from.
+     */
+    public SyntaxNode asSyntaxNode() {
+        if (this instanceof SyntaxNode) {
+            return (SyntaxNode) this;
+        } else {
+            return getSyntaxNode();
+        }
+    }
+
+    /**
+     * Locates the {@link SyntaxNode} with which this node is associated/derived. Many nodes
+     * organize themselves in such a way that the relevant {@link SyntaxNode} can be found by
+     * following the parent chain, which is therefore the default implementation.
+     */
+    protected SyntaxNode getSyntaxNode() {
+        Node current = this;
+        while (current != null) {
+            if (current instanceof SyntaxNode) {
+                return (SyntaxNode) current;
+            }
+            current = current.getParent();
+        }
+        throw new IllegalStateException("no SyntaxNode found");
     }
 
     /**
@@ -587,14 +614,4 @@ public abstract class Node implements NodeInterface, Cloneable {
         IN_ATOMIC_BLOCK.set(IN_ATOMIC_BLOCK.get() - 1);
         return true;
     }
-
-    private static final class AccessorNodes extends Accessor {
-        @Override
-        protected Class<? extends TruffleLanguage> findLanguage(RootNode n) {
-            return n.language;
-        }
-    }
-
-    // registers into Accessor.NODES
-    @SuppressWarnings("unused") private static final AccessorNodes ACCESSOR = new AccessorNodes();
 }

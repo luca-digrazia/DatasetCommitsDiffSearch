@@ -27,11 +27,15 @@ package com.oracle.truffle.api.source;
 import java.io.*;
 import java.lang.ref.*;
 import java.net.*;
-import java.nio.*;
-import java.nio.charset.*;
 import java.util.*;
 
 import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.instrument.*;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
 
 /**
  * Representation of a guest language source code unit and its contents. Sources originate in
@@ -85,11 +89,64 @@ import com.oracle.truffle.api.*;
  * reload.</li>
  * </ol>
  * <p>
+ *
+ * @see SourceTag
+ * @see SourceListener
  */
 public abstract class Source {
 
     // TODO (mlvdv) consider canonicalizing and reusing SourceSection instances
     // TOOD (mlvdv) connect SourceSections into a spatial tree for fast geometric lookup
+
+    public enum Tags implements SourceTag {
+
+        /**
+         * From bytes.
+         */
+        FROM_BYTES("bytes", "read from bytes"),
+
+        /**
+         * Read from a file.
+         */
+        FROM_FILE("file", "read from a file"),
+
+        /**
+         * From literal text.
+         */
+        FROM_LITERAL("literal", "from literal text"),
+
+        /**
+         * From a {@linkplain java.io.Reader Reader}.
+         */
+        FROM_READER("reader", "read from a Java Reader"),
+
+        /**
+         * Read from a URL.
+         */
+        FROM_URL("URL", "read from a URL");
+
+        private final String name;
+        private final String description;
+
+        private Tags(String name, String description) {
+            this.name = name;
+            this.description = description;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+    }
+
+    /**
+     * All Sources that have been created.
+     */
+    private static final List<WeakReference<Source>> allSources = Collections.synchronizedList(new ArrayList<WeakReference<Source>>());
 
     /**
      * Index of all named sources.
@@ -97,6 +154,8 @@ public abstract class Source {
     private static final Map<String, WeakReference<Source>> nameToSource = new HashMap<>();
 
     private static boolean fileCacheEnabled = true;
+
+    private static final List<SourceListener> sourceListeners = new ArrayList<>();
 
     /**
      * Locates an existing instance by the name under which it was indexed.
@@ -135,6 +194,7 @@ public abstract class Source {
         if (reset) {
             source.reset();
         }
+        notifyNewSource(source).tagAs(Tags.FROM_FILE);
         return source;
     }
 
@@ -177,6 +237,7 @@ public abstract class Source {
                 nameToSource.put(path, new WeakReference<>(source));
             }
         }
+        notifyNewSource(source).tagAs(Tags.FROM_FILE);
         return source;
     }
 
@@ -189,8 +250,11 @@ public abstract class Source {
      */
     public static Source fromText(CharSequence chars, String description) {
         CompilerAsserts.neverPartOfCompilation();
+
         assert chars != null;
-        return new LiteralSource(description, chars.toString());
+        final LiteralSource source = new LiteralSource(description, chars.toString());
+        notifyNewSource(source).tagAs(Tags.FROM_LITERAL);
+        return source;
     }
 
     /**
@@ -202,7 +266,10 @@ public abstract class Source {
      */
     public static Source fromAppendableText(String description) {
         CompilerAsserts.neverPartOfCompilation();
-        return new AppendableLiteralSource(description);
+
+        final Source source = new AppendableLiteralSource(description);
+        notifyNewSource(source).tagAs(Tags.FROM_LITERAL);
+        return source;
     }
 
     /**
@@ -216,8 +283,10 @@ public abstract class Source {
      */
     public static Source fromNamedText(CharSequence chars, String name) {
         CompilerAsserts.neverPartOfCompilation();
+
         final Source source = new LiteralSource(name, chars.toString());
         nameToSource.put(name, new WeakReference<>(source));
+        notifyNewSource(source).tagAs(Tags.FROM_LITERAL);
         return source;
     }
 
@@ -232,8 +301,10 @@ public abstract class Source {
      */
     public static Source fromNamedAppendableText(String name) {
         CompilerAsserts.neverPartOfCompilation();
+
         final Source source = new AppendableLiteralSource(name);
         nameToSource.put(name, new WeakReference<>(source));
+        notifyNewSource(source).tagAs(Tags.FROM_LITERAL);
         return source;
     }
 
@@ -249,6 +320,7 @@ public abstract class Source {
      */
     public static Source subSource(Source base, int baseCharIndex, int length) {
         CompilerAsserts.neverPartOfCompilation();
+
         final SubSource subSource = SubSource.create(base, baseCharIndex, length);
         return subSource;
     }
@@ -278,7 +350,10 @@ public abstract class Source {
      */
     public static Source fromURL(URL url, String description) throws IOException {
         CompilerAsserts.neverPartOfCompilation();
-        return URLSource.get(url, description);
+
+        final URLSource source = URLSource.get(url, description);
+        notifyNewSource(source).tagAs(Tags.FROM_URL);
+        return source;
     }
 
     /**
@@ -291,7 +366,10 @@ public abstract class Source {
      */
     public static Source fromReader(Reader reader, String description) throws IOException {
         CompilerAsserts.neverPartOfCompilation();
-        return new LiteralSource(description, read(reader));
+
+        final LiteralSource source = new LiteralSource(description, read(reader));
+        notifyNewSource(source).tagAs(Tags.FROM_READER);
+        return source;
     }
 
     /**
@@ -323,7 +401,10 @@ public abstract class Source {
      */
     public static Source fromBytes(byte[] bytes, int byteIndex, int length, String description, Charset charset) {
         CompilerAsserts.neverPartOfCompilation();
-        return new BytesSource(description, bytes, byteIndex, length, charset);
+
+        final BytesSource source = new BytesSource(description, bytes, byteIndex, length, charset);
+        notifyNewSource(source).tagAs(Tags.FROM_BYTES);
+        return source;
     }
 
     // TODO (mlvdv) enable per-file choice whether to cache?
@@ -333,6 +414,50 @@ public abstract class Source {
      */
     public static void setFileCaching(boolean enabled) {
         fileCacheEnabled = enabled;
+    }
+
+    /**
+     * Returns all {@link Source}s holding a particular {@link SyntaxTag}, or the whole collection
+     * of Sources if the specified tag is {@code null}.
+     *
+     * @return A collection of Sources containing the given tag.
+     */
+    public static Collection<Source> findSourcesTaggedAs(SourceTag tag) {
+        final List<Source> taggedSources = new ArrayList<>();
+        synchronized (allSources) {
+            for (WeakReference<Source> ref : allSources) {
+                Source source = ref.get();
+                if (source != null) {
+                    if (tag == null || source.isTaggedAs(tag)) {
+                        taggedSources.add(ref.get());
+                    }
+                }
+            }
+        }
+        return taggedSources;
+    }
+
+    /**
+     * Adds a {@link SourceListener} to receive events.
+     */
+    public static void addSourceListener(SourceListener listener) {
+        assert listener != null;
+        sourceListeners.add(listener);
+    }
+
+    /**
+     * Removes a {@link SourceListener}. Ignored if listener not found.
+     */
+    public static void removeSourceListener(SourceListener listener) {
+        sourceListeners.remove(listener);
+    }
+
+    private static Source notifyNewSource(Source source) {
+        allSources.add(new WeakReference<>(source));
+        for (SourceListener listener : sourceListeners) {
+            listener.sourceCreated(source);
+        }
+        return source;
     }
 
     private static String read(Reader reader) throws IOException {
@@ -354,12 +479,40 @@ public abstract class Source {
         return builder.toString();
     }
 
+    private final ArrayList<SourceTag> tags = new ArrayList<>();
+
     private Source() {
     }
 
     private TextMap textMap = null;
 
     abstract void reset();
+
+    public final boolean isTaggedAs(SourceTag tag) {
+        assert tag != null;
+        return tags.contains(tag);
+    }
+
+    public final Collection<SourceTag> getSourceTags() {
+        return Collections.unmodifiableCollection(tags);
+    }
+
+    /**
+     * Adds a {@linkplain SourceTag tag} to the set of tags associated with this {@link Source};
+     * {@code no-op} if already in the set.
+     *
+     * @return this
+     */
+    public final Source tagAs(SourceTag tag) {
+        assert tag != null;
+        if (!tags.contains(tag)) {
+            tags.add(tag);
+            for (SourceListener listener : sourceListeners) {
+                listener.sourceTaggedAs(this, tag);
+            }
+        }
+        return this;
+    }
 
     /**
      * Returns the name of this resource holding a guest language program. An example would be the
@@ -789,7 +942,7 @@ public abstract class Source {
                 return code;
             }
             try {
-                return read(new InputStreamReader(new FileInputStream(file), "UTF-8"));
+                return read(new FileReader(file));
             } catch (IOException e) {
             }
             return null;
@@ -811,12 +964,10 @@ public abstract class Source {
                 return new StringReader(code);
             }
             try {
-                return new InputStreamReader(new FileInputStream(file), "UTF-8");
+                return new FileReader(file);
             } catch (FileNotFoundException e) {
 
                 throw new RuntimeException("Can't find file " + path, e);
-            } catch (UnsupportedEncodingException e) {
-                throw new RuntimeException("Unsupported encoding in file " + path, e);
             }
         }
 

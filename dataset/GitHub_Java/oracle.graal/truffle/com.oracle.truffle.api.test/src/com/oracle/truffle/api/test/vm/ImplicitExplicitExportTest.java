@@ -30,7 +30,6 @@ import java.util.*;
 import org.junit.*;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.debug.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.Node;
@@ -109,41 +108,36 @@ public class ImplicitExplicitExportTest {
         assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").invoke(null));
     }
 
-    private static final class Ctx {
-        final Map<String, String> explicit = new HashMap<>();
-        final Map<String, String> implicit = new HashMap<>();
-        final Env env;
-
-        public Ctx(Env env) {
-            this.env = env;
+    private abstract static class AbstractExportImportLanguage extends TruffleLanguage {
+        protected AbstractExportImportLanguage(Env env) {
+            super(env);
         }
-    }
 
-    private abstract static class AbstractExportImportLanguage extends TruffleLanguage<Ctx> {
-
-        @Override
-        protected Ctx createContext(Env env) {
-            return new Ctx(env);
-        }
+        private final Map<String, String> explicit = new HashMap<>();
+        private final Map<String, String> implicit = new HashMap<>();
 
         @Override
         protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
-            return new ValueCallTarget(code, this);
+            return new ValueCallTarget(code, getClass());
         }
 
         @Override
-        protected Object findExportedSymbol(Ctx context, String globalName, boolean onlyExplicit) {
-            if (context.explicit.containsKey(globalName)) {
-                return context.explicit.get(globalName);
+        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
+            if (explicit.containsKey(globalName)) {
+                return explicit.get(globalName);
             }
-            if (!onlyExplicit && context.implicit.containsKey(globalName)) {
-                return context.implicit.get(globalName);
+            if (!onlyExplicit && implicit.containsKey(globalName)) {
+                return implicit.get(globalName);
             }
             return null;
         }
 
+        public static <Language extends TruffleLanguage> Language findContext(Class<Language> type) {
+            return TruffleLanguage.findContext(type);
+        }
+
         @Override
-        protected Object getLanguageGlobal(Ctx context) {
+        protected Object getLanguageGlobal() {
             return null;
         }
 
@@ -163,7 +157,6 @@ public class ImplicitExplicitExportTest {
         }
 
         private Object importExport(Source code) {
-            Ctx ctx = findContext();
             Properties p = new Properties();
             try (Reader r = code.getReader()) {
                 p.load(r);
@@ -176,13 +169,13 @@ public class ImplicitExplicitExportTest {
                 if (n instanceof String) {
                     String k = (String) n;
                     if (k.startsWith("explicit.")) {
-                        ctx.explicit.put(k.substring(9), p.getProperty(k));
+                        explicit.put(k.substring(9), p.getProperty(k));
                     }
                     if (k.startsWith("implicit.")) {
-                        ctx.implicit.put(k.substring(9), p.getProperty(k));
+                        implicit.put(k.substring(9), p.getProperty(k));
                     }
                     if (k.equals("return")) {
-                        return ctx.env.importSymbol(p.getProperty(k));
+                        return env().importSymbol(p.getProperty(k));
                     }
                 }
             }
@@ -192,9 +185,9 @@ public class ImplicitExplicitExportTest {
 
     private static final class ValueCallTarget implements RootCallTarget {
         private final Source code;
-        private final AbstractExportImportLanguage language;
+        private final Class<? extends AbstractExportImportLanguage> language;
 
-        private ValueCallTarget(Source code, AbstractExportImportLanguage language) {
+        private ValueCallTarget(Source code, Class<? extends AbstractExportImportLanguage> language) {
             this.code = code;
             this.language = language;
         }
@@ -206,7 +199,8 @@ public class ImplicitExplicitExportTest {
 
         @Override
         public Object call(Object... arguments) {
-            return language.importExport(code);
+            AbstractExportImportLanguage context = AbstractExportImportLanguage.findContext(language);
+            return context.importExport(code);
         }
     }
 
@@ -216,25 +210,22 @@ public class ImplicitExplicitExportTest {
 
     @TruffleLanguage.Registration(mimeType = L1, name = "ImportExport1", version = "0")
     public static final class ExportImportLanguage1 extends AbstractExportImportLanguage {
-        public static final AbstractExportImportLanguage INSTANCE = new ExportImportLanguage1();
-
-        public ExportImportLanguage1() {
+        public ExportImportLanguage1(Env env) {
+            super(env);
         }
     }
 
     @TruffleLanguage.Registration(mimeType = L2, name = "ImportExport2", version = "0")
     public static final class ExportImportLanguage2 extends AbstractExportImportLanguage {
-        public static final AbstractExportImportLanguage INSTANCE = new ExportImportLanguage2();
-
-        public ExportImportLanguage2() {
+        public ExportImportLanguage2(Env env) {
+            super(env);
         }
     }
 
     @TruffleLanguage.Registration(mimeType = L3, name = "ImportExport3", version = "0")
     public static final class ExportImportLanguage3 extends AbstractExportImportLanguage {
-        public static final AbstractExportImportLanguage INSTANCE = new ExportImportLanguage3();
-
-        private ExportImportLanguage3() {
+        public ExportImportLanguage3(Env env) {
+            super(env);
         }
     }
 

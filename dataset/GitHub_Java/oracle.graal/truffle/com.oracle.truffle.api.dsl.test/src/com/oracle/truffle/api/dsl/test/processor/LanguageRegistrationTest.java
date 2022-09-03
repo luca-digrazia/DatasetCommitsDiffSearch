@@ -48,11 +48,11 @@ public class LanguageRegistrationTest {
     public static final class MyLangNoSubclass {
     }
 
-    @ExpectError("Language class must have public static final singleton field called INSTANCE")
+    @ExpectError("Language must have a public constructor accepting TruffleLanguage.Env as parameter")
     @TruffleLanguage.Registration(name = "myLangNoCnstr", version = "0", mimeType = "text/x-my")
-    public static final class MyLangWrongConstr extends TruffleLanguage<Object> {
+    public static final class MyLangWrongConstr extends TruffleLanguage {
         private MyLangWrongConstr() {
-            super();
+            super(null);
         }
 
         @Override
@@ -61,12 +61,12 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected Object findExportedSymbol(Object context, String globalName, boolean onlyExplicit) {
+        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
             return null;
         }
 
         @Override
-        protected Object getLanguageGlobal(Object context) {
+        protected Object getLanguageGlobal() {
             return null;
         }
 
@@ -83,20 +83,15 @@ public class LanguageRegistrationTest {
         @Override
         protected DebugSupportProvider getDebugSupport() {
             return null;
-        }
-
-        @Override
-        protected Object createContext(Env env) {
-            throw new UnsupportedOperationException();
         }
 
     }
 
-    @ExpectError("Language class must have public static final singleton field called INSTANCE")
-    @TruffleLanguage.Registration(name = "myLangNoField", version = "0", mimeType = "text/x-my")
-    public static final class MyLangNoField extends TruffleLanguage<Object> {
-        public MyLangNoField() {
-            super();
+    @ExpectError("Language must have a public constructor accepting TruffleLanguage.Env as parameter")
+    @TruffleLanguage.Registration(name = "myLangNoCnstr", version = "0", mimeType = "text/x-my")
+    public static final class MyLangNoConstr extends TruffleLanguage {
+        public MyLangNoConstr() {
+            super(null);
         }
 
         @Override
@@ -105,12 +100,12 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected Object findExportedSymbol(Object context, String globalName, boolean onlyExplicit) {
+        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
             return null;
         }
 
         @Override
-        protected Object getLanguageGlobal(Object context) {
+        protected Object getLanguageGlobal() {
             return null;
         }
 
@@ -127,30 +122,23 @@ public class LanguageRegistrationTest {
         @Override
         protected DebugSupportProvider getDebugSupport() {
             return null;
-        }
-
-        @Override
-        protected Object createContext(Env env) {
-            throw new UnsupportedOperationException();
         }
 
     }
 
     @TruffleLanguage.Registration(name = "myLangGood", version = "0", mimeType = "text/x-my")
-    public static final class MyLangGood extends TruffleLanguage<Object> {
-        private MyLangGood() {
-            super();
+    public static final class MyLangGood extends TruffleLanguage {
+        public MyLangGood(TruffleLanguage.Env env) {
+            super(env);
         }
 
-        public static final MyLangGood INSTANCE = new MyLangGood();
-
         @Override
-        protected Object findExportedSymbol(Object context, String globalName, boolean onlyExplicit) {
+        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
             return null;
         }
 
         @Override
-        protected Object getLanguageGlobal(Object context) {
+        protected Object getLanguageGlobal() {
             return null;
         }
 
@@ -172,11 +160,6 @@ public class LanguageRegistrationTest {
         @Override
         protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
             throw new IOException();
-        }
-
-        @Override
-        protected Object createContext(Env env) {
-            return env;
         }
 
     }
