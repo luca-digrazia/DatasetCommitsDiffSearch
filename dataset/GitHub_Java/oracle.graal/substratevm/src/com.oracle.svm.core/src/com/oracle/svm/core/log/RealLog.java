@@ -27,7 +27,6 @@ import java.io.FileDescriptor;
 
 import org.graalvm.compiler.core.common.calc.UnsignedMath;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.struct.SizeOf;
@@ -355,7 +354,7 @@ public class RealLog extends Log {
 
     @Override
     public Log flush() {
-        ImageSingletons.lookup(LogHandler.class).flush();
+        LogHandler.get().flush();
         return this;
     }
 
@@ -378,7 +377,7 @@ public class RealLog extends Log {
 
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.UNRESTRICTED, overridesCallers = true, reason = "Some implementations allocate.")
     protected Log rawBytes(CCharPointer bytes, UnsignedWord length) {
-        ImageSingletons.lookup(LogHandler.class).log(bytes, length);
+        LogHandler.get().log(bytes, length);
         return this;
     }
 

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -300,15 +298,7 @@ public abstract class Log implements AutoCloseable {
      * after each newline.
      */
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate when logging.")
-    public abstract Log redent(boolean addOrRemove);
-
-    /**
-     * Change current amount of indentation, and then print a newline.
-     */
-    @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate when logging.")
-    public final Log indent(boolean addOrRemove) {
-        return redent(addOrRemove).newline();
-    }
+    public abstract Log indent(boolean addOrRemove);
 
     /**
      * Prints the strings "true" or "false" depending on the value.
@@ -525,7 +515,7 @@ public abstract class Log implements AutoCloseable {
         }
 
         @Override
-        public Log redent(boolean addOrRemove) {
+        public Log indent(boolean addOrRemove) {
             return this;
         }
     }

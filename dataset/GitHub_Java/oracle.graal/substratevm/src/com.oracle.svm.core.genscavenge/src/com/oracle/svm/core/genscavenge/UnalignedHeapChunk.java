@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,14 +23,13 @@
 package com.oracle.svm.core.genscavenge;
 
 import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.replacements.nodes.AssertionNode;
 import org.graalvm.compiler.word.Word;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.struct.RawStructure;
 import org.graalvm.nativeimage.c.struct.SizeOf;
-import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
@@ -192,15 +189,11 @@ public class UnalignedHeapChunk extends HeapChunk {
      *
      * This has to be fast, because it is used by the post-write barrier.
      */
-    public static void dirtyCardForObjectOfUnalignedHeapChunk(Object obj, boolean verifyOnly) {
+    public static void dirtyCardForObjectOfUnalignedHeapChunk(Object obj) {
         final UnalignedHeader chunk = getEnclosingUnalignedHeapChunk(obj);
-        final Pointer cardTableStart = getCardTableStart(chunk);
+        final Pointer rememberedSetStart = getCardTableStart(chunk);
         final UnsignedWord objectIndex = getObjectIndex();
-        if (verifyOnly) {
-            AssertionNode.assertion(false, CardTable.isDirtyEntryAtIndexUnchecked(cardTableStart, objectIndex), "card must be dirty");
-        } else {
-            CardTable.dirtyEntryAtIndex(cardTableStart, objectIndex);
-        }
+        CardTable.dirtyEntryAtIndex(rememberedSetStart, objectIndex);
     }
 
     /** Verify that there are only clean cards in the remembered set of the given chunk. */
@@ -465,10 +458,6 @@ public class UnalignedHeapChunk extends HeapChunk {
 
 @AutomaticFeature
 class UnalignedHeapChunkMemoryWalkerAccessFeature implements Feature {
-    @Override
-    public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return HeapOptions.UseCardRememberedSetHeap.getValue();
-    }
 
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {

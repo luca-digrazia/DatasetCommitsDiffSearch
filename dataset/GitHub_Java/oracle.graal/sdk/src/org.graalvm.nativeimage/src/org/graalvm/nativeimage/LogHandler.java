@@ -28,51 +28,35 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.UnsignedWord;
 
 /**
- * Low-level handler for log messages of native images. Implement this interface to create a custom
- * log handler, i.e., redirect log messages. The custom log handler must be installed in the
- * {@code ImageSingletons}, using this interface as the key, at {@code Feature.duringSetup()} time:
- *
+ * Implement this interface to create a custom log handler. The custom log handler must be installed
+ * in the {@code ImageSingletons} at {@code Feature.duringSetup()} time like so:
+ * 
  * <pre>
  *    class LogHandlerFeature implements Feature {
- *        {@literal @}Override
+ *       {@literal @}Override
  *        public void duringSetup(DuringSetupAccess access) {
  *            ImageSingletons.add(LogHandler.class, new CustomLogHandler());
  *        }
  *    }
  * </pre>
+ * 
+ * If no custom log handler is installed a default one would be provided at
+ * {@code Feature.beforeAnalysis()} time. Installing a custom log handler at a later time, after the
+ * default one has been installed, will result in an error.
  *
- * If no custom log handler is installed, a default is installed
- * {@code Feature.beforeAnalysis() before the static analysis}. The default handler prints log
- * messages to the standard output. Installing a custom log handler at a later time, after the
- * default one has been installed, results in an error.
- * <p>
- * The methods defined in this interface are called from places where Java object allocation is not
- * possible, e.g., during a garbage collection or before the heap is set up.
- *
- * @since 1.0
  */
 public interface LogHandler {
 
-    /**
-     * Write raw bytes to the log.
-     *
-     * @since 1.0
-     */
+    static LogHandler get() {
+        return ImageSingletons.lookup(LogHandler.class);
+    }
+
+    /** Writes the raw bytes. */
     void log(CCharPointer bytes, UnsignedWord length);
 
-    /**
-     * Flush the log to its destination.
-     *
-     * @since 1.0
-     */
+    /** Forces the log to flush to its destination. */
     void flush();
 
-    /**
-     * Exit the VM because a fatal, non-recoverable error situation has been detected. The
-     * implementation of this method must not return, and it must not throw a Java exception. A
-     * valid implementation is, e.g., to ask the OS to kill the process.
-     *
-     * @since 1.0
-     */
+    /** Exit the VM. Method must not return. No Java code should be run after this point. */
     void fatalError();
 }

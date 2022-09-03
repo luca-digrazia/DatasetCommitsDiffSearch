@@ -35,7 +35,6 @@ import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation;
 import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.LocationIdentity;
@@ -426,7 +425,7 @@ public class SnippetRuntime {
              */
             Log.log().string("Fatal error: recursion in exception handling: ").string(exception.getClass().getName());
             Log.log().string(" thrown while unwinding ").string(currentException.get().getClass().getName()).newline();
-            ImageSingletons.lookup(LogHandler.class).fatalError();
+            LogHandler.get().fatalError();
             return;
         }
         currentException.set(exception);
@@ -453,7 +452,7 @@ public class SnippetRuntime {
             Log.log().string(": ").string(detail);
         }
         Log.log().newline();
-        ImageSingletons.lookup(LogHandler.class).fatalError();
+        LogHandler.get().fatalError();
     }
 
     public static void reportUnhandledExceptionJava(Throwable exception) {

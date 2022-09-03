@@ -22,7 +22,6 @@
  */
 package com.oracle.svm.core.jdk;
 
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 
 import com.oracle.svm.core.SubstrateUtil;
@@ -134,6 +133,6 @@ public class VMErrorSubstitutions {
     @Uninterruptible(reason = "Allow use in uninterruptible code.", calleeMustBe = false)
     private static void doShutdown(Log log) {
         SubstrateUtil.printDiagnostics(log, KnownIntrinsics.readCallerStackPointer(), KnownIntrinsics.readReturnAddress());
-        ImageSingletons.lookup(LogHandler.class).fatalError();
+        LogHandler.get().fatalError();
     }
 }

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,7 +25,6 @@ package com.oracle.svm.core.threadlocal;
 import java.util.Arrays;
 import java.util.Collection;
 
-import org.graalvm.compiler.word.ObjectAccess;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -72,7 +69,7 @@ public class VMThreadLocalInfos {
                 WordBase value = primitiveData(thread).readWord(WordFactory.signed(info.offset));
                 log.signed(value).string("  ").zhex(value.rawValue());
             } else if (info.threadLocalClass == FastThreadLocalObject.class) {
-                Object value = ObjectAccess.readObject(objectData(thread), WordFactory.signed(info.offset));
+                Object value = objectData(thread).readObject(WordFactory.signed(info.offset));
                 if (value == null) {
                     log.string("null");
                 } else {
@@ -89,7 +86,7 @@ public class VMThreadLocalInfos {
         }
     }
 
-    @Uninterruptible(reason = "called from uninterruptible code", mayBeInlined = true)
+    @Uninterruptible(reason = "called from uninterruptible code")
     private static Pointer primitiveData(IsolateThread thread) {
         if (SubstrateOptions.MultiThreaded.getValue()) {
             return (Pointer) thread;
@@ -98,12 +95,12 @@ public class VMThreadLocalInfos {
         }
     }
 
-    @Uninterruptible(reason = "called from uninterruptible code", mayBeInlined = true)
-    private static Object objectData(IsolateThread thread) {
+    @Uninterruptible(reason = "called from uninterruptible code")
+    private static Pointer objectData(IsolateThread thread) {
         if (SubstrateOptions.MultiThreaded.getValue()) {
-            return ((Pointer) thread).toObjectNonNull();
+            return (Pointer) thread;
         } else {
-            return ImageSingletons.lookup(VMThreadLocalSTSupport.class).objectThreadLocals;
+            return Word.objectToUntrackedPointer(ImageSingletons.lookup(VMThreadLocalSTSupport.class).objectThreadLocals);
         }
     }
 

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -151,10 +149,10 @@ public final class ThreadLocalAllocation {
     static Object allocateNewInstance(DynamicHub hub, ThreadLocalAllocation.Descriptor tlab, boolean rememberedSet) {
         DeoptTester.disableDeoptTesting();
 
-        log().string("[ThreadLocalAllocation.allocateNewInstance: ").string(DynamicHub.toClass(hub).getName()).string(" in tlab ").hex(tlab).newline();
+        log().string("[ThreadLocalAllocation.allocateNewInstance: ").string(hub.asClass().getName()).string(" in tlab ").hex(tlab).newline();
 
         // Slow-path check if allocation is disallowed.
-        HeapImpl.exitIfAllocationDisallowed("ThreadLocalAllocation.allocateNewInstance", DynamicHub.toClass(hub).getName());
+        HeapImpl.exitIfAllocationDisallowed("ThreadLocalAllocation.allocateNewInstance", hub.asClass().getName());
         // Policy: Possibly collect before this allocation.
         HeapImpl.getHeapImpl().getHeapPolicy().getCollectOnAllocationPolicy().maybeCauseCollection();
 
@@ -186,7 +184,7 @@ public final class ThreadLocalAllocation {
         assert memory.isNonNull();
 
         /* Install the DynamicHub and zero the fields. */
-        return KnownIntrinsics.formatObject(memory, DynamicHub.toClass(hub), rememberedSet);
+        return KnownIntrinsics.formatObject(memory, hub.asClass(), rememberedSet);
     }
 
     /** Slow path of array allocation snippet. */
@@ -218,10 +216,10 @@ public final class ThreadLocalAllocation {
     static Object allocateNewArray(DynamicHub hub, int length, ThreadLocalAllocation.Descriptor tlab, boolean rememberedSet) {
         DeoptTester.disableDeoptTesting();
 
-        log().string("[ThreadLocalAllocation.allocateNewArray: ").string(DynamicHub.toClass(hub).getName()).string("  length ").signed(length).string("  in tlab ").hex(tlab).newline();
+        log().string("[ThreadLocalAllocation.allocateNewArray: ").string(hub.asClass().getName()).string("  length ").signed(length).string("  in tlab ").hex(tlab).newline();
 
         // Slow-path check if allocation is disallowed.
-        HeapImpl.exitIfAllocationDisallowed("Heap.allocateNewArray", DynamicHub.toClass(hub).getName());
+        HeapImpl.exitIfAllocationDisallowed("Heap.allocateNewArray", hub.asClass().getName());
         // Policy: Possibly collect before this allocation.
         HeapImpl.getHeapImpl().getHeapPolicy().getCollectOnAllocationPolicy().maybeCauseCollection();
 
@@ -261,7 +259,7 @@ public final class ThreadLocalAllocation {
         Pointer memory = allocateMemory(tlab, size);
         assert memory.isNonNull();
         /* Install the DynamicHub and length, and zero the elements. */
-        return KnownIntrinsics.formatArray(memory, DynamicHub.toClass(hub), length, rememberedSet, false);
+        return KnownIntrinsics.formatArray(memory, hub.asClass(), length, rememberedSet, false);
     }
 
     @Uninterruptible(reason = "Holds uninitialized memory, modifies TLAB")
@@ -275,7 +273,7 @@ public final class ThreadLocalAllocation {
         assert memory.isNonNull();
 
         /* Install the DynamicHub and length, and zero the elements. */
-        return KnownIntrinsics.formatArray(memory, DynamicHub.toClass(hub), length, rememberedSet, true);
+        return KnownIntrinsics.formatArray(memory, hub.asClass(), length, rememberedSet, true);
     }
 
     /**
