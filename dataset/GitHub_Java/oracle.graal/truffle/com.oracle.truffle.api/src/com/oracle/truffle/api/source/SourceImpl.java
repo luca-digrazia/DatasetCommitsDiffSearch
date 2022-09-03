@@ -27,8 +27,6 @@ package com.oracle.truffle.api.source;
 import java.lang.ref.WeakReference;
 import java.util.Objects;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-
 final class SourceImpl extends Source implements Cloneable {
     private static Ref SOURCES = null;
 
@@ -70,7 +68,6 @@ final class SourceImpl extends Source implements Cloneable {
         return null;
     }
 
-    @TruffleBoundary
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof Source) {
