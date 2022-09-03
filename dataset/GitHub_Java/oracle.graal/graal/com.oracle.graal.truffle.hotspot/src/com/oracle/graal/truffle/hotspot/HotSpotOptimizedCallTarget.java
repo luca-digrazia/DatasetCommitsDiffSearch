@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.truffle.hotspot;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 import static com.oracle.graal.truffle.OptimizedCallTargetLog.*;
 
@@ -52,10 +53,6 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
         return speculationLog;
     }
 
-    public boolean isOptimized() {
-        return installedCode != null || installedCodeTask != null;
-    }
-
     @Override
     public Object call(Object... args) {
         return callBoundary(args);
@@ -72,11 +69,8 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     }
 
     private Object compiledCallFallback(Object[] args) {
-        InstalledCode currentInstalledCode = installedCode;
-        if (currentInstalledCode.isValid()) {
+        if (isValid()) {
             reinstallCallMethodShortcut();
-        } else {
-            return compiledCodeInvalidated(args);
         }
         return interpreterCall(args);
     }
@@ -88,17 +82,21 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
         HotSpotTruffleRuntime.installOptimizedCallTargetCallMethod();
     }
 
-    private Object compiledCodeInvalidated(Object[] args) {
-        invalidate(null, null, "Compiled code invalidated");
-        return call(args);
+    @Override
+    public void invalidate() {
+        runtime().getCompilerToVM().invalidateInstalledCode(this);
+    }
+
+    @Override
+    public Object executeVarargs(Object... args) throws InvalidInstalledCodeException {
+        return runtime().getCompilerToVM().executeCompiledMethodVarargs(args, this);
     }
 
     @Override
     protected void invalidate(Node oldNode, Node newNode, CharSequence reason) {
-        InstalledCode m = this.installedCode;
-        if (m != null) {
+        if (isValid()) {
             CompilerAsserts.neverPartOfCompilation();
-            installedCode = null;
+            invalidate();
             compilationProfile.reportInvalidated();
             logOptimizedInvalidated(this, oldNode, newNode, reason);
         }
@@ -109,7 +107,6 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
         Future<InstalledCode> task = this.installedCodeTask;
         if (task != null) {
             task.cancel(true);
-            this.installedCodeTask = null;
             logOptimizingUnqueued(this, oldNode, newNode, reason);
             compilationProfile.reportInvalidated();
         }
@@ -124,11 +121,10 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
 
         if (compilationEnabled && compilationPolicy.shouldCompile(compilationProfile)) {
             compile();
-            if (installedCode.isValid()) {
+            if (isValid()) {
                 try {
-                    return installedCode.executeVarargs(new Object[]{this, args});
+                    return executeVarargs(new Object[]{this, args});
                 } catch (InvalidInstalledCodeException ex) {
-                    return compiledCodeInvalidated(args);
                 }
             }
         }
@@ -138,8 +134,8 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     private boolean isCompiling() {
         Future<InstalledCode> codeTask = this.installedCodeTask;
         if (codeTask != null) {
-            if (codeTask.isCancelled()) {
-                installedCodeTask = null;
+            if (codeTask.isCancelled() || codeTask.isDone()) {
+                // System.out.println("done or cancelled => set null " + codeTask.isCancelled());
                 return false;
             }
             return true;
@@ -159,23 +155,26 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
         }
     }
 
-    private InstalledCode receiveInstalledCode() {
-        try {
-            return installedCodeTask.get();
-        } catch (InterruptedException | ExecutionException e) {
-            compilationEnabled = false;
-            logOptimizingFailed(this, e.getMessage());
-            if (e.getCause() instanceof BailoutException) {
-                // Bailout => move on.
-            } else {
-                if (TraceTruffleCompilationExceptions.getValue()) {
-                    e.printStackTrace(OUT);
-                }
-                if (TruffleCompilationExceptionsAreFatal.getValue()) {
-                    System.exit(-1);
-                }
+    @Override
+    public void exceptionWhileCompiling(Throwable t) {
+        compilationEnabled = false;
+        logOptimizingFailed(this, t.getMessage());
+        if (t instanceof BailoutException) {
+            // Bailout => move on.
+        } else {
+            if (TruffleCompilationExceptionsAreFatal.getValue()) {
+                t.printStackTrace(OUT);
+                System.exit(-1);
             }
-            return null;
+        }
+    }
+
+    private void receiveInstalledCode() {
+        try {
+            // Force task completion.
+            installedCodeTask.get();
+        } catch (InterruptedException | ExecutionException e) {
+            exceptionWhileCompiling(e.getCause());
         }
     }
 
