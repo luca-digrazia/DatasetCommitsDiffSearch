@@ -80,7 +80,6 @@ public final class GraalOptions {
 
     // Ideal graph visualizer output settings
     public static boolean Plot                               = ____;
-    public static boolean PlotOnError                        = ____;
     public static int     PrintIdealGraphLevel               = 0;
     public static boolean PrintIdealGraphFile                = ____;
     public static String  PrintIdealGraphAddress             = "127.0.0.1";
@@ -104,6 +103,7 @@ public final class GraalOptions {
     public static boolean TraceDeadCodeElimination           = ____;
     public static boolean TraceMemoryMaps                    = ____;
     public static boolean TraceReadElimination               = ____;
+    public static boolean TraceGVN                           = ____;
     public static int     TraceBytecodeParserLevel           = 0;
     public static boolean QuietBailout                       = ____;
 
@@ -143,6 +143,7 @@ public final class GraalOptions {
     public static boolean CommentedAssembly                  = ____;
     public static boolean PrintLIRWithAssembly               = ____;
 
+    public static boolean OptGVN                             = true;
     public static boolean OptCanonicalizer                   = true;
     public static boolean OptLoops                           = true;
 }
