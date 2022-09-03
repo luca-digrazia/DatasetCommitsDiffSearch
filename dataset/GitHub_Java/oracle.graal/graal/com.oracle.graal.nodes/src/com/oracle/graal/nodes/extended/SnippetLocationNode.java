@@ -22,8 +22,11 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import static com.oracle.graal.api.meta.LocationIdentity.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -42,6 +45,10 @@ public final class SnippetLocationNode extends LocationNode implements Canonical
     @Input private ValueNode displacement;
     @Input private ValueNode index;
     @Input private ValueNode indexScaling;
+
+    public static SnippetLocationNode create(ValueNode identity, ValueNode kind, ValueNode displacement, ValueNode index, ValueNode indexScaling, Graph graph) {
+        return graph.unique(new SnippetLocationNode(identity, kind, displacement, index, indexScaling));
+    }
 
     private SnippetLocationNode(ValueNode locationIdentity, ValueNode kind, ValueNode displacement) {
         this(locationIdentity, kind, displacement, null, null);
@@ -70,11 +77,11 @@ public final class SnippetLocationNode extends LocationNode implements Canonical
             return (LocationIdentity) locationIdentity.asConstant().asObject();
         }
         // We do not know our actual location identity yet, so be conservative.
-        return LocationNode.ANY_LOCATION;
+        return ANY_LOCATION;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         if (valueKind.isConstant() && locationIdentity.isConstant() && displacement.isConstant() && (indexScaling == null || indexScaling.isConstant())) {
             Kind constKind = (Kind) valueKind.asConstant().asObject();
             LocationIdentity constLocation = (LocationIdentity) locationIdentity.asConstant().asObject();
@@ -93,13 +100,13 @@ public final class SnippetLocationNode extends LocationNode implements Canonical
     }
 
     @Override
-    public Value generateAddress(LIRGeneratorTool gen, Value base) {
+    public Value generateAddress(NodeMappableLIRBuilder builder, LIRGeneratorTool gen, Value base) {
         throw new GraalInternalError("locationIdentity must be a constant so that this node can be canonicalized: " + locationIdentity);
     }
 
     @NodeIntrinsic
-    public static native Location constantLocation(Object identity, Kind kind, long displacement);
+    public static native Location constantLocation(LocationIdentity identity, Kind kind, long displacement);
 
     @NodeIntrinsic
-    public static native Location indexedLocation(Object identity, Kind kind, long displacement, int index, int indexScaling);
+    public static native Location indexedLocation(LocationIdentity identity, Kind kind, long displacement, int index, int indexScaling);
 }

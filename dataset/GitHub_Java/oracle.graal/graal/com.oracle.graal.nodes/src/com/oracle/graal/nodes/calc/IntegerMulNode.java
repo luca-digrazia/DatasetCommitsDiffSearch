@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,19 +24,18 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "*")
 public class IntegerMulNode extends IntegerArithmeticNode implements Canonicalizable, NarrowableArithmeticNode {
 
-    public IntegerMulNode(ValueNode x, ValueNode y) {
-        super(x.stamp().unrestricted(), x, y);
-        assert x.stamp().isCompatible(y.stamp());
+    public IntegerMulNode(Stamp stamp, ValueNode x, ValueNode y) {
+        super(stamp, x, y);
     }
 
     @Override
@@ -47,22 +46,22 @@ public class IntegerMulNode extends IntegerArithmeticNode implements Canonicaliz
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (getX().isConstant() && !getY().isConstant()) {
-            return graph().unique(new IntegerMulNode(getY(), getX()));
+        if (x().isConstant() && !y().isConstant()) {
+            return graph().unique(new IntegerMulNode(stamp(), y(), x()));
         }
-        if (getX().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(getX().asConstant(), getY().asConstant()), graph());
-        } else if (getY().isConstant()) {
-            long c = getY().asConstant().asLong();
+        if (x().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
+        } else if (y().isConstant()) {
+            long c = y().asConstant().asLong();
             if (c == 1) {
-                return getX();
+                return x();
             }
             if (c == 0) {
                 return ConstantNode.forIntegerStamp(stamp(), 0, graph());
             }
             long abs = Math.abs(c);
             if (abs > 0 && CodeUtil.isPowerOf2(abs)) {
-                LeftShiftNode shift = graph().unique(new LeftShiftNode(getX(), ConstantNode.forInt(CodeUtil.log2(abs), graph())));
+                LeftShiftNode shift = graph().unique(new LeftShiftNode(stamp().unrestricted(), x(), ConstantNode.forInt(CodeUtil.log2(abs), graph())));
                 if (c < 0) {
                     return graph().unique(new NegateNode(shift));
                 } else {
@@ -77,13 +76,22 @@ public class IntegerMulNode extends IntegerArithmeticNode implements Canonicaliz
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        Value op1 = builder.operand(getX());
-        Value op2 = builder.operand(getY());
-        if (!getY().isConstant() && !FloatAddNode.livesLonger(this, getY(), builder)) {
+        Value op1 = builder.operand(x());
+        Value op2 = builder.operand(y());
+        if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), builder)) {
             Value op = op1;
             op1 = op2;
             op2 = op;
         }
         builder.setResult(this, gen.emitMul(op1, op2));
+    }
+
+    @Override
+    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
+        Value result = gen.emitMulMemory(x(), y(), access);
+        if (result != null) {
+            gen.setResult(this, result);
+        }
+        return result != null;
     }
 }

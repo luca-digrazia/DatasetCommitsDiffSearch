@@ -23,12 +23,10 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -65,19 +63,6 @@ public class ZeroExtendNode extends IntegerConvertNode {
     }
 
     @Override
-    public boolean preservesOrder(Condition op) {
-        switch (op) {
-            case GE:
-            case GT:
-            case LE:
-            case LT:
-                return false;
-            default:
-                return true;
-        }
-    }
-
-    @Override
     public Node canonical(CanonicalizerTool tool) {
         ValueNode ret = canonicalConvert();
         if (ret != null) {
@@ -89,19 +74,6 @@ public class ZeroExtendNode extends IntegerConvertNode {
             // ==> xxxx -(zero-extend)-> 00000000 0000xxxx
             ZeroExtendNode other = (ZeroExtendNode) getInput();
             return graph().unique(new ZeroExtendNode(other.getInput(), getResultBits()));
-        }
-        if (getInput() instanceof NarrowNode) {
-            NarrowNode narrow = (NarrowNode) getInput();
-            Stamp inputStamp = narrow.getInput().stamp();
-            if (inputStamp instanceof IntegerStamp && inputStamp.isCompatible(stamp())) {
-                IntegerStamp istamp = (IntegerStamp) inputStamp;
-                long mask = IntegerStamp.defaultMask(PrimitiveStamp.getBits(narrow.stamp()));
-                if (((istamp.upMask() | istamp.downMask()) & ~mask) == 0) {
-                    // The original value is in the range of the masked zero extended result so
-                    // simply return the original input.
-                    return narrow.getInput();
-                }
-            }
         }
 
         return this;
@@ -115,5 +87,14 @@ public class ZeroExtendNode extends IntegerConvertNode {
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
         builder.setResult(this, gen.emitZeroExtend(builder.operand(getInput()), getInputBits(), getResultBits()));
+    }
+
+    @Override
+    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
+        Value result = gen.emitZeroExtendMemory(getInputBits(), getResultBits(), access);
+        if (result != null) {
+            gen.setResult(this, result);
+        }
+        return result != null;
     }
 }

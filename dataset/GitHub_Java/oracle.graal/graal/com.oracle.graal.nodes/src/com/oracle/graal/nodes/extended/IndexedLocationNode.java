@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,9 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -38,7 +35,7 @@ import com.oracle.graal.nodes.type.*;
  * constants.
  */
 @NodeInfo(nameTemplate = "IdxLoc {p#locationIdentity/s}")
-public class IndexedLocationNode extends LocationNode implements Canonicalizable {
+public final class IndexedLocationNode extends LocationNode implements Canonicalizable {
 
     private final Kind valueKind;
     private final LocationIdentity locationIdentity;
@@ -68,14 +65,8 @@ public class IndexedLocationNode extends LocationNode implements Canonicalizable
         return graph.unique(new IndexedLocationNode(identity, kind, displacement, index, indexScaling));
     }
 
-    public static IndexedLocationNode create(LocationIdentity identity, Kind kind, long displacement, ValueNode index, int indexScaling) {
-        return new IndexedLocationNode(identity, kind, displacement, index, indexScaling);
-    }
-
     public IndexedLocationNode(LocationIdentity identity, Kind kind, long displacement, ValueNode index, int indexScaling) {
-        super(StampFactory.forVoid());
-        assert index != null;
-        assert indexScaling != 0;
+        super(StampFactory.extension());
         assert kind != Kind.Illegal && kind != Kind.Void;
         this.valueKind = kind;
         this.locationIdentity = identity;
@@ -96,18 +87,12 @@ public class IndexedLocationNode extends LocationNode implements Canonicalizable
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (index.isConstant()) {
-            return ConstantLocationNode.create(getLocationIdentity(), getValueKind(), index.asConstant().asLong() * indexScaling + displacement);
+        if (index == null || indexScaling == 0) {
+            return ConstantLocationNode.create(getLocationIdentity(), getValueKind(), displacement, graph());
+        } else if (index.isConstant()) {
+            return ConstantLocationNode.create(getLocationIdentity(), getValueKind(), index.asConstant().asLong() * indexScaling + displacement, graph());
         }
         return this;
-    }
-
-    @Override
-    public IntegerStamp getDisplacementStamp() {
-        assert indexScaling > 0 && CodeUtil.isPowerOf2(indexScaling);
-        int scale = CodeUtil.log2(indexScaling);
-        return (IntegerStamp) StampTool.add(StampFactory.forInteger(64, displacement, displacement),
-                        StampTool.signExtend(StampTool.leftShift(index.stamp(), StampFactory.forInteger(64, scale, scale)), 64));
     }
 
     @Override

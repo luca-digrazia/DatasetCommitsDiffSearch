@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.LocationNode.Location;
@@ -33,19 +32,14 @@ import com.oracle.graal.nodes.virtual.*;
 /**
  * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
  */
-@NodeInfo
-public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
+public final class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
 
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
-        super(object, value, location, barrierType);
+    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible) {
+        super(object, value, location, barrierType, compressible);
     }
 
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
-        super(object, value, location, barrierType, initialization);
-    }
-
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
-        super(object, value, location, barrierType, guard, initialization);
+    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible, boolean initialization) {
+        super(object, value, location, barrierType, compressible, initialization);
     }
 
     @Override
@@ -54,24 +48,24 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simpli
         // It's possible a constant was forced for other usages so inspect the value directly and
         // use a constant if it can be directly stored.
         Value v;
-        if (value().isConstant() && gen.getLIRGeneratorTool().canStoreConstant(value().asConstant())) {
+        if (value().isConstant() && gen.getLIRGeneratorTool().canStoreConstant(value().asConstant(), isCompressible())) {
             v = value().asConstant();
         } else {
             v = gen.operand(value());
         }
-        LIRKind writeKind = gen.getLIRGeneratorTool().getLIRKind(value().stamp());
-        gen.getLIRGeneratorTool().emitStore(writeKind, address, v, gen.state(this));
+        PlatformKind writeKind = gen.getLIRGeneratorTool().getPlatformKind(value().stamp());
+        gen.getLIRGeneratorTool().emitStore(writeKind, address, v, this);
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
         if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
-            setObject(((PiNode) object()).getOriginalNode());
+            setObject(((PiNode) object()).getOriginalValue());
         }
     }
 
     @NodeIntrinsic
-    public static native void writeMemory(Object object, Object value, Location location, @ConstantNodeParameter BarrierType barrierType);
+    public static native void writeMemory(Object object, Object value, Location location, @ConstantNodeParameter BarrierType barrierType, @ConstantNodeParameter boolean compressible);
 
     @Override
     public void virtualize(VirtualizerTool tool) {
@@ -87,9 +81,5 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simpli
                 }
             }
         }
-    }
-
-    public boolean canNullCheck() {
-        return true;
     }
 }

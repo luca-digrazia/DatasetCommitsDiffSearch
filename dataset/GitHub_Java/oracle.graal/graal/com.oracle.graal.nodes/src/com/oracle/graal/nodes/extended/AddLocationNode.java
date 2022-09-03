@@ -23,10 +23,8 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -37,16 +35,16 @@ import com.oracle.graal.nodes.type.*;
  * [(base + x) + y] where base is a node and x and y are location nodes.
  */
 @NodeInfo(nameTemplate = "AddLoc {p#locationIdentity/s}")
-public class AddLocationNode extends LocationNode implements Canonicalizable.Binary<LocationNode> {
+public final class AddLocationNode extends LocationNode implements Canonicalizable {
 
-    @Input(InputType.Association) private ValueNode x;
-    @Input(InputType.Association) private ValueNode y;
+    @Input private ValueNode x;
+    @Input private ValueNode y;
 
-    public LocationNode getX() {
+    protected LocationNode getX() {
         return (LocationNode) x;
     }
 
-    public LocationNode getY() {
+    protected LocationNode getY() {
         return (LocationNode) y;
     }
 
@@ -55,8 +53,8 @@ public class AddLocationNode extends LocationNode implements Canonicalizable.Bin
         return graph.unique(new AddLocationNode(x, y));
     }
 
-    AddLocationNode(ValueNode x, ValueNode y) {
-        super(StampFactory.forVoid());
+    private AddLocationNode(ValueNode x, ValueNode y) {
+        super(StampFactory.extension());
         this.x = x;
         this.y = y;
     }
@@ -71,20 +69,21 @@ public class AddLocationNode extends LocationNode implements Canonicalizable.Bin
         return getX().getLocationIdentity();
     }
 
-    public LocationNode canonical(CanonicalizerTool tool, LocationNode forX, LocationNode forY) {
-        if (forX instanceof ConstantLocationNode) {
-            return canonical((ConstantLocationNode) forX, forY);
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (x instanceof ConstantLocationNode) {
+            return canonical((ConstantLocationNode) x, getY());
         }
-        if (forY instanceof ConstantLocationNode) {
-            return canonical((ConstantLocationNode) forY, forX);
+        if (y instanceof ConstantLocationNode) {
+            return canonical((ConstantLocationNode) y, getX());
         }
-        if (forX instanceof IndexedLocationNode && forY instanceof IndexedLocationNode) {
-            IndexedLocationNode xIdx = (IndexedLocationNode) forX;
-            IndexedLocationNode yIdx = (IndexedLocationNode) forY;
+        if (x instanceof IndexedLocationNode && y instanceof IndexedLocationNode) {
+            IndexedLocationNode xIdx = (IndexedLocationNode) x;
+            IndexedLocationNode yIdx = (IndexedLocationNode) y;
             if (xIdx.getIndexScaling() == yIdx.getIndexScaling()) {
                 long displacement = xIdx.getDisplacement() + yIdx.getDisplacement();
-                ValueNode index = IntegerArithmeticNode.add(xIdx.getIndex(), yIdx.getIndex());
-                return IndexedLocationNode.create(getLocationIdentity(), getValueKind(), displacement, index, xIdx.getIndexScaling());
+                ValueNode index = IntegerArithmeticNode.add(graph(), xIdx.getIndex(), yIdx.getIndex());
+                return IndexedLocationNode.create(getLocationIdentity(), getValueKind(), displacement, index, graph(), xIdx.getIndexScaling());
             }
         }
         return this;
@@ -93,15 +92,15 @@ public class AddLocationNode extends LocationNode implements Canonicalizable.Bin
     private LocationNode canonical(ConstantLocationNode constant, LocationNode other) {
         if (other instanceof ConstantLocationNode) {
             ConstantLocationNode otherConst = (ConstantLocationNode) other;
-            return ConstantLocationNode.create(getLocationIdentity(), getValueKind(), otherConst.getDisplacement() + constant.getDisplacement());
+            return ConstantLocationNode.create(getLocationIdentity(), getValueKind(), otherConst.getDisplacement() + constant.getDisplacement(), graph());
         } else if (other instanceof IndexedLocationNode) {
             IndexedLocationNode otherIdx = (IndexedLocationNode) other;
-            return IndexedLocationNode.create(getLocationIdentity(), getValueKind(), otherIdx.getDisplacement() + constant.getDisplacement(), otherIdx.getIndex(), otherIdx.getIndexScaling());
+            return IndexedLocationNode.create(getLocationIdentity(), getValueKind(), otherIdx.getDisplacement() + constant.getDisplacement(), otherIdx.getIndex(), graph(), otherIdx.getIndexScaling());
         } else if (other instanceof AddLocationNode) {
             AddLocationNode otherAdd = (AddLocationNode) other;
             LocationNode newInner = otherAdd.canonical(constant, otherAdd.getX());
             if (newInner != otherAdd) {
-                return new AddLocationNode(newInner, otherAdd.getY());
+                return AddLocationNode.create(newInner, otherAdd.getY(), graph());
             }
         }
         return this;
@@ -111,11 +110,6 @@ public class AddLocationNode extends LocationNode implements Canonicalizable.Bin
     public Value generateAddress(NodeMappableLIRBuilder builder, LIRGeneratorTool gen, Value base) {
         Value xAddr = getX().generateAddress(builder, gen, base);
         return getY().generateAddress(builder, gen, xAddr);
-    }
-
-    @Override
-    public IntegerStamp getDisplacementStamp() {
-        return StampTool.add(getX().getDisplacementStamp(), getY().getDisplacementStamp());
     }
 
     @NodeIntrinsic

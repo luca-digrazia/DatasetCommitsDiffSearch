@@ -23,25 +23,23 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "|")
 public final class OrNode extends BitLogicNode implements Canonicalizable {
 
-    public OrNode(ValueNode x, ValueNode y) {
-        super(StampTool.or(x.stamp(), y.stamp()), x, y);
-        assert x.stamp().isCompatible(y.stamp());
+    public OrNode(Stamp stamp, ValueNode x, ValueNode y) {
+        super(stamp, x, y);
     }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.or(getX().stamp(), getY().stamp()));
+        return updateStamp(StampTool.or(x().stamp(), y().stamp()));
     }
 
     @Override
@@ -52,22 +50,22 @@ public final class OrNode extends BitLogicNode implements Canonicalizable {
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (getX() == getY()) {
-            return getX();
+        if (x() == y()) {
+            return x();
         }
-        if (getX().isConstant() && !getY().isConstant()) {
-            return graph().unique(new OrNode(getY(), getX()));
+        if (x().isConstant() && !y().isConstant()) {
+            return graph().unique(new OrNode(stamp(), y(), x()));
         }
-        if (getX().isConstant()) {
-            return ConstantNode.forPrimitive(stamp(), evalConst(getX().asConstant(), getY().asConstant()), graph());
-        } else if (getY().isConstant()) {
-            long rawY = getY().asConstant().asLong();
+        if (x().isConstant()) {
+            return ConstantNode.forPrimitive(stamp(), evalConst(x().asConstant(), y().asConstant()), graph());
+        } else if (y().isConstant()) {
+            long rawY = y().asConstant().asLong();
             long mask = IntegerStamp.defaultMask(PrimitiveStamp.getBits(stamp()));
             if ((rawY & mask) == mask) {
                 return ConstantNode.forIntegerStamp(stamp(), mask, graph());
             }
             if ((rawY & mask) == 0) {
-                return getX();
+                return x();
             }
             return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
         }
@@ -76,6 +74,15 @@ public final class OrNode extends BitLogicNode implements Canonicalizable {
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitOr(builder.operand(getX()), builder.operand(getY())));
+        builder.setResult(this, gen.emitOr(builder.operand(x()), builder.operand(y())));
+    }
+
+    @Override
+    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
+        Value result = gen.emitOrMemory(x(), y(), access);
+        if (result != null) {
+            gen.setResult(this, result);
+        }
+        return result != null;
     }
 }

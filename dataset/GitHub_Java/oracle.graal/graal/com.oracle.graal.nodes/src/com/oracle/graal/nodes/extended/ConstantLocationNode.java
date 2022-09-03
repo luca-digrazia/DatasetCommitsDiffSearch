@@ -23,17 +23,16 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Location node that has a constant displacement. Can represent addresses of the form [base + disp]
  * where base is a node and disp is a constant.
  */
 @NodeInfo(nameTemplate = "Loc {p#locationIdentity/s}")
-public class ConstantLocationNode extends LocationNode {
+public final class ConstantLocationNode extends LocationNode {
 
     private final Kind valueKind;
     private final LocationIdentity locationIdentity;
@@ -43,12 +42,8 @@ public class ConstantLocationNode extends LocationNode {
         return graph.unique(new ConstantLocationNode(identity, kind, displacement));
     }
 
-    public static ConstantLocationNode create(LocationIdentity identity, Kind kind, long displacement) {
-        return new ConstantLocationNode(identity, kind, displacement);
-    }
-
-    ConstantLocationNode(LocationIdentity identity, Kind kind, long displacement) {
-        super(StampFactory.forVoid());
+    private ConstantLocationNode(LocationIdentity identity, Kind kind, long displacement) {
+        super(StampFactory.extension());
         assert kind != Kind.Illegal && kind != Kind.Void;
         this.valueKind = kind;
         this.locationIdentity = identity;
@@ -72,10 +67,5 @@ public class ConstantLocationNode extends LocationNode {
     @Override
     public Value generateAddress(NodeMappableLIRBuilder builder, LIRGeneratorTool gen, Value base) {
         return gen.emitAddress(base, getDisplacement(), Value.ILLEGAL, 0);
-    }
-
-    @Override
-    public IntegerStamp getDisplacementStamp() {
-        return StampFactory.forInteger(64, displacement, displacement);
     }
 }

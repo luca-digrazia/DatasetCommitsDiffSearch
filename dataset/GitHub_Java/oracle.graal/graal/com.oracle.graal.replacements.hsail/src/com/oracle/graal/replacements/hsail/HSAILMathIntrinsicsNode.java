@@ -22,22 +22,23 @@
  */
 package com.oracle.graal.replacements.hsail;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.hsail.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.hsail.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.api.meta.Constant;
+import com.oracle.graal.api.meta.Value;
+import com.oracle.graal.compiler.hsail.HSAILLIRGenerator;
+import com.oracle.graal.graph.GraalInternalError;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.hsail.HSAILArithmetic;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.StampFactory;
 
 /**
  * This node implements HSAIL intrinsics for specific {@link Math} routines.
  */
-@NodeInfo
 public class HSAILMathIntrinsicsNode extends FloatingNode implements Canonicalizable, ArithmeticLIRLowerable {
 
     /**
@@ -124,7 +125,7 @@ public class HSAILMathIntrinsicsNode extends FloatingNode implements Canonicaliz
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (getParameter().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(getParameter().asConstant()));
+            return ConstantNode.forPrimitive(evalConst(getParameter().asConstant()), graph());
         }
         return this;
     }

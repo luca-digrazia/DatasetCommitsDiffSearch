@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
@@ -34,89 +33,78 @@ import com.oracle.graal.nodes.virtual.*;
 /**
  * Reads an {@linkplain FixedAccessNode accessed} value.
  */
-public final class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, PiPushable, Virtualizable, GuardingNode {
+public final class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, PiPushable, Virtualizable {
 
-    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
-        super(object, location, stamp, null, barrierType);
+    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType, boolean compressible) {
+        super(object, location, stamp, barrierType, compressible);
     }
 
-    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
-        super(object, location, stamp, guard, barrierType);
+    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean compressible) {
+        super(object, location, stamp, guard, barrierType, compressible);
     }
 
-    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
-        super(object, location, stamp, guard, barrierType, nullCheck, stateBefore);
-    }
-
-    private ReadNode(ValueNode object, ValueNode location, ValueNode guard, BarrierType barrierType) {
+    private ReadNode(ValueNode object, ValueNode location, ValueNode guard, BarrierType barrierType, boolean compressible) {
         /*
          * Used by node intrinsics. Really, you can trust me on that! Since the initial value for
          * location is a parameter, i.e., a ParameterNode, the constructor cannot use the declared
          * type LocationNode.
          */
-        super(object, location, StampFactory.forNodeIntrinsic(), (GuardingNode) guard, barrierType);
+        super(object, location, StampFactory.forNodeIntrinsic(), (GuardingNode) guard, barrierType, compressible);
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         Value address = location().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
-        LIRKind readKind = gen.getLIRGeneratorTool().getLIRKind(stamp());
-        gen.setResult(this, gen.getLIRGeneratorTool().emitLoad(readKind, address, gen.state(this)));
+        PlatformKind readKind = gen.getLIRGeneratorTool().getPlatformKind(stamp());
+        gen.setResult(this, gen.getLIRGeneratorTool().emitLoad(readKind, address, this));
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (usages().isEmpty()) {
-            GuardingNode guard = getGuard();
+        if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
+            return graph().add(new ReadNode(((PiNode) object()).getOriginalValue(), location(), stamp(), getGuard(), getBarrierType(), isCompressible()));
+        }
+        return canonicalizeRead(this, location(), object(), tool, isCompressible());
+    }
+
+    @Override
+    public FloatingAccessNode asFloatingNode(MemoryNode lastLocationAccess) {
+        return graph().unique(new FloatingReadNode(object(), location(), lastLocationAccess, stamp(), getGuard(), getBarrierType(), isCompressible()));
+    }
+
+    public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool, boolean compressible) {
+        MetaAccessProvider metaAccess = tool.getMetaAccess();
+        if (read.usages().isEmpty()) {
+            GuardingNode guard = ((Access) read).getGuard();
             if (guard != null && !(guard instanceof FixedNode)) {
                 // The guard is necessary even if the read goes away.
-                return new ValueAnchorNode((ValueNode) guard);
+                return read.graph().add(new ValueAnchorNode((ValueNode) guard));
             } else {
                 // Read without usages or guard can be safely removed.
                 return null;
             }
         }
-        if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
-            return new ReadNode(((PiNode) object()).getOriginalNode(), location(), stamp(), getGuard(), getBarrierType(), getNullCheck(), stateBefore());
-        }
-        if (!getNullCheck()) {
-            return canonicalizeRead(this, location(), object(), tool);
-        } else {
-            // if this read is a null check, then replacing it with the value is incorrect for
-            // guard-type usages
-            return this;
-        }
-    }
-
-    @Override
-    public FloatingAccessNode asFloatingNode(MemoryNode lastLocationAccess) {
-        return graph().unique(new FloatingReadNode(object(), location(), lastLocationAccess, stamp(), getGuard(), getBarrierType()));
-    }
-
-    @Override
-    public boolean isAllowedUsageType(InputType type) {
-        return (getNullCheck() && type == InputType.Guard) ? true : super.isAllowedUsageType(type);
-    }
-
-    public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool) {
-        MetaAccessProvider metaAccess = tool.getMetaAccess();
         if (tool.canonicalizeReads()) {
             if (metaAccess != null && object != null && object.isConstant()) {
                 if ((location.getLocationIdentity() == LocationIdentity.FINAL_LOCATION || location.getLocationIdentity() == LocationIdentity.ARRAY_LENGTH_LOCATION) &&
                                 location instanceof ConstantLocationNode) {
                     long displacement = ((ConstantLocationNode) location).getDisplacement();
-                    Constant base = object.asConstant();
-                    if (base != null) {
-                        Constant constant;
-                        if (read.stamp() instanceof PrimitiveStamp) {
-                            PrimitiveStamp stamp = (PrimitiveStamp) read.stamp();
-                            constant = tool.getConstantReflection().readRawConstant(stamp.getStackKind(), base, displacement, stamp.getBits());
-                        } else {
-                            assert read.stamp() instanceof ObjectStamp;
-                            constant = tool.getConstantReflection().readUnsafeConstant(Kind.Object, base, displacement);
+                    Kind kind = location.getValueKind();
+                    if (object.getKind() == Kind.Object) {
+                        Object base = object.asConstant().asObject();
+                        if (base != null) {
+                            Constant constant = tool.getConstantReflection().readUnsafeConstant(kind, base, displacement, compressible);
+                            if (constant != null) {
+                                return ConstantNode.forConstant(constant, metaAccess, read.graph());
+                            }
                         }
-                        if (constant != null) {
-                            return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
+                    } else if (object.getKind().isNumericInteger()) {
+                        long base = object.asConstant().asLong();
+                        if (base != 0L) {
+                            Constant constant = tool.getConstantReflection().readUnsafeConstant(kind, null, base + displacement, compressible);
+                            if (constant != null) {
+                                return ConstantNode.forConstant(constant, metaAccess, read.graph());
+                            }
                         }
                     }
                 }
@@ -151,7 +139,7 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
         }
 
         ObjectStamp valueStamp = (ObjectStamp) parent.object().stamp();
-        ResolvedJavaType valueType = StampTool.typeOrNull(valueStamp);
+        ResolvedJavaType valueType = ObjectStamp.typeOrNull(valueStamp);
         if (valueType != null && field.getDeclaringClass().isAssignableFrom(valueType)) {
             if (piStamp.nonNull() == valueStamp.nonNull() && piStamp.alwaysNull() == valueStamp.alwaysNull()) {
                 replaceFirstInput(parent, parent.object());
@@ -175,9 +163,5 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
                 }
             }
         }
-    }
-
-    public boolean canNullCheck() {
-        return true;
     }
 }

@@ -50,7 +50,13 @@ public class NarrowNode extends IntegerConvertNode {
 
     @Override
     public Constant reverse(Constant input) {
-        long result = SignExtendNode.signExtend(input.asLong(), getResultBits());
+        IntegerStamp stamp = (IntegerStamp) stamp();
+        long result;
+        if (stamp.isUnsigned()) {
+            result = ZeroExtendNode.zeroExtend(input.asLong(), getResultBits());
+        } else {
+            result = SignExtendNode.signExtend(input.asLong(), getResultBits());
+        }
         return Constant.forPrimitiveInt(getInputBits(), result);
     }
 

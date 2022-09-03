@@ -23,20 +23,58 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * A {@code FloatConvert} converts between integers and floating point numbers according to Java
  * semantics.
  */
-public class FloatConvertNode extends ConvertNode implements Canonicalizable, Lowerable, ArithmeticLIRLowerable {
+public class FloatConvertNode extends ConvertNode implements Canonicalizable, Lowerable, ArithmeticLIRLowerable, MemoryArithmeticLIRLowerable {
+
+    public enum FloatConvert {
+        F2I,
+        D2I,
+        F2L,
+        D2L,
+        I2F,
+        L2F,
+        D2F,
+        I2D,
+        L2D,
+        F2D;
+
+        public FloatConvert reverse() {
+            switch (this) {
+                case D2F:
+                    return F2D;
+                case D2I:
+                    return I2D;
+                case D2L:
+                    return L2D;
+                case F2D:
+                    return D2F;
+                case F2I:
+                    return I2F;
+                case F2L:
+                    return L2F;
+                case I2D:
+                    return D2I;
+                case I2F:
+                    return F2I;
+                case L2D:
+                    return D2L;
+                case L2F:
+                    return F2L;
+                default:
+                    throw GraalInternalError.shouldNotReachHere();
+            }
+        }
+    }
 
     private final FloatConvert op;
 
@@ -95,7 +133,7 @@ public class FloatConvertNode extends ConvertNode implements Canonicalizable, Lo
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(createStamp(op, getValue()));
+        return updateStamp(createStamp(op, getInput()));
     }
 
     private static Constant convert(FloatConvert op, Constant value) {
@@ -148,12 +186,12 @@ public class FloatConvertNode extends ConvertNode implements Canonicalizable, Lo
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (getValue().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(getValue().asConstant()), graph());
-        } else if (getValue() instanceof FloatConvertNode) {
-            FloatConvertNode other = (FloatConvertNode) getValue();
+        if (getInput().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(getInput().asConstant()), graph());
+        } else if (getInput() instanceof FloatConvertNode) {
+            FloatConvertNode other = (FloatConvertNode) getInput();
             if (other.isLossless() && other.op == this.op.reverse()) {
-                return other.getValue();
+                return other.getInput();
             }
         }
         return this;
@@ -164,6 +202,20 @@ public class FloatConvertNode extends ConvertNode implements Canonicalizable, Lo
     }
 
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitFloatConvert(op, builder.operand(getValue())));
+        builder.setResult(this, gen.emitFloatConvert(op, builder.operand(getInput())));
+    }
+
+    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
+        Kind kind = access.nullCheckLocation().getValueKind();
+        if (kind != kind.getStackKind()) {
+            // Doesn't work for subword operations
+            return false;
+        }
+
+        Value result = gen.emitFloatConvertMemory(getOp(), access);
+        if (result != null) {
+            gen.setResult(this, result);
+        }
+        return result != null;
     }
 }

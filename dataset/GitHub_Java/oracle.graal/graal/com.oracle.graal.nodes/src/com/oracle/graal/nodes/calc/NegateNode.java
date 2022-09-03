@@ -23,10 +23,8 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -34,20 +32,27 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code NegateNode} node negates its operand.
  */
-public final class NegateNode extends UnaryNode implements Canonicalizable, ArithmeticLIRLowerable, NarrowableArithmeticNode {
+public final class NegateNode extends FloatingNode implements Canonicalizable, ArithmeticLIRLowerable, NarrowableArithmeticNode {
+
+    @Input private ValueNode x;
+
+    public ValueNode x() {
+        return x;
+    }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.negate(getValue().stamp()));
+        return updateStamp(StampTool.negate(x().stamp()));
     }
 
     /**
      * Creates new NegateNode instance.
      *
-     * @param value the instruction producing the value that is input to this instruction
+     * @param x the instruction producing the value that is input to this instruction
      */
-    public NegateNode(ValueNode value) {
-        super(StampTool.negate(value.stamp()), value);
+    public NegateNode(ValueNode x) {
+        super(StampTool.negate(x.stamp()));
+        this.x = x;
     }
 
     public Constant evalConst(Constant... inputs) {
@@ -69,14 +74,14 @@ public final class NegateNode extends UnaryNode implements Canonicalizable, Arit
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (getValue().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(getValue().asConstant()), graph());
+        if (x().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(x.asConstant()), graph());
         }
-        if (getValue() instanceof NegateNode) {
-            return ((NegateNode) getValue()).getValue();
+        if (x() instanceof NegateNode) {
+            return ((NegateNode) x()).x();
         }
-        if (getValue() instanceof IntegerSubNode) {
-            IntegerSubNode sub = (IntegerSubNode) getValue();
+        if (x() instanceof IntegerSubNode) {
+            IntegerSubNode sub = (IntegerSubNode) x;
             return IntegerArithmeticNode.sub(graph(), sub.y(), sub.x());
         }
         return this;
@@ -84,6 +89,6 @@ public final class NegateNode extends UnaryNode implements Canonicalizable, Arit
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitNegate(builder.operand(getValue())));
+        builder.setResult(this, gen.emitNegate(builder.operand(x())));
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,18 +23,16 @@
 package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-@NodeInfo
-public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerable {
+public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, ArithmeticLIRLowerable {
 
+    @Input private ValueNode x;
     private final Operation operation;
 
     public enum Operation {
@@ -47,19 +45,24 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
         TAN
     }
 
+    public ValueNode x() {
+        return x;
+    }
+
     public Operation operation() {
         return operation;
     }
 
-    public MathIntrinsicNode(ValueNode value, Operation op) {
-        super(StampFactory.forKind(Kind.Double), value);
-        assert value.stamp() instanceof FloatStamp && PrimitiveStamp.getBits(value.stamp()) == 64;
+    public MathIntrinsicNode(ValueNode x, Operation op) {
+        super(StampFactory.forKind(Kind.Double));
+        assert x.stamp() instanceof FloatStamp && PrimitiveStamp.getBits(x.stamp()) == 64;
+        this.x = x;
         this.operation = op;
     }
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        Value input = builder.operand(getValue());
+        Value input = builder.operand(x());
         Value result;
         switch (operation()) {
             case ABS:
@@ -95,9 +98,9 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        if (forValue.isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(forValue.asConstant()));
+    public Node canonical(CanonicalizerTool tool) {
+        if (x().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(x().asConstant()), graph());
         }
         return this;
     }
@@ -107,7 +110,7 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
         return doCompute(value, op);
     }
 
-    private static double doCompute(double value, Operation op) {
+    private static double doCompute(double value, Operation op) throws GraalInternalError {
         switch (op) {
             case ABS:
                 return Math.abs(value);
@@ -123,8 +126,7 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
                 return Math.cos(value);
             case TAN:
                 return Math.tan(value);
-            default:
-                throw new GraalInternalError("unknown op %s", op);
         }
+        throw new GraalInternalError("unknown op %s", op);
     }
 }

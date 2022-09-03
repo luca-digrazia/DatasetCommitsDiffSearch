@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,23 +23,17 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * A location for a memory access in terms of the kind of value accessed and how to access it. All
  * locations have the form [base + location], where base is a node and location is defined by
  * subclasses of the {@link LocationNode}.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Association})
 public abstract class LocationNode extends FloatingNode implements LIRLowerable, ValueNumberable {
-
-    public static final NodeClass TYPE = NodeClass.get(LocationNode.class);
 
     /**
      * Marker interface for locations in snippets.
@@ -47,9 +41,14 @@ public abstract class LocationNode extends FloatingNode implements LIRLowerable,
     public interface Location {
     }
 
-    protected LocationNode(NodeClass c, Stamp stamp) {
-        super(c, stamp);
+    protected LocationNode(Stamp stamp) {
+        super(stamp);
     }
+
+    /**
+     * Returns the kind of the accessed memory value.
+     */
+    public abstract Kind getValueKind();
 
     /**
      * Returns the identity of the accessed memory location.
@@ -62,9 +61,4 @@ public abstract class LocationNode extends FloatingNode implements LIRLowerable,
     }
 
     public abstract Value generateAddress(NodeMappableLIRBuilder builder, LIRGeneratorTool gen, Value base);
-
-    /**
-     * @return the range of the displacement as a 64-bit integer stamp
-     */
-    public abstract IntegerStamp getDisplacementStamp();
 }

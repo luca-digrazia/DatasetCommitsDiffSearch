@@ -23,11 +23,10 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -74,26 +73,26 @@ public class SignExtendNode extends IntegerConvertNode {
             return ret;
         }
 
-        if (getValue() instanceof SignExtendNode) {
+        if (getInput() instanceof SignExtendNode) {
             // sxxx -(sign-extend)-> ssss sxxx -(sign-extend)-> ssssssss sssssxxx
             // ==> sxxx -(sign-extend)-> ssssssss sssssxxx
-            SignExtendNode other = (SignExtendNode) getValue();
-            return graph().unique(new SignExtendNode(other.getValue(), getResultBits()));
-        } else if (getValue() instanceof ZeroExtendNode) {
-            ZeroExtendNode other = (ZeroExtendNode) getValue();
+            SignExtendNode other = (SignExtendNode) getInput();
+            return graph().unique(new SignExtendNode(other.getInput(), getResultBits()));
+        } else if (getInput() instanceof ZeroExtendNode) {
+            ZeroExtendNode other = (ZeroExtendNode) getInput();
             if (other.getResultBits() > other.getInputBits()) {
                 // sxxx -(zero-extend)-> 0000 sxxx -(sign-extend)-> 00000000 0000sxxx
                 // ==> sxxx -(zero-extend)-> 00000000 0000sxxx
-                return graph().unique(new ZeroExtendNode(other.getValue(), getResultBits()));
+                return graph().unique(new ZeroExtendNode(other.getInput(), getResultBits()));
             }
         }
 
-        if (getValue().stamp() instanceof IntegerStamp) {
-            IntegerStamp inputStamp = (IntegerStamp) getValue().stamp();
+        if (getInput().stamp() instanceof IntegerStamp) {
+            IntegerStamp inputStamp = (IntegerStamp) getInput().stamp();
             if ((inputStamp.upMask() & (1L << (getInputBits() - 1))) == 0L) {
                 // 0xxx -(sign-extend)-> 0000 0xxx
                 // ==> 0xxx -(zero-extend)-> 0000 0xxx
-                return graph().unique(new ZeroExtendNode(getValue(), getResultBits()));
+                return graph().unique(new ZeroExtendNode(getInput(), getResultBits()));
             }
         }
 
@@ -102,11 +101,20 @@ public class SignExtendNode extends IntegerConvertNode {
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.signExtend(getValue().stamp(), getResultBits()));
+        return updateStamp(StampTool.signExtend(getInput().stamp(), getResultBits()));
     }
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitSignExtend(builder.operand(getValue()), getInputBits(), getResultBits()));
+        builder.setResult(this, gen.emitSignExtend(builder.operand(getInput()), getInputBits(), getResultBits()));
+    }
+
+    @Override
+    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
+        Value result = gen.emitSignExtendMemory(access, access.nullCheckLocation().getValueKind().getBitCount(), getResultBits());
+        if (result != null) {
+            gen.setResult(this, result);
+        }
+        return result != null;
     }
 }

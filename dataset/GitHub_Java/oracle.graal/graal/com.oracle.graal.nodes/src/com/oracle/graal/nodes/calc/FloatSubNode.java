@@ -23,12 +23,12 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "-")
 public final class FloatSubNode extends FloatArithmeticNode implements Canonicalizable {
@@ -55,13 +55,37 @@ public final class FloatSubNode extends FloatArithmeticNode implements Canonical
         }
         if (x().isConstant() && y().isConstant()) {
             return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
+        } else if (y().isConstant()) {
+            Constant c = y().asConstant();
+            if (c.getKind() == Kind.Float) {
+                float f = c.asFloat();
+                if (f == 0.0f) {
+                    return x();
+                }
+                return graph().unique(new FloatAddNode(stamp(), x(), ConstantNode.forFloat(-f, graph()), isStrictFP()));
+            } else {
+                assert c.getKind() == Kind.Double;
+                double d = c.asDouble();
+                if (d == 0.0) {
+                    return x();
+                }
+                return graph().unique(new FloatAddNode(stamp(), x(), ConstantNode.forDouble(-d, graph()), isStrictFP()));
+            }
         }
-        // Constant 0.0 can't be eliminated since it can affect the sign of the result.
         return this;
     }
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
         builder.setResult(this, gen.emitSub(builder.operand(x()), builder.operand(y())));
+    }
+
+    @Override
+    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
+        Value result = gen.emitSubMemory(x(), y(), access);
+        if (result != null) {
+            gen.setResult(this, result);
+        }
+        return result != null;
     }
 }
