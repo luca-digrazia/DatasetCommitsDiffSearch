@@ -22,11 +22,13 @@
  */
 package com.oracle.graal.truffle;
 
+import java.nio.*;
 import java.lang.reflect.*;
 import java.util.*;
 
 import sun.misc.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 
@@ -105,7 +107,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private byte getByteUnsafe(FrameSlot slot) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Byte);
+        long offset = alignPrimitive(slot, Kind.Byte);
         boolean condition = this.getTags()[slot.getIndex()] == FrameSlotKind.Byte.ordinal();
         return unsafeGetByte(getPrimitiveLocals(), offset, condition, slot);
     }
@@ -117,7 +119,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setByteUnsafe(FrameSlot slot, byte value) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Boolean);
+        long offset = alignPrimitive(slot, Kind.Boolean);
         unsafePutByte(getPrimitiveLocals(), offset, value, slot);
     }
 
@@ -128,7 +130,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private boolean getBooleanUnsafe(FrameSlot slot) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Boolean);
+        long offset = alignPrimitive(slot, Kind.Boolean);
         boolean condition = this.getTags()[slot.getIndex()] == FrameSlotKind.Boolean.ordinal();
         return unsafeGetBoolean(getPrimitiveLocals(), offset, condition, slot);
     }
@@ -140,7 +142,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setBooleanUnsafe(FrameSlot slot, boolean value) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Boolean);
+        long offset = alignPrimitive(slot, Kind.Boolean);
         unsafePutBoolean(getPrimitiveLocals(), offset, value, slot);
     }
 
@@ -151,7 +153,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private float getFloatUnsafe(FrameSlot slot) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Float);
+        long offset = alignPrimitive(slot, Kind.Float);
         boolean condition = this.getTags()[slot.getIndex()] == FrameSlotKind.Float.ordinal();
         return unsafeGetFloat(getPrimitiveLocals(), offset, condition, slot);
     }
@@ -163,7 +165,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setFloatUnsafe(FrameSlot slot, float value) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Float);
+        long offset = alignPrimitive(slot, Kind.Float);
         unsafePutFloat(getPrimitiveLocals(), offset, value, slot);
     }
 
@@ -174,7 +176,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private long getLongUnsafe(FrameSlot slot) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Long);
+        long offset = alignPrimitive(slot, Kind.Long);
         boolean condition = this.getTags()[slot.getIndex()] == FrameSlotKind.Long.ordinal();
         return unsafeGetLong(getPrimitiveLocals(), offset, condition, slot);
     }
@@ -186,7 +188,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setLongUnsafe(FrameSlot slot, long value) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Long);
+        long offset = alignPrimitive(slot, Kind.Long);
         unsafePutLong(getPrimitiveLocals(), offset, value, slot);
     }
 
@@ -197,7 +199,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private int getIntUnsafe(FrameSlot slot) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Int);
+        long offset = alignPrimitive(slot, Kind.Int);
         boolean condition = this.getTags()[slot.getIndex()] == FrameSlotKind.Int.ordinal();
         return unsafeGetInt(getPrimitiveLocals(), offset, condition, slot);
     }
@@ -209,7 +211,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setIntUnsafe(FrameSlot slot, int value) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Int);
+        long offset = alignPrimitive(slot, Kind.Int);
         unsafePutInt(getPrimitiveLocals(), offset, value, slot);
     }
 
@@ -220,7 +222,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private double getDoubleUnsafe(FrameSlot slot) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Double);
+        long offset = alignPrimitive(slot, Kind.Double);
         boolean condition = this.getTags()[slot.getIndex()] == FrameSlotKind.Double.ordinal();
         return unsafeGetDouble(getPrimitiveLocals(), offset, condition, slot);
     }
@@ -232,7 +234,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setDoubleUnsafe(FrameSlot slot, double value) {
-        long offset = getPrimitiveOffset(slot, FrameSlotKind.Double);
+        long offset = alignPrimitive(slot, Kind.Double);
         unsafePutDouble(getPrimitiveLocals(), offset, value, slot);
     }
 
@@ -243,34 +245,38 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     private void verifySet(FrameSlot slot, FrameSlotKind accessKind) {
         int slotIndex = slot.getIndex();
-        byte[] tagsArray = getTags();
-        if (slotIndex >= tagsArray.length) {
+        if (slotIndex >= getTags().length) {
             CompilerDirectives.transferToInterpreter();
             if (!resize()) {
                 throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
             }
         }
-        tagsArray[slotIndex] = (byte) accessKind.ordinal();
+        getTags()[slotIndex] = (byte) accessKind.ordinal();
     }
 
     private void verifyGet(FrameSlot slot, FrameSlotKind accessKind) throws FrameSlotTypeException {
         int slotIndex = slot.getIndex();
-        byte[] tagsArray = getTags();
-        if (slotIndex >= tagsArray.length) {
+        if (slotIndex >= getTags().length) {
             CompilerDirectives.transferToInterpreter();
             if (!resize()) {
                 throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
             }
         }
-        byte tag = tagsArray[slotIndex];
+        byte tag = this.getTags()[slotIndex];
         if (tag != accessKind.ordinal()) {
             CompilerDirectives.transferToInterpreter();
             throw new FrameSlotTypeException();
         }
     }
 
-    private static long getPrimitiveOffset(FrameSlot slot, FrameSlotKind forKind) {
-        return Unsafe.ARRAY_LONG_BASE_OFFSET + slot.getIndex() * (long) Unsafe.ARRAY_LONG_INDEX_SCALE + forKind.getByteOffset();
+    private static long alignPrimitive(FrameSlot slot, Kind forKind) {
+        long offset = Unsafe.ARRAY_LONG_BASE_OFFSET + slot.getIndex() * (long) Unsafe.ARRAY_LONG_INDEX_SCALE;
+        if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) {
+            // On big endian, we use int in long type, which means, when byteCount() <=4, the value
+            // is right aligned in the 4 byte half, which has the lower address.
+            offset += Kind.Long.getByteCount() - Math.min((long) Unsafe.ARRAY_LONG_INDEX_SCALE, 4 + forKind.getByteCount());
+        }
+        return offset;
     }
 
     @Override
