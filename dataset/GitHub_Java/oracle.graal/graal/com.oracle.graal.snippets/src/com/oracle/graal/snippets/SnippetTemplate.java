@@ -144,7 +144,7 @@ public class SnippetTemplate {
 
                             FixedNode explodeLoopNext = explodeLoop.next();
                             explodeLoop.clearSuccessors();
-                            explodeLoop.replaceAtPredecessor(explodeLoopNext);
+                            explodeLoop.replaceAtPredecessors(explodeLoopNext);
                             explodeLoop.replaceAtUsages(null);
                             GraphUtil.killCFG(explodeLoop);
                             break;
@@ -296,7 +296,7 @@ public class SnippetTemplate {
 
         // Re-wire the control flow graph around the replacee
         FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
-        anchor.replaceAtPredecessor(firstCFGNodeDuplicate);
+        anchor.replaceAtPredecessors(firstCFGNodeDuplicate);
         FixedNode next = anchor.next();
         anchor.setNext(null);
 
