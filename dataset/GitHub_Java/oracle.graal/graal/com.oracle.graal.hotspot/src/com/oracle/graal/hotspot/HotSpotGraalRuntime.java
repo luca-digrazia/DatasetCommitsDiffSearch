@@ -35,7 +35,6 @@ import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 
 /**
@@ -85,14 +84,9 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         runtime.compilerToVm = toVM;
     }
 
-    // @formatter:off
-    @Option(help = "The runtime configuration to use")
-    private static final OptionValue<String> GraalRuntime = new OptionValue<>("basic");
-    // @formatter:on
-
     protected static HotSpotGraalRuntimeFactory findFactory(String architecture) {
         for (HotSpotGraalRuntimeFactory factory : ServiceLoader.loadInstalled(HotSpotGraalRuntimeFactory.class)) {
-            if (factory.getArchitecture().equals(architecture) && factory.getName().equals(GraalRuntime.getValue())) {
+            if (factory.getArchitecture().equals(architecture) && factory.getName().equals(GraalOptions.GraalRuntime)) {
                 return factory;
             }
         }
@@ -129,9 +123,9 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         return unsafe.getInt(object, offset);
     }
 
-    protected/* final */CompilerToVM compilerToVm;
+    protected/* final */CompilerToVM  compilerToVm;
     protected/* final */CompilerToGPU compilerToGpu;
-    protected/* final */VMToCompiler vmToCompiler;
+    protected/* final */VMToCompiler  vmToCompiler;
 
     protected final HotSpotRuntime runtime;
     protected final TargetDescription target;
@@ -144,13 +138,13 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
     private final HotSpotBackend backend;
 
     protected HotSpotGraalRuntime() {
-        CompilerToVM toVM = new CompilerToVMImpl();
+        CompilerToVM  toVM  = new CompilerToVMImpl();
         CompilerToGPU toGPU = new CompilerToGPUImpl();
 
         // initialize VmToCompiler
         VMToCompiler toCompiler = new VMToCompilerImpl(this);
 
-        compilerToVm = toVM;
+        compilerToVm  = toVM;
         compilerToGpu = toGPU;
         vmToCompiler = toCompiler;
         config = new HotSpotVMConfig();

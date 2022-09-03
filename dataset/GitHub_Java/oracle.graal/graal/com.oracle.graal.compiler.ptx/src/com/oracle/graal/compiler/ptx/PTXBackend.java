@@ -59,11 +59,6 @@ public class PTXBackend extends Backend {
     }
 
     @Override
-    protected AbstractAssembler createAssembler(FrameMap frameMap) {
-        return new PTXAssembler(target, frameMap.registerConfig);
-    }
-
-    @Override
     public TargetMethodAssembler newAssembler(LIRGenerator lirGen, CompilationResult compilationResult) {
         // Omit the frame if the method:
         // - has no spill slots or other slots allocated during register allocation
@@ -71,7 +66,7 @@ public class PTXBackend extends Backend {
         // - has no incoming arguments passed on the stack
         // - has no instructions with debug info
         FrameMap frameMap = lirGen.frameMap;
-        AbstractAssembler masm = createAssembler(frameMap);
+        AbstractAssembler masm = new PTXAssembler(target, frameMap.registerConfig);
         HotSpotFrameContext frameContext = new HotSpotFrameContext();
         TargetMethodAssembler tasm = new PTXTargetMethodAssembler(target, runtime(), frameMap, masm, frameContext, compilationResult);
         tasm.setFrameSize(frameMap.frameSize());

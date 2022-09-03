@@ -24,7 +24,6 @@
 package com.oracle.graal.hotspot.bridge;
 
 import com.oracle.graal.api.code.InvalidInstalledCodeException;
-import com.oracle.graal.hotspot.meta.HotSpotInstalledCode;
 
 /**
  * Calls from Java into the GPU.
@@ -53,9 +52,4 @@ public interface CompilerToGPU {
      * @return the value of the bound kernel in GPU space.
      */
     long generateKernel(byte[] code, String name) throws InvalidInstalledCodeException;
-
-    Object executeExternalMethodVarargs(Object[] args, HotSpotInstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException;
-
-    Object executeParallelMethodVarargs(int dimX, int dimY, int dimZ,
-                                        Object[] args, HotSpotInstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException;
 }
