@@ -26,13 +26,9 @@ import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TraceTr
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TraceTruffleStackTraceLimit;
 
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 import java.util.function.Consumer;
 
 import org.graalvm.compiler.debug.TTY;
-import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -40,141 +36,36 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.impl.AbstractAssumption;
 import com.oracle.truffle.api.nodes.InvalidAssumptionException;
 
-/**
- * An assumption that when {@linkplain #invalidate() invalidated} will cause all
- * {@linkplain #registerDependency() registered} dependencies to be invalidated.
- */
+import jdk.vm.ci.code.InstalledCode;
+
 public final class OptimizedAssumption extends AbstractAssumption {
 
-    /**
-     * A daemon thread used to clean up {@link OptimizedAssumptionDependency} objects that may
-     * become invalid by some mechanism other than {@link OptimizedAssumption#invalidate()} and
-     * whose reachability is
-     * {@linkplain OptimizedAssumptionDependency#unreachabilityDeterminesValidity() not correlated}
-     * with the validity of the referenced machine code.
-     */
-    static class Cleaner extends Thread {
-
-        private static final int CLEANING_INTERVAL_MS = 1000;
-
-        Cleaner() {
-            super("OptimizedAssumptionDependencyCleaner");
-            setDaemon(true);
-            setPriority(MIN_PRIORITY);
-            start();
-        }
-
-        @Override
-        public void run() {
-            while (true) {
-                try {
-                    Thread.sleep(CLEANING_INTERVAL_MS);
-                } catch (InterruptedException e) {
-                }
-                clean();
-            }
-        }
-
-        final List<Entry> deps = new ArrayList<>();
-
-        static synchronized void add(Entry e) {
-            if (CLEANER == null) {
-                CLEANER = new Cleaner();
-            }
-            CLEANER.deps.add(e);
-            // Notify that there might be something to clean
-            CLEANER.notify();
-        }
-
-        synchronized void clean() {
-            while (deps.isEmpty()) {
-                try {
-                    // Wait until there might be something to clean
-                    this.wait();
-                } catch (InterruptedException e) {
-                }
-            }
-            Iterator<Entry> iter = deps.iterator();
-            while (iter.hasNext()) {
-                Entry e = iter.next();
-                OptimizedAssumptionDependency dep = e.dependency;
-                if (dep != null && !dep.isValid()) {
-                    e.dependency = INVALID_DEPENDENCY;
-                    iter.remove();
-                }
-            }
-        }
-
-        private static Cleaner CLEANER;
-
-        /**
-         * Replaces a strong reference to machine code once the code becomes invalid.
-         */
-        static final OptimizedAssumptionDependency INVALID_DEPENDENCY = new OptimizedAssumptionDependency() {
-
-            @Override
-            public void invalidate() {
-            }
-
-            @Override
-            public boolean isValid() {
-                return false;
-            }
-
-            @Override
-            public String toString() {
-                return "INVALID_DEPENDENCY";
-            }
-        };
-    }
-
-    /**
-     * Reference to machine code that is dependent on an assumption.
-     */
-    static class Entry implements Consumer<OptimizedAssumptionDependency> {
-        /**
-         * A machine code reference that must be kept reachable as long as the machine code itself
-         * is valid. A {@link Cleaner} is used to clear such strong references to machine code when
-         * the code is invalidated by some mechanism other than
-         * {@link OptimizedAssumption#invalidate()}.
-         */
-        volatile OptimizedAssumptionDependency dependency;
-
-        /**
-         * Machine code that is guaranteed to be invalid once the
-         * {@link OptimizedAssumptionDependency} object becomes unreachable.
-         */
-        WeakReference<OptimizedAssumptionDependency> weakDependency;
-
+    private static class Entry implements Consumer<InstalledCode> {
+        WeakReference<InstalledCode> installedCode;
+        long version;
         Entry next;
 
         @Override
-        public void accept(OptimizedAssumptionDependency dep) {
+        public void accept(InstalledCode code) {
             synchronized (this) {
-                if (dep.unreachabilityDeterminesValidity()) {
-                    this.weakDependency = new WeakReference<>(dep);
-                } else {
-                    this.dependency = dep;
-                    GraalTruffleRuntime.getRuntime();
-                    Cleaner.add(this);
+                installedCode = new WeakReference<>(code);
+                if (code != null) {
+                    version = code.getVersion();
                 }
                 this.notifyAll();
             }
         }
 
-        public OptimizedAssumptionDependency awaitDependency() {
+        public InstalledCode awaitInstalledCode() {
             synchronized (this) {
-                while (dependency == null && weakDependency == null) {
+                while (installedCode == null) {
                     try {
                         this.wait();
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
                 }
-                if (dependency != null) {
-                    return dependency;
-                }
-                return weakDependency.get();
+                return installedCode.get();
             }
         }
     }
@@ -210,18 +101,19 @@ public final class OptimizedAssumption extends AbstractAssumption {
             return;
         }
 
-        boolean invalidatedADependency = false;
+        boolean invalidatedInstalledCode = false;
         Entry e = first;
         while (e != null) {
-            OptimizedAssumptionDependency dependency = e.awaitDependency();
-            if (dependency != null) {
-                OptimizedCallTarget callTarget = invalidateWithReason(dependency, "assumption invalidated");
-                invalidatedADependency = true;
+            InstalledCode installedCode = e.awaitInstalledCode();
+            if (installedCode != null && installedCode.getVersion() == e.version) {
+                invalidateWithReason(installedCode, "assumption invalidated");
+                invalidatedInstalledCode = true;
                 if (TruffleCompilerOptions.getValue(TraceTruffleAssumptions)) {
-                    logInvalidatedDependency(dependency);
+                    logInvalidatedInstalledCode(installedCode);
                 }
-                if (callTarget != null) {
-                    callTarget.getCompilationProfile().reportInvalidated();
+                if (installedCode instanceof OptimizedCallTarget) {
+                    OptimizedCallTarget target = (OptimizedCallTarget) installedCode;
+                    target.getCompilationProfile().reportInvalidated();
                 }
             }
             e = e.next;
@@ -230,31 +122,26 @@ public final class OptimizedAssumption extends AbstractAssumption {
         isValid = false;
 
         if (TruffleCompilerOptions.getValue(TraceTruffleAssumptions)) {
-            if (invalidatedADependency) {
+            if (invalidatedInstalledCode) {
                 logStackTrace();
             }
         }
     }
 
-    /**
-     * Registers some dependent code with this object.
-     *
-     * @return a consumer that will be supplied the dependent code once it is available
-     */
-    public synchronized Consumer<OptimizedAssumptionDependency> registerDependency() {
+    public synchronized Consumer<InstalledCode> registerInstalledCodeEntry() {
         if (isValid) {
             Entry e = new Entry();
             e.next = first;
             first = e;
             return e;
         } else {
-            return new Consumer<OptimizedAssumptionDependency>() {
+            return new Consumer<InstalledCode>() {
                 @Override
-                public void accept(OptimizedAssumptionDependency dependency) {
-                    if (dependency != null) {
-                        invalidateWithReason(dependency, "assumption already invalidated when installing code");
+                public void accept(InstalledCode installedCode) {
+                    if (installedCode != null) {
+                        invalidateWithReason(installedCode, "assumption already invalidated when installing code");
                         if (TruffleCompilerOptions.getValue(TraceTruffleAssumptions)) {
-                            logInvalidatedDependency(dependency);
+                            logInvalidatedInstalledCode(installedCode);
                             logStackTrace();
                         }
                     }
@@ -263,14 +150,11 @@ public final class OptimizedAssumption extends AbstractAssumption {
         }
     }
 
-    private OptimizedCallTarget invalidateWithReason(OptimizedAssumptionDependency dependency, String reason) {
-        if (dependency.getCompilable() != null) {
-            OptimizedCallTarget callTarget = (OptimizedCallTarget) dependency.getCompilable();
-            callTarget.invalidate(this, reason);
-            return callTarget;
+    private void invalidateWithReason(InstalledCode installedCode, String reason) {
+        if (installedCode instanceof OptimizedCallTarget) {
+            ((OptimizedCallTarget) installedCode).invalidate(this, reason);
         } else {
-            dependency.invalidate();
-            return null;
+            installedCode.invalidate();
         }
     }
 
@@ -279,8 +163,8 @@ public final class OptimizedAssumption extends AbstractAssumption {
         return isValid;
     }
 
-    private void logInvalidatedDependency(OptimizedAssumptionDependency dependency) {
-        TTY.out().out().printf("assumption '%s' invalidated installed code '%s'\n", name, dependency);
+    private void logInvalidatedInstalledCode(InstalledCode installedCode) {
+        TTY.out().out().printf("assumption '%s' invalidated installed code '%s'\n", name, installedCode);
     }
 
     private static void logStackTrace() {

@@ -178,7 +178,7 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
      * @param method the method compiled to produce {@code compiledCode} or {@code null} if the
      *            input to {@code compResult} was not a {@link ResolvedJavaMethod}
      * @param compilationRequest the compilation request or {@code null}
-     * @param compilationResult the code to be installed
+     * @param compilationResult the code to be compiled
      * @param predefinedInstalledCode a pre-allocated {@link InstalledCode} object to use as a
      *            reference to the installed code. If {@code null}, a new {@link InstalledCode}
      *            object will be created.
@@ -204,13 +204,12 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
         }
         try (DebugContext.Scope s2 = debug.scope("CodeInstall", debugContext);
                         DebugContext.Activation a = debug.activate()) {
+            preCodeInstallationTasks(tasks, compilationResult);
 
             InstalledCode installedCode;
             try {
-                preCodeInstallationTasks(tasks, compilationResult, predefinedInstalledCode);
                 CompiledCode compiledCode = createCompiledCode(method, compilationRequest, compilationResult);
                 installedCode = getProviders().getCodeCache().installCode(method, compiledCode, predefinedInstalledCode, speculationLog, isDefault);
-                assert predefinedInstalledCode == null || installedCode == predefinedInstalledCode;
             } catch (Throwable t) {
                 failCodeInstallationTasks(tasks, t);
                 throw t;
@@ -230,9 +229,9 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
         }
     }
 
-    private static void preCodeInstallationTasks(CodeInstallationTask[] tasks, CompilationResult compilationResult, InstalledCode predefinedInstalledCode) {
+    private static void preCodeInstallationTasks(CodeInstallationTask[] tasks, CompilationResult compilationResult) {
         for (CodeInstallationTask task : tasks) {
-            task.preProcess(compilationResult, predefinedInstalledCode);
+            task.preProcess(compilationResult);
         }
     }
 
@@ -306,29 +305,23 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
     public abstract static class CodeInstallationTask {
         /**
          * Task to run before code installation.
-         *
-         * @param compilationResult the code about to be installed
-         * @param predefinedInstalledCode a pre-allocated {@link InstalledCode} object that will be
-         *            used as a reference to the installed code. May be {@code null}.
-         *
          */
-        public void preProcess(CompilationResult compilationResult, InstalledCode predefinedInstalledCode) {
+        @SuppressWarnings("unused")
+        public void preProcess(CompilationResult compilationResult) {
         }
 
         /**
          * Task to run after the code is installed.
-         *
-         * @param installedCode a reference to the installed code
          */
+        @SuppressWarnings("unused")
         public void postProcess(InstalledCode installedCode) {
         }
 
         /**
          * Invoked after {@link #preProcess} when code installation fails.
-         *
-         * @param cause the cause of the installation failure
          */
-        public void installFailed(Throwable cause) {
+        @SuppressWarnings("unused")
+        public void installFailed(Throwable t) {
         }
     }
 
