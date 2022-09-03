@@ -505,7 +505,11 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
         frameState.storeLocal(index, append(genIntegerAdd(Kind.Int, x, y)));
     }
 
-    protected abstract void genGoto();
+    private void genGoto() {
+        appendGoto(createTarget(currentBlock.getSuccessors().get(0), frameState));
+        // assert currentBlock.numNormalSuccessors() == 1;
+        assert currentBlock.getSuccessors().size() == 1;
+    }
 
     protected abstract T genObjectEquals(T x, T y);
 
@@ -894,11 +898,27 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
 
     protected abstract T append(T v);
 
-    protected boolean isNeverExecutedCode(double probability) {
+    private boolean isNeverExecutedCode(double probability) {
         return probability == 0 && optimisticOpts.removeNeverExecutedCode() && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI;
     }
 
+    protected abstract T genDeoptimization();
+
+    protected T createTarget(double probability, BciBlock block, F stateAfter) {
+        assert probability >= 0 && probability <= 1.01 : probability;
+        if (isNeverExecutedCode(probability)) {
+            return genDeoptimization();
+        } else {
+            assert block != null;
+            return createTarget(block, stateAfter);
+        }
+    }
+
+    protected abstract T createTarget(BciBlock trueBlock, F state);
+
     protected abstract void processBlock(BciBlock block);
+
+    protected abstract void appendGoto(T target);
 
     protected abstract void iterateBytecodesForBlock(BciBlock block);
 

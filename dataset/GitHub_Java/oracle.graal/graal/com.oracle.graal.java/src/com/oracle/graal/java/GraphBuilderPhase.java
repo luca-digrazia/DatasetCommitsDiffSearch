@@ -562,12 +562,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             @Override
-            protected void genGoto() {
-                appendGoto(createTarget(currentBlock.getSuccessors().get(0), frameState));
-                assert currentBlock.numNormalSuccessors() == 1;
-            }
-
-            @Override
             protected ValueNode genObjectEquals(ValueNode x, ValueNode y) {
                 return new ObjectEqualsNode(x, y);
             }
@@ -988,17 +982,21 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return new Target(target, state);
             }
 
-            private FixedNode createTarget(double probability, BciBlock block, HIRFrameStateBuilder stateAfter) {
-                assert probability >= 0 && probability <= 1.01 : probability;
-                if (isNeverExecutedCode(probability)) {
-                    return currentGraph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
-                } else {
-                    assert block != null;
-                    return createTarget(block, stateAfter);
-                }
+            @Override
+            protected ValueNode genDeoptimization() {
+                return currentGraph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
             }
 
-            private FixedNode createTarget(BciBlock block, HIRFrameStateBuilder state) {
+            @Override
+            protected FixedNode createTarget(double probability, BciBlock block, HIRFrameStateBuilder stateAfter) {
+                ValueNode fixed = super.createTarget(probability, block, stateAfter);
+                assert fixed instanceof FixedNode;
+                return (FixedNode) fixed;
+
+            }
+
+            @Override
+            protected FixedNode createTarget(BciBlock block, HIRFrameStateBuilder state) {
                 assert block != null && state != null;
                 assert !block.isExceptionEntry || state.stackSize() == 1;
 
@@ -1214,7 +1212,10 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
             }
 
-            private void appendGoto(FixedNode target) {
+            @Override
+            protected void appendGoto(ValueNode targetNode) {
+                assert targetNode instanceof FixedNode;
+                FixedNode target = (FixedNode) targetNode;
                 if (lastInstr != null) {
                     lastInstr.setNext(target);
                 }
