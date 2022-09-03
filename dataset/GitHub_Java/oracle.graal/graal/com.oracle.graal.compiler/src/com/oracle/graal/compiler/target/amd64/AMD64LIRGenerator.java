@@ -575,13 +575,11 @@ public class AMD64LIRGenerator extends LIRGenerator {
         Variable newValue = load(operand(node.newValue()));
 
         CiAddress address;
-        int displacement = node.displacement();
         CiValue index = operand(node.offset());
         if (isConstant(index) && NumUtil.isInt(asConstant(index).asLong())) {
-            displacement += (int) asConstant(index).asLong();
-            address = new CiAddress(kind, load(operand(node.object())), displacement);
+            address = new CiAddress(kind, load(operand(node.object())), (int) asConstant(index).asLong());
         } else {
-            address = new CiAddress(kind, load(operand(node.object())), load(index), CiAddress.Scale.Times1, displacement);
+            address = new CiAddress(kind, load(operand(node.object())), load(index), CiAddress.Scale.Times1, 0);
         }
 
         CiRegisterValue rax = AMD64.rax.asValue(kind);

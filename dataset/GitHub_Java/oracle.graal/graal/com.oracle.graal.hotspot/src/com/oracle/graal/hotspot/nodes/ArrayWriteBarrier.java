@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
-public final class ArrayWriteBarrier extends WriteBarrier implements Lowerable {
+public final class ArrayWriteBarrier extends WriteBarrier implements LIRLowerable {
 
     @Input private ValueNode object;
     @Input private LocationNode location;
@@ -45,7 +45,9 @@ public final class ArrayWriteBarrier extends WriteBarrier implements Lowerable {
         this.location = location;
     }
 
-    public void lower(LoweringTool generator) {
-        generator.getRuntime().lower(this, generator);
+    @Override
+    public void generate(LIRGeneratorTool gen) {
+        CiValue addr = gen.emitLea(gen.makeAddress(location(), object()));
+        generateBarrier(addr, gen);
     }
 }
