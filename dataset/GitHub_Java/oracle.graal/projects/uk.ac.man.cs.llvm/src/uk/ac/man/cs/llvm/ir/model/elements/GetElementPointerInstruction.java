@@ -34,22 +34,19 @@ import java.util.List;
 
 import uk.ac.man.cs.llvm.ir.model.InstructionVisitor;
 import uk.ac.man.cs.llvm.ir.model.Symbol;
-import uk.ac.man.cs.llvm.ir.model.Symbols;
 import uk.ac.man.cs.llvm.ir.model.ValueSymbol;
-import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public final class GetElementPointerInstruction extends ValueInstruction {
 
     private Symbol base;
 
-    private final List<Symbol> indices;
+    private final List<Symbol> indices = new ArrayList<>();
 
     private final boolean isInbounds;
 
-    private GetElementPointerInstruction(Type type, boolean isInbounds) {
+    public GetElementPointerInstruction(Type type, boolean isInbounds) {
         super(type);
-        this.indices = new ArrayList<>();
         this.isInbounds = isInbounds;
     }
 
@@ -58,15 +55,13 @@ public final class GetElementPointerInstruction extends ValueInstruction {
         visitor.visit(this);
     }
 
+    public void addIndex(Symbol index) {
+        indices.add(index);
+    }
+
     @Override
     public int getAlign() {
-        if (base instanceof ValueSymbol) {
-            return ((ValueSymbol) base).getAlign();
-        } else if (base instanceof GetElementPointerConstant) {
-            return ((ValueSymbol) ((GetElementPointerConstant) base).getBasePointer()).getAlign();
-        } else {
-            throw new IllegalStateException("Unknown Source of Alignment: " + base.getClass());
-        }
+        return ((ValueSymbol) base).getAlign();
     }
 
     public Symbol getIndex(int index) {
@@ -97,12 +92,7 @@ public final class GetElementPointerInstruction extends ValueInstruction {
         }
     }
 
-    public static GetElementPointerInstruction fromSymbols(Symbols symbols, Type type, int pointer, int[] indices, boolean isInbounds) {
-        final GetElementPointerInstruction inst = new GetElementPointerInstruction(type, isInbounds);
-        inst.base = symbols.getSymbol(pointer, inst);
-        for (int index : indices) {
-            inst.indices.add(symbols.getSymbol(index, inst));
-        }
-        return inst;
+    public void setBasePointer(Symbol base) {
+        this.base = base;
     }
 }

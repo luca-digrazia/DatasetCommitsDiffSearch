@@ -30,13 +30,13 @@
 package uk.ac.man.cs.llvm.ir.model.elements;
 
 import uk.ac.man.cs.llvm.ir.model.Symbol;
-import uk.ac.man.cs.llvm.ir.model.enums.Linkage;
-import uk.ac.man.cs.llvm.ir.model.enums.Visibility;
 import uk.ac.man.cs.llvm.ir.types.FunctionType;
 import uk.ac.man.cs.llvm.ir.types.PointerType;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public interface Call extends Instruction {
+
+    void addArgument(Symbol argument);
 
     Symbol getArgument(int index);
 
@@ -53,8 +53,4 @@ public interface Call extends Instruction {
 
         return (FunctionType) type;
     }
-
-    Linkage getLinkage();
-
-    Visibility getVisibility();
 }

@@ -56,10 +56,6 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
         return align;
     }
 
-    public int getInitialiser() {
-        return initialiser;
-    }
-
     @Override
     public String getName() {
         return name;
@@ -75,8 +71,8 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
     }
 
     public void initialise(Symbols symbols) {
-        if (getInitialiser() > 0) {
-            value = symbols.getSymbol(getInitialiser() - 1);
+        if (initialiser > 0) {
+            value = symbols.getSymbol(initialiser - 1);
         }
     }
 

@@ -29,7 +29,6 @@
  */
 package uk.ac.man.cs.llvm.ir;
 
-import java.math.BigInteger;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public interface ConstantGenerator {
@@ -53,8 +52,6 @@ public interface ConstantGenerator {
     void createGetElementPointerExpression(Type type, int pointer, int[] indices, boolean isInbounds);
 
     void createInteger(Type type, long value);
-
-    void createInteger(Type type, BigInteger value);
 
     void createNull(Type type);
 

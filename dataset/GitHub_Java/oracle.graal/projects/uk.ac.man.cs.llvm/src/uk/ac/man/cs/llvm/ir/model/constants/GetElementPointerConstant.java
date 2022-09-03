@@ -30,14 +30,12 @@
 package uk.ac.man.cs.llvm.ir.model.constants;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import uk.ac.man.cs.llvm.ir.model.Symbol;
-import uk.ac.man.cs.llvm.ir.model.Symbols;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
-public final class GetElementPointerConstant extends AbstractConstant {
+public class GetElementPointerConstant extends AbstractConstant {
 
     private final boolean isInbounds;
 
@@ -45,9 +43,13 @@ public final class GetElementPointerConstant extends AbstractConstant {
 
     private final List<Symbol> indices = new ArrayList<>();
 
-    private GetElementPointerConstant(Type type, boolean isInbounds) {
+    public GetElementPointerConstant(Type type, boolean isInbounds) {
         super(type);
         this.isInbounds = isInbounds;
+    }
+
+    public void addIndex(Symbol index) {
+        indices.add(index);
     }
 
     public Symbol getBasePointer() {
@@ -60,10 +62,6 @@ public final class GetElementPointerConstant extends AbstractConstant {
 
     public int getIndexCount() {
         return indices.size();
-    }
-
-    public List<Symbol> getIndices() {
-        return Collections.unmodifiableList(indices);
     }
 
     public boolean isInbounds() {
@@ -82,13 +80,7 @@ public final class GetElementPointerConstant extends AbstractConstant {
         }
     }
 
-    public static GetElementPointerConstant fromSymbols(Symbols symbols, Type type, int pointer, int[] indices, boolean isInbounds) {
-        final GetElementPointerConstant constant = new GetElementPointerConstant(type, isInbounds);
-
-        constant.base = symbols.getSymbol(pointer, constant);
-        for (int index : indices) {
-            constant.indices.add(symbols.getSymbol(index, constant));
-        }
-        return constant;
+    public void setBasePointer(Symbol base) {
+        this.base = base;
     }
 }

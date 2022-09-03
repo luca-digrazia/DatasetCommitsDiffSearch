@@ -27,27 +27,6 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.bc.records;
 
 public final class Records {
@@ -56,11 +35,12 @@ public final class Records {
     }
 
     public static long extendSign(int bits, long value) {
+        long v = value;
         long mask = (((1L << (bits)) - 1) ^ -1L) >> 1;
-        if ((value & mask) != 0) {
-            value |= mask;
+        if ((v & mask) != 0) {
+            v |= mask;
         }
-        return value;
+        return v;
     }
 
     public static int toAlignment(long value) {
@@ -76,11 +56,12 @@ public final class Records {
     }
 
     public static long toSignedValue(long value) {
-        if ((value & 1L) == 1L) {
-            value = value >>> 1;
-            return value == 0 ? Long.MIN_VALUE : -value;
+        long v = value;
+        if ((v & 1L) == 1L) {
+            v = v >>> 1;
+            return v == 0 ? Long.MIN_VALUE : -v;
         } else {
-            return value >>> 1;
+            return v >>> 1;
         }
     }
 

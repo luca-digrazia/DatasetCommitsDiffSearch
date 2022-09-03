@@ -50,7 +50,7 @@ public class ModuleV32 extends Module {
         generator.createFunction(type, isPrototype);
         symbols.add(type);
         if (!isPrototype) {
-            functions.add(type);
+            methods.add(type);
         }
     }
 

@@ -29,13 +29,11 @@
  */
 package uk.ac.man.cs.llvm.ir.model;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
 import uk.ac.man.cs.llvm.ir.FunctionGenerator;
 import uk.ac.man.cs.llvm.ir.ModuleGenerator;
-import uk.ac.man.cs.llvm.ir.model.constants.BigIntegerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
@@ -161,11 +159,6 @@ public final class ModelModule implements ModuleGenerator {
     @Override
     public void createInteger(Type type, long value) {
         symbols.addSymbol(new IntegerConstant((IntegerType) type, value));
-    }
-
-    @Override
-    public void createInteger(Type type, BigInteger value) {
-        symbols.addSymbol(new BigIntegerConstant((IntegerType) type, value));
     }
 
     @Override

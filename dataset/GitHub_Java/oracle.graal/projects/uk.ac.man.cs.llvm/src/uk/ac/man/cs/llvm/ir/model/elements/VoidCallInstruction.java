@@ -31,31 +31,27 @@ package uk.ac.man.cs.llvm.ir.model.elements;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import uk.ac.man.cs.llvm.ir.model.InstructionVisitor;
 import uk.ac.man.cs.llvm.ir.model.Symbol;
-import uk.ac.man.cs.llvm.ir.model.Symbols;
-import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
-import uk.ac.man.cs.llvm.ir.model.constants.MetadataConstant;
-import uk.ac.man.cs.llvm.ir.types.FunctionType;
-import uk.ac.man.cs.llvm.ir.types.IntegerType;
-import uk.ac.man.cs.llvm.ir.types.MetaType;
-import uk.ac.man.cs.llvm.ir.types.MetadataConstantType;
-import uk.ac.man.cs.llvm.ir.types.Type;
 
 public final class VoidCallInstruction implements Call, VoidInstruction {
 
-    private Symbol target;
+    private final Symbol target;
 
-    private final List<Symbol> arguments;
+    private final List<Symbol> arguments = new ArrayList<>();
 
-    private VoidCallInstruction() {
-        arguments = new ArrayList<>();
+    public VoidCallInstruction(Symbol target) {
+        this.target = target;
     }
 
     @Override
     public void accept(InstructionVisitor visitor) {
         visitor.visit(this);
+    }
+
+    @Override
+    public void addArgument(Symbol argument) {
+        arguments.add(argument);
     }
 
     @Override
@@ -75,27 +71,10 @@ public final class VoidCallInstruction implements Call, VoidInstruction {
 
     @Override
     public void replace(Symbol original, Symbol replacement) {
-        if (target == original) {
-            target = replacement;
-        }
         for (int i = 0; i < arguments.size(); i++) {
             if (arguments.get(i) == original) {
                 arguments.set(i, replacement);
             }
         }
-    }
-
-    public static VoidCallInstruction fromSymbols(Symbols symbols, int targetIndex, int[] arguments) {
-        final VoidCallInstruction inst = new VoidCallInstruction();
-        inst.target = symbols.getSymbol(targetIndex, inst);
-        Type[] types = ((FunctionType) (inst.target)).getArgumentTypes();
-        for (int i = 0; i < arguments.length; i++) {
-            if (types[i] instanceof MetaType) {
-                inst.arguments.add(new MetadataConstant(arguments[i]));
-            } else {
-                inst.arguments.add(symbols.getSymbol(arguments[i], inst));
-            }
-        }
-        return inst;
     }
 }

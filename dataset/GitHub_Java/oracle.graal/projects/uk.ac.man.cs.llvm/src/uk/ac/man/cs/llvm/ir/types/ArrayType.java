@@ -31,16 +31,11 @@ package uk.ac.man.cs.llvm.ir.types;
 
 import java.util.Objects;
 
-import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
-import uk.ac.man.cs.llvm.ir.model.MetadataBlock.MetadataReference;
-
 public class ArrayType implements AggregateType {
 
     public final Type type;
 
     private final int size;
-
-    private MetadataReference metadata = MetadataBlock.voidRef;
 
     public ArrayType(Type type, int size) {
         super();
@@ -97,15 +92,5 @@ public class ArrayType implements AggregateType {
     @Override
     public String toString() {
         return String.format("[%d x %s]", getElementCount(), getElementType());
-    }
-
-    @Override
-    public void setMetadataReference(MetadataReference metadata) {
-        this.metadata = metadata;
-    }
-
-    @Override
-    public MetadataReference getMetadataReference() {
-        return metadata;
     }
 }

@@ -61,13 +61,13 @@ public enum ModuleVersion {
 
     private final ModuleParser module;
 
-    private final FunctionParser function;
+    private final FunctionParser method;
 
     private final ConstantsParser constants;
 
-    ModuleVersion(ModuleParser module, FunctionParser function, ConstantsParser constants) {
+    ModuleVersion(ModuleParser module, FunctionParser method, ConstantsParser constants) {
         this.module = module;
-        this.function = function;
+        this.method = method;
         this.constants = constants;
     }
 
@@ -75,8 +75,8 @@ public enum ModuleVersion {
         return constants.instantiate(types, symbols, generator);
     }
 
-    public Function createFunction(Types types, List<Type> symbols, FunctionGenerator generator, int mode) {
-        return function.instantiate(this, types, symbols, generator, mode);
+    public Function createMethod(Types types, List<Type> symbols, FunctionGenerator generator, int mode) {
+        return method.instantiate(this, types, symbols, generator, mode);
     }
 
     public Module createModule(ModuleGenerator generator) {

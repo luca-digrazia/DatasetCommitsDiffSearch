@@ -27,27 +27,6 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.bc.blocks;
 
 import uk.ac.man.cs.llvm.bc.Bitstream;
@@ -70,9 +49,9 @@ public final class InformationBlockParser extends Parser {
     }
 
     @Override
-    protected Parser instantiate(Parser parser, Bitstream stream, Block block, ParserListener listener, Parser parent, Operation[][] operations, long idsize, long offset) {
-        long b = parser instanceof InformationBlockParser ? ((InformationBlockParser) parser).bid : 0;
-        return new InformationBlockParser(stream, block, listener, parent, operations, idsize, offset, b);
+    protected Parser instantiate(Parser argParser, Bitstream argStream, Block argBlock, ParserListener argListener, Parser argParent, Operation[][] argOperations, long argIdSize, long argOffset) {
+        long b = argParser instanceof InformationBlockParser ? ((InformationBlockParser) argParser).bid : 0;
+        return new InformationBlockParser(argStream, argBlock, argListener, argParent, argOperations, argIdSize, argOffset, b);
     }
 
     @Override

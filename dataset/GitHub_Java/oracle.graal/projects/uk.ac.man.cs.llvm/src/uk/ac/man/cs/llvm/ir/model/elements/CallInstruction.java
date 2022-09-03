@@ -34,30 +34,27 @@ import java.util.List;
 
 import uk.ac.man.cs.llvm.ir.model.InstructionVisitor;
 import uk.ac.man.cs.llvm.ir.model.Symbol;
-import uk.ac.man.cs.llvm.ir.model.Symbols;
-import uk.ac.man.cs.llvm.ir.model.enums.Linkage;
-import uk.ac.man.cs.llvm.ir.model.enums.Visibility;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public final class CallInstruction extends ValueInstruction implements Call {
 
-    private final Linkage linkage;
-
-    private final Visibility visibility;
-
-    private Symbol target;
+    private final Symbol target;
 
     private final List<Symbol> arguments = new ArrayList<>();
 
-    private CallInstruction(Type type, Linkage linkage, Visibility visibility) {
+    public CallInstruction(Type type, Symbol target) {
         super(type);
-        this.linkage = linkage;
-        this.visibility = visibility;
+        this.target = target;
     }
 
     @Override
     public void accept(InstructionVisitor visitor) {
         visitor.visit(this);
+    }
+
+    @Override
+    public void addArgument(Symbol argument) {
+        arguments.add(argument);
     }
 
     @Override
@@ -76,33 +73,11 @@ public final class CallInstruction extends ValueInstruction implements Call {
     }
 
     @Override
-    public Linkage getLinkage() {
-        return linkage;
-    }
-
-    @Override
-    public Visibility getVisibility() {
-        return visibility;
-    }
-
-    @Override
     public void replace(Symbol original, Symbol replacement) {
-        if (target == original) {
-            target = replacement;
-        }
         for (int i = 0; i < arguments.size(); i++) {
             if (arguments.get(i) == original) {
                 arguments.set(i, replacement);
             }
         }
-    }
-
-    public static CallInstruction fromSymbols(Symbols symbols, Type type, int targetIndex, int[] arguments, long visibility, long linkage) {
-        final CallInstruction inst = new CallInstruction(type, Linkage.decode(linkage), Visibility.decode(visibility));
-        inst.target = symbols.getSymbol(targetIndex, inst);
-        for (int argument : arguments) {
-            inst.arguments.add(symbols.getSymbol(argument, inst));
-        }
-        return inst;
     }
 }

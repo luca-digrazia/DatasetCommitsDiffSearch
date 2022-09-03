@@ -29,22 +29,31 @@
  */
 package uk.ac.man.cs.llvm.ir.model.constants;
 
+import java.util.Arrays;
 import uk.ac.man.cs.llvm.ir.types.ArrayType;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
-public final class ArrayConstant extends AggregateConstant {
+public final class ArrayConstant extends AbstractConstant {
+
+    private final Constant[] values;
 
     public ArrayConstant(Constant value, int size) {
-        super(new ArrayType(value.getType(), size), new Constant[size]);
-        fill(value);
+        super(new ArrayType(value.getType(), size));
+        values = new Constant[size];
+        Arrays.fill(values, value);
     }
 
     public ArrayConstant(ArrayType type, Constant[] values) {
-        super(type, values);
+        super(type);
+        this.values = values;
     }
 
-    public ArrayConstant(ArrayType type, int valueCount) {
-        this(type, new Constant[valueCount]);
+    public Constant getElement(int idx) {
+        return values[idx];
+    }
+
+    public int getElementCount() {
+        return values.length;
     }
 
     @Override
@@ -57,11 +66,11 @@ public final class ArrayConstant extends AggregateConstant {
         StringBuilder sb = new StringBuilder();
         sb.append("[");
         Type type = getType().getElementType();
-        for (int i = 0; i < getElementCount(); i++) {
+        for (int i = 0; i < values.length; i++) {
             if (i > 0) {
                 sb.append(", ");
             }
-            sb.append(type).append(" ").append(getElement(i));
+            sb.append(type).append(" ").append(values[i]);
         }
         return sb.append("]").toString();
     }

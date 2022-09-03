@@ -263,9 +263,4 @@ public final class Types implements ParserListener, Iterable<Type> {
             return 0;
         }
     }
-
-    @Override
-    public String toString() {
-        return "Types " + Arrays.toString(table);
-    }
 }

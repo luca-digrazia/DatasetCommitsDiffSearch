@@ -29,8 +29,6 @@
  */
 package uk.ac.man.cs.llvm.ir;
 
-import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
-
 public interface SymbolGenerator extends ConstantGenerator {
 
     void nameBlock(int index, String name);
@@ -38,6 +36,4 @@ public interface SymbolGenerator extends ConstantGenerator {
     void nameEntry(int index, String name);
 
     void nameFunction(int index, int offset, String name);
-
-    MetadataBlock getMetadata();
 }

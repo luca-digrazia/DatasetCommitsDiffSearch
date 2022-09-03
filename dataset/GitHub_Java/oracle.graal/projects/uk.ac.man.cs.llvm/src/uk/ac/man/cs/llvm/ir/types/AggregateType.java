@@ -29,9 +29,7 @@
  */
 package uk.ac.man.cs.llvm.ir.types;
 
-import uk.ac.man.cs.llvm.ir.model.MetadataReferenceType;
-
-public interface AggregateType extends Type, MetadataReferenceType {
+public interface AggregateType extends Type {
 
     int getElementCount();
 

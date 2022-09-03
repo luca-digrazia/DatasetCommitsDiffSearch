@@ -33,15 +33,11 @@ public final class TargetDataLayout implements TargetInformation {
 
     private final String layout;
 
-    private TargetDataLayout(String layout) {
+    public TargetDataLayout(String layout) {
         this.layout = layout;
     }
 
     public String getDataLayout() {
         return layout;
-    }
-
-    public static TargetDataLayout fromString(String layout) {
-        return new TargetDataLayout(layout);
     }
 }

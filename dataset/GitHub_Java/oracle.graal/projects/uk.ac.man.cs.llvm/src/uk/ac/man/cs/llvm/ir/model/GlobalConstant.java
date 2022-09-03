@@ -33,8 +33,8 @@ import uk.ac.man.cs.llvm.ir.types.Type;
 
 public class GlobalConstant extends GlobalValueSymbol {
 
-    public GlobalConstant(Type type, int initialiser, int align, long linkage) {
-        super(type, initialiser, align, linkage);
+    public GlobalConstant(Type type, int initialiser, int align) {
+        super(type, initialiser, align);
     }
 
     @Override
