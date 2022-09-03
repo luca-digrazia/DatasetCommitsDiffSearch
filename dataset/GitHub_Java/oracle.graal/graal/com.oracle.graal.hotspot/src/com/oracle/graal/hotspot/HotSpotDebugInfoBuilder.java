@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.api.code.BytecodeFrame.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
@@ -55,14 +53,14 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
         StackSlotValue slot = lockStack.makeLockSlot(lockDepth);
         ValueNode lock = state.lockAt(lockIndex);
         Value object = toValue(lock);
-        boolean eliminated = object instanceof VirtualObject || state.monitorIdAt(lockIndex) == null;
+        boolean eliminated = object instanceof VirtualObject && state.monitorIdAt(lockIndex) != null;
         assert state.monitorIdAt(lockIndex) == null || state.monitorIdAt(lockIndex).getLockDepth() == lockDepth;
         return new StackLockValue(object, slot, eliminated);
     }
 
     @Override
     protected BytecodeFrame computeFrameForState(FrameState state) {
-        assert !isPlaceholderBci(state.bci) || state.bci == BytecodeFrame.BEFORE_BCI : state.bci;
+        assert state.bci >= 0 || state.bci == BytecodeFrame.BEFORE_BCI : state.bci;
         return super.computeFrameForState(state);
     }
 }

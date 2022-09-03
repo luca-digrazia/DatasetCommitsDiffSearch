@@ -80,46 +80,34 @@ public class LIRFrameState {
      */
     protected static final EnumSet<OperandFlag> STATE_FLAGS = EnumSet.of(OperandFlag.REG, OperandFlag.STACK);
 
-    protected void processValues(LIRInstruction inst, Value[] values, InstructionValueProcedure proc) {
+    protected void processValues(LIRInstruction inst, JavaValue[] values, InstructionValueProcedure proc) {
         for (int i = 0; i < values.length; i++) {
-            Value value = values[i];
-            values[i] = processValue(inst, proc, value);
+            if (values[i] instanceof Value) {
+                Value value = (Value) values[i];
+                values[i] = (JavaValue) processValue(inst, proc, value);
+            }
         }
     }
 
     protected Value processValue(LIRInstruction inst, InstructionValueProcedure proc, Value value) {
-        if (value instanceof StackLockValue) {
-            StackLockValue monitor = (StackLockValue) value;
-            Value owner = monitor.getOwner();
-            if (owner instanceof AllocatableValue) {
-                monitor.setOwner(proc.doValue(inst, owner, OperandMode.ALIVE, STATE_FLAGS));
-            }
-            Value slot = monitor.getSlot();
-            if (isVirtualStackSlot(slot)) {
-                monitor.setSlot(asStackSlotValue(proc.doValue(inst, slot, OperandMode.ALIVE, STATE_FLAGS)));
-            }
-        } else {
-            if (!isIllegal(value) && value instanceof AllocatableValue) {
-                return proc.doValue(inst, value, OperandMode.ALIVE, STATE_FLAGS);
-            } else {
-                assert unprocessed(value);
-            }
+        if (processed(value)) {
+            return proc.doValue(inst, value, OperandMode.ALIVE, STATE_FLAGS);
         }
         return value;
     }
 
-    private boolean unprocessed(Value value) {
+    protected boolean processed(Value value) {
         if (isIllegal(value)) {
             // Ignore dead local variables.
-            return true;
+            return false;
         } else if (isConstant(value)) {
             // Ignore constants, the register allocator does not need to see them.
-            return true;
+            return false;
         } else if (isVirtualObject(value)) {
             assert Arrays.asList(virtualObjects).contains(value);
-            return true;
-        } else {
             return false;
+        } else {
+            return true;
         }
     }
 
@@ -138,6 +126,15 @@ public class LIRFrameState {
      */
     public void updateUnion(ReferenceMap refMap) {
         debugInfo.getReferenceMap().updateUnion(refMap);
+    }
+
+    /**
+     * Called by the register allocator after all locations are marked.
+     *
+     * @param op The instruction to which this frame state belongs.
+     * @param frameMap The frame map.
+     */
+    public void finish(LIRInstruction op, FrameMap frameMap) {
     }
 
     @Override
