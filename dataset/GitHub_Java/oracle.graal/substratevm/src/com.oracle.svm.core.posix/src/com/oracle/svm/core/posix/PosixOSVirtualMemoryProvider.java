@@ -248,14 +248,6 @@ public class PosixOSVirtualMemoryProvider implements VirtualMemoryProvider {
         return freeVirtualMemory(pagedStart, pagedSize);
     }
 
-    @Override
-    public void beforeGarbageCollection() {
-    }
-
-    @Override
-    public void afterGarbageCollection(boolean completeCollection) {
-    }
-
     protected void trackVirtualMemory(UnsignedWord size) {
         tracker.track(size);
     }

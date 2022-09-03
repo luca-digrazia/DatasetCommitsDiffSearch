@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,6 +24,8 @@ package com.oracle.svm.core.jdk;
 
 // Checkstyle: allow reflection
 
+import java.io.FileDescriptor;
+import java.io.IOException;
 import java.lang.ref.ReferenceQueue;
 import java.util.function.Function;
 
@@ -45,9 +45,10 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
-import com.oracle.svm.core.log.Log;
+import com.oracle.svm.core.os.OSInterface;
 import com.oracle.svm.core.os.VirtualMemoryProvider;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 
@@ -114,7 +115,7 @@ final class Target_sun_misc_Unsafe {
     @Substitute
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     int pageSize() {
-        return (int) VirtualMemoryProvider.get().getGranularity().rawValue();
+        return (int) VirtualMemoryProvider.get().getPageSize().rawValue();
     }
 
     @Substitute
@@ -163,20 +164,31 @@ final class Target_sun_misc_Unsafe {
 @TargetClass(sun.misc.MessageUtils.class)
 final class Target_sun_misc_MessageUtils {
 
-    /*
-     * Low-level logging support in the JDK. Methods must not use char-to-byte conversions (because
-     * they are used to report errors in the converters). We just redirect to the low-level SVM log
-     * infrastructure.
-     */
-
     @Substitute
     private static void toStderr(String msg) {
-        Log.log().string(msg);
+        Util_sun_misc_MessageUtils.output(FileDescriptor.err, msg);
     }
 
     @Substitute
     private static void toStdout(String msg) {
-        Log.log().string(msg);
+        Util_sun_misc_MessageUtils.output(FileDescriptor.out, msg);
+    }
+}
+
+final class Util_sun_misc_MessageUtils {
+
+    static void output(FileDescriptor target, String msg) {
+        byte[] bytes = new byte[msg.length()];
+        for (int i = 0; i < msg.length(); i++) {
+            bytes[i] = (byte) msg.charAt(i);
+        }
+
+        OSInterface os = ConfigurationValues.getOSInterface();
+        try {
+            os.writeBytes(target, bytes);
+        } catch (IOException ex) {
+            // Ignore, since we are in low-level debug printing code.
+        }
     }
 }
 
@@ -192,7 +204,7 @@ class Package_jdk_internal_ref implements Function<TargetClass, String> {
     }
 }
 
-@TargetClass(classNameProvider = Package_jdk_internal_ref.class, className = "Cleaner", onlyWith = JDK9OrLater.class)
+@TargetClass(classNameProvider = Package_jdk_internal_ref.class, className = "Cleaner")
 final class Target_jdk_internal_ref_Cleaner {
 
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
@@ -214,34 +226,6 @@ final class Target_jdk_internal_ref_Cleaner {
 
     @Alias
     native void clean();
-}
-
-@TargetClass(className = "jdk.internal.ref.CleanerImpl", onlyWith = JDK9OrLater.class)
-final class Target_jdk_internal_ref_CleanerImpl {
-
-    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.NewInstance, declClassName = "jdk.internal.ref.CleanerImpl$PhantomCleanableRef")//
-    Target_jdk_internal_ref_PhantomCleanable phantomCleanableList;
-
-    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.NewInstance, declClassName = "jdk.internal.ref.CleanerImpl$WeakCleanableRef")//
-    Target_jdk_internal_ref_WeakCleanable weakCleanableList;
-
-    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.NewInstance, declClassName = "jdk.internal.ref.CleanerImpl$SoftCleanableRef")//
-    Target_jdk_internal_ref_SoftCleanable softCleanableList;
-
-    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.NewInstance, declClassName = "jdk.internal.ref.ReferenceQueue")//
-    ReferenceQueue<Object> queue;
-}
-
-@TargetClass(className = "jdk.internal.ref.PhantomCleanable", onlyWith = JDK9OrLater.class)
-final class Target_jdk_internal_ref_PhantomCleanable {
-}
-
-@TargetClass(className = "jdk.internal.ref.WeakCleanable", onlyWith = JDK9OrLater.class)
-final class Target_jdk_internal_ref_WeakCleanable {
-}
-
-@TargetClass(className = "jdk.internal.ref.SoftCleanable", onlyWith = JDK9OrLater.class)
-final class Target_jdk_internal_ref_SoftCleanable {
 }
 
 /** PerfCounter methods that access the lb field fail with SIGSEV. */
