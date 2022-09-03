@@ -192,7 +192,7 @@ public final class Symbols {
     private static class ForwardReference implements Constant {
 
         private final List<Symbol> dependents = new ArrayList<>();
-        private final Map<AggregateConstant, List<Integer>> aggregateDependents = new HashMap<>();
+        private final Map<AggregateConstant, Integer> aggregateDependents = new HashMap<>();
 
         ForwardReference() {
         }
@@ -202,13 +202,11 @@ public final class Symbols {
         }
 
         void addDependent(AggregateConstant dependent, int index) {
-            final List<Integer> indices = aggregateDependents.getOrDefault(dependent, new ArrayList<Integer>());
-            indices.add(index);
-            aggregateDependents.put(dependent, indices);
+            aggregateDependents.put(dependent, index);
         }
 
         public void replace(Symbol replacement) {
-            aggregateDependents.forEach((key, val) -> val.forEach(i -> key.replaceElement(i, replacement)));
+            aggregateDependents.forEach((key, val) -> key.replaceElement(val, replacement));
             dependents.forEach(dependent -> dependent.replace(this, replacement));
         }
 

@@ -68,11 +68,8 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     private String name = ValueSymbol.UNKNOWN;
 
-    private final MetadataBlock metadata;
-
-    public FunctionDefinition(FunctionType type, MetadataBlock metadata) {
+    public FunctionDefinition(FunctionType type) {
         super(type.getReturnType(), type.getArgumentTypes(), type.isVarArg());
-        this.metadata = metadata;
     }
 
     public void accept(FunctionVisitor visitor) {
@@ -243,11 +240,6 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     @Override
     public void createUndefined(Type type) {
         symbols.addSymbol(new UndefinedConstant(type));
-    }
-
-    @Override
-    public MetadataBlock getMetadata() {
-        return metadata;
     }
 
     @Override
