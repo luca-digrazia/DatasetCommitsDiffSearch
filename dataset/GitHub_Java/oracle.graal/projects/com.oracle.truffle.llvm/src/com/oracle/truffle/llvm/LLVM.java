@@ -52,7 +52,7 @@ import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.parser.factories.NodeFactoryFacadeImpl;
 import com.oracle.truffle.llvm.parser.impl.LLVMVisitor;
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.LLVMPropertyOptimizationConfiguration;
 import com.oracle.truffle.llvm.types.LLVMFunction;
 
@@ -73,8 +73,7 @@ public class LLVM {
             public CallTarget parse(Source code, Node context, String... argumentNames) {
                 Node findContext = LLVMLanguage.INSTANCE.createFindContextNode0();
                 LLVMContext llvmContext = LLVMLanguage.INSTANCE.findContext0(findContext);
-                CallTarget parseFile = parseFile(code.getPath(), llvmContext);
-                return parseFile;
+                return parseFile(code.getPath(), llvmContext);
             }
 
             public LLVMContext createContext(Env env) {
@@ -116,7 +115,9 @@ public class LLVM {
     }
 
     public static int executeMain(File file, Object... args) {
-        LLVMLogger.info("current file: " + file.getAbsolutePath());
+        if (LLVMOptions.debugEnabled()) {
+            System.out.println("current file: " + file.getAbsolutePath());
+        }
         Source fileSource;
         try {
             fileSource = Source.fromFileName(file.getAbsolutePath());
@@ -128,7 +129,9 @@ public class LLVM {
 
     public static int executeMain(String codeString, Object... args) {
         Source fromText = Source.fromText(codeString, "code string").withMimeType(LLVMLanguage.LLVM_MIME_TYPE);
-        LLVMLogger.info("current code string: " + codeString);
+        if (LLVMOptions.debugEnabled()) {
+            System.out.println("current code string: " + codeString);
+        }
         return evaluateFromSource(fromText, args);
     }
 

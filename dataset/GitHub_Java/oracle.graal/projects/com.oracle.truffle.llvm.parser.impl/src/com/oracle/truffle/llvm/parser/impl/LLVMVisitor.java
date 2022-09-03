@@ -240,7 +240,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 Object[] args = new Object[argsCount];
                 args[0] = currentContext.getSourceFile();
                 System.arraycopy(currentContext.getMainArguments(), 0, args, 1, currentContext.getMainArguments().length);
-                LLVMParserAsserts.assertNoNullElement(args);
                 LLVMAddress allocatedArgsStartAddress = getArgsAsStringArray(args);
                 // Checkstyle: stop magic number check
                 if (argParamCount == 2) {
@@ -265,7 +264,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private static LLVMAddress getArgsAsStringArray(Object... args) {
-        LLVMParserAsserts.assertNoNullElement(args);
         String[] stringArgs = getStringArgs(args);
         int argsMemory = stringArgs.length * LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
         LLVMAddress allocatedArgsStartAddress = LLVMHeap.allocateMemory(argsMemory);
@@ -280,12 +278,13 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private static String[] getStringArgs(Object... args) {
-        LLVMParserAsserts.assertNoNullElement(args);
         String[] stringArgs = new String[args.length];
         for (int i = 0; i < args.length; i++) {
             stringArgs[i] = args[i].toString();
+            if (stringArgs[i] == null) {
+                throw new AssertionError();
+            }
         }
-        LLVMParserAsserts.assertNoNullElement(stringArgs);
         return stringArgs;
     }
 
@@ -523,7 +522,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
         }
         for (BasicBlock basicBlock : def.getBasicBlocks()) {
             FrameSlot[] deadSlots = deadSlotsAfterBlock.get(basicBlock);
-            LLVMParserAsserts.assertNoNullElement(deadSlots);
             indexToSlotNuller[basicBlockIndices[i++]] = getSlotNullerNode(deadSlots);
         }
         int size = allFunctionNodes.size();
@@ -543,7 +541,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
                     statements[i] = new LLVMWrappedStatementNode(currentNode, successorIndex);
                 }
             }
-            LLVMParserAsserts.assertNoNullElement(statements);
             return new LLVMBlockControlFlowNode(statements, indexToSlotNuller);
         } else {
             return new LLVMBlockNoControlFlowNode(allFunctionNodes.toArray(new LLVMNode[allFunctionNodes.size()]));
@@ -559,7 +556,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
         for (FrameSlot slot : deadSlots) {
             nullers[i++] = getNullerNode(slot);
         }
-        LLVMParserAsserts.assertNoNullElement(nullers);
         return nullers;
     }
 
@@ -1464,7 +1460,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
         for (int i = 0; i < caseConditions.size(); i++) {
             cases[i] = visitValueRef(caseConditions.get(i).getRef(), caseConditions.get(i).getType());
         }
-        LLVMParserAsserts.assertNoNullElement(cases);
         LLVMBaseType llvmType = getLLVMType(switchInstr.getComparisonValue().getType());
         return factoryFacade.createSwitch(cond, defaultLabel, otherLabels, cases, llvmType);
     }

@@ -33,18 +33,15 @@ import java.util.Map;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMFrameUtil;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMExitException;
 import com.oracle.truffle.llvm.runtime.LLVMOptions;
@@ -64,11 +61,9 @@ public class LLVMGlobalRootNode extends RootNode {
     private final LLVMContext context;
     // FIXME instead make the option system "PE safe"
     private final boolean printNativeStats = LLVMOptions.printNativeCallStats();
-    private final FrameSlot stackPointerSlot;
 
-    public LLVMGlobalRootNode(FrameSlot stackSlot, FrameDescriptor descriptor, LLVMContext context, LLVMNode[] staticInits, CallTarget main, LLVMAddress[] llvmAddresses, Object... arguments) {
-        super(LLVMLanguage.class, null, descriptor);
-        this.stackPointerSlot = stackSlot;
+    public LLVMGlobalRootNode(LLVMContext context, LLVMNode[] staticInits, CallTarget main, LLVMAddress[] llvmAddresses, Object... arguments) {
+        super(LLVMLanguage.class, null, null);
         this.context = context;
         this.staticInits = staticInits;
         this.main = Truffle.getRuntime().createDirectCallNode(main);
@@ -80,30 +75,22 @@ public class LLVMGlobalRootNode extends RootNode {
     @ExplodeLoop
     public Object execute(VirtualFrame frame) {
         CompilerAsserts.compilationConstant(staticInits);
-        LLVMAddress stackPointer = context.getStack().allocate();
-        frame.setObject(stackPointerSlot, stackPointer);
+        context.getStack().reset();
         for (LLVMNode init : staticInits) {
             init.executeVoid(frame);
         }
-        Object[] realArgs = new Object[arguments.length + LLVMCallNode.ARG_START_INDEX];
-        realArgs[0] = LLVMFrameUtil.getAddress(frame, stackPointerSlot);
-        System.arraycopy(arguments, 0, realArgs, LLVMCallNode.ARG_START_INDEX, arguments.length);
         try {
-            Object result = null;
-            for (int i = 0; i < LLVMOptions.getExecutionCount(); i++) {
-                result = main.call(frame, realArgs);
-            }
-            return result;
+            return main.call(frame, arguments);
         } catch (LLVMExitException e) {
             return e.getReturnCode();
         } finally {
             for (LLVMAddress alloc : llvmAddresses) {
                 LLVMHeap.freeMemory(alloc);
             }
+            context.getStack().free();
             if (printNativeStats) {
                 printNativeCallStats(context);
             }
-            context.getStack().free();
         }
     }
 

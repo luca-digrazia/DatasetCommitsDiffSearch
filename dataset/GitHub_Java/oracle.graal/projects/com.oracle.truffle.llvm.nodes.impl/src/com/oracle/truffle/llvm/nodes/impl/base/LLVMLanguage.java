@@ -34,9 +34,11 @@ import java.io.IOException;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.Visualizer;
+import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.LLVMFunction;
 
 @TruffleLanguage.Registration(name = "Sulong", version = "0.01", mimeType = LLVMLanguage.LLVM_MIME_TYPE)
 public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
@@ -69,7 +71,7 @@ public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     @Override
     protected Object findExportedSymbol(LLVMContext context, String globalName, boolean onlyExplicit) {
-        return LLVMFunctionDescriptor.createFromName(globalName);
+        return LLVMFunction.createFromName(globalName);
     }
 
     @Override
@@ -91,8 +93,25 @@ public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     }
 
     @Override
+    protected boolean isInstrumentable(Node node) {
+        return false;
+    }
+
+    @Override
+    protected WrapperNode createWrapperNode(Node node) {
+        throw new AssertionError();
+    }
+
+    @Override
     protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
         throw new AssertionError();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    protected Visualizer getVisualizer() {
+        // TODO Auto-generated method stub
+        return null;
     }
 
 }
