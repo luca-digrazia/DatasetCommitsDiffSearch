@@ -30,16 +30,22 @@
 package com.oracle.truffle.llvm.tools;
 
 import java.io.File;
+import java.io.IOException;
 
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.tools.util.ProcessUtil;
 
 public final class GCC extends CompilerBase {
+
+    private static final File GPP_PATH = Mx.executeGetGCCProgramPath("g++");
+    private static final File GFORTRAN_PATH = Mx.executeGetGCCProgramPath("gfortran");
+    private static final File GCC_PATH = Mx.executeGetGCCProgramPath("gcc");
 
     private GCC() {
     }
 
     public static void compileObjectToMachineCode(File objectFile, File executable) {
-        String linkCommand = "gcc " + objectFile.getAbsolutePath() + " -o " + executable.getAbsolutePath() + " -lm -lgfortran -lgmp";
+        String linkCommand = GCC_PATH + " " + objectFile.getAbsolutePath() + " -o " + executable.getAbsolutePath() + " -lm -lgfortran -lgmp";
         ProcessUtil.executeNativeCommandZeroReturn(linkCommand);
         executable.setExecutable(true);
     }
@@ -47,16 +53,35 @@ public final class GCC extends CompilerBase {
     public static void compileToLLVMIR(File toBeCompiled, File destinationFile) {
         String tool;
         if (ProgrammingLanguage.C.isFile(toBeCompiled)) {
-            tool = "gcc-4.6 -std=gnu99";
+            tool = GCC_PATH + " -std=gnu99";
         } else if (ProgrammingLanguage.FORTRAN.isFile(toBeCompiled)) {
-            tool = "gfortran-4.6";
+            tool = GFORTRAN_PATH.toString();
         } else if (ProgrammingLanguage.C_PLUS_PLUS.isFile(toBeCompiled)) {
-            tool = "g++-4.6";
+            tool = GPP_PATH.toString();
         } else {
             throw new AssertionError(toBeCompiled);
         }
-        String[] command = new String[]{tool, "-S", dragonEggOption(), "-fplugin-arg-dragonegg-emit-ir", "-o " + destinationFile, toBeCompiled.getAbsolutePath()};
-        ProcessUtil.executeNativeCommandZeroReturn(command);
+
+        String destinationLLFileName = destinationFile.getAbsolutePath();
+        File interimFile;
+        try {
+            interimFile = File.createTempFile("interim", ".ll");
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
+
+        if (destinationFile.getName().endsWith(".bc")) {
+            destinationLLFileName = interimFile.getAbsolutePath();
+        }
+
+        String[] llFileGenerationCommand = new String[]{tool, "-I " + LLVMBaseOptionFacade.getProjectRoot() + "/../include", "-S", dragonEggOption(),
+                        "-fplugin-arg-dragonegg-emit-ir", "-o " + destinationLLFileName, toBeCompiled.getAbsolutePath()};
+        ProcessUtil.executeNativeCommandZeroReturn(llFileGenerationCommand);
+
+        // Converting interim .ll file to .bc file
+        if (destinationFile.getName().endsWith(".bc")) {
+            LLVMAssembler.assembleToBitcodeFile(interimFile, destinationFile);
+        }
     }
 
     private static String dragonEggOption() {
