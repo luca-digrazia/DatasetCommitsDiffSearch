@@ -52,8 +52,7 @@ abstract class MessageGenerator extends InteropNodeGenerator {
         super(processingEnv, element, containingForeignAccessFactory);
         this.receiverClassName = Utils.getReceiverTypeFullClassName(messageResolutionAnnotation);
         this.messageName = resolveAnnotation.message();
-        String mName = messageName.substring(messageName.lastIndexOf('.') + 1);
-        this.rootNodeName = mName + "RootNode";
+        this.rootNodeName = messageName.charAt(0) + messageName.toLowerCase().substring(1, messageName.length()) + "RootNode";
     }
 
     public void appendGetName(Writer w) throws IOException {

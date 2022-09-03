@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -52,11 +50,11 @@ final class ExecuteGenerator extends MessageGenerator {
                     ForeignAccessFactoryGenerator containingForeignAccessFactory) {
         super(processingEnv, resolveAnnotation, messageResolutionAnnotation, element, containingForeignAccessFactory);
         this.targetableExecuteNode = (new StringBuilder(messageName)).replace(0, 1, messageName.substring(0, 1).toUpperCase()).append("Node").insert(0, "Targetable").toString();
-        if (Message.EXECUTE.toString().equalsIgnoreCase(messageName)) {
+        if (Message.createExecute(0).toString().equalsIgnoreCase(messageName)) {
             numberOfArguments = 2;
-        } else if (Message.INVOKE.toString().equalsIgnoreCase(messageName)) {
+        } else if (Message.createInvoke(0).toString().equalsIgnoreCase(messageName)) {
             numberOfArguments = 3;
-        } else if (Message.NEW.toString().equalsIgnoreCase(messageName)) {
+        } else if (Message.createNew(0).toString().equalsIgnoreCase(messageName)) {
             numberOfArguments = 2;
         } else {
             throw new AssertionError();
@@ -93,7 +91,7 @@ final class ExecuteGenerator extends MessageGenerator {
         w.append(indent).append("        public Object execute(VirtualFrame frame) {\n");
         w.append(indent).append("            try {\n");
         w.append(indent).append("              Object receiver = ForeignAccess.getReceiver(frame);\n");
-        if (Message.INVOKE.toString().equalsIgnoreCase(messageName)) {
+        if (Message.createInvoke(0).toString().equalsIgnoreCase(messageName)) {
             w.append(indent).append("              List<Object> arguments = ForeignAccess.getArguments(frame);\n");
             w.append(indent).append("              Object identifier = arguments.get(0);\n");
             w.append(indent).append("              Object[] args = new Object[arguments.size() - 1];\n");
@@ -127,16 +125,16 @@ final class ExecuteGenerator extends MessageGenerator {
         int expectedNumberOfArguments = hasFrameArgument ? getParameterCount() + 1 : getParameterCount();
 
         if (params.size() != expectedNumberOfArguments) {
-            if (Message.INVOKE.toString().equalsIgnoreCase(messageName)) {
+            if (Message.createInvoke(0).toString().equalsIgnoreCase(messageName)) {
                 return "Wrong number of arguments. Expected signature: ([frame: VirtualFrame], receiverObject: TruffleObject, identifier: String, arguments: Object[])";
-            } else if (Message.EXECUTE.toString().equalsIgnoreCase(messageName)) {
+            } else if (Message.createExecute(0).toString().equalsIgnoreCase(messageName)) {
                 return "Wrong number of arguments. Expected signature: ([frame: VirtualFrame], receiverObject: TruffleObject, arguments: Object[])";
             } else {
                 throw new IllegalStateException();
             }
         }
 
-        if (Message.INVOKE.toString().equalsIgnoreCase(messageName)) {
+        if (Message.createInvoke(0).toString().equalsIgnoreCase(messageName)) {
             if (!ElementUtils.typeEquals(params.get(hasFrameArgument ? 2 : 1).asType(), Utils.getTypeMirror(processingEnv, String.class))) {
                 int i = hasFrameArgument ? 3 : 2;
                 return "The " + i + " argument must be a " + String.class.getName() + "- but is " + ElementUtils.getQualifiedName(params.get(hasFrameArgument ? 2 : 1).asType());
