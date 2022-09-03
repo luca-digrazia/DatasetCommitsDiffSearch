@@ -68,10 +68,23 @@ public enum NodeCycles {
     CYCLES_200(200),
     CYCLES_500(500);
 
-    public final int estimatedCPUCycles;
+    final int estimatedCPUCycles;
 
     NodeCycles(int estimatedCPUCycles) {
         this.estimatedCPUCycles = estimatedCPUCycles;
+    }
+
+    public static int getEstimatedCPUCycles(NodeCyclesSupplier supplier) {
+        /*
+         * Note: We prohibit the access on the raw estimated code size value as custom node cost
+         * providers or architecture specific ones might override the default values.
+         */
+        return supplier.getNodeCycles().estimatedCPUCycles;
+    }
+
+    @FunctionalInterface
+    public interface NodeCyclesSupplier {
+        NodeCycles getNodeCycles();
     }
 
     public static final int IGNORE_CYCLES_CONTRACT_FACTOR = 0xFFFF;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,45 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_6;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * Marks a position in the graph where a safepoint should be emitted.
  */
-public final class SafepointNode extends FixedWithNextNode implements LIRLowerable, Node.IterableNodeType {
+// @formatter:off
+@NodeInfo(cycles = CYCLES_UNKNOWN,
+          cyclesRationale = "We don't know how long a safepoint would take if it is executed",
+          size = SIZE_6)
+// @formatter:on
+public final class SafepointNode extends DeoptimizingFixedWithNextNode implements Lowerable, LIRLowerable {
 
-    /**
-     * Will be null if this safepoint is not associated with a loop end.
-     */
-    @Data private final LoopEndNode loopEnd;
+    public static final NodeClass<SafepointNode> TYPE = NodeClass.create(SafepointNode.class);
 
-    public SafepointNode(LoopEndNode loopEnd) {
-        super(StampFactory.illegal());
-        this.loopEnd = loopEnd;
+    public SafepointNode() {
+        super(TYPE, StampFactory.forVoid());
     }
 
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
+    public void generate(NodeLIRBuilderTool gen) {
         gen.visitSafepointNode(this);
     }
 
-    /**
-     * Gets the loop end (if any) associated with this safepoint.
-     */
-    public LoopEndNode loopEnd() {
-        return loopEnd;
+    @Override
+    public boolean canDeoptimize() {
+        return true;
     }
 }

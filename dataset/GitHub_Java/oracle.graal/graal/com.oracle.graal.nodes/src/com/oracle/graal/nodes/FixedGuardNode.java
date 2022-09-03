@@ -22,64 +22,89 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.cri.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.DeoptimizeNode.DeoptAction;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Guard;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
 
-public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, LIRLowerable, Node.IterableNodeType {
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.SimplifierTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.extended.ValueAnchorNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
-    @Input private final NodeInputList<BooleanNode> conditions;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
 
-    public FixedGuardNode(BooleanNode condition) {
-        super(StampFactory.illegal());
-        this.conditions = new NodeInputList<>(this, new BooleanNode[] {condition});
+@NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}", allowedUsageTypes = Guard, size = SIZE_2, cycles = CYCLES_2)
+public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowerable, IterableNodeType {
+    public static final NodeClass<FixedGuardNode> TYPE = NodeClass.create(FixedGuardNode.class);
+
+    public FixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
+        this(condition, deoptReason, action, JavaConstant.NULL_POINTER, false);
     }
 
-    @Override
-    public void generate(LIRGeneratorTool gen) {
-        for (BooleanNode condition : conditions()) {
-            gen.emitGuardCheck(condition);
-        }
+    public FixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
+        this(condition, deoptReason, action, JavaConstant.NULL_POINTER, negated);
     }
 
-    public void addCondition(BooleanNode x) {
-        conditions.add(x);
-    }
-
-    public NodeInputList<BooleanNode> conditions() {
-        return conditions;
+    public FixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation, boolean negated) {
+        super(TYPE, condition, deoptReason, action, speculation, negated);
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
-        for (BooleanNode n : conditions.snapshot()) {
-            if (n instanceof ConstantNode) {
-                ConstantNode c = (ConstantNode) n;
-                if (c.asConstant().asBoolean()) {
-                    conditions.remove(n);
-                } else {
-                    FixedNode next = this.next();
-                    if (next != null) {
-                        tool.deleteBranch(next);
-                    }
-                    setNext(graph().add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
-                    return;
+        super.simplify(tool);
+
+        if (getCondition() instanceof LogicConstantNode) {
+            LogicConstantNode c = (LogicConstantNode) getCondition();
+            if (c.getValue() == isNegated()) {
+                FixedNode currentNext = this.next();
+                if (currentNext != null) {
+                    tool.deleteBranch(currentNext);
                 }
+
+                DeoptimizeNode deopt = graph().add(new DeoptimizeNode(getAction(), getReason(), getSpeculation()));
+                deopt.setStateBefore(stateBefore());
+                setNext(deopt);
             }
-        }
-        if (conditions.isEmpty()) {
-            ((StructuredGraph) graph()).removeFixed(this);
+            this.replaceAtUsages(null);
+            graph().removeFixed(this);
+        } else if (getCondition() instanceof ShortCircuitOrNode) {
+            ShortCircuitOrNode shortCircuitOr = (ShortCircuitOrNode) getCondition();
+            if (isNegated() && hasNoUsages()) {
+                graph().addAfterFixed(this, graph().add(new FixedGuardNode(shortCircuitOr.getY(), getReason(), getAction(), getSpeculation(), !shortCircuitOr.isYNegated())));
+                graph().replaceFixedWithFixed(this, graph().add(new FixedGuardNode(shortCircuitOr.getX(), getReason(), getAction(), getSpeculation(), !shortCircuitOr.isXNegated())));
+            }
         }
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        AnchorNode newAnchor = graph().add(new AnchorNode());
-        for (BooleanNode b : conditions) {
-            newAnchor.addGuard((GuardNode) tool.createGuard(b));
+    public void lower(LoweringTool tool) {
+        if (graph().getGuardsStage().allowsFloatingGuards()) {
+            /*
+             * Don't allow guards with action None and reason RuntimeConstraint to float. In cases
+             * where 2 guards are testing equivalent conditions they might be lowered at the same
+             * location. If the guard with the None action is lowered before the the other guard
+             * then the code will be stuck repeatedly deoptimizing without invalidating the code.
+             * Conditional elimination will eliminate the guard if it's truly redundant in this
+             * case.
+             */
+            if (getAction() != DeoptimizationAction.None || getReason() != DeoptimizationReason.RuntimeConstraint) {
+                ValueNode guard = tool.createGuard(this, getCondition(), getReason(), getAction(), getSpeculation(), isNegated()).asNode();
+                this.replaceAtUsages(guard);
+                ValueAnchorNode newAnchor = graph().add(new ValueAnchorNode(guard.asNode()));
+                graph().replaceFixedWithFixed(this, newAnchor);
+            }
+        } else {
+            lowerToIf().lower(tool);
         }
-        ((StructuredGraph) graph()).replaceFixedWithFixed(this, newAnchor);
+    }
+
+    @Override
+    public boolean canDeoptimize() {
+        return true;
     }
 }
