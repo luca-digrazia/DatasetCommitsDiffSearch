@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,142 @@
  */
 package com.oracle.graal.api.meta;
 
+import java.io.*;
+import java.util.*;
 
+/**
+ * Miscellaneous collection of utility methods used by {@code com.oracle.graal.api.meta} and its
+ * clients.
+ */
 public class MetaUtil {
+
+    private static class ClassInfo {
+        public long totalSize;
+        public long instanceCount;
+
+        @Override
+        public String toString() {
+            return "totalSize=" + totalSize + ", instanceCount=" + instanceCount;
+        }
+    }
+
     /**
-     * Extends the functionality of {@link Class#getSimpleName()} to include a non-empty string for anonymous and local
-     * classes.
+     * Returns the number of bytes occupied by this constant value or constant object and
+     * recursively all values reachable from this value.
+     *
+     * @param constant the constant whose bytes should be measured
+     * @param printTopN print total size and instance count of the top n classes is desired
+     * @return the number of bytes occupied by this constant
+     */
+    public static long getMemorySizeRecursive(MetaAccessProvider access, ConstantReflectionProvider constantReflection, JavaConstant constant, PrintStream out, int printTopN) {
+        Set<JavaConstant> marked = new HashSet<>();
+        Deque<JavaConstant> stack = new ArrayDeque<>();
+        if (constant.getKind() == Kind.Object && constant.isNonNull()) {
+            marked.add(constant);
+        }
+        final HashMap<ResolvedJavaType, ClassInfo> histogram = new HashMap<>();
+        stack.push(constant);
+        long sum = 0;
+        while (!stack.isEmpty()) {
+            JavaConstant c = stack.pop();
+            long memorySize = access.getMemorySize(constant);
+            sum += memorySize;
+            if (c.getKind() == Kind.Object && c.isNonNull()) {
+                ResolvedJavaType clazz = access.lookupJavaType(c);
+                if (!histogram.containsKey(clazz)) {
+                    histogram.put(clazz, new ClassInfo());
+                }
+                ClassInfo info = histogram.get(clazz);
+                info.instanceCount++;
+                info.totalSize += memorySize;
+                ResolvedJavaType type = access.lookupJavaType(c);
+                if (type.isArray()) {
+                    if (!type.getComponentType().isPrimitive()) {
+                        int length = constantReflection.readArrayLength(c);
+                        for (int i = 0; i < length; i++) {
+                            JavaConstant value = constantReflection.readArrayElement(c, i);
+                            pushConstant(marked, stack, value);
+                        }
+                    }
+                } else {
+                    ResolvedJavaField[] instanceFields = type.getInstanceFields(true);
+                    for (ResolvedJavaField f : instanceFields) {
+                        if (f.getKind() == Kind.Object) {
+                            JavaConstant value = constantReflection.readFieldValue(f, c);
+                            pushConstant(marked, stack, value);
+                        }
+                    }
+                }
+            }
+        }
+        ArrayList<ResolvedJavaType> clazzes = new ArrayList<>();
+        clazzes.addAll(histogram.keySet());
+        Collections.sort(clazzes, new Comparator<ResolvedJavaType>() {
+
+            @Override
+            public int compare(ResolvedJavaType o1, ResolvedJavaType o2) {
+                long l1 = histogram.get(o1).totalSize;
+                long l2 = histogram.get(o2).totalSize;
+                if (l1 > l2) {
+                    return -1;
+                } else if (l1 == l2) {
+                    return 0;
+                } else {
+                    return 1;
+                }
+            }
+        });
+
+        int z = 0;
+        for (ResolvedJavaType c : clazzes) {
+            if (z > printTopN) {
+                break;
+            }
+            out.println("Class " + c + ", " + histogram.get(c));
+            ++z;
+        }
+
+        return sum;
+    }
+
+    private static void pushConstant(Set<JavaConstant> marked, Deque<JavaConstant> stack, JavaConstant value) {
+        if (value.isNonNull()) {
+            if (!marked.contains(value)) {
+                marked.add(value);
+                stack.push(value);
+            }
+        }
+    }
+
+    /**
+     * Calls {@link JavaType#resolve(ResolvedJavaType)} on an array of types.
+     */
+    public static ResolvedJavaType[] resolveJavaTypes(JavaType[] types, ResolvedJavaType accessingClass) {
+        ResolvedJavaType[] result = new ResolvedJavaType[types.length];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = types[i].resolve(accessingClass);
+        }
+        return result;
+    }
+
+    /**
+     * Extends the functionality of {@link Class#getSimpleName()} to include a non-empty string for
+     * anonymous and local classes.
      *
      * @param clazz the class for which the simple name is being requested
-     * @param withEnclosingClass specifies if the returned name should be qualified with the name(s) of the enclosing
-     *            class/classes of {@code clazz} (if any). This option is ignored if {@code clazz} denotes an anonymous
-     *            or local class.
+     * @param withEnclosingClass specifies if the returned name should be qualified with the name(s)
+     *            of the enclosing class/classes of {@code clazz} (if any). This option is ignored
+     *            if {@code clazz} denotes an anonymous or local class.
      * @return the simple name
      */
-    public static String getSimpleName(Class< ? > clazz, boolean withEnclosingClass) {
+    public static String getSimpleName(Class<?> clazz, boolean withEnclosingClass) {
         final String simpleName = clazz.getSimpleName();
         if (simpleName.length() != 0) {
             if (withEnclosingClass) {
                 String prefix = "";
-                Class< ? > enclosingClass = clazz;
+                Class<?> enclosingClass = clazz;
                 while ((enclosingClass = enclosingClass.getEnclosingClass()) != null) {
-                    prefix = prefix + enclosingClass.getSimpleName() + ".";
+                    prefix = enclosingClass.getSimpleName() + "." + prefix;
                 }
                 return prefix + simpleName;
             }
@@ -60,52 +176,7 @@ public class MetaUtil {
         return name.substring(index + 1);
     }
 
-
-    /**
-     * Converts a given type to its Java programming language name. The following are examples of strings returned by
-     * this method:
-     *
-     * <pre>
-     *     qualified == true:
-     *         java.lang.Object
-     *         int
-     *         boolean[][]
-     *     qualified == false:
-     *         Object
-     *         int
-     *         boolean[][]
-     * </pre>
-     *
-     * @param riType the type to be converted to a Java name
-     * @param qualified specifies if the package prefix of the type should be included in the returned name
-     * @return the Java name corresponding to {@code riType}
-     */
-    public static String toJavaName(JavaType riType, boolean qualified) {
-        Kind kind = riType.kind();
-        if (kind.isObject()) {
-            return internalNameToJava(riType.name(), qualified);
-        }
-        return riType.kind().javaName;
-    }
-
-    /**
-     * Converts a given type to its Java programming language name. The following are examples of strings returned by
-     * this method:
-     *
-     * <pre>
-     *      java.lang.Object
-     *      int
-     *      boolean[][]
-     * </pre>
-     *
-     * @param riType the type to be converted to a Java name
-     * @return the Java name corresponding to {@code riType}
-     */
-    public static String toJavaName(JavaType riType) {
-        return (riType == null) ? null : internalNameToJava(riType.name(), true);
-    }
-
-    public static String internalNameToJava(String name, boolean qualified) {
+    static String internalNameToJava(String name, boolean qualified, boolean classForNameCompatible) {
         switch (name.charAt(0)) {
             case 'L': {
                 String result = name.substring(1, name.length() - 1).replace('/', '.');
@@ -116,15 +187,155 @@ public class MetaUtil {
                     }
                 }
                 return result;
-
             }
             case '[':
-                return internalNameToJava(name.substring(1), qualified) + "[]";
+                return classForNameCompatible ? name.replace('/', '.') : internalNameToJava(name.substring(1), qualified, classForNameCompatible) + "[]";
             default:
                 if (name.length() != 1) {
                     throw new IllegalArgumentException("Illegal internal name: " + name);
                 }
-                return Kind.fromPrimitiveOrVoidTypeChar(name.charAt(0)).javaName;
+                return Kind.fromPrimitiveOrVoidTypeChar(name.charAt(0)).getJavaName();
         }
+    }
+
+    /**
+     * Turns an class name in internal format into a resolved Java type.
+     */
+    public static ResolvedJavaType classForName(String internal, MetaAccessProvider metaAccess, ClassLoader cl) {
+        Kind k = Kind.fromTypeString(internal);
+        try {
+            String n = internalNameToJava(internal, true, true);
+            return metaAccess.lookupJavaType(k.isPrimitive() ? k.toJavaClass() : Class.forName(n, true, cl));
+        } catch (ClassNotFoundException cnfe) {
+            throw new IllegalArgumentException("could not instantiate class described by " + internal, cnfe);
+        }
+    }
+
+    /**
+     * Convenient shortcut for calling
+     * {@link #appendLocation(StringBuilder, ResolvedJavaMethod, int)} without having to supply a
+     * {@link StringBuilder} instance and convert the result to a string.
+     */
+    public static String toLocation(ResolvedJavaMethod method, int bci) {
+        return appendLocation(new StringBuilder(), method, bci).toString();
+    }
+
+    /**
+     * Appends a string representation of a location specified by a given method and bci to a given
+     * {@link StringBuilder}. If a stack trace element with a non-null file name and non-negative
+     * line number is {@linkplain ResolvedJavaMethod#asStackTraceElement(int) available} for the
+     * given method, then the string returned is the {@link StackTraceElement#toString()} value of
+     * the stack trace element, suffixed by the bci location. For example:
+     *
+     * <pre>
+     *     java.lang.String.valueOf(String.java:2930) [bci: 12]
+     * </pre>
+     *
+     * Otherwise, the string returned is the value of applying {@link JavaMethod#format(String)}
+     * with the format string {@code "%H.%n(%p)"}, suffixed by the bci location. For example:
+     *
+     * <pre>
+     *     java.lang.String.valueOf(int) [bci: 12]
+     * </pre>
+     *
+     * @param sb
+     * @param method
+     * @param bci
+     */
+    public static StringBuilder appendLocation(StringBuilder sb, ResolvedJavaMethod method, int bci) {
+        if (method != null) {
+            StackTraceElement ste = method.asStackTraceElement(bci);
+            if (ste.getFileName() != null && ste.getLineNumber() > 0) {
+                sb.append(ste);
+            } else {
+                sb.append(method.format("%H.%n(%p)"));
+            }
+        } else {
+            sb.append("Null method");
+        }
+        return sb.append(" [bci: ").append(bci).append(']');
+    }
+
+    static void appendProfile(StringBuilder buf, AbstractJavaProfile<?, ?> profile, int bci, String type, String sep) {
+        if (profile != null) {
+            AbstractProfiledItem<?>[] pitems = profile.getItems();
+            if (pitems != null) {
+                buf.append(String.format("%s@%d:", type, bci));
+                for (int j = 0; j < pitems.length; j++) {
+                    AbstractProfiledItem<?> pitem = pitems[j];
+                    buf.append(String.format(" %.6f (%s)%s", pitem.getProbability(), pitem.getItem(), sep));
+                }
+                if (profile.getNotRecordedProbability() != 0) {
+                    buf.append(String.format(" %.6f <other %s>%s", profile.getNotRecordedProbability(), type, sep));
+                } else {
+                    buf.append(String.format(" <no other %s>%s", type, sep));
+                }
+            }
+        }
+    }
+
+    /**
+     * Converts a Java source-language class name into the internal form.
+     *
+     * @param className the class name
+     * @return the internal name form of the class name
+     */
+    public static String toInternalName(String className) {
+        String prefix = "";
+        String base = className;
+        while (base.endsWith("[]")) {
+            prefix += "[";
+            base = base.substring(base.length() - 2);
+        }
+
+        switch (className) {
+            case "boolean":
+                return prefix + "Z";
+            case "byte":
+                return prefix + "B";
+            case "short":
+                return prefix + "S";
+            case "char":
+                return prefix + "C";
+            case "int":
+                return prefix + "I";
+            case "float":
+                return prefix + "F";
+            case "long":
+                return prefix + "J";
+            case "double":
+                return prefix + "D";
+            case "void":
+                return prefix + "V";
+            default:
+                return prefix + "L" + className.replace('.', '/') + ";";
+        }
+    }
+
+    /**
+     * Prepends the String {@code indentation} to every line in String {@code lines}, including a
+     * possibly non-empty line following the final newline.
+     */
+    public static String indent(String lines, String indentation) {
+        if (lines.length() == 0) {
+            return lines;
+        }
+        final String newLine = "\n";
+        if (lines.endsWith(newLine)) {
+            return indentation + (lines.substring(0, lines.length() - 1)).replace(newLine, newLine + indentation) + newLine;
+        }
+        return indentation + lines.replace(newLine, newLine + indentation);
+    }
+
+    /**
+     * Gets a string representation of an object based soley on its class and its
+     * {@linkplain System#identityHashCode(Object) identity hash code}. This avoids and calls to
+     * virtual methods on the object such as {@link Object#hashCode()}.
+     */
+    public static String identityHashCodeString(Object obj) {
+        if (obj == null) {
+            return "null";
+        }
+        return obj.getClass().getName() + "@" + System.identityHashCode(obj);
     }
 }

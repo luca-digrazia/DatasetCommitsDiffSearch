@@ -31,22 +31,15 @@ public class UnsafeAccess {
     /**
      * An instance of {@link Unsafe} for use within Graal.
      */
-    public static final Unsafe unsafe = getUnsafe();
+    public static final Unsafe unsafe;
 
-    private static Unsafe getUnsafe() {
-        try {
-            // this will fail if Graal is not part of the boot class path
-            return Unsafe.getUnsafe();
-        } catch (SecurityException e) {
-            // nothing to do
-        }
+    static {
         try {
             Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
             theUnsafeInstance.setAccessible(true);
-            return (Unsafe) theUnsafeInstance.get(Unsafe.class);
+            unsafe = (Unsafe) theUnsafeInstance.get(Unsafe.class);
         } catch (Exception e) {
-            // currently we rely on being able to use Unsafe...
-            throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
+            throw new RuntimeException("exception while trying to get Unsafe", e);
         }
     }
 
@@ -55,7 +48,7 @@ public class UnsafeAccess {
      * terminated C string. The native memory buffer is allocated via
      * {@link Unsafe#allocateMemory(long)}. The caller is responsible for releasing the buffer when
      * it is no longer needed via {@link Unsafe#freeMemory(long)}.
-     * 
+     *
      * @return the native memory pointer of the C string created from {@code s}
      */
     public static long createCString(String s) {
@@ -65,14 +58,14 @@ public class UnsafeAccess {
     /**
      * Reads a {@code '\0'} terminated C string from native memory and converts it to a
      * {@link String}.
-     * 
+     *
      * @return a Java string
      */
     public static String readCString(long address) {
         if (address == 0) {
             return null;
         }
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         for (int i = 0;; i++) {
             char c = (char) unsafe.getByte(address + i);
             if (c == 0) {
@@ -88,7 +81,7 @@ public class UnsafeAccess {
      * terminated C string. The caller is responsible for ensuring the buffer is at least
      * {@code s.length() + 1} bytes long. The caller is also responsible for releasing the buffer
      * when it is no longer.
-     * 
+     *
      * @return the value of {@code buf}
      */
     public static long writeCString(String s, long buf) {

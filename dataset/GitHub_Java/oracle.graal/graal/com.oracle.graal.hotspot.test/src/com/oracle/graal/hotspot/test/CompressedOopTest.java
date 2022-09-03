@@ -299,7 +299,7 @@ public class CompressedOopTest extends GraalCompilerTest {
 
     @Test
     public void test14() throws Exception {
-        HotSpotInstalledCode installedBenchmarkCode = getInstalledCode("stringBuilderTest", Object.class, Object.class);
+        HotSpotInstalledCode installedBenchmarkCode = getInstalledCode("stringBufferTest", Object.class, Object.class);
         StringBuilder buffer = new StringBuilder("TestTestTestTestTestTestTest");
         Assert.assertTrue(buffer.length() == 28);
         String a = new String("TestTestTestTestTestTestTest");
@@ -308,8 +308,8 @@ public class CompressedOopTest extends GraalCompilerTest {
         Assert.assertTrue(buffer.toString().equals("TestTestTestTestTestTestTestTestTestTestTestTestTestTest"));
     }
 
-    public static void stringBuilderTest(Object c1, Object c2) {
-        StringBuilder source = (StringBuilder) c1;
+    public static void stringBufferTest(Object c1, Object c2) {
+        StringBuffer source = (StringBuffer) c1;
         char[] add = (char[]) c2;
         for (int i = 0; i < add.length; i++) {
             source.append(add[i]);
@@ -318,11 +318,11 @@ public class CompressedOopTest extends GraalCompilerTest {
 
     @Test
     public void test15() throws Exception {
-        HotSpotInstalledCode installedBenchmarkCode = getInstalledCode("stringBuilderTestIn");
+        HotSpotInstalledCode installedBenchmarkCode = getInstalledCode("stringBufferTestIn");
         installedBenchmarkCode.executeVarargs();
     }
 
-    public static void stringBuilderTestIn() {
+    public static void stringBufferTestIn() {
         StringBuilder buffer = new StringBuilder("TestTestTestTestTestTestTest");
         Assert.assertTrue(buffer.length() == 28);
         String a = new String("TestTestTestTestTestTestTest");
@@ -336,11 +336,11 @@ public class CompressedOopTest extends GraalCompilerTest {
 
     @Test
     public void test16() throws Exception {
-        HotSpotInstalledCode installedBenchmarkCode = getInstalledCode("stringBuilderArrayCopy");
+        HotSpotInstalledCode installedBenchmarkCode = getInstalledCode("stringBufferArrayCopy");
         installedBenchmarkCode.executeVarargs();
     }
 
-    public static void stringBuilderArrayCopy() {
+    public static void stringBufferArrayCopy() {
         StringBuilder buffer = new StringBuilder("TestTestTestTestTestTestTest");
         Assert.assertTrue(buffer.length() == 28);
         String a = new String("TestTestTestTestTestTestTest");
