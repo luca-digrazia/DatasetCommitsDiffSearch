@@ -35,7 +35,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.Objects;
 
 abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition, Location> implements Closeable {
     private static final Charset UTF8 = Charset.forName("UTF-8");
@@ -390,42 +389,34 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         if (id == null) {
             addPoolEntry(object);
         } else {
-            int type = findPoolType(object);
-            writeByte(type);
-            writeShort(id.charValue());
-        }
-    }
-
-    private int findPoolType(Object object) throws IOException {
-        if (object == null) {
-            return POOL_NULL;
-        }
-        if (findJavaField(object) != null) {
-            return POOL_FIELD;
-        } else if (findSignature(object) != null) {
-            return POOL_SIGNATURE;
-        } else if (versionMajor >= 4 && findNodeSourcePosition(object) != null) {
-            return POOL_NODE_SOURCE_POSITION;
-        } else {
-            final Node node = findNode(object);
-            if (versionMajor == 4 && node != null) {
-                object = classForNode(node);
-            }
-            if (findNodeClass(object) != null) {
-                return POOL_NODE_CLASS;
-            } else if (versionMajor >= 5 && node != null) {
-                return POOL_NODE;
-            } else if (findMethod(object) != null) {
-                return POOL_METHOD;
+            if (findJavaField(object) != null) {
+                writeByte(POOL_FIELD);
+            } else if (findSignature(object) != null) {
+                writeByte(POOL_SIGNATURE);
+            } else if (versionMajor >= 4 && findNodeSourcePosition(object) != null) {
+                writeByte(POOL_NODE_SOURCE_POSITION);
             } else {
-                if (object instanceof Enum<?> || findEnumOrdinal(object) >= 0) {
-                    return POOL_ENUM;
-                } else if (object instanceof Class<?> || findJavaTypeName(object) != null) {
-                    return POOL_CLASS;
+                final Node node = findNode(object);
+                if (versionMajor == 4 && node != null) {
+                    object = classForNode(node);
+                }
+                if (findNodeClass(object) != null) {
+                    writeByte(POOL_NODE_CLASS);
+                } else if (versionMajor >= 5 && node != null) {
+                    writeByte(POOL_NODE);
+                } else if (findMethod(object) != null) {
+                    writeByte(POOL_METHOD);
                 } else {
-                    return POOL_STRING;
+                    if (object instanceof Enum<?> || findEnumOrdinal(object) >= 0) {
+                        writeByte(POOL_ENUM);
+                    } else if (object instanceof Class<?> || findJavaTypeName(object) != null) {
+                        writeByte(POOL_CLASS);
+                    } else {
+                        writeByte(POOL_STRING);
+                    }
                 }
             }
+            writeShort(id.charValue());
         }
     }
 
@@ -546,91 +537,85 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
     @SuppressWarnings("all")
     private void addPoolEntry(Object obj) throws IOException {
         Object object = obj;
+        ResolvedJavaField field;
+        String typeName;
+        Signature signature;
+        NodeSourcePosition pos;
+        int enumOrdinal;
         char index = constantPool.add(object);
         writeByte(POOL_NEW);
         writeShort(index);
-
-        int type = findPoolType(object);
-        writeByte(type);
-        switch (type) {
-            default:
-                throw new IllegalStateException();
-            case POOL_FIELD: {
-                ResolvedJavaField field = findJavaField(object);
-                Objects.nonNull(field);
-                writePoolObject(findFieldDeclaringClass(field));
-                writePoolObject(findFieldName(field));
-                writePoolObject(findFieldTypeName(field));
-                writeInt(findFieldModifiers(field));
-                break;
+        if ((field = findJavaField(object)) != null) {
+            writeByte(POOL_FIELD);
+            writePoolObject(findFieldDeclaringClass(field));
+            writePoolObject(findFieldName(field));
+            writePoolObject(findFieldTypeName(field));
+            writeInt(findFieldModifiers(field));
+        } else if ((signature = findSignature(object)) != null) {
+            writeByte(POOL_SIGNATURE);
+            int args = findSignatureParameterCount(signature);
+            writeShort((char) args);
+            for (int i = 0; i < args; i++) {
+                writePoolObject(findSignatureParameterTypeName(signature, i));
             }
-            case POOL_SIGNATURE: {
-                Signature signature = findSignature(object);
-                Objects.nonNull(signature);
-                int args = findSignatureParameterCount(signature);
-                writeShort((char) args);
-                for (int i = 0; i < args; i++) {
-                    writePoolObject(findSignatureParameterTypeName(signature, i));
-                }
-                writePoolObject(findSignatureReturnTypeName(signature));
-                break;
-            }
-            case POOL_NODE_SOURCE_POSITION: {
-                NodeSourcePosition pos = findNodeSourcePosition(object);
-                Objects.nonNull(pos);
-                ResolvedJavaMethod method = findNodeSourcePositionMethod(pos);
-                writePoolObject(method);
-                final int bci = findNodeSourcePositionBCI(pos);
-                writeInt(bci);
-                Iterator<Location> ste = findLocation(method, bci, pos).iterator();
-                if (versionMajor >= 6) {
-                    while (ste.hasNext()) {
-                        Location loc = ste.next();
-                        URI uri;
-                        try {
-                            uri = findLocationURI(loc);
-                        } catch (URISyntaxException ex) {
-                            throw new IOException(ex);
-                        }
-                        if (uri == null) {
-                            throw new IOException("No URI for " + loc);
-                        }
-                        String l = findLocationLanguage(loc);
-                        if (l == null) {
-                            continue;
-                        }
-                        writePoolObject(uri.toString());
-                        writeString(l);
-                        writeInt(findLocationLine(loc));
-                        writeInt(findLocationStart(loc));
-                        writeInt(findLocationEnd(loc));
+            writePoolObject(findSignatureReturnTypeName(signature));
+        } else if (versionMajor >= 4 && (pos = findNodeSourcePosition(object)) != null) {
+            writeByte(POOL_NODE_SOURCE_POSITION);
+            ResolvedJavaMethod method = findNodeSourcePositionMethod(pos);
+            writePoolObject(method);
+            final int bci = findNodeSourcePositionBCI(pos);
+            writeInt(bci);
+            Iterator<Location> ste = findLocation(method, bci, pos).iterator();
+            if (versionMajor >= 6) {
+                while (ste.hasNext()) {
+                    Location loc = ste.next();
+                    URI uri;
+                    try {
+                        uri = findLocationURI(loc);
+                    } catch (URISyntaxException ex) {
+                        throw new IOException(ex);
                     }
-                    writePoolObject(null);
+                    if (uri == null) {
+                        throw new IOException("No URI for " + loc);
+                    }
+                    String l = findLocationLanguage(loc);
+                    if (l == null) {
+                        continue;
+                    }
+                    writePoolObject(uri.toString());
+                    writeString(l);
+                    writeInt(findLocationLine(loc));
+                    writeInt(findLocationStart(loc));
+                    writeInt(findLocationEnd(loc));
+                }
+                writePoolObject(null);
+            } else {
+                Location first = ste.hasNext() ? ste.next() : null;
+                String fileName = first != null ? findLocationFile(first) : null;
+                if (fileName != null) {
+                    writePoolObject(fileName);
+                    writeInt(findLocationLine(first));
                 } else {
-                    Location first = ste.hasNext() ? ste.next() : null;
-                    String fileName = first != null ? findLocationFile(first) : null;
-                    if (fileName != null) {
-                        writePoolObject(fileName);
-                        writeInt(findLocationLine(first));
-                    } else {
-                        writePoolObject(null);
-                    }
+                    writePoolObject(null);
                 }
-                writePoolObject(findNodeSourcePositionCaller(pos));
-                break;
             }
-            case POOL_NODE: {
-                Node node = findNode(object);
-                Objects.nonNull(node);
-                writeInt(findNodeId(node));
-                writePoolObject(classForNode(node));
-                break;
-            }
-            case POOL_NODE_CLASS: {
+            writePoolObject(findNodeSourcePositionCaller(pos));
+        } else {
+            Node node = findNode(object);
+            if (node != null) {
+                if (versionMajor >= 5) {
+                    writeByte(POOL_NODE);
+                    writeInt(findNodeId(node));
+                    writePoolObject(classForNode(node));
+                    return;
+                }
                 if (versionMajor == 4) {
-                    object = classForNode(findNode(object));
+                    object = classForNode(node);
                 }
-                NodeClass nodeClass = findNodeClass(object);
+            }
+            NodeClass nodeClass = findNodeClass(object);
+            if (nodeClass != null) {
+                writeByte(POOL_NODE_CLASS);
                 final Object clazz = findJavaClass(nodeClass);
                 if (versionMajor >= 3) {
                     writePoolObject(clazz);
@@ -642,48 +627,43 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
                 }
                 writeEdgesInfo(nodeClass, true);
                 writeEdgesInfo(nodeClass, false);
-                break;
+                return;
             }
-            case POOL_CLASS: {
-                String typeName = findJavaTypeName(object);
-                Objects.nonNull(typeName);
-                writeString(typeName);
-                String[] enumValueNames = findEnumTypeValues(object);
-                if (enumValueNames != null) {
-                    writeByte(ENUM_KLASS);
-                    writeInt(enumValueNames.length);
-                    for (String o : enumValueNames) {
-                        writePoolObject(o);
+            ResolvedJavaMethod method = findMethod(object);
+            if (method == null) {
+                if ((typeName = findJavaTypeName(object)) != null) {
+                    writeByte(POOL_CLASS);
+                    writeString(typeName);
+                    String[] enumValueNames = findEnumTypeValues(object);
+                    if (enumValueNames != null) {
+                        writeByte(ENUM_KLASS);
+                        writeInt(enumValueNames.length);
+                        for (String o : enumValueNames) {
+                            writePoolObject(o);
+                        }
+                    } else {
+                        writeByte(KLASS);
                     }
+                } else if ((enumOrdinal = findEnumOrdinal(object)) >= 0) {
+                    writeByte(POOL_ENUM);
+                    writePoolObject(findEnumClass(object));
+                    writeInt(enumOrdinal);
                 } else {
-                    writeByte(KLASS);
+                    writeByte(POOL_STRING);
+                    writeString(object.toString());
                 }
-                break;
+                return;
             }
-            case POOL_METHOD: {
-                ResolvedJavaMethod method = findMethod(object);
-                Objects.nonNull(method);
-                writePoolObject(findMethodDeclaringClass(method));
-                writePoolObject(findMethodName(method));
-                final Signature methodSignature = findMethodSignature(method);
-                if (findSignature(methodSignature) == null) {
-                    throw new IOException("Should be recognized as signature: " + methodSignature + " for " + method);
-                }
-                writePoolObject(methodSignature);
-                writeInt(findMethodModifiers(method));
-                writeBytes(findMethodCode(method));
-                break;
+            writeByte(POOL_METHOD);
+            writePoolObject(findMethodDeclaringClass(method));
+            writePoolObject(findMethodName(method));
+            final Signature methodSignature = findMethodSignature(method);
+            if (findSignature(methodSignature) == null) {
+                throw new IOException("Should be recognized as signature: " + methodSignature + " for " + method);
             }
-            case POOL_ENUM: {
-                int enumOrdinal = findEnumOrdinal(object);
-                writePoolObject(findEnumClass(object));
-                writeInt(enumOrdinal);
-                break;
-            }
-            case POOL_STRING: {
-                writeString(object.toString());
-                break;
-            }
+            writePoolObject(methodSignature);
+            writeInt(findMethodModifiers(method));
+            writeBytes(findMethodCode(method));
         }
     }
 
