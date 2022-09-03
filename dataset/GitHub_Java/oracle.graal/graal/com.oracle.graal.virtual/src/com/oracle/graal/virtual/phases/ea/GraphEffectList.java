@@ -33,16 +33,16 @@ import com.oracle.graal.phases.common.*;
 
 public class GraphEffectList extends EffectList {
 
-    public void addCounterBefore(String group, String name, int increment, boolean addContext, FixedNode position) {
+    public void addCounterBefore(final String group, final String name, final int increment, final boolean addContext, final FixedNode position) {
         add("add counter", graph -> DynamicCounterNode.addCounterBefore(group, name, increment, addContext, position));
     }
 
-    public void addCounterAfter(String group, String name, int increment, boolean addContext, FixedWithNextNode position) {
+    public void addCounterAfter(final String group, final String name, final int increment, final boolean addContext, final FixedWithNextNode position) {
         FixedNode nextPosition = position.next();
         add("add counter after", graph -> DynamicCounterNode.addCounterBefore(group, name, increment, addContext, nextPosition));
     }
 
-    public void addWeakCounterCounterBefore(String group, String name, int increment, boolean addContext, ValueNode checkedValue, FixedNode position) {
+    public void addWeakCounterCounterBefore(final String group, final String name, final int increment, final boolean addContext, final ValueNode checkedValue, final FixedNode position) {
         add("add weak counter", graph -> WeakCounterNode.addCounterBefore(group, name, increment, addContext, checkedValue, position));
     }
 
@@ -53,22 +53,10 @@ public class GraphEffectList extends EffectList {
      * @param node The fixed node to be added to the graph.
      * @param position The fixed node before which the node should be added.
      */
-    public void addFixedNodeBefore(FixedWithNextNode node, FixedNode position) {
+    public void addFixedNodeBefore(final FixedWithNextNode node, final FixedNode position) {
         add("add fixed node", graph -> {
             assert !node.isAlive() && !node.isDeleted() && position.isAlive();
             graph.addBeforeFixed(position, graph.add(node));
-        });
-    }
-
-    public void ensureAdded(ValueNode node, FixedNode position) {
-        add("ensure added", graph -> {
-            assert position.isAlive();
-            if (!node.isAlive()) {
-                graph.addWithoutUniqueWithInputs(node);
-                if (node instanceof FixedWithNextNode) {
-                    graph.addBeforeFixed(position, (FixedWithNextNode) node);
-                }
-            }
         });
     }
 
@@ -77,8 +65,21 @@ public class GraphEffectList extends EffectList {
      *
      * @param node The floating node to be added.
      */
-    public void addFloatingNode(ValueNode node, @SuppressWarnings("unused") String cause) {
+    public void addFloatingNode(final ValueNode node, @SuppressWarnings("unused") final String cause) {
         add("add floating node", graph -> graph.addWithoutUnique(node));
+    }
+
+    /**
+     * Adds an value to the given phi node.
+     *
+     * @param node The phi node to which the value should be added.
+     * @param value The value that will be added to the phi node.
+     */
+    public void addPhiInput(final PhiNode node, final ValueNode value) {
+        add("add phi input", graph -> {
+            assert node.isAlive() && value.isAlive() : node + " " + value;
+            node.addInput(value);
+        });
     }
 
     /**
@@ -89,7 +90,7 @@ public class GraphEffectList extends EffectList {
      * @param index The index of the phi input to be changed.
      * @param value The new value for the phi input.
      */
-    public void initializePhiInput(PhiNode node, int index, ValueNode value) {
+    public void initializePhiInput(final PhiNode node, final int index, final ValueNode value) {
         add("set phi input", (graph, obsoleteNodes) -> {
             assert node.isAlive() && value.isAlive() && index >= 0;
             node.initializeValueAt(index, value);
@@ -103,20 +104,18 @@ public class GraphEffectList extends EffectList {
      * @param node The frame state to which the state should be added.
      * @param state The virtual object state to add.
      */
-    public void addVirtualMapping(FrameState node, EscapeObjectState state) {
+    public void addVirtualMapping(final FrameState node, final EscapeObjectState state) {
         add("add virtual mapping", new Effect() {
             @Override
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                if (node.isAlive()) {
-                    assert !state.isDeleted();
-                    FrameState stateAfter = node;
-                    for (int i = 0; i < stateAfter.virtualObjectMappingCount(); i++) {
-                        if (stateAfter.virtualObjectMappingAt(i).object() == state.object()) {
-                            stateAfter.virtualObjectMappings().remove(i);
-                        }
+                assert node.isAlive() && !state.isDeleted();
+                FrameState stateAfter = node;
+                for (int i = 0; i < stateAfter.virtualObjectMappingCount(); i++) {
+                    if (stateAfter.virtualObjectMappingAt(i).object() == state.object()) {
+                        stateAfter.virtualObjectMappings().remove(i);
                     }
-                    stateAfter.addVirtualObjectMapping(state.isAlive() ? state : graph.unique(state));
                 }
+                stateAfter.addVirtualObjectMapping(state.isAlive() ? state : graph.unique(state));
             }
 
             @Override
@@ -131,37 +130,12 @@ public class GraphEffectList extends EffectList {
      *
      * @param node The fixed node that should be deleted.
      */
-    public void deleteNode(Node node) {
+    public void deleteNode(final Node node) {
         add("delete fixed node", (graph, obsoleteNodes) -> {
             if (node instanceof FixedWithNextNode) {
                 GraphUtil.unlinkFixedNode((FixedWithNextNode) node);
             }
             obsoleteNodes.add(node);
-        });
-    }
-
-    public void killIfBranch(IfNode ifNode, boolean constantCondition) {
-        add("kill if branch", new Effect() {
-            public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                graph.removeSplitPropagate(ifNode, ifNode.getSuccessor(constantCondition));
-            }
-
-            public boolean isCfgKill() {
-                return true;
-            }
-        });
-    }
-
-    public void replaceWithSink(FixedWithNextNode node, ControlSinkNode sink) {
-        add("kill if branch", new Effect() {
-            public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                node.replaceAtPredecessor(sink);
-                GraphUtil.killCFG(node);
-            }
-
-            public boolean isCfgKill() {
-                return true;
-            }
         });
     }
 
@@ -175,10 +149,9 @@ public class GraphEffectList extends EffectList {
      *            non-connected {@link FixedWithNextNode} it will be added to the control flow.
      *
      */
-    public void replaceAtUsages(ValueNode node, ValueNode replacement) {
-        assert node != null && replacement != null : node + " " + replacement;
+    public void replaceAtUsages(final ValueNode node, final ValueNode replacement) {
         add("replace at usages", (graph, obsoleteNodes) -> {
-            assert node.isAlive() && replacement.isAlive() : node + " " + replacement;
+            assert node.isAlive() && replacement.isAlive();
             if (replacement instanceof FixedWithNextNode && ((FixedWithNextNode) replacement).next() == null) {
                 assert node instanceof FixedNode;
                 graph.addBeforeFixed((FixedNode) node, (FixedWithNextNode) replacement);
@@ -198,15 +171,13 @@ public class GraphEffectList extends EffectList {
      * @param oldInput The value to look for.
      * @param newInput The value to replace with.
      */
-    public void replaceFirstInput(Node node, Node oldInput, Node newInput) {
+    public void replaceFirstInput(final Node node, final Node oldInput, final Node newInput) {
         assert node.isAlive() && oldInput.isAlive() && !newInput.isDeleted();
         add("replace first input", new Effect() {
             @Override
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                if (node.isAlive()) {
-                    assert oldInput.isAlive() && newInput.isAlive();
-                    node.replaceFirstInput(oldInput, newInput);
-                }
+                assert node.isAlive() && oldInput.isAlive() && newInput.isAlive();
+                node.replaceFirstInput(oldInput, newInput);
             }
 
             @Override
