@@ -57,7 +57,6 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.runtime.SLFunction;
 import java.util.List;
-import java.util.Map;
 
 public class SLJavaInteropTest {
 
@@ -196,7 +195,8 @@ public class SLJavaInteropTest {
                         new PairImpl("two", 2),
                         new PairImpl("three", 3),
         };
-        fn.execute(javaSum, arr);
+        TruffleObject truffleArr = JavaInterop.asTruffleObject(arr);
+        fn.execute(javaSum, truffleArr);
         assertEquals(6, javaSum.sum);
     }
 
@@ -220,54 +220,8 @@ public class SLJavaInteropTest {
                                         new PairImpl("three", 3),
                         }
         };
-        fn.execute(javaSum, arr);
-        assertEquals(6, javaSum.sum);
-    }
-
-    @Test
-    public void sumMapInArrayOfArray() {
-        String scriptText = "function values(sum, arr) {\n" + //
-                        "  sum.sumArrayMap(arr);\n" + //
-                        "}\n"; //
-        Source script = Source.newBuilder(scriptText).name("Test").mimeType("application/x-sl").build();
-        engine.eval(script);
-        PolyglotEngine.Value fn = engine.findGlobalSymbol("values");
-
-        Sum javaSum = new Sum();
-
-        PairImpl[][] arr = {
-                        new PairImpl[]{
-                                        new PairImpl("one", 1),
-                        },
-                        new PairImpl[]{
-                                        new PairImpl("two", 2),
-                                        new PairImpl("three", 3),
-                        }
-        };
-        fn.execute(javaSum, arr);
-        assertEquals(6, javaSum.sum);
-    }
-
-    @Test
-    public void sumPairInMapOfArray() {
-        String scriptText = "function values(sum, arr) {\n" + //
-                        "  sum.sumMapArray(arr);\n" + //
-                        "}\n"; //
-        Source script = Source.newBuilder(scriptText).name("Test").mimeType("application/x-sl").build();
-        engine.eval(script);
-        PolyglotEngine.Value fn = engine.findGlobalSymbol("values");
-
-        Sum javaSum = new Sum();
-
-        TwoPairsImpl groups = new TwoPairsImpl(
-                        new PairImpl[]{
-                                        new PairImpl("one", 1),
-                        },
-                        new PairImpl[]{
-                                        new PairImpl("two", 2),
-                                        new PairImpl("three", 3),
-                        });
-        fn.execute(javaSum, groups);
+        TruffleObject truffleArr = JavaInterop.asTruffleObject(arr);
+        fn.execute(javaSum, truffleArr);
         assertEquals(6, javaSum.sum);
     }
 
@@ -299,16 +253,6 @@ public class SLJavaInteropTest {
         }
     }
 
-    public static final class TwoPairsImpl {
-        public final PairImpl[] one;
-        public final PairImpl[] two;
-
-        TwoPairsImpl(PairImpl[] one, PairImpl[] two) {
-            this.one = one;
-            this.two = two;
-        }
-    }
-
     public static class Sum {
         int sum;
 
@@ -331,29 +275,6 @@ public class SLJavaInteropTest {
             for (List<Pair> list : pairs) {
                 sumArray(list);
             }
-        }
-
-        public void sumArrayMap(List<List<Map<String, Integer>>> pairs) {
-            Object[] arr = pairs.toArray();
-            assertNotNull("Array created", arr);
-            assertEquals("Two lists", 2, arr.length);
-            for (List<Map<String, Integer>> list : pairs) {
-                for (Map<String, Integer> map : list) {
-                    Integer value = map.get("value");
-                    sum += value;
-                }
-            }
-        }
-
-        public void sumMapArray(Map<String, List<Pair>> pairs) {
-            assertEquals("Two elements", 2, pairs.size());
-            Object one = pairs.get("one");
-            assertNotNull(one);
-            Object two = pairs.get("two");
-            assertNotNull(two);
-
-            sumArray(pairs.get("two"));
-            sumArray(pairs.get("one"));
         }
     }
 }
