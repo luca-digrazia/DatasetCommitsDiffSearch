@@ -82,8 +82,10 @@ public class LLVM {
         for (int i = 1; i < args.length; i++) {
             otherArgs[i - 1] = args[i];
         }
-        int status = executeMain(file, otherArgs);
-        System.exit(status);
+        int result = executeMain(file, otherArgs);
+        if (LLVMOptions.isPrintRetVal()) {
+            System.out.println("result : " + result);
+        }
     }
 
     public interface NodeFactoryFacadeProvider {
