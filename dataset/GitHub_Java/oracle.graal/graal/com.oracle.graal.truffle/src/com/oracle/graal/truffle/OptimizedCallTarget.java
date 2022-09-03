@@ -75,7 +75,6 @@ import com.oracle.truffle.api.utilities.ValueProfile;
  * Call target that is optimized by Graal upon surpassing a specific invocation threshold.
  */
 public class OptimizedCallTarget extends InstalledCode implements RootCallTarget, LoopCountReceiver, ReplaceObserver {
-    private static final RootNode UNINITIALIZED = RootNode.createConstantNode(null);
 
     protected final GraalTruffleRuntime runtime;
     private SpeculationLog speculationLog;
@@ -90,8 +89,8 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     @CompilationFinal private Class<?> profiledReturnType;
     @CompilationFinal private Assumption profiledReturnTypeAssumption;
 
+    private final RootNode uninitializedRootNode;
     private final RootNode rootNode;
-    private volatile RootNode uninitializedRootNode = UNINITIALIZED;
 
     /* Experimental fields for new splitting. */
     private final Map<TruffleStamp, OptimizedCallTarget> splitVersions = new HashMap<>();
@@ -100,7 +99,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private TruffleInlining inlining;
     private int cachedNonTrivialNodeCount = -1;
     private boolean compiling;
-    private int cloneIndex;
 
     /**
      * When this call target is inlined, the inlining {@link InstalledCode} registers this
@@ -122,6 +120,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         this.compilationPolicy = compilationPolicy;
         this.rootNode.adoptChildren();
         this.rootNode.applyInstrumentation();
+        this.uninitializedRootNode = sourceCallTarget == null ? cloneRootNode(rootNode) : sourceCallTarget.uninitializedRootNode;
         if (TruffleCallTargetProfiling.getValue()) {
             this.compilationProfile = new TraceCompilationProfile();
         } else {
@@ -157,12 +156,13 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return argumentStamp;
     }
 
+    private int cloneIndex;
+
     public int getCloneIndex() {
         return cloneIndex;
     }
 
     public OptimizedCallTarget cloneUninitialized() {
-        ensureCloned();
         RootNode copiedRoot = cloneRootNode(uninitializedRootNode);
         if (copiedRoot == null) {
             return null;
@@ -170,16 +170,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         OptimizedCallTarget splitTarget = (OptimizedCallTarget) runtime.createClonedCallTarget(this, copiedRoot);
         splitTarget.cloneIndex = cloneIndex++;
         return splitTarget;
-    }
-
-    private void ensureCloned() {
-        if (uninitializedRootNode == UNINITIALIZED) {
-            synchronized (this) {
-                if (uninitializedRootNode == UNINITIALIZED) {
-                    this.uninitializedRootNode = sourceCallTarget == null ? cloneRootNode(rootNode) : sourceCallTarget.uninitializedRootNode;
-                }
-            }
-        }
     }
 
     public Map<TruffleStamp, OptimizedCallTarget> getSplitVersions() {
@@ -368,9 +358,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             // Stubs were deoptimized => reinstall.
             this.runtime.reinstallStubs();
         } else {
-            if (uninitializedRootNode == UNINITIALIZED) {
-                ensureCloned();
-            }
             compilationProfile.reportInterpreterCall();
             if (!isCompiling() && compilationPolicy.shouldCompile(compilationProfile, getCompilerOptions())) {
                 compile();
@@ -381,7 +368,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     public final void compile() {
         if (!isCompiling()) {
             compiling = true;
-            ensureCloned();
             runtime.compile(this, TruffleBackgroundCompilation.getValue() && !TruffleCompilationExceptionsAreThrown.getValue());
         }
     }
@@ -606,15 +592,5 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             }
             return true;
         }
-    }
-
-    @Override
-    public final boolean equals(Object obj) {
-        return obj == this;
-    }
-
-    @Override
-    public final int hashCode() {
-        return System.identityHashCode(this);
     }
 }
