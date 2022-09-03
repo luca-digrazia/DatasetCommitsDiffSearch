@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,44 @@
  */
 package com.oracle.graal.phases.tiers;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.util.*;
-import com.oracle.jvmci.meta.*;
 
 public class HighTierContext extends PhaseContext {
 
-    private final PhaseSuite<HighTierContext> graphBuilderSuite;
+    private final PhasePlan plan;
 
+    private final GraphCache cache;
     private final OptimisticOptimizations optimisticOpts;
 
-    private SpeculationLog speculationLog;
-
-    public HighTierContext(Providers providers, PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, SpeculationLog speculationLog) {
-        super(providers);
-        this.graphBuilderSuite = graphBuilderSuite;
+    public HighTierContext(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, LoweringProvider lowerer, Replacements replacements, Assumptions assumptions,
+                    GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+        super(metaAccess, constantReflection, lowerer, replacements, assumptions);
+        this.plan = plan;
+        this.cache = cache;
         this.optimisticOpts = optimisticOpts;
-        this.speculationLog = speculationLog;
     }
 
-    public PhaseSuite<HighTierContext> getGraphBuilderSuite() {
-        return graphBuilderSuite;
+    public HighTierContext(Providers providers, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+        this(providers.getMetaAccess(), providers.getConstantReflection(), providers.getLowerer(), providers.getReplacements(), assumptions, cache, plan, optimisticOpts);
+    }
+
+    public PhasePlan getPhasePlan() {
+        return plan;
+    }
+
+    public GraphCache getGraphCache() {
+        return cache;
     }
 
     public OptimisticOptimizations getOptimisticOptimizations() {
         return optimisticOpts;
     }
 
-    public SpeculationLog getSpeculationLog() {
-        return speculationLog;
+    public HighTierContext replaceAssumptions(Assumptions newAssumptions) {
+        return new HighTierContext(getMetaAccess(), getConstantReflection(), getLowerer(), getReplacements(), newAssumptions, getGraphCache(), getPhasePlan(), getOptimisticOptimizations());
     }
 }

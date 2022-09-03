@@ -25,47 +25,45 @@ package com.oracle.graal.phases.tiers;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.util.*;
 
 public class PhaseContext {
 
     private final MetaAccessProvider metaAccess;
-    private final CodeCacheProvider codeCache;
-    private final LoweringProvider lowerer;
     private final ConstantReflectionProvider constantReflection;
-    private final Assumptions assumptions;
+    private final LoweringProvider lowerer;
     private final Replacements replacements;
+    private final Assumptions assumptions;
 
-    public PhaseContext(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, LoweringProvider lowerer, Assumptions assumptions,
-                    Replacements replacements) {
+    public PhaseContext(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, LoweringProvider lowerer, Replacements replacements, Assumptions assumptions) {
         this.metaAccess = metaAccess;
-        this.codeCache = codeCache;
         this.constantReflection = constantReflection;
         this.lowerer = lowerer;
-        this.assumptions = assumptions;
         this.replacements = replacements;
+        this.assumptions = assumptions;
+    }
+
+    public PhaseContext(Providers providers, Assumptions assumptions) {
+        this(providers.getMetaAccess(), providers.getConstantReflection(), providers.getLowerer(), providers.getReplacements(), assumptions);
     }
 
     public MetaAccessProvider getMetaAccess() {
         return metaAccess;
     }
 
-    public CodeCacheProvider getCodeCache() {
-        return codeCache;
+    public ConstantReflectionProvider getConstantReflection() {
+        return constantReflection;
     }
 
     public LoweringProvider getLowerer() {
         return lowerer;
     }
 
-    public Assumptions getAssumptions() {
-        return assumptions;
-    }
-
-    public ConstantReflectionProvider getConstantReflection() {
-        return constantReflection;
-    }
-
     public Replacements getReplacements() {
         return replacements;
+    }
+
+    public Assumptions getAssumptions() {
+        return assumptions;
     }
 }
