@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,50 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import static com.oracle.graal.graph.iterators.NodePredicates.isNotA;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.graph.spi.SimplifierTool;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.calc.AddNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.util.GraphUtil;
 
+@NodeInfo
+public final class LoopBeginNode extends AbstractMergeNode implements IterableNodeType, LIRLowerable {
 
-public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, LIRLowerable {
-    private double loopFrequency;
-    private int nextEndIndex;
+    public static final NodeClass<LoopBeginNode> TYPE = NodeClass.create(LoopBeginNode.class);
+    protected double loopFrequency;
+    protected int nextEndIndex;
+    protected int unswitches;
+    protected int inversionCount;
+
+    /** See {@link LoopEndNode#canSafepoint} for more information. */
+    boolean canEndsSafepoint;
+
+    @OptionalInput(InputType.Guard) GuardingNode overflowGuard;
 
     public LoopBeginNode() {
+        super(TYPE);
         loopFrequency = 1;
+        this.canEndsSafepoint = true;
+    }
+
+    /** Disables safepoint for the whole loop, i.e., for all {@link LoopEndNode loop ends}. */
+    public void disableSafepoint() {
+        /* Store flag locally in case new loop ends are created later on. */
+        this.canEndsSafepoint = false;
+        /* Propagate flag to all existing loop ends. */
+        for (LoopEndNode loopEnd : loopEnds()) {
+            loopEnd.disableSafepoint();
+        }
     }
 
     public double loopFrequency() {
@@ -42,36 +73,67 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
     }
 
     public void setLoopFrequency(double loopFrequency) {
+        assert loopFrequency >= 0;
         this.loopFrequency = loopFrequency;
     }
 
+    /**
+     * Returns the <b>unordered</b> set of {@link LoopEndNode} that correspond to back-edges for
+     * this loop. The order of the back-edges is unspecified, if you need to get an ordering
+     * compatible for {@link PhiNode} creation, use {@link #orderedLoopEnds()}.
+     *
+     * @return the set of {@code LoopEndNode} that correspond to back-edges for this loop
+     */
     public NodeIterable<LoopEndNode> loopEnds() {
         return usages().filter(LoopEndNode.class);
     }
 
-    public List<LoopEndNode> orderedLoopEnds() {
-        List<LoopEndNode> snapshot = usages().filter(LoopEndNode.class).snapshot();
-        Collections.sort(snapshot, new Comparator<LoopEndNode>() {
-            @Override
-            public int compare(LoopEndNode o1, LoopEndNode o2) {
-                return o1.endIndex() - o2.endIndex();
-            }
-        });
-        return snapshot;
+    public NodeIterable<LoopExitNode> loopExits() {
+        return usages().filter(LoopExitNode.class);
     }
 
-    public EndNode forwardEnd() {
+    @Override
+    public NodeIterable<Node> anchored() {
+        return super.anchored().filter(isNotA(LoopEndNode.class).nor(LoopExitNode.class));
+    }
+
+    /**
+     * Returns the set of {@link LoopEndNode} that correspond to back-edges for this loop, in
+     * increasing {@link #phiPredecessorIndex} order. This method is suited to create new loop
+     * {@link PhiNode}.<br>
+     *
+     * For example a new PhiNode may be added as follow:
+     *
+     * <pre>
+     * PhiNode phi = new ValuePhiNode(stamp, loop);
+     * phi.addInput(forwardEdgeValue);
+     * for (LoopEndNode loopEnd : loop.orderedLoopEnds()) {
+     *     phi.addInput(backEdgeValue(loopEnd));
+     * }
+     * </pre>
+     *
+     * @return the set of {@code LoopEndNode} that correspond to back-edges for this loop
+     */
+    public LoopEndNode[] orderedLoopEnds() {
+        LoopEndNode[] result = new LoopEndNode[this.getLoopEndCount()];
+        for (LoopEndNode end : loopEnds()) {
+            result[end.endIndex()] = end;
+        }
+        return result;
+    }
+
+    public AbstractEndNode forwardEnd() {
         assert forwardEndCount() == 1;
         return forwardEndAt(0);
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
+    public void generate(NodeLIRBuilderTool gen) {
         // Nothing to emit, since this is node is used for structural purposes only.
     }
 
     @Override
-    protected void deleteEnd(EndNode end) {
+    protected void deleteEnd(AbstractEndNode end) {
         if (end instanceof LoopEndNode) {
             LoopEndNode loopEnd = (LoopEndNode) end;
             loopEnd.setLoopBegin(null);
@@ -95,7 +157,7 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
     }
 
     @Override
-    public int phiPredecessorIndex(EndNode pred) {
+    public int phiPredecessorIndex(AbstractEndNode pred) {
         if (pred instanceof LoopEndNode) {
             LoopEndNode loopEnd = (LoopEndNode) pred;
             if (loopEnd.loopBegin() == this) {
@@ -103,13 +165,13 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
                 return loopEnd.endIndex() + forwardEndCount();
             }
         } else {
-            return super.forwardEndIndex(pred);
+            return super.forwardEndIndex((EndNode) pred);
         }
-        throw ValueUtil.shouldNotReachHere("unknown pred : " + pred);
+        throw ValueNodeUtil.shouldNotReachHere("unknown pred : " + pred);
     }
 
     @Override
-    public EndNode phiPredecessorAt(int index) {
+    public AbstractEndNode phiPredecessorAt(int index) {
         if (index < forwardEndCount()) {
             return forwardEndAt(index);
         }
@@ -120,7 +182,7 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
                 return end;
             }
         }
-        throw ValueUtil.shouldNotReachHere();
+        throw ValueNodeUtil.shouldNotReachHere();
     }
 
     @Override
@@ -129,19 +191,136 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
         return super.verify();
     }
 
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("loopFrequency", String.format("%7.1f", loopFrequency));
-        return properties;
+    int nextEndIndex() {
+        return nextEndIndex++;
     }
 
-    public int nextEndIndex() {
-        return nextEndIndex++;
+    public int getLoopEndCount() {
+        return nextEndIndex;
+    }
+
+    public int unswitches() {
+        return unswitches;
+    }
+
+    public void incrementUnswitches() {
+        unswitches++;
+    }
+
+    public int getInversionCount() {
+        return inversionCount;
+    }
+
+    public void setInversionCount(int count) {
+        inversionCount = count;
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
-        // nothing yet
+        canonicalizePhis(tool);
+    }
+
+    public boolean isLoopExit(AbstractBeginNode begin) {
+        return begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == this;
+    }
+
+    public void removeExits() {
+        for (LoopExitNode loopexit : loopExits().snapshot()) {
+            loopexit.removeProxies();
+            FrameState loopStateAfter = loopexit.stateAfter();
+            graph().replaceFixedWithFixed(loopexit, graph().add(new BeginNode()));
+            if (loopStateAfter != null && loopStateAfter.isAlive() && loopStateAfter.hasNoUsages()) {
+                GraphUtil.killWithUnusedFloatingInputs(loopStateAfter);
+            }
+        }
+    }
+
+    public GuardingNode getOverflowGuard() {
+        return overflowGuard;
+    }
+
+    public void setOverflowGuard(GuardingNode overflowGuard) {
+        updateUsagesInterface(this.overflowGuard, overflowGuard);
+        this.overflowGuard = overflowGuard;
+    }
+
+    private static final int NO_INCREMENT = Integer.MIN_VALUE;
+
+    /**
+     * Returns an array with one entry for each input of the phi, which is either
+     * {@link #NO_INCREMENT} or the increment, i.e., the value by which the phi is incremented in
+     * the corresponding branch.
+     */
+    private static int[] getSelfIncrements(PhiNode phi) {
+        int[] selfIncrement = new int[phi.valueCount()];
+        for (int i = 0; i < phi.valueCount(); i++) {
+            ValueNode input = phi.valueAt(i);
+            long increment = NO_INCREMENT;
+            if (input != null && input instanceof AddNode && input.stamp() instanceof IntegerStamp) {
+                AddNode add = (AddNode) input;
+                if (add.getX() == phi && add.getY().isConstant()) {
+                    increment = add.getY().asJavaConstant().asLong();
+                } else if (add.getY() == phi && add.getX().isConstant()) {
+                    increment = add.getX().asJavaConstant().asLong();
+                }
+            } else if (input == phi) {
+                increment = 0;
+            }
+            if (increment < Integer.MIN_VALUE || increment > Integer.MAX_VALUE || increment == NO_INCREMENT) {
+                increment = NO_INCREMENT;
+            }
+            selfIncrement[i] = (int) increment;
+        }
+        return selfIncrement;
+    }
+
+    /**
+     * Coalesces loop phis that represent the same value (which is not handled by normal Global
+     * Value Numbering).
+     */
+    public void canonicalizePhis(SimplifierTool tool) {
+        int phiCount = phis().count();
+        if (phiCount > 1) {
+            int phiInputCount = phiPredecessorCount();
+            int phiIndex = 0;
+            int[][] selfIncrement = new int[phiCount][];
+            PhiNode[] phis = this.phis().snapshot().toArray(new PhiNode[phiCount]);
+
+            for (phiIndex = 0; phiIndex < phiCount; phiIndex++) {
+                PhiNode phi = phis[phiIndex];
+                if (phi != null) {
+                    nextPhi: for (int otherPhiIndex = phiIndex + 1; otherPhiIndex < phiCount; otherPhiIndex++) {
+                        PhiNode otherPhi = phis[otherPhiIndex];
+                        if (otherPhi == null || phi.getNodeClass() != otherPhi.getNodeClass() || !phi.valueEquals(otherPhi)) {
+                            continue nextPhi;
+                        }
+                        if (selfIncrement[phiIndex] == null) {
+                            selfIncrement[phiIndex] = getSelfIncrements(phi);
+                        }
+                        if (selfIncrement[otherPhiIndex] == null) {
+                            selfIncrement[otherPhiIndex] = getSelfIncrements(otherPhi);
+                        }
+                        int[] phiIncrement = selfIncrement[phiIndex];
+                        int[] otherPhiIncrement = selfIncrement[otherPhiIndex];
+                        for (int inputIndex = 0; inputIndex < phiInputCount; inputIndex++) {
+                            if (phiIncrement[inputIndex] == NO_INCREMENT) {
+                                if (phi.valueAt(inputIndex) != otherPhi.valueAt(inputIndex)) {
+                                    continue nextPhi;
+                                }
+                            }
+                            if (phiIncrement[inputIndex] != otherPhiIncrement[inputIndex]) {
+                                continue nextPhi;
+                            }
+                        }
+                        if (tool != null) {
+                            tool.addToWorkList(otherPhi.usages());
+                        }
+                        otherPhi.replaceAtUsages(phi);
+                        GraphUtil.killWithUnusedFloatingInputs(otherPhi);
+                        phis[otherPhiIndex] = null;
+                    }
+                }
+            }
+        }
     }
 }

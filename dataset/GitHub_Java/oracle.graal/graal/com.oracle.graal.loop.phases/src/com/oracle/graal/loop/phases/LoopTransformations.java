@@ -61,13 +61,12 @@ public abstract class LoopTransformations {
         // assert loop.isCounted(); //TODO (gd) strenghten : counted with known trip count
         LoopBeginNode loopBegin = loop.loopBegin();
         StructuredGraph graph = loopBegin.graph();
-        int initialNodeCount = graph.getNodeCount();
         while (!loopBegin.isDeleted()) {
             Mark mark = graph.getMark();
             peel(loop);
             canonicalizer.applyIncremental(graph, context, mark);
             loop.invalidateFragments();
-            if (graph.getNodeCount() > initialNodeCount + MaximumDesiredSize.getValue() * 2) {
+            if (graph.getNodeCount() > MaximumDesiredSize.getValue() * 3) {
                 throw new BailoutException("FullUnroll : Graph seems to grow out of proportion");
             }
         }
