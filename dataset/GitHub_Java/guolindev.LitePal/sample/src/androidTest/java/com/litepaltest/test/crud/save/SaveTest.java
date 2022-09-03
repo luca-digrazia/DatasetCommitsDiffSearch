@@ -7,15 +7,12 @@ import com.litepaltest.model.IdCard;
 import com.litepaltest.model.Product;
 import com.litepaltest.model.Student;
 import com.litepaltest.model.Teacher;
-import com.litepaltest.model.WeChatMessage;
-import com.litepaltest.model.WeiboMessage;
 import com.litepaltest.test.LitePalTestCase;
 
 import junit.framework.Assert;
 
 import org.litepal.crud.DataSupport;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -207,96 +204,6 @@ public class SaveTest extends LitePalTestCase {
         assertFalse(cell.saveIfNotExist("serial = ?", serial));
         List<Cellphone> cellphoneList = DataSupport.where("serial = ?", serial).find(Cellphone.class);
         assertEquals(1, cellphoneList.size());
-    }
-
-    public void testSaveInheritModels() {
-        WeChatMessage weChatMessage = new WeChatMessage();
-        weChatMessage.setFriend("Tom");
-        weChatMessage.setContent("Hello nice to meet you");
-        weChatMessage.setTitle("Greeting message");
-        weChatMessage.setType(1);
-        assertTrue(weChatMessage.save());
-        assertTrue(weChatMessage.getId() > 0);
-        WeChatMessage message1 = DataSupport.find(WeChatMessage.class, weChatMessage.getId());
-        assertEquals("Tom", message1.getFriend());
-        assertEquals("Hello nice to meet you", message1.getContent());
-        assertNull(message1.getTitle());
-        assertEquals(1, message1.getType());
-
-        WeiboMessage weiboMessage = new WeiboMessage();
-        weiboMessage.setType(2);
-        weiboMessage.setTitle("Following message");
-        weiboMessage.setContent("Something big happens");
-        weiboMessage.setFollower("Jimmy");
-        weiboMessage.setNumber(123456);
-        assertTrue(weiboMessage.saveFast());
-        assertTrue(weiboMessage.getId() > 0);
-    }
-
-    public void testSaveInheritModelsWithAssociations() {
-        Cellphone cellphone = new Cellphone();
-        cellphone.setBrand("iPhone 7");
-        cellphone.setInStock('N');
-        cellphone.setPrice(6999.99);
-        cellphone.setSerial(UUID.randomUUID().toString());
-        cellphone.setMac("ff:3d:4a:99:76");
-        cellphone.save();
-
-        WeChatMessage weChatMessage = new WeChatMessage();
-        weChatMessage.setFriend("Tom");
-        weChatMessage.setContent("Hello nice to meet you");
-        weChatMessage.setTitle("Greeting message");
-        weChatMessage.setType(1);
-        assertTrue(weChatMessage.save());
-        assertTrue(weChatMessage.getId() > 0);
-        WeChatMessage message1 = DataSupport.find(WeChatMessage.class, weChatMessage.getId());
-        assertEquals("Tom", message1.getFriend());
-        assertEquals("Hello nice to meet you", message1.getContent());
-        assertNull(message1.getTitle());
-        assertEquals(1, message1.getType());
-
-        WeiboMessage weiboMessage = new WeiboMessage();
-        weiboMessage.setType(2);
-        weiboMessage.setTitle("Following message");
-        weiboMessage.setContent("Something big happens");
-        weiboMessage.setFollower("Jimmy");
-        weiboMessage.setNumber(123456);
-        weiboMessage.setCellphone(cellphone);
-        assertTrue(weiboMessage.save());
-        assertTrue(weiboMessage.getId() > 0);
-        WeiboMessage message2 = DataSupport.find(WeiboMessage.class, weiboMessage.getId(), true);
-        Cellphone result = message2.getCellphone();
-        assertEquals(cellphone.getId(), result.getId());
-        assertEquals(cellphone.getBrand(), result.getBrand());
-        assertEquals(cellphone.getInStock(), result.getInStock());
-        assertEquals(cellphone.getPrice(), result.getPrice());
-        assertEquals(cellphone.getSerial(), result.getSerial());
-        assertEquals(cellphone.getMac(), result.getMac());
-    }
-
-    public void testSaveGenericData() {
-        Classroom classroom = new Classroom();
-        classroom.setName("classroom1");
-        classroom.getNews().add("news1");
-        classroom.getNews().add("news2");
-        classroom.getNews().add("news3");
-        List<Integer> numbers = new ArrayList<>();
-        numbers.add(1);
-        numbers.add(2);
-        numbers.add(3);
-        numbers.add(4);
-        classroom.setNumbers(numbers);
-        classroom.save();
-        Classroom c = DataSupport.find(Classroom.class, classroom.get_id());
-        assertEquals("classroom1", c.getName());
-        assertEquals(3, c.getNews().size());
-        assertEquals(4, c.getNumbers().size());
-        for (String news : c.getNews()) {
-            assertTrue(news.equals("news1") || news.equals("news2") || news.equals("news3"));
-        }
-        for (int number : c.getNumbers()) {
-            assertTrue(number == 1 || number == 2 || number == 3 || number == 4);
-        }
     }
 
 }
