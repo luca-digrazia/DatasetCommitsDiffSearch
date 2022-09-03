@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -72,8 +72,16 @@ import org.graalvm.compiler.phases.VerifyPhase;
 import org.graalvm.compiler.phases.VerifyPhase.VerificationError;
 import org.graalvm.compiler.phases.contract.VerifyNodeCosts;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
-import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.phases.util.Providers;
+import org.graalvm.compiler.phases.verify.VerifyBailoutUsage;
+import org.graalvm.compiler.phases.verify.VerifyCallerSensitiveMethods;
+import org.graalvm.compiler.phases.verify.VerifyDebugUsage;
+import org.graalvm.compiler.phases.verify.VerifyGetOptionsUsage;
+import org.graalvm.compiler.phases.verify.VerifyGraphAddUsage;
+import org.graalvm.compiler.phases.verify.VerifyInstanceOfUsage;
+import org.graalvm.compiler.phases.verify.VerifyUpdateUsages;
+import org.graalvm.compiler.phases.verify.VerifyUsageWithEquals;
+import org.graalvm.compiler.phases.verify.VerifyVirtualizableUsage;
 import org.graalvm.compiler.runtime.RuntimeProvider;
 import org.graalvm.word.LocationIdentity;
 import org.junit.Assert;
