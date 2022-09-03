@@ -29,132 +29,63 @@
  */
 package com.oracle.truffle.llvm.runtime.options;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.nio.file.Paths;
 import java.util.ServiceLoader;
-import java.util.stream.Collectors;
 
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.option.OptionSummary;
 
-public class LLVMOptions {
+public final class LLVMOptions {
 
-    public static void main(String[] args) {
-        for (PropertyCategory category : PropertyCategory.values()) {
-            List<LLVMOption> props = registeredProperties.stream().filter(option -> option.getCategory() == category).collect(Collectors.toList());
-            if (!props.isEmpty()) {
-                LLVMLogger.unconditionalInfo(category + ":");
-                for (LLVMOption prop : props) {
-                    LLVMLogger.unconditionalInfo(prop.toString());
-                }
-                LLVMLogger.unconditionalInfo("");
-            }
-        }
-    }
-
-    static final String PATH_DELIMITER = ":";
-    static final String OPTION_PREFIX = "sulong.";
-    private static final String OBSOLETE_OPTION_PREFIX = "llvm.";
-
-    @FunctionalInterface
-    interface OptionParser {
-        Object parse(LLVMOption property);
-    }
-
-    static boolean parseBoolean(LLVMOption prop) {
-        return Boolean.parseBoolean(System.getProperty(prop.getKey(), prop.getDefaultValue()));
-    }
-
-    static String parseString(LLVMOption prop) {
-        return System.getProperty(prop.getKey(), prop.getDefaultValue());
-    }
-
-    static int parseInteger(LLVMOption prop) {
-        return Integer.parseInt(System.getProperty(prop.getKey(), prop.getDefaultValue()));
-    }
-
-    static String[] parseDynamicLibraryPath(LLVMOption prop) {
-        String property = System.getProperty(prop.getKey(), prop.getDefaultValue());
-        if (property == null) {
-            return new String[0];
-        } else {
-            return property.split(PATH_DELIMITER);
-        }
-    }
-
-    public enum PropertyCategory {
-        GENERAL,
-        DEBUG,
-        PERFORMANCE,
-        TESTS,
-        MX;
-
-    }
-
-    private static Map<LLVMOption, Object> parsedProperties = new HashMap<>();
-    private static final List<LLVMOption> registeredProperties = new ArrayList<>();
+    public static final SulongEngineOptionGen ENGINE = SulongEngineOptionGen.create();
+    public static final SulongDebugOptionGen DEBUG = SulongDebugOptionGen.create();
 
     static {
         registerOptions();
-        parseOptions();
-        checkForInvalidOptionNames();
-        checkForObsoleteOptionPrefix();
+        OptionSummary.checkForInvalidOptionNames();
     }
 
     private static void registerOptions() {
-        registeredProperties.addAll(Arrays.asList(Property.values()));
         ServiceLoader<LLVMOptionServiceProvider> loader = ServiceLoader.load(LLVMOptionServiceProvider.class);
         for (LLVMOptionServiceProvider definitions : loader) {
-            registeredProperties.addAll(definitions.getOptions());
+            definitions.getClass(); // ensure class is loaded.
         }
     }
 
-    private static void checkForInvalidOptionNames() {
-        boolean wrongOptionName = false;
-        Properties allProperties = System.getProperties();
-        for (String key : allProperties.stringPropertyNames()) {
-            if (key.startsWith(OPTION_PREFIX)) {
-                if (Property.fromKey(key) == null) {
-                    wrongOptionName = true;
-                    LLVMLogger.error(key + " is an invalid option!");
-                }
+    public static void main(String[] args) {
+        OptionSummary.printOptions();
+    }
+
+    public static String[] getNativeLibraries() {
+        String graalHome = System.getProperty("graalvm.home");
+        String[] userLibraries = LLVMOptions.ENGINE.dynamicNativeLibraryPath();
+        if (graalHome != null) {
+            String defaultPath;
+            if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+                defaultPath = Paths.get(graalHome, "language", "llvm", "libsulong.dylib").toAbsolutePath().toString();
+            } else {
+                defaultPath = Paths.get(graalHome, "language", "llvm", "libsulong.so").toAbsolutePath().toString();
             }
-        }
-        if (wrongOptionName) {
-            LLVMLogger.error("\nvalid options:");
-            printOptions();
-            System.exit(-1);
-        }
-    }
-
-    private static void printOptions() {
-        LLVMOptions.main(new String[0]);
-    }
-
-    private static void checkForObsoleteOptionPrefix() {
-        Properties allProperties = System.getProperties();
-        for (String key : allProperties.stringPropertyNames()) {
-            if (key.startsWith(OBSOLETE_OPTION_PREFIX)) {
-                LLVMLogger.error(
-                                "The prefix '" + OBSOLETE_OPTION_PREFIX + "' in option '" + key + "' is an obsolete option prefix and has been replaced by the prefix '" + OPTION_PREFIX + "':");
-                printOptions();
-                System.exit(-1);
-            }
+            String[] prependedUserLibraries = new String[userLibraries.length + 1];
+            System.arraycopy(userLibraries, 0, prependedUserLibraries, 1, userLibraries.length);
+            prependedUserLibraries[0] = defaultPath;
+            return prependedUserLibraries;
+        } else {
+            return userLibraries;
         }
     }
 
-    private static void parseOptions() {
-        for (LLVMOption prop : registeredProperties) {
-            parsedProperties.put(prop, prop.parse());
+    public static String[] getBitcodeLibraries() {
+        String graalHome = System.getProperty("graalvm.home");
+        String[] userLibraries = LLVMOptions.ENGINE.dynamicBitcodeLibraries();
+        if (graalHome != null) {
+            String defaultPath = Paths.get(graalHome, "language", "llvm", "libsulong.bc").toAbsolutePath().toString();
+            String[] prependedUserLibraries = new String[userLibraries.length + 1];
+            System.arraycopy(userLibraries, 0, prependedUserLibraries, 1, userLibraries.length);
+            prependedUserLibraries[0] = defaultPath;
+            return prependedUserLibraries;
+        } else {
+            return userLibraries;
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <T> T getParsedProperty(Property property) {
-        return (T) parsedProperties.get(property);
     }
 
 }
