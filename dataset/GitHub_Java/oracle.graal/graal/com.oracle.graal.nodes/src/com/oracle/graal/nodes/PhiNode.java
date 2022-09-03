@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,85 +22,92 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Association;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import java.util.Iterator;
+
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.calc.FloatingNode;
 
 /**
- * The {@code PhiNode} represents the merging of dataflow in the graph. It refers to a merge
- * and a variable.
+ * {@code PhiNode}s represent the merging of edges at a control flow merges (
+ * {@link AbstractMergeNode} or {@link LoopBeginNode}). For a {@link AbstractMergeNode}, the order
+ * of the values corresponds to the order of the ends. For {@link LoopBeginNode}s, the first value
+ * corresponds to the loop's predecessor, while the rest of the values correspond to the
+ * {@link LoopEndNode}s.
  */
-public final class PhiNode extends FloatingNode implements Canonicalizable, Node.IterableNodeType {
+@NodeInfo(cycles = CYCLES_0, size = SIZE_1)
+public abstract class PhiNode extends FloatingNode implements Canonicalizable {
 
-    @Input(notDataflow = true) private MergeNode merge;
+    public static final NodeClass<PhiNode> TYPE = NodeClass.create(PhiNode.class);
+    @Input(Association) protected AbstractMergeNode merge;
 
-    @Input private final NodeInputList<ValueNode> values = new NodeInputList<>(this);
-
-    public MergeNode merge() {
-        return merge;
-    }
-
-    public static enum PhiType {
-        Value, // normal value phis
-        Memory, // memory phis
-        Virtual // phis used for VirtualObjectField merges
-    }
-
-    private final PhiType type;
-
-    public PhiNode(CiKind kind, MergeNode merge, PhiType type) {
-        super(StampFactory.forKind(kind));
-        this.type = type;
+    protected PhiNode(NodeClass<? extends PhiNode> c, Stamp stamp, AbstractMergeNode merge) {
+        super(c, stamp);
         this.merge = merge;
     }
 
-    public PhiType type() {
-        return type;
+    public abstract NodeInputList<ValueNode> values();
+
+    public AbstractMergeNode merge() {
+        return merge;
     }
 
-    public NodeInputList<ValueNode> values() {
-        return values;
-    }
-
-    public boolean inferStamp() {
-        Stamp newStamp = StampFactory.or(values());
-        if (stamp().equals(newStamp)) {
-            return false;
-        } else {
-            setStamp(newStamp);
-            return true;
-        }
+    public void setMerge(AbstractMergeNode x) {
+        updateUsages(merge, x);
+        merge = x;
     }
 
     @Override
     public boolean verify() {
         assertTrue(merge() != null, "missing merge");
         assertTrue(merge().phiPredecessorCount() == valueCount(), "mismatch between merge predecessor count and phi value count: %d != %d", merge().phiPredecessorCount(), valueCount());
-        if (type == PhiType.Value) {
-            for (ValueNode v : values()) {
-                assertTrue(v.kind() == kind(), "all phi values must have same kind");
-            }
-        }
         return super.verify();
     }
 
     /**
-     * Get the instruction that produces the value associated with the i'th predecessor of the merge.
+     * Get the instruction that produces the value associated with the i'th predecessor of the
+     * merge.
      *
      * @param i the index of the predecessor
      * @return the instruction that produced the value in the i'th predecessor
      */
     public ValueNode valueAt(int i) {
-        return values.get(i);
+        return values().get(i);
+    }
+
+    /**
+     * Sets the value at the given index and makes sure that the values list is large enough.
+     *
+     * @param i the index at which to set the value
+     * @param x the new phi input value for the given location
+     */
+    public void initializeValueAt(int i, ValueNode x) {
+        while (values().size() <= i) {
+            values().add(null);
+        }
+        values().set(i, x);
     }
 
     public void setValueAt(int i, ValueNode x) {
-        values.set(i, x);
+        values().set(i, x);
     }
 
-    public ValueNode valueAt(EndNode pred) {
+    public void setValueAt(AbstractEndNode end, ValueNode x) {
+        setValueAt(merge().phiPredecessorIndex(end), x);
+    }
+
+    public ValueNode valueAt(AbstractEndNode pred) {
         return valueAt(merge().phiPredecessorIndex(pred));
     }
 
@@ -110,11 +117,11 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
      * @return the number of inputs in this phi
      */
     public int valueCount() {
-        return values.size();
+        return values().size();
     }
 
     public void clearValues() {
-        values.clear();
+        values().clear();
     }
 
     @Override
@@ -127,46 +134,101 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
                 }
                 str.append(valueAt(i) == null ? "-" : valueAt(i).toString(Verbosity.Id));
             }
-            if (type == PhiType.Value) {
-                return super.toString(Verbosity.Name) + "(" + str + ")";
-            } else {
-                return type + super.toString(Verbosity.Name) + "(" + str + ")";
-            }
+            return super.toString(Verbosity.Name) + "(" + str + ")";
         } else {
             return super.toString(verbosity);
         }
     }
 
     public void addInput(ValueNode x) {
-        values.add(x);
+        assert !(x instanceof ValuePhiNode) || ((ValuePhiNode) x).merge() instanceof LoopBeginNode || ((ValuePhiNode) x).merge() != this.merge();
+        assert !(this instanceof ValuePhiNode) || x.stamp().isCompatible(stamp());
+        values().add(x);
     }
 
     public void removeInput(int index) {
-        values.remove(index);
+        values().remove(index);
     }
 
+    public NodeIterable<ValueNode> backValues() {
+        return values().subList(merge().forwardEndCount());
+    }
+
+    @NodeInfo
+    static final class MultipleValuesNode extends ValueNode {
+
+        public static final NodeClass<MultipleValuesNode> TYPE = NodeClass.create(MultipleValuesNode.class);
+
+        protected MultipleValuesNode() {
+            super(TYPE, null);
+        }
+
+    }
+
+    public static final ValueNode MULTIPLE_VALUES = new MultipleValuesNode();
+
+    /**
+     * If all inputs are the same value, this value is returned, otherwise {@link #MULTIPLE_VALUES}.
+     * Note that {@code null} is a valid return value, since {@link GuardPhiNode}s can have
+     * {@code null} inputs.
+     */
     public ValueNode singleValue() {
-        ValueNode differentValue = null;
-        for (ValueNode n : values()) {
-            if (n != this) {
-                if (differentValue == null) {
-                    differentValue = n;
-                } else if (differentValue != n) {
-                    return null;
+        ValueNode singleValue = valueAt(0);
+        int count = valueCount();
+        for (int i = 1; i < count; ++i) {
+            ValueNode value = valueAt(i);
+            if (value != this) {
+                if (value != singleValue) {
+                    return MULTIPLE_VALUES;
                 }
             }
         }
-        return differentValue;
+        return singleValue;
+    }
+
+    /**
+     * If all inputs (but the first one) are the same value, this value is returned, otherwise
+     * {@link #MULTIPLE_VALUES}. Note that {@code null} is a valid return value, since
+     * {@link GuardPhiNode}s can have {@code null} inputs.
+     */
+    public ValueNode singleBackValue() {
+        assert merge() instanceof LoopBeginNode;
+        Iterator<ValueNode> iterator = values().iterator();
+        iterator.next();
+        ValueNode singleValue = iterator.next();
+        while (iterator.hasNext()) {
+            if (iterator.next() != singleValue) {
+                return MULTIPLE_VALUES;
+            }
+        }
+        return singleValue;
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        ValueNode singleValue = singleValue();
 
-        if (singleValue != null) {
-            return singleValue;
+        if (isLoopPhi()) {
+            if (singleBackValue() == this) {
+                return firstValue();
+            }
+
+            boolean onlySelfUsage = true;
+            for (Node n : this.usages()) {
+                if (n != this) {
+                    onlySelfUsage = false;
+                    break;
+                }
+            }
+
+            if (onlySelfUsage) {
+                return null;
+            }
         }
 
+        ValueNode singleValue = singleValue();
+        if (singleValue != MULTIPLE_VALUES) {
+            return singleValue;
+        }
         return this;
     }
 
@@ -176,5 +238,14 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
 
     public boolean isLoopPhi() {
         return merge() instanceof LoopBeginNode;
+    }
+
+    public boolean hasValidInput() {
+        for (ValueNode n : values()) {
+            if (n != null) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,147 +22,242 @@
  */
 package com.oracle.graal.nodes.type;
 
-import java.util.*;
+import java.util.Iterator;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
+import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.nodes.ValueNode;
+
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Helper class that is used to keep all stamp-related operations in one place.
  */
-// TODO(ls) maybe move the contents into IntegerStamp
 public class StampTool {
 
-    public static Stamp negate(Stamp stamp) {
-        Kind kind = stamp.kind();
-        if (stamp instanceof IntegerStamp) {
-            IntegerStamp integerStamp = (IntegerStamp) stamp;
-            if (integerStamp.lowerBound() != kind.minValue()) {
-                // TODO(ls) check if the mask calculation is correct...
-                return new IntegerStamp(kind, -integerStamp.upperBound(), -integerStamp.lowerBound(), IntegerStamp.defaultMask(kind) & (integerStamp.mask() | -integerStamp.mask()));
-            }
-        }
-        return StampFactory.forKind(kind);
-    }
-
-    public static Stamp meet(Collection<? extends StampProvider> values) {
-        Iterator< ? extends StampProvider> iterator = values.iterator();
-        if (iterator.hasNext()) {
-            Stamp stamp = iterator.next().stamp();
-            while (iterator.hasNext()) {
-                stamp = stamp.meet(iterator.next().stamp());
-            }
-            return stamp;
-        } else {
+    public static Stamp meet(Iterable<? extends ValueNode> values) {
+        Stamp stamp = meetOrNull(values, null);
+        if (stamp == null) {
             return StampFactory.forVoid();
         }
+        return stamp;
     }
 
-    public static Stamp add(IntegerStamp stamp1, IntegerStamp stamp2) {
-        Kind kind = stamp1.kind();
-        assert kind == stamp2.kind();
-        if (addOverflow(stamp1.lowerBound(), stamp2.lowerBound(), kind)) {
-            return StampFactory.forKind(kind);
+    /**
+     * Meet a collection of {@link ValueNode}s optionally excluding {@code selfValue}. If no values
+     * are encountered then return {@code null}.
+     */
+    public static Stamp meetOrNull(Iterable<? extends ValueNode> values, ValueNode selfValue) {
+        Iterator<? extends ValueNode> iterator = values.iterator();
+        Stamp stamp = null;
+        while (iterator.hasNext()) {
+            ValueNode nextValue = iterator.next();
+            if (nextValue != selfValue) {
+                if (stamp == null) {
+                    stamp = nextValue.stamp();
+                } else {
+                    stamp = stamp.meet(nextValue.stamp());
+                }
+            }
         }
-        if (addOverflow(stamp1.upperBound(), stamp2.upperBound(), kind)) {
-            return StampFactory.forKind(kind);
+        return stamp;
+    }
+
+    /**
+     * Compute the stamp resulting from the unsigned comparison being true.
+     *
+     * @return null if it's can't be true or it nothing useful can be encoded.
+     */
+    public static Stamp unsignedCompare(Stamp stamp, Stamp stamp2) {
+        IntegerStamp x = (IntegerStamp) stamp;
+        IntegerStamp y = (IntegerStamp) stamp2;
+        if (x == x.unrestricted() && y == y.unrestricted()) {
+            // Don't know anything.
+            return null;
         }
-        long lowerBound = stamp1.lowerBound() + stamp2.lowerBound();
-        long upperBound = stamp1.upperBound() + stamp2.upperBound();
-        long mask = IntegerStamp.maskFor(kind, lowerBound, upperBound) & (stamp1.mask() | stamp2.mask());
-
-        return StampFactory.forInteger(kind, lowerBound, upperBound, mask);
-    }
-
-    public static Stamp sub(IntegerStamp stamp1, IntegerStamp stamp2) {
-        return add(stamp1, (IntegerStamp) StampTool.negate(stamp2));
-    }
-
-    public static Stamp div(IntegerStamp stamp1, IntegerStamp stamp2) {
-        Kind kind = stamp1.kind();
-        if (stamp2.lowerBound() > 0) {
-            long lowerBound = stamp1.lowerBound() / stamp2.lowerBound();
-            long upperBound = stamp1.upperBound() / stamp2.lowerBound();
-            return StampFactory.forInteger(kind, lowerBound, upperBound, IntegerStamp.maskFor(kind, lowerBound, upperBound));
+        // c <| n, where c is a constant and n is known to be positive.
+        if (x.lowerBound() == x.upperBound()) {
+            if (y.isPositive()) {
+                if (x.lowerBound() == (1 << x.getBits()) - 1) {
+                    // Constant is MAX_VALUE which must fail.
+                    return null;
+                }
+                if (x.lowerBound() <= y.lowerBound()) {
+                    // Test will fail. Return illegalStamp instead?
+                    return null;
+                }
+                // If the test succeeds then this proves that n is at greater than c so the bounds
+                // are [c+1..-n.upperBound)].
+                return StampFactory.forInteger(x.getBits(), x.lowerBound() + 1, y.upperBound());
+            }
+            return null;
         }
-        return StampFactory.forKind(kind);
-    }
-
-    private static boolean addOverflow(long x, long y, Kind kind) {
-        long result = x + y;
-        if (kind == Kind.Long) {
-            return ((x ^ result) & (y ^ result)) < 0;
-        } else {
-            assert kind == Kind.Int;
-            return result > Integer.MAX_VALUE || result < Integer.MIN_VALUE;
+        // n <| c, where c is a strictly positive constant
+        if (y.lowerBound() == y.upperBound() && y.isStrictlyPositive()) {
+            // The test proves that n is positive and less than c, [0..c-1]
+            return StampFactory.forInteger(y.getBits(), 0, y.lowerBound() - 1);
         }
+        return null;
     }
 
-    private static final long INTEGER_SIGN_BIT = 0x80000000L;
-    private static final long LONG_SIGN_BIT = 0x8000000000000000L;
+    public static Stamp stampForLeadingZeros(IntegerStamp valueStamp) {
+        long mask = CodeUtil.mask(valueStamp.getBits());
+        // Don't count zeros from the mask in the result.
+        int adjust = Long.numberOfLeadingZeros(mask);
+        assert adjust == 0 || adjust == 32;
+        int min = Long.numberOfLeadingZeros(valueStamp.upMask() & mask) - adjust;
+        int max = Long.numberOfLeadingZeros(valueStamp.downMask() & mask) - adjust;
+        return StampFactory.forInteger(JavaKind.Int, min, max);
+    }
 
-    private static Stamp stampForMask(Kind kind, long mask) {
-        long lowerBound;
-        long upperBound;
-        if (kind == Kind.Int && (mask & INTEGER_SIGN_BIT) != 0) {
-            // the mask is negative
-            lowerBound = Integer.MIN_VALUE;
-            upperBound = mask ^ INTEGER_SIGN_BIT;
-        } else if (kind == Kind.Long && (mask & LONG_SIGN_BIT) != 0) {
-            // the mask is negative
-            lowerBound = Long.MIN_VALUE;
-            upperBound = mask ^ LONG_SIGN_BIT;
-        } else {
-            lowerBound = 0;
-            upperBound = mask;
+    public static Stamp stampForTrailingZeros(IntegerStamp valueStamp) {
+        long mask = CodeUtil.mask(valueStamp.getBits());
+        int min = Long.numberOfTrailingZeros(valueStamp.upMask() & mask);
+        int max = Long.numberOfTrailingZeros(valueStamp.downMask() & mask);
+        return StampFactory.forInteger(JavaKind.Int, min, max);
+    }
+
+    /**
+     * Checks whether this {@link ValueNode} represents a {@linkplain Stamp#hasValues() legal}
+     * pointer value which is known to be always null.
+     *
+     * @param node the node to check
+     * @return true if this node represents a legal object value which is known to be always null
+     */
+    public static boolean isPointerAlwaysNull(ValueNode node) {
+        return isPointerAlwaysNull(node.stamp());
+    }
+
+    /**
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
+     * stamp whose values are known to be always null.
+     *
+     * @param stamp the stamp to check
+     * @return true if this stamp represents a legal object stamp whose values are known to be
+     *         always null
+     */
+    public static boolean isPointerAlwaysNull(Stamp stamp) {
+        if (stamp instanceof AbstractPointerStamp && stamp.hasValues()) {
+            return ((AbstractPointerStamp) stamp).alwaysNull();
         }
-        return StampFactory.forInteger(kind, lowerBound, upperBound, mask);
+        return false;
     }
 
-    public static Stamp and(IntegerStamp stamp1, IntegerStamp stamp2) {
-        Kind kind = stamp1.kind();
-        long mask = stamp1.mask() & stamp2.mask();
-        return stampForMask(kind, mask);
+    /**
+     * Checks whether this {@link ValueNode} represents a {@linkplain Stamp#hasValues() legal}
+     * pointer value which is known to never be null.
+     *
+     * @param node the node to check
+     * @return true if this node represents a legal object value which is known to never be null
+     */
+    public static boolean isPointerNonNull(ValueNode node) {
+        return isPointerNonNull(node.stamp());
     }
 
-    public static Stamp or(IntegerStamp stamp1, IntegerStamp stamp2) {
-        Kind kind = stamp1.kind();
-        long mask = stamp1.mask() | stamp2.mask();
-        return stampForMask(kind, mask);
+    /**
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
+     * stamp whose values are known to never be null.
+     *
+     * @param stamp the stamp to check
+     * @return true if this stamp represents a legal object stamp whose values are known to be
+     *         always null
+     */
+    public static boolean isPointerNonNull(Stamp stamp) {
+        if (stamp instanceof AbstractPointerStamp) {
+            return ((AbstractPointerStamp) stamp).nonNull();
+        }
+        return false;
     }
 
-    public static Stamp unsignedRightShift(IntegerStamp value, IntegerStamp shift) {
-        Kind kind = value.kind();
-        if (shift.lowerBound() == shift.upperBound()) {
-            long shiftMask = kind == Kind.Int ? 0x1FL : 0x3FL;
-            long shiftCount = shift.lowerBound() & shiftMask;
-            long lowerBound;
-            long upperBound;
-            if (value.lowerBound() < 0) {
-                lowerBound = 0;
-                upperBound = IntegerStamp.defaultMask(kind) >>> shiftCount;
+    /**
+     * Returns the {@linkplain ResolvedJavaType Java type} this {@linkplain ValueNode} has if it is
+     * a {@linkplain Stamp#hasValues() legal} Object value.
+     *
+     * @param node the node to check
+     * @return the Java type this value has if it is a legal Object type, null otherwise
+     */
+    public static TypeReference typeReferenceOrNull(ValueNode node) {
+        return typeReferenceOrNull(node.stamp());
+    }
+
+    public static ResolvedJavaType typeOrNull(ValueNode node) {
+        return typeOrNull(node.stamp());
+    }
+
+    public static ResolvedJavaType typeOrNull(Stamp stamp) {
+        TypeReference type = typeReferenceOrNull(stamp);
+        return type == null ? null : type.getType();
+    }
+
+    public static ResolvedJavaType typeOrNull(Stamp stamp, MetaAccessProvider metaAccess) {
+        if (stamp instanceof AbstractObjectStamp && stamp.hasValues()) {
+            AbstractObjectStamp abstractObjectStamp = (AbstractObjectStamp) stamp;
+            ResolvedJavaType type = abstractObjectStamp.type();
+            if (type == null) {
+                return metaAccess.lookupJavaType(Object.class);
             } else {
-                lowerBound = value.lowerBound() >>> shiftCount;
-                upperBound = value.upperBound() >>> shiftCount;
+                return type;
             }
-            long mask = value.mask() >>> shiftCount;
-            return StampFactory.forInteger(kind, lowerBound, upperBound, mask);
         }
-        long mask = IntegerStamp.maskFor(kind, value.lowerBound(), value.upperBound());
-        return stampForMask(kind, mask);
+        return null;
     }
 
-    public static Stamp leftShift(IntegerStamp value, IntegerStamp shift) {
-        Kind kind = value.kind();
-        int shiftBits = kind == Kind.Int ? 5 : 6;
-        long shiftMask = kind == Kind.Int ? 0x1FL : 0x3FL;
-        if ((shift.lowerBound() >>> shiftBits) == (shift.upperBound() >>> shiftBits)) {
-            long mask = 0;
-            for (long i = shift.lowerBound() & shiftMask; i <= (shift.upperBound() & shiftMask); i++) {
-                mask |= value.mask() << i;
+    public static ResolvedJavaType typeOrNull(ValueNode node, MetaAccessProvider metaAccess) {
+        return typeOrNull(node.stamp(), metaAccess);
+    }
+
+    /**
+     * Returns the {@linkplain ResolvedJavaType Java type} this {@linkplain Stamp} has if it is a
+     * {@linkplain Stamp#hasValues() legal} Object stamp.
+     *
+     * @param stamp the stamp to check
+     * @return the Java type this stamp has if it is a legal Object stamp, null otherwise
+     */
+    public static TypeReference typeReferenceOrNull(Stamp stamp) {
+        if (stamp instanceof AbstractObjectStamp && stamp.hasValues()) {
+            AbstractObjectStamp abstractObjectStamp = (AbstractObjectStamp) stamp;
+            if (abstractObjectStamp.isExactType()) {
+                return TypeReference.createExactTrusted(abstractObjectStamp.type());
+            } else {
+                return TypeReference.createTrustedWithoutAssumptions(abstractObjectStamp.type());
             }
-            mask &= IntegerStamp.defaultMask(kind);
-            return stampForMask(kind, mask);
         }
-        return StampFactory.forKind(kind);
+        return null;
+    }
+
+    /**
+     * Checks whether this {@link ValueNode} represents a {@linkplain Stamp#hasValues() legal}
+     * Object value whose Java type is known exactly. If this method returns true then the
+     * {@linkplain ResolvedJavaType Java type} returned by {@link #typeReferenceOrNull(ValueNode)}
+     * is the concrete dynamic/runtime Java type of this value.
+     *
+     * @param node the node to check
+     * @return true if this node represents a legal object value whose Java type is known exactly
+     */
+    public static boolean isExactType(ValueNode node) {
+        return isExactType(node.stamp());
+    }
+
+    /**
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} Object
+     * stamp whose {@linkplain ResolvedJavaType Java type} is known exactly. If this method returns
+     * true then the Java type returned by {@link #typeReferenceOrNull(Stamp)} is the only concrete
+     * dynamic/runtime Java type possible for values of this stamp.
+     *
+     * @param stamp the stamp to check
+     * @return true if this node represents a legal object stamp whose Java type is known exactly
+     */
+    public static boolean isExactType(Stamp stamp) {
+        if (stamp instanceof AbstractObjectStamp && stamp.hasValues()) {
+            return ((AbstractObjectStamp) stamp).isExactType();
+        }
+        return false;
     }
 }
