@@ -48,8 +48,4 @@ public interface Invoke extends StateSplit {
     Graph graph();
 
     double probability();
-
-    boolean useForInlining();
-
-    void setUseForInlining(boolean value);
 }
