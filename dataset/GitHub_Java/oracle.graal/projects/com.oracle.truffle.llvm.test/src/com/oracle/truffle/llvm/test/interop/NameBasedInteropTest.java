@@ -36,6 +36,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.graalvm.polyglot.Source;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -57,9 +58,9 @@ import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
+import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.test.options.TestOptions;
 import com.oracle.truffle.tck.TruffleRunner;
 import com.oracle.truffle.tck.TruffleRunner.Inject;
@@ -70,19 +71,21 @@ public final class NameBasedInteropTest {
 
     @ClassRule public static TruffleRunner.RunWithPolyglotRule runWithPolyglot = new TruffleRunner.RunWithPolyglotRule();
 
-    private static TruffleObject testLibrary;
+    private static LanguageInfo llvmLanguage;
 
     @BeforeClass
     public static void loadTestBitcode() {
         File file = new File(TestOptions.TEST_SUITE_PATH, "interop/nameBasedInterop/O0_MEM2REG.bc");
         Source source;
         try {
-            source = Source.newBuilder(file).language("llvm").build();
+            source = Source.newBuilder("llvm", file).build();
         } catch (IOException ex) {
             throw new AssertionError(ex);
         }
-        CallTarget target = runWithPolyglot.getTruffleTestEnv().parse(source);
-        testLibrary = (TruffleObject) target.call();
+        runWithPolyglot.getPolyglotContext().eval(source);
+
+        final Map<String, LanguageInfo> languages = runWithPolyglot.getTruffleTestEnv().getLanguages();
+        llvmLanguage = languages.get("llvm");
     }
 
     @Parameters(name = "{0}")
@@ -107,11 +110,7 @@ public final class NameBasedInteropTest {
 
         protected SulongTestNode(String fnName, int argCount) {
             super(null);
-            try {
-                function = (TruffleObject) ForeignAccess.sendRead(Message.READ.createNode(), testLibrary, fnName);
-            } catch (InteropException ex) {
-                throw new AssertionError(ex);
-            }
+            function = (TruffleObject) runWithPolyglot.getTruffleTestEnv().lookupSymbol(llvmLanguage, fnName);
             execute = Message.createExecute(argCount).createNode();
         }
 
