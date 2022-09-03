@@ -71,10 +71,10 @@ public class Classfile {
         ClassfileConstantPool cp = new ClassfileConstantPool(stream, context);
 
         // access_flags, this_class, super_class
-        skipFully(stream, 6);
+        stream.skipBytes(6);
 
         // interfaces
-        skipFully(stream, stream.readUnsignedShort() * 2);
+        stream.skipBytes(stream.readUnsignedShort() * 2);
 
         // fields
         skipFields(stream);
@@ -100,7 +100,7 @@ public class Classfile {
         int attributesCount;
         attributesCount = stream.readUnsignedShort();
         for (int i = 0; i < attributesCount; i++) {
-            skipFully(stream, 2); // name_index
+            stream.skipBytes(2); // name_index
             int attributeLength = stream.readInt();
             skipFully(stream, attributeLength);
         }
@@ -148,7 +148,7 @@ public class Classfile {
     private static void skipFields(DataInputStream stream) throws IOException {
         int count = stream.readUnsignedShort();
         for (int i = 0; i < count; i++) {
-            skipFully(stream, 6); // access_flags, name_index, descriptor_index
+            stream.skipBytes(6); // access_flags, name_index, descriptor_index
             skipAttributes(stream);
         }
     }
