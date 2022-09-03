@@ -30,9 +30,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.logging.Handler;
 import java.util.logging.Level;
 
 import org.graalvm.polyglot.io.FileSystem;
+
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 final class PolyglotContextConfig {
     private static final String[] EMPTY_STRING_ARRAY = new String[0];
@@ -49,14 +52,15 @@ final class PolyglotContextConfig {
     final Set<String> allowedPublicLanguages;
     final Map<String, String> options;
     private final Map<String, OptionValuesImpl> optionsByLanguage;
-    final FileSystem fileSystem;
+    @CompilationFinal FileSystem fileSystem;
     final Map<String, Level> logLevels;    // effectively final
+    final Handler logHandler;
 
     PolyglotContextConfig(PolyglotEngineImpl engine, OutputStream out, OutputStream err, InputStream in,
                     boolean hostAccessAllowed, boolean nativeAccessAllowed, boolean createThreadAllowed,
                     boolean hostClassLoadingAllowed, Predicate<String> classFilter,
                     Map<String, String[]> applicationArguments, Set<String> allowedPublicLanguages,
-                    Map<String, String> options, FileSystem fileSystem) {
+                    Map<String, String> options, FileSystem fileSystem, Handler logHandler) {
         assert out != null;
         assert err != null;
         assert in != null;
@@ -73,6 +77,7 @@ final class PolyglotContextConfig {
         this.options = options;
         this.fileSystem = fileSystem;
         this.optionsByLanguage = new HashMap<>();
+        this.logHandler = logHandler;
         this.logLevels = new HashMap<>(engine.logLevels);
         for (String optionKey : options.keySet()) {
             String group = PolyglotEngineImpl.parseOptionGroup(optionKey);

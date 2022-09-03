@@ -1016,10 +1016,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         if (context == null) {
             context = new PolyglotContextImpl(this, config);
             addContext(context);
-        } else {
-            // don't add contexts for preinitialized contexts as they have been added already
-            assert Thread.holdsLock(this);
-            assert contexts.contains(context);
         }
 
         Context api = impl.getAPIAccess().newContext(context);
