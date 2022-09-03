@@ -197,9 +197,6 @@ public abstract class DebugValue {
      * @since 0.19
      */
     public final boolean isArray() {
-        if (!isReadable()) {
-            return false;
-        }
         Object value = get();
         if (value instanceof TruffleObject) {
             TruffleObject to = (TruffleObject) value;
@@ -218,9 +215,6 @@ public abstract class DebugValue {
      * @since 0.19
      */
     public final List<DebugValue> getArray() {
-        if (!isReadable()) {
-            return null;
-        }
         List<DebugValue> arrayList = null;
         Object value = get();
         if (value instanceof TruffleObject) {
@@ -253,9 +247,6 @@ public abstract class DebugValue {
      * @since 0.22
      */
     public final DebugValue getMetaObject() {
-        if (!isReadable()) {
-            return null;
-        }
         Object obj = get();
         if (obj == null) {
             return null;
@@ -278,9 +269,6 @@ public abstract class DebugValue {
      * @since 0.22
      */
     public final SourceSection getSourceLocation() {
-        if (!isReadable()) {
-            return null;
-        }
         Object obj = get();
         if (obj == null) {
             return null;
@@ -304,9 +292,6 @@ public abstract class DebugValue {
      * @since 0.27
      */
     public final LanguageInfo getOriginalLanguage() {
-        if (!isReadable()) {
-            return null;
-        }
         Object obj = get();
         if (obj == null) {
             return null;
