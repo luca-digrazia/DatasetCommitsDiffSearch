@@ -174,7 +174,6 @@ public final class LLVMFunction implements TruffleObject, Comparable<LLVMFunctio
         return getName() + " " + getFunctionAddress();
     }
 
-    @Override
     public ForeignAccess getForeignAccess() {
         throw new AssertionError();
     }
@@ -183,14 +182,13 @@ public final class LLVMFunction implements TruffleObject, Comparable<LLVMFunctio
         return functionCounter;
     }
 
-    @Override
     public int compareTo(LLVMFunction o) {
         return getName().compareTo(o.getName());
     }
 
     @Override
     public int hashCode() {
-        return getName().hashCode() + 11 * getLlvmReturnType().hashCode();
+        return getName().hashCode() + 11 * getLlvmParamTypes().hashCode();
     }
 
     @Override
