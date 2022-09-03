@@ -20,23 +20,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.truffle.test;
+package com.oracle.graal.truffle.test.nodes;
 
-import org.junit.*;
-
-import com.oracle.graal.truffle.test.nodes.*;
 import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.interop.impl.ReadOnlyArrayList;
+import java.util.List;
 
-public class ReadOnlyArrayListPartialEvaluationTest extends PartialEvaluationTest {
+public class ReadOnlyArrayListConstantNode extends AbstractTestNode {
 
-    public static Object constant42() {
-        return 42;
+    private final int value;
+
+    public ReadOnlyArrayListConstantNode(int value) {
+        this.value = value;
     }
 
-    @Test
-    public void constantValue() {
-        FrameDescriptor fd = new FrameDescriptor();
-        AbstractTestNode result = new ReadOnlyArrayListConstantNode(42);
-        assertPartialEvalEquals("constant42", new RootTestNode(fd, "constantValue", result));
+    @Override
+    public int execute(VirtualFrame frame) {
+        List<Object> arr = ReadOnlyArrayList.asList(new Object[]{value, value, value}, 0, 3);
+        return (int) arr.subList(1, 3).get(0);
     }
 }
