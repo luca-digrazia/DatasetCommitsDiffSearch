@@ -187,7 +187,7 @@ public class ComputeProbabilityClosure {
                         if (t == -1) {
                             return -1;
                         }
-                        factor = multiplySaturate(factor, t);
+                        factor *= t;
                     }
                     backEdgeProb += nodeProbabilities.get(le) * factor;
                 }
@@ -201,21 +201,6 @@ public class ComputeProbabilityClosure {
             }
             return loopFrequency;
         }
-    }
-
-    /**
-     * Multiplies a and b and saturates the result to 1/{@link Double#MIN_NORMAL}.
-     * 
-     * @param a
-     * @param b
-     * @return a times b saturated to 1/{@link Double#MIN_NORMAL}
-     */
-    public static double multiplySaturate(double a, double b) {
-        double r = a * b;
-        if (r > 1 / Double.MIN_NORMAL) {
-            return 1 / Double.MIN_NORMAL;
-        }
-        return r;
     }
 
     private class Probability extends MergeableState<Probability> {
@@ -251,7 +236,7 @@ public class ComputeProbabilityClosure {
                         if (loopFrequency == -1) {
                             return false;
                         }
-                        probability = multiplySaturate(probability, loopFrequency);
+                        probability *= loopFrequency;
                         assert probability >= 0;
                     }
                 }
@@ -263,7 +248,7 @@ public class ComputeProbabilityClosure {
                             if (loopFrequency == -1) {
                                 return false;
                             }
-                            prob = multiplySaturate(prob, loopFrequency);
+                            prob *= loopFrequency;
                             assert prob >= 0;
                         }
                     }
@@ -350,7 +335,7 @@ public class ComputeProbabilityClosure {
                 assert loops != null;
                 double countProd = 1;
                 for (LoopInfo loop : loops) {
-                    countProd = multiplySaturate(countProd, loop.loopFrequency(nodeProbabilities));
+                    countProd *= loop.loopFrequency(nodeProbabilities);
                 }
                 count = countProd;
             }
@@ -359,7 +344,7 @@ public class ComputeProbabilityClosure {
 
         @Override
         public void loopBegin(LoopBeginNode loopBegin) {
-            count = multiplySaturate(count, loopBegin.loopFrequency());
+            count *= loopBegin.loopFrequency();
         }
     }
 
