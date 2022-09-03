@@ -39,9 +39,9 @@ public class LoopUtil {
 
     public static class Loop {
         private final LoopBegin loopBegin;
-        private NodeBitMap nodes;
+        private final NodeBitMap nodes;
         private Loop parent;
-        private NodeBitMap exits;
+        private final NodeBitMap exits;
         public Loop(LoopBegin loopBegin, NodeBitMap nodes, NodeBitMap exits) {
             this.loopBegin = loopBegin;
             this.nodes = nodes;
@@ -67,10 +67,6 @@ public class LoopUtil {
         public void setParent(Loop parent) {
             this.parent = parent;
         }
-
-        public boolean isChild(Loop loop) {
-            return loop.parent != null && (loop.parent == this || loop.parent.isChild(this));
-        }
     }
 
     private static class PeelingResult {
@@ -94,8 +90,26 @@ public class LoopUtil {
         List<Loop> loops = new LinkedList<LoopUtil.Loop>();
         for (LoopBegin loopBegin : graph.getNodes(LoopBegin.class)) {
             NodeBitMap nodes = computeLoopNodes(loopBegin);
-            NodeBitMap exits = computeLoopExits(loopBegin, nodes);
-            loops.add(new Loop(loopBegin, nodes, exits));
+            NodeBitMap exits = graph.createNodeBitMap();
+            Loop loop = new Loop(loopBegin, nodes, exits);
+            NodeFlood workCFG = graph.createNodeFlood();
+            workCFG.add(loopBegin.loopEnd());
+            for (Node n : workCFG) {
+                if (n == loopBegin) {
+                    continue;
+                }
+                if (IdentifyBlocksPhase.trueSuccessorCount(n) > 1) {
+                    for (Node sux : n.cfgSuccessors()) {
+                        if (!nodes.isMarked(sux) && sux instanceof FixedNode) {
+                            exits.mark(sux);
+                        }
+                    }
+                }
+                for (Node pred : n.cfgPredecessors()) {
+                    workCFG.add(pred);
+                }
+            }
+            loops.add(loop);
         }
         for (Loop loop : loops) {
             for (Loop other : loops) {
@@ -107,29 +121,6 @@ public class LoopUtil {
             }
         }
         return loops;
-    }
-
-    public static NodeBitMap computeLoopExits(LoopBegin loopBegin, NodeBitMap nodes) {
-        Graph graph = loopBegin.graph();
-        NodeBitMap exits = graph.createNodeBitMap();
-        NodeFlood workCFG = graph.createNodeFlood();
-        workCFG.add(loopBegin.loopEnd());
-        for (Node n : workCFG) {
-            if (n == loopBegin) {
-                continue;
-            }
-            if (IdentifyBlocksPhase.trueSuccessorCount(n) > 1) {
-                for (Node sux : n.cfgSuccessors()) {
-                    if (!nodes.isMarked(sux) && sux instanceof FixedNode) {
-                        exits.mark(sux);
-                    }
-                }
-            }
-            for (Node pred : n.cfgPredecessors()) {
-                workCFG.add(pred);
-            }
-        }
-        return exits;
     }
 
     public static NodeBitMap computeLoopNodes(LoopBegin loopBegin) {
@@ -147,7 +138,7 @@ public class LoopUtil {
         }
         NodeBitMap inOrAfter = loopBegin.graph().createNodeBitMap();
         for (Node n : workData1) {
-            markWithState(n, inOrAfter);
+            inOrAfter.mark(n);
             for (Node usage : n.dataUsages()) {
                 if (usage instanceof Phi) { // filter out data graph cycles
                     Phi phi = (Phi) usage;
@@ -167,13 +158,13 @@ public class LoopUtil {
         }
         NodeBitMap inOrBefore = loopBegin.graph().createNodeBitMap();
         for (Node n : workData2) {
-            markWithState(n, inOrBefore);
-            if (n instanceof Phi) { // filter out data graph cycles
+            inOrBefore.mark(n);
+            if (n instanceof Phi) {
                 Phi phi = (Phi) n;
                 if (!phi.isDead()) {
                     int backIndex = -1;
                     Merge merge = phi.merge();
-                    if (!loopNodes.isMarked(merge) && merge instanceof LoopBegin) {
+                    if (merge instanceof LoopBegin) {
                         LoopBegin phiLoop = (LoopBegin) merge;
                         backIndex = phiLoop.phiPredecessorIndex(phiLoop.loopEnd());
                     }
@@ -202,7 +193,7 @@ public class LoopUtil {
                 debug.put("loopNodes", loopNodes);
                 debug.put("inOrAfter", inOrAfter);
                 debug.put("inOrBefore", inOrBefore);
-                compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "Compute loop nodes loop#" + loopBegin.id(), loopBegin.graph(), true, false, debug));
+                compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "Compute loop nodes", loopBegin.graph(), true, false, debug));
             }
             recurse = false;
         }
@@ -276,13 +267,6 @@ public class LoopUtil {
         rewirePeeling(peeling, loop, loopEnd);
         if (compilation.compiler.isObserved()) {
             compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After rewirePeeling", loopEnd.graph(), true, false));
-        }
-        // update parents
-        Loop parent = loop.parent();
-        while (parent != null) {
-            parent.nodes = computeLoopNodes(loop.loopBegin);
-            parent.exits = computeLoopExits(parent.loopBegin, parent.nodes);
-            parent = parent.parent;
         }
     }
 
@@ -517,7 +501,7 @@ public class LoopUtil {
             }
             @Override
             public boolean explore(Node n) {
-                return !inOrBefore.isNew(n) && !inOrBefore.isMarked(n) && !(n instanceof Local) && !(n instanceof Constant); //TODO (gd) hum
+                return !inOrBefore.isNew(n) && !inOrBefore.isMarked(n) && !(n instanceof Local); //TODO (gd) hum
             }
             @Override
             public void fixNode(Node node, Node color) {
@@ -562,17 +546,16 @@ public class LoopUtil {
             compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After computeLoopNodesFrom", loopBegin.graph(), true, false, debug));
         }
         if (from == loopBegin.loopEnd()) {
-            clearWithState(from, marked);
+            marked.clear(from);
         }
-        clearWithState(loopBegin, marked);
+        marked.clear(loopBegin);
         Map<Node, Node> replacements = new HashMap<Node, Node>();
         NodeMap<Placeholder> phis = graph.createNodeMap();
         NodeMap<Placeholder> exits = graph.createNodeMap();
 
         for (Node exit : loop.exits()) {
             if (marked.isMarked(exit.singlePredecessor())) {
-                Placeholder pExit = (Placeholder) exit;
-                marked.mark(pExit.stateAfter());
+                marked.mark(((Placeholder) exit).stateAfter());
                 Placeholder p = new Placeholder(graph);
                 replacements.put(exit, p);
                 exits.set(exit, p);
@@ -580,6 +563,12 @@ public class LoopUtil {
         }
 
         for (Node n : marked) {
+            if (n instanceof StateSplit) {
+                FrameState stateAfter = ((StateSplit) n).stateAfter();
+                if (stateAfter != null) {
+                    marked.mark(stateAfter);
+                }
+            }
             if (n instanceof Phi && ((Phi) n).merge() == loopBegin) {
                 Placeholder p = new Placeholder(graph);
                 replacements.put(n, p);
@@ -597,7 +586,7 @@ public class LoopUtil {
         if (compilation.compiler.isObserved()) {
             Map<String, Object> debug = new HashMap<String, Object>();
             debug.put("marked", marked);
-            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "Before addDuplicate loop#" + loopBegin.id(), loopBegin.graph(), true, false, debug));
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "Before addDuplicate", loopBegin.graph(), true, false, debug));
         }
 
         Map<Node, Node> duplicates = graph.addDuplicate(marked, replacements);
@@ -607,7 +596,7 @@ public class LoopUtil {
             for (Node usage : n.dataUsages()) {
                 if (!marked.isMarked(usage)
                                 && !loop.nodes().isNew(usage) && loop.nodes().isMarked(usage)
-                                && !((usage instanceof Phi) && ((Phi) usage).merge() != loopBegin)) {
+                                && !((usage instanceof Phi) || ((Phi) usage).merge() != loopBegin)) {
                     dataOut.set(n, duplicates.get(n));
                     break;
                 }
@@ -635,70 +624,18 @@ public class LoopUtil {
         Graph graph = loop.loopBegin().graph();
         NodeBitMap inOrBefore = graph.createNodeBitMap();
         NodeFlood work = graph.createNodeFlood();
-        NodeBitMap loopNodes = loop.nodes();
-        work.addAll(loopNodes);
+        work.addAll(loop.nodes());
         for (Node n : work) {
             inOrBefore.mark(n);
             for (Node pred : n.predecessors()) {
                 work.add(pred);
             }
-            if (n instanceof Phi) { // filter out data graph cycles
-                Phi phi = (Phi) n;
-                if (!phi.isDead()) {
-                    int backIndex = -1;
-                    Merge merge = phi.merge();
-                    if (!loopNodes.isNew(merge) && !loopNodes.isMarked(merge) && merge instanceof LoopBegin) {
-                        LoopBegin phiLoop = (LoopBegin) merge;
-                        backIndex = phiLoop.phiPredecessorIndex(phiLoop.loopEnd());
-                    }
-                    for (int i = 0; i < phi.valueCount(); i++) {
-                        if (i != backIndex) {
-                            work.add(phi.valueAt(i));
-                        }
-                    }
-                }
-            } else {
-                for (Node in : n.inputs()) {
-                    if (in != null) {
-                        work.add(in);
-                    }
-                }
-                if (n instanceof LoopBegin) {
-                    Loop p = loop.parent;
-                    boolean isParent = false;
-                    while (p != null) {
-                        if (p.loopBegin() == n) {
-                            isParent = true;
-                            break;
-                        }
-                        p = p.parent;
-                    }
-                    if (!isParent) {
-                        work.add(((LoopBegin) n).loopEnd());
-                    }
+            for (Node in : n.inputs()) {
+                if (in != null) {
+                    work.add(in);
                 }
             }
         }
         return inOrBefore;
-    }
-
-    private static void markWithState(Node n, NodeBitMap map) {
-        map.mark(n);
-        if (n instanceof StateSplit) {
-            FrameState stateAfter = ((StateSplit) n).stateAfter();
-            if (stateAfter != null) {
-                map.mark(stateAfter);
-            }
-        }
-    }
-
-    private static void clearWithState(Node n, NodeBitMap map) {
-        map.clear(n);
-        if (n instanceof StateSplit) {
-            FrameState stateAfter = ((StateSplit) n).stateAfter();
-            if (stateAfter != null) {
-                map.clear(stateAfter);
-            }
-        }
     }
 }
