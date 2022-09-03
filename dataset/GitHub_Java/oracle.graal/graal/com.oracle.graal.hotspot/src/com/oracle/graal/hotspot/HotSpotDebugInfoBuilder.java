@@ -29,6 +29,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Extends {@link DebugInfoBuilder} to allocate the extra debug information required for locks.
@@ -47,16 +48,15 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
     }
 
     @Override
-    protected Value computeLockValue(FrameState state, int lockIndex) {
-        int lockDepth = lockIndex;
+    protected Value computeLockValue(FrameState state, int i) {
+        int lockDepth = i;
         if (state.outerFrameState() != null) {
             lockDepth += state.outerFrameState().nestedLockDepth();
         }
         StackSlot slot = lockStack.makeLockSlot(lockDepth);
-        ValueNode lock = state.lockAt(lockIndex);
+        ValueNode lock = state.lockAt(i);
         Value object = toValue(lock);
-        boolean eliminated = object instanceof VirtualObject && state.monitorIdAt(lockIndex) != null;
-        assert state.monitorIdAt(lockIndex) == null || state.monitorIdAt(lockIndex).getLockDepth() == lockDepth;
+        boolean eliminated = lock instanceof VirtualObjectNode;
         return new HotSpotMonitorValue(object, slot, eliminated);
     }
 
