@@ -102,6 +102,7 @@ public final class PolyglotLauncher extends Launcher {
     private void launch(String[] args) {
         List<String> arguments = new ArrayList<>(Arrays.asList(args));
         if (isAOT()) {
+            nativeAccess.setGraalVMProperties(null);
             nativeAccess.maybeExec(arguments, true, Collections.emptyMap(), VMType.Native);
         }
 
@@ -228,10 +229,10 @@ public final class PolyglotLauncher extends Launcher {
             launcherClass = getLauncherClass(launcherName);
         }
         try {
-            AbstractLanguageLauncher launcher = launcherClass.getDeclaredConstructor().newInstance();
+            AbstractLanguageLauncher launcher = launcherClass.newInstance();
             launcher.setPolyglot(true);
             launcher.launch(args, options, false);
-        } catch (Exception e) {
+        } catch (IllegalAccessException | InstantiationException e) {
             throw new RuntimeException("Failed to instanciate launcher class " + launcherName, e);
         }
     }
