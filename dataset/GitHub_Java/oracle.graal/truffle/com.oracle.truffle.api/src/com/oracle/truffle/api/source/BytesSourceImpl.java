@@ -24,7 +24,9 @@
  */
 package com.oracle.truffle.api.source;
 
+import java.io.IOException;
 import java.io.Reader;
+import java.net.URI;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -32,7 +34,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 
-final class BytesSourceImpl extends Source implements Cloneable {
+final class BytesSourceImpl extends Content implements Content.CreateURI {
 
     private final String name;
     private final byte[] bytes;
@@ -46,10 +48,6 @@ final class BytesSourceImpl extends Source implements Cloneable {
         this.byteIndex = byteIndex;
         this.length = length;
         this.decoder = decoder.newDecoder();
-    }
-
-    @Override
-    void reset() {
     }
 
     @Override
@@ -73,6 +71,16 @@ final class BytesSourceImpl extends Source implements Cloneable {
     }
 
     @Override
+    URI getURI() {
+        return createURIOnce(this);
+    }
+
+    @Override
+    public URI createURI() {
+        return getNamedURI(name, bytes, byteIndex, length);
+    }
+
+    @Override
     public Reader getReader() {
         return null;
     }
@@ -86,31 +94,26 @@ final class BytesSourceImpl extends Source implements Cloneable {
         } catch (CharacterCodingException ex) {
             return "";
         }
-        return chb.toString();
+        return code = chb.toString();
     }
 
     @Override
-    public String getCode(int byteOffset, int codeLength) {
-        ByteBuffer bb = ByteBuffer.wrap(bytes, byteIndex + byteOffset, codeLength);
-        CharBuffer chb;
-        try {
-            chb = decoder.decode(bb);
-        } catch (CharacterCodingException ex) {
-            return "";
+    String findMimeType() throws IOException {
+        return null;
+    }
+
+    @Override
+    Object getHashKey() {
+        int hash = bytes.length;
+        if (bytes.length > 0) {
+            int oneFourth = bytes.length / 4;
+            int oneHalf = bytes.length / 2;
+            hash ^= bytes[0];
+            hash ^= (bytes[oneFourth] << 8);
+            hash ^= (bytes[oneHalf] << 16);
+            hash ^= (bytes[oneHalf + oneFourth] << 24);
         }
-        return chb.toString();
-    }
-
-    @Override
-    void checkRange(int charIndex, int rangeLength) {
-        if (!(charIndex >= 0 && rangeLength >= 0 && charIndex + rangeLength <= length)) {
-            throw new IllegalArgumentException("text positions out of range");
-        }
-    }
-
-    @Override
-    TextMap createTextMap() {
-        return TextMap.fromString(getCode());
+        return hash;
     }
 
 }

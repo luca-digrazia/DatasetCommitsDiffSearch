@@ -28,6 +28,10 @@ import static com.oracle.truffle.api.instrumentation.InstrumentationTestLanguage
 import static com.oracle.truffle.api.instrumentation.InstrumentationTestLanguage.MIME_TYPE;
 
 import com.oracle.truffle.api.source.Source;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
 
 final class TestSource {
 
@@ -63,17 +67,6 @@ final class TestSource {
                         sourceName + FILENAME_EXTENSION).withMimeType(MIME_TYPE);
     }
 
-    static Source createCall(String sourceName) {
-        return Source.fromText("ROOT(\n" +
-                        "  DEFINE(foo,\n" +
-                        "    STATEMENT\n" +
-                        "  ),\n" +
-                        "  STATEMENT,\n" +
-                        "  CALL(foo)\n" +
-                        ")\n",
-                        sourceName + FILENAME_EXTENSION).withMimeType(MIME_TYPE);
-    }
-
     static Source createCallLoop3(String sourceName) {
         return Source.fromText("ROOT(\n" +
                         "  DEFINE(foo,\n" +
@@ -83,6 +76,22 @@ final class TestSource {
                         "  CALL(foo)\n" +
                         ")\n",
                         sourceName + FILENAME_EXTENSION).withMimeType(MIME_TYPE);
+    }
+
+    static File createCallLoop3File() throws IOException {
+        String code = "ROOT(\n" +
+                        "  DEFINE(foo,\n" +
+                        "    LOOP(3,\n" +
+                        "      STATEMENT)\n" +
+                        "  ),\n" +
+                        "  CALL(foo)\n" +
+                        ")\n";
+        File file = File.createTempFile("Loop3", FILENAME_EXTENSION);
+        try (Writer w = new FileWriter(file)) {
+            w.write(code);
+        }
+        file.deleteOnExit();
+        return file;
     }
 
     private TestSource() {

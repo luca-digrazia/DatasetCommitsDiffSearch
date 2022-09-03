@@ -27,27 +27,27 @@ package com.oracle.truffle.api.source;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.net.URI;
 import java.net.URL;
 import java.util.Objects;
 
-final class LiteralSourceImpl extends Content {
+final class LiteralSourceImpl extends Content implements Content.CreateURI {
 
-    private final String description;
-    private final String code;
+    private final String name;
 
-    LiteralSourceImpl(String description, String code) {
-        this.description = description;
+    LiteralSourceImpl(String name, String code) {
+        this.name = name;
         this.code = code;
     }
 
     @Override
     public String getName() {
-        return description;
+        return name;
     }
 
     @Override
     public String getShortName() {
-        return description;
+        return name;
     }
 
     @Override
@@ -57,7 +57,7 @@ final class LiteralSourceImpl extends Content {
 
     @Override
     public String getPath() {
-        return null;
+        return name;
     }
 
     @Override
@@ -66,32 +66,23 @@ final class LiteralSourceImpl extends Content {
     }
 
     @Override
+    URI getURI() {
+        return createURIOnce(this);
+    }
+
+    @Override
+    public URI createURI() {
+        return getNamedURI(name, code.getBytes());
+    }
+
+    @Override
     public Reader getReader() {
         return new StringReader(code);
     }
 
     @Override
-    void reset() {
-    }
-
-    @Override
     public int hashCode() {
-        return Objects.hash(description, code);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (obj instanceof LiteralSourceImpl) {
-            LiteralSourceImpl other = (LiteralSourceImpl) obj;
-            return Objects.equals(description, other.description) && code.equals(other.code);
-        }
-        return false;
+        return Objects.hash(name, code);
     }
 
     @Override

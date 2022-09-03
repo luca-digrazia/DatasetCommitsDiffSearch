@@ -28,17 +28,17 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 
 // TODO (mlvdv) if we keep this, hoist a superclass in common with FileSource.
 
-final class ClientManagedFileSourceImpl extends Content {
+final class ClientManagedFileSourceImpl extends Content implements Content.CreateURI {
 
     private final File file;
     private final String name; // Name used originally to describe the source
     private final String path; // Normalized path description of an actual file
-    private String code; // The file's contents, as provided by the client
 
     ClientManagedFileSourceImpl(File file, String name, String path, CharSequence chars) {
         this.file = file.getAbsoluteFile();
@@ -82,6 +82,16 @@ final class ClientManagedFileSourceImpl extends Content {
     }
 
     @Override
+    URI getURI() {
+        return createURIOnce(this);
+    }
+
+    @Override
+    public URI createURI() {
+        return file.toURI();
+    }
+
+    @Override
     public Reader getReader() {
         return new StringReader(code);
     }
@@ -95,22 +105,4 @@ final class ClientManagedFileSourceImpl extends Content {
     public int hashCode() {
         return path.hashCode();
     }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj instanceof ClientManagedFileSourceImpl) {
-            ClientManagedFileSourceImpl other = (ClientManagedFileSourceImpl) obj;
-            return path.equals(other.path);
-        }
-        return false;
-    }
-
-    @Override
-    void reset() {
-        this.code = null;
-    }
-
 }

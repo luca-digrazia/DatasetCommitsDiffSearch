@@ -53,7 +53,6 @@ final class SubSourceImpl extends Content {
         return base.getName();
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public String getShortName() {
         return base.getShortName();

@@ -24,39 +24,41 @@
  */
 package com.oracle.truffle.api.source;
 
+import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.net.URI;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
 
-final class AppendableLiteralSourceImpl extends Source implements Cloneable {
+final class AppendableLiteralSourceImpl extends Content implements Content.CreateURI {
 
-    private final String description;
-    final List<CharSequence> codeList = new ArrayList<>();
+    private final String name;
+    // Checkstyle: stop
+    private final StringBuffer text = new StringBuffer();
+    // Checkstyle: resume
 
-    AppendableLiteralSourceImpl(String description) {
-        this.description = description;
+    AppendableLiteralSourceImpl(String name) {
+        this.name = name;
     }
 
     @Override
     public String getName() {
-        return description;
+        return name;
     }
 
     @Override
     public String getShortName() {
-        return description;
+        return name;
     }
 
     @Override
     public String getCode() {
-        return getCodeFromIndex(0);
+        return text.toString();
     }
 
     @Override
     public String getPath() {
-        return description;
+        return name;
     }
 
     @Override
@@ -65,27 +67,33 @@ final class AppendableLiteralSourceImpl extends Source implements Cloneable {
     }
 
     @Override
+    URI getURI() {
+        return createURIOnce(this);
+    }
+
+    @Override
+    public URI createURI() {
+        return getNamedURI(name);
+    }
+
+    @Override
     public Reader getReader() {
         return new StringReader(getCode());
     }
 
     @Override
-    void reset() {
-    }
-
-    private String getCodeFromIndex(int index) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = index; i < codeList.size(); i++) {
-            CharSequence s = codeList.get(i);
-            sb.append(s);
-        }
-        return sb.toString();
+    public void appendCode(CharSequence chars) {
+        text.append(chars);
     }
 
     @Override
-    public void appendCode(CharSequence chars) {
-        codeList.add(chars);
-        clearTextMap();
+    String findMimeType() throws IOException {
+        return null;
+    }
+
+    @Override
+    Object getHashKey() {
+        return name;
     }
 
 }
