@@ -89,6 +89,11 @@ abstract class LIRIntrospection extends FieldIntrospection {
         protected void setValueArray(Object obj, int index, Value[] valueArray) {
             putObject(obj, index, valueArray);
         }
+
+        @Override
+        public String toString() {
+            return super.toString();
+        }
     }
 
     /**
