@@ -105,7 +105,7 @@ public abstract class Tag {
     /**
      * Annotation applied to {@link Tag} subclasses to specify the tag identifier. The tag
      * identifier can be used to {@link Tag#findProvidedTag(LanguageInfo, String) find} and load tag
-     * classes used by tools.
+     * classes using by tools.
      *
      * @since 0.32
      */
