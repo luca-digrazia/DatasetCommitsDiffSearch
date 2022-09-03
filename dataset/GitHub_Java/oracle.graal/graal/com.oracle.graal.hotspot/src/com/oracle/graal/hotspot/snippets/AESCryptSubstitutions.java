@@ -44,16 +44,13 @@ import com.oracle.graal.word.*;
 @ClassSubstitution(className = "com.sun.crypto.provider.AESCrypt")
 public class AESCryptSubstitutions {
 
-    static final long kOffset;
-    static final Class<?> AESCryptClass;
-
+    private static final long kOffset;
     static {
         try {
             // Need to use launcher class path as com.sun.crypto.provider.AESCrypt
             // is normally not on the boot class path
             ClassLoader cl = Launcher.getLauncher().getClassLoader();
-            AESCryptClass = Class.forName("com.sun.crypto.provider.AESCrypt", true, cl);
-            kOffset = UnsafeAccess.unsafe.objectFieldOffset(AESCryptClass.getDeclaredField("K"));
+            kOffset = UnsafeAccess.unsafe.objectFieldOffset(Class.forName("com.sun.crypto.provider.AESCrypt", true, cl).getDeclaredField("K"));
         } catch (Exception ex) {
             throw new GraalInternalError(ex);
         }
