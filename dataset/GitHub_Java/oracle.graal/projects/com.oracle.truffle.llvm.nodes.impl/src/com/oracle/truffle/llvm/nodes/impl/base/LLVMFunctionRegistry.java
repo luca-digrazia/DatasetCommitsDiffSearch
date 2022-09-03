@@ -50,17 +50,13 @@ import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
  */
 public class LLVMFunctionRegistry {
 
-    // do not start with 0, otherwise the first function
-    // pointer would be == NULL
-    private static final int FUNCTION_START_INDEX = 1;
-
     private final Map<String, NodeFactory<? extends LLVMNode>> intrinsics;
     private final NodeFactoryFacade facade;
 
     /**
      * The function index assigned to the next function descriptor.
      */
-    private int currentFunctionIndex = FUNCTION_START_INDEX;
+    private int currentFunctionIndex;
 
     /**
      * Maps a function index (see {@link LLVMFunctionDescriptor#getFunctionIndex()} to a call
@@ -72,7 +68,7 @@ public class LLVMFunctionRegistry {
      * Maps a function index (see {@link LLVMFunctionDescriptor#getFunctionIndex()} to a function
      * descriptor.
      */
-    @CompilationFinal private LLVMFunctionDescriptor[] functionDescriptors = new LLVMFunctionDescriptor[FUNCTION_START_INDEX];
+    @CompilationFinal private LLVMFunctionDescriptor[] functionDescriptors = new LLVMFunctionDescriptor[0];
 
     public LLVMFunctionRegistry(LLVMOptimizationConfiguration optimizationConfig, NodeFactoryFacade facade) {
         this.facade = facade;
@@ -98,7 +94,7 @@ public class LLVMFunctionRegistry {
 
     public void register(Map<LLVMFunctionDescriptor, RootCallTarget> functionCallTargets) {
         CompilerAsserts.neverPartOfCompilation();
-        functionPtrCallTargetMap = new RootCallTarget[FUNCTION_START_INDEX + functionDescriptors.length + intrinsics.size()];
+        functionPtrCallTargetMap = new RootCallTarget[functionDescriptors.length + intrinsics.size()];
         registerIntrinsics();
         for (LLVMFunctionDescriptor func : functionCallTargets.keySet()) {
             functionPtrCallTargetMap[func.getFunctionIndex()] = functionCallTargets.get(func);
@@ -134,7 +130,7 @@ public class LLVMFunctionRegistry {
      */
     public LLVMFunctionDescriptor createFunctionDescriptor(String name, LLVMRuntimeType returnType, LLVMRuntimeType[] paramTypes, boolean varArgs) {
         CompilerAsserts.neverPartOfCompilation();
-        for (int i = FUNCTION_START_INDEX; i < functionDescriptors.length; i++) {
+        for (int i = 0; i < functionDescriptors.length; i++) {
             if (functionDescriptors[i].getName().equals(name)) {
                 return functionDescriptors[i];
             }
