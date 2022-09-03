@@ -83,22 +83,14 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
         return field.getName() + "Value";
     }
 
-    private static String valueName(ActualParameter param) {
-        NodeData node = (NodeData) param.getMethod().getTemplate();
+    private static String valueName(TemplateMethod method, ActualParameter param) {
+        NodeData node = (NodeData) method.getTemplate();
         NodeFieldData field = node.findField(param.getSpecification().getName());
         if (field != null) {
             return valueName(field);
         } else {
             return param.getSpecification().getName();
         }
-    }
-
-    private static String castValueName(ActualParameter parameter) {
-        return valueName(parameter) + "Cast";
-    }
-
-    private static String castValueName(NodeFieldData field) {
-        return valueName(field) + "Cast";
     }
 
     private void addValueParameters(CodeExecutableElement method, TemplateMethod specialization, boolean forceFrame) {
@@ -110,7 +102,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             if (forceFrame && spec.getName().equals("frame")) {
                 continue;
             }
-            method.addParameter(new CodeVariableElement(parameter.getActualType(), valueName(parameter)));
+            method.addParameter(new CodeVariableElement(parameter.getActualType(), valueName(specialization, parameter)));
         }
     }
 
@@ -127,12 +119,12 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             if (unexpectedValueName != null && spec.getName().equals(unexpectedValueName)) {
                 builder.string("ex.getResult()");
             } else {
-                builder.string(valueName(parameter));
+                builder.string(valueName(specialization, parameter));
             }
         }
     }
 
-    private static void addValueParameterNamesWithCasts(CodeTreeBuilder body, SpecializationData valueSpecialization, SpecializationData targetSpecialization) {
+    private static void addValueParameterNamesWithCasts(ProcessorContext context, CodeTreeBuilder body, SpecializationData valueSpecialization, SpecializationData targetSpecialization) {
         NodeData node = targetSpecialization.getNode();
         TypeSystemData typeSystem = node.getTypeSystem();
 
@@ -146,9 +138,12 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
 
             if (targetType == null || targetType.isGeneric() || (valueType != null && valueType.equalsType(targetType))) {
-                body.string(valueName(targetParameter));
+                body.string(valueName(targetSpecialization, targetParameter));
             } else {
-                body.string(castValueName(targetParameter));
+                String methodName = TypeSystemCodeGenerator.asTypeMethodName(targetType);
+                startCallTypeSystemMethod(context, body, node, methodName);
+                body.string(valueName(targetSpecialization, targetParameter));
+                body.end().end();
             }
         }
     }
@@ -189,14 +184,6 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
         return prefix;
     }
 
-    private static CodeTree createCallTypeSystemMethod(ProcessorContext context, CodeTreeBuilder parent, NodeData node, String methodName, String value) {
-        CodeTreeBuilder builder = new CodeTreeBuilder(parent);
-        startCallTypeSystemMethod(context, builder, node, methodName);
-        builder.string(value);
-        builder.end().end();
-        return builder.getRoot();
-    }
-
     private static void startCallTypeSystemMethod(ProcessorContext context, CodeTreeBuilder body, NodeData node, String methodName) {
         VariableElement singleton = TypeSystemCodeGenerator.findSingleton(context, node.getTypeSystem());
         assert singleton != null;
@@ -206,12 +193,12 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
         body.string(".").startCall(methodName);
     }
 
-    private CodeTree createGuardAndCast(CodeTreeBuilder parent, String conditionPrefix, SpecializationData valueSpecialization, SpecializationData guardedSpecialization, boolean onSpecialization,
-                    CodeTree guardedStatements, CodeTree elseStatements) {
+    private static CodeTree createGuardAndCast(ProcessorContext context, CodeTreeBuilder parent, String prefix, SpecializationData valueSpecialization, SpecializationData guardedSpecialization,
+                    boolean onSpecialization, CodeTree guardedStatements, CodeTree elseStatements) {
 
         CodeTreeBuilder builder = new CodeTreeBuilder(parent);
-        CodeTree implicitGuards = createImplicitGuards(parent, conditionPrefix, valueSpecialization, guardedSpecialization);
-        CodeTree explicitGuards = createExplicitGuards(parent, implicitGuards == null ? conditionPrefix : null, valueSpecialization, guardedSpecialization, onSpecialization);
+        CodeTree implicitGuards = createImplicitGuards(context, parent, prefix, valueSpecialization, guardedSpecialization);
+        CodeTree explicitGuards = createExplicitGuards(context, parent, implicitGuards == null ? prefix : null, valueSpecialization, guardedSpecialization, onSpecialization);
 
         int ifCount = 0;
 
@@ -223,10 +210,6 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             ifCount++;
         }
 
-        if (explicitGuards != null || !onSpecialization) {
-            builder.tree(createCasts(parent, valueSpecialization, guardedSpecialization));
-        }
-
         if (explicitGuards != null) {
             builder.startIf();
             builder.tree(explicitGuards);
@@ -235,8 +218,8 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             ifCount++;
         }
 
-        if (implicitGuards == null && explicitGuards == null && conditionPrefix != null && !conditionPrefix.isEmpty()) {
-            builder.startIf().string(conditionPrefix).end().startBlock();
+        if (implicitGuards == null && explicitGuards == null && prefix != null && !prefix.isEmpty()) {
+            builder.startIf().string(prefix).end().startBlock();
             ifCount++;
         }
 
@@ -252,10 +235,10 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
         return builder.getRoot();
     }
 
-    private static CodeTree createExplicitGuards(CodeTreeBuilder parent, String conditionPrefix, SpecializationData valueSpecialization, SpecializationData guardedSpecialization,
+    private static CodeTree createExplicitGuards(ProcessorContext context, CodeTreeBuilder parent, String prefix, SpecializationData valueSpecialization, SpecializationData guardedSpecialization,
                     boolean onSpecialization) {
         CodeTreeBuilder builder = new CodeTreeBuilder(parent);
-        String andOperator = conditionPrefix != null ? conditionPrefix + " && " : "";
+        String andOperator = (prefix != null && !prefix.isEmpty()) ? (prefix + " && ") : "";
         if (guardedSpecialization.getGuards().length > 0) {
             // Explicitly specified guards
             for (SpecializationGuardData guard : guardedSpecialization.getGuards()) {
@@ -263,7 +246,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                     builder.string(andOperator);
 
                     startCallOperationMethod(builder, guard.getGuardDeclaration());
-                    addValueParameterNamesWithCasts(builder, valueSpecialization, guardedSpecialization);
+                    addValueParameterNamesWithCasts(context, builder, valueSpecialization, guardedSpecialization);
 
                     builder.end().end(); // call
                     andOperator = " && ";
@@ -274,137 +257,48 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
         return builder.isEmpty() ? null : builder.getRoot();
     }
 
-    private CodeTree createCasts(CodeTreeBuilder parent, SpecializationData valueSpecialization, SpecializationData guardedSpecialization) {
+    private static CodeTree createImplicitGuards(ProcessorContext context, CodeTreeBuilder parent, String prefix, SpecializationData valueSpecialization, SpecializationData guardedSpecialization) {
         NodeData node = guardedSpecialization.getNode();
+        TypeSystemData typeSystem = node.getTypeSystem();
 
         CodeTreeBuilder builder = new CodeTreeBuilder(parent);
         // Implict guards based on method signature
+        String andOperator = (prefix != null && !prefix.isEmpty()) ? (prefix + " && ") : "";
         for (NodeFieldData field : node.getFields()) {
             ActualParameter guardedParam = guardedSpecialization.findParameter(field.getName());
             ActualParameter valueParam = valueSpecialization.findParameter(field.getName());
 
-            CodeTree cast = createCast(parent, field, valueParam, guardedParam);
-            if (cast == null) {
-                continue;
-            }
-            builder.tree(cast);
-        }
+            TypeData guardedType = guardedParam.getActualTypeData(typeSystem);
+            TypeData valueType = valueParam.getActualTypeData(typeSystem);
 
-        return builder.getRoot();
-    }
-
-    private CodeTree createImplicitGuards(CodeTreeBuilder parent, String conditionPrefix, SpecializationData valueSpecialization, SpecializationData guardedSpecialization) {
-        NodeData node = guardedSpecialization.getNode();
-
-        CodeTreeBuilder builder = new CodeTreeBuilder(parent);
-        // Implict guards based on method signature
-        String andOperator = conditionPrefix != null ? conditionPrefix + " && " : "";
-        for (NodeFieldData field : node.getFields()) {
-            ActualParameter guardedParam = guardedSpecialization.findParameter(field.getName());
-            ActualParameter valueParam = valueSpecialization.findParameter(field.getName());
-
-            CodeTree implicitGuard = createImplicitGuard(builder, field, valueParam, guardedParam);
-            if (implicitGuard == null) {
+            if (guardedType.equalsType(valueType) || guardedType.isGeneric()) {
                 continue;
             }
 
             builder.string(andOperator);
-            builder.tree(implicitGuard);
+
+            builder.startGroup();
+
+            if (field.isShortCircuit()) {
+                ActualParameter shortCircuit = guardedSpecialization.getPreviousParam(guardedParam);
+                builder.string("(");
+                builder.string("!").string(valueName(guardedSpecialization, shortCircuit));
+                builder.string(" || ");
+            }
+
+            startCallTypeSystemMethod(context, builder, guardedSpecialization.getNode(), TypeSystemCodeGenerator.isTypeMethodName(guardedType));
+            builder.string(valueName(guardedSpecialization, guardedParam));
+            builder.end().end(); // call
+
+            if (field.isShortCircuit()) {
+                builder.string(")");
+            }
+
+            builder.end(); // group
             andOperator = " && ";
         }
 
         return builder.isEmpty() ? null : builder.getRoot();
-    }
-
-    private CodeTree createImplicitGuard(CodeTreeBuilder parent, NodeFieldData field, ActualParameter source, ActualParameter target) {
-        NodeData node = field.getNodeData();
-        CodeTreeBuilder builder = new CodeTreeBuilder(parent);
-
-        TypeData targetType = target.getActualTypeData(node.getTypeSystem());
-        TypeData sourceType = source.getActualTypeData(node.getTypeSystem());
-
-        if (targetType.equalsType(sourceType) || targetType.isGeneric()) {
-            return null;
-        }
-
-        builder.startGroup();
-
-        if (field.isShortCircuit()) {
-            ActualParameter shortCircuit = target.getPreviousParameter();
-            assert shortCircuit != null;
-            builder.string("(");
-            builder.string("!").string(valueName(shortCircuit));
-            builder.string(" || ");
-        }
-
-        startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.isTypeMethodName(target.getActualTypeData(node.getTypeSystem())));
-        builder.string(valueName(field));
-        builder.end().end(); // call
-
-        if (field.isShortCircuit()) {
-            builder.string(")");
-        }
-
-        builder.end(); // group
-
-        return builder.getRoot();
-    }
-
-    private CodeTree createCast(CodeTreeBuilder parent, NodeFieldData field, ActualParameter source, ActualParameter target) {
-        NodeData node = field.getNodeData();
-        TypeSystemData typeSystem = node.getTypeSystem();
-
-        TypeData sourceType = source.getActualTypeData(typeSystem);
-        TypeData targetType = target.getActualTypeData(typeSystem);
-
-        if (targetType.equalsType(sourceType) || targetType.isGeneric()) {
-            return null;
-        }
-
-        CodeTree condition = null;
-        if (field.isShortCircuit()) {
-            ActualParameter shortCircuit = target.getPreviousParameter();
-            assert shortCircuit != null;
-            condition = CodeTreeBuilder.singleString(valueName(shortCircuit));
-        }
-
-        CodeTree value = createCallTypeSystemMethod(context, parent, node, TypeSystemCodeGenerator.asTypeMethodName(targetType), valueName(target));
-
-        return createLazyAssignment(parent, castValueName(field), target.getActualType(), condition, value);
-    }
-
-    /**
-     * <pre>
-     * variant1 $condition != null
-     * 
-     * $type $name = defaultValue($type);
-     * if ($condition) {
-     *     $name = $value;
-     * }
-     * 
-     * variant2 $condition != null
-     * $type $name = $value;
-     * </pre>
-     * 
-     * .
-     */
-    private static CodeTree createLazyAssignment(CodeTreeBuilder parent, String name, TypeMirror type, CodeTree condition, CodeTree value) {
-        CodeTreeBuilder builder = new CodeTreeBuilder(parent);
-        if (condition == null) {
-            builder.declaration(type, name, value);
-        } else {
-            builder.declaration(type, name, new CodeTreeBuilder(parent).defaultValue(type).getRoot());
-
-            builder.startIf().tree(condition).end();
-            builder.startBlock();
-            builder.startStatement();
-            builder.string(name);
-            builder.string(" = ");
-            builder.tree(value);
-            builder.end(); // statement
-            builder.end(); // block
-        }
-        return builder.getRoot();
     }
 
     @Override
@@ -626,7 +520,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 guarded.string(THIS_NODE_LOCAL_VAR_NAME);
                 guarded.end().end();
 
-                body.tree(createGuardAndCast(body, "allowed", node.getGenericSpecialization(), specialization, true, guarded.getRoot(), null));
+                body.tree(createGuardAndCast(getContext(), body, "allowed", node.getGenericSpecialization(), specialization, true, guarded.getRoot(), null));
             }
             body.startThrow().startNew(getContext().getType(IllegalArgumentException.class)).end().end();
 
@@ -675,7 +569,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             CodeTree invokeMethod = invokeMethodBuilder.getRoot();
 
             if (next != null) {
-                invokeMethod = createGuardAndCast(builder, null, current.getNode().getGenericSpecialization(), current, false, invokeMethod, null);
+                invokeMethod = createGuardAndCast(getContext(), builder, "", current.getNode().getGenericSpecialization(), current, false, invokeMethod, null);
             }
 
             builder.tree(invokeMethod);
@@ -697,7 +591,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             builder.startReturn();
             startCallOperationMethod(builder, specialization);
-            addValueParameterNamesWithCasts(builder, specialization.getNode().getGenericSpecialization(), specialization);
+            addValueParameterNamesWithCasts(context, builder, specialization.getNode().getGenericSpecialization(), specialization);
             builder.end().end(); // start call operation
             builder.end(); // return
 
@@ -804,14 +698,14 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                     builder.string("// ignore").newLine();
                 } else {
                     builder.startReturn();
-                    builder.tree(createExpectType(node, castedType, CodeTreeBuilder.singleString("ex.getResult()")));
+                    builder.tree(castPrimaryExecute(node, castedType, CodeTreeBuilder.singleString("ex.getResult()")));
                     builder.end();
                 }
                 builder.end();
 
                 if (!returnVoid) {
                     builder.startReturn();
-                    builder.tree(createExpectType(node, castedType, CodeTreeBuilder.singleString("value")));
+                    builder.tree(castPrimaryExecute(node, castedType, CodeTreeBuilder.singleString("value")));
                     builder.end();
                 }
             } else {
@@ -819,13 +713,13 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                     builder.statement(primaryExecuteCall);
                 } else {
                     builder.startReturn();
-                    builder.tree(createExpectType(node, castedType, primaryExecuteCall));
+                    builder.tree(castPrimaryExecute(node, castedType, primaryExecuteCall));
                     builder.end();
                 }
             }
         }
 
-        private CodeTree createExpectType(NodeData node, ExecutableTypeData castedType, CodeTree value) {
+        private CodeTree castPrimaryExecute(NodeData node, ExecutableTypeData castedType, CodeTree value) {
             if (castedType == null) {
                 return value;
             } else if (castedType.getType().isVoid()) {
@@ -835,14 +729,11 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
 
             CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
-            String targetMethodName;
             if (castedType.hasUnexpectedValue(getContext())) {
-                targetMethodName = TypeSystemCodeGenerator.expectTypeMethodName(castedType.getType());
+                startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.expectTypeMethodName(castedType.getType()));
             } else {
-                targetMethodName = TypeSystemCodeGenerator.asTypeMethodName(castedType.getType());
+                startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.asTypeMethodName(castedType.getType()));
             }
-            startCallTypeSystemMethod(getContext(), builder, node, targetMethodName);
-
             builder.tree(value);
             builder.end().end();
             return builder.getRoot();
@@ -866,7 +757,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             if (next != null) {
                 returnSpecialized = createReturnSpecializeAndExecute(builder, next, null);
             }
-            builder.tree(createGuardAndCast(builder, null, specialization, specialization, false, executeNode, returnSpecialized));
+            builder.tree(createGuardAndCast(context, builder, "", specialization, specialization, false, executeNode, returnSpecialized));
         }
 
         private CodeTree createDeoptimize(CodeTreeBuilder parent) {
@@ -972,7 +863,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 builder.string(" ");
             }
 
-            builder.string(valueName(specParameter));
+            builder.string(valueName(specialization, specParameter));
             builder.string(" = ");
             ExecutableTypeData genericExecutableType = field.getNodeData().findGenericExecutableType(getContext(), specParameter.getActualTypeData(node.getTypeSystem()));
             if (genericExecutableType == null) {
@@ -1008,7 +899,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             boolean shortCircuit = startShortCircuit(builder, specialization, field, null);
 
             if (!shortCircuit) {
-                builder.startStatement().type(param.getActualType()).string(" ").string(valueName(param)).end();
+                builder.startStatement().type(param.getActualType()).string(" ").string(valueName(specialization, param)).end();
             }
 
             ExecutableTypeData execType = field.getNodeData().findExecutableType(param.getActualTypeData(field.getNodeData().getTypeSystem()));
@@ -1060,7 +951,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 }
             }
 
-            builder.startStatement().type(shortCircuitParam.getActualType()).string(" ").string(valueName(shortCircuitParam)).string(" = ");
+            builder.startStatement().type(shortCircuitParam.getActualType()).string(" ").string(valueName(specialization, shortCircuitParam)).string(" = ");
             ShortCircuitData shortCircuitData = specialization.getShortCircuits()[shortCircuitIndex];
 
             startCallOperationMethod(builder, shortCircuitData);
@@ -1069,7 +960,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             builder.end(); // statement
 
-            builder.declaration(parameter.getActualType(), valueName(parameter), CodeTreeBuilder.createBuilder().defaultValue(parameter.getActualType()));
+            builder.declaration(parameter.getActualType(), valueName(specialization, parameter), CodeTreeBuilder.createBuilder().defaultValue(parameter.getActualType()));
             builder.startIf().string(shortCircuitParam.getSpecification().getName()).end();
             builder.startBlock();
 
@@ -1132,7 +1023,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             addValueParameterNames(genericExecute, specialization.getNode().getGenericSpecialization(), null, true);
             genericExecute.end(); // call generated generic
 
-            CodeTree genericInvocation = createExpectType(node, returnExecutableType, genericExecute.getRoot());
+            CodeTree genericInvocation = castPrimaryExecute(node, returnExecutableType, genericExecute.getRoot());
 
             if (generatedGeneric != null && Utils.isVoid(generatedGeneric.getReturnType())) {
                 builder.statement(genericInvocation);

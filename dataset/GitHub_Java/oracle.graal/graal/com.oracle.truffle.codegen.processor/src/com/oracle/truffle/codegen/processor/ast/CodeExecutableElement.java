@@ -204,7 +204,7 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
         return v.visitExecutable(this, p);
     }
 
-    public static CodeExecutableElement clone(@SuppressWarnings("unused") ProcessingEnvironment env, ExecutableElement method) {
+    public static CodeExecutableElement clone(ProcessingEnvironment env, ExecutableElement method) {
         CodeExecutableElement copy = new CodeExecutableElement(method.getReturnType(), method.getSimpleName().toString());
         for (TypeMirror thrownType : method.getThrownTypes()) {
             copy.addThrownType(thrownType);
@@ -220,8 +220,8 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
         for (Element element : method.getEnclosedElements()) {
             copy.add(element);
         }
+        copy.setBody(Utils.getMethodBody(env, method));
         copy.getModifiers().addAll(method.getModifiers());
-        copy.setVarArgs(method.isVarArgs());
         return copy;
     }
 
