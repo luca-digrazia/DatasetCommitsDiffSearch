@@ -35,10 +35,7 @@ public class NodeIterator {
         while (nodes.size() > 0) {
             Node n = nodes.remove();
             if (visitor != null) {
-                boolean followEdges = visitor.visit(n);
-                if (!followEdges) {
-                    continue;
-                }
+                visitor.visit(n);
             }
             switch(e) {
                 case INPUTS:
