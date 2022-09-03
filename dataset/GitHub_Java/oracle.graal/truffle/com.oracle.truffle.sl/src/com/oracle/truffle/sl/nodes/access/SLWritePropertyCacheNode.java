@@ -46,6 +46,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -61,9 +62,10 @@ import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.sl.runtime.SLUndefinedNameException;
 
+@SuppressWarnings("unused")
 public abstract class SLWritePropertyCacheNode extends SLPropertyCacheNode {
 
-    public abstract void executeWrite(Object receiver, Object name, Object value);
+    public abstract void executeWrite(VirtualFrame frame, Object receiver, Object name, Object value);
 
     /**
      * Polymorphic inline cache for writing a property that already exists (no shape change is
@@ -79,8 +81,8 @@ public abstract class SLWritePropertyCacheNode extends SLPropertyCacheNode {
                     assumptions = {
                                     "shape.getValidAssumption()"
                     })
-    protected static void writeExistingPropertyCached(DynamicObject receiver, @SuppressWarnings("unused") Object name, Object value,
-                    @SuppressWarnings("unused") @Cached("name") Object cachedName,
+    protected static void writeExistingPropertyCached(DynamicObject receiver, Object name, Object value,
+                    @Cached("name") Object cachedName,
                     @Cached("lookupShape(receiver)") Shape shape,
                     @Cached("lookupLocation(shape, name, value)") Location location) {
         try {
@@ -107,7 +109,6 @@ public abstract class SLWritePropertyCacheNode extends SLPropertyCacheNode {
                                     "oldShape.getValidAssumption()",
                                     "newShape.getValidAssumption()"
                     })
-    @SuppressWarnings("unused")
     protected static void writeNewPropertyCached(DynamicObject receiver, Object name, Object value,
                     @Cached("name") Object cachedName,
                     @Cached("lookupShape(receiver)") Shape oldShape,
@@ -176,7 +177,7 @@ public abstract class SLWritePropertyCacheNode extends SLPropertyCacheNode {
      * polymorphic inline cache.
      */
     @TruffleBoundary
-    @Specialization(replaces = {"writeExistingPropertyCached", "writeNewPropertyCached"}, guards = {"isValidSLObject(receiver)"})
+    @Specialization(contains = {"writeExistingPropertyCached", "writeNewPropertyCached"}, guards = {"isValidSLObject(receiver)"})
     protected static void writeUncached(DynamicObject receiver, Object name, Object value) {
         receiver.define(name, value);
     }
@@ -207,13 +208,13 @@ public abstract class SLWritePropertyCacheNode extends SLPropertyCacheNode {
      * API to access the foreign data.
      */
     @Specialization(guards = "isForeignObject(receiver)")
-    protected static void writeForeign(TruffleObject receiver, Object name, Object value,
+    protected static void writeForeign(VirtualFrame frame, TruffleObject receiver, Object name, Object value,
                     // The child node to access the foreign object
                     @Cached("createForeignWriteNode()") Node foreignWriteNode) {
 
         try {
             /* Perform the foreign object access. */
-            ForeignAccess.sendWrite(foreignWriteNode, receiver, name, value);
+            ForeignAccess.sendWrite(foreignWriteNode, frame, receiver, name, value);
 
         } catch (UnknownIdentifierException | UnsupportedTypeException | UnsupportedMessageException e) {
             /* Foreign access was not successful. */
