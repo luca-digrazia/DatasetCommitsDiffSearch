@@ -76,15 +76,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         @CompilationFinal private volatile PolyglotContextImpl singleContext;
     }
 
-    @CompilationFinal private static SingleContextState SINGLE_CONTEXT_STATE = new SingleContextState();
-
-    /*
-     * Used from testing using reflection. Its invalid to call it anywhere else than testing. Used
-     * in ContextLookupCompilationTest.
-     */
-    static void resetSingleContextState() {
-        SINGLE_CONTEXT_STATE = new SingleContextState();
-    }
+    private static final SingleContextState SINGLE_CONTEXT_STATE = new SingleContextState();
 
     private final Assumption singleThreaded = Truffle.getRuntime().createAssumption("Single threaded");
     private final Assumption singleThreadedConstant = Truffle.getRuntime().createAssumption("Single threaded constant thread");
@@ -189,15 +181,14 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
      * Marks a context used globally. Potentially invalidating the global single context assumption.
      */
     static void initializeStaticContext(PolyglotContextImpl context) {
-        SingleContextState state = SINGLE_CONTEXT_STATE;
-        if (state.singleContextAssumption.isValid()) {
-            synchronized (state) {
-                if (state.singleContextAssumption.isValid()) {
-                    if (state.singleContext != null) {
-                        state.singleContextAssumption.invalidate();
-                        state.singleContext = null;
+        if (SINGLE_CONTEXT_STATE.singleContextAssumption.isValid()) {
+            synchronized (SINGLE_CONTEXT_STATE) {
+                if (SINGLE_CONTEXT_STATE.singleContextAssumption.isValid()) {
+                    if (SINGLE_CONTEXT_STATE.singleContext != null) {
+                        SINGLE_CONTEXT_STATE.singleContextAssumption.invalidate();
+                        SINGLE_CONTEXT_STATE.singleContext = null;
                     } else {
-                        state.singleContext = context;
+                        SINGLE_CONTEXT_STATE.singleContext = context;
                     }
                 }
             }
@@ -205,16 +196,15 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     /**
-     * Marks all code from this context as unusable. Its important that a context is only disposed
-     * there is no code that could rely on the singleContextAssumption.
+     * Marks a context unusable and therefore we free up future contexts to specialize that there is
+     * just one usable.
      */
     static void disposeStaticContext(PolyglotContextImpl context) {
-        SingleContextState state = SINGLE_CONTEXT_STATE;
-        if (state.singleContextAssumption.isValid()) {
-            synchronized (state) {
-                if (state.singleContextAssumption.isValid()) {
-                    assert state.singleContext == context;
-                    state.singleContext = null;
+        if (SINGLE_CONTEXT_STATE.singleContextAssumption.isValid()) {
+            synchronized (SINGLE_CONTEXT_STATE) {
+                if (SINGLE_CONTEXT_STATE.singleContextAssumption.isValid()) {
+                    assert SINGLE_CONTEXT_STATE.singleContext == context;
+                    SINGLE_CONTEXT_STATE.singleContext = null;
                 }
             }
         }
@@ -957,9 +947,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                     }
                     closed = success;
                     if (success) {
-                        if (engine.boundEngine) {
-                            disposeStaticContext(this);
-                        }
+                        disposeStaticContext(this);
                     }
                     cancelling = false;
                 }
