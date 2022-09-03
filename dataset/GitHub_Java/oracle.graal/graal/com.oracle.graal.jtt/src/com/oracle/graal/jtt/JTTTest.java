@@ -64,7 +64,7 @@ public class JTTTest extends GraalCompilerTest {
             assert parameterTypes.length == args.length;
             for (int i = 0; i < args.length; i++) {
                 ParameterNode param = graph.getParameter(i);
-                Constant c = getSnippetReflection().forBoxed(parameterTypes[i].getKind(), args[i]);
+                Constant c = Constant.forBoxed(parameterTypes[i].getKind(), args[i]);
                 ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
                 param.replaceAtUsages(replacement);
             }
@@ -80,11 +80,11 @@ public class JTTTest extends GraalCompilerTest {
     Double delta;
 
     @Override
-    protected void assertDeepEquals(Object expected, Object actual) {
+    protected void assertEquals(Object expected, Object actual) {
         if (delta != null) {
             Assert.assertEquals(((Number) expected).doubleValue(), ((Number) actual).doubleValue(), delta);
         } else {
-            super.assertDeepEquals(expected, actual);
+            super.assertEquals(expected, actual);
         }
     }
 
