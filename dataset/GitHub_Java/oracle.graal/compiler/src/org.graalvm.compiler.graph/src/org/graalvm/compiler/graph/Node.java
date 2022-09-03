@@ -752,7 +752,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
             assert !graph.isFrozen();
             NodeEventListener listener = graph.nodeEventListener;
             if (listener != null) {
-                listener.event(Graph.NodeEvent.INPUT_CHANGED, node);
+                listener.inputChanged(node);
             }
         }
     }
@@ -762,7 +762,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
             assert !graph.isFrozen();
             NodeEventListener listener = graph.nodeEventListener;
             if (listener != null && node.isAlive()) {
-                listener.event(Graph.NodeEvent.ZERO_USAGES, node);
+                listener.usagesDroppedToZero(node);
             }
         }
     }
