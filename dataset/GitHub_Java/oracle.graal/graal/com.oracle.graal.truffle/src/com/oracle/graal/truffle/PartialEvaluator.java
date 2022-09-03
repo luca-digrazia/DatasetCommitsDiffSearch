@@ -187,19 +187,14 @@ public class PartialEvaluator {
 
         private Stack<TruffleInlining> inlining;
         private OptimizedDirectCallNode lastDirectCallNode;
-        private final Replacements replacements;
 
-        public InlineInvokePlugin(TruffleInlining inlining, Replacements replacements) {
+        public InlineInvokePlugin(TruffleInlining inlining) {
             this.inlining = new Stack<>();
             this.inlining.push(inlining);
-            this.replacements = replacements;
         }
 
         public ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments, JavaType returnType, int depth) {
             if (original.getAnnotation(TruffleBoundary.class) != null) {
-                return null;
-            }
-            if (replacements != null && (replacements.getMethodSubstitutionMethod(original) != null || replacements.getMacroSubstitution(original) != null)) {
                 return null;
             }
             if (original.equals(callSiteProxyMethod)) {
@@ -247,11 +242,12 @@ public class PartialEvaluator {
         newConfig.setLoadFieldPlugin(new InterceptLoadFieldPlugin());
         newConfig.setParameterPlugin(new InterceptReceiverPlugin(callTarget));
         callTarget.setInlining(new TruffleInlining(callTarget, new DefaultInliningPolicy()));
-        newConfig.setInlineInvokePlugin(new InlineInvokePlugin(callTarget.getInlining(), providers.getReplacements()));
+        newConfig.setInlineInvokePlugin(new InlineInvokePlugin(callTarget.getInlining()));
         newConfig.setLoopExplosionPlugin(new LoopExplosionPlugin());
         TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), newConfig.getInvocationPlugins());
         long ms = System.currentTimeMillis();
-        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), this.snippetReflection, providers.getConstantReflection(), newConfig, TruffleCompilerImpl.Optimizations).apply(graph);
+        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), this.snippetReflection, providers.getReplacements(), providers.getConstantReflection(), newConfig,
+                        TruffleCompilerImpl.Optimizations).apply(graph);
         System.out.println("# ms: " + (System.currentTimeMillis() - ms));
         Debug.dump(graph, "After FastPE");
 
