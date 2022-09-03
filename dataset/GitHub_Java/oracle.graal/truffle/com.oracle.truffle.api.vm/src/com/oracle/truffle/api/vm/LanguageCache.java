@@ -25,7 +25,6 @@
 package com.oracle.truffle.api.vm;
 
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleOptions;
 import static com.oracle.truffle.api.vm.PolyglotEngine.LOG;
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,8 +39,8 @@ import java.util.TreeSet;
 import java.util.logging.Level;
 
 /**
- * Ahead-of-time initialization. If the JVM is started with {@link TruffleOptions#AOT}, it populates
- * cache with languages found in application classloader.
+ * Ahead-of-time initialization. If the JVM is started with -Dcom.oracle.truffle.aot=true, it
+ * populates cache with languages found in application classloader.
  */
 final class LanguageCache {
     static final boolean PRELOAD;
@@ -54,7 +53,7 @@ final class LanguageCache {
 
     static {
         Map<String, LanguageCache> map = null;
-        if (TruffleOptions.AOT) {
+        if (Boolean.getBoolean("com.oracle.truffle.aot")) { // NOI18N
             map = languages();
             for (LanguageCache info : map.values()) {
                 info.getImpl(true);
