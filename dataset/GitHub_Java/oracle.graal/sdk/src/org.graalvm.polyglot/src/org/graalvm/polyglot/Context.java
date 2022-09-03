@@ -31,7 +31,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Predicate;
 
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 
@@ -246,7 +245,6 @@ public final class Context implements AutoCloseable {
         private InputStream in;
         private Map<String, String> options;
         private Map<String, String[]> arguments;
-        private Predicate<String> classFilter;
 
         Builder(String... onlyLanguages) {
             Objects.requireNonNull(onlyLanguages);
@@ -323,25 +321,10 @@ public final class Context implements AutoCloseable {
         }
 
         /**
-         * Sets a class filter that allows to limit the classes that are allowed to be loaded by
-         * guest languages.
-         *
-         * @param classFilter a predicate that returns <code>true</code> or <code>false</code> for a
-         *            java qualified class name.
-         *
-         * @since 1.0
-         */
-        public Builder setJavaClassFilter(Predicate<String> classFilter) {
-            Objects.requireNonNull(classFilter);
-            this.classFilter = classFilter;
-            return this;
-        }
-
-        /**
          * Set an option for this language {@link Context context}. If one of the set option keys or
          * values is invalid then an {@link IllegalArgumentException} is thrown when the context is
          * {@link #build() built}. The given key and value must not be <code>null</code>. Options
-         * for the engine or instruments can be specified using the
+         * for the engine or instruments must be specified using the
          * {@link Engine.Builder#setOption(String, String) engine builder}.
          *
          * @see Language#getOptions() To list all available options for a {@link Language language}.
@@ -449,15 +432,16 @@ public final class Context implements AutoCloseable {
                 }
                 engineBuilder.setBoundEngine(true);
                 engine = engineBuilder.build();
-                return engine.impl.createContext(null, null, null, classFilter, Collections.emptyMap(),
+                return engine.impl.createContext(null, null, null, Collections.emptyMap(),
                                 arguments == null ? Collections.emptyMap() : arguments,
                                 onlyLanguages);
             } else {
-                return engine.impl.createContext(out, err, in, classFilter,
+                return engine.impl.createContext(out, err, in,
                                 options == null ? Collections.emptyMap() : options,
                                 arguments == null ? Collections.emptyMap() : arguments,
                                 onlyLanguages);
             }
+
         }
 
     }
