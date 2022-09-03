@@ -29,10 +29,7 @@ import org.junit.Test;
 
 import com.oracle.graal.nodes.IfNode;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.DominatorConditionalEliminationPhase;
 import com.oracle.graal.phases.common.IterativeConditionalEliminationPhase;
 import com.oracle.graal.virtual.phases.ea.EarlyReadEliminationPhase;
 
@@ -131,30 +128,6 @@ public class ConditionalEliminationLoadFieldConstantFoldTest extends GraalCompil
         return 0;
     }
 
-    public int testLoadFinalTwiceNoReadEliminationInstanceOf(E e) {
-        if (e.o == CONST_C) {
-            /*
-             * we cannot eliminate the second read of e.o although it is a final field. the call to
-             * identity hash code (or any other memory checkpoint killing ANY_LOCATION) will
-             * prohibit the elimination of the second load, thus we have two different load nodes,
-             * we know that that first load field is a constant but we do not know for the second
-             * one, assuming e.o is final, as it might have been written in between
-             *
-             * this prohibits us to remove the if (fold through all loads to final fields) and the
-             * instance of e.o
-             */
-            System.identityHashCode(e);
-            C c = (C) e.o;
-            if (c.b.a == 10) {
-                intSideEffect = 1;
-            } else {
-                intSideEffect = 10;
-            }
-        }
-        return 0;
-
-    }
-
     static class C1 {
         final int a;
 
@@ -210,6 +183,30 @@ public class ConditionalEliminationLoadFieldConstantFoldTest extends GraalCompil
             intSideEffect = -1;
             return -1;
         }
+    }
+
+    public int testLoadFinalTwiceNoReadEliminationInstanceOf(E e) {
+        if (e.o == CONST_C) {
+            /*
+             * we cannot eliminate the second read of e.o although it is a final field. the call to
+             * System.gc (or any other memory checkpoint killing ANY_LOCATION) will prohibit the
+             * elimination of the second load, thus we have two different load nodes, we know that
+             * that first load field is a constant but we do not know for the second one, assuming
+             * e.o is final, as it might have been written in between
+             *
+             * this prohibits us to remove the if (fold through all loads to final fields) and the
+             * instance of e.o
+             */
+            System.gc();
+            C c = (C) e.o;
+            if (c.b.a == 10) {
+                intSideEffect = 1;
+            } else {
+                intSideEffect = 10;
+            }
+        }
+        return 0;
+
     }
 
     private static final C1 C1_CONST = new C1(0);
@@ -271,12 +268,10 @@ public class ConditionalEliminationLoadFieldConstantFoldTest extends GraalCompil
     @Test(expected = AssertionError.class)
     @SuppressWarnings("try")
     public void test06() {
-        try (OverrideScope os = OptionValue.override(DominatorConditionalEliminationPhase.Options.FoldFinalFieldLoads, true)) {
-            Result actual = executeActual(getResolvedJavaMethod("foldThatIsNotAllowed"), null, C2_CONST);
-            UNSAFE.putObject(C2_CONST, C2_C1_OFFSET, C1_CONST);
-            Result expected = executeExpected(getResolvedJavaMethod("foldThatIsNotAllowed"), null, C2_CONST);
-            Assert.assertEquals(expected.returnValue, actual.returnValue);
-        }
+        Result actual = executeActual(getResolvedJavaMethod("foldThatIsNotAllowed"), null, C2_CONST);
+        UNSAFE.putObject(C2_CONST, C2_C1_OFFSET, C1_CONST);
+        Result expected = executeExpected(getResolvedJavaMethod("foldThatIsNotAllowed"), null, C2_CONST);
+        Assert.assertEquals(expected.returnValue, actual.returnValue);
     }
 
     @SuppressWarnings("try")
@@ -285,9 +280,7 @@ public class ConditionalEliminationLoadFieldConstantFoldTest extends GraalCompil
         CanonicalizerPhase c = new CanonicalizerPhase();
         c.apply(g, getDefaultHighTierContext());
         new EarlyReadEliminationPhase(c).apply(g, getDefaultHighTierContext());
-        try (OverrideScope os = OptionValue.override(DominatorConditionalEliminationPhase.Options.FoldFinalFieldLoads, true)) {
-            new IterativeConditionalEliminationPhase(c, false).apply(g, getDefaultHighTierContext());
-        }
+        new IterativeConditionalEliminationPhase(c, false).apply(g, getDefaultHighTierContext());
         Assert.assertEquals("Nr of Ifs left does not match", nrOfIfsAfter, g.getNodes().filter(IfNode.class).count());
         c.apply(g, getDefaultHighTierContext());
         return g;
