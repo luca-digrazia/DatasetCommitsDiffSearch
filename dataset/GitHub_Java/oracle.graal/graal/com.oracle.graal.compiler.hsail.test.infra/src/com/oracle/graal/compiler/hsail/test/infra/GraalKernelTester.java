@@ -54,7 +54,7 @@ public abstract class GraalKernelTester extends KernelTester {
 
     private static synchronized void installSubstitutions() {
         if (!substitutionsInstalled) {
-            getHSAILBackend().getProviders().getReplacements().registerSubstitutions(GraalKernelTester.class, ForceDeoptSubstitutions.class);
+            getHSAILBackend().getProviders().getReplacements().registerSubstitutions(ForceDeoptSubstitutions.class);
             substitutionsInstalled = true;
         }
     }
@@ -131,18 +131,11 @@ public abstract class GraalKernelTester extends KernelTester {
     }
 
     /**
-     * Determines if the JVM supports the required typeProfileWidth.
-     */
-    public boolean typeProfileWidthAtLeast(int val) {
-        return (getHSAILBackend().getRuntime().getConfig().typeProfileWidth >= val);
-    }
-
-    /**
      * Determines if the runtime supports {@link VirtualObject}s in {@link DebugInfo} associated
      * with HSAIL code.
      */
     public boolean canHandleDeoptVirtualObjects() {
-        return true;
+        return false;
     }
 
     /**
@@ -152,17 +145,13 @@ public abstract class GraalKernelTester extends KernelTester {
         return true;
     }
 
-    HotSpotNmethod installedCode;
-
     @Override
     protected void dispatchKernelOkra(int range, Object... args) {
         HSAILHotSpotBackend backend = getHSAILBackend();
         if (backend.isDeviceInitialized()) {
             try {
-                if (installedCode == null) {
-                    installedCode = backend.compileAndInstallKernel(testMethod);
-                }
-                backend.executeKernel(installedCode, range, args);
+                HotSpotNmethod code = backend.compileAndInstallKernel(testMethod);
+                backend.executeKernel(code, range, args);
             } catch (InvalidInstalledCodeException e) {
                 Debug.log("WARNING:Invalid installed code: " + e);
                 e.printStackTrace();
@@ -194,7 +183,7 @@ public abstract class GraalKernelTester extends KernelTester {
     @Override
     public void testGeneratedHsail() {
         try (OverrideScope s = getOverrideScope()) {
-            assumeTrue(supportsRequiredCapabilities() && okraEnvIsInitialized());
+            assumeTrue(supportsRequiredCapabilities());
             super.testGeneratedHsail();
         }
     }
@@ -202,7 +191,7 @@ public abstract class GraalKernelTester extends KernelTester {
     @Override
     public void testGeneratedHsailUsingLambdaMethod() {
         try (OverrideScope s = getOverrideScope()) {
-            assumeTrue(supportsRequiredCapabilities() && okraEnvIsInitialized());
+            assumeTrue(supportsRequiredCapabilities());
             super.testGeneratedHsailUsingLambdaMethod();
         }
     }

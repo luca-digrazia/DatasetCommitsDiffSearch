@@ -737,8 +737,6 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMFlag(name = "AllocatePrefetchStepSize") @Stable public int allocatePrefetchStepSize;
     @HotSpotVMFlag(name = "AllocatePrefetchDistance") @Stable public int allocatePrefetchDistance;
 
-    @HotSpotVMFlag(name = "FlightRecorder", optional = true) @Stable public boolean flightRecorder;
-
     @HotSpotVMField(name = "Universe::_collectedHeap", type = "CollectedHeap*", get = HotSpotVMField.Type.VALUE) @Stable private long universeCollectedHeap;
     @HotSpotVMField(name = "CollectedHeap::_total_collections", type = "unsigned int", get = HotSpotVMField.Type.OFFSET) @Stable private int collectedHeapTotalCollectionsOffset;
 
@@ -1035,9 +1033,9 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMField(name = "HSAILFrame::_pc_offset", type = "jint", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailFramePcOffset;
     @HotSpotVMField(name = "HSAILFrame::_num_s_regs", type = "jbyte", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailFrameNumSRegOffset;
     @HotSpotVMField(name = "HSAILFrame::_num_d_regs", type = "jbyte", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailFrameNumDRegOffset;
-    @HotSpotVMType(name = "HSAILFrame", get = HotSpotVMType.Type.SIZE) @Stable public int hsailFrameHeaderSize;
-    @HotSpotVMType(name = "Hsail::HSAILKernelDeoptimization", get = HotSpotVMType.Type.SIZE) @Stable public int hsailKernelDeoptimizationHeaderSize;
-    @HotSpotVMType(name = "Hsail::HSAILDeoptimizationInfo", get = HotSpotVMType.Type.SIZE) @Stable public int hsailDeoptimizationInfoHeaderSize;
+    @HotSpotVMConstant(name = "sizeof(HSAILFrame)") @Stable public int hsailFrameHeaderSize;
+    @HotSpotVMConstant(name = "sizeof(Hsail::HSAILKernelDeoptimization)") @Stable public int hsailKernelDeoptimizationHeaderSize;
+    @HotSpotVMConstant(name = "sizeof(Hsail::HSAILDeoptimizationInfo)") @Stable public int hsailDeoptimizationInfoHeaderSize;
 
     /**
      * Mark word right shift to get identity hash code.
@@ -1066,7 +1064,6 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMConstant(name = "Method::_dont_inline") @Stable public int methodFlagsDontInline;
     @HotSpotVMConstant(name = "Method::_hidden") @Stable public int methodFlagsHidden;
     @HotSpotVMConstant(name = "Method::nonvirtual_vtable_index") @Stable public int nonvirtualVtableIndex;
-    @HotSpotVMConstant(name = "Method::invalid_vtable_index") @Stable public int invalidVtableIndex;
 
     @HotSpotVMConstant(name = "JVM_ACC_MONITOR_MATCH") @Stable public int jvmAccMonitorMatch;
     @HotSpotVMConstant(name = "JVM_ACC_HAS_MONITOR_BYTECODES") @Stable public int jvmAccHasMonitorBytecodes;
