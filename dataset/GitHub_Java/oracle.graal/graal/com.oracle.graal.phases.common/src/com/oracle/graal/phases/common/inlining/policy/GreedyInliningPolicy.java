@@ -57,18 +57,15 @@ public class GreedyInliningPolicy extends AbstractInliningPolicy {
     public boolean isWorthInlining(ToDoubleFunction<FixedNode> probabilities, Replacements replacements, InlineInfo info, int inliningDepth, double probability, double relevance,
                     boolean fullyProcessed) {
         if (InlineEverything.getValue()) {
-            InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "inline everything");
-            return true;
+            return InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "inline everything");
         }
 
         if (isIntrinsic(replacements, info)) {
-            InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "intrinsic");
-            return true;
+            return InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "intrinsic");
         }
 
         if (info.shouldInline()) {
-            InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "forced inlining");
-            return true;
+            return InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "forced inlining");
         }
 
         double inliningBonus = getInliningBonus(info);
@@ -82,8 +79,7 @@ public class GreedyInliningPolicy extends AbstractInliningPolicy {
         }
 
         if (nodes < TrivialInliningSize.getValue() * inliningBonus) {
-            InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "trivial (relevance=%f, probability=%f, bonus=%f, nodes=%d)", relevance, probability, inliningBonus, nodes);
-            return true;
+            return InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "trivial (relevance=%f, probability=%f, bonus=%f, nodes=%d)", relevance, probability, inliningBonus, nodes);
         }
 
         /*
@@ -101,9 +97,8 @@ public class GreedyInliningPolicy extends AbstractInliningPolicy {
 
         double maximumNodes = computeMaximumSize(relevance, (int) (MaximumInliningSize.getValue() * inliningBonus));
         if (nodes <= maximumNodes) {
-            InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "relevance-based (relevance=%f, probability=%f, bonus=%f, nodes=%d <= %f)", relevance, probability, inliningBonus,
-                            nodes, maximumNodes);
-            return true;
+            return InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "relevance-based (relevance=%f, probability=%f, bonus=%f, nodes=%d <= %f)", relevance, probability,
+                            inliningBonus, nodes, maximumNodes);
         }
 
         InliningUtil.logNotInlinedMethod(info, inliningDepth, "relevance-based (relevance=%f, probability=%f, bonus=%f, nodes=%d > %f)", relevance, probability, inliningBonus, nodes, maximumNodes);
