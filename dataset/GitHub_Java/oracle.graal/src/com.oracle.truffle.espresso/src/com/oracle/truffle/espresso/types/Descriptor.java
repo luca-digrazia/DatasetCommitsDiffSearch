@@ -52,7 +52,7 @@ public abstract class Descriptor implements Comparable<Descriptor> {
 
     @Override
     public final boolean equals(Object other) {
-        if (other != null && other.getClass() == this.getClass()) {
+        if (other.getClass() == this.getClass()) {
             return value.equals(((Descriptor) other).value);
         }
         return false;
@@ -66,4 +66,5 @@ public abstract class Descriptor implements Comparable<Descriptor> {
     public final int compareTo(Descriptor other) {
         return value.compareTo(other.value);
     }
+
 }
