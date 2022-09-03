@@ -79,7 +79,9 @@ public interface NodeIterable<T extends Node> extends Iterable<T> {
     }
 
     default boolean contains(T node) {
-        for (T next : this) {
+        Iterator<T> iterator = iterator();
+        while (iterator.hasNext()) {
+            T next = iterator.next();
             if (next == node) {
                 return true;
             }

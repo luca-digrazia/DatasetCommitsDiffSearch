@@ -22,89 +22,24 @@
  */
 package com.oracle.graal.graph.iterators;
 
-import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Node;
 
 public abstract class NodePredicates {
+
     private static final TautologyPredicate TAUTOLOGY = new TautologyPredicate();
-    private static final FalsePredicate FALSE = new FalsePredicate();
+    private static final ContradictionPredicate CONTRADICTION = new ContradictionPredicate();
     private static final IsNullPredicate IS_NULL = new IsNullPredicate();
-    private static final IsNotNullPredicate IS_NOT_NULL = new IsNotNullPredicate();
 
     public static NodePredicate alwaysTrue() {
         return TAUTOLOGY;
     }
 
     public static NodePredicate alwaysFalse() {
-        return FALSE;
+        return CONTRADICTION;
     }
 
     public static NodePredicate isNull() {
         return IS_NULL;
-    }
-
-    public static NodePredicate isNotNull() {
-        return IS_NOT_NULL;
-    }
-
-    public static NodePredicate equals(Node n) {
-        return new EqualsPredicate(n);
-    }
-
-    public static NodePredicate not(NodePredicate a) {
-        if (a == TAUTOLOGY) {
-            return FALSE;
-        }
-        if (a == FALSE) {
-            return TAUTOLOGY;
-        }
-        if (a == IS_NULL) {
-            return IS_NOT_NULL;
-        }
-        if (a == IS_NOT_NULL) {
-            return IS_NULL;
-        }
-        if (a instanceof NotPredicate) {
-            return ((NotPredicate) a).a;
-        }
-        if (a instanceof PositiveTypePredicate) {
-            return new NegativeTypePredicate((PositiveTypePredicate) a);
-        }
-        if (a instanceof NegativeTypePredicate) {
-            return new PositiveTypePredicate((NegativeTypePredicate) a);
-        }
-        if (a instanceof EqualsPredicate) {
-            return new NotEqualsPredicate(((EqualsPredicate) a).u);
-        }
-        if (a instanceof NotEqualsPredicate) {
-            return new EqualsPredicate(((NotEqualsPredicate) a).u);
-        }
-        return new NotPredicate(a);
-    }
-
-    public static NodePredicate and(NodePredicate a, NodePredicate b) {
-        if (a == TAUTOLOGY) {
-            return b;
-        }
-        if (b == TAUTOLOGY) {
-            return a;
-        }
-        if (a == FALSE || b == FALSE) {
-            return FALSE;
-        }
-        return new AndPredicate(a, b);
-    }
-
-    public static NodePredicate or(NodePredicate a, NodePredicate b) {
-        if (a == FALSE) {
-            return b;
-        }
-        if (b == FALSE) {
-            return a;
-        }
-        if (a == TAUTOLOGY || b == TAUTOLOGY) {
-            return TAUTOLOGY;
-        }
-        return new OrPredicate(a, b);
     }
 
     public static NegativeTypePredicate isNotA(Class<? extends Node> clazz) {
@@ -115,119 +50,93 @@ public abstract class NodePredicates {
         return new PositiveTypePredicate(clazz);
     }
 
-    public static NodePredicate isAInterface(Class<?> iface) {
-        assert iface.isInterface();
-        return new PositiveTypePredicate(iface);
-    }
+    static final class TautologyPredicate implements NodePredicate {
 
-    public static NodePredicate isNotAInterface(Class<?> iface) {
-        assert iface.isInterface();
-        return new NegativeTypePredicate(iface);
-    }
-
-    private static final class TautologyPredicate extends NodePredicate {
         @Override
         public boolean apply(Node n) {
             return true;
         }
+
+        public NodePredicate and(NodePredicate np) {
+            return np;
+        }
     }
 
-    private static final class FalsePredicate extends NodePredicate {
+    static final class ContradictionPredicate implements NodePredicate {
+
         @Override
         public boolean apply(Node n) {
             return false;
         }
+
+        public NodePredicate and(NodePredicate np) {
+            return this;
+        }
     }
 
-    private static final class AndPredicate extends NodePredicate {
+    static final class AndPredicate implements NodePredicate {
+
         private final NodePredicate a;
         private final NodePredicate b;
-        private AndPredicate(NodePredicate a, NodePredicate b) {
+
+        AndPredicate(NodePredicate a, NodePredicate b) {
             this.a = a;
             this.b = b;
         }
+
         @Override
         public boolean apply(Node n) {
             return a.apply(n) && b.apply(n);
         }
     }
 
-    private static final class NotPredicate extends NodePredicate {
+    static final class NotPredicate implements NodePredicate {
+
         private final NodePredicate a;
-        private NotPredicate(NodePredicate n) {
+
+        NotPredicate(NodePredicate n) {
             this.a = n;
         }
+
         @Override
         public boolean apply(Node n) {
             return !a.apply(n);
         }
-    }
 
-    private static final class OrPredicate extends NodePredicate {
-        private final NodePredicate a;
-        private final NodePredicate b;
-        private OrPredicate(NodePredicate a, NodePredicate b) {
-            this.a = a;
-            this.b = b;
-        }
-        @Override
-        public boolean apply(Node n) {
-            return a.apply(n) || b.apply(n);
+        public NodePredicate negate() {
+            return a;
         }
     }
 
-    private static final class IsNullPredicate extends NodePredicate {
+    static final class IsNullPredicate implements NodePredicate {
+
         @Override
         public boolean apply(Node n) {
             return n == null;
         }
     }
 
-    private static final class IsNotNullPredicate extends NodePredicate {
-        @Override
-        public boolean apply(Node n) {
-            return n != null;
-        }
-    }
+    public static final class PositiveTypePredicate implements NodePredicate {
 
-    private static final class EqualsPredicate extends NodePredicate {
-        private final Node u;
-        public EqualsPredicate(Node u) {
-            this.u = u;
-        }
-        @Override
-        public boolean apply(Node n) {
-            return u == n;
-        }
-    }
-
-    private static final class NotEqualsPredicate extends NodePredicate {
-        private final Node u;
-        public NotEqualsPredicate(Node u) {
-            this.u = u;
-        }
-        @Override
-        public boolean apply(Node n) {
-            return u != n;
-        }
-    }
-
-    public static final class PositiveTypePredicate extends NodePredicate {
         private final Class<?> type;
         private PositiveTypePredicate or;
-        public PositiveTypePredicate(Class<?> type) {
+
+        PositiveTypePredicate(Class<?> type) {
             this.type = type;
         }
+
         public PositiveTypePredicate(NegativeTypePredicate a) {
             type = a.type;
             if (a.nor != null) {
                 or = new PositiveTypePredicate(a.nor);
             }
         }
+
         @Override
         public boolean apply(Node n) {
             return type.isInstance(n) || (or != null && or.apply(n));
         }
+
         public PositiveTypePredicate or(Class<? extends Node> clazz) {
             if (or == null) {
                 or = new PositiveTypePredicate(clazz);
@@ -236,24 +145,33 @@ public abstract class NodePredicates {
             }
             return this;
         }
+
+        public NodePredicate negate() {
+            return new NegativeTypePredicate(this);
+        }
     }
 
-    public static final class NegativeTypePredicate extends NodePredicate {
+    public static final class NegativeTypePredicate implements NodePredicate {
+
         private final Class<?> type;
         private NegativeTypePredicate nor;
-        public NegativeTypePredicate(Class<?> type) {
+
+        NegativeTypePredicate(Class<?> type) {
             this.type = type;
         }
+
         public NegativeTypePredicate(PositiveTypePredicate a) {
             type = a.type;
             if (a.or != null) {
                 nor = new NegativeTypePredicate(a.or);
             }
         }
+
         @Override
         public boolean apply(Node n) {
             return !type.isInstance(n) && (nor == null || nor.apply(n));
         }
+
         public NegativeTypePredicate nor(Class<? extends Node> clazz) {
             if (nor == null) {
                 nor = new NegativeTypePredicate(clazz);
@@ -261,6 +179,10 @@ public abstract class NodePredicates {
                 nor.nor(clazz);
             }
             return this;
+        }
+
+        public NodePredicate negate() {
+            return new PositiveTypePredicate(this);
         }
     }
 }
