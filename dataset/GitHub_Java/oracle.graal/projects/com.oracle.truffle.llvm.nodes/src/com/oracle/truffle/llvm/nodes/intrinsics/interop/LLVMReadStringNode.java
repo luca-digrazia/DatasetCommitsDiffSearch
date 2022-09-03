@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,51 +29,129 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNode.LLVMIncrementPointerNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMReadStringNodeGen.ForeignReadStringNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.LLVMGetElementPtrNode.LLVMIncrementPointerNode;
+import com.oracle.truffle.llvm.nodes.memory.LLVMGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMI8LoadNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.load.LLVMLoadNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
-public abstract class LLVMReadStringNode extends Node {
+public abstract class LLVMReadStringNode extends LLVMNode {
 
-    @Child private LLVMIncrementPointerNode inc = LLVMIncrementPointerNodeGen.create();
-    @Child private LLVMLoadNode read = LLVMI8LoadNodeGen.create();
+    @Child PointerReadStringNode readOther;
 
-    public abstract String executeWithTarget(VirtualFrame frame, Object address);
+    public abstract String executeWithTarget(Object address);
 
     @Specialization
-    protected String readString(String address) {
+    String readString(String address) {
         return address;
     }
 
-    @Fallback
-    public String fallback(VirtualFrame frame, Object address) {
-        Object ptr = address;
-        int length = 0;
-        while ((byte) read.executeWithTarget(frame, ptr) != 0) {
-            length++;
-            ptr = inc.executeWithTarget(ptr, Byte.BYTES, PrimitiveType.I8);
-        }
-
-        char[] string = new char[length];
-
-        ptr = address;
-        for (int i = 0; i < length; i++) {
-            string[i] = (char) Byte.toUnsignedInt((byte) read.executeWithTarget(frame, ptr));
-            ptr = inc.executeWithTarget(ptr, Byte.BYTES, PrimitiveType.I8);
-        }
-
-        return toString(string);
+    @Specialization(guards = "isForeign(foreign)")
+    String readForeign(LLVMManagedPointer foreign,
+                    @Cached("create()") ForeignReadStringNode read) {
+        return read.execute(foreign);
     }
 
-    @TruffleBoundary
-    private static String toString(char[] string) {
-        return new String(string);
+    @Fallback
+    String readOther(Object address) {
+        if (readOther == null) {
+            readOther = insert(PointerReadStringNode.create());
+        }
+        return readOther.readPointer(address);
+    }
+
+    protected static boolean isForeign(LLVMManagedPointer pointer) {
+        return pointer.getOffset() == 0 && pointer.getObject() instanceof LLVMTypedForeignObject;
+    }
+
+    abstract static class Dummy extends LLVMNode {
+
+        protected abstract LLVMManagedPointer execute();
+    }
+
+    @NodeChild(value = "object", type = Dummy.class)
+    @NodeChild(value = "foreign", type = LLVMAsForeignNode.class, executeWith = "object")
+    abstract static class ForeignReadStringNode extends LLVMNode {
+
+        @Child Node isBoxed = Message.IS_BOXED.createNode();
+
+        protected abstract String execute(LLVMManagedPointer foreign);
+
+        @Specialization(guards = "isBoxed(foreign)")
+        String readUnbox(@SuppressWarnings("unused") LLVMManagedPointer object, TruffleObject foreign,
+                        @Cached("createUnbox()") Node unbox) {
+            try {
+                Object unboxed = ForeignAccess.sendUnbox(unbox, foreign);
+                return (String) unboxed;
+            } catch (UnsupportedMessageException ex) {
+                throw ex.raise();
+            }
+        }
+
+        @Specialization(guards = "!isBoxed(foreign)")
+        String readOther(LLVMManagedPointer object, @SuppressWarnings("unused") TruffleObject foreign,
+                        @Cached("create()") PointerReadStringNode read) {
+            return read.readPointer(object);
+        }
+
+        protected boolean isBoxed(TruffleObject foreign) {
+            return foreign != null && ForeignAccess.sendIsBoxed(isBoxed, foreign);
+        }
+
+        protected static Node createUnbox() {
+            return Message.UNBOX.createNode();
+        }
+
+        public static ForeignReadStringNode create() {
+            return ForeignReadStringNodeGen.create(null, LLVMAsForeignNode.createOptional());
+        }
+    }
+
+    static class PointerReadStringNode extends LLVMNode {
+
+        @Child private LLVMIncrementPointerNode inc = LLVMIncrementPointerNodeGen.create();
+        @Child private LLVMLoadNode read = LLVMI8LoadNodeGen.create(null);
+
+        public String readPointer(Object address) {
+            Object ptr = address;
+            int length = 0;
+            while ((byte) read.executeWithTarget(ptr) != 0) {
+                length++;
+                ptr = inc.executeWithTarget(ptr, Byte.BYTES);
+            }
+
+            char[] string = new char[length];
+
+            ptr = address;
+            for (int i = 0; i < length; i++) {
+                string[i] = (char) Byte.toUnsignedInt((byte) read.executeWithTarget(ptr));
+                ptr = inc.executeWithTarget(ptr, Byte.BYTES);
+            }
+
+            return toString(string);
+        }
+
+        @TruffleBoundary
+        private static String toString(char[] string) {
+            return new String(string);
+        }
+
+        public static PointerReadStringNode create() {
+            return new PointerReadStringNode();
+        }
     }
 }
