@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.*;
@@ -55,7 +53,7 @@ public class NodeClassSubstitutions {
 
         @Override
         protected Constant evaluate(Constant param, MetaAccessProvider metaAccess) {
-            return param.isNull() || AOTCompilation.getValue() ? null : Constant.forObject(NodeClass.get((Class<?>) param.asObject()));
+            return Constant.forObject(NodeClass.get((Class<?>) param.asObject()));
         }
     }
 
