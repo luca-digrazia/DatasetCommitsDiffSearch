@@ -113,14 +113,14 @@ class PolyglotSource extends AbstractSourceImpl {
     public CharSequence getCode(Object impl) {
         com.oracle.truffle.api.source.Source source = (com.oracle.truffle.api.source.Source) impl;
 
-        return source.getCharacters();
+        return source.getCodeSequence();
     }
 
     @Override
     public CharSequence getCode(Object impl, int lineNumber) {
         com.oracle.truffle.api.source.Source source = (com.oracle.truffle.api.source.Source) impl;
 
-        return source.getCharacters(lineNumber);
+        return source.getCodeSequence(lineNumber);
     }
 
     @Override
@@ -221,15 +221,15 @@ class PolyglotSource extends AbstractSourceImpl {
         return impl.equals(otherImpl);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public Source build(String language, Object origin, URI uri, String name, CharSequence content, boolean interactive, boolean internal) throws IOException {
+    public Source build(String language, Object origin, URI uri, String name, String content, boolean interactive, boolean internal) {
         assert language != null;
         com.oracle.truffle.api.source.Source.Builder<?, ?, ?> builder;
         boolean needsName = false;
         if (origin instanceof File) {
             builder = com.oracle.truffle.api.source.Source.newBuilder((File) origin);
         } else if (origin instanceof CharSequence) {
+            // TODO add support for real CharSequence sources.
             builder = com.oracle.truffle.api.source.Source.newBuilder(((CharSequence) origin));
             needsName = true;
         } else if (origin instanceof Reader) {
@@ -266,13 +266,13 @@ class PolyglotSource extends AbstractSourceImpl {
         builder.mimeType("x-unknown");
 
         try {
-            return engineImpl.getAPIAccess().newSource(language, ((com.oracle.truffle.api.source.Source.Builder<IOException, ?, ?>) builder).build());
-        } catch (IOException e) {
-            throw e;
-        } catch (RuntimeException e) {
-            throw e;
+            return engineImpl.getAPIAccess().newSource(language, builder.build());
         } catch (Exception e) {
-            throw new AssertionError();
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            } else {
+                throw new RuntimeException(e);
+            }
         }
     }
 
