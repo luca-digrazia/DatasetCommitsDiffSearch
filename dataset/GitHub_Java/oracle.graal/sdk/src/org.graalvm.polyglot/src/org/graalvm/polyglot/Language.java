@@ -29,13 +29,12 @@ import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractLanguageImpl;
 
 /**
- * A handle for a Graal language installed in an {@link Engine engine}. The handle provides access
- * to the language's meta-data, including the language's {@link #getId() id}, {@link #getName()
- * name}, {@link #getVersion() version} and {@link #getOptions() options}.
+ * A handle for a Truffle language installed in a {@link Engine engine}. The handle provides access
+ * to the language metadata, including the language {@linkplain #getId() id}, {@linkplain #getName()
+ * name} and {@linkplain #getVersion() version}
  *
- * @see Engine#getLanguage(String) To return a single language
- * @see Engine#getLanguages() To return a map of all installed languages
- *
+ * @see Engine#getLanguage(String) To return a single language.
+ * @see Engine#getLanguages() To return all installed languages.
  * @since 1.0
  */
 public final class Language {
@@ -47,8 +46,8 @@ public final class Language {
     }
 
     /**
-     * Gets the primary identification string of this language. The language id is used as the
-     * primary way of identifying languages in the polyglot API. (eg. <code>js</code>)
+     * Gets the primary identification string of this language. The language ID is used as the
+     * primary way of identifying languages in the polyglot API (for example, "js").
      *
      * @returns a language ID string.
      * @since 1.0
@@ -98,7 +97,9 @@ public final class Language {
     }
 
     /**
-     * Returns <code>true</code> if this language object represents the Java host language.
+     * Returns <code>true</code> if this language object represents the host language, typically
+     * Java.
+     *
      * @since 1.0
      */
     public boolean isHost() {
