@@ -25,79 +25,122 @@ package com.oracle.graal.lir;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.lir.LIRInstruction.*;
+import com.oracle.graal.lir.LIRInstruction.OperandFlag;
+import com.oracle.graal.lir.LIRIntrospection.Values;
 
 /**
- * Describes an operand slot for a {@link LIRInstructionClass}.
+ * Describes an operand slot for a {@link LIRInstruction}.
  */
 public final class ValuePosition {
 
-    private final OperandMode mode;
+    /**
+     * The {@linkplain Values offsets} to the fields of the containing element (either
+     * {@link LIRInstruction} or {@link CompositeValue}).
+     */
+    private final Values values;
+    /**
+     * The index into {@link #values}.
+     *
+     * @see Values#getValue(Object, int)
+     */
     private final int index;
+    /**
+     * The sub-index if {@link #index} points to a value array, otherwise {@link #NO_SUBINDEX}.
+     *
+     * @see Values#getDirectCount()
+     * @see Values#getValueArray(Object, int)
+     */
     private final int subIndex;
+    /**
+     * @see #getOuterPosition()
+     */
     private final ValuePosition outerPosition;
 
     public static final int NO_SUBINDEX = -1;
     public static final ValuePosition ROOT_VALUE_POSITION = null;
 
-    public ValuePosition(OperandMode mode, int index, int subIndex, ValuePosition outerPosition) {
-        this.mode = mode;
+    ValuePosition(Values values, int index, int subIndex, ValuePosition outerPosition) {
+        this.values = values;
         this.index = index;
         this.subIndex = subIndex;
         this.outerPosition = outerPosition;
     }
 
+    /**
+     * @return True if the value denoted by this {@linkplain ValuePosition position} is part of a
+     *         {@link CompositeValue}.
+     */
     public boolean isCompositePosition() {
         return outerPosition != ROOT_VALUE_POSITION;
     }
 
+    /**
+     * @param inst The instruction this {@linkplain ValuePosition position} belongs to.
+     * @return The value denoted by this {@linkplain ValuePosition position}.
+     */
     public Value get(LIRInstruction inst) {
         if (isCompositePosition()) {
             CompositeValue compValue = (CompositeValue) outerPosition.get(inst);
             return compValue.getValueClass().getValue(compValue, this);
         }
-        return inst.getLIRInstructionClass().getValue(inst, this);
-    }
-
-    public EnumSet<OperandFlag> getFlags(LIRInstruction inst) {
-        if (isCompositePosition()) {
-            CompositeValue compValue = (CompositeValue) outerPosition.get(inst);
-            return compValue.getValueClass().getFlags(this);
+        if (index < values.getDirectCount()) {
+            return values.getValue(inst, index);
         }
-        return inst.getLIRInstructionClass().getFlags(this);
+        return values.getValueArray(inst, index)[subIndex];
     }
 
+    /**
+     * Sets the value denoted by this {@linkplain ValuePosition position}.
+     *
+     * @param inst The instruction this {@linkplain ValuePosition position} belongs to.
+     */
     public void set(LIRInstruction inst, Value value) {
         if (isCompositePosition()) {
             CompositeValue compValue = (CompositeValue) outerPosition.get(inst);
-            compValue.getValueClass().setValue(compValue, this, value);
+            CompositeValue newCompValue = compValue.getValueClass().createUpdatedValue(compValue, this, value);
+            outerPosition.set(inst, newCompValue);
         } else {
-            inst.getLIRInstructionClass().setValue(inst, this, value);
+            if (index < values.getDirectCount()) {
+                values.setValue(inst, index, value);
+            } else {
+                values.getValueArray(inst, index)[subIndex] = value;
+            }
         }
     }
 
-    public int getSubIndex() {
+    int getSubIndex() {
         return subIndex;
     }
 
-    public int getIndex() {
+    int getIndex() {
         return index;
     }
 
-    public OperandMode getMode() {
-        return mode;
+    /**
+     * @return The flags associated with the value denoted by this {@linkplain ValuePosition
+     *         position}.
+     */
+    public EnumSet<OperandFlag> getFlags() {
+        return values.getFlags(index);
     }
 
-    public ValuePosition getSuperPosition() {
+    /**
+     * @return The {@link ValuePosition} of the containing {@link CompositeValue} if this value is
+     *         part of a {@link CompositeValue}, otherwise {@link #ROOT_VALUE_POSITION}.
+     *
+     * @see #isCompositePosition()
+     */
+    public ValuePosition getOuterPosition() {
         return outerPosition;
     }
 
     @Override
     public String toString() {
-        if (outerPosition == ROOT_VALUE_POSITION) {
-            return mode.toString() + "(" + index + (subIndex < 0 ? "" : "/" + subIndex) + ")";
+        String str = "(" + index + (subIndex < 0 ? "" : "/" + subIndex) + ")";
+        if (isCompositePosition()) {
+            return outerPosition.toString() + "[" + str + "]";
         }
-        return outerPosition.toString() + "[" + mode.toString() + "(" + index + (subIndex < 0 ? "" : "/" + subIndex) + ")]";
+        return str;
     }
 
     @Override
@@ -105,9 +148,9 @@ public final class ValuePosition {
         final int prime = 31;
         int result = 1;
         result = prime * result + index;
-        result = prime * result + ((mode == null) ? 0 : mode.hashCode());
         result = prime * result + subIndex;
         result = prime * result + ((outerPosition == null) ? 0 : outerPosition.hashCode());
+        result = prime * result + ((values == null) ? 0 : values.hashCode());
         return result;
     }
 
@@ -126,9 +169,6 @@ public final class ValuePosition {
         if (index != other.index) {
             return false;
         }
-        if (mode != other.mode) {
-            return false;
-        }
         if (subIndex != other.subIndex) {
             return false;
         }
@@ -137,6 +177,13 @@ public final class ValuePosition {
                 return false;
             }
         } else if (!outerPosition.equals(other.outerPosition)) {
+            return false;
+        }
+        if (values == null) {
+            if (other.values != null) {
+                return false;
+            }
+        } else if (!values.equals(other.values)) {
             return false;
         }
         return true;
