@@ -339,7 +339,7 @@ public class CodeUtil {
             argTypes[argIndex++] = sig.getParameterType(i, null);
         }
 
-        RegisterConfig registerConfig = codeCache.getRegisterConfig();
+        RegisterConfig registerConfig = codeCache.lookupRegisterConfig();
         return registerConfig.getCallingConvention(type, retType, argTypes, codeCache.getTarget(), stackOnly);
     }
 }
