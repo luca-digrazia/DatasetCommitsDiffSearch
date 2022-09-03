@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.replacements.test;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.compiler.common.calc.UnsignedMath;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.compiler.test.*;
 
 /**
  * Tests the substitutions for the {@link UnsignedMath} class.
@@ -49,11 +49,11 @@ public class UnsignedMathTest extends GraalCompilerTest {
     }
 
     public static int divideInt(int a, int b) {
-        return Integer.divideUnsigned(a, b);
+        return UnsignedMath.divide(a, b);
     }
 
     public static int remainderInt(int a, int b) {
-        return Integer.remainderUnsigned(a, b);
+        return UnsignedMath.remainder(a, b);
     }
 
     public static boolean aboveThanLong(long a, long b) {
@@ -73,11 +73,11 @@ public class UnsignedMathTest extends GraalCompilerTest {
     }
 
     public static long divideLong(long a, long b) {
-        return Long.divideUnsigned(a, b);
+        return UnsignedMath.divide(a, b);
     }
 
     public static long remainderLong(long a, long b) {
-        return Long.remainderUnsigned(a, b);
+        return UnsignedMath.remainder(a, b);
     }
 
     private void testInt(int a, int b) {
