@@ -55,8 +55,7 @@ public abstract class Accessor {
     }
 
     public abstract static class DebugSupport {
-        public abstract void executionStarted(Object vm, int currentDepth, Object[] debuggerHolder, Source s);
-        public abstract void executionEnded(Object vm, Object[] debuggerHolder);
+        public abstract Closeable executionStart(Object vm, int currentDepth, Object[] debuggerHolder, Source s);
     }
 
     public abstract static class ExecSupport {
