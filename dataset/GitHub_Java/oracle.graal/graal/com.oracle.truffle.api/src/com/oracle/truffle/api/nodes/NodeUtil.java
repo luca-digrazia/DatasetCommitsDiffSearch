@@ -676,60 +676,26 @@ public final class NodeUtil {
     }
 
     /**
-     * Determines whether a proposed child replacement would be safe: structurally and type.
+     * Determines whether a proposed child replacement would be type safe.
+     *
+     * @param parent non-null node
+     * @param oldChild non-null existing child of parent
+     * @param newChild non-null proposed replacement for existing child
      */
     public static boolean isReplacementSafe(Node parent, Node oldChild, Node newChild) {
         assert newChild != null;
-        if (parent != null) {
-            final NodeField field = findChildField(parent, oldChild);
-            if (field != null) {
-                switch (field.getKind()) {
-                    case CHILD:
-                        return field.getType().isAssignableFrom(newChild.getClass());
-                    case CHILDREN:
-                        return field.getType().getComponentType().isAssignableFrom(newChild.getClass());
-                    default:
-                        throw new IllegalStateException();
-                }
-            }
+        final NodeField field = findChildField(parent, oldChild);
+        if (field == null) {
+            throw new IllegalArgumentException();
         }
-        return false;
-    }
-
-    /**
-     * Executes a closure for every non-null child of the parent node.
-     *
-     * @return {@code true} if all children were visited, {@code false} otherwise
-     */
-    public static boolean forEachChild(Node parent, NodeVisitor visitor) {
-        Objects.requireNonNull(visitor);
-        NodeClass parentNodeClass = NodeClass.get(parent.getClass());
-
-        for (NodeField field : parentNodeClass.getChildFields()) {
-            Object child = field.getObject(parent);
-            if (child != null) {
-                if (!visitor.visit((Node) child)) {
-                    return false;
-                }
-            }
+        switch (field.getKind()) {
+            case CHILD:
+                return field.getType().isAssignableFrom(newChild.getClass());
+            case CHILDREN:
+                return field.getType().getComponentType().isAssignableFrom(newChild.getClass());
+            default:
+                throw new IllegalArgumentException();
         }
-
-        for (NodeField field : parentNodeClass.getChildrenFields()) {
-            Object arrayObject = field.getObject(parent);
-            if (arrayObject != null) {
-                Object[] array = (Object[]) arrayObject;
-                for (int i = 0; i < array.length; i++) {
-                    Object child = array[i];
-                    if (child != null) {
-                        if (!visitor.visit((Node) child)) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-
-        return true;
     }
 
     /** Returns all declared fields in the class hierarchy. */
