@@ -200,7 +200,6 @@ public final class PolyglotLauncher extends Launcher {
         if (runPolyglotAction()) {
             return;
         }
-        argumentsProcessingDone();
         Context.Builder contextBuilder = Context.newBuilder().options(options).in(System.in).out(System.out).err(System.err);
         contextBuilder.allowAllAccess(true);
         final Path logFile = getLogFile();
