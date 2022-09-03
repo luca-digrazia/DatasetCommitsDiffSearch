@@ -108,12 +108,12 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
     }
 
     /**
-     * The result of instantiating an instanceof snippet. This enables a snippet instantiation to be
-     * re-used which reduces compile time and produces better code.
+     * The result of an instantiating an instanceof snippet. This enables a snippet instantiation to
+     * be re-used which reduces compile time and produces better code.
      */
     public static final class Instantiation {
 
-        private ValueNode result;
+        private PhiNode result;
         private CompareNode condition;
         private ValueNode trueValue;
         private ValueNode falseValue;
@@ -125,9 +125,9 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
             return result != null;
         }
 
-        void initialize(ValueNode r, ValueNode t, ValueNode f) {
+        void initialize(PhiNode phi, ValueNode t, ValueNode f) {
             assert !isInitialized();
-            this.result = r;
+            this.result = phi;
             this.trueValue = t;
             this.falseValue = f;
         }
@@ -137,12 +137,8 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
          * 
          * @param testValue the returned condition is true if the result is equal to this value
          */
-        LogicNode asCondition(ValueNode testValue) {
+        CompareNode asCondition(ValueNode testValue) {
             assert isInitialized();
-            if (result.isConstant()) {
-                assert testValue.isConstant();
-                return LogicConstantNode.forBoolean(result.asConstant().equals(testValue.asConstant()), result.graph());
-            }
             if (condition == null || condition.y() != testValue) {
                 // Re-use previously generated condition if the trueValue for the test is the same
                 condition = createCompareNode(Condition.EQ, result, testValue);
@@ -211,18 +207,10 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
 
         @Override
         public void replace(ValueNode oldNode, ValueNode newNode) {
-            if (newNode.isConstant()) {
-                LogicConstantNode logicConstant = LogicConstantNode.forBoolean(newNode.asConstant().asInt() != 0, newNode.graph());
-                usage.replaceFirstInput(oldNode, logicConstant);
-                // PrintStream out = System.out;
-                // out.println(newNode.graph() + ": " + this);
-                GraalInternalError.shouldNotReachHere(instanceOf.graph().toString());
-                return;
-            }
             assert newNode instanceof PhiNode;
             assert oldNode == instanceOf;
             newNode.inferStamp();
-            instantiation.initialize(newNode, trueValue, falseValue);
+            instantiation.initialize((PhiNode) newNode, trueValue, falseValue);
             usage.replaceFirstInput(oldNode, instantiation.asCondition(trueValue));
         }
     }
@@ -251,18 +239,10 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
 
         @Override
         public void replace(ValueNode oldNode, ValueNode newNode) {
-            if (newNode.isConstant()) {
-                LogicConstantNode logicConstant = LogicConstantNode.forBoolean(newNode.asConstant().asInt() != 0, newNode.graph());
-                usage.replaceFirstInput(oldNode, logicConstant);
-                // PrintStream out = System.out;
-                // out.println(newNode.graph() + ": " + this);
-                GraalInternalError.shouldNotReachHere(instanceOf.graph().toString());
-                return;
-            }
             assert newNode instanceof PhiNode;
             assert oldNode == instanceOf;
             newNode.inferStamp();
-            instantiation.initialize(newNode, trueValue, falseValue);
+            instantiation.initialize((PhiNode) newNode, trueValue, falseValue);
             usage.replaceAtUsages(newNode);
             usage.clearInputs();
             assert usage.usages().isEmpty();

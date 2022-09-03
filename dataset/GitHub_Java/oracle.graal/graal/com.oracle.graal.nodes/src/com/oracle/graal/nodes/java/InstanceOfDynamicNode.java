@@ -23,9 +23,10 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code InstanceOfDynamicNode} represents a type check where the type being checked is not
@@ -38,15 +39,18 @@ public final class InstanceOfDynamicNode extends LogicNode implements Canonicali
     @Input private ValueNode mirror;
 
     /**
-     * @param mirror the {@link Class} value representing the target target type of the test
-     * @param object the object being tested
+     * Constructs a new InstanceOfNode.
+     * 
+     * @param mirror the {@link Class} value representing the target target type of the instanceof
+     *            check
+     * @param object the object being tested by the instanceof
      */
     public InstanceOfDynamicNode(ValueNode mirror, ValueNode object) {
         this.mirror = mirror;
         this.object = object;
-        assert mirror.kind() == Kind.Object : mirror.kind();
-        assert ObjectStamp.isExactType(mirror);
-        assert ObjectStamp.typeOrNull(mirror).getName().equals("Ljava/lang/Class;");
+        assert mirror.kind() == Kind.Object;
+        assert mirror.objectStamp().isExactType();
+        assert mirror.objectStamp().type().getName().equals("Ljava/lang/Class;");
     }
 
     @Override
@@ -71,5 +75,13 @@ public final class InstanceOfDynamicNode extends LogicNode implements Canonicali
 
     public ValueNode mirror() {
         return mirror;
+    }
+
+    @Override
+    public boolean verify() {
+        for (Node usage : usages()) {
+            assertTrue(usage instanceof IfNode || usage instanceof FixedGuardNode || usage instanceof ConditionalNode, "unsupported usage: %s", usage);
+        }
+        return super.verify();
     }
 }

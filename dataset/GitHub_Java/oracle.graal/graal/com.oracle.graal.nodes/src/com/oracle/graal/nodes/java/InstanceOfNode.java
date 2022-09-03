@@ -36,7 +36,7 @@ public final class InstanceOfNode extends LogicNode implements Canonicalizable, 
 
     @Input private ValueNode object;
     private final ResolvedJavaType type;
-    private JavaTypeProfile profile;
+    private final JavaTypeProfile profile;
 
     /**
      * Constructs a new InstanceOfNode.
@@ -107,10 +107,6 @@ public final class InstanceOfNode extends LogicNode implements Canonicalizable, 
 
     public JavaTypeProfile profile() {
         return profile;
-    }
-
-    public void setProfile(JavaTypeProfile profile) {
-        this.profile = profile;
     }
 
     @Override
