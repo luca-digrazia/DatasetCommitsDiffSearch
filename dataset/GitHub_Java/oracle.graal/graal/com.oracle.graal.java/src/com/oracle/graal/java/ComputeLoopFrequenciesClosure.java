@@ -22,15 +22,22 @@
  */
 package com.oracle.graal.java;
 
-import java.util.*;
-import java.util.stream.*;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.graph.*;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.ControlSplitNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.LoopBeginNode;
+import com.oracle.graal.nodes.LoopExitNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import com.oracle.graal.phases.graph.ReentrantNodeIterator;
 
-public class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIteratorClosure<Double> {
+public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIteratorClosure<Double> {
 
-    private static final double EPSILON = Double.MIN_NORMAL;
     private static final ComputeLoopFrequenciesClosure INSTANCE = new ComputeLoopFrequenciesClosure();
 
     private ComputeLoopFrequenciesClosure() {
@@ -44,13 +51,13 @@ public class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIte
     }
 
     @Override
-    protected Double merge(MergeNode merge, List<Double> states) {
+    protected Double merge(AbstractMergeNode merge, List<Double> states) {
         // a merge has the sum of all predecessor probabilities
         return states.stream().collect(Collectors.summingDouble(d -> d));
     }
 
     @Override
-    protected Double afterSplit(BeginNode node, Double oldState) {
+    protected Double afterSplit(AbstractBeginNode node, Double oldState) {
         // a control split splits up the probability
         ControlSplitNode split = (ControlSplitNode) node.predecessor();
         return oldState * split.probability(node);
@@ -61,10 +68,11 @@ public class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIte
         Map<LoopExitNode, Double> exitStates = ReentrantNodeIterator.processLoop(this, loop, 1D).exitStates;
 
         double exitProbability = exitStates.values().stream().mapToDouble(d -> d).sum();
-        assert exitProbability <= 1D && exitProbability >= 0D;
-        if (exitProbability < EPSILON) {
-            exitProbability = EPSILON;
+        exitProbability = Math.min(1D, exitProbability);
+        if (exitProbability < ControlFlowGraph.MIN_PROBABILITY) {
+            exitProbability = ControlFlowGraph.MIN_PROBABILITY;
         }
+        assert exitProbability <= 1D && exitProbability >= 0D;
         double loopFrequency = 1D / exitProbability;
         loop.setLoopFrequency(loopFrequency);
 
@@ -75,14 +83,12 @@ public class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIte
     }
 
     /**
-     * Multiplies a and b and saturates the result to 1/{@link Double#MIN_NORMAL}.
-     *
-     * @return a times b saturated to 1/{@link Double#MIN_NORMAL}
+     * Multiplies a and b and saturates the result to {@link ControlFlowGraph#MAX_PROBABILITY}.
      */
     public static double multiplySaturate(double a, double b) {
         double r = a * b;
-        if (r > 1 / Double.MIN_NORMAL) {
-            return 1 / Double.MIN_NORMAL;
+        if (r > ControlFlowGraph.MAX_PROBABILITY) {
+            return ControlFlowGraph.MAX_PROBABILITY;
         }
         return r;
     }
