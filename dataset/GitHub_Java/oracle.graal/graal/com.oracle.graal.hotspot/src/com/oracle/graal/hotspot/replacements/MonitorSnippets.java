@@ -48,6 +48,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.Snippet.Fold;
@@ -58,7 +59,7 @@ import com.oracle.graal.word.*;
 
 /**
  * Snippets used for implementing the monitorenter and monitorexit instructions.
- *
+ * 
  * The locking algorithm used is described in the paper <a
  * href="http://dl.acm.org/citation.cfm?id=1167515.1167496"> Eliminating synchronization-related
  * atomic operations with biased locking and bulk rebiasing</a> by Kenneth Russell and David
@@ -102,7 +103,7 @@ public class MonitorSnippets implements Snippets {
         if (object == null) {
             DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
         }
-        GuardingNode anchorNode = SnippetAnchorNode.anchor();
+        BeginNode anchorNode = BeginNode.anchor();
 
         // Load the mark word - this includes a null-check on object
         final Word mark = loadWordFromObject(object, markOffset());
@@ -324,7 +325,7 @@ public class MonitorSnippets implements Snippets {
                 // The object's mark word was not pointing to the displaced header,
                 // we do unlocking via runtime call.
                 traceObject(trace, "-lock{stub}", object, false);
-                monitorexitStub(MONITOREXIT, object, lock);
+                MonitorExitStubCall.call(object, lockDepth);
             } else {
                 traceObject(trace, "-lock{cas}", object, false);
             }
@@ -340,8 +341,7 @@ public class MonitorSnippets implements Snippets {
     public static void monitorexitStub(Object object, @ConstantParameter int lockDepth, @ConstantParameter boolean trace) {
         verifyOop(object);
         traceObject(trace, "-lock{stub}", object, false);
-        final Word lock = CurrentLockNode.currentLock(lockDepth);
-        monitorexitStub(MONITOREXIT, object, lock);
+        MonitorExitStubCall.call(object, lockDepth);
         endLockScope();
         decCounter();
     }
@@ -416,8 +416,8 @@ public class MonitorSnippets implements Snippets {
 
         private final boolean useFastLocking;
 
-        public Templates(HotSpotProviders providers, TargetDescription target, boolean useFastLocking) {
-            super(providers, providers.getSnippetReflection(), target);
+        public Templates(Providers providers, TargetDescription target, boolean useFastLocking) {
+            super(providers, target);
             this.useFastLocking = useFastLocking;
         }
 
@@ -457,7 +457,7 @@ public class MonitorSnippets implements Snippets {
         }
 
         static boolean isTracingEnabledForType(ValueNode object) {
-            ResolvedJavaType type = StampTool.typeOrNull(object.stamp());
+            ResolvedJavaType type = ObjectStamp.typeOrNull(object.stamp());
             if (TRACE_TYPE_FILTER == null) {
                 return false;
             } else {
@@ -507,11 +507,11 @@ public class MonitorSnippets implements Snippets {
                     for (ReturnNode ret : rets) {
                         returnType = checkCounter.getMethod().getSignature().getReturnType(checkCounter.getMethod().getDeclaringClass());
                         String msg = "unbalanced monitors in " + MetaUtil.format("%H.%n(%p)", graph.method()) + ", count = %d";
-                        ConstantNode errMsg = ConstantNode.forConstant(HotSpotObjectConstant.forObject(msg), providers.getMetaAccess(), graph);
+                        ConstantNode errMsg = ConstantNode.forObject(msg, providers.getMetaAccess(), graph);
                         callTarget = graph.add(new MethodCallTargetNode(InvokeKind.Static, checkCounter.getMethod(), new ValueNode[]{errMsg}, returnType));
                         invoke = graph.add(new InvokeNode(callTarget, 0));
                         List<ValueNode> stack = Collections.emptyList();
-                        FrameState stateAfter = new FrameState(graph.method(), BytecodeFrame.AFTER_BCI, new ValueNode[0], stack, new ValueNode[0], new MonitorIdNode[0], false, false);
+                        FrameState stateAfter = new FrameState(graph.method(), FrameState.AFTER_BCI, new ValueNode[0], stack, new ValueNode[0], new MonitorIdNode[0], false, false);
                         invoke.setStateAfter(graph.add(stateAfter));
                         graph.addBeforeFixed(ret, invoke);
 
@@ -528,12 +528,8 @@ public class MonitorSnippets implements Snippets {
     }
 
     public static final ForeignCallDescriptor MONITORENTER = new ForeignCallDescriptor("monitorenter", void.class, Object.class, Word.class);
-    public static final ForeignCallDescriptor MONITOREXIT = new ForeignCallDescriptor("monitorexit", void.class, Object.class, Word.class);
 
     @NodeIntrinsic(ForeignCallNode.class)
     private static native void monitorenterStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object, Word lock);
-
-    @NodeIntrinsic(ForeignCallNode.class)
-    private static native void monitorexitStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object, Word lock);
 
 }

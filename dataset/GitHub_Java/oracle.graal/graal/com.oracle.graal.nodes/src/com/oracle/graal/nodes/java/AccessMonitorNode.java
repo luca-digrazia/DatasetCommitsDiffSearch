@@ -23,10 +23,9 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code AccessMonitorNode} is the base class of both monitor acquisition and release.
@@ -34,26 +33,32 @@ import com.oracle.graal.nodes.extended.*;
  * The Java bytecode specification allows non-balanced locking. Graal does not handle such cases and
  * throws a {@link BailoutException} instead during graph building.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public abstract class AccessMonitorNode extends AbstractMemoryCheckpoint implements MemoryCheckpoint, DeoptimizingNode.DeoptBefore, DeoptimizingNode.DeoptAfter {
+public abstract class AccessMonitorNode extends AbstractMemoryCheckpoint implements MemoryCheckpoint, DeoptimizingNode {
 
-    @OptionalInput(InputType.State) private FrameState stateBefore;
+    @Input private FrameState deoptState;
     @Input private ValueNode object;
-    @Input(InputType.Association) private MonitorIdNode monitorId;
+    @Input private MonitorIdNode monitorId;
 
     @Override
     public boolean canDeoptimize() {
         return true;
     }
 
-    public FrameState stateBefore() {
-        return stateBefore;
+    @Override
+    public FrameState getDeoptimizationState() {
+        return deoptState;
     }
 
     @Override
-    public void setStateBefore(FrameState f) {
-        updateUsages(stateBefore, f);
-        stateBefore = f;
+    public void setDeoptimizationState(FrameState f) {
+        updateUsages(deoptState, f);
+        deoptState = f;
+    }
+
+    @Override
+    public FrameState getState() {
+        assert deoptState == null || stateAfter() == null;
+        return deoptState == null ? stateAfter() : deoptState;
     }
 
     public ValueNode object() {
@@ -66,7 +71,7 @@ public abstract class AccessMonitorNode extends AbstractMemoryCheckpoint impleme
 
     /**
      * Creates a new AccessMonitor instruction.
-     *
+     * 
      * @param object the instruction producing the object
      */
     public AccessMonitorNode(ValueNode object, MonitorIdNode monitorId) {
