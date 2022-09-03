@@ -252,6 +252,14 @@ public interface CompilerToVM {
     boolean hasFinalizableSubclass(long metaspaceKlass);
 
     /**
+     * Gets the most recent {@link HotSpotInstalledCode} object associated with a given metaspace
+     * Method object as a result of
+     * {@linkplain #installCode(HotSpotCompiledCode, HotSpotInstalledCode, SpeculationLog)
+     * installing} code for the Method.
+     */
+    HotSpotInstalledCode getInstalledCode(long metaspaceMethod);
+
+    /**
      * Gets the metaspace Method object corresponding to a given {@link Class} object and slot
      * number.
      * 
