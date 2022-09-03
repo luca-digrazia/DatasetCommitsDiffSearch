@@ -152,12 +152,4 @@ public class SLTckTest extends TruffleTCK {
     @Override
     public void testPlusWithFloat() throws Exception {
     }
-
-    @Override
-    public void testPrimitiveReturnTypeDouble() throws Exception {
-    }
-
-    @Override
-    public void testPrimitiveReturnTypeFloat() throws Exception {
-    }
 }
