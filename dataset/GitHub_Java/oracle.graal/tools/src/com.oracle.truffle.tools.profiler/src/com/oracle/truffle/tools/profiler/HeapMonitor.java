@@ -25,6 +25,7 @@
 package com.oracle.truffle.tools.profiler;
 
 import java.io.Closeable;
+import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,7 +53,6 @@ import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.tools.profiler.impl.HeapMonitorInstrument;
-import java.lang.ref.WeakReference;
 
 /**
  * Implementation of a heap allocation monitor for
@@ -377,10 +377,7 @@ public final class HeapMonitor implements Closeable {
             }
             LanguageInfo language = event.getLanguage();
             if (initializedLanguages.containsKey(language)) {
-                String metaInfo = getMetaObjectString(language, object);
-                if (metaInfo != null) {
-                    newReferences.add(new ObjectPhantomReference(object, referenceQueue, language, metaInfo.intern(), event.getOldSize(), event.getNewSize()));
-                }
+                newReferences.add(new ObjectPhantomReference(object, referenceQueue, language, getMetaObjectString(language, object), event.getOldSize(), event.getNewSize()));
             }
         }
 
@@ -396,16 +393,15 @@ public final class HeapMonitor implements Closeable {
                             return toString;
                         }
                     }
-                    return "Uknown";
                 } finally {
                     RECURSIVE.set(Boolean.FALSE);
                 }
             }
-            return null;
+            return "Unknown";
         }
     }
 
-    private static final class ObjectPhantomReference extends WeakReference<Object> {
+    private static final class ObjectPhantomReference extends PhantomReference<Object> {
         final String metaObject; // is NULL_NAME for null
         final LanguageInfo language;
         final long oldSize;
