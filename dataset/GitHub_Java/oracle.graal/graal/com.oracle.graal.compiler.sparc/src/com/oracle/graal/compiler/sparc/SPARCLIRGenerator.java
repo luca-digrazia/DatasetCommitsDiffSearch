@@ -44,6 +44,7 @@ import com.oracle.graal.lir.sparc.SPARCArithmetic.BinaryRegConst;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.BinaryRegReg;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.MulHighOp;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.RemOp;
+//import com.oracle.graal.lir.sparc.SPARCArithmetic.ShiftOp;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.Unary2Op;
 import com.oracle.graal.lir.sparc.SPARCCompare.CompareOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.BranchOp;
@@ -457,9 +458,8 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitArrayEquals(Kind kind, Value array1, Value array2, Value length) {
-        Variable result = newVariable(LIRKind.value(Kind.Int));
-        append(new SPARCArrayEqualsOp(this, kind, result, load(array1), load(array2), asAllocatable(length)));
-        return result;
+        // TODO Auto-generated method stub
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
@@ -871,13 +871,8 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         append(new MoveFpGp(dst, src, tempSlot));
     }
 
-    private StackSlot tmp;
-
     private StackSlot getTempSlot(LIRKind kind) {
-        if (tmp == null) {
-            tmp = getResult().getFrameMap().allocateSpillSlot(kind);
-        }
-        return tmp;
+        return getResult().getFrameMap().allocateSpillSlot(kind);
     }
 
     protected SPARC getArchitecture() {
