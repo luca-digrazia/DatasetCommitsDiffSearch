@@ -63,7 +63,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision>, Truff
     }
 
     private static List<TruffleInliningDecision> createDecisions(OptimizedCallTarget sourceTarget, TruffleInliningPolicy policy, CompilerOptions options) {
-        if (!sourceTarget.getOptionValue(PolyglotCompilerOptions.Inlining)) {
+        if (!TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleFunctionInlining)) {
             return Collections.emptyList();
         }
         int[] visitedNodes = {0};
