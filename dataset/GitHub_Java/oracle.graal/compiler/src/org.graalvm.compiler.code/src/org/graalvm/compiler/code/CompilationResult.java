@@ -191,10 +191,6 @@ public class CompilationResult {
 
     private StackSlot customStackArea = null;
 
-    /**
-     * A customized name that is unrelated to {@link #compilationId}. Can be null if
-     * {@link #compilationId} fully describes the compilation.
-     */
     private final String name;
 
     private final CompilationIdentifier compilationId;
@@ -232,7 +228,7 @@ public class CompilationResult {
     private boolean isImmutablePIC;
 
     public CompilationResult(CompilationIdentifier compilationId) {
-        this(compilationId, null, false);
+        this(compilationId, compilationId.toString(CompilationIdentifier.Verbosity.NAME), false);
     }
 
     public CompilationResult(CompilationIdentifier compilationId, String name) {
@@ -681,10 +677,6 @@ public class CompilationResult {
         return unmodifiableList(sourceMapping);
     }
 
-    /**
-     * Gets the name for this compilation result. This will only be non-null when it provides a
-     * value unrelated to {@link #getCompilationId()}.
-     */
     public String getName() {
         return name;
     }

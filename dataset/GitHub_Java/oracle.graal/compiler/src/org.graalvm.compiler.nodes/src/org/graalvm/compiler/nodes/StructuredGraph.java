@@ -46,6 +46,7 @@ import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.JavaMethodContext;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.graph.Graph;
@@ -933,9 +934,10 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
      * Records that {@code method} was used to build this graph.
      */
     public void recordMethod(ResolvedJavaMethod method) {
-        if (methods != null) {
-            methods.add(method);
+        if (methods == null) {
+            throw new GraalError("inlined method recording not enabled for %s", this);
         }
+        methods.add(method);
     }
 
     /**
@@ -943,13 +945,14 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
      * to build another graph.
      */
     public void updateMethods(StructuredGraph other) {
-        if (methods != null) {
-            if (other.rootMethod != null) {
-                methods.add(other.rootMethod);
-            }
-            for (ResolvedJavaMethod m : other.methods) {
-                methods.add(m);
-            }
+        if (methods == null) {
+            throw new GraalError("inlined method recording not enabled for %s", this);
+        }
+        if (other.rootMethod != null) {
+            methods.add(other.rootMethod);
+        }
+        for (ResolvedJavaMethod m : other.methods) {
+            methods.add(m);
         }
     }
 
