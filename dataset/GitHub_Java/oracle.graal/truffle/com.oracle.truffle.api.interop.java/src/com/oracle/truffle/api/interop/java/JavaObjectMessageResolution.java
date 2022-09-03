@@ -226,7 +226,7 @@ class JavaObjectMessageResolution {
                 Object obj = receiver.obj;
                 try {
                     Field f = findField(receiver, name);
-                    Object convertedValue = toJava.execute(frame, value, new TypeAndClass(f.getGenericType(), f.getType()));
+                    Object convertedValue = toJava.execute(frame, value, f.getType());
                     setField(obj, f, convertedValue);
                     return JavaObject.NULL;
                 } catch (NoSuchFieldException ex) {
@@ -259,11 +259,7 @@ class JavaObjectMessageResolution {
     abstract static class PropertiesNode extends Node {
         @TruffleBoundary
         public Object access(JavaObject receiver) {
-            Class<?> clazz = receiver.clazz;
-            while ((clazz.getModifiers() & Modifier.PUBLIC) == 0) {
-                clazz = clazz.getSuperclass();
-            }
-            final Field[] fields = clazz.getFields();
+            final Field[] fields = receiver.clazz.getFields();
             final String[] names = new String[fields.length];
             for (int i = 0; i < fields.length; i++) {
                 names[i] = fields[i].getName();

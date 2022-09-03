@@ -25,6 +25,7 @@
 package com.oracle.truffle.api.interop.java.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -49,7 +50,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.util.Iterator;
 import java.util.Map;
-import static org.junit.Assert.assertNotNull;
 
 public class JavaInteropTest {
     public class Data {
@@ -132,27 +132,6 @@ public class JavaInteropTest {
         assertTrue("Contains arr " + list, list.contains("arr"));
         assertTrue("Contains value " + list, list.contains("value"));
         assertTrue("Contains map " + list, list.contains("map"));
-    }
-
-    class POJO {
-        public int x;
-    }
-
-    @Test
-    public void accessAllProperties() {
-        TruffleObject pojo = JavaInterop.asTruffleObject(new POJO());
-        Map<?, ?> map = JavaInterop.asJavaObject(Map.class, pojo);
-        int cnt = 0;
-        for (Map.Entry<?, ?> entry : map.entrySet()) {
-            Object key = entry.getKey();
-            Object value = entry.getValue();
-            assertNotNull(key);
-
-            assertNotNull(value);
-            cnt++;
-        }
-        assertEquals("No properties", 0, cnt);
-        assertEquals("Empty: " + map, 0, map.size());
     }
 
     @Test
@@ -248,6 +227,54 @@ public class JavaInteropTest {
         assertEquals(42, ForeignAccess.sendRead(Message.READ.createNode(), Truffle.getRuntime().createVirtualFrame(new Object[0], new FrameDescriptor()), truffleObject, 1.0));
         assertEquals(42, ForeignAccess.sendRead(Message.READ.createNode(), Truffle.getRuntime().createVirtualFrame(new Object[0], new FrameDescriptor()), truffleObject, 1L));
 
+    }
+
+    @Test
+    public void isNull() {
+        assertTrue(JavaInterop.isNull(null));
+        assertFalse(JavaInterop.isNull(JavaInterop.asTruffleObject(new Object())));
+        assertTrue(JavaInterop.isNull(JavaInterop.asTruffleObject(null)));
+    }
+
+    @Test
+    public void isArray() {
+        assertFalse(JavaInterop.isArray(null));
+        assertFalse(JavaInterop.isNull(JavaInterop.asTruffleObject(new Object())));
+        int[] a = new int[]{1, 2, 3};
+        TruffleObject truffleArray = JavaInterop.asTruffleObject(a);
+        assertTrue(JavaInterop.isArray(truffleArray));
+    }
+
+    @Test
+    public void isBoxed() {
+        assertFalse(JavaInterop.isBoxed(null));
+        assertFalse(JavaInterop.isBoxed(JavaInterop.asTruffleObject(new Object())));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject(42)));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject((byte) 0x42)));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject((short) 42)));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject(4242424242424242L)));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject(42.42f)));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject(42.42)));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject("42")));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject('4')));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject(true)));
+        assertTrue(JavaInterop.isBoxed(JavaInterop.asTruffleObject(false)));
+    }
+
+    @Test
+    public void unbox() {
+        assertNull(JavaInterop.unbox(null));
+        assertNull(JavaInterop.unbox(JavaInterop.asTruffleObject(new Object())));
+        assertEquals(42, JavaInterop.unbox(JavaInterop.asTruffleObject(42)));
+        assertEquals((byte) 42, JavaInterop.unbox(JavaInterop.asTruffleObject((byte) 42)));
+        assertEquals((short) 42, JavaInterop.unbox(JavaInterop.asTruffleObject((short) 42)));
+        assertEquals(4242424242424242L, JavaInterop.unbox(JavaInterop.asTruffleObject(4242424242424242L)));
+        assertEquals(42.42f, JavaInterop.unbox(JavaInterop.asTruffleObject(42.42f)));
+        assertEquals(42.42, JavaInterop.unbox(JavaInterop.asTruffleObject(42.42)));
+        assertEquals("42", JavaInterop.unbox(JavaInterop.asTruffleObject("42")));
+        assertEquals('4', JavaInterop.unbox(JavaInterop.asTruffleObject('4')));
+        assertEquals(true, JavaInterop.unbox(JavaInterop.asTruffleObject(true)));
+        assertEquals(false, JavaInterop.unbox(JavaInterop.asTruffleObject(false)));
     }
 
     public interface XYPlus {
