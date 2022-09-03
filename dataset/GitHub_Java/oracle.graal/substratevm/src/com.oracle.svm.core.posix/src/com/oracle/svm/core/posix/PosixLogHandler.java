@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -35,7 +33,6 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.LibC;
 
 @AutomaticFeature
@@ -59,31 +56,18 @@ public class PosixLogHandler implements LogHandler {
 
     @Override
     public void log(CCharPointer bytes, UnsignedWord length) {
-        /* Save and restore errno around calls that would otherwise change errno. */
-        final int savedErrno = Errno.errno();
-        try {
-            if (!PosixUtils.writeBytes(getOutputFile(), bytes, length)) {
-                /*
-                 * We are in a low-level log routine and output failed, so there is little we can
-                 * do.
-                 */
-                fatalError();
-            }
-        } finally {
-            Errno.set_errno(savedErrno);
+        if (!PosixUtils.writeBytes(getOutputFile(), bytes, length)) {
+            /*
+             * We are in a low-level log routine and output failed, so there is little we can do.
+             */
+            fatalError();
         }
     }
 
     @Override
     public void flush() {
-        /* Save and restore errno around calls that would otherwise change errno. */
-        final int savedErrno = Errno.errno();
-        try {
-            PosixUtils.flush(getOutputFile());
-            /* ignore error -- they're benign */
-        } finally {
-            Errno.set_errno(savedErrno);
-        }
+        PosixUtils.flush(getOutputFile());
+        /* ignore error -- they're benign */
     }
 
     @Override

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -3150,44 +3148,6 @@ public final class PosixJavaNIOSubstitutions {
             // 085 return 0;
             return 0;
         }
-    }
-
-    @TargetClass(className = "sun.nio.ch.UnixAsynchronousSocketChannelImpl")
-    static final class Target_sun_nio_ch_UnixAsynchronousSocketChannelImpl {
-
-        /* { Do not format quoted code: @formatter:off */
-
-        /* Translated from src/solaris/native/sun/nio/ch/UnixAsynchronousSocketChannelImpl.c?v=Java_1.8.0_40_b10 */
-        @Substitute
-        // 038 JNIEXPORT void JNICALL
-        // 039 Java_sun_nio_ch_UnixAsynchronousSocketChannelImpl_checkConnect(JNIEnv *env,
-        // 040     jobject this, int fd)
-        static void checkConnect(int fd) throws IOException {
-            // 042     int error = 0;
-            CIntPointer errorPointer = StackValue.get(SizeOf.get(CIntPointer.class));
-            errorPointer.write(0);
-            // 043     socklen_t arglen = sizeof(error);
-            CIntPointer arglenPointer = StackValue.get(SizeOf.get(CIntPointer.class));
-            arglenPointer.write(SizeOf.get(CIntPointer.class));
-            // 044     int result;
-            int result;
-            // 045
-            // 046     result = getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &arglen);
-            result = Socket.getsockopt(fd, Socket.SOL_SOCKET(), Socket.SO_ERROR(), errorPointer, arglenPointer);
-            // 047     if (result < 0) {
-            if (result < 0) {
-                // 048         JNU_ThrowIOExceptionWithLastError(env, "getsockopt");
-                PosixJavaNIOSubstitutions.throwIOExceptionWithLastError("getsockopt");
-            } else {
-                // 050         if (error)
-                if (CTypeConversion.toBoolean(errorPointer.read())) {
-                    // 051             handleSocketError(env, error);
-                    Util_sun_nio_ch_Net.handleSocketError(errorPointer.read());
-                }
-            }
-        }
-
-        /* } Do not format quoted code: @formatter:on */
     }
 
     @TargetClass(className = "sun.nio.fs.UnixFileSystem")

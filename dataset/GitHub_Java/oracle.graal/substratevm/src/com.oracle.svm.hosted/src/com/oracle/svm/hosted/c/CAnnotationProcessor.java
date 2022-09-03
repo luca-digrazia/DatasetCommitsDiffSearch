@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,9 +28,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
+import com.oracle.svm.core.posix.headers.PosixDirectives;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.c.codegen.CCompilerInvoker;
@@ -46,21 +47,24 @@ import com.oracle.svm.hosted.c.query.SizeAndSignednessVerifier;
 /**
  * Processes native library information for one C Library header file (one { NativeCodeContext }).
  */
-public class CAnnotationProcessor {
+public class CAnnotationProcessor extends CCompilerInvoker {
 
     private final NativeCodeContext codeCtx;
-    private final NativeLibraries nativeLibs;
-    private final CCompilerInvoker compilerInvoker;
-    private final Path tempDirectory;
+    private final List<String> posixHeaders;
 
     private NativeCodeInfo codeInfo;
     private QueryCodeWriter writer;
 
-    public CAnnotationProcessor(NativeLibraries nativeLibs, NativeCodeContext codeCtx, CCompilerInvoker compilerInvoker) {
-        this.nativeLibs = nativeLibs;
+    public CAnnotationProcessor(NativeLibraries nativeLibs, NativeCodeContext codeCtx, Path tempDirectory) {
+        super(nativeLibs, tempDirectory);
         this.codeCtx = codeCtx;
-        this.compilerInvoker = compilerInvoker;
-        this.tempDirectory = compilerInvoker.tempDirectory;
+
+        PosixDirectives posixDirectives = new PosixDirectives();
+        if (posixDirectives.isInConfiguration()) {
+            this.posixHeaders = posixDirectives.getHeaderFiles();
+        } else {
+            this.posixHeaders = Collections.emptyList();
+        }
     }
 
     public NativeCodeInfo process(CAnnotationProcessorCache cache) {
@@ -101,15 +105,16 @@ public class CAnnotationProcessor {
     }
 
     private void makeQuery(CAnnotationProcessorCache cache, String binaryName) {
+        List<String> command = new ArrayList<>();
+        command.add(binaryName);
         Process printingProcess = null;
         try {
-            ProcessBuilder pb = new ProcessBuilder().command(binaryName).directory(tempDirectory.toFile());
-            printingProcess = pb.start();
-            try (InputStream is = printingProcess.getInputStream()) {
-                List<String> lines = QueryResultParser.parse(nativeLibs, codeInfo, is);
-                if (CAnnotationProcessorCache.Options.NewCAPCache.getValue()) {
-                    cache.put(codeInfo, lines);
-                }
+            printingProcess = startCommand(command);
+            InputStream is = printingProcess.getInputStream();
+            List<String> lines = QueryResultParser.parse(nativeLibs, codeInfo, is);
+            is.close();
+            if (CAnnotationProcessorCache.Options.NewCAPCache.getValue()) {
+                cache.put(codeInfo, lines);
             }
             printingProcess.waitFor();
         } catch (IOException ex) {
@@ -124,17 +129,17 @@ public class CAnnotationProcessor {
     }
 
     private Path compileQueryCode(Path queryFile) {
-        /* replace the '.c' or '.cpp' from the end to get the binary name */
-        String fileName = queryFile.getFileName().toString();
-        Path binary = queryFile.resolveSibling(compilerInvoker.asExecutableName(fileName.substring(0, fileName.lastIndexOf("."))));
-        compilerInvoker.compileAndParseError(codeCtx.getDirectives().getOptions(), queryFile, binary, this::reportCompilerError);
-        return binary;
+        /* remove the '.c' from the end to get the binary name */
+        String binaryName = queryFile.toString().substring(0, queryFile.toString().length() - 2);
+        Path binary = Paths.get(binaryName);
+        return compileAndParseError(codeCtx.getDirectives().getOptions(), queryFile.normalize(), binary.normalize());
     }
 
-    protected void reportCompilerError(ProcessBuilder lastCommand, Path queryFile, String line) {
-        for (String header : codeCtx.getDirectives().getHeaderFiles()) {
+    @Override
+    protected void reportCompilerError(Path queryFile, String line) {
+        for (String header : posixHeaders) {
             if (line.contains(header.substring(1, header.length() - 1) + ": No such file or directory")) {
-                UserError.abort("Basic header file missing (" + header + "). Make sure headers are available on your system.");
+                UserError.abort("Basic header file missing (" + header + "). Make sure libc and zlib headers are available on your system.");
             }
         }
         List<Object> elements = new ArrayList<>();
@@ -159,6 +164,6 @@ public class CAnnotationProcessor {
             }
         }
 
-        nativeLibs.getErrors().add(new CInterfaceError("Error compiling query code (in " + queryFile + "). Compiler command " + lastCommand + " output included error: " + line, elements));
+        nativeLibs.getErrors().add(new CInterfaceError("Error compiling query code (in " + queryFile + "). Compiler command " + lastExecutedCommand() + " output included error: " + line, elements));
     }
 }

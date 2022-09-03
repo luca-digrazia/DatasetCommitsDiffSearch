@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,25 +22,20 @@
  */
 package com.oracle.svm.core.posix;
 
+import java.io.Console;
+import java.nio.charset.Charset;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Function;
 
-import org.graalvm.compiler.serviceprovider.GraalServices;
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Alias;
-import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.NeverInline;
+import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.jdk.JDK8OrEarlier;
-import com.oracle.svm.core.jdk.JDK9OrLater;
-import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
 import com.oracle.svm.core.nodes.CFunctionPrologueNode;
@@ -50,39 +43,62 @@ import com.oracle.svm.core.os.IsDefined;
 import com.oracle.svm.core.posix.headers.CSunMiscSignal;
 import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Signal;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 
-@Platforms(Platform.HOSTED_ONLY.class)
-class Package_jdk_internal_misc implements Function<TargetClass, String> {
-    @Override
-    public String apply(TargetClass annotation) {
-        if (GraalServices.Java8OrEarlier) {
-            return "sun.misc." + annotation.className();
-        } else {
-            return "jdk.internal.misc." + annotation.className();
+@TargetClass(sun.misc.SharedSecrets.class)
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+final class Target_sun_misc_SharedSecrets {
+
+    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
+    private static sun.misc.JavaIOAccess javaIOAccess;
+
+    @Substitute
+    public static sun.misc.JavaIOAccess getJavaIOAccess() {
+        if (javaIOAccess == null) {
+            javaIOAccess = new sun.misc.JavaIOAccess() {
+                @Override
+                public Console console() {
+                    if (Target_java_io_Console.istty()) {
+                        if (Target_java_lang_System.cons == null) {
+                            Target_java_lang_System.cons = Util_java_io_Console.toConsole(new Target_java_io_Console());
+                        }
+                        return Target_java_lang_System.cons;
+                    }
+                    return null;
+                }
+
+                @Override
+                public Charset charset() {
+                    // This method is called in sun.security.util.Password,
+                    // cons already exists when this method is called
+                    return KnownIntrinsics.unsafeCast(Target_java_lang_System.cons, Target_java_io_Console.class).cs;
+                }
+            };
         }
+        return javaIOAccess;
+    }
+
+    @Alias private static sun.misc.JavaLangAccess javaLangAccess;
+
+    @Substitute
+    public static sun.misc.JavaLangAccess getJavaLangAccess() {
+        return javaLangAccess;
     }
 }
 
+@TargetClass(sun.misc.Signal.class)
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
-@TargetClass(classNameProvider = Package_jdk_internal_misc.class, className = "Signal")
-final class Target_jdk_internal_misc_Signal {
+final class Target_sun_misc_Signal {
 
     @Substitute
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
-    private static /* native */ int findSignal(String signalName) {
-        return Util_jdk_internal_misc_Signal.numberFromName(signalName);
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    private static /* native */ int findSignal0(String signalName) {
-        return Util_jdk_internal_misc_Signal.numberFromName(signalName);
+    private static int findSignal(String signalName) {
+        return Util_sun_misc_Signal.numberFromName(signalName);
     }
 
     @Substitute
     private static long handle0(int sig, long nativeH) {
-        return Util_jdk_internal_misc_Signal.handle0(sig, nativeH);
+        return Util_sun_misc_Signal.handle0(sig, nativeH);
     }
 
     /** The Java side of raising a signal calls the C side of raising a signal. */
@@ -100,7 +116,7 @@ final class Target_jdk_internal_misc_Signal {
 }
 
 /** Support for Target_sun_misc_Signal. */
-final class Util_jdk_internal_misc_Signal {
+final class Util_sun_misc_Signal {
 
     /** A thread to dispatch signals as they are raised. */
     private static Thread dispatchThread = null;
@@ -113,7 +129,7 @@ final class Util_jdk_internal_misc_Signal {
     /** A map from signal numbers to handlers. */
     private static SignalState[] signalState = null;
 
-    private Util_jdk_internal_misc_Signal() {
+    private Util_sun_misc_Signal() {
         /* All-static class. */
     }
 
@@ -289,7 +305,7 @@ final class Util_jdk_internal_misc_Signal {
                     if (dispatcher.equal(CSunMiscSignal.countingHandlerFunctionPointer())) {
                         /* ... and if there are outstanding signals to be dispatched. */
                         if (entry.decrementCount() > 0L) {
-                            Target_jdk_internal_misc_Signal.dispatch(entry.getNumber());
+                            Target_sun_misc_Signal.dispatch(entry.getNumber());
                         }
                     }
                 }
@@ -357,7 +373,7 @@ final class Util_jdk_internal_misc_Signal {
 }
 
 /** Translated from: jdk/src/share/native/sun/misc/NativeSignalHandler.c?v=Java_1.8.0_40_b10. */
-@TargetClass(className = "sun.misc.NativeSignalHandler", onlyWith = JDK8OrEarlier.class)
+@TargetClass(className = "sun.misc.NativeSignalHandler")
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_sun_misc_NativeSignalHandler {
 
@@ -401,33 +417,6 @@ final class Util_sun_misc_NativeSignalHandler {
     @NeverInline("Provide a return address for the Java frame anchor.")
     private static void handle0InNative(Signal.AdvancedSignalDispatcher functionPointer, int sig) {
         functionPointer.dispatch(sig, WordFactory.nullPointer(), WordFactory.nullPointer());
-    }
-}
-
-@AutomaticFeature
-class IgnoreSIGPIPEFeature implements Feature {
-
-    @Override
-    public void beforeAnalysis(BeforeAnalysisAccess access) {
-
-        RuntimeSupport.getRuntimeSupport().addStartupHook(new Runnable() {
-
-            @Override
-            /**
-             * Ignore SIGPIPE. Reading from a closed pipe, instead of delivering a process-wide
-             * signal whose default action is to terminate the process, will instead return an error
-             * code from the specific write operation.
-             *
-             * From pipe(7}: If all file descriptors referring to the read end of a pipe have been
-             * closed, then a write(2) will cause a SIGPIPE signal to be generated for the calling
-             * process. If the calling process is ignoring this signal, then write(2) fails with the
-             * error EPIPE.
-             */
-            public void run() {
-                final Signal.SignalDispatcher signalResult = Signal.signal(Signal.SignalEnum.SIGPIPE.getCValue(), Signal.SIG_IGN());
-                VMError.guarantee(signalResult != Signal.SIG_ERR(), "IgnoreSIGPIPEFeature.run: Could not ignore SIGPIPE");
-            }
-        });
     }
 }
 
