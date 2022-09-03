@@ -245,7 +245,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             GraalTVMCI tvmci = runtime().getTvmci();
             if (sourceCallTarget == null && rootNode.isCloningAllowed() && !tvmci.isCloneUninitializedSupported(rootNode)) {
                 // We are the source CallTarget, so make a copy.
-                this.uninitializedRootNode = NodeUtil.cloneNode(rootNode);
+                this.uninitializedRootNode = cloneRootNode(rootNode);
             }
             tvmci.onFirstExecution(this);
             this.compilationProfile = createCompilationProfile();
@@ -311,20 +311,24 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         runtime().cancelInstalledTask(this, source, reason);
     }
 
+    private static RootNode cloneRootNode(RootNode root) {
+        assert root.isCloningAllowed();
+        GraalTVMCI tvmci = runtime().getTvmci();
+        if (tvmci.isCloneUninitializedSupported(root)) {
+            assert root == null;
+            return tvmci.cloneUnitialized(root);
+        } else {
+            return NodeUtil.cloneNode(root);
+        }
+    }
+
     OptimizedCallTarget cloneUninitialized() {
         assert sourceCallTarget == null;
         if (compilationProfile == null) {
             initialize();
         }
-        RootNode clonedRoot;
-        GraalTVMCI tvmci = runtime().getTvmci();
-        if (tvmci.isCloneUninitializedSupported(rootNode)) {
-            assert uninitializedRootNode == null;
-            clonedRoot = tvmci.cloneUninitialized(rootNode);
-        } else {
-            clonedRoot = NodeUtil.cloneNode(uninitializedRootNode);
-        }
-        return (OptimizedCallTarget) runtime().createClonedCallTarget(this, clonedRoot);
+        RootNode copiedRoot = cloneRootNode(uninitializedRootNode);
+        return (OptimizedCallTarget) runtime().createClonedCallTarget(this, copiedRoot);
     }
 
     protected synchronized SpeculationLog getSpeculationLog() {
