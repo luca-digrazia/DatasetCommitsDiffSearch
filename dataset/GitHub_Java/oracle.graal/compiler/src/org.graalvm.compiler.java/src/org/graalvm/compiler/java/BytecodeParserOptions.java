@@ -34,9 +34,7 @@ import org.graalvm.compiler.options.OptionKey;
  */
 public class BytecodeParserOptions {
     // @formatter:off
-    @Option(help = "The trace level for the bytecode parser. A value of 1 enables instruction tracing " +
-                   "and any greater value emits a frame state trace just prior to an instruction trace. " +
-                   "This option requires assertions to be enabled.", type = OptionType.Debug)
+    @Option(help = "The trace level for the bytecode parser used when building a graph from bytecode", type = OptionType.Debug)
     public static final OptionKey<Integer> TraceBytecodeParserLevel = new OptionKey<>(0);
 
     @Option(help = "Inlines trivial methods during bytecode parsing.", type = OptionType.Expert)
@@ -65,5 +63,9 @@ public class BytecodeParserOptions {
 
     @Option(help = "Use intrinsics guarded by a virtual dispatch test at indirect call sites.", type = OptionType.Debug)
     public static final OptionKey<Boolean> UseGuardedIntrinsics = new OptionKey<>(true);
+
+    // Remove once GR-3604 reduces the memory overhead of including node source info dumps
+    @Option(help = "Enable node source positions if dumping is enabled.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> DumpWithInfopoints = new OptionKey<>(false);
     // @formatter:on
 }
