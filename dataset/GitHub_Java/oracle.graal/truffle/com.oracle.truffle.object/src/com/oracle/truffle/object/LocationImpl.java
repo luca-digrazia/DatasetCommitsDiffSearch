@@ -22,20 +22,20 @@
  */
 package com.oracle.truffle.object;
 
-import com.oracle.truffle.api.object.*;
+import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.object.FinalLocationException;
+import com.oracle.truffle.api.object.IncompatibleLocationException;
+import com.oracle.truffle.api.object.Location;
+import com.oracle.truffle.api.object.LongLocation;
+import com.oracle.truffle.api.object.Shape;
+import com.oracle.truffle.api.object.TypedLocation;
 
 public abstract class LocationImpl extends Location {
 
-    public interface EffectivelyFinalLocation<T extends Location> {
-        T toNonFinalLocation();
-    }
-
-    public interface TypedObjectLocation<T extends Location & ObjectLocation> extends ObjectLocation {
-        T toUntypedLocation();
-    }
-
     public interface InternalLongLocation extends LongLocation {
         void setLongInternal(DynamicObject store, long value);
+
+        String getWhereString();
     }
 
     public interface LocationVisitor {
@@ -62,8 +62,13 @@ public abstract class LocationImpl extends Location {
     protected abstract void setInternal(DynamicObject store, Object value) throws IncompatibleLocationException;
 
     @Override
-    public final boolean canSet(DynamicObject store, Object value) {
+    public boolean canSet(DynamicObject store, Object value) {
         return canStore(value) && canStoreFinal(store, value);
+    }
+
+    @Override
+    public boolean canSet(Object value) {
+        return canSet(null, value);
     }
 
     @Override
@@ -115,8 +120,7 @@ public abstract class LocationImpl extends Location {
     @Override
     public String toString() {
         String finalString = isFinal() ? "f" : "";
-        String typeString = this instanceof IntLocation ? "i" : (this instanceof DoubleLocation ? "d" : (this instanceof BooleanLocation ? "b"
-                        : (this instanceof TypedLocation ? ((TypedLocation) this).getType().getSimpleName() : "o")));
+        String typeString = (this instanceof TypedLocation ? ((TypedLocation) this).getType().getSimpleName() : "Object");
         return finalString + typeString + getWhereString();
     }
 
