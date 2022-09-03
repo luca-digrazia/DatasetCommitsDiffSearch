@@ -22,24 +22,18 @@
  */
 package com.oracle.graal.compiler.amd64.test;
 
-import static com.oracle.graal.compiler.common.GraalOptions.TraceRA;
-import static com.oracle.graal.compiler.common.GraalOptions.RegisterPressure;
-import static org.junit.Assume.assumeTrue;
-import jdk.vm.ci.amd64.AMD64;
+import static org.junit.Assume.*;
 
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.compiler.test.backend.AllocatorTest;
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.compiler.test.backend.*;
 
 public class AMD64AllocatorTest extends AllocatorTest {
 
     @Before
     public void checkAMD64() {
         assumeTrue("skipping AMD64 specific test", getTarget().arch instanceof AMD64);
-        assumeTrue("RegisterPressure is set -> skip", RegisterPressure.getValue() == null);
-        assumeTrue("TraceRA is set -> skip", !TraceRA.getValue());
     }
 
     @Test
