@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
@@ -32,8 +31,6 @@ import com.oracle.graal.replacements.nodes.*;
 
 /**
  * {@link MacroNode Macro node} for {@link Class#isInstance(Object)}.
- * 
- * @see ClassSubstitutions#isInstance(Class, Object)
  */
 public class ClassIsInstanceNode extends MacroNode implements Canonicalizable, Lowerable {
 
