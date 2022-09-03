@@ -68,7 +68,7 @@ public final class ModelModule implements ModuleGenerator {
 
     private final Symbols symbols = new Symbols();
 
-    private int currentFunction = -1;
+    private int currentMethod = -1;
 
     public ModelModule() {
     }
@@ -100,10 +100,10 @@ public final class ModelModule implements ModuleGenerator {
     }
 
     @Override
-    public void createBlockAddress(Type type, int function, int block) {
+    public void createBlockAddress(Type type, int method, int block) {
         symbols.addSymbol(new BlockAddressConstant(
                         type,
-                        symbols.getSymbol(function),
+                        symbols.getSymbol(method),
                         null));
     }
 
@@ -171,9 +171,9 @@ public final class ModelModule implements ModuleGenerator {
     @Override
     public void createFunction(FunctionType type, boolean isPrototype) {
         if (isPrototype) {
-            FunctionDeclaration function = new FunctionDeclaration(type);
-            symbols.addSymbol(function);
-            declares.add(function);
+            FunctionDeclaration method = new FunctionDeclaration(type);
+            symbols.addSymbol(method);
+            declares.add(method);
         } else {
             FunctionDefinition method = new FunctionDefinition(type);
             symbols.addSymbol(method);
@@ -217,15 +217,15 @@ public final class ModelModule implements ModuleGenerator {
 
     @Override
     public FunctionGenerator generateFunction() {
-        while (++currentFunction < symbols.getSize()) {
-            Symbol symbol = symbols.getSymbol(currentFunction);
+        while (++currentMethod < symbols.getSize()) {
+            Symbol symbol = symbols.getSymbol(currentMethod);
             if (symbol instanceof FunctionDefinition) {
-                FunctionDefinition function = (FunctionDefinition) symbol;
-                function.getSymbols().addSymbols(symbols);
-                return function;
+                FunctionDefinition method = (FunctionDefinition) symbol;
+                method.getSymbols().addSymbols(symbols);
+                return method;
             }
         }
-        throw new RuntimeException("Trying to generate undefined function");
+        throw new RuntimeException("Trying to generate undefined method");
     }
 
     @Override

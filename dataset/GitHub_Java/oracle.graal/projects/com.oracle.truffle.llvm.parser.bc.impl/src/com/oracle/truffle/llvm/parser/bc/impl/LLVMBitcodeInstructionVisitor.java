@@ -725,8 +725,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
 
         Type type = store.getSource().getType();
 
-        LLVMNode node = LLVMMemoryReadWriteFactory.createStore(pointerNode, valueNode, LLVMBitcodeHelper.toBaseType(type).getType(),
-                        LLVMBitcodeHelper.getSize(type, store.getAlign()));
+        LLVMNode node = LLVMMemoryReadWriteFactory.createStore(pointerNode, valueNode, LLVMBitcodeHelper.toBaseType(type).getType(), LLVMBitcodeHelper.getSize(type, store.getAlign()));
 
         method.addInstruction(node);
     }
