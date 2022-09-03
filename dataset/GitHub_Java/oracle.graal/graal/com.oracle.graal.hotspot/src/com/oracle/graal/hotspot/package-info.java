@@ -26,4 +26,3 @@
  * from the Java to the C++ side (CompilerToVMImpl.java).
  */
 package com.oracle.graal.hotspot;
-

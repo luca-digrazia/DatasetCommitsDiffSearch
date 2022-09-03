@@ -34,6 +34,9 @@ import com.oracle.graal.hotspot.ri.*;
  */
 public final class HotSpotTargetMethod extends CompilerObject {
 
+    /**
+     *
+     */
     private static final long serialVersionUID = 7807321392203253218L;
     public final CiTargetMethod targetMethod;
     public final HotSpotMethodResolved method; // used only for methods
@@ -96,4 +99,9 @@ public final class HotSpotTargetMethod extends CompilerObject {
         }
         return result;
     }
+
+    public static Object installStub(Compiler compiler, CiTargetMethod targetMethod, String name, HotSpotCodeInfo info) {
+        return compiler.getCompilerToVM().installStub(new HotSpotTargetMethod(compiler, targetMethod, name), info);
+    }
+
 }

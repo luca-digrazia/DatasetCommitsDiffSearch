@@ -25,24 +25,27 @@ package com.oracle.graal.hotspot.ri;
 import java.lang.annotation.*;
 import java.lang.reflect.*;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.HotSpotCompiler;
+import com.oracle.graal.hotspot.Compiler;
 
 /**
  * Implementation of RiType for primitive HotSpot types.
  */
 public final class HotSpotTypePrimitive extends HotSpotType implements RiResolvedType {
 
+    /**
+     *
+     */
     private static final long serialVersionUID = -6208552348908071473L;
-    private RiKind kind;
-    private final HotSpotKlassOop klassOop;
+    private CiKind kind;
 
-    public HotSpotTypePrimitive(HotSpotCompiler compiler, RiKind kind) {
+
+    public HotSpotTypePrimitive(Compiler compiler, CiKind kind) {
         super(compiler);
         this.kind = kind;
         this.name = String.valueOf(Character.toUpperCase(kind.typeChar));
-        this.klassOop = new HotSpotKlassOop(compiler, kind.toJavaClass());
     }
 
     @Override
@@ -77,12 +80,12 @@ public final class HotSpotTypePrimitive extends HotSpotType implements RiResolve
     }
 
     @Override
-    public RiConstant getEncoding(Representation r) {
+    public CiConstant getEncoding(Representation r) {
         throw GraalInternalError.unimplemented("HotSpotTypePrimitive.getEncoding");
     }
 
     @Override
-    public RiKind getRepresentationKind(Representation r) {
+    public CiKind getRepresentationKind(Representation r) {
         return kind;
     }
 
@@ -112,7 +115,7 @@ public final class HotSpotTypePrimitive extends HotSpotType implements RiResolve
     }
 
     @Override
-    public boolean isInstance(RiConstant obj) {
+    public boolean isInstance(CiConstant obj) {
         return false;
     }
 
@@ -132,7 +135,7 @@ public final class HotSpotTypePrimitive extends HotSpotType implements RiResolve
     }
 
     @Override
-    public RiKind kind(boolean architecture) {
+    public CiKind kind(boolean architecture) {
         return kind;
     }
 
@@ -174,10 +177,5 @@ public final class HotSpotTypePrimitive extends HotSpotType implements RiResolve
     @Override
     public RiResolvedType resolve(RiResolvedType accessingClass) {
         return this;
-    }
-
-    @Override
-    public HotSpotKlassOop klassOop() {
-        return klassOop;
     }
 }

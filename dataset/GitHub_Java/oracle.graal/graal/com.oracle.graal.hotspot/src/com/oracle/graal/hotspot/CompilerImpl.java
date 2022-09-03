@@ -109,22 +109,22 @@ public final class CompilerImpl implements Compiler, Remote {
             toVM = new CompilerToVMImpl();
         }
 
-        // initialize VmToCompiler
-        VMToCompiler toCompiler = new VMToCompilerImpl(this);
+        // initialize VMExits
+        VMToCompiler exits = new VMToCompilerImpl(this);
 
         // logging, etc.
         if (CountingProxy.ENABLED) {
-            toCompiler = CountingProxy.getProxy(VMToCompiler.class, toCompiler);
+            exits = CountingProxy.getProxy(VMToCompiler.class, exits);
             toVM = CountingProxy.getProxy(CompilerToVM.class, toVM);
         }
         if (Logger.ENABLED) {
-            toCompiler = LoggingProxy.getProxy(VMToCompiler.class, toCompiler);
+            exits = LoggingProxy.getProxy(VMToCompiler.class, exits);
             toVM = LoggingProxy.getProxy(CompilerToVM.class, toVM);
         }
 
         // set the final fields
         compilerToVm = toVM;
-        vmToCompiler = toCompiler;
+        vmToCompiler = exits;
 
         // initialize compiler
         config = compilerToVm.getConfiguration();
