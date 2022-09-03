@@ -23,7 +23,6 @@
 package org.graalvm.compiler.hotspot;
 
 import static org.graalvm.compiler.core.common.GraalOptions.HotSpotPrintInlining;
-import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.debug.GraalDebugConfig.areScopedGlobalMetricsEnabled;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.DebugValueSummary;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Dump;
@@ -90,8 +89,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     private final GraalHotSpotVMConfig config;
 
-    private final OptionValues options;
-
     /**
      * @param compilerConfigurationFactory factory for the compiler configuration
      *            {@link CompilerConfigurationFactory#selectFactory(String)}
@@ -100,8 +97,9 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     HotSpotGraalRuntime(HotSpotJVMCIRuntime jvmciRuntime, CompilerConfigurationFactory compilerConfigurationFactory) {
 
         HotSpotVMConfigStore store = jvmciRuntime.getConfigStore();
-        config = GeneratePIC.getValue(GLOBAL) ? new AOTGraalHotSpotVMConfig(store) : new GraalHotSpotVMConfig(store);
+        config = new GraalHotSpotVMConfig(store);
 
+        OptionValues options;
         // Only set HotSpotPrintInlining if it still has its default value (false).
         if (GraalOptions.HotSpotPrintInlining.getValue(GLOBAL) == false && config.printInlining) {
             options = new OptionValues(GLOBAL, HotSpotPrintInlining, true);
@@ -268,7 +266,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     void shutdown() {
         if (debugValuesPrinter != null) {
-            debugValuesPrinter.printDebugValues(options);
+            debugValuesPrinter.printDebugValues();
         }
         phaseTransition("final");
 

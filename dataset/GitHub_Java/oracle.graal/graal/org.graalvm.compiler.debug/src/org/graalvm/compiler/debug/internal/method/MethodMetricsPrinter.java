@@ -37,7 +37,6 @@ import org.graalvm.compiler.debug.internal.DebugScope;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.options.OptionValues;
 
 /**
  * Interface for printing a collection of method metrics (e.g. during shutdown).
@@ -53,8 +52,9 @@ public interface MethodMetricsPrinter {
         // @formatter:on
     }
 
-    static boolean methodMetricsDumpingEnabled(OptionValues options) {
-        return MethodMetricsPrinter.Options.MethodMeterPrintAscii.getValue(options) || MethodMetricsPrinter.Options.MethodMeterFile.getValue(options) != null;
+    static boolean methodMetricsDumpingEnabled() {
+        return MethodMetricsPrinter.Options.MethodMeterPrintAscii.getValue(DebugScope.getConfig().getOptions()) ||
+                        MethodMetricsPrinter.Options.MethodMeterFile.getValue(DebugScope.getConfig().getOptions()) != null;
     }
 
     /**

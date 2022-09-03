@@ -127,12 +127,7 @@ public class GraalDebugConfigCustomizer implements DebugConfigCustomizer {
              */
             return null;
         } catch (IOException e) {
-            if (!Options.PrintIdealGraphFile.hasBeenSet(options)) {
-                TTY.println(String.format("Could not connect to the IGV on %s:%d - falling back to file dumping...", host, port));
-                return createFilePrinter(options);
-            } else {
-                throw new IOException(String.format("Could not connect to the IGV on %s:%d", host, port), e);
-            }
+            throw new IOException(String.format("Could not connect to the IGV on %s:%d", host, port), e);
         }
     }
 
