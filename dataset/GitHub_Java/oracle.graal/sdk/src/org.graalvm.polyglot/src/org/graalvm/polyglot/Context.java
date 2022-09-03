@@ -159,9 +159,17 @@ public final class Context implements AutoCloseable {
     }
 
     /**
+     * @deprecated use {@link #lookupSymbol(String, String)} instead.
+     */
+    @Deprecated
+    public Value lookup(String language, String symbol) {
+        return impl.lookup(getEngine().getLanguage(language).impl, symbol);
+    }
+
+    /**
      * Perform a lookup for a symbol in the top-most scope of the language.
      */
-    public Value lookup(String language, String symbol) {
+    public Value lookupSymbol(String language, String symbol) {
         return impl.lookup(getEngine().getLanguage(language).impl, symbol);
     }
 
