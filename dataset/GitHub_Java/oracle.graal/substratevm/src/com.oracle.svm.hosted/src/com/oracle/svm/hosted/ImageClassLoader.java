@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -33,7 +31,6 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.FileSystem;
@@ -102,17 +99,15 @@ public final class ImageClassLoader {
         this.classLoader = classLoader;
     }
 
+    /** A public factory method that accepts a gr8964Tracing parameter. */
     public static ImageClassLoader create(Platform platform, String[] classpathAll, ClassLoader classLoader) {
         ArrayList<String> classpathFiltered = new ArrayList<>(classpathAll.length);
         classpathFiltered.addAll(Arrays.asList(classpathAll));
 
-        /* If the Graal SDK is on the boot class path, and it contains annotated types. */
-        final String sunBootClassPath = System.getProperty("sun.boot.class.path");
-        if (sunBootClassPath != null) {
-            for (String s : sunBootClassPath.split(File.pathSeparator)) {
-                if (s.contains("graal-sdk")) {
-                    classpathFiltered.add(s);
-                }
+        /* The Graal SDK is on the boot class path, and it contains annotated types. */
+        for (String s : System.getProperty("sun.boot.class.path").split(File.pathSeparator)) {
+            if (s.contains("graal-sdk")) {
+                classpathFiltered.add(s);
             }
         }
 
@@ -135,21 +130,22 @@ public final class ImageClassLoader {
         Set<Path> uniquePaths = new TreeSet<>(Comparator.comparing(ImageClassLoader::toRealPath));
         final boolean debugGR8964 = Boolean.valueOf(System.getProperty("debug_gr_8964", "false"));
         if (debugGR8964) {
-            System.err.println("[ImageClassLoader.initAllClasses");
+            System.err.print("[ImageClassLoader.initAllClasses");
             List<Path> pathList = new ArrayList<>();
             for (String classPathEntry : classpath) {
+                System.err.println();
                 System.err.println("  [classPathEntry: " + classPathEntry);
                 toClassPathEntries(classPathEntry).forEach(path -> {
                     pathList.add(path);
                     final Path absolutePath;
-                    System.err.print("    [        path: " + path.toString());
+                    System.err.println("             path: " + path.toString());
                     if (!path.isAbsolute()) {
                         absolutePath = path.toAbsolutePath();
-                        System.err.println();
-                        System.err.print("     absolutePath: " + path.toString());
+                        System.err.println("     absolutePath: " + path.toString());
                     } else {
                         absolutePath = path;
                     }
+                    System.err.print("                 ");
                     System.err.print(path.isAbsolute() ? "  absolute" : "");
                     final boolean exists = Files.exists(absolutePath);
                     System.err.print(exists ? "  exists" : "");
@@ -164,9 +160,8 @@ public final class ImageClassLoader {
                             System.err.print("  n/a");
                         }
                     }
-                    System.err.println(" ]");
+                    System.err.print("]");
                 });
-                System.err.println("  ]");
             }
             System.err.println("]");
             uniquePaths.addAll(pathList);
@@ -183,7 +178,7 @@ public final class ImageClassLoader {
 
     static Stream<Path> toClassPathEntries(String classPathEntry) {
         Path entry = Paths.get(classPathEntry);
-        if (entry.getFileName().toString().endsWith("*")) {
+        if (entry.endsWith("*")) {
             return Arrays.stream(entry.getParent().toFile().listFiles()).filter(File::isFile).map(File::toPath);
         }
         return Stream.of(entry);
@@ -199,19 +194,14 @@ public final class ImageClassLoader {
 
     private void loadClassesFromPath(ForkJoinPool executor, Path path) {
         if (Files.exists(path)) {
-            String name = path.toAbsolutePath().toString();
-            if (path.getNameCount() > 0 && name.endsWith(".jar")) {
+            if (path.getNameCount() > 0 && path.getFileName().toString().endsWith(".jar")) {
                 try {
-                    name = name.replace('\\', '/');
-                    URI jarURI = new URI("jar:file:///" + name);
-                    try (FileSystem jarFileSystem = FileSystems.newFileSystem(jarURI, Collections.emptyMap())) {
+                    try (FileSystem jarFileSystem = FileSystems.newFileSystem(URI.create("jar:file:" + path), Collections.emptyMap())) {
                         initAllClasses(jarFileSystem.getPath("/"), Collections.emptySet(), executor);
                     }
                 } catch (ClosedByInterruptException ignored) {
                     throw new InterruptImageBuilding();
                 } catch (IOException e) {
-                    throw shouldNotReachHere(e);
-                } catch (URISyntaxException e) {
                     throw shouldNotReachHere(e);
                 }
             } else {
