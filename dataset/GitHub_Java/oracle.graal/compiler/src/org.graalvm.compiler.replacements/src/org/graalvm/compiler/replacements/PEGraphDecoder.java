@@ -22,7 +22,6 @@
  */
 package org.graalvm.compiler.replacements;
 
-import java.net.URI;
 import static org.graalvm.compiler.debug.GraalError.unimplemented;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
@@ -161,7 +160,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         protected final int inliningDepth;
 
         protected final ValueNode[] arguments;
-        private SourceLanguagePosition sourceLanguagePosition = UnresolvedSourceLanguagePosition.INSTANCE;
+        private final SourceLanguagePosition sourceLanguagePosition;
 
         protected FrameState outerState;
         protected FrameState exceptionState;
@@ -177,6 +176,13 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             this.invokeData = invokeData;
             this.inliningDepth = inliningDepth;
             this.arguments = arguments;
+            SourceLanguagePosition position = null;
+            if (arguments != null && method.hasReceiver() && arguments.length > 0 && arguments[0].isJavaConstant()) {
+                JavaConstant constantArgument = arguments[0].asJavaConstant();
+                position = sourceLanguagePositionProvider.getPosition(constantArgument);
+            }
+            this.sourceLanguagePosition = position;
+
         }
 
         @Override
@@ -198,60 +204,12 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 callerBytecodePosition = invokePosition;
             }
             if (position != null) {
-                return position.addCaller(caller.resolveSourceLanguagePosition(), callerBytecodePosition);
+                return position.addCaller(caller.sourceLanguagePosition, callerBytecodePosition);
             }
-            final SourceLanguagePosition pos = caller.resolveSourceLanguagePosition();
-            if (pos != null && callerBytecodePosition != null) {
-                return new NodeSourcePosition(pos, callerBytecodePosition.getCaller(), callerBytecodePosition.getMethod(), callerBytecodePosition.getBCI());
+            if (caller.sourceLanguagePosition != null && callerBytecodePosition != null) {
+                return new NodeSourcePosition(caller.sourceLanguagePosition, callerBytecodePosition.getCaller(), callerBytecodePosition.getMethod(), callerBytecodePosition.getBCI());
             }
             return callerBytecodePosition;
-        }
-
-        private SourceLanguagePosition resolveSourceLanguagePosition() {
-            SourceLanguagePosition res = sourceLanguagePosition;
-            if (res == UnresolvedSourceLanguagePosition.INSTANCE) {
-                res = null;
-                if (arguments != null && method.hasReceiver() && arguments.length > 0 && arguments[0].isJavaConstant()) {
-                    JavaConstant constantArgument = arguments[0].asJavaConstant();
-                    res = sourceLanguagePositionProvider.getPosition(constantArgument);
-                }
-                sourceLanguagePosition = res;
-            }
-            return res;
-        }
-    }
-
-    private static final class UnresolvedSourceLanguagePosition implements SourceLanguagePosition {
-        static final SourceLanguagePosition INSTANCE = new UnresolvedSourceLanguagePosition();
-
-        @Override
-        public String toShortString() {
-            throw new IllegalStateException(getClass().getSimpleName() + " should not be reachable.");
-        }
-
-        @Override
-        public int getOffsetEnd() {
-            throw new IllegalStateException(getClass().getSimpleName() + " should not be reachable.");
-        }
-
-        @Override
-        public int getOffsetStart() {
-            throw new IllegalStateException(getClass().getSimpleName() + " should not be reachable.");
-        }
-
-        @Override
-        public int getLineNumber() {
-            throw new IllegalStateException(getClass().getSimpleName() + " should not be reachable.");
-        }
-
-        @Override
-        public URI getURI() {
-            throw new IllegalStateException(getClass().getSimpleName() + " should not be reachable.");
-        }
-
-        @Override
-        public String getLanguage() {
-            throw new IllegalStateException(getClass().getSimpleName() + " should not be reachable.");
         }
     }
 
