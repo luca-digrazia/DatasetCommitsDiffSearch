@@ -207,7 +207,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         crb.recordMark(Marks.MARK_VERIFIED_ENTRY);
 
         // Emit code for the LIR
-        crb.emit(lirGen.lir);
+        lirGen.lir.emitCode(crb);
 
         HotSpotFrameContext frameContext = (HotSpotFrameContext) crb.frameContext;
         HotSpotForeignCallsProvider foreignCalls = getProviders().getForeignCalls();

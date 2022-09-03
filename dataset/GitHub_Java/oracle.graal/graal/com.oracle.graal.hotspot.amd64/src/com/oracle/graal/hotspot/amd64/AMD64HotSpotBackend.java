@@ -278,7 +278,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
      * @param installedCodeOwner see {@link Backend#emitCode}
      */
     public void emitCodeBody(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, LIRGenerator lirGen) {
-        crb.emit(lirGen.lir);
+        lirGen.lir.emitCode(crb);
     }
 
     /**
