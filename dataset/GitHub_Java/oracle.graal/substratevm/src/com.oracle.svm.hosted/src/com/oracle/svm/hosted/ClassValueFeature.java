@@ -24,17 +24,15 @@
  */
 package com.oracle.svm.hosted;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.hosted.Feature;
-
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.jdk.JavaLangSubstitutions.ClassValueSupport;
-import com.oracle.svm.util.ReflectionUtil;
+import com.oracle.svm.core.util.VMError;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.ImageSingletons;
 
 @AutomaticFeature
 public final class ClassValueFeature implements Feature {
@@ -71,19 +69,25 @@ public final class ClassValueFeature implements Feature {
                 ClassValue<?> v = e.getKey();
                 Map<Class<?>, Object> m = e.getValue();
                 if (!m.containsKey(clazz) && hasValue(v, clazz)) {
-                    Object value = v.get(clazz);
-                    if (value == null) {
-                        value = ClassValueSupport.NULL_MARKER;
-                    }
-                    m.put(clazz, value);
+                    m.put(clazz, v.get(clazz));
                     access.requireAnalysisIteration();
                 }
             }
         }
     }
 
-    private static final java.lang.reflect.Field IDENTITY = ReflectionUtil.lookupField(ClassValue.class, "identity");
-    private static final java.lang.reflect.Field CLASS_VALUE_MAP = ReflectionUtil.lookupField(Class.class, "classValueMap");
+    private static final java.lang.reflect.Field IDENTITY;
+    private static final java.lang.reflect.Field CLASS_VALUE_MAP;
+    static {
+        try {
+            IDENTITY = ClassValue.class.getDeclaredField("identity");
+            IDENTITY.setAccessible(true);
+            CLASS_VALUE_MAP = Class.class.getDeclaredField("classValueMap");
+            CLASS_VALUE_MAP.setAccessible(true);
+        } catch (NoSuchFieldException ex) {
+            throw VMError.shouldNotReachHere(ex);
+        }
+    }
 
     private static boolean hasValue(ClassValue<?> v, Class<?> c) {
         try {
