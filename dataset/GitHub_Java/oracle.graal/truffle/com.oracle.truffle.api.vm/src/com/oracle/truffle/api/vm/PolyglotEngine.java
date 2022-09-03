@@ -856,20 +856,21 @@ public class PolyglotEngine {
         @SuppressWarnings("try")
         private Object executeDirect(Object[] args) throws IOException {
             ContextStore prev = Access.EXEC.executionStarted(context);
-            boolean isDebugger = debugger[0] != null;
             try {
-                if (isDebugger) {
-                    Access.DEBUG.executionStarted(PolyglotEngine.this, -1, debugger, null);
+                Access.DEBUG.executionStarted(PolyglotEngine.this, -1, debugger, null);
+                for (;;) {
+                    try {
+                        if (target == null) {
+                            target = SymbolInvokerImpl.createCallTarget(language[0], compute == null ? value : compute.get(), args);
+                        }
+                        return target.call(args);
+                    } catch (ArgumentsMishmashException ex) {
+                        target = null;
+                    }
                 }
-                if (target == null) {
-                    target = SymbolInvokerImpl.createCallTarget(language[0], compute == null ? value : compute.get(), args);
-                }
-                return target.call(args);
             } finally {
                 Access.EXEC.executionEnded(prev);
-                if (isDebugger) {
-                    Access.DEBUG.executionEnded(PolyglotEngine.this, debugger);
-                }
+                Access.DEBUG.executionEnded(PolyglotEngine.this, debugger);
             }
         }
 
