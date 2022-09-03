@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.phases;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
@@ -73,7 +72,7 @@ public class OnStackReplacementPhase extends Phase {
                 break;
             }
 
-            LoopTransformations.peel(osrLoop, true);
+            LoopTransformations.peel(osrLoop);
             for (Node usage : osr.usages().snapshot()) {
                 ProxyNode proxy = (ProxyNode) usage;
                 proxy.replaceAndDelete(proxy.value());
