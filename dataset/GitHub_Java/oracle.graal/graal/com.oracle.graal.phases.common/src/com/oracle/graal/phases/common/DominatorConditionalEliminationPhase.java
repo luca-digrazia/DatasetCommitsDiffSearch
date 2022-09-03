@@ -211,7 +211,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
             for (InfoElement infoElement : getInfoElements(node.object())) {
                 TriState result = node.tryFold(infoElement.getStamp());
                 if (result.isKnown()) {
-                    if (rewireGuards(infoElement.getGuard(), result.toBoolean(), (guard, checkCastResult) -> {
+                    rewireGuards(infoElement.getGuard(), result.toBoolean(), (guard, checkCastResult) -> {
                         if (checkCastResult) {
                             PiNode piNode = node.graph().unique(new PiNode(node.object(), node.stamp(), guard));
                             node.replaceAtUsages(piNode);
@@ -223,9 +223,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
                             GraphUtil.killCFG(node);
                         }
                         return true;
-                    })) {
-                        return;
-                    }
+                    });
                 }
             }
         }
