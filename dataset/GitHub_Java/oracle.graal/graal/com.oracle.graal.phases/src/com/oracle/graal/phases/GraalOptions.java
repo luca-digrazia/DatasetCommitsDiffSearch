@@ -152,7 +152,6 @@ public final class GraalOptions {
     public static int     TraceBytecodeParserLevel           = 0;
     public static boolean ExitVMOnBailout                    = ____;
     public static boolean ExitVMOnException                  = true;
-    public static boolean PrintStackTraceOnException         = false;
 
     // HotSpot command line options
     public static boolean HotSpotPrintCompilation            = ____;
