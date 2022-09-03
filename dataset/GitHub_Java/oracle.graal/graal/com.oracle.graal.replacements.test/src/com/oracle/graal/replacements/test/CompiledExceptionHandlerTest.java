@@ -37,12 +37,12 @@ import com.oracle.graal.phases.common.*;
 public class CompiledExceptionHandlerTest extends GraalCompilerTest {
 
     public CompiledExceptionHandlerTest() {
-        getSuites().getHighTier().findPhase(AbstractInliningPhase.class).remove();
+        suites.getHighTier().findPhase(AbstractInliningPhase.class).remove();
     }
 
     @Override
-    protected StructuredGraph parseEager(Method m) {
-        StructuredGraph graph = super.parseEager(m);
+    protected StructuredGraph parse(Method m) {
+        StructuredGraph graph = super.parse(m);
         int handlers = graph.getNodes().filter(ExceptionObjectNode.class).count();
         Assert.assertEquals(1, handlers);
         return graph;
