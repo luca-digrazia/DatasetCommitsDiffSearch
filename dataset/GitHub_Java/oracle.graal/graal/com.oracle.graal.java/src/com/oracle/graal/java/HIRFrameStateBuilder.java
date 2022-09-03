@@ -32,8 +32,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.Verbosity;
-import com.oracle.graal.java.BciBlockMapping.BciBlock;
-import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
@@ -49,7 +47,6 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
     private final ValueNode[] stack;
     private ValueNode[] lockedObjects;
     private MonitorIdNode[] monitorIds;
-    private final StructuredGraph graph;
 
     /**
      * @see BytecodeFrame#rethrowException
@@ -57,16 +54,13 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
     private boolean rethrowException;
 
     public HIRFrameStateBuilder(ResolvedJavaMethod method, StructuredGraph graph, boolean eagerResolve) {
-        super(method);
-
-        assert graph != null;
+        super(method, graph);
 
         this.locals = new ValueNode[method.getMaxLocals()];
         // we always need at least one stack slot (for exceptions)
         this.stack = new ValueNode[Math.max(1, method.getMaxStackSize())];
         this.lockedObjects = EMPTY_ARRAY;
         this.monitorIds = EMPTY_MONITOR_ARRAY;
-        this.graph = graph;
 
         int javaIndex = 0;
         int index = 0;
@@ -101,8 +95,6 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
 
     private HIRFrameStateBuilder(HIRFrameStateBuilder other) {
         super(other);
-        assert other.graph != null;
-        graph = other.graph;
         locals = other.locals.clone();
         stack = other.stack.clone();
         lockedObjects = other.lockedObjects == EMPTY_ARRAY ? EMPTY_ARRAY : other.lockedObjects.clone();
@@ -147,7 +139,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
     }
 
     public boolean isCompatibleWith(HIRFrameStateBuilder other) {
-        assert method.equals(other.method) && graph == other.graph && localsSize() == other.localsSize() : "Can only compare frame states of the same method";
+        assert method == other.method && graph == other.graph && localsSize() == other.localsSize() : "Can only compare frame states of the same method";
         assert lockedObjects.length == monitorIds.length && other.lockedObjects.length == other.monitorIds.length : "mismatch between lockedObjects and monitorIds";
 
         if (stackSize() != other.stackSize()) {
@@ -156,7 +148,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
         for (int i = 0; i < stackSize(); i++) {
             ValueNode x = stackAt(i);
             ValueNode y = other.stackAt(i);
-            if (x != y && (x == null || x.isDeleted() || y == null || y.isDeleted() || x.getKind() != y.getKind())) {
+            if (x != y && (x == null || x.isDeleted() || y == null || y.isDeleted() || x.kind() != y.kind())) {
                 return false;
             }
         }
@@ -191,8 +183,8 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
             return null;
 
         } else if (block.isPhiAtMerge(currentValue)) {
-            if (otherValue == null || otherValue.isDeleted() || currentValue.getKind() != otherValue.getKind()) {
-                propagateDelete((ValuePhiNode) currentValue);
+            if (otherValue == null || otherValue.isDeleted() || currentValue.kind() != otherValue.kind()) {
+                propagateDelete((PhiNode) currentValue);
                 return null;
             }
             ((PhiNode) currentValue).addInput(otherValue);
@@ -200,11 +192,11 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
 
         } else if (currentValue != otherValue) {
             assert !(block instanceof LoopBeginNode) : "Phi functions for loop headers are create eagerly for all locals and stack slots";
-            if (otherValue == null || otherValue.isDeleted() || currentValue.getKind() != otherValue.getKind()) {
+            if (otherValue == null || otherValue.isDeleted() || currentValue.kind() != otherValue.kind()) {
                 return null;
             }
 
-            ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(currentValue.stamp().unrestricted(), block));
+            PhiNode phi = graph.addWithoutUnique(new PhiNode(currentValue.kind(), block));
             for (int i = 0; i < block.phiPredecessorCount(); i++) {
                 phi.addInput(currentValue);
             }
@@ -218,16 +210,16 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
     }
 
     private void propagateDelete(FloatingNode node) {
-        assert node instanceof ValuePhiNode || node instanceof ProxyNode;
+        assert node instanceof PhiNode || node instanceof ProxyNode;
         if (node.isDeleted()) {
             return;
         }
         // Collect all phi functions that use this phi so that we can delete them recursively (after
         // we delete ourselves to avoid circles).
-        List<FloatingNode> propagateUsages = node.usages().filter(FloatingNode.class).filter(isA(ValuePhiNode.class).or(ProxyNode.class)).snapshot();
+        List<FloatingNode> propagateUsages = node.usages().filter(FloatingNode.class).filter(isA(PhiNode.class).or(ProxyNode.class)).snapshot();
 
         // Remove the phi function from all FrameStates where it is used and then delete it.
-        assert node.usages().filter(isNotA(FrameState.class).nor(ValuePhiNode.class).nor(ProxyNode.class)).isEmpty() : "phi function that gets deletes must only be used in frame states";
+        assert node.usages().filter(isNotA(FrameState.class).nor(PhiNode.class).nor(ProxyNode.class)).isEmpty() : "phi function that gets deletes must only be used in frame states";
         node.replaceAtUsages(null);
         node.safeDelete();
 
@@ -296,13 +288,13 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
         }
     }
 
-    private ValuePhiNode createLoopPhi(MergeNode block, ValueNode value) {
+    private PhiNode createLoopPhi(MergeNode block, ValueNode value) {
         if (value == null) {
             return null;
         }
         assert !block.isPhiAtMerge(value) : "phi function for this block already created";
 
-        ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(value.stamp().unrestricted(), block));
+        PhiNode phi = graph.addWithoutUnique(new PhiNode(value.kind(), block));
         phi.addInput(value);
         return phi;
     }
@@ -310,27 +302,19 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
     public void cleanupDeletedPhis() {
         for (int i = 0; i < localsSize(); i++) {
             if (localAt(i) != null && localAt(i).isDeleted()) {
-                assert localAt(i) instanceof ValuePhiNode || localAt(i) instanceof ProxyNode : "Only phi and value proxies can be deleted during parsing: " + localAt(i);
+                assert localAt(i) instanceof PhiNode || localAt(i) instanceof ProxyNode : "Only phi and value proxies can be deleted during parsing: " + localAt(i);
                 storeLocal(i, null);
             }
         }
     }
 
-    public void clearNonLiveLocals(BciBlock block, LocalLiveness liveness, boolean liveIn) {
+    public void clearNonLiveLocals(BitSet liveness) {
         if (liveness == null) {
             return;
         }
-        if (liveIn) {
-            for (int i = 0; i < locals.length; i++) {
-                if (!liveness.localIsLiveIn(block, i)) {
-                    locals[i] = null;
-                }
-            }
-        } else {
-            for (int i = 0; i < locals.length; i++) {
-                if (!liveness.localIsLiveOut(block, i)) {
-                    locals[i] = null;
-                }
+        for (int i = 0; i < locals.length; i++) {
+            if (!liveness.get(i)) {
+                locals[i] = null;
             }
         }
     }
@@ -370,7 +354,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
      * @param object the object whose monitor will be locked.
      */
     public void pushLock(ValueNode object, MonitorIdNode monitorId) {
-        assert object.isAlive() && object.getKind() == Kind.Object : "unexpected value: " + object;
+        assert object.isAlive() && object.kind() == Kind.Object : "unexpected value: " + object;
         lockedObjects = Arrays.copyOf(lockedObjects, lockedObjects.length + 1);
         monitorIds = Arrays.copyOf(monitorIds, monitorIds.length + 1);
         lockedObjects[lockedObjects.length - 1] = object;
@@ -408,22 +392,22 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
     public ValueNode loadLocal(int i) {
         ValueNode x = locals[i];
         assert !x.isDeleted();
-        assert !isTwoSlot(x.getKind()) || locals[i + 1] == null;
-        assert i == 0 || locals[i - 1] == null || !isTwoSlot(locals[i - 1].getKind());
+        assert !isTwoSlot(x.kind()) || locals[i + 1] == null;
+        assert i == 0 || locals[i - 1] == null || !isTwoSlot(locals[i - 1].kind());
         return x;
     }
 
     @Override
     public void storeLocal(int i, ValueNode x) {
-        assert x == null || x.isAlive() && x.getKind() != Kind.Void && x.getKind() != Kind.Illegal : "unexpected value: " + x;
+        assert x == null || x.isAlive() && x.kind() != Kind.Void && x.kind() != Kind.Illegal : "unexpected value: " + x;
         locals[i] = x;
-        if (x != null && isTwoSlot(x.getKind())) {
+        if (x != null && isTwoSlot(x.kind())) {
             // if this is a double word, then kill i+1
             locals[i + 1] = null;
         }
         if (x != null && i > 0) {
             ValueNode p = locals[i - 1];
-            if (p != null && isTwoSlot(p.getKind())) {
+            if (p != null && isTwoSlot(p.kind())) {
                 // if there was a double word at i - 1, then kill it
                 locals[i - 1] = null;
             }
@@ -432,13 +416,13 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
 
     @Override
     public void storeStack(int i, ValueNode x) {
-        assert x == null || x.isAlive() && (stack[i] == null || x.getKind() == stack[i].getKind()) : "Method does not handle changes from one-slot to two-slot values or non-alive values";
+        assert x == null || x.isAlive() && (stack[i] == null || x.kind() == stack[i].kind()) : "Method does not handle changes from one-slot to two-slot values or non-alive values";
         stack[i] = x;
     }
 
     @Override
     public void push(Kind kind, ValueNode x) {
-        assert x.isAlive() && x.getKind() != Kind.Void && x.getKind() != Kind.Illegal;
+        assert x.isAlive() && x.kind() != Kind.Void && x.kind() != Kind.Illegal;
         xpush(assertKind(kind, x));
         if (isTwoSlot(kind)) {
             xpush(null);
@@ -447,7 +431,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
 
     @Override
     public void xpush(ValueNode x) {
-        assert x == null || (x.isAlive() && x.getKind() != Kind.Void && x.getKind() != Kind.Illegal);
+        assert x == null || (x.isAlive() && x.kind() != Kind.Void && x.kind() != Kind.Illegal);
         stack[stackSize++] = x;
     }
 
@@ -538,7 +522,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
             ValueNode element = stack[base + stackindex];
             assert element != null;
             r[argIndex++] = element;
-            stackindex += stackSlots(element.getKind());
+            stackindex += stackSlots(element.kind());
         }
         stackSize = base;
         return r;
@@ -550,11 +534,20 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
         for (int i = 0; i < argumentNumber; i++) {
             if (stackAt(idx) == null) {
                 idx--;
-                assert isTwoSlot(stackAt(idx).getKind());
+                assert isTwoSlot(stackAt(idx).kind());
             }
             idx--;
         }
         return stackAt(idx);
+    }
+
+    public static int stackSlots(Kind kind) {
+        return isTwoSlot(kind) ? 2 : 1;
+    }
+
+    public static boolean isTwoSlot(Kind kind) {
+        assert kind != Kind.Void && kind != Kind.Illegal;
+        return kind == Kind.Long || kind == Kind.Double;
     }
 
     public boolean contains(ValueNode value) {
