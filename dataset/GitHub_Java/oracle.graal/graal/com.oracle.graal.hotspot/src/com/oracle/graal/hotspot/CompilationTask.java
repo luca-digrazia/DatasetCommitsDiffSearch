@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
 import static com.oracle.graal.phases.common.InliningUtil.*;
 
@@ -30,12 +29,10 @@ import java.lang.reflect.Modifier;
 import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -159,9 +156,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                             graph = graph.copy();
                         }
                         InlinedBytecodes.add(method.getCodeSize());
-                        HotSpotRuntime runtime = graalRuntime.getRuntime();
-                        CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
-                        return GraalCompiler.compileMethod(runtime, replacements, graalRuntime.getBackend(), graalRuntime.getTarget(), method, graph, cc, graalRuntime.getCache(), plan,
+                        return GraalCompiler.compileMethod(graalRuntime.getRuntime(), replacements, graalRuntime.getBackend(), graalRuntime.getTarget(), method, graph, graalRuntime.getCache(), plan,
                                         optimisticOpts, method.getSpeculationLog());
                     }
                 });
@@ -172,7 +167,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                 }
             }
 
-            installMethod(result, null);
+            installMethod(result);
         } catch (BailoutException bailout) {
             Debug.metric("Bailouts").increment();
             if (GraalOptions.ExitVMOnBailout) {
@@ -202,12 +197,12 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                         MetaUtil.format("%H::%n(%p)", method), isOSR ? "@ " + entryBCI + " " : "", method.getCodeSize()));
     }
 
-    private void installMethod(final CompilationResult compResult, final Graph graph) {
+    private void installMethod(final CompilationResult compResult) {
         Debug.scope("CodeInstall", new Object[]{new DebugDumpScope(String.valueOf(id), true), graalRuntime.getRuntime(), method}, new Runnable() {
 
             @Override
             public void run() {
-                HotSpotInstalledCode installedCode = graalRuntime.getRuntime().installMethod(method, graph, entryBCI, compResult);
+                HotSpotInstalledCode installedCode = graalRuntime.getRuntime().installMethod(method, entryBCI, compResult);
                 if (Debug.isDumpEnabled()) {
                     Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
                 }
