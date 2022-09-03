@@ -24,14 +24,11 @@ package com.oracle.graal.virtual.phases.ea;
 
 import static com.oracle.graal.phases.GraalOptions.*;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.spi.Virtualizable.State;
 import com.oracle.graal.nodes.spi.*;
@@ -83,32 +80,28 @@ class VirtualizerToolImpl implements VirtualizerTool {
     }
 
     @Override
-    public void setVirtualEntry(State objectState, int index, ValueNode value, boolean unsafe) {
+    public void setVirtualEntry(State objectState, int index, ValueNode value) {
         ObjectState obj = (ObjectState) objectState;
         assert obj != null && obj.isVirtual() : "not virtual: " + obj;
+        ObjectState valueState = closure.getObjectState(state, value);
         ValueNode newValue;
-        if (value == null) {
-            newValue = null;
+        if (valueState == null) {
+            newValue = getReplacedValue(value);
+            assert obj.getEntry(index) == null || obj.getEntry(index).kind() == newValue.kind() || (isObjectEntry(obj.getEntry(index)) && isObjectEntry(newValue));
         } else {
-            ObjectState valueState = closure.getObjectState(state, value);
-            if (valueState == null) {
-                newValue = getReplacedValue(value);
-                assert unsafe || obj.getEntry(index) == null || obj.getEntry(index).getKind() == newValue.getKind() || (isObjectEntry(obj.getEntry(index)) && isObjectEntry(newValue));
+            if (valueState.getState() != EscapeState.Virtual) {
+                newValue = valueState.getMaterializedValue();
+                assert newValue.kind() == Kind.Object;
             } else {
-                if (valueState.getState() != EscapeState.Virtual) {
-                    newValue = valueState.getMaterializedValue();
-                    assert newValue.getKind() == Kind.Object;
-                } else {
-                    newValue = valueState.getVirtualObject();
-                }
-                assert obj.getEntry(index) == null || isObjectEntry(obj.getEntry(index));
+                newValue = valueState.getVirtualObject();
             }
+            assert obj.getEntry(index) == null || isObjectEntry(obj.getEntry(index));
         }
         obj.setEntry(index, newValue);
     }
 
     private static boolean isObjectEntry(ValueNode value) {
-        return value.getKind() == Kind.Object || value instanceof VirtualObjectNode;
+        return value.kind() == Kind.Object || value instanceof VirtualObjectNode;
     }
 
     @Override
@@ -153,7 +146,7 @@ class VirtualizerToolImpl implements VirtualizerTool {
     }
 
     @Override
-    public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks) {
+    public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, int[] locks) {
         VirtualUtil.trace("{{%s}} ", current);
         if (!virtualObject.isAlive()) {
             effects.addFloatingNode(virtualObject, "newVirtualObject");

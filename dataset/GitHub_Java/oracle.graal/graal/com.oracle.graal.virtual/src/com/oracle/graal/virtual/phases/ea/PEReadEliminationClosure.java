@@ -85,11 +85,11 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
                     processIdentity(state, ANY_LOCATION);
                 }
             } else if (node instanceof MemoryCheckpoint.Single) {
-                METRIC_MEMORYCHECKPOINT.increment();
+                METRIC_MEMORYCHECKOINT.increment();
                 LocationIdentity identity = ((MemoryCheckpoint.Single) node).getLocationIdentity();
                 processIdentity(state, identity);
             } else if (node instanceof MemoryCheckpoint.Multi) {
-                METRIC_MEMORYCHECKPOINT.increment();
+                METRIC_MEMORYCHECKOINT.increment();
                 for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
                     processIdentity(state, identity);
                 }
@@ -114,7 +114,7 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
             if (initialState.getReadCache().get(entry.getKey()) != entry.getValue()) {
                 ValueNode value = exitState.getReadCache(entry.getKey().object, entry.getKey().identity, this);
                 if (!(value instanceof ProxyNode) || ((ProxyNode) value).proxyPoint() != exitNode) {
-                    ProxyNode proxy = new ProxyNode(value, exitNode, PhiType.Value);
+                    ProxyNode proxy = new ProxyNode(value, exitNode, PhiType.Value, null);
                     effects.addFloatingNode(proxy, "readCacheProxy");
                     entry.setValue(proxy);
                 }

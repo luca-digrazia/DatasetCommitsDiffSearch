@@ -52,9 +52,6 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
 
         @Override
         public boolean equals(Object obj) {
-            if (!(obj instanceof CacheEntry<?>)) {
-                return false;
-            }
             CacheEntry<?> other = (CacheEntry<?>) obj;
             return identity == other.identity && object == other.object;
         }
@@ -67,14 +64,14 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
         public abstract boolean conflicts(LocationIdentity other);
     }
 
-    static class LoadCacheEntry extends CacheEntry<LocationIdentity> {
+    static class LoadCacheEntry extends CacheEntry<ResolvedJavaField> {
 
-        public LoadCacheEntry(ValueNode object, LocationIdentity identity) {
+        public LoadCacheEntry(ValueNode object, ResolvedJavaField identity) {
             super(object, identity);
         }
 
         @Override
-        public CacheEntry<LocationIdentity> duplicateWithObject(ValueNode newObject) {
+        public CacheEntry<ResolvedJavaField> duplicateWithObject(ValueNode newObject) {
             return new LoadCacheEntry(newObject, identity);
         }
 
