@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
@@ -40,10 +41,8 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@NodeChild(type = LLVMExpressionNode.class, value = "destination")
-@NodeChild(type = LLVMExpressionNode.class, value = "source")
-@NodeChild(type = LLVMExpressionNode.class, value = "length")
-@NodeChild(type = LLVMExpressionNode.class, value = "isVolatile")
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "destination"), @NodeChild(type = LLVMExpressionNode.class, value = "source"),
+                @NodeChild(type = LLVMExpressionNode.class, value = "length"), @NodeChild(type = LLVMExpressionNode.class, value = "isVolatile")})
 public abstract class LLVMMemCopy extends LLVMBuiltin {
 
     @Child private LLVMMemMoveNode memMove;
