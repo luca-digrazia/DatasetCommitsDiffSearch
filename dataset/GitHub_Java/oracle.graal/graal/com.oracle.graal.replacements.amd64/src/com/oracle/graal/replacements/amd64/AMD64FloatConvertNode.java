@@ -22,36 +22,45 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.calc.FloatConvertNode.FloatConvert;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_5;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.calc.FloatConvert;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.FloatConvertOp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatConvertNode;
+import com.oracle.graal.nodes.calc.UnaryArithmeticNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * This node has the semantics of the AMD64 floating point conversions. It is used in the lowering
  * of the {@link FloatConvertNode} which, on AMD64 needs a {@link AMD64FloatConvertNode} plus some
  * fixup code that handles the corner cases that differ between AMD64 and Java.
  */
-public class AMD64FloatConvertNode extends FloatingNode implements ArithmeticLIRLowerable {
+@NodeInfo(cycles = CYCLES_5, size = SIZE_1)
+public final class AMD64FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> implements ArithmeticLIRLowerable {
+    public static final NodeClass<AMD64FloatConvertNode> TYPE = NodeClass.create(AMD64FloatConvertNode.class);
 
-    private final FloatConvert op;
-    @Input private ValueNode value;
+    protected final FloatConvert op;
 
-    public AMD64FloatConvertNode(Stamp stamp, FloatConvert op, ValueNode value) {
-        super(stamp);
+    public AMD64FloatConvertNode(FloatConvert op, ValueNode value) {
+        super(TYPE, table -> table.getFloatConvert(op), value);
         this.op = op;
-        this.value = value;
     }
 
-    public Constant evalConst(Constant... inputs) {
-        // this node should never have been created if its input is constant
-        throw GraalInternalError.shouldNotReachHere();
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        // nothing to do
+        return this;
     }
 
-    public void generate(NodeLIRGeneratorTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().emitFloatConvert(op, gen.operand(value)));
+    @Override
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitFloatConvert(op, nodeValueMap.operand(getValue())));
     }
 }
