@@ -29,35 +29,21 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.nfi.types.NativeLibraryDescriptor;
 import com.oracle.truffle.nfi.types.Parser;
 
 @TruffleLanguage.Registration(name = "TruffleNFI", version = "0.1", mimeType = NFILanguage.MIME_TYPE, internal = true)
-public class NFILanguage extends TruffleLanguage<NFIContext> {
+public class NFILanguage extends TruffleLanguage<Env> {
 
     public static final String MIME_TYPE = "application/x-native";
 
     @Override
-    protected NFIContext createContext(Env env) {
-        return new NFIContext(env);
-    }
-
-    @Override
-    protected void initializeContext(NFIContext context) throws Exception {
-        context.initialize();
-    }
-
-    @Override
-    protected void disposeContext(NFIContext context) {
-        context.dispose();
-    }
-
-    @Override
-    protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
-        // the NFI is fully thread-safe
-        return true;
+    protected Env createContext(Env env) {
+        NativeAccess.ensureInitialized();
+        return env;
     }
 
     private static class LoadLibraryNode extends RootNode {
@@ -66,20 +52,18 @@ public class NFILanguage extends TruffleLanguage<NFIContext> {
         private final int flags;
 
         @CompilationFinal private LibFFILibrary cached;
-        private final ContextReference<NFIContext> ctxRef;
 
-        LoadLibraryNode(NFILanguage language, String name, int flags) {
-            super(language);
+        LoadLibraryNode(String name, int flags) {
+            super(null);
             this.name = name;
             this.flags = flags;
-            this.ctxRef = language.getContextReference();
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
             if (cached == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                cached = ctxRef.get().loadLibrary(name, flags);
+                cached = LibFFILibrary.create(NativeAccess.loadLibrary(name, flags));
             }
             return cached;
         }
@@ -93,17 +77,16 @@ public class NFILanguage extends TruffleLanguage<NFIContext> {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            return LibFFILibrary.createDefault();
+            return LibFFILibrary.DEFAULT;
         }
     }
 
     @Override
     protected CallTarget parse(ParsingRequest request) throws Exception {
         String library = request.getSource().getCode();
-        RootNode root;
         NativeLibraryDescriptor descriptor = Parser.parseLibraryDescriptor(library);
-        NFIContext ctx = getContextReference().get();
 
+        RootNode root;
         if (descriptor.isDefaultLibrary()) {
             root = new GetDefaultLibraryNode();
         } else {
@@ -113,17 +96,17 @@ public class NFILanguage extends TruffleLanguage<NFIContext> {
                 for (String flag : descriptor.getFlags()) {
                     switch (flag) {
                         case "RTLD_GLOBAL":
-                            flags |= ctx.RTLD_GLOBAL;
+                            flags |= NativeAccess.RTLD_GLOBAL;
                             break;
                         case "RTLD_LOCAL":
-                            flags |= ctx.RTLD_LOCAL;
+                            flags |= NativeAccess.RTLD_LOCAL;
                             break;
                         case "RTLD_LAZY":
-                            flags |= ctx.RTLD_LAZY;
+                            flags |= NativeAccess.RTLD_LAZY;
                             lazyOrNow = true;
                             break;
                         case "RTLD_NOW":
-                            flags |= ctx.RTLD_NOW;
+                            flags |= NativeAccess.RTLD_NOW;
                             lazyOrNow = true;
                             break;
                     }
@@ -131,24 +114,15 @@ public class NFILanguage extends TruffleLanguage<NFIContext> {
             }
             if (!lazyOrNow) {
                 // default to 'RTLD_NOW' if neither 'RTLD_LAZY' nor 'RTLD_NOW' was specified
-                flags |= ctx.RTLD_NOW;
+                flags |= NativeAccess.RTLD_NOW;
             }
-            root = new LoadLibraryNode(this, descriptor.getFilename(), flags);
+            root = new LoadLibraryNode(descriptor.getFilename(), flags);
         }
-
-        if (!descriptor.getBindings().isEmpty()) {
-            root = new LookupAndBind(this, root, descriptor.getBindings());
-        }
-
         return Truffle.getRuntime().createCallTarget(root);
     }
 
-    static ContextReference<NFIContext> getCurrentContextReference() {
-        return getCurrentLanguage(NFILanguage.class).getContextReference();
-    }
-
     @Override
-    protected Object getLanguageGlobal(NFIContext context) {
+    protected Object getLanguageGlobal(Env context) {
         return null;
     }
 
