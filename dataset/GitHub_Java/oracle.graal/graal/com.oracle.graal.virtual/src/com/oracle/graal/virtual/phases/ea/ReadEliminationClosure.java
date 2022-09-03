@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static jdk.internal.jvmci.meta.LocationIdentity.*;
+import static com.oracle.graal.api.meta.LocationIdentity.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -35,8 +34,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.memory.*;
-import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.virtual.phases.ea.ReadEliminationBlockState.CacheEntry;
 import com.oracle.graal.virtual.phases.ea.ReadEliminationBlockState.LoadCacheEntry;
@@ -87,41 +84,40 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
             }
         } else if (node instanceof ReadNode) {
             ReadNode read = (ReadNode) node;
-            if (read.getAddress() instanceof OffsetAddressNode) {
-                OffsetAddressNode address = (OffsetAddressNode) read.getAddress();
-                if (address.getOffset().isConstant()) {
-                    ValueNode object = GraphUtil.unproxify(address.getBase());
-                    ReadCacheEntry identifier = new ReadCacheEntry(object, address.getOffset(), read.getLocationIdentity());
-                    ValueNode cachedValue = state.getCacheEntry(identifier);
-                    if (cachedValue != null && read.stamp().isCompatible(cachedValue.stamp())) {
-                        // Anchor guard if it is not fixed and different from cachedValue's guard
-                        if (read.getGuard() != null && !(read.getGuard() instanceof FixedNode)) {
-                            if (!(cachedValue instanceof GuardedNode) || ((GuardedNode) cachedValue).getGuard() != read.getGuard()) {
-                                effects.addFixedNodeBefore(new ValueAnchorNode((ValueNode) read.getGuard()), read);
-                            }
+            if (read.location() instanceof ConstantLocationNode) {
+                ValueNode object = GraphUtil.unproxify(read.object());
+                ReadCacheEntry identifier = new ReadCacheEntry(object, read.location());
+                ValueNode cachedValue = state.getCacheEntry(identifier);
+                if (cachedValue != null && read.stamp().isCompatible(cachedValue.stamp())) {
+                    // Anchor guard if it is not fixed and different from cachedValue's guard
+                    if (read.getGuard() != null && !(read.getGuard() instanceof FixedNode)) {
+                        if (!(cachedValue instanceof GuardedNode) || ((GuardedNode) cachedValue).getGuard() != read.getGuard()) {
+                            effects.addFixedNodeBefore(new ValueAnchorNode((ValueNode) read.getGuard()), read);
                         }
                     }
+                    effects.replaceAtUsages(read, cachedValue);
+                    addScalarAlias(read, cachedValue);
+                    deleted = true;
+                } else {
+                    state.addCacheEntry(identifier, read);
                 }
             }
         } else if (node instanceof WriteNode) {
             WriteNode write = (WriteNode) node;
-            if (write.getAddress() instanceof OffsetAddressNode) {
-                OffsetAddressNode address = (OffsetAddressNode) write.getAddress();
-                if (address.getOffset().isConstant()) {
-                    ValueNode object = GraphUtil.unproxify(address.getBase());
-                    ReadCacheEntry identifier = new ReadCacheEntry(object, address.getOffset(), write.getLocationIdentity());
-                    ValueNode cachedValue = state.getCacheEntry(identifier);
+            if (write.location() instanceof ConstantLocationNode) {
+                ValueNode object = GraphUtil.unproxify(write.object());
+                ReadCacheEntry identifier = new ReadCacheEntry(object, write.location());
+                ValueNode cachedValue = state.getCacheEntry(identifier);
 
-                    ValueNode value = getScalarAlias(write.value());
-                    if (GraphUtil.unproxify(value) == GraphUtil.unproxify(cachedValue)) {
-                        effects.deleteNode(write);
-                        deleted = true;
-                    }
-                    processIdentity(state, write.getLocationIdentity());
-                    state.addCacheEntry(identifier, value);
-                } else {
-                    processIdentity(state, write.getLocationIdentity());
+                ValueNode value = getScalarAlias(write.value());
+                if (GraphUtil.unproxify(value) == GraphUtil.unproxify(cachedValue)) {
+                    effects.deleteNode(write);
+                    deleted = true;
                 }
+                processIdentity(state, write.location().getLocationIdentity());
+                state.addCacheEntry(identifier, value);
+            } else {
+                processIdentity(state, write.location().getLocationIdentity());
             }
         } else if (node instanceof UnsafeAccessNode) {
             if (node instanceof UnsafeLoadNode) {
@@ -251,7 +247,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                 }
             }
             for (PhiNode phi : getPhis()) {
-                if (phi.getStackKind() == Kind.Object) {
+                if (phi.getKind() == Kind.Object) {
                     for (Map.Entry<CacheEntry<?>, ValueNode> entry : states.get(0).readCache.entrySet()) {
                         if (entry.getKey().object == getPhiValueAt(phi, 0)) {
                             mergeReadCachePhi(phi, entry.getKey(), states);
