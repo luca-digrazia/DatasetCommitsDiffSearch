@@ -28,9 +28,9 @@ import java.lang.annotation.*;
 import java.lang.reflect.*;
 import java.util.concurrent.*;
 
-import sun.misc.*;
-
 import com.oracle.truffle.api.frame.*;
+
+import sun.misc.*;
 
 /**
  * Directives that influence the optimizations of the Truffle compiler. All of the operations have
@@ -84,15 +84,6 @@ public final class CompilerDirectives {
     }
 
     /**
-     * Returns a boolean value indicating whether the method is executed in the compiled code.
-     *
-     * @return {@code false} when executed in the interpreter, {@code true} in compiled code.
-     */
-    public static boolean inCompiledCode() {
-        return false;
-    }
-
-    /**
      * Directive for the compiler that the given runnable should only be executed in the interpreter
      * and ignored in the compiled code.
      *
@@ -123,7 +114,7 @@ public final class CompilerDirectives {
      * be greater than b is 90%):
      *
      * <code>
-     * if (injectBranchProbability(0.9, a &gt; b)) {
+     * if (injectBranchProbability(0.9, a > b)) {
      *    // ...
      * }
      * </code>
@@ -133,7 +124,7 @@ public final class CompilerDirectives {
      * 10%):
      *
      * <code>
-     * if (injectBranchProbability(0.9, a &gt; b) &amp;&amp; injectBranchProbability(0.1, a == 0)) {
+     * if (injectBranchProbability(0.9, a > b) && injectBranchProbability(0.1, a == 0)) {
      *    // ...
      * }
      * </code>
@@ -205,7 +196,7 @@ public final class CompilerDirectives {
      * @return the value to be casted to the new type
      */
     public static MaterializedFrame unsafeFrameCast(MaterializedFrame value) {
-        return unsafeCast(value, getUnsafeFrameType(), true, true);
+        return unsafeCast(value, getUnsafeFrameType(), true);
     }
 
     private static Class<? extends MaterializedFrame> getUnsafeFrameType() {
@@ -627,14 +618,5 @@ public final class CompilerDirectives {
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.TYPE})
     public @interface ValueType {
-    }
-
-    /**
-     * Ensures that the given object is not virtual, i.e., not removed by Escape Analysis at the
-     * point of this call.
-     *
-     * @param obj the object to exclude from Escape Analysis
-     */
-    public static void materialize(Object obj) {
     }
 }
