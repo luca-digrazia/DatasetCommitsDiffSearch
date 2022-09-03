@@ -22,13 +22,16 @@
  */
 package com.oracle.graal.printer;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import com.oracle.jvmci.code.DebugInfo;
+import com.oracle.jvmci.code.TargetDescription;
+import com.oracle.jvmci.meta.ResolvedJavaMethod;
+import com.oracle.jvmci.meta.MetaUtil;
+import com.oracle.jvmci.meta.Kind;
+import com.oracle.jvmci.meta.Value;
+import static com.oracle.jvmci.code.ValueUtil.*;
 
 import java.io.*;
 import java.util.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.gen.*;
@@ -314,7 +317,7 @@ class CFGPrinter extends CompilationPrinter {
         out.print("tid ").print(nodeToString(node)).println(COLUMN_END);
 
         if (nodeLirGenerator != null) {
-            Value operand = nodeLirGenerator.hasOperand(node) ? nodeLirGenerator.operand(node) : null;
+            Value operand = nodeLirGenerator.getNodeOperands().get(node);
             if (operand != null) {
                 out.print("result ").print(operand.toString()).println(COLUMN_END);
             }
@@ -418,10 +421,11 @@ class CFGPrinter extends CompilationPrinter {
 
     private String stateValueToString(ValueNode value) {
         String result = nodeToString(value);
-        if (nodeLirGenerator != null && value != null && nodeLirGenerator.hasOperand(value)) {
-            Value operand = nodeLirGenerator.operand(value);
-            assert operand != null;
-            result += ": " + operand;
+        if (nodeLirGenerator != null && nodeLirGenerator.getNodeOperands() != null && value != null) {
+            Value operand = nodeLirGenerator.getNodeOperands().get(value);
+            if (operand != null) {
+                result += ": " + operand;
+            }
         }
         return result;
     }

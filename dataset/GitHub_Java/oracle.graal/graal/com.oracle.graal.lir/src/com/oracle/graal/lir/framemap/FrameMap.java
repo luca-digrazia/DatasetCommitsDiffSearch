@@ -24,10 +24,9 @@ package com.oracle.graal.lir.framemap;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.asm.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * This class is used to build the stack frame layout for a compiled method. A {@link StackSlot} is
@@ -326,7 +325,7 @@ public abstract class FrameMap {
     }
 
     public ReferenceMap initReferenceMap(boolean hasRegisters) {
-        ReferenceMap refMap = getTarget().createReferenceMap(hasRegisters, frameSize() / getTarget().wordSize, totalFrameSize());
+        ReferenceMap refMap = getTarget().createReferenceMap(hasRegisters, frameSize() / getTarget().wordSize);
         return refMap;
     }
 }

@@ -25,11 +25,9 @@ package com.oracle.graal.printer;
 import java.io.*;
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.lir.dfa.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Utility for printing compilation related data structures at various compilation phases. The
@@ -114,16 +112,10 @@ public class CompilationPrinter implements Closeable {
     /**
      * Formats given debug info as a multi line string.
      */
-    protected String debugInfoToString(BytecodePosition codePos, ReferenceMap refMap, ValueSet liveBasePointers, RegisterSaveLayout calleeSaveInfo) {
+    protected String debugInfoToString(BytecodePosition codePos, ReferenceMap refMap, RegisterSaveLayout calleeSaveInfo) {
         StringBuilder sb = new StringBuilder();
         if (refMap != null) {
-            sb.append("reference-map: ");
             sb.append(refMap.toString());
-            sb.append("\n");
-        }
-        if (liveBasePointers != null) {
-            sb.append("live-base-pointers: ");
-            sb.append(liveBasePointers);
             sb.append("\n");
         }
 
@@ -191,7 +183,7 @@ public class CompilationPrinter implements Closeable {
     }
 
     public void printMachineCode(String code, String label) {
-        if (code == null || code.length() == 0) {
+        if (code.length() == 0) {
             return;
         }
         if (label != null) {

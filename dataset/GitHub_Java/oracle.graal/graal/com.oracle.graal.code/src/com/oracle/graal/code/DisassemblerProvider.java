@@ -23,11 +23,12 @@
 package com.oracle.graal.code;
 
 import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.service.*;
 
 /**
  * Interface providing capability for disassembling machine code.
  */
-public interface DisassemblerProvider {
+public interface DisassemblerProvider extends Service {
 
     /**
      * Gets a textual disassembly of a given compilation result.
