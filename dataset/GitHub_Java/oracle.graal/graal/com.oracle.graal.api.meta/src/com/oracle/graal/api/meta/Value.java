@@ -103,7 +103,6 @@ public abstract class Value implements Serializable, KindProvider {
      * Warning: Use with caution! Usually equivalence {@link #equals(Object)} is sufficient and
      * should be used.
      */
-    @ExcludeFromIdentityComparisonVerification
     public final boolean identityEquals(Value other) {
         return this == other;
     }
