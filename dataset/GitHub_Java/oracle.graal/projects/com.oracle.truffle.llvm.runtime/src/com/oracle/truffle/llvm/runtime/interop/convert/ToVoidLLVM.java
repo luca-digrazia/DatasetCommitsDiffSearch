@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,7 +31,7 @@ package com.oracle.truffle.llvm.runtime.interop.convert;
 
 import com.oracle.truffle.api.dsl.Specialization;
 
-public abstract class ToVoidLLVM extends ForeignToLLVM {
+abstract class ToVoidLLVM extends ForeignToLLVM {
 
     @Specialization
     protected int fromInt(int value) {

@@ -45,7 +45,6 @@ import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
@@ -59,13 +58,13 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 @NodeField(name = "slot", type = FrameSlot.class)
 @NodeField(name = "source", type = LLVMSourceLocation.class)
 @NodeChild(value = "valueNode", type = LLVMExpressionNode.class)
-public abstract class LLVMWriteNode extends LLVMStatementNode {
+public abstract class LLVMWriteNode extends LLVMExpressionNode {
 
     protected abstract FrameSlot getSlot();
 
     protected abstract LLVMSourceLocation getSource();
 
-    public abstract void executeWithTarget(VirtualFrame frame, Object value);
+    public abstract Object executeWithTarget(VirtualFrame frame, Object value);
 
     @Override
     public LLVMSourceLocation getSourceLocation() {
@@ -87,138 +86,159 @@ public abstract class LLVMWriteNode extends LLVMStatementNode {
 
     public abstract static class LLVMWriteI1Node extends LLVMWriteNode {
         @Specialization
-        protected void writeI1(VirtualFrame frame, boolean value) {
+        protected Object writeI1(VirtualFrame frame, boolean value) {
             frame.setBoolean(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWriteI8Node extends LLVMWriteNode {
         @Specialization
-        protected void writeI8(VirtualFrame frame, byte value) {
+        protected Object writeI8(VirtualFrame frame, byte value) {
             frame.setByte(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWriteI16Node extends LLVMWriteNode {
         @Specialization
-        protected void writeI16(VirtualFrame frame, short value) {
+        protected Object writeI16(VirtualFrame frame, short value) {
             frame.setInt(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWriteI32Node extends LLVMWriteNode {
         @Specialization
-        protected void writeI32(VirtualFrame frame, int value) {
+        protected Object writeI32(VirtualFrame frame, int value) {
             frame.setInt(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWriteI64Node extends LLVMWriteNode {
         @Specialization
-        protected void writeI64(VirtualFrame frame, long value) {
+        protected Object writeI64(VirtualFrame frame, long value) {
             if (getSlot().getKind() == FrameSlotKind.Long) {
                 frame.setLong(getSlot(), value);
             } else {
                 frame.setObject(getSlot(), value);
             }
+            return null;
         }
 
         @Specialization(replaces = "writeI64")
-        protected void writePointer(VirtualFrame frame, Object value) {
+        protected Object writePointer(VirtualFrame frame, Object value) {
             if (getSlot().getKind() == FrameSlotKind.Long) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 getSlot().setKind(FrameSlotKind.Object);
             }
             frame.setObject(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWriteIVarBitNode extends LLVMWriteNode {
         @Specialization
-        protected void writeIVarBit(VirtualFrame frame, LLVMIVarBit value) {
+        protected Object writeIVarBit(VirtualFrame frame, LLVMIVarBit value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWriteFloatNode extends LLVMWriteNode {
         @Specialization
-        protected void writeFloat(VirtualFrame frame, float value) {
+        protected Object writeFloat(VirtualFrame frame, float value) {
             frame.setFloat(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWriteDoubleNode extends LLVMWriteNode {
         @Specialization
-        protected void writeDouble(VirtualFrame frame, double value) {
+        protected Object writeDouble(VirtualFrame frame, double value) {
             frame.setDouble(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWrite80BitFloatingNode extends LLVMWriteNode {
         @Specialization
-        protected void write80BitFloat(VirtualFrame frame, LLVM80BitFloat value) {
+        protected Object write80BitFloat(VirtualFrame frame, LLVM80BitFloat value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWritePointerNode extends LLVMWriteNode {
         @Specialization
-        protected void writeAddress(VirtualFrame frame, long value) {
+        protected Object writeAddress(VirtualFrame frame, long value) {
             frame.setObject(getSlot(), LLVMNativePointer.create(value));
+            return null;
         }
 
         @Fallback
-        protected void writeObject(VirtualFrame frame, Object value) {
+        protected Object writeObject(VirtualFrame frame, Object value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWriteFunctionNode extends LLVMWriteNode {
         @Specialization
-        protected void writeAddress(VirtualFrame frame, LLVMPointer value) {
+        protected Object writeAddress(VirtualFrame frame, LLVMPointer value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
 
         @Specialization
-        protected void writeFunction(VirtualFrame frame, LLVMFunctionDescriptor value) {
+        protected Object writeFunction(VirtualFrame frame, LLVMFunctionDescriptor value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
     }
 
     public abstract static class LLVMWriteVectorNode extends LLVMWriteNode {
         @Specialization
-        protected void writeVector(VirtualFrame frame, LLVMDoubleVector value) {
+        protected Object writeVector(VirtualFrame frame, LLVMDoubleVector value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
 
         @Specialization
-        protected void writeVector(VirtualFrame frame, LLVMFloatVector value) {
+        protected Object writeVector(VirtualFrame frame, LLVMFloatVector value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
 
         @Specialization
-        protected void writeVector(VirtualFrame frame, LLVMI16Vector value) {
+        protected Object writeVector(VirtualFrame frame, LLVMI16Vector value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
 
         @Specialization
-        protected void writeVector(VirtualFrame frame, LLVMI1Vector value) {
+        protected Object writeVector(VirtualFrame frame, LLVMI1Vector value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
 
         @Specialization
-        protected void writeVector(VirtualFrame frame, LLVMI32Vector value) {
+        protected Object writeVector(VirtualFrame frame, LLVMI32Vector value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
 
         @Specialization
-        protected void writeVector(VirtualFrame frame, LLVMI64Vector value) {
+        protected Object writeVector(VirtualFrame frame, LLVMI64Vector value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
 
         @Specialization
-        protected void writeVector(VirtualFrame frame, LLVMI8Vector value) {
+        protected Object writeVector(VirtualFrame frame, LLVMI8Vector value) {
             frame.setObject(getSlot(), value);
+            return null;
         }
     }
 }

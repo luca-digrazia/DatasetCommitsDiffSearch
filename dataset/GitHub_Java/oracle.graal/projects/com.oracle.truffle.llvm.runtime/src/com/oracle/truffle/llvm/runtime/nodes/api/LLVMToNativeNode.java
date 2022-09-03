@@ -31,85 +31,91 @@ package com.oracle.truffle.llvm.runtime.nodes.api;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNodeGen.LLVMObjectToNativeNodeGen;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMToNativeNode extends Node {
+@NodeChild(type = LLVMExpressionNode.class)
+public abstract class LLVMToNativeNode extends LLVMNode {
 
-    public abstract LLVMAddress executeWithTarget(VirtualFrame frame, Object object);
+    public abstract LLVMNativePointer execute(VirtualFrame frame);
 
-    public static LLVMToNativeNode toNative() {
-        return LLVMToNativeNodeGen.create();
+    public abstract LLVMNativePointer executeWithTarget(Object object);
+
+    public static LLVMToNativeNode createToNativeWithTarget() {
+        return LLVMToNativeNodeGen.create(null);
     }
 
     @Specialization
-    protected LLVMAddress doLongCase(long a) {
-        return LLVMAddress.fromLong(a);
+    protected LLVMNativePointer doLongCase(long a) {
+        return LLVMNativePointer.create(a);
     }
 
     @Specialization
-    protected LLVMAddress doAddressCase(LLVMAddress a) {
+    protected LLVMNativePointer doAddressCase(LLVMNativePointer a) {
         return a;
     }
 
     @Specialization
-    protected LLVMAddress executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
+    protected LLVMNativePointer doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
         if (from.getValue() instanceof Long) {
-            return LLVMAddress.fromLong((long) from.getValue());
+            return LLVMNativePointer.create((long) from.getValue());
         } else {
             CompilerDirectives.transferToInterpreter();
-            throw new IllegalAccessError(String.format("Cannot convert a primitive value (type: %s, value: %s) to an LLVMAddress).", String.valueOf(from.getValue().getClass()),
+            throw new IllegalAccessError(String.format("Cannot convert a primitive value (type: %s, value: %s) to an LLVMNativePointer).", String.valueOf(from.getValue().getClass()),
                             String.valueOf(from.getValue())));
         }
     }
 
-    @Child private Node isNull = Message.IS_NULL.createNode();
-
-    @Specialization(guards = "isNull(pointer.getObject())")
-    protected LLVMAddress handleIsNull(LLVMTruffleObject pointer) {
-        LLVMAddress base = LLVMAddress.nullPointer();
-        return base.increment(pointer.getOffset());
+    // this is a workaround because @Fallback does not support @Cached
+    @Specialization(guards = "isOther(pointer)")
+    protected LLVMNativePointer doOther(Object pointer,
+                    @Cached("createLLVMObjectToNative()") LLVMObjectToNativeNode toNative) {
+        return toNative.executeWithTarget(pointer);
     }
 
-    @Specialization(guards = {"lib.guard(pointer)", "lib.isPointer(frame, pointer)"})
-    protected LLVMAddress handlePointerCached(VirtualFrame frame, Object pointer,
-                    @Cached("createCached(pointer)") LLVMObjectNativeLibrary lib) {
-        return handlePointer(frame, pointer, lib);
+    protected static boolean isOther(Object pointer) {
+        return !(pointer instanceof Long || LLVMNativePointer.isInstance(pointer) || pointer instanceof LLVMBoxedPrimitive);
     }
 
-    @Specialization(replaces = "handlePointerCached", guards = {"lib.guard(pointer)", "lib.isPointer(frame, pointer)"})
-    protected LLVMAddress handlePointer(VirtualFrame frame, Object pointer,
-                    @Cached("createGeneric()") LLVMObjectNativeLibrary lib) {
-        try {
-            return LLVMAddress.fromLong(lib.asPointer(frame, pointer));
-        } catch (InteropException e) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException("Cannot convert " + pointer + " to LLVMAddress", e);
+    protected LLVMObjectToNativeNode createLLVMObjectToNative() {
+        return LLVMObjectToNativeNodeGen.create();
+    }
+
+    abstract static class LLVMObjectToNativeNode extends LLVMNode {
+        public abstract LLVMNativePointer executeWithTarget(Object pointer);
+
+        @Specialization(guards = {"lib.guard(pointer)", "lib.isPointer(pointer)"})
+        protected LLVMNativePointer handlePointerCached(Object pointer,
+                        @Cached("createCached(pointer)") LLVMObjectNativeLibrary lib) {
+            return handlePointer(pointer, lib);
+        }
+
+        @Specialization(replaces = "handlePointerCached", guards = {"lib.guard(pointer)", "lib.isPointer(pointer)"})
+        protected LLVMNativePointer handlePointer(Object pointer,
+                        @Cached("createGeneric()") LLVMObjectNativeLibrary lib) {
+            try {
+                return LLVMNativePointer.create(lib.asPointer(pointer));
+            } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException("Cannot convert " + pointer + " to LLVMNativePointer", e);
+            }
+        }
+
+        @Specialization(replaces = {"handlePointer", "handlePointerCached"}, guards = {"lib.guard(pointer)"})
+        protected LLVMNativePointer transitionToNative(Object pointer,
+                        @Cached("createGeneric()") LLVMObjectNativeLibrary lib) {
+            try {
+                Object n = lib.toNative(pointer);
+                return LLVMNativePointer.create(lib.asPointer(n));
+            } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException("Cannot convert " + pointer + " to LLVMNativePointer", e);
+            }
         }
     }
-
-    @Specialization(replaces = {"handlePointer", "handlePointerCached"}, guards = {"lib.guard(pointer)"})
-    protected LLVMAddress transitionToNative(VirtualFrame frame, Object pointer,
-                    @Cached("createGeneric()") LLVMObjectNativeLibrary lib) {
-        try {
-            Object n = lib.toNative(frame, pointer);
-            return LLVMAddress.fromLong(lib.asPointer(frame, n));
-        } catch (InteropException e) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException("Cannot convert " + pointer + " to LLVMAddress", e);
-        }
-    }
-
-    protected boolean isNull(TruffleObject object) {
-        return ForeignAccess.sendIsNull(isNull, object);
-    }
-
 }

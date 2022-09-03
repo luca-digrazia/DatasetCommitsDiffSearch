@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,11 +29,11 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -41,23 +41,11 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 public abstract class LLVMLoadLibrary extends LLVMIntrinsic {
 
     @Specialization
-    public Object executeIntrinsic(String value) {
-        return value;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization(limit = "2", guards = "constantPointer(id, cachedPtr)")
-    public Object executeIntrinsicCached(LLVMAddress id, @Cached("pointerOf(id)") long cachedPtr,
-                    @Cached("readString(id)") String cachedId, @Cached("getContext()") LLVMContext context) {
-        context.addLibraryToNativeLookup(cachedId);
+    protected Object doIntrinsic(Object value,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> context,
+                    @Cached("createReadString()") LLVMReadStringNode readId) {
+        String name = readId.executeWithTarget(value);
+        context.get().addExternalLibrary(name, true);
         return null;
     }
-
-    @Specialization
-    public Object executeIntrinsic(LLVMAddress value, @Cached("getContext()") LLVMContext context) {
-        String name = LLVMTruffleIntrinsicUtil.readString(value);
-        context.addLibraryToNativeLookup(name);
-        return null;
-    }
-
 }
