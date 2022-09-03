@@ -60,6 +60,21 @@ public class HotSpotSnippetUtils {
     }
 
     @Fold
+    public static int threadObjectOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().threadObjectOffset;
+    }
+
+    @Fold
+    public static int osThreadOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().osThreadOffset;
+    }
+
+    @Fold
+    public static int osThreadInterruptedOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().osThreadInterruptedOffset;
+    }
+
+    @Fold
     public static Kind wordKind() {
         return HotSpotGraalRuntime.getInstance().getTarget().wordKind;
     }
@@ -92,6 +107,46 @@ public class HotSpotSnippetUtils {
     @Fold
     public static long arrayPrototypeMarkWord() {
         return config().arrayPrototypeMarkWord;
+    }
+
+    @Fold
+    public static int klassOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().klassOffset;
+    }
+
+    @Fold
+    public static int klassModifierFlagsOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().klassModifierFlagsOffset;
+    }
+
+    @Fold
+    public static int klassAccessFlagsOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().klassAccessFlagsOffset;
+    }
+
+    @Fold
+    public static int klassLayoutHelperOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().klassLayoutHelperOffset;
+    }
+
+    @Fold
+    public static int arrayKlassLayoutHelperIdentifier() {
+        return HotSpotGraalRuntime.getInstance().getConfig().arrayKlassLayoutHelperIdentifier;
+    }
+
+    @Fold
+    public static int arrayKlassComponentMirrorOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().arrayKlassComponentMirrorOffset;
+    }
+
+    @Fold
+    public static int klassSuperKlassOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().klassSuperKlassOffset;
+    }
+
+    @Fold
+    public static int classMirrorOffset() {
+        return HotSpotGraalRuntime.getInstance().getConfig().classMirrorOffset;
     }
 
     @Fold
@@ -207,6 +262,16 @@ public class HotSpotSnippetUtils {
         return config().useBiasedLocking;
     }
 
+    @Fold
+    static int uninitializedIdentityHashCodeValue() {
+        return HotSpotGraalRuntime.getInstance().getConfig().uninitializedIdentityHashCodeValue;
+    }
+
+    @Fold
+    static int identityHashCodeShift() {
+        return HotSpotGraalRuntime.getInstance().getConfig().identityHashCodeShift;
+    }
+
     /**
      * Loads the hub from a object, null checking it first.
      */
@@ -244,6 +309,10 @@ public class HotSpotSnippetUtils {
         return loadWordFromWordIntrinsic(address, 0, offset, wordKind());
     }
 
+    static Object loadObjectFromWord(Word address, int offset) {
+        return UnsafeLoadNode.load(address, 0, offset, Kind.Object);
+    }
+
     public static Word loadWordFromObject(Object object, int offset) {
         return loadWordFromObjectIntrinsic(object, 0, offset, wordKind());
     }
@@ -270,18 +339,6 @@ public class HotSpotSnippetUtils {
     public
     static int klassStateOffset() {
         return config().klassStateOffset;
-    }
-
-    @Fold
-    public
-    static int klassModifierFlagsOffset() {
-        return config().klassModifierFlagsOffset;
-    }
-
-    @Fold
-    public
-    static int klassOffset() {
-        return config().klassOffset;
     }
 
     @Fold
