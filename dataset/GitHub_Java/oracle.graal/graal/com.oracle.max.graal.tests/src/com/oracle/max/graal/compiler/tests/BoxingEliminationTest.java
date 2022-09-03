@@ -22,12 +22,15 @@
  */
 package com.oracle.max.graal.compiler.tests;
 
+import static com.oracle.max.graal.graph.iterators.NodePredicates.*;
+
 import java.util.*;
 
 import org.junit.*;
 
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.phases.PhasePlan.PhasePosition;
+import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
@@ -38,19 +41,24 @@ import com.oracle.max.graal.nodes.extended.*;
  * graph of the method that just has a "return 1" statement in it.
  */
 public class BoxingEliminationTest extends GraphTest {
-
+    private static final Short s = 2;
     private static final String REFERENCE_SNIPPET = "referenceSnippet";
 
-    public static int referenceSnippet(int a) {
+    @SuppressWarnings("all")
+    public static short referenceSnippet(short a) {
         return 1;
     }
 
-    public static Integer boxedInteger() {
+    public static Short boxedShort() {
         return 1;
     }
 
     public static Object boxedObject() {
-        return 1;
+        return (short) 1;
+    }
+
+    public static Short constantBoxedShort() {
+        return s;
     }
 
     @Test
@@ -58,8 +66,9 @@ public class BoxingEliminationTest extends GraphTest {
         test("test1Snippet");
     }
 
-    public static int test1Snippet(int a) {
-        return boxedInteger();
+    @SuppressWarnings("all")
+    public static short test1Snippet(short a) {
+        return boxedShort();
     }
 
     @Test
@@ -67,51 +76,64 @@ public class BoxingEliminationTest extends GraphTest {
         test("test2Snippet");
     }
 
-    public static int test2Snippet(int a) {
-        return (Integer) boxedObject();
+    @SuppressWarnings("all")
+    public static short test2Snippet(short a) {
+        return (Short) boxedObject();
     }
     @Test
     public void test3() {
         test("test3Snippet");
     }
 
-    public static int test3Snippet(int a) {
-        int b = boxedInteger();
+    @SuppressWarnings("all")
+    public static short test3Snippet(short a) {
+        short b = boxedShort();
         if (b < 0) {
-            b = boxedInteger();
+            b = boxedShort();
         }
         return b;
     }
 
-    private void test(String snippet) {
-        StructuredGraph graph = parse(snippet);
-        BoxingMethodPool pool = new BoxingMethodPool(runtime());
-        IdentifyBoxingPhase identifyBoxingPhase = new IdentifyBoxingPhase(pool);
-        PhasePlan phasePlan = new PhasePlan();
-        phasePlan.addPhase(PhasePosition.AFTER_PARSING, identifyBoxingPhase);
-        identifyBoxingPhase.apply(graph);
-        LocalNode local = graph.getNodes(LocalNode.class).iterator().next();
-        ConstantNode constant = ConstantNode.forInt(0, graph);
-        for (Node n : local.usages().snapshot()) {
-            if (n instanceof FrameState) {
-                // Do not replace.
-            } else {
-                n.replaceFirstInput(local, constant);
+    @Test
+    public void test4() {
+        test("test4Snippet");
+    }
+
+    @SuppressWarnings("all")
+    public static short test4Snippet(short a) {
+        return constantBoxedShort();
+    }
+
+    private void test(final String snippet) {
+        Debug.scope("BoxingEliminationTest", new DebugDumpScope(snippet), new Runnable() {
+            @Override
+            public void run() {
+                StructuredGraph graph = parse(snippet);
+                BoxingMethodPool pool = new BoxingMethodPool(runtime());
+                IdentifyBoxingPhase identifyBoxingPhase = new IdentifyBoxingPhase(pool);
+                PhasePlan phasePlan = getDefaultPhasePlan();
+                phasePlan.addPhase(PhasePosition.AFTER_PARSING, identifyBoxingPhase);
+                identifyBoxingPhase.apply(graph);
+                LocalNode local = graph.getNodes(LocalNode.class).iterator().next();
+                ConstantNode constant = ConstantNode.forShort((short) 0, graph);
+                for (Node n : local.usages().filter(isNotA(FrameState.class)).snapshot()) {
+                    n.replaceFirstInput(local, constant);
+                }
+                Collection<Invoke> hints = new ArrayList<>();
+                for (Invoke invoke : graph.getInvokes()) {
+                    hints.add(invoke);
+                }
+                new InliningPhase(null, runtime(), hints, null, phasePlan).apply(graph);
+                new CanonicalizerPhase(null, runtime(), null).apply(graph);
+                Debug.dump(graph, "Graph");
+                new BoxingEliminationPhase().apply(graph);
+                Debug.dump(graph, "Graph");
+                new ExpandBoxingNodesPhase(pool).apply(graph);
+                new CanonicalizerPhase(null, runtime(), null).apply(graph);
+                new DeadCodeEliminationPhase().apply(graph);
+                StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
+                assertEquals(referenceGraph, graph);
             }
-        }
-        Collection<Invoke> hints = new ArrayList<Invoke>();
-        for (Invoke invoke : graph.getInvokes()) {
-            hints.add(invoke);
-        }
-        new InliningPhase(null, runtime(), hints, null, phasePlan).apply(graph);
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        print(graph);
-        new BoxingEliminationPhase(runtime()).apply(graph);
-        print(graph);
-        new ExpandBoxingNodesPhase(pool).apply(graph);
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        new DeadCodeEliminationPhase().apply(graph);
-        StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
-        assertEquals(referenceGraph, graph);
+        });
     }
 }

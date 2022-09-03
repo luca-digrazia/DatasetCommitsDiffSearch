@@ -34,10 +34,12 @@ import com.oracle.max.graal.nodes.type.*;
 public final class UnboxNode extends FixedWithNextNode implements Node.IterableNodeType, Canonicalizable {
 
     @Input private ValueNode source;
+    @Data private CiKind destinationKind;
 
     public UnboxNode(CiKind kind, ValueNode source) {
         super(StampFactory.forKind(kind));
         this.source = source;
+        this.destinationKind = kind;
         assert kind != CiKind.Object : "can only unbox to primitive";
         assert source.kind() == CiKind.Object : "can only unbox objects";
     }
@@ -47,7 +49,7 @@ public final class UnboxNode extends FixedWithNextNode implements Node.IterableN
     }
 
     public CiKind destinationKind() {
-        return this.kind();
+        return destinationKind;
     }
 
     public void expand(BoxingMethodPool pool) {
@@ -62,25 +64,27 @@ public final class UnboxNode extends FixedWithNextNode implements Node.IterableN
         if (source.isConstant()) {
             CiConstant constant = source.asConstant();
             Object o = constant.asObject();
-            switch (kind()) {
-                case Boolean:
-                    return ConstantNode.forBoolean((Boolean) o, graph());
-                case Byte:
-                    return ConstantNode.forByte((Byte) o, graph());
-                case Char:
-                    return ConstantNode.forChar((Character) o, graph());
-                case Short:
-                    return ConstantNode.forShort((Short) o, graph());
-                case Int:
-                    return ConstantNode.forInt((Integer) o, graph());
-                case Long:
-                    return ConstantNode.forLong((Long) o, graph());
-                case Float:
-                    return ConstantNode.forFloat((Long) o, graph());
-                case Double:
-                    return ConstantNode.forDouble((Long) o, graph());
-                default:
-                    assert false;
+            if (o != null) {
+                switch (destinationKind) {
+                    case Boolean:
+                        return ConstantNode.forBoolean((Boolean) o, graph());
+                    case Byte:
+                        return ConstantNode.forByte((Byte) o, graph());
+                    case Char:
+                        return ConstantNode.forChar((Character) o, graph());
+                    case Short:
+                        return ConstantNode.forShort((Short) o, graph());
+                    case Int:
+                        return ConstantNode.forInt((Integer) o, graph());
+                    case Long:
+                        return ConstantNode.forLong((Long) o, graph());
+                    case Float:
+                        return ConstantNode.forFloat((Long) o, graph());
+                    case Double:
+                        return ConstantNode.forDouble((Long) o, graph());
+                    default:
+                        ValueUtil.shouldNotReachHere();
+                }
             }
         }
         return this;
