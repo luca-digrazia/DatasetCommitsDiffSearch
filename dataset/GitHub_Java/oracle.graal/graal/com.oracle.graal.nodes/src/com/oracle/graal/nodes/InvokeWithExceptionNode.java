@@ -37,9 +37,9 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     @Input private final MethodCallTargetNode callTarget;
     @Input private FrameState stateAfter;
-    private final int bci;
+    @Data private final int bci;
     // megamorph should only be true when the compiler is sure that the call site is megamorph, and false when in doubt
-    private boolean megamorph;
+    @Data private boolean megamorph;
     private boolean useForInlining;
     private final long leafGraphId;
 
@@ -185,11 +185,6 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         if (node == null) {
             assert kind() == CiKind.Void && usages().isEmpty();
             ((StructuredGraph) graph()).removeSplit(this, NORMAL_EDGE);
-        } else if (node instanceof DeoptimizeNode) {
-            this.replaceAtPredecessors(node);
-            this.replaceAtUsages(null);
-            GraphUtil.killCFG(this);
-            return;
         } else {
             ((StructuredGraph) graph()).replaceSplit(this, node, NORMAL_EDGE);
         }

@@ -24,9 +24,8 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
 
-public interface Invoke extends StateSplit, Lowerable {
+public interface Invoke extends StateSplit {
 
     FixedNode next();
 
@@ -56,12 +55,9 @@ public interface Invoke extends StateSplit, Lowerable {
 
     void setUseForInlining(boolean value);
 
-    /**
-     * True if this invocation is almost certainly megamorphic, false when in doubt.
-     */
-    boolean isMegamorphic();
+    boolean megamorph();
 
-    void setMegamorphic(boolean value);
+    void setMegamorph(boolean megamorph);
 
     long leafGraphId();
 }

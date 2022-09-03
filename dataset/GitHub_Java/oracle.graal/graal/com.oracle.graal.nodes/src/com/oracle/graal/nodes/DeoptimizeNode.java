@@ -25,21 +25,29 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ri.*;
 
 @NodeInfo(shortName = "Deopt")
 public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, LIRLowerable {
 
+    public static enum DeoptAction {
+        None,                           // just interpret, do not invalidate nmethod
+        Recompile,                      // recompile the nmethod; need not invalidate
+        InvalidateReprofile,            // invalidate the nmethod, reset IC, maybe recompile
+        InvalidateRecompile,            // invalidate the nmethod, recompile (probably)
+        InvalidateStopCompiling,        // invalidate the nmethod and do not compile
+    }
+
     @Data private String message;
-    @Data private final RiDeoptAction action;
-    @Data private final RiDeoptReason reason;
+    @Data private final DeoptAction action;
     private final long leafGraphId;
 
+    public DeoptimizeNode() {
+        this(DeoptAction.InvalidateReprofile, StructuredGraph.INVALID_GRAPH_ID);
+    }
 
-    public DeoptimizeNode(RiDeoptAction action, RiDeoptReason reason, long leafGraphId) {
+    public DeoptimizeNode(DeoptAction action, long leafGraphId) {
         super(StampFactory.illegal());
         this.action = action;
-        this.reason = reason;
         this.leafGraphId = leafGraphId;
     }
 
@@ -51,12 +59,8 @@ public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, 
         return message;
     }
 
-    public RiDeoptAction action() {
+    public DeoptAction action() {
         return action;
-    }
-
-    public RiDeoptReason reason() {
-        return reason;
     }
 
     public long leafGraphId() {
@@ -65,12 +69,11 @@ public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, 
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitDeoptimize(action, reason, message, leafGraphId);
+        gen.emitDeoptimize(action, message, leafGraphId);
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void deopt(@ConstantNodeParameter RiDeoptAction action, @ConstantNodeParameter RiDeoptReason reason) {
+    public static void deopt() {
         throw new UnsupportedOperationException();
     }
 }

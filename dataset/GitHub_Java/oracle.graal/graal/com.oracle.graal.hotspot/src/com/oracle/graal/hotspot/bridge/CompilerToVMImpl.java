@@ -78,10 +78,10 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
     public native RiField RiConstantPool_lookupField(HotSpotTypeResolved pool, int cpi, byte byteCode);
 
     @Override
-    public native HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean installCode, HotSpotCodeInfo info);
+    public native HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean installCode);
 
     @Override
-    public native long installStub(HotSpotTargetMethod targetMethod, HotSpotCodeInfo info);
+    public native long installStub(HotSpotTargetMethod targetMethod);
 
     @Override
     public native HotSpotVMConfig getConfiguration();
@@ -157,13 +157,7 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
     public native String disassembleJava(HotSpotMethodResolved method);
 
     @Override
-    public native StackTraceElement RiMethod_toStackTraceElement(HotSpotMethodResolved method, int bci);
-
-    @Override
     public native Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
-
-    @Override
-    public native Object executeCompiledMethodVarargs(HotSpotCompiledMethod method, Object... args);
 
     @Override
     public native int RiMethod_vtableEntryOffset(HotSpotMethodResolved method);

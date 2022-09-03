@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.spi.types;
 
 import java.util.*;
 
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.max.cri.ci.*;
@@ -88,7 +89,7 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
         }
 
         @Override
-        public ValueNode dependency() {
+        public Node dependency() {
             return store.dependency;
         }
     }
@@ -120,7 +121,7 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
     private final CiKind kind;
     private final ConstantBound constantBounds;
     private final TypeFeedbackChanged changed;
-    private ValueNode dependency;
+    private Node dependency;
     private HashMap<ValueNode, Condition> valueBounds;
 
     private void updateDependency() {

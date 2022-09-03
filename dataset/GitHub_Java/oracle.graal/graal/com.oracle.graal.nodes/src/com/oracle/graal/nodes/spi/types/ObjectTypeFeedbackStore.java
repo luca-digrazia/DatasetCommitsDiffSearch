@@ -138,7 +138,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         }
 
         @Override
-        public ValueNode dependency() {
+        public Node dependency() {
             return store.dependency;
         }
     }
@@ -225,7 +225,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
 
     private final TypeFeedbackChanged changed;
 
-    private ValueNode dependency;
+    private Node dependency;
 
     private void updateDependency() {
         dependency = changed.node;

@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ri.*;
 
 
 public class SafeWriteNode extends SafeAccessNode implements Lowerable{
@@ -47,7 +46,7 @@ public class SafeWriteNode extends SafeAccessNode implements Lowerable{
     @Override
     public void lower(CiLoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) graph();
-        GuardNode guard = (GuardNode) tool.createGuard(graph.unique(new NullCheckNode(object(), false)), RiDeoptReason.NullCheckException, RiDeoptAction.InvalidateReprofile, StructuredGraph.INVALID_GRAPH_ID);
+        GuardNode guard = (GuardNode) tool.createGuard(graph.unique(new NullCheckNode(object(), false)), StructuredGraph.INVALID_GRAPH_ID);
         WriteNode write = graph.add(new WriteNode(object(), value(), location()));
         write.setGuard(guard);
         graph.replaceFixedWithFixed(this, write);

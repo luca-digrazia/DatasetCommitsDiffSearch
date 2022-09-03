@@ -66,6 +66,7 @@ import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.NullCheckOp;
 import com.oracle.graal.lir.amd64.AMD64Move.SpillMoveOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
+import com.oracle.graal.nodes.DeoptimizeNode.DeoptAction;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -497,20 +498,19 @@ public class AMD64LIRGenerator extends LIRGenerator {
         return result;
     }
 
-
     @Override
-    public void emitDeoptimizeOn(Condition cond, RiDeoptAction action, RiDeoptReason reason, Object deoptInfo) {
+    public void emitDeoptimizeOn(Condition cond, DeoptAction action, Object deoptInfo) {
         assert cond != null;
         LIRDebugInfo info = state();
-        LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
+        LabelRef stubEntry = createDeoptStub(action, info, deoptInfo);
         append(new BranchOp(cond, stubEntry, info));
     }
 
 
     @Override
-    public void emitDeoptimize(RiDeoptAction action, RiDeoptReason reason, Object deoptInfo, long leafGraphId) {
+    public void emitDeoptimize(DeoptAction action, Object deoptInfo, long leafGraphId) {
         LIRDebugInfo info = state(leafGraphId);
-        LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
+        LabelRef stubEntry = createDeoptStub(action, info, deoptInfo);
         append(new JumpOp(stubEntry, info));
     }
 
@@ -551,9 +551,9 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected LabelRef createDeoptStub(RiDeoptAction action, RiDeoptReason reason, LIRDebugInfo info, Object deoptInfo) {
+    protected LabelRef createDeoptStub(DeoptAction action, LIRDebugInfo info, Object deoptInfo) {
         assert info.topFrame.bci >= 0 : "invalid bci for deopt framestate";
-        AMD64DeoptimizationStub stub = new AMD64DeoptimizationStub(action, reason, info, deoptInfo);
+        AMD64DeoptimizationStub stub = new AMD64DeoptimizationStub(action, info, deoptInfo);
         lir.deoptimizationStubs.add(stub);
         return LabelRef.forLabel(stub.label);
     }
@@ -566,6 +566,10 @@ public class AMD64LIRGenerator extends LIRGenerator {
         append(new NullCheckOp(value, info));
     }
 
+    // TODO (cwimmer) The CompareAndSwapNode in its current form needs to be lowered to several Nodes before code generation to separate three parts:
+    // * The write barriers (and possibly read barriers) when accessing an object field
+    // * The distinction of returning a boolean value (semantic similar to a BooleanNode to be used as a condition?) or the old value being read
+    // * The actual compare-and-swap
     @Override
     public void visitCompareAndSwap(CompareAndSwapNode node) {
         CiKind kind = node.newValue().kind();
@@ -582,12 +586,25 @@ public class AMD64LIRGenerator extends LIRGenerator {
             address = new CiAddress(kind, load(operand(node.object())), load(index), CiAddress.Scale.Times1, 0);
         }
 
+        if (kind == CiKind.Object) {
+            address = new CiAddress(kind, emitLea(address));
+            preGCWriteBarrier(address.base, false, null);
+        }
+
         CiRegisterValue rax = AMD64.rax.asValue(kind);
         emitMove(expected, rax);
         append(new CompareAndSwapOp(rax, address, rax, newValue));
 
         Variable result = newVariable(node.kind());
-        append(new CondMoveOp(result, Condition.EQ, load(CiConstant.TRUE), CiConstant.FALSE));
+        if (node.directResult()) {
+            emitMove(rax, result);
+        } else {
+            append(new CondMoveOp(result, Condition.EQ, load(CiConstant.TRUE), CiConstant.FALSE));
+        }
         setResult(node, result);
+
+        if (kind == CiKind.Object) {
+            postGCWriteBarrier(address.base, newValue);
+        }
     }
 }

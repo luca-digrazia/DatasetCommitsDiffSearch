@@ -59,14 +59,10 @@ public class StructuredGraph extends Graph {
     }
 
     public StructuredGraph(String name, RiResolvedMethod method) {
-        this(name, method, uniqueGraphIds.incrementAndGet());
-    }
-
-    private StructuredGraph(String name, RiResolvedMethod method, long graphId) {
         super(name);
         this.start = add(new BeginNode());
         this.method = method;
-        this.graphId = graphId;
+        this.graphId = uniqueGraphIds.incrementAndGet();
     }
 
     public StructuredGraph(RiResolvedMethod method) {
@@ -92,7 +88,7 @@ public class StructuredGraph extends Graph {
 
     @Override
     public StructuredGraph copy(String newName) {
-        StructuredGraph copy = new StructuredGraph(newName, method, graphId);
+        StructuredGraph copy = new StructuredGraph(newName);
         HashMap<Node, Node> replacements = new HashMap<>();
         replacements.put(start, copy.start);
         copy.addDuplicates(getNodes(), replacements);

@@ -25,11 +25,8 @@ package com.oracle.graal.nodes.extended;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
-/**
- * An analog to {@link AccessNode} with the additional semantics of null-checking
- * the receiver object before the access.
- */
-public abstract class SafeAccessNode extends FixedWithNextNode {
+
+public abstract class SafeAccessNode extends AbstractStateSplit {
 
     @Input private ValueNode object;
     @Input private LocationNode location;

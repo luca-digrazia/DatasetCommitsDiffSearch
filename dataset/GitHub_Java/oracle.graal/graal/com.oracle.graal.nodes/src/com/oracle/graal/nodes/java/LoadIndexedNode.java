@@ -22,30 +22,27 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.lang.reflect.*;
-
-import sun.misc.*;
-
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
 
 /**
  * The {@code LoadIndexedNode} represents a read from an element of an array.
  */
-public final class LoadIndexedNode extends AccessIndexedNode implements Canonicalizable, Lowerable, Node.IterableNodeType {
+public final class LoadIndexedNode extends AccessIndexedNode implements Lowerable, LIRLowerable, Node.IterableNodeType {
 
     /**
      * Creates a new LoadIndexedNode.
      * @param array the instruction producing the array
      * @param index the instruction producing the index
+     * @param length the instruction producing the length
      * @param elementKind the element type
      */
-    public LoadIndexedNode(ValueNode array, ValueNode index, CiKind elementKind, long leafGraphId) {
-        super(createStamp(array, elementKind), array, index, elementKind, leafGraphId);
+    public LoadIndexedNode(ValueNode array, ValueNode index, ValueNode length, CiKind elementKind, long leafGraphId) {
+        super(createStamp(array, elementKind), array, index, length, elementKind, leafGraphId);
     }
 
     private static Stamp createStamp(ValueNode array, CiKind kind) {
@@ -57,24 +54,17 @@ public final class LoadIndexedNode extends AccessIndexedNode implements Canonica
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+    public void generate(LIRGeneratorTool gen) {
+        gen.visitLoadIndexed(this);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (index().isConstant() && array().isConstant() && !array().isNullConstant()) {
-            CiConstant arrayConst = array().asConstant();
-            if (tool.isImmutable(arrayConst)) {
-                int index = index().asConstant().asInt();
-                Object array = arrayConst.asObject();
-                int length = Array.getLength(array);
-                if (index >= 0 && index < length) {
-                    return ConstantNode.forCiConstant(elementKind().readUnsafeConstant(array,
-                                    Unsafe.ARRAY_OBJECT_BASE_OFFSET + index * Unsafe.ARRAY_OBJECT_INDEX_SCALE), tool.runtime(), graph());
-                }
-            }
-        }
-        return this;
+    public boolean needsStateAfter() {
+        return false;
+    }
+
+    @Override
+    public void lower(CiLoweringTool tool) {
+        tool.getRuntime().lower(this, tool);
     }
 }
