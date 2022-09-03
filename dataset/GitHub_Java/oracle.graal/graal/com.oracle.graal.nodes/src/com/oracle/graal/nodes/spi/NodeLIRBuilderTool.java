@@ -39,6 +39,8 @@ public interface NodeLIRBuilderTool extends NodeMappableLIRBuilder {
     // TODO (je) remove and move into the Node
     LIRFrameState state(DeoptimizingNode deopt);
 
+    void emitNullCheck(ValueNode v, DeoptimizingNode deopting);
+
     void emitIf(IfNode i);
 
     void emitConditional(ConditionalNode i);
@@ -67,6 +69,8 @@ public interface NodeLIRBuilderTool extends NodeMappableLIRBuilder {
     void emitOverflowCheckBranch(BeginNode overflowSuccessor, BeginNode next, double probability);
 
     Value[] visitInvokeArguments(CallingConvention cc, Collection<ValueNode> arguments);
+
+    MemoryArithmeticLIRLowerer getMemoryLowerer();
 
     Variable newVariable(Kind kind);
 
