@@ -30,7 +30,6 @@ import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.nodes.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
@@ -190,42 +189,6 @@ public class BoxingEliminationTest extends GraalCompilerTest {
         return result;
     }
 
-    @Test
-    public void testComparison() {
-        compareGraphs("testComparison1Snippet", "referenceComparisonSnippet");
-        compareGraphs("testComparison2Snippet", "referenceComparisonSnippet");
-    }
-
-    @SuppressWarnings("cast")
-    public static boolean testComparison1Snippet(int a, int b) {
-        return ((Integer) a) == b;
-    }
-
-    public static boolean testComparison2Snippet(int a, int b) {
-        Integer x = a;
-        Integer y = b;
-        return x == y;
-    }
-
-    public static boolean referenceComparisonSnippet(int a, int b) {
-        return a == b;
-    }
-
-    @Test
-    public void testLateCanonicalization() {
-        compareGraphs("testLateCanonicalizationSnippet", "referenceLateCanonicalizationSnippet");
-    }
-
-    public static boolean testLateCanonicalizationSnippet(int a) {
-        Integer x = a;
-        Integer y = 1000;
-        return x == y;
-    }
-
-    public static boolean referenceLateCanonicalizationSnippet(int a) {
-        return a == 1000;
-    }
-
     private StructuredGraph graph;
 
     public static Integer materializeReferenceSnippet(int a) {
@@ -308,9 +271,8 @@ public class BoxingEliminationTest extends GraalCompilerTest {
         graph = parse(snippet);
         new ComputeProbabilityPhase().apply(graph);
         Assumptions assumptions = new Assumptions(false);
-        HighTierContext context = new HighTierContext(runtime(), assumptions);
-        new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-        new PartialEscapeAnalysisPhase(false, false).apply(graph, context);
+        new InliningPhase(runtime(), null, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+        new PartialEscapeAnalysisPhase(runtime(), assumptions, false, false).apply(graph);
         new CullFrameStatesPhase().apply(graph);
     }
 
@@ -327,14 +289,13 @@ public class BoxingEliminationTest extends GraalCompilerTest {
 
                 new ComputeProbabilityPhase().apply(graph);
                 Assumptions assumptions = new Assumptions(false);
-                HighTierContext context = new HighTierContext(runtime(), assumptions);
-                new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+                new InliningPhase(runtime(), null, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
                 if (loopPeeling) {
                     new LoopTransformHighPhase().apply(graph);
                 }
                 new DeadCodeEliminationPhase().apply(graph);
-                new CanonicalizerPhase().apply(graph, context);
-                new PartialEscapeAnalysisPhase(false, false).apply(graph, context);
+                new CanonicalizerPhase(runtime(), assumptions).apply(graph);
+                new PartialEscapeAnalysisPhase(runtime(), assumptions, false, false).apply(graph);
 
                 for (MaterializeObjectNode materialize : graph.getNodes(MaterializeObjectNode.class)) {
                     materialize.getVirtualObject().materializeAt(materialize, materialize.getValues(), false, materialize.getLockCount());
@@ -342,12 +303,12 @@ public class BoxingEliminationTest extends GraalCompilerTest {
 
                 new CullFrameStatesPhase().apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
-                new CanonicalizerPhase().apply(graph, context);
+                new CanonicalizerPhase(runtime(), assumptions).apply(graph);
 
                 StructuredGraph referenceGraph = parse(referenceSnippet);
-                new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(referenceGraph);
+                new InliningPhase(runtime(), null, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(referenceGraph);
                 new DeadCodeEliminationPhase().apply(referenceGraph);
-                new CanonicalizerPhase().apply(referenceGraph, context);
+                new CanonicalizerPhase(runtime(), assumptions).apply(referenceGraph);
                 assertEquals(referenceGraph, graph, excludeVirtual);
             }
         });
