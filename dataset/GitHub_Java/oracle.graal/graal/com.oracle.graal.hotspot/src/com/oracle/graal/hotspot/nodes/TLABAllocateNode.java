@@ -22,9 +22,10 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.hotspot.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.*;
 
 /**
@@ -35,8 +36,8 @@ public final class TLABAllocateNode extends FixedWithNextNode implements Lowerab
 
     @Input private ValueNode size;
 
-    public TLABAllocateNode(ValueNode size) {
-        super(HotSpotGraalRuntime.wordStamp());
+    public TLABAllocateNode(ValueNode size, Kind wordKind) {
+        super(StampFactory.forWord(wordKind, true));
         this.size = size;
     }
 
@@ -52,6 +53,9 @@ public final class TLABAllocateNode extends FixedWithNextNode implements Lowerab
     /**
      * @return null if allocation fails
      */
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native Word allocateVariableSize(int size);
+    public static Word allocateVariableSize(int size, @ConstantNodeParameter Kind wordKind) {
+        throw new UnsupportedOperationException();
+    }
 }
