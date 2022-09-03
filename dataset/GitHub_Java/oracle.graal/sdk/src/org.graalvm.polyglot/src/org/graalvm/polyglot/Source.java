@@ -63,7 +63,7 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractSourceImpl;
  * <h3>Source from a literal text</h3>
  *
  * An anonymous immutable code snippet can be created from a string via the
- * {@link Source#newBuilder(java.lang.CharSequence) } factory method: <br>
+ * {@link Source#newBuilder(java.lang.String) } factory method: <br>
  *
  * {@link SourceSnippets#fromAString}
  *
@@ -348,8 +348,8 @@ public final class Source {
         return IMPL.equals(impl, otherImpl);
     }
 
-    public static Builder newBuilder(CharSequence source) {
-        return new Builder(source);
+    public static LiteralBuilder newBuilder(CharSequence source) {
+        return new LiteralBuilder(source);
     }
 
     public static Builder newBuilder(File source) {
@@ -365,11 +365,7 @@ public final class Source {
     }
 
     public static Source create(CharSequence source) {
-        try {
-            return newBuilder(source).build();
-        } catch (IOException e) {
-            throw new AssertionError("Should not reach here");
-        }
+        return newBuilder(source).build();
     }
 
     public static Source create(File source) throws IOException {
@@ -382,6 +378,78 @@ public final class Source {
 
     public static Source create(String name, Reader source) throws IOException {
         return newBuilder(source).setName(name).build();
+    }
+
+    public static final class LiteralBuilder extends Builder {
+
+        LiteralBuilder(CharSequence origin) {
+            super(origin);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder setContent(String code) {
+            return (LiteralBuilder) super.setContent(code);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder setInteractive(boolean interactive) {
+            return (LiteralBuilder) super.setInteractive(interactive);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder setInternal(boolean internal) {
+            return (LiteralBuilder) super.setInternal(internal);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder setName(String newName) {
+            return (LiteralBuilder) super.setName(newName);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder setURI(URI ownUri) {
+            return (LiteralBuilder) super.setURI(ownUri);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public Source build() {
+            try {
+                return super.build();
+            } catch (IOException e) {
+                // should not reach here.
+                throw new AssertionError();
+            }
+        }
     }
 
     public static class Builder {
@@ -408,14 +476,6 @@ public final class Source {
             Objects.requireNonNull(newName);
             this.name = newName;
             return this;
-        }
-
-        /**
-         * @deprecated use {@link #setName(String)}
-         */
-        @Deprecated
-        public Builder name(String newName) {
-            return setName(newName);
         }
 
         /**
@@ -455,14 +515,6 @@ public final class Source {
         }
 
         /**
-         * @deprecated use {@link #setName(String)}
-         */
-        @Deprecated
-        public Builder interactive() {
-            return setInteractive(true);
-        }
-
-        /**
          * Marks the source as internal. Internal sources are those that aren't created by user, but
          * rather inherently present by the language system. Calling this method influences result
          * of create {@link Source#isInternal()}
@@ -473,14 +525,6 @@ public final class Source {
         public Builder setInternal(boolean internal) {
             this.internal = internal;
             return this;
-        }
-
-        /**
-         * @deprecated use {@link #setName(String)}
-         */
-        @Deprecated
-        public Builder internal() {
-            return setInternal(true);
         }
 
         /**
@@ -500,25 +544,6 @@ public final class Source {
         }
 
         /**
-         * @deprecated use {@link #setURI(String)}
-         */
-        @Deprecated
-        public Builder uri(URI newUri) {
-            return setURI(newUri);
-        }
-
-        /**
-         * Uses configuration of this builder to create new {@link Source} object. This method
-         * throws can throw an {@link IOException} independent of whether
-         *
-         * @return the source object
-         * @since 1.0
-         */
-        public Source build() throws IOException {
-            return getImpl().build(origin, uri, name, content, interactive, internal);
-        }
-
-        /**
          * Uses configuration of this builder to create new {@link Source} object. This method may
          * throw an exception - especially when dealing with files (e.g.
          * {@link Source#newBuilder(java.net.URL)}, {@link Source#newBuilder(java.io.File)} or
@@ -530,15 +555,8 @@ public final class Source {
          * @return the source object
          * @since 1.0
          */
-        public Source buildLiteral() {
-            if (!(origin instanceof CharSequence)) {
-                throw new UnsupportedOperationException("This method is only supported for string literal. Use build() instead.");
-            }
-            try {
-                return getImpl().build(origin, uri, name, content, interactive, internal);
-            } catch (IOException e) {
-                throw new AssertionError("No error expected.", e);
-            }
+        public Source build() throws IOException {
+            return getImpl().build(origin, uri, name, content, interactive, internal);
         }
 
     }
@@ -617,7 +635,7 @@ class SourceSnippets {
      // BEGIN: SourceSnippets#fromAString
      Source source = Source.newBuilder("function() {\n"
          + "  return 'Hi';\n"
-         + "}\n").buildLiteral();
+         + "}\n").setName("sample.js").build();
      // END: SourceSnippets#fromAString
      return source;
  }
