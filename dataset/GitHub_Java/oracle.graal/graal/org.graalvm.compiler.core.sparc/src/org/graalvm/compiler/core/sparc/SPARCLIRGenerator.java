@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -199,11 +199,11 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         Condition actualCondition;
         if (isJavaConstant(x)) {
             left = load(y);
-            right = loadSimm13(x);
+            right = loadNonConst(x);
             actualCondition = cond.mirror();
         } else {
             left = load(x);
-            right = loadSimm13(y);
+            right = loadNonConst(y);
             actualCondition = cond;
         }
         SPARCKind actualCmpKind = (SPARCKind) cmpKind;
@@ -250,7 +250,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         return load(value);
     }
 
-    public Value loadSimm13(Value value) {
+    private Value loadSimm13(Value value) {
         if (isJavaConstant(value)) {
             JavaConstant c = asJavaConstant(value);
             if (c.isNull() || SPARCAssembler.isSimm13(c)) {
@@ -258,13 +258,6 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             }
         }
         return load(value);
-    }
-
-    @Override
-    public Value loadNonConst(Value value) {
-        // SPARC does not support a proper way of loadNonConst. Please use the appropriate
-        // loadSimm11 or loadSimm13 variants.
-        throw GraalError.shouldNotReachHere("This operation is not available for SPARC.");
     }
 
     @Override
