@@ -54,7 +54,7 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
              */
             LocationIdentity locationsKilledByInvoke = ((InvokeWithExceptionNode) predecessor()).getLocationIdentity();
             BeginNode entry = graph().add(new KillingBeginNode(locationsKilledByInvoke));
-            LoadExceptionObjectNode loadException = graph().add(new LoadExceptionObjectNode(stamp()));
+            LoadExceptionObjectNode loadException = graph().add(new LoadExceptionObjectNode(StampFactory.declaredNonNull(tool.getMetaAccess().lookupJavaType(Throwable.class))));
 
             loadException.setStateAfter(stateAfter());
             replaceAtUsages(InputType.Value, loadException);
@@ -69,5 +69,13 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
     public boolean verify() {
         assertTrue(stateAfter() != null, "an exception handler needs a frame state");
         return super.verify();
+    }
+
+    public MemoryCheckpoint asMemoryCheckpoint() {
+        return this;
+    }
+
+    public MemoryPhiNode asMemoryPhi() {
+        return null;
     }
 }

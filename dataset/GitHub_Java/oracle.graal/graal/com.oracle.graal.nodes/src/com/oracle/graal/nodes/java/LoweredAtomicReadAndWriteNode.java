@@ -38,10 +38,10 @@ import sun.misc.*;
 public class LoweredAtomicReadAndWriteNode extends FixedAccessNode implements StateSplit, LIRLowerable, MemoryCheckpoint.Single {
 
     @Input private ValueNode newValue;
-    @OptionalInput(InputType.State) private FrameState stateAfter;
+    @Input(InputType.State) private FrameState stateAfter;
 
-    public LoweredAtomicReadAndWriteNode(ValueNode object, LocationNode location, ValueNode newValue, BarrierType barrierType) {
-        super(object, location, newValue.stamp().unrestricted(), barrierType);
+    public LoweredAtomicReadAndWriteNode(ValueNode object, LocationNode location, ValueNode newValue, BarrierType barrierType, boolean compressible) {
+        super(object, location, newValue.stamp().unrestricted(), barrierType, compressible);
         this.newValue = newValue;
     }
 

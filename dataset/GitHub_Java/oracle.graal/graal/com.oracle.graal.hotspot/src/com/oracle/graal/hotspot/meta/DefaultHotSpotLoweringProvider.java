@@ -230,26 +230,29 @@ public class DefaultHotSpotLoweringProvider implements HotSpotLoweringProvider {
             JavaType[] signature = MetaUtil.signatureToTypes(callTarget.targetMethod().getSignature(), callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
 
             LoweredCallTargetNode loweredCallTarget = null;
-            boolean isVirtualOrInterface = callTarget.invokeKind() == InvokeKind.Virtual || callTarget.invokeKind() == InvokeKind.Interface;
-            if (InlineVTableStubs.getValue() && isVirtualOrInterface && (AlwaysInlineVTableStubs.getValue() || invoke.isPolymorphic())) {
+            if (callTarget.invokeKind() == InvokeKind.Virtual && InlineVTableStubs.getValue() && (AlwaysInlineVTableStubs.getValue() || invoke.isPolymorphic())) {
+
                 HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
-                ResolvedJavaType receiverType = invoke.getReceiverType();
-                if (hsMethod.isInVirtualMethodTable(receiverType)) {
-                    Kind wordKind = runtime.getTarget().wordKind;
-                    ValueNode hub = createReadHub(graph, wordKind, receiver, receiverNullCheck);
+                if (!hsMethod.getDeclaringClass().isInterface()) {
+                    if (hsMethod.isInVirtualMethodTable()) {
+                        int vtableEntryOffset = hsMethod.vtableEntryOffset();
+                        assert vtableEntryOffset > 0;
+                        Kind wordKind = runtime.getTarget().wordKind;
+                        ValueNode hub = createReadHub(graph, wordKind, receiver, receiverNullCheck);
 
-                    ReadNode metaspaceMethod = createReadVirtualMethod(graph, wordKind, hub, hsMethod, receiverType);
-                    // We use LocationNode.ANY_LOCATION for the reads that access the
-                    // compiled code entry as HotSpot does not guarantee they are final
-                    // values.
-                    ReadNode compiledEntry = graph.add(new ReadNode(metaspaceMethod, ConstantLocationNode.create(ANY_LOCATION, wordKind, runtime.getConfig().methodCompiledEntryOffset, graph),
-                                    StampFactory.forKind(wordKind), BarrierType.NONE, false));
+                        ReadNode metaspaceMethod = createReadVirtualMethod(graph, wordKind, hub, hsMethod);
+                        // We use LocationNode.ANY_LOCATION for the reads that access the
+                        // compiled code entry as HotSpot does not guarantee they are final
+                        // values.
+                        ReadNode compiledEntry = graph.add(new ReadNode(metaspaceMethod, ConstantLocationNode.create(ANY_LOCATION, wordKind, runtime.getConfig().methodCompiledEntryOffset, graph),
+                                        StampFactory.forKind(wordKind), BarrierType.NONE, false));
 
-                    loweredCallTarget = graph.add(new HotSpotIndirectCallTargetNode(metaspaceMethod, compiledEntry, parameters, invoke.asNode().stamp(), signature, callTarget.targetMethod(),
-                                    CallingConvention.Type.JavaCall));
+                        loweredCallTarget = graph.add(new HotSpotIndirectCallTargetNode(metaspaceMethod, compiledEntry, parameters, invoke.asNode().stamp(), signature, callTarget.targetMethod(),
+                                        CallingConvention.Type.JavaCall));
 
-                    graph.addBeforeFixed(invoke.asNode(), metaspaceMethod);
-                    graph.addAfterFixed(metaspaceMethod, compiledEntry);
+                        graph.addBeforeFixed(invoke.asNode(), metaspaceMethod);
+                        graph.addAfterFixed(metaspaceMethod, compiledEntry);
+                    }
                 }
             }
 
@@ -551,8 +554,8 @@ public class DefaultHotSpotLoweringProvider implements HotSpotLoweringProvider {
 
     private void lowerLoadMethodNode(LoadMethodNode loadMethodNode) {
         StructuredGraph graph = loadMethodNode.graph();
-        HotSpotResolvedJavaMethod method = (HotSpotResolvedJavaMethod) loadMethodNode.getMethod();
-        ReadNode metaspaceMethod = createReadVirtualMethod(graph, runtime.getTarget().wordKind, loadMethodNode.getHub(), method, loadMethodNode.getReceiverType());
+        ResolvedJavaMethod method = loadMethodNode.getMethod();
+        ReadNode metaspaceMethod = createReadVirtualMethod(graph, runtime.getTarget().wordKind, loadMethodNode.getHub(), method);
         graph.replaceFixed(loadMethodNode, metaspaceMethod);
     }
 
@@ -813,11 +816,12 @@ public class DefaultHotSpotLoweringProvider implements HotSpotLoweringProvider {
         return false;
     }
 
-    private static ReadNode createReadVirtualMethod(StructuredGraph graph, Kind wordKind, ValueNode hub, HotSpotResolvedJavaMethod method, ResolvedJavaType receiverType) {
-        return createReadVirtualMethod(graph, wordKind, hub, method.vtableEntryOffset(receiverType));
-    }
+    private static ReadNode createReadVirtualMethod(StructuredGraph graph, Kind wordKind, ValueNode hub, ResolvedJavaMethod method) {
+        HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
+        assert !hsMethod.getDeclaringClass().isInterface();
+        assert hsMethod.isInVirtualMethodTable();
 
-    private static ReadNode createReadVirtualMethod(StructuredGraph graph, Kind wordKind, ValueNode hub, int vtableEntryOffset) {
+        int vtableEntryOffset = hsMethod.vtableEntryOffset();
         assert vtableEntryOffset > 0;
         // We use LocationNode.ANY_LOCATION for the reads that access the vtable
         // entry as HotSpot does not guarantee that this is a final value.
