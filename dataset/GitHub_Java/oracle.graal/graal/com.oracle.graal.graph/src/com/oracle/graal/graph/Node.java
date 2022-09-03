@@ -31,14 +31,13 @@ import java.util.*;
 import sun.misc.*;
 
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.remote.*;
 import com.oracle.graal.graph.Graph.NodeEventListener;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 
 /**
- * This class is the base class for all nodes. It represents a node that can be inserted in a
+ * This class is the base class for all nodes, it represent a node which can be inserted in a
  * {@link Graph}.
  * <p>
  * Once a node has been added to a graph, it has a graph-unique {@link #id()}. Edges in the
@@ -48,11 +47,6 @@ import com.oracle.graal.nodeinfo.*;
  * this field points to.
  * <p>
  * Nodes which are be value numberable should implement the {@link ValueNumberable} interface.
- *
- * <h1>Replay Compilation</h1>
- *
- * To enable deterministic replay compilation, node hash set creation within a compilation scope
- * must {@link #newNodeHashSet()} or {@link #newNodeHashSet(Collection)}.
  *
  * <h1>Assertions and Verification</h1>
  *
@@ -65,7 +59,13 @@ import com.oracle.graal.nodeinfo.*;
 @NodeInfo
 public abstract class Node implements Cloneable, Formattable {
 
-    public static final boolean USE_UNSAFE_TO_CLONE = Boolean.parseBoolean(System.getProperty("graal.node.useUnsafeToClone", "true"));
+    public final static boolean USE_GENERATED_VALUE_NUMBER = Boolean.parseBoolean(System.getProperty("graal.node.useGeneratedValueNumber", "false"));
+
+    public final static boolean USE_GENERATED_VALUE_EQUALS = Boolean.parseBoolean(System.getProperty("graal.node.useGeneratedValueEquals", "true"));
+
+    public final static boolean USE_UNSAFE_TO_CLONE = Boolean.parseBoolean(System.getProperty("graal.node.useUnsafeToClone", "true"));
+
+    public final static boolean USE_GENERATED_NODES = USE_GENERATED_VALUE_NUMBER || USE_GENERATED_VALUE_EQUALS;
 
     static final int DELETED_ID_START = -1000000000;
     static final int INITIAL_ID = -1;
@@ -186,6 +186,7 @@ public abstract class Node implements Cloneable, Formattable {
     public static final int NOT_ITERABLE = -1;
 
     public Node() {
+        assert USE_GENERATED_NODES == this instanceof GeneratedNode : getClass() + " is not a generated Node class - forgot @" + NodeInfo.class.getSimpleName() + " on class declaration?";
         init();
     }
 
@@ -196,22 +197,6 @@ public abstract class Node implements Cloneable, Formattable {
 
     int id() {
         return id;
-    }
-
-    /**
-     * Creates a {@link Node} hash set. The return set will be a {@link LinkedHashSet} if the
-     * current thread has an active compilation replay scope. This is requires to make replay
-     * compilations deterministic.
-     */
-    public static <E extends Node> HashSet<E> newNodeHashSet() {
-        return Context.getCurrent() == null ? new HashSet<>() : new LinkedHashSet<>();
-    }
-
-    /**
-     * @see #newNodeHashSet()
-     */
-    public static <E extends Node> HashSet<E> newNodeHashSet(Collection<? extends E> c) {
-        return Context.getCurrent() == null ? new HashSet<>(c) : new LinkedHashSet<>(c);
     }
 
     /**
@@ -1058,6 +1043,29 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     /**
+     * Gets a hash for this {@linkplain NodeClass#valueNumberable() value numberable}
+     * {@linkplain NodeClass#isLeafNode() leaf} node based on its {@linkplain NodeClass#getData()
+     * data} fields.
+     *
+     * This method must only be called if {@link #USE_GENERATED_VALUE_NUMBER} is true and this is a
+     * value numberable leaf node.
+     *
+     * Overridden by a method generated for leaf nodes.
+     */
+    public int valueNumberLeaf() {
+        throw new GraalInternalError("Node is not a value numberable leaf", this);
+    }
+
+    /**
+     * Overridden by a generated method.
+     *
+     * @param other
+     */
+    protected boolean dataEquals(Node other) {
+        throw GraalInternalError.shouldNotReachHere();
+    }
+
+    /**
      * Determines if this node's {@link NodeClass#getData() data} fields are equal to the data
      * fields of another node of the same type. Primitive fields are compared by value and
      * non-primitive fields are compared by {@link Objects#equals(Object, Object)}.
@@ -1068,6 +1076,6 @@ public abstract class Node implements Cloneable, Formattable {
      * @return true if the data fields of this object and {@code other} are equal
      */
     public boolean valueEquals(Node other) {
-        return getNodeClass().dataEquals(this, other);
+        return USE_GENERATED_VALUE_EQUALS ? dataEquals(other) : getNodeClass().dataEquals(this, other);
     }
 }
