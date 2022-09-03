@@ -22,27 +22,57 @@
  */
 package com.oracle.graal.printer;
 
+import static com.oracle.graal.compiler.GraalDebugConfig.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+
 import java.io.*;
 import java.util.*;
 
+import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.phases.*;
-
 
 public class DebugEnvironment {
 
-    public static void initialize(PrintStream log) {
-        Debug.enable();
+    @SuppressWarnings("all")
+    private static boolean assertionsEnabled() {
+        boolean assertionsEnabled = false;
+        assert assertionsEnabled = true;
+        return assertionsEnabled;
+    }
+
+    public static GraalDebugConfig initialize(PrintStream log) {
+
+        // Ensure Graal runtime is initialized prior to Debug being initialized as the former
+        // may include processing command line options used by the latter.
+        Graal.getRuntime();
+
+        if (!Debug.isEnabled()) {
+            log.println("WARNING: Scope debugging needs to be enabled with -esa or -D" + Debug.Initialization.INITIALIZER_PROPERTY_NAME + "=true");
+            return null;
+        }
         List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
         dumpHandlers.add(new GraphPrinterDumpHandler());
-        if (GraalOptions.PrintCFG) {
-            if (GraalOptions.PrintBinaryGraphs) {
-                TTY.println("CFG dumping slows down PrintBinaryGraphs: use -G:-PrintCFG to disable it");
+        if (PrintCFG.getValue() || PrintBackendCFG.getValue()) {
+            if (PrintBinaryGraphs.getValue() && PrintCFG.getValue()) {
+                TTY.println("Complete C1Visualizer dumping slows down PrintBinaryGraphs: use -G:-PrintCFG to disable it");
             }
-            dumpHandlers.add(new CFGPrinterObserver());
+            dumpHandlers.add(new CFGPrinterObserver(PrintCFG.getValue()));
         }
-        GraalDebugConfig hotspotDebugConfig = new GraalDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, log, dumpHandlers);
-        Debug.setConfig(hotspotDebugConfig);
+        if (DecompileAfterPhase.getValue() != null) {
+            dumpHandlers.add(new DecompilerDebugDumpHandler());
+        }
+        List<DebugVerifyHandler> verifyHandlers = new ArrayList<>();
+        String verifyFilter = Verify.getValue();
+        if (verifyFilter == null && assertionsEnabled()) {
+            verifyFilter = "";
+        }
+        if (verifyFilter != null) {
+            verifyHandlers.add(new NoDeadCodeVerifyHandler());
+        }
+        GraalDebugConfig debugConfig = new GraalDebugConfig(Log.getValue(), Meter.getValue(), TrackMemUse.getValue(), Time.getValue(), Dump.getValue(), verifyFilter, MethodFilter.getValue(), log,
+                        dumpHandlers, verifyHandlers);
+        Debug.setConfig(debugConfig);
+        return debugConfig;
     }
 }
