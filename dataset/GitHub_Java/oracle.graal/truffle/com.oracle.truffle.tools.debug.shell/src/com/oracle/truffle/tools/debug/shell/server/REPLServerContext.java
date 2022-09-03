@@ -27,14 +27,17 @@ package com.oracle.truffle.tools.debug.shell.server;
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.SuspendedEvent;
-import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.frame.FrameInstance;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.impl.DefaultVisualizer;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.vm.*;
-import com.oracle.truffle.api.vm.TruffleVM.Language;
-import com.oracle.truffle.tools.debug.shell.*;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.PolyglotEngine.Language;
+import com.oracle.truffle.tools.debug.shell.REPLMessage;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public abstract class REPLServerContext {
@@ -62,6 +65,19 @@ public abstract class REPLServerContext {
     }
 
     /**
+     * Evaluates given code snippet in the context of currently suspended execution.
+     * 
+     * @param code the snippet to evaluate
+     * @param frame <code>null</code> in case the evaluation should happen in top most frame,
+     *            non-null value
+     * @return result of the evaluation
+     * @throws IOException if something goes wrong
+     */
+    public Object eval(String code, FrameInstance frame) throws IOException {
+        return event.eval(code, frame);
+    }
+
+    /**
      * The frame where execution is halted in this context.
      */
     public MaterializedFrame getFrameAtHalt() {
@@ -74,7 +90,18 @@ public abstract class REPLServerContext {
         return new DefaultVisualizer();
     }
 
-    public abstract TruffleVM vm();
+    public PolyglotEngine engine() {
+        return vm();
+    }
+
+    /**
+     * @deprecated use {@link #engine()}.
+     */
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    public com.oracle.truffle.api.vm.TruffleVM vm() {
+        return (com.oracle.truffle.api.vm.TruffleVM) engine();
+    }
 
     protected abstract Debugger db();
 
@@ -89,7 +116,12 @@ public abstract class REPLServerContext {
 
     public abstract int getBreakpointID(Breakpoint breakpoint);
 
-    List<FrameDebugDescription> getStack() {
+    /**
+     * Provides access to the execution stack.
+     *
+     * @return immutable list of stack elements
+     */
+    public List<FrameDebugDescription> getStack() {
         List<FrameDebugDescription> frames = new ArrayList<>();
         int frameCount = 1;
         for (FrameInstance frameInstance : event.getStack()) {
@@ -100,7 +132,7 @@ public abstract class REPLServerContext {
             }
             frameCount++;
         }
-        return frames;
+        return Collections.unmodifiableList(frames);
     }
 
     void prepareStepOut() {
