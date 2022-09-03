@@ -78,18 +78,6 @@ public class NodeData extends Template {
         this.assumptions = splitSource.assumptions;
     }
 
-    public boolean needsFrame() {
-        for (SpecializationData specialization : specializations) {
-            if (!specialization.isReachable()) {
-                continue;
-            }
-            if (specialization.findParameter("frameValue") != null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public int getPolymorphicDepth() {
         return polymorphicDepth;
     }
