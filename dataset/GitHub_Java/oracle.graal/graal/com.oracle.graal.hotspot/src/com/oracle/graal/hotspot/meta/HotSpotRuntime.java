@@ -647,16 +647,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                 checkcastDynamicSnippets.lower(checkcastDynamicNode);
             }
         } else if (n instanceof UnsafeLoadNode) {
-            UnsafeLoadNode load = (UnsafeLoadNode) n;
-            if (load.getGuardingCondition() != null) {
-                boolean compressible = (!load.object().isNullConstant() && load.accessKind() == Kind.Object);
-                ConditionAnchorNode valueAnchorNode = graph.add(new ConditionAnchorNode(load.getGuardingCondition()));
-                LocationNode location = createLocation(load);
-                ReadNode memoryRead = graph.add(new ReadNode(load.object(), location, load.stamp(), valueAnchorNode, BarrierType.NONE, compressible));
-                load.replaceAtUsages(memoryRead);
-                graph.replaceFixedWithFixed(load, valueAnchorNode);
-                graph.addAfterFixed(valueAnchorNode, memoryRead);
-            } else if (graph.getGuardsStage().ordinal() > StructuredGraph.GuardsStage.FLOATING_GUARDS.ordinal()) {
+            if (graph.getGuardsStage().ordinal() > StructuredGraph.GuardsStage.FLOATING_GUARDS.ordinal()) {
+                UnsafeLoadNode load = (UnsafeLoadNode) n;
                 assert load.kind() != Kind.Illegal;
                 boolean compressible = (!load.object().isNullConstant() && load.accessKind() == Kind.Object);
                 if (addReadBarrier(load)) {

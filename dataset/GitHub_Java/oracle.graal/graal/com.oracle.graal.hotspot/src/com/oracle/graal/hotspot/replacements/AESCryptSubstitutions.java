@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-
 import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
@@ -31,8 +30,6 @@ import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.word.*;
@@ -40,24 +37,10 @@ import com.oracle.graal.word.*;
 /**
  * Substitutions for {@code com.sun.crypto.provider.AESCrypt} methods.
  */
-@ClassSubstitution(className = "com.sun.crypto.provider.AESCrypt", optional = true, defaultGuard = AESCryptSubstitutions.Guard.class)
+@ClassSubstitution(className = "com.sun.crypto.provider.AESCrypt", optional = true)
 public class AESCryptSubstitutions {
 
-    public static class Guard implements SubstitutionGuard {
-        public boolean execute() {
-            HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
-            if (config.useAESIntrinsics) {
-                assert config.aescryptEncryptBlockStub != 0L;
-                assert config.aescryptDecryptBlockStub != 0L;
-                assert config.cipherBlockChainingEncryptAESCryptStub != 0L;
-                assert config.cipherBlockChainingDecryptAESCryptStub != 0L;
-            }
-            return config.useAESIntrinsics;
-        }
-    }
-
     static final long kOffset;
-    static final LocationIdentity kLocationIdentity;
     static final Class<?> AESCryptClass;
 
     static {
@@ -67,7 +50,6 @@ public class AESCryptSubstitutions {
             ClassLoader cl = Launcher.getLauncher().getClassLoader();
             AESCryptClass = Class.forName("com.sun.crypto.provider.AESCrypt", true, cl);
             kOffset = UnsafeAccess.unsafe.objectFieldOffset(AESCryptClass.getDeclaredField("K"));
-            kLocationIdentity = HotSpotResolvedObjectType.fromClass(AESCryptClass).findInstanceFieldWithOffset(kOffset);
         } catch (Exception ex) {
             throw new GraalInternalError(ex);
         }
@@ -84,7 +66,7 @@ public class AESCryptSubstitutions {
     }
 
     private static void crypt(Object rcvr, byte[] in, int inOffset, byte[] out, int outOffset, boolean encrypt) {
-        Object kObject = UnsafeLoadNode.load(rcvr, kOffset, Kind.Object, kLocationIdentity);
+        Object kObject = UnsafeLoadNode.load(rcvr, kOffset, Kind.Object);
         Word kAddr = (Word) Word.fromObject(kObject).add(arrayBaseOffset(Kind.Byte));
         Word inAddr = Word.unsigned(GetObjectAddressNode.get(in) + arrayBaseOffset(Kind.Byte) + inOffset);
         Word outAddr = Word.unsigned(GetObjectAddressNode.get(out) + arrayBaseOffset(Kind.Byte) + outOffset);

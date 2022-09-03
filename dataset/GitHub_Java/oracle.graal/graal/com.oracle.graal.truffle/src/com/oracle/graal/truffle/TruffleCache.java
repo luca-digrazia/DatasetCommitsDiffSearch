@@ -54,10 +54,7 @@ import com.oracle.truffle.api.nodes.*;
  */
 public final class TruffleCache {
 
-    private final MetaAccessProvider metaAccess;
-    private final ConstantReflectionProvider constantReflection;
-    private final CodeCacheProvider codeCache;
-    private final LoweringProvider lowerer;
+    private final MetaAccessProvider metaAccessProvider;
     private final GraphBuilderConfiguration config;
     private final OptimisticOptimizations optimisticOptimizations;
     private final Replacements replacements;
@@ -66,16 +63,12 @@ public final class TruffleCache {
     private final StructuredGraph markerGraph = new StructuredGraph();
     private final ResolvedJavaType stringBuilderClass;
 
-    public TruffleCache(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, LoweringProvider lowerer, GraphBuilderConfiguration config,
-                    OptimisticOptimizations optimisticOptimizations, Replacements replacements) {
-        this.metaAccess = metaAccess;
-        this.codeCache = codeCache;
-        this.constantReflection = constantReflection;
-        this.lowerer = lowerer;
+    public TruffleCache(MetaAccessProvider metaAccessProvider, GraphBuilderConfiguration config, OptimisticOptimizations optimisticOptimizations, Replacements replacements) {
+        this.metaAccessProvider = metaAccessProvider;
         this.config = config;
         this.optimisticOptimizations = optimisticOptimizations;
         this.replacements = replacements;
-        this.stringBuilderClass = metaAccess.lookupJavaType(StringBuilder.class);
+        this.stringBuilderClass = metaAccessProvider.lookupJavaType(StringBuilder.class);
     }
 
     @SuppressWarnings("unused")
@@ -99,13 +92,13 @@ public final class TruffleCache {
         }
 
         cache.put(key, markerGraph);
-        resultGraph = Debug.scope("TruffleCache", new Object[]{metaAccess, method}, new Callable<StructuredGraph>() {
+        resultGraph = Debug.scope("TruffleCache", new Object[]{metaAccessProvider, method}, new Callable<StructuredGraph>() {
 
             public StructuredGraph call() {
 
                 final StructuredGraph graph = new StructuredGraph(method);
-                PhaseContext context = new PhaseContext(metaAccess, codeCache, constantReflection, lowerer, new Assumptions(false), replacements);
-                new GraphBuilderPhase(metaAccess, config, optimisticOptimizations).apply(graph);
+                PhaseContext context = new PhaseContext(metaAccessProvider, new Assumptions(false), replacements);
+                new GraphBuilderPhase(metaAccessProvider, config, optimisticOptimizations).apply(graph);
 
                 for (LocalNode l : graph.getNodes(LocalNode.class)) {
                     if (l.kind() == Kind.Object) {
@@ -129,7 +122,7 @@ public final class TruffleCache {
                     partialEscapePhase.apply(graph, context);
 
                     // Conditional elimination.
-                    ConditionalEliminationPhase conditionalEliminationPhase = new ConditionalEliminationPhase(metaAccess);
+                    ConditionalEliminationPhase conditionalEliminationPhase = new ConditionalEliminationPhase(metaAccessProvider);
                     conditionalEliminationPhase.apply(graph);
 
                     // Canonicalize / constant propagate.
@@ -213,8 +206,8 @@ public final class TruffleCache {
 
     private boolean tryCutOffRuntimeExceptions(MethodCallTargetNode methodCallTargetNode) {
         if (methodCallTargetNode.targetMethod().isConstructor()) {
-            ResolvedJavaType runtimeException = metaAccess.lookupJavaType(RuntimeException.class);
-            ResolvedJavaType controlFlowException = metaAccess.lookupJavaType(ControlFlowException.class);
+            ResolvedJavaType runtimeException = metaAccessProvider.lookupJavaType(RuntimeException.class);
+            ResolvedJavaType controlFlowException = metaAccessProvider.lookupJavaType(ControlFlowException.class);
             ResolvedJavaType exceptionType = Objects.requireNonNull(ObjectStamp.typeOrNull(methodCallTargetNode.receiver().stamp()));
             if (runtimeException.isAssignableFrom(methodCallTargetNode.targetMethod().getDeclaringClass()) && !controlFlowException.isAssignableFrom(exceptionType)) {
                 DeoptimizeNode deoptNode = methodCallTargetNode.graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode));

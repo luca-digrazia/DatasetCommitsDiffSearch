@@ -69,7 +69,7 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
@@ -80,12 +80,9 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
             if (indexValue.isConstant()) {
                 long offset = indexValue.asConstant().asLong();
                 int entryIndex = state.getVirtualObject().entryIndexForOffset(offset);
-                if (entryIndex != -1) {
-                    ValueNode entry = state.getEntry(entryIndex);
-                    if (entry.kind() == this.accessKind() || state.getVirtualObject().entryKind(entryIndex) == this.accessKind()) {
-                        tool.setVirtualEntry(state, entryIndex, value());
-                        tool.delete();
-                    }
+                if (entryIndex != -1 && state.getVirtualObject().entryKind(entryIndex) == accessKind()) {
+                    tool.setVirtualEntry(state, entryIndex, value());
+                    tool.delete();
                 }
             }
         }
