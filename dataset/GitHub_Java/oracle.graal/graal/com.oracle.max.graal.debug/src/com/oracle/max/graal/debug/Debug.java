@@ -22,7 +22,9 @@
  */
 package com.oracle.max.graal.debug;
 
-import com.oracle.max.graal.debug.internal.*;
+import com.oracle.max.graal.debug.internal.DebugScope;
+import com.oracle.max.graal.debug.internal.MetricImpl;
+import com.oracle.max.graal.debug.internal.TimerImpl;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -131,7 +133,7 @@ public class Debug {
     }
 
     public static DebugMetric metric(String name) {
-        if (ENABLED) {
+        if (ENABLED && DebugScope.getInstance().isMeterEnabled()) {
             return new MetricImpl(name);
         } else {
             return VOID_METRIC;
@@ -185,7 +187,7 @@ public class Debug {
     };
 
     public static DebugTimer timer(String name) {
-        if (ENABLED) {
+        if (ENABLED && DebugScope.getInstance().isTimeEnabled()) {
             return new TimerImpl(name);
         } else {
             return VOID_TIMER;
@@ -193,6 +195,7 @@ public class Debug {
     }
 
     private static final DebugTimer VOID_TIMER = new DebugTimer() {
-        public TimerCloseable start() { return TimerImpl.VOID_CLOSEABLE; }
+        public void start() { }
+        public void stop() { }
     };
 }

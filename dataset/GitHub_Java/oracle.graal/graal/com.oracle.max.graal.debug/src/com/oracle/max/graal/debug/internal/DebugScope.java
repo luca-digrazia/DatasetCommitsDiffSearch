@@ -28,13 +28,12 @@ import java.util.concurrent.*;
 
 import com.oracle.max.graal.debug.*;
 
+
 public final class DebugScope {
 
     private static ThreadLocal<DebugScope> instanceTL = new ThreadLocal<>();
     private static ThreadLocal<DebugConfig> configTL = new ThreadLocal<>();
     private static ThreadLocal<RuntimeException> lastExceptionThrownTL = new ThreadLocal<>();
-    private static DebugTimer scopeTime = Debug.timer("ScopeTime");
-    private static DebugMetric scopeCount = Debug.metric("ScopeCount");
 
     private final DebugScope parent;
 
@@ -43,7 +42,6 @@ public final class DebugScope {
     private List<DebugScope> children;
     private DebugValueMap valueMap;
     private String qualifiedName;
-    private String name;
 
     private static final char SCOPE_SEP = '.';
 
@@ -55,10 +53,8 @@ public final class DebugScope {
     public static DebugScope getInstance() {
         DebugScope result = instanceTL.get();
         if (result == null) {
-            DebugScope topLevelDebugScope = new DebugScope(Thread.currentThread().getName(), "", null);
-            instanceTL.set(topLevelDebugScope);
-            DebugValueMap.registerTopLevel(topLevelDebugScope.getValueMap());
-            return topLevelDebugScope;
+            instanceTL.set(new DebugScope("", null));
+            return instanceTL.get();
         } else {
             return result;
         }
@@ -68,8 +64,7 @@ public final class DebugScope {
         return configTL.get();
     }
 
-    private DebugScope(String name, String qualifiedName, DebugScope parent, Object... context) {
-        this.name = name;
+    private DebugScope(String qualifiedName, DebugScope parent, Object... context) {
         this.parent = parent;
         this.context = context;
         this.qualifiedName = qualifiedName;
@@ -114,20 +109,16 @@ public final class DebugScope {
         DebugConfig oldConfig = getConfig();
         DebugScope newChild = null;
         if (sandbox) {
-            newChild = new DebugScope(newName, newName, null, newContext);
+            newChild = new DebugScope(newName, null, newContext);
             setConfig(null);
         } else {
             newChild = oldContext.createChild(newName, newContext);
         }
         instanceTL.set(newChild);
         newChild.updateFlags();
-        scopeCount.increment();
-        try (TimerCloseable a = scopeTime.start()) {
+        try {
             return executeScope(runnable, callable);
         } finally {
-            if (!sandbox && newChild.hasValueMap()) {
-                getValueMap().addChild(newChild.getValueMap());
-            }
             newChild.deactivate();
             instanceTL.set(oldContext);
             setConfig(oldConfig);
@@ -177,8 +168,7 @@ public final class DebugScope {
     private RuntimeException interceptException(final RuntimeException e) {
         final DebugConfig config = getConfig();
         if (config != null) {
-            return scope("InterceptException", null, new Callable<RuntimeException>() {
-
+            return scope("InterceptException", null, new Callable<RuntimeException>(){
                 @Override
                 public RuntimeException call() throws Exception {
                     try {
@@ -186,21 +176,16 @@ public final class DebugScope {
                     } catch (Throwable t) {
                         return e;
                     }
-                }
-            }, false, new Object[] {e});
+                }}, false, new Object[]{e});
         }
         return e;
     }
 
     private DebugValueMap getValueMap() {
         if (valueMap == null) {
-            valueMap = new DebugValueMap(name);
+            valueMap = new DebugValueMap();
         }
         return valueMap;
-    }
-
-    private boolean hasValueMap() {
-        return valueMap != null;
     }
 
     long getCurrentValue(int index) {
@@ -216,7 +201,7 @@ public final class DebugScope {
         if (this.qualifiedName.length() > 0) {
             newQualifiedName = this.qualifiedName + SCOPE_SEP + newName;
         }
-        DebugScope result = new DebugScope(newName, newQualifiedName, this, newContext);
+        DebugScope result = new DebugScope(newQualifiedName, this, newContext);
         if (children == null) {
             children = new ArrayList<>(4);
         }
@@ -292,3 +277,4 @@ public final class DebugScope {
         cachedOut = System.out;
     }
 }
+
