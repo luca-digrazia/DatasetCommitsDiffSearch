@@ -117,12 +117,11 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
         private void check(Access access, ValueNode object) {
             ValueNode guard = nullGuarded.get(object);
             if (guard != null && isImplicitNullCheck(access.accessLocation())) {
-                if (guard instanceof PiNode) {
-                    PiNode piNode = (PiNode) guard;
-                    assert guard == object;
-                    assert piNode.getGuard() instanceof GuardNode : piNode;
-                    assert access.object() == guard;
-                    access.asNode().replaceFirstInput(piNode, piNode.getOriginalNode());
+                if (object instanceof PiNode) {
+                    PiNode piNode = (PiNode) object;
+                    assert piNode.getGuard() instanceof GuardNode;
+                    assert access.object() == object;
+                    access.asNode().replaceFirstInput(object, piNode.getOriginalNode());
                 } else {
                     assert guard instanceof GuardNode;
                 }
