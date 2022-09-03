@@ -411,18 +411,12 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
 
     @Override
     public Object allocateGlobalVariable(GlobalVariable globalVariable) {
-        if (runtime.isGlobalVariableDefined(globalVariable.getName())) {
-            ResolvedType resolvedType = runtime.resolve(globalVariable.getType());
-            int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
-            LLVMAddress allocation = LLVMHeap.allocateMemory(byteSize);
-            LLVMAddressNode addressLiteralNode = (LLVMAddressNode) createLiteral(allocation, LLVMBaseType.ADDRESS);
-            runtime.addDestructor(LLVMFreeFactory.create(addressLiteralNode));
-            return new LLVMGlobalVariableStorage(globalVariable.getName(), allocation);
-        } else {
-            long getNativeSymbol = runtime.getNativeHandle(globalVariable.getName());
-            LLVMAddress nativeSymbolAddress = LLVMAddress.fromLong(getNativeSymbol);
-            return new LLVMGlobalVariableStorage(globalVariable.getName(), nativeSymbolAddress);
-        }
+        ResolvedType resolvedType = runtime.resolve(globalVariable.getType());
+        int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
+        LLVMAddress allocation = LLVMHeap.allocateMemory(byteSize);
+        LLVMAddressNode addressLiteralNode = (LLVMAddressNode) createLiteral(allocation, LLVMBaseType.ADDRESS);
+        runtime.addDestructor(LLVMFreeFactory.create(addressLiteralNode));
+        return new LLVMGlobalVariableStorage(globalVariable.getName(), allocation);
     }
 
     @Override
