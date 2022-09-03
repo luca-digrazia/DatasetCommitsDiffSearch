@@ -1553,10 +1553,7 @@ public final class GraphBuilderPhase extends Phase {
     private void createUnwind() {
         assert frameState.stackSize() == 1 : frameState;
         synchronizedEpilogue(FrameState.AFTER_EXCEPTION_BCI);
-        ValueNode exception = frameState.apop();
-        FixedGuardNode guard = currentGraph.add(new FixedGuardNode(currentGraph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
-        append(guard);
-        UnwindNode unwindNode = currentGraph.add(new UnwindNode(exception));
+        UnwindNode unwindNode = currentGraph.add(new UnwindNode(frameState.apop()));
         append(unwindNode);
     }
 
