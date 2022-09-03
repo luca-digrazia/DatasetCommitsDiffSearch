@@ -81,7 +81,6 @@ import org.graalvm.compiler.nodes.LogicConstantNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoopEndNode;
 import org.graalvm.compiler.nodes.LoweredCallTargetNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -244,7 +243,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     protected LIRKind getExactPhiKind(PhiNode phi) {
-        LIRKind derivedKind = gen.toRegisterKind(gen.getLIRKind(phi.stamp(NodeView.DEFAULT)));
+        LIRKind derivedKind = gen.toRegisterKind(gen.getLIRKind(phi.stamp()));
         /* Collect reference information. */
         for (int i = 0; i < phi.valueCount() && !derivedKind.isUnknownReference(); i++) {
             ValueNode node = phi.valueAt(i);
@@ -256,7 +255,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                 valueKind = value.getValueKind(LIRKind.class);
             } else {
                 assert isPhiInputFromBackedge(phi, i) : String.format("Input %s to phi node %s is not yet available although it is not coming from a loop back edge", node, phi);
-                LIRKind kind = gen.getLIRKind(node.stamp(NodeView.DEFAULT));
+                LIRKind kind = gen.getLIRKind(node.stamp());
                 valueKind = gen.toRegisterKind(kind);
             }
             /* Merge the reference information of the derived kind and the input. */
@@ -449,7 +448,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     protected void emitNode(ValueNode node) {
-        if (node.getDebug().isLogEnabled() && node.stamp(NodeView.DEFAULT).isEmpty()) {
+        if (node.getDebug().isLogEnabled() && node.stamp().isEmpty()) {
             node.getDebug().log("This node has an empty stamp, we are emitting dead code(?): %s", node);
         }
         setSourcePosition(node.getNodeSourcePosition());
@@ -478,7 +477,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
         for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
             Value paramValue = params[param.index()];
-            assert paramValue.getValueKind().equals(getLIRGeneratorTool().getLIRKind(param.stamp(NodeView.DEFAULT))) : paramValue + " " + getLIRGeneratorTool().getLIRKind(param.stamp(NodeView.DEFAULT));
+            assert paramValue.getValueKind().equals(getLIRGeneratorTool().getLIRKind(param.stamp())) : paramValue + " " + getLIRGeneratorTool().getLIRKind(param.stamp());
             setResult(param, gen.emitMove(paramValue));
         }
     }
@@ -507,7 +506,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     protected LIRKind getPhiKind(PhiNode phi) {
-        return gen.getLIRKind(phi.stamp(NodeView.DEFAULT));
+        return gen.getLIRKind(phi.stamp());
     }
 
     @Override
@@ -530,13 +529,13 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     private void emitNullCheckBranch(IsNullNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, double trueSuccessorProbability) {
-        LIRKind kind = gen.getLIRKind(node.getValue().stamp(NodeView.DEFAULT));
+        LIRKind kind = gen.getLIRKind(node.getValue().stamp());
         Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
         gen.emitCompareBranch(kind.getPlatformKind(), operand(node.getValue()), nullValue, Condition.EQ, false, trueSuccessor, falseSuccessor, trueSuccessorProbability);
     }
 
     public void emitCompareBranch(CompareNode compare, LabelRef trueSuccessor, LabelRef falseSuccessor, double trueSuccessorProbability) {
-        PlatformKind kind = gen.getLIRKind(compare.getX().stamp(NodeView.DEFAULT)).getPlatformKind();
+        PlatformKind kind = gen.getLIRKind(compare.getX().stamp()).getPlatformKind();
         gen.emitCompareBranch(kind, operand(compare.getX()), operand(compare.getY()), compare.condition(), compare.unorderedIsTrue(), trueSuccessor, falseSuccessor, trueSuccessorProbability);
     }
 
@@ -559,12 +558,12 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     public Variable emitConditional(LogicNode node, Value trueValue, Value falseValue) {
         if (node instanceof IsNullNode) {
             IsNullNode isNullNode = (IsNullNode) node;
-            LIRKind kind = gen.getLIRKind(isNullNode.getValue().stamp(NodeView.DEFAULT));
+            LIRKind kind = gen.getLIRKind(isNullNode.getValue().stamp());
             Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
             return gen.emitConditionalMove(kind.getPlatformKind(), operand(isNullNode.getValue()), nullValue, Condition.EQ, false, trueValue, falseValue);
         } else if (node instanceof CompareNode) {
             CompareNode compare = (CompareNode) node;
-            PlatformKind kind = gen.getLIRKind(compare.getX().stamp(NodeView.DEFAULT)).getPlatformKind();
+            PlatformKind kind = gen.getLIRKind(compare.getX().stamp()).getPlatformKind();
             return gen.emitConditionalMove(kind, operand(compare.getX()), operand(compare.getY()), compare.condition(), compare.unorderedIsTrue(), trueValue, falseValue);
         } else if (node instanceof LogicConstantNode) {
             return gen.emitMove(((LogicConstantNode) node).getValue() ? trueValue : falseValue);
@@ -580,7 +579,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     public void emitInvoke(Invoke x) {
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
-        CallingConvention invokeCc = frameMapBuilder.getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp(NodeView.DEFAULT).javaType(gen.getMetaAccess()), callTarget.signature(), gen);
+        CallingConvention invokeCc = frameMapBuilder.getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp().javaType(gen.getMetaAccess()), callTarget.signature(), gen);
         frameMapBuilder.callsMethod(invokeCc);
 
         Value[] parameters = visitInvokeArguments(invokeCc, callTarget.arguments());
@@ -651,7 +650,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             if (keyCount == 1) {
                 assert defaultTarget != null;
                 double probability = x.probability(x.keySuccessor(0));
-                LIRKind kind = gen.getLIRKind(x.value().stamp(NodeView.DEFAULT));
+                LIRKind kind = gen.getLIRKind(x.value().stamp());
                 Value key = gen.emitConstant(kind, x.keyAt(0));
                 gen.emitCompareBranch(kind.getPlatformKind(), gen.load(operand(x.value())), key, Condition.EQ, false, getLIRBlock(x.keySuccessor(0)), defaultTarget, probability);
             } else if (x instanceof IntegerSwitchNode && x.isSorted()) {

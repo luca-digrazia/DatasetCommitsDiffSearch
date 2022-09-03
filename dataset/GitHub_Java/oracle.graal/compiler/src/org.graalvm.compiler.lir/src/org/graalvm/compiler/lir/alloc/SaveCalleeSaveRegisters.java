@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -38,8 +36,6 @@ import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.lir.phases.PreAllocationOptimizationPhase;
 import org.graalvm.compiler.lir.util.RegisterMap;
 
-import jdk.vm.ci.aarch64.AArch64;
-import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterArray;
@@ -79,15 +75,7 @@ public class SaveCalleeSaveRegisters extends PreAllocationOptimizationPhase {
         int savedRegisterValueIndex = 0;
         RegisterMap<Variable> saveMap = new RegisterMap<>(arch);
         for (Register register : calleeSaveRegisters) {
-            PlatformKind registerPlatformKind;
-            if (arch instanceof AArch64 && register.getRegisterCategory().equals(AArch64.SIMD)) {
-                /*
-                 * On AArch64 when saving SIMD registers only the bottom 64-bits need to be saved.
-                 */
-                registerPlatformKind = AArch64Kind.DOUBLE;
-            } else {
-                registerPlatformKind = arch.getLargestStorableKind(register.getRegisterCategory());
-            }
+            PlatformKind registerPlatformKind = arch.getLargestStorableKind(register.getRegisterCategory());
             LIRKind lirKind = LIRKind.value(registerPlatformKind);
             RegisterValue registerValue = register.asValue(lirKind);
             Variable saveVariable = lirGen.newVariable(lirKind);
