@@ -32,26 +32,27 @@ import java.util.function.Function;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextPolicy;
-import com.oracle.truffle.api.vm.PolyglotLanguage.ContextProfile;
 
 final class PolyglotLanguageInstance {
 
     final PolyglotLanguage language;
-    final ContextProfile profile;
     final TruffleLanguage<?> spi;
     final boolean singleContext;
 
     private final PolyglotSourceCache sourceCache;
     private final Map<Object, PolyglotSourceCache> sourceCaches;
-    private final Function<Object, PolyglotSourceCache> sourceCacheCompute;
+    private static final Function<Object, PolyglotSourceCache> sourceCacheCompute = new Function<Object, PolyglotSourceCache>() {
+        public PolyglotSourceCache apply(Object t) {
+            return new PolyglotSourceCache();
+        }
+    };
 
     PolyglotLanguageInstance(PolyglotLanguage language, boolean singleContext) {
         this.singleContext = singleContext;
         this.language = language;
-        this.profile = new ContextProfile(this);
         try {
             this.spi = language.cache.loadLanguage();
-            LANGUAGE.initializeLanguage(spi, language.info, this);
+            LANGUAGE.initializeLanguage(spi, language.info, language);
 
             if (!language.engine.singleContext.isValid()) {
                 initializeMultiContext();
@@ -62,15 +63,9 @@ final class PolyglotLanguageInstance {
         if (singleContext) {
             this.sourceCache = new PolyglotSourceCache();
             this.sourceCaches = null;
-            this.sourceCacheCompute = null;
         } else {
             this.sourceCache = null;
             this.sourceCaches = new ConcurrentHashMap<>();
-            this.sourceCacheCompute = new Function<Object, PolyglotSourceCache>() {
-                public PolyglotSourceCache apply(Object t) {
-                    return new PolyglotSourceCache();
-                }
-            };
         }
     }
 
