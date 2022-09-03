@@ -2,6 +2,7 @@ package com.oracle.truffle.espresso.jni;
 
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Objects;
 import java.util.WeakHashMap;
