@@ -22,9 +22,10 @@
  */
 package com.oracle.truffle.api.vm;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Map;
-import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -32,12 +33,18 @@ public class LanguageCacheReflectiveReinitializationTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void canReinitializeLanguages() throws Exception {
+    public void canReinitializeLanguages() throws ClassNotFoundException, NoSuchFieldException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
+        System.setProperty("com.oracle.truffle.aot", "true");
+
         Class<?> languageCacheClass = Class.forName("com.oracle.truffle.api.vm.LanguageCache");
+        Field languageCacheField = languageCacheClass.getDeclaredField("CACHE");
+        languageCacheField.setAccessible(true);
+        assert languageCacheField.get(null) == null;
+
         Method initMethod = languageCacheClass.getDeclaredMethod("initializeLanguages", ClassLoader.class);
         initMethod.setAccessible(true);
         Map<String, Object> languages = (Map<String, Object>) initMethod.invoke(null, Thread.currentThread().getContextClassLoader());
 
-        assertTrue("Re-initialized languages must contain application/x-test language after reflective initialization: " + languages, languages.containsKey("application/x-test-hash"));
+        assert languages.containsKey("application/x-test") : "Re-initialized languages must contain application/x-test language after reflective initialization.";
     }
 }
