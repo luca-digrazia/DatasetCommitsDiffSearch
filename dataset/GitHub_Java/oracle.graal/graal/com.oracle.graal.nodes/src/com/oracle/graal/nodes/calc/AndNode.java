@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -81,16 +80,7 @@ public final class AndNode extends BitLogicNode implements Canonicalizable, Narr
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().emitAnd(gen.operand(x()), gen.operand(y())));
-    }
-
-    @Override
-    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
-        Value result = gen.emitAndMemory(x(), y(), access);
-        if (result != null) {
-            gen.setResult(this, result);
-        }
-        return result != null;
+    public void generate(ArithmeticLIRGenerator gen) {
+        gen.setResult(this, gen.emitAnd(gen.operand(x()), gen.operand(y())));
     }
 }
