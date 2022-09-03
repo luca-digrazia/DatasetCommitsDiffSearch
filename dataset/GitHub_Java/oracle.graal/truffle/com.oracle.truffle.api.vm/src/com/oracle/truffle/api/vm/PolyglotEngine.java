@@ -62,7 +62,6 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import java.util.Collection;
 
 /**
  * Gate way into the world of {@link TruffleLanguage Truffle languages}. {@link #buildNew()
@@ -166,7 +165,7 @@ public class PolyglotEngine {
     /**
      * Real constructor used from the builder.
      */
-    PolyglotEngine(Executor executor, Map<String, Object> globals, OutputStream out, OutputStream err, InputStream in, EventConsumer<?>[] handlers, List<Object[]> config, PolyglotLocator locator) {
+    PolyglotEngine(Executor executor, Map<String, Object> globals, OutputStream out, OutputStream err, InputStream in, EventConsumer<?>[] handlers, List<Object[]> config) {
         assertNoTruffle();
         this.executor = executor;
         this.out = out;
@@ -181,7 +180,7 @@ public class PolyglotEngine {
         this.instrumentationHandler = Access.INSTRUMENT.createInstrumentationHandler(this, out, err, in);
         Map<String, Language> map = new HashMap<>();
         /* We want to create a language instance but per LanguageCache and not per mime type. */
-        Set<LanguageCache> uniqueCaches = new HashSet<>(LanguageCache.languages(locator).values());
+        Set<LanguageCache> uniqueCaches = new HashSet<>(LanguageCache.languages().values());
         for (LanguageCache languageCache : uniqueCaches) {
             Language newLanguage = new Language(languageCache);
             for (String mimeType : newLanguage.getMimeTypes()) {
@@ -189,7 +188,7 @@ public class PolyglotEngine {
             }
         }
         this.langs = map;
-        this.instruments = createAndAutostartDescriptors(InstrumentCache.load(locator));
+        this.instruments = createAndAutostartDescriptors(InstrumentCache.load(JDK8OrEarlier ? getClass().getClassLoader() : null));
         this.context = ExecutionImpl.createStore(this);
     }
 
@@ -261,7 +260,6 @@ public class PolyglotEngine {
         private final Map<String, Object> globals = new HashMap<>();
         private Executor executor;
         private List<Object[]> arguments;
-        private PolyglotLocator locator;
 
         Builder() {
         }
@@ -414,23 +412,6 @@ public class PolyglotEngine {
         }
 
         /**
-         * Specifies a {@link PolyglotLocator locator} to be used to search for various
-         * registrations in the engine. Only the last specified locator is used. If a non-
-         * <code>null</code> locator is specified, then the standard search for
-         * {@link PolyglotLocator system wide locators} is disabled for the to be created
-         * {@link PolyglotEngine}.
-         *
-         * @param locator the locator to use
-         * @return instance of this builder
-         * @since 0.18
-         */
-        @SuppressWarnings("hiding")
-        public Builder locator(PolyglotLocator locator) {
-            this.locator = locator;
-            return this;
-        }
-
-        /**
          * Creates the {@link PolyglotEngine Truffle virtual machine}. The configuration is taken
          * from values passed into configuration methods in this class.
          *
@@ -448,7 +429,7 @@ public class PolyglotEngine {
             if (in == null) {
                 in = System.in;
             }
-            return new PolyglotEngine(executor, globals, out, err, in, handlers.toArray(new EventConsumer[0]), arguments, locator);
+            return new PolyglotEngine(executor, globals, out, err, in, handlers.toArray(new EventConsumer[0]), arguments);
         }
     }
 
@@ -1406,11 +1387,6 @@ public class PolyglotEngine {
                 assert engine.debugger()[0] == null || engine.debugger()[0] == debugger;
                 engine.debugger()[0] = debugger;
             }
-
-            @Override
-            public Collection<ClassLoader> allLoaders() {
-                return PolyglotLocator.Response.loaders(null);
-            }
         }
 
     } // end of SPIAccessor
@@ -1418,6 +1394,8 @@ public class PolyglotEngine {
 }
 
 class PolyglotEngineSnippets {
+    static final boolean loaded = true;
+
     abstract class YourLang extends TruffleLanguage<Object> {
         public static final String MIME_TYPE = "application/my-test-lang";
     }
