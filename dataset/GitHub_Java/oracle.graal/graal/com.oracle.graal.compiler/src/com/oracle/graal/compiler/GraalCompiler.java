@@ -141,15 +141,19 @@ public class GraalCompiler {
         assert !graph.isFrozen();
         try (Scope s0 = withScope ? Debug.scope("GraalCompiler", graph, providers.getCodeCache()) : null) {
             Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
-            SchedulePhase schedule = null;
+            LIR lir = null;
             try (Scope s = Debug.scope("FrontEnd"); TimerCloseable a = FrontEnd.start()) {
-                schedule = emitHIR(providers, target, graph, assumptions, cache, graphBuilderSuite, optimisticOpts, profilingInfo, speculationLog, suites);
+                lir = emitHIR(providers, target, graph, assumptions, cache, graphBuilderSuite, optimisticOpts, profilingInfo, speculationLog, suites);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
             try (TimerCloseable a = BackEnd.start()) {
                 LIRGenerator lirGen = null;
-                lirGen = emitLIR(backend, target, schedule, graph, cc);
+                try (Scope s = Debug.scope("BackEnd", lir)) {
+                    lirGen = emitLIR(backend, target, lir, graph, cc);
+                } catch (Throwable e) {
+                    throw Debug.handle(e);
+                }
                 try (Scope s = Debug.scope("CodeGen", lirGen)) {
                     emitCode(backend, getLeafGraphIdArray(graph), assumptions, lirGen, compilationResult, installedCodeOwner, factory);
                 } catch (Throwable e) {
@@ -185,7 +189,7 @@ public class GraalCompiler {
     /**
      * Builds the graph, optimizes it.
      */
-    public static SchedulePhase emitHIR(Providers providers, TargetDescription target, StructuredGraph graph, Assumptions assumptions, GraphCache cache, PhaseSuite<HighTierContext> graphBuilderSuite,
+    public static LIR emitHIR(Providers providers, TargetDescription target, StructuredGraph graph, Assumptions assumptions, GraphCache cache, PhaseSuite<HighTierContext> graphBuilderSuite,
                     OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites) {
 
         if (speculationLog != null) {
@@ -219,7 +223,23 @@ public class GraalCompiler {
         SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);
         Debug.dump(schedule, "final schedule");
-        return schedule;
+
+        Block[] blocks = schedule.getCFG().getBlocks();
+        Block startBlock = schedule.getCFG().getStartBlock();
+        assert startBlock != null;
+        assert startBlock.getPredecessorCount() == 0;
+
+        try (Scope s = Debug.scope("ComputeLinearScanOrder")) {
+            NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
+            List<Block> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock, nodeProbabilities);
+            List<Block> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock, nodeProbabilities);
+
+            LIR lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder);
+            Debug.dump(lir, "After linear scan order");
+            return lir;
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
 
     }
 
@@ -234,72 +254,46 @@ public class GraalCompiler {
         }
     }
 
-    public static LIRGenerator emitLIR(Backend backend, TargetDescription target, SchedulePhase schedule, StructuredGraph graph, CallingConvention cc) {
-        Block[] blocks = schedule.getCFG().getBlocks();
-        Block startBlock = schedule.getCFG().getStartBlock();
-        assert startBlock != null;
-        assert startBlock.getPredecessorCount() == 0;
+    public static LIRGenerator emitLIR(Backend backend, TargetDescription target, LIR lir, StructuredGraph graph, CallingConvention cc) {
+        FrameMap frameMap = backend.newFrameMap();
+        LIRGenerator lirGen = backend.newLIRGenerator(graph, frameMap, cc, lir);
 
-        LIR lir = null;
-        try (Scope ds = Debug.scope("MidEnd")) {
-            try (Scope s = Debug.scope("ComputeLinearScanOrder")) {
-                NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
-                List<Block> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock, nodeProbabilities);
-                List<Block> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock, nodeProbabilities);
+        try (Scope s = Debug.scope("LIRGen", lirGen)) {
+            for (Block b : lir.linearScanOrder()) {
+                emitBlock(lirGen, b);
+            }
+            lirGen.beforeRegisterAllocation();
 
-                lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder);
-                Debug.dump(lir, "After linear scan order");
-            } catch (Throwable e) {
-                throw Debug.handle(e);
+            Debug.dump(lir, "After LIR generation");
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
+
+        try (Scope s = Debug.scope("Allocator")) {
+            if (backend.shouldAllocateRegisters()) {
+                new LinearScan(target, lir, lirGen, frameMap).allocate();
             }
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
-        try (Scope ds = Debug.scope("BackEnd", lir)) {
-            FrameMap frameMap = backend.newFrameMap();
-            LIRGenerator lirGen = backend.newLIRGenerator(graph, frameMap, cc, lir);
 
-            try (Scope s = Debug.scope("LIRGen", lirGen)) {
-                for (Block b : lir.linearScanOrder()) {
-                    emitBlock(lirGen, b);
-                }
-                lirGen.beforeRegisterAllocation();
+        try (Scope s = Debug.scope("ControlFlowOptimizations")) {
+            EdgeMoveOptimizer.optimize(lir);
+            ControlFlowOptimizer.optimize(lir);
+            RedundantMoveElimination.optimize(lir, frameMap, lirGen.getGraph().method());
+            NullCheckOptimizer.optimize(lir, target.implicitNullCheckLimit);
 
-                Debug.dump(lir, "After LIR generation");
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
-
-            try (Scope s = Debug.scope("Allocator", lirGen)) {
-                if (backend.shouldAllocateRegisters()) {
-                    new LinearScan(target, lir, frameMap).allocate();
-                }
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
-
-            try (Scope s = Debug.scope("ControlFlowOptimizations")) {
-                EdgeMoveOptimizer.optimize(lir);
-                ControlFlowOptimizer.optimize(lir);
-                if (lirGen.canEliminateRedundantMoves()) {
-                    RedundantMoveElimination.optimize(lir, frameMap, lirGen.getGraph().method());
-                }
-                NullCheckOptimizer.optimize(lir, target.implicitNullCheckLimit);
-
-                Debug.dump(lir, "After control flow optimization");
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
-            return lirGen;
+            Debug.dump(lir, "After control flow optimization");
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
+        return lirGen;
     }
 
     public static void emitCode(Backend backend, long[] leafGraphIds, Assumptions assumptions, LIRGenerator lirGen, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner,
                     CompilationResultBuilderFactory factory) {
         CompilationResultBuilder crb = backend.newCompilationResultBuilder(lirGen, compilationResult, factory);
-        backend.emitCode(crb, lirGen.lir, installedCodeOwner);
+        backend.emitCode(crb, lirGen, installedCodeOwner);
         crb.finish();
         if (!assumptions.isEmpty()) {
             compilationResult.setAssumptions(assumptions);
