@@ -25,6 +25,7 @@ package com.oracle.graal.java;
 import static com.oracle.graal.api.meta.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.bytecode.Bytecodes.*;
+import static com.oracle.graal.compiler.common.GraalInternalError.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.graph.iterators.NodePredicates.*;
 import static com.oracle.graal.java.AbstractBytecodeParser.Options.*;
@@ -1149,22 +1150,63 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
             }
 
+            /**
+             * Contains all the assertion checking logic around the application of an
+             * {@link InvocationPlugin}. This class is only loaded when assertions are enabled.
+             */
+            class InvocationPluginAssertions {
+                final InvocationPlugin plugin;
+                final ValueNode[] args;
+                final ResolvedJavaMethod targetMethod;
+                final Kind resultType;
+                final int beforeStackSize;
+                final boolean needsNullCheck;
+                final int nodeCount;
+                final Mark mark;
+
+                public InvocationPluginAssertions(InvocationPlugin plugin, ValueNode[] args, ResolvedJavaMethod targetMethod, Kind resultType) {
+                    guarantee(assertionsEnabled(), "%s should only be loaded and instantiated if assertions are enabled", getClass().getSimpleName());
+                    this.plugin = plugin;
+                    this.targetMethod = targetMethod;
+                    this.args = args;
+                    this.resultType = resultType;
+                    this.beforeStackSize = frameState.stackSize;
+                    this.needsNullCheck = !targetMethod.isStatic() && args[0].getKind() == Kind.Object && !StampTool.isPointerNonNull(args[0].stamp());
+                    this.nodeCount = currentGraph.getNodeCount();
+                    this.mark = currentGraph.getMark();
+                }
+
+                boolean check(boolean pluginResult) {
+                    if (pluginResult == true) {
+                        assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize : "plugin manipulated the stack incorrectly " + targetMethod;
+                        NodeIterable<Node> newNodes = currentGraph.getNewNodes(mark);
+                        assert !needsNullCheck || args[0].usages().filter(isNotA(FrameState.class)).isEmpty() || containsNullCheckOf(newNodes, args[0]) : format(
+                                        "plugin needs to null check the receiver of %s: receiver=%s%n\tplugin at %s", targetMethod.format("%H.%n(%p)"), args[0],
+                                        plugin.getApplySourceLocation(metaAccess));
+                        for (Node n : newNodes) {
+                            if (n instanceof StateSplit) {
+                                StateSplit stateSplit = (StateSplit) n;
+                                assert stateSplit.stateAfter() != null : format("%s node added by plugin for %s need to have a non-null frame state: %s%n\tplugin at %s",
+                                                StateSplit.class.getSimpleName(), targetMethod.format("%H.%n(%p)"), stateSplit, plugin.getApplySourceLocation(metaAccess));
+                            }
+                        }
+                    } else {
+                        assert nodeCount == currentGraph.getNodeCount() : "plugin that returns false must not create new nodes";
+                        assert beforeStackSize == frameState.stackSize : "plugin that returns false must modify the stack";
+                    }
+                    return true;
+                }
+            }
+
             private boolean tryInvocationPlugin(ValueNode[] args, ResolvedJavaMethod targetMethod, Kind resultType) {
                 InvocationPlugin plugin = graphBuilderConfig.getPlugins().getInvocationPlugins().lookupInvocation(targetMethod);
                 if (plugin != null) {
-                    int beforeStackSize = frameState.stackSize;
-                    boolean needsNullCheck = !targetMethod.isStatic() && args[0].getKind() == Kind.Object && !StampTool.isPointerNonNull(args[0].stamp());
-                    int nodeCount = currentGraph.getNodeCount();
-                    Mark mark = needsNullCheck ? currentGraph.getMark() : null;
+                    InvocationPluginAssertions assertions = assertionsEnabled() ? new InvocationPluginAssertions(plugin, args, targetMethod, resultType) : null;
                     if (InvocationPlugin.execute(this, targetMethod, plugin, args)) {
-                        assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize : "plugin manipulated the stack incorrectly " + targetMethod;
-                        assert !needsNullCheck || args[0].usages().filter(isNotA(FrameState.class)).isEmpty() || containsNullCheckOf(currentGraph.getNewNodes(mark), args[0]) : format(
-                                        "plugin needs to null check the receiver of %s: receiver=%s%n\tplugin at %s", targetMethod.format("%H.%n(%p)"), args[0],
-                                        plugin.getApplySourceLocation(metaAccess));
+                        assert assertions.check(true);
                         return true;
                     }
-                    assert nodeCount == currentGraph.getNodeCount() : "plugin that returns false must not create new nodes";
-                    assert beforeStackSize == frameState.stackSize : "plugin that returns false must modify the stack";
+                    assert assertions.check(false);
                 }
                 return false;
             }
@@ -1444,41 +1486,61 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return ConstantNode.forConstant(constant, metaAccess, currentGraph);
             }
 
+            @SuppressWarnings("unchecked")
             @Override
-            public <T extends ValueNode> T append(T v) {
+            public ValueNode append(ValueNode v) {
                 if (v.graph() != null) {
+                    // This node was already appended to the graph.
                     return v;
                 }
-                T added = currentGraph.addOrUnique(v);
-                if (added == v) {
-                    updateLastInstruction(v);
+                if (v instanceof ControlSinkNode) {
+                    return append((ControlSinkNode) v);
                 }
+                if (v instanceof ControlSplitNode) {
+                    return append((ControlSplitNode) v);
+                }
+                if (v instanceof FixedWithNextNode) {
+                    return append((FixedWithNextNode) v);
+                }
+                if (v instanceof FloatingNode) {
+                    return append((FloatingNode) v);
+                }
+                throw GraalInternalError.shouldNotReachHere("Can not append Node of type: " + v.getClass().getName());
+            }
+
+            public <T extends ControlSinkNode> T append(T fixed) {
+                assert !fixed.isAlive() && !fixed.isDeleted() : "instruction should not have been appended yet";
+                assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
+                T added = currentGraph.add(fixed);
+                lastInstr.setNext(added);
+                lastInstr = null;
                 return added;
             }
 
-            public <T extends ValueNode> T recursiveAppend(T v) {
-                if (v.graph() != null) {
-                    return v;
-                }
-                T added = currentGraph.addOrUniqueWithInputs(v);
-                if (added == v) {
-                    updateLastInstruction(v);
-                }
+            public <T extends ControlSplitNode> T append(T fixed) {
+                assert !fixed.isAlive() && !fixed.isDeleted() : "instruction should not have been appended yet";
+                assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
+                T added = currentGraph.add(fixed);
+                lastInstr.setNext(added);
+                lastInstr = null;
                 return added;
             }
 
-            private <T extends ValueNode> void updateLastInstruction(T v) {
-                if (v instanceof FixedNode) {
-                    FixedNode fixedNode = (FixedNode) v;
-                    lastInstr.setNext(fixedNode);
-                    if (fixedNode instanceof FixedWithNextNode) {
-                        FixedWithNextNode fixedWithNextNode = (FixedWithNextNode) fixedNode;
-                        assert fixedWithNextNode.next() == null : "cannot append instruction to instruction which isn't end";
-                        lastInstr = fixedWithNextNode;
-                    } else {
-                        lastInstr = null;
-                    }
+            public <T extends FixedWithNextNode> T append(T fixed) {
+                assert !fixed.isAlive() && !fixed.isDeleted() : "instruction should not have been appended yet";
+                assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
+                T added = currentGraph.add(fixed);
+                lastInstr.setNext(added);
+                lastInstr = added;
+                return added;
+            }
+
+            public <T extends FloatingNode> T append(T v) {
+                if (v.graph() != null) {
+                    return v;
                 }
+                T added = currentGraph.unique(v);
+                return added;
             }
 
             private Target checkLoopExit(FixedNode target, BciBlock targetBlock, HIRFrameStateBuilder state) {
@@ -2371,5 +2433,12 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
     static String nSpaces(int n) {
         return n == 0 ? "" : format("%" + n + "s", "");
+    }
+
+    @SuppressWarnings("all")
+    private static boolean assertionsEnabled() {
+        boolean assertionsEnabled = false;
+        assert assertionsEnabled = true;
+        return assertionsEnabled;
     }
 }
