@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -213,7 +213,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
              * have a non-default value.
              */
             assert !isStatic(modifiers);
-            Object object = HotSpotObjectConstant.asObject(receiver);
+            Object object = receiver.asObject();
 
             // Canonicalization may attempt to process an unsafe read before
             // processing a guard (e.g. a null check or a type check) for this read
@@ -234,7 +234,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
                     if (StableOptionValue.class.isAssignableFrom(clazz)) {
                         assert getName().equals("value") : "Unexpected field in " + StableOptionValue.class.getName() + " hierarchy:" + this;
                         StableOptionValue<?> option = (StableOptionValue<?>) object;
-                        return HotSpotObjectConstant.forObject(option.getValue());
+                        return Constant.forObject(option.getValue());
                     }
                 }
             }
@@ -244,7 +244,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
 
     /**
      * Determines if a given object contains this field.
-     *
+     * 
      * @return true iff this is a non-static field and its declaring class is assignable from
      *         {@code object}'s class
      */
@@ -260,13 +260,14 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         if (receiver == null) {
             assert isStatic(modifiers);
             if (holder.isInitialized()) {
-                return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), HotSpotObjectConstant.forObject(holder.mirror()), offset);
+                return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), holder.mirror(), offset, getKind() == Kind.Object);
             }
             return null;
         } else {
             assert !isStatic(modifiers);
-            assert receiver.isNonNull() && isInObject(HotSpotObjectConstant.asObject(receiver));
-            return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), receiver, offset);
+            Object object = receiver.asObject();
+            assert object != null && isInObject(object);
+            return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), object, offset, getKind() == Kind.Object);
         }
     }
 
@@ -331,7 +332,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
 
     /**
      * Checks if this field has the {@link Stable} annotation.
-     *
+     * 
      * @return true if field has {@link Stable} annotation, false otherwise
      */
     public boolean isStable() {
