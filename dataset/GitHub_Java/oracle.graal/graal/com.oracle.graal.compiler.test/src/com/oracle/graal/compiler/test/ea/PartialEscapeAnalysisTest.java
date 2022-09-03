@@ -24,7 +24,9 @@ package com.oracle.graal.compiler.test.ea;
 
 import java.util.concurrent.*;
 
-import org.junit.*;
+import junit.framework.Assert;
+
+import org.junit.Test;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.test.*;
