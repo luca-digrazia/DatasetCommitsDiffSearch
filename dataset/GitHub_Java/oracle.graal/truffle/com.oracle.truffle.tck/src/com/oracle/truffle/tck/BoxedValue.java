@@ -24,6 +24,9 @@
  */
 package com.oracle.truffle.tck;
 
+import java.util.Objects;
+
+import com.oracle.truffle.tck.impl.TckLanguage;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -36,8 +39,7 @@ final class BoxedValue implements TruffleObject, ForeignAccess.Factory10 {
     private final Object value;
 
     BoxedValue(Object v) {
-        v.getClass();
-        this.value = v;
+        this.value = Objects.requireNonNull(v);
     }
 
     @Override
@@ -108,6 +110,11 @@ final class BoxedValue implements TruffleObject, ForeignAccess.Factory10 {
 
     @Override
     public CallTarget accessMessage(Message unknown) {
+        return null;
+    }
+
+    @Override
+    public CallTarget accessProperties() {
         return null;
     }
 }

@@ -22,28 +22,27 @@
  */
 package com.oracle.truffle.api.interop;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
 import static org.junit.Assert.assertEquals;
+
 import org.junit.Test;
+
+import com.oracle.truffle.api.CallTarget;
 
 public class ForeignAccessToStringTest {
     @Test
     public void checkRegularFactory() {
         ForeignAccess fa = ForeignAccess.create(new SimpleTestingFactory());
-        assertEquals("ForeignAccess[com.oracle.truffle.api.test.interop.ForeignAccessToStringTest$SimpleTestingFactory]", fa.toString());
+        assertEquals("ForeignAccess[" + ForeignAccessToStringTest.class.getName() + "$SimpleTestingFactory]", fa.toString());
     }
 
     @Test
     public void check10Factory() {
         ForeignAccess fa = ForeignAccess.create(TruffleObject.class, new Simple10TestingFactory());
-        assertEquals("ForeignAccess[com.oracle.truffle.api.test.interop.ForeignAccessToStringTest$Simple10TestingFactory]", fa.toString());
+        assertEquals("ForeignAccess[" + ForeignAccessToStringTest.class.getName() + "$Simple10TestingFactory]", fa.toString());
     }
 
     private static class SimpleTestingFactory implements ForeignAccess.Factory {
-        public SimpleTestingFactory() {
+        SimpleTestingFactory() {
         }
 
         @Override
@@ -115,6 +114,11 @@ public class ForeignAccessToStringTest {
 
         @Override
         public CallTarget accessNew(int argumentsLength) {
+            return null;
+        }
+
+        @Override
+        public CallTarget accessProperties() {
             return null;
         }
     }
