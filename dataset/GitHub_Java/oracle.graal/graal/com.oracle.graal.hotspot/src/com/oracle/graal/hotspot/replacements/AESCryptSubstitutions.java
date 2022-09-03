@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,10 +35,9 @@ import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LocationIdentity;
+import sun.misc.Launcher;
 
-import com.oracle.graal.api.replacements.ClassSubstitution;
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
@@ -55,7 +54,6 @@ import com.oracle.graal.word.Word;
 /**
  * Substitutions for {@code com.sun.crypto.provider.AESCrypt} methods.
  */
-@ClassSubstitution(className = "com.sun.crypto.provider.AESCrypt", optional = true)
 public class AESCryptSubstitutions {
 
     static final long kOffset;
@@ -65,10 +63,9 @@ public class AESCryptSubstitutions {
 
     static {
         try {
-            // Need to use the system class loader as com.sun.crypto.provider.AESCrypt
-            // is normally loaded by the extension class loader which is not delegated
-            // to by the JVMCI class loader.
-            ClassLoader cl = ClassLoader.getSystemClassLoader();
+            // Need to use launcher class path as com.sun.crypto.provider.AESCrypt
+            // is normally not on the boot class path
+            ClassLoader cl = Launcher.getLauncher().getClassLoader();
             AESCryptClass = Class.forName("com.sun.crypto.provider.AESCrypt", true, cl);
             kOffset = UnsafeAccess.UNSAFE.objectFieldOffset(AESCryptClass.getDeclaredField("K"));
             lastKeyOffset = UnsafeAccess.UNSAFE.objectFieldOffset(AESCryptClass.getDeclaredField("lastKey"));
@@ -80,22 +77,18 @@ public class AESCryptSubstitutions {
         }
     }
 
-    @MethodSubstitution(isStatic = false)
     static void encryptBlock(Object rcvr, byte[] in, int inOffset, byte[] out, int outOffset) {
         crypt(rcvr, in, inOffset, out, outOffset, true, false);
     }
 
-    @MethodSubstitution(isStatic = false)
     static void implEncryptBlock(Object rcvr, byte[] in, int inOffset, byte[] out, int outOffset) {
         crypt(rcvr, in, inOffset, out, outOffset, true, false);
     }
 
-    @MethodSubstitution(isStatic = false)
     static void decryptBlock(Object rcvr, byte[] in, int inOffset, byte[] out, int outOffset) {
         crypt(rcvr, in, inOffset, out, outOffset, false, false);
     }
 
-    @MethodSubstitution(isStatic = false)
     static void implDecryptBlock(Object rcvr, byte[] in, int inOffset, byte[] out, int outOffset) {
         crypt(rcvr, in, inOffset, out, outOffset, false, false);
     }
@@ -104,7 +97,6 @@ public class AESCryptSubstitutions {
      * Variation for platforms (e.g. SPARC) that need do key expansion in stubs due to compatibility
      * issues between Java key expansion and hardware crypto instructions.
      */
-    @MethodSubstitution(value = "decryptBlock", isStatic = false)
     static void decryptBlockWithOriginalKey(Object rcvr, byte[] in, int inOffset, byte[] out, int outOffset) {
         crypt(rcvr, in, inOffset, out, outOffset, false, true);
     }
@@ -112,7 +104,6 @@ public class AESCryptSubstitutions {
     /**
      * @see #decryptBlockWithOriginalKey(Object, byte[], int, byte[], int)
      */
-    @MethodSubstitution(value = "implDecryptBlock", isStatic = false)
     static void implDecryptBlockWithOriginalKey(Object rcvr, byte[] in, int inOffset, byte[] out, int outOffset) {
         crypt(rcvr, in, inOffset, out, outOffset, false, true);
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,7 +29,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import jdk.vm.ci.code.CompiledCode;
 import jdk.vm.ci.code.DebugInfo;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterSaveLayout;
@@ -37,10 +36,11 @@ import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionType;
+import jdk.vm.ci.options.OptionValue;
 
-import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
@@ -67,9 +67,6 @@ import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.framemap.FrameMap;
 import com.oracle.graal.lir.framemap.ReferenceMapBuilder;
 import com.oracle.graal.nodes.UnwindNode;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.tiers.SuitesProvider;
 import com.oracle.graal.word.Pointer;
 import com.oracle.graal.word.Word;
@@ -205,15 +202,15 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
      * @param lir the LIR to examine
      * @return the registers that are defined by or used as temps for any instruction in {@code lir}
      */
-    protected final Set<Register> gatherDestroyedCallerRegisters(LIR lir) {
-        final Set<Register> destroyedRegisters = new HashSet<>();
+    protected static Set<Register> gatherDefinedRegisters(LIR lir) {
+        final Set<Register> definedRegisters = new HashSet<>();
         ValueConsumer defConsumer = new ValueConsumer() {
 
             @Override
             public void visitValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
                 if (ValueUtil.isRegister(value)) {
                     final Register reg = ValueUtil.asRegister(value);
-                    destroyedRegisters.add(reg);
+                    definedRegisters.add(reg);
                 }
             }
         };
@@ -227,7 +224,7 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
                 }
             }
         }
-        return translateToCallerRegisters(destroyedRegisters);
+        return definedRegisters;
     }
 
     /**
@@ -247,7 +244,7 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
      *            slot to a frame slot index
      */
     protected void updateStub(Stub stub, Set<Register> destroyedRegisters, Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo, FrameMap frameMap) {
-        stub.initDestroyedCallerRegisters(destroyedRegisters);
+        stub.initDestroyedRegisters(destroyedRegisters);
 
         for (Map.Entry<LIRFrameState, SaveRegistersOp> e : calleeSaveInfo.entrySet()) {
             SaveRegistersOp save = e.getValue();
@@ -280,10 +277,5 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     @Override
     public ReferenceMapBuilder newReferenceMapBuilder(int totalFrameSize) {
         return new HotSpotReferenceMapBuilder(totalFrameSize);
-    }
-
-    @Override
-    public CompiledCode createCompiledCode(ResolvedJavaMethod method, CompilationResult compResult) {
-        return HotSpotCompiledCodeBuilder.createCompiledCode(method, null, compResult);
     }
 }
