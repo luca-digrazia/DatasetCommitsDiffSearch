@@ -347,8 +347,7 @@ public final class LLVMInteropTest {
         final Object[] result = new Object[]{null};
         runner.export(JavaInterop.asTruffleFunction(FuncEInterface.class, x -> result[0] = x), "foo");
         Assert.assertEquals(36, runner.run());
-        byte[] actualResult = (byte[]) (result[0]);
-        Assert.assertArrayEquals(new byte[]{102, 111, 111, 0, 32, 98, 97, 114, -128, 32}, actualResult);
+        Assert.assertEquals(new String(new byte[]{102, 111, 111, 0, 32, 98, 97, 114, -128, 32}), (result[0]));
     }
 
     // implicit interop
