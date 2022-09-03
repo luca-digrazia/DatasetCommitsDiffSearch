@@ -98,12 +98,11 @@ public final class GraalOptions {
     public static float   MinimumUsageProbability            = 0.95f;
 
     //loop transform settings TODO (gd) tune
-    public static boolean LoopPeeling                        = true;
+    public static float   MinimumPeelProbability             = 0.35f;
     public static boolean ReassociateInvariants              = true;
     public static boolean FullUnroll                         = true;
-    public static boolean LoopUnswitch                       = ____;
     public static int     FullUnrollMaxNodes                 = 150;
-    public static float   MinimumPeelProbability             = 0.35f;
+    public static boolean LoopUnswitch                       = ____;
     public static int     LoopUnswitchMaxIncrease            = 50;
     public static int     LoopUnswitchUncertaintyBoost       = 5;
 
@@ -264,7 +263,6 @@ public final class GraalOptions {
      */
     public static String HIRLowerCheckcast = "";
     public static String HIRLowerNewInstance = "";
-    public static String HIRLowerNewArray = "";
 
     static {
         // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)

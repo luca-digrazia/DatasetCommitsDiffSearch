@@ -30,7 +30,8 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.VirtualState.NodeClosure;
+import com.oracle.graal.nodes.VirtualState.VirtualClosure;
 
 
 public abstract class LoopFragment {
@@ -88,7 +89,13 @@ public abstract class LoopFragment {
     public abstract NodeIterable<Node> nodes();
 
     public StructuredGraph graph() {
-        return (StructuredGraph) loop.loopBegin().graph();
+        LoopEx l;
+        if (isDuplicate()) {
+            l = original().loop();
+        } else {
+            l = loop();
+        }
+        return (StructuredGraph) l.loopBegin().graph();
     }
 
     protected abstract DuplicationReplacement getDuplicationReplacement();
@@ -98,11 +105,13 @@ public abstract class LoopFragment {
     protected void patchNodes(final DuplicationReplacement dataFix) {
         if (isDuplicate() && !nodesReady) {
             assert !original.isDuplicate();
-            final DuplicationReplacement cfgFix = getDuplicationReplacement();
+            final DuplicationReplacement cfgFix = original().getDuplicationReplacement();
             DuplicationReplacement dr;
-            if (cfgFix == null) {
+            if (cfgFix == null && dataFix != null) {
                 dr = dataFix;
-            } else {
+            } else if (cfgFix != null && dataFix == null) {
+                dr = cfgFix;
+            } else if (cfgFix != null && dataFix != null) {
                 dr = new DuplicationReplacement() {
                     @Override
                     public Node replacement(Node o) {
@@ -118,8 +127,15 @@ public abstract class LoopFragment {
                         return o;
                     }
                 };
+            } else {
+                dr = new DuplicationReplacement() {
+                    @Override
+                    public Node replacement(Node o) {
+                        return o;
+                    }
+                };
             }
-            duplicationMap = graph().addDuplicates(nodes(), dr);
+            duplicationMap = graph().addDuplicates(original().nodes(), dr);
             finishDuplication();
             nodesReady = true;
         } else {
@@ -127,20 +143,12 @@ public abstract class LoopFragment {
         }
     }
 
-    public static Collection<BeginNode> toHirBlocks(Collection<Block> blocks) {
-        List<BeginNode> hir = new ArrayList<>(blocks.size());
-        for (Block b : blocks) {
-            hir.add(b.getBeginNode());
-        }
-        return hir;
-    }
-
     protected static NodeBitMap computeNodes(Graph graph, Collection<BeginNode> blocks) {
         return computeNodes(graph, blocks, Collections.<BeginNode>emptyList());
     }
 
     protected static NodeBitMap computeNodes(Graph graph, Collection<BeginNode> blocks, Collection<BeginNode> earlyExits) {
-        NodeBitMap nodes = graph.createNodeBitMap(true);
+        final NodeBitMap nodes = graph.createNodeBitMap(true);
         for (BeginNode b : blocks) {
             for (Node n : b.getBlockNodes()) {
                 if (n instanceof Invoke) {
@@ -157,8 +165,15 @@ public abstract class LoopFragment {
         }
         for (BeginNode earlyExit : earlyExits) {
             FrameState stateAfter = earlyExit.stateAfter();
-            assert stateAfter != null;
-            nodes.mark(stateAfter);
+            if (stateAfter != null) {
+                nodes.mark(stateAfter);
+                stateAfter.applyToVirtual(new VirtualClosure() {
+                    @Override
+                    public void apply(VirtualState node) {
+                        nodes.mark(node);
+                    }
+                });
+            }
             nodes.mark(earlyExit);
             for (ValueProxyNode proxy : earlyExit.proxies()) {
                 nodes.mark(proxy);
@@ -205,56 +220,80 @@ public abstract class LoopFragment {
         return false;
     }
 
+    public static Collection<BeginNode> toHirBlocks(Collection<Block> blocks) {
+        List<BeginNode> hir = new ArrayList<>(blocks.size());
+        for (Block b : blocks) {
+            hir.add(b.getBeginNode());
+        }
+        return hir;
+    }
+
     /**
      * Merges the early exits (i.e. loop exits) that were duplicated as part of this fragment, with the original fragment's exits.
      */
     protected void mergeEarlyExits() {
         assert isDuplicate();
         StructuredGraph graph = graph();
-        for (BeginNode earlyExit : toHirBlocks(original().loop().lirLoop().exits)) {
-            if (!this.contains(earlyExit)) {
+        for (BeginNode earlyExit : LoopFragment.toHirBlocks(original().loop().lirLoop().exits)) {
+            FixedNode next = earlyExit.next();
+            if (earlyExit.isDeleted() || !this.original().contains(earlyExit)) {
                 continue;
             }
             BeginNode newEarlyExit = getDuplicatedNode(earlyExit);
-            assert newEarlyExit != null;
+            if (newEarlyExit == null) {
+                continue;
+            }
             MergeNode merge = graph.add(new MergeNode());
+            merge.setProbability(next.probability());
             EndNode originalEnd = graph.add(new EndNode());
             EndNode newEnd = graph.add(new EndNode());
             merge.addForwardEnd(originalEnd);
             merge.addForwardEnd(newEnd);
-            FixedNode next = earlyExit.next();
             earlyExit.setNext(originalEnd);
             newEarlyExit.setNext(newEnd);
             merge.setNext(next);
+
             FrameState exitState = earlyExit.stateAfter();
-            FrameState state = exitState.duplicate();
-            merge.setStateAfter(state);
+            FrameState newExitState = newEarlyExit.stateAfter();
+            FrameState state = null;
+            if (exitState != null) {
+                state = exitState.duplicateWithVirtualState();
+                merge.setStateAfter(state);
+            }
 
             for (Node anchored : earlyExit.anchored().snapshot()) {
                 anchored.replaceFirstInput(earlyExit, merge);
             }
 
-            for (ValueProxyNode vpn : earlyExit.proxies().snapshot()) {
-                ValueNode replaceWith;
+            for (final ValueProxyNode vpn : earlyExit.proxies().snapshot()) {
+                final ValueNode replaceWith;
                 ValueProxyNode newVpn = getDuplicatedNode(vpn);
                 if (newVpn != null) {
                     PhiNode phi = graph.add(vpn.type() == PhiType.Value ? new PhiNode(vpn.kind(), merge) : new PhiNode(vpn.type(), merge));
                     phi.addInput(vpn);
                     phi.addInput(newVpn);
-                    if (vpn.type() == PhiType.Value) {
-                        replaceWith = phi;
-                    } else {
-                        assert vpn.type() == PhiType.Virtual;
-                        ValueNode vof = GraphUtil.unProxify(vpn);
-                        ValueNode newVof = GraphUtil.unProxify(newVpn);
-                        replaceWith = GraphUtil.mergeVirtualChain(graph, vof, newVof, phi, earlyExit, newEarlyExit, merge);
-                    }
+                    replaceWith = phi;
                 } else {
                     replaceWith = vpn.value();
                 }
-                state.replaceFirstInput(vpn, replaceWith);
+                if (state != null) {
+                    state.applyToNonVirtual(new NodeClosure<ValueNode>() {
+                        @Override
+                        public void apply(Node from, ValueNode node) {
+                            if (node == vpn) {
+                                from.replaceFirstInput(vpn, replaceWith);
+                            }
+                        }
+                    });
+                }
                 for (Node usage : vpn.usages().snapshot()) {
-                    if (usage != exitState && !merge.isPhiAtMerge(usage)) {
+                    if (!merge.isPhiAtMerge(usage)) {
+                        if (usage instanceof VirtualState) {
+                            VirtualState stateUsage = (VirtualState) usage;
+                            if (exitState.isPartOfThisState(stateUsage) || newExitState.isPartOfThisState(stateUsage)) {
+                                continue;
+                            }
+                        }
                         usage.replaceFirstInput(vpn, replaceWith);
                     }
                 }

@@ -28,7 +28,8 @@ import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.PhiNode.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
+import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.util.*;
 
 
@@ -40,7 +41,7 @@ public class LoopFragmentInside extends LoopFragment {
      * In the unrolling case they will be used as the value that replace the loop-phis of the duplicated inside fragment
      */
     private Map<PhiNode, ValueNode> mergedInitializers;
-    private final DuplicationReplacement dataFix = new DuplicationReplacement() {
+    private final DuplicationReplacement dataFixBefore = new DuplicationReplacement() {
         @Override
         public Node replacement(Node oriInput) {
             if (!(oriInput instanceof ValueNode)) {
@@ -55,7 +56,7 @@ public class LoopFragmentInside extends LoopFragment {
     }
 
     public LoopFragmentInside(LoopFragmentInside original) {
-        super(original.loop(), original);
+        super(null, original);
     }
 
     @Override
@@ -69,16 +70,22 @@ public class LoopFragmentInside extends LoopFragment {
         return (LoopFragmentInside) super.original();
     }
 
+    @SuppressWarnings("unused")
     public void appendInside(LoopEx loop) {
         // TODO (gd)
     }
 
     @Override
+    public LoopEx loop() {
+        assert !this.isDuplicate();
+        return super.loop();
+    }
+
+    @Override
     public void insertBefore(LoopEx loop) {
-        if (this.loop() != loop) {
-            throw new UnsupportedOperationException();
-        }
-        patchNodes(dataFix);
+        assert this.isDuplicate() && this.original().loop() == loop;
+
+        patchNodes(dataFixBefore);
 
         BeginNode end = mergeEnds();
 
@@ -86,8 +93,14 @@ public class LoopFragmentInside extends LoopFragment {
 
         mergeEarlyExits();
 
-        FixedNode entry = getDuplicatedNode(this.loop().loopBegin());
+        BeginNode entry = getDuplicatedNode(loop.loopBegin());
+        FrameState state = entry.stateAfter();
+        if (state != null) {
+            entry.setStateAfter(null);
+            GraphUtil.killWithUnusedFloatingInputs(state);
+        }
         loop.entryPoint().replaceAtPredecessor(entry);
+        end.setProbability(loop.entryPoint().probability());
         end.setNext(loop.entryPoint());
     }
 
@@ -97,11 +110,8 @@ public class LoopFragmentInside extends LoopFragment {
             LoopFragmentWhole whole = loop().whole();
             whole.nodes(); // init nodes bitmap in whole
             nodes = whole.nodes.copy();
-            // remove the loop begin, its FS and the phis
-            LoopBeginNode loopBegin = loop().loopBegin();
-            //nodes.clear(loopBegin);
-            nodes.clear(loopBegin.stateAfter());
-            for (PhiNode phi : loopBegin.phis()) {
+            // remove the phis
+            for (PhiNode phi : loop().loopBegin().phis()) {
                 nodes.clear(phi);
             }
         }
@@ -132,7 +142,6 @@ public class LoopFragmentInside extends LoopFragment {
     @Override
     protected void finishDuplication() {
         // TODO (gd) ?
-
     }
 
     private void patchPeeling(LoopFragmentInside peel) {
@@ -177,12 +186,13 @@ public class LoopFragmentInside extends LoopFragment {
 
     /**
      * Gets the corresponding value in this fragment.
-     * @param peel the peel to look into
+     *
      * @param b original value
      * @return corresponding value in the peel
      */
     private ValueNode prim(ValueNode b) {
-        LoopBeginNode loopBegin = loop().loopBegin();
+        assert isDuplicate();
+        LoopBeginNode loopBegin = original().loop().loopBegin();
         if (loopBegin.isPhiAtMerge(b)) {
             PhiNode phi = (PhiNode) b;
             return phi.valueAt(loopBegin.forwardEnd());
@@ -198,9 +208,10 @@ public class LoopFragmentInside extends LoopFragment {
     }
 
     private BeginNode mergeEnds() {
+        assert isDuplicate();
         List<EndNode> endsToMerge = new LinkedList<>();
         Map<EndNode, LoopEndNode> reverseEnds = new HashMap<>(); // map peel's exit to the corresponding loop exits
-        LoopBeginNode loopBegin = loop().loopBegin();
+        LoopBeginNode loopBegin = original().loop().loopBegin();
         for (LoopEndNode le : loopBegin.loopEnds()) {
             EndNode duplicate = getDuplicatedNode(le);
             if (duplicate != null) {
@@ -221,14 +232,18 @@ public class LoopFragmentInside extends LoopFragment {
             assert endsToMerge.size() > 1;
             MergeNode newExitMerge = graph.add(new MergeNode());
             newExit = newExitMerge;
-            FrameState duplicateState = loopBegin.stateAfter().duplicate();
-            newExitMerge.setStateAfter(duplicateState);
+            FrameState state = loopBegin.stateAfter();
+            FrameState duplicateState = null;
+            if (state != null) {
+                duplicateState = state.duplicateWithVirtualState();
+                newExitMerge.setStateAfter(duplicateState);
+            }
             for (EndNode end : endsToMerge) {
                 newExitMerge.addForwardEnd(end);
             }
 
-            for (PhiNode phi : loopBegin.phis().snapshot()) {
-                PhiNode firstPhi = graph.add(phi.type() == PhiType.Value ? new PhiNode(phi.kind(), newExitMerge) : new PhiNode(phi.type(), newExitMerge));
+            for (final PhiNode phi : loopBegin.phis().snapshot()) {
+                final PhiNode firstPhi = graph.add(phi.type() == PhiType.Value ? new PhiNode(phi.kind(), newExitMerge) : new PhiNode(phi.type(), newExitMerge));
                 for (EndNode end : newExitMerge.forwardEnds()) {
                     LoopEndNode loopEnd = reverseEnds.get(end);
                     ValueNode prim = prim(phi.valueAt(loopEnd));
@@ -236,9 +251,16 @@ public class LoopFragmentInside extends LoopFragment {
                     firstPhi.addInput(prim);
                 }
                 ValueNode initializer = firstPhi;
-                duplicateState.replaceFirstInput(phi, firstPhi); // fix the merge's state after
-                if (phi.type() == PhiType.Virtual) {
-                    initializer = GraphUtil.mergeVirtualChain(graph, firstPhi, newExitMerge);
+                if (duplicateState != null) {
+                    // fix the merge's state after
+                    duplicateState.applyToNonVirtual(new NodeClosure<ValueNode>() {
+                        @Override
+                        public void apply(Node from, ValueNode node) {
+                            if (node == phi) {
+                                from.replaceFirstInput(phi, firstPhi);
+                            }
+                        }
+                    });
                 }
                 mergedInitializers.put(phi, initializer);
             }
