@@ -28,8 +28,6 @@ public interface Access extends GuardedNode, HeapAccess {
 
     ValueNode object();
 
-    LocationNode accessLocation();
-
-    boolean canNullCheck();
+    LocationNode nullCheckLocation();
 
 }

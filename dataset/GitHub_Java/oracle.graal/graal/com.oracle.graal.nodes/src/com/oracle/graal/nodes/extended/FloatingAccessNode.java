@@ -41,7 +41,7 @@ public abstract class FloatingAccessNode extends FloatingGuardedNode implements 
         return location;
     }
 
-    public LocationNode accessLocation() {
+    public LocationNode nullCheckLocation() {
         return location;
     }
 
@@ -71,10 +71,6 @@ public abstract class FloatingAccessNode extends FloatingGuardedNode implements 
     @Override
     public boolean isCompressible() {
         return compressible;
-    }
-
-    public boolean canNullCheck() {
-        return true;
     }
 
     public abstract FixedAccessNode asFixedNode();

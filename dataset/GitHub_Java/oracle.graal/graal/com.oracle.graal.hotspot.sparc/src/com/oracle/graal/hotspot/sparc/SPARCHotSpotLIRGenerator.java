@@ -192,27 +192,23 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         append(new SPARCHotSpotUnwindOp(exceptionParameter));
     }
 
-    private void moveDeoptValuesToThread(Value actionAndReason, Value speculation) {
-        moveValueToThread(actionAndReason, runtime().getConfig().pendingDeoptimizationOffset);
-        moveValueToThread(speculation, runtime().getConfig().pendingFailedSpeculationOffset);
-    }
-
-    private void moveValueToThread(Value v, int offset) {
+    private void moveDeoptimizationActionAndReasonToThread(Value actionAndReason) {
+        int pendingDeoptimizationOffset = runtime().getConfig().pendingDeoptimizationOffset;
         Kind wordKind = getProviders().getCodeCache().getTarget().wordKind;
         RegisterValue thread = getProviders().getRegisters().getThreadRegister().asValue(wordKind);
-        SPARCAddressValue pendingDeoptAddress = new SPARCAddressValue(v.getKind(), thread, offset);
-        append(new StoreOp(v.getKind(), pendingDeoptAddress, emitMove(v), null));
+        SPARCAddressValue pendingDeoptAddress = new SPARCAddressValue(actionAndReason.getKind(), thread, pendingDeoptimizationOffset);
+        append(new StoreOp(actionAndReason.getKind(), pendingDeoptAddress, emitMove(actionAndReason), null));
     }
 
     @Override
-    public void emitDeoptimize(Value actionAndReason, Value speculation, DeoptimizingNode deopting) {
-        moveDeoptValuesToThread(actionAndReason, speculation);
+    public void emitDeoptimize(Value actionAndReason, DeoptimizingNode deopting) {
+        moveDeoptimizationActionAndReasonToThread(actionAndReason);
         append(new SPARCDeoptimizeOp(state(deopting)));
     }
 
     @Override
     public void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason) {
-        moveDeoptValuesToThread(getMetaAccess().encodeDeoptActionAndReason(action, reason, 0), Constant.NULL_OBJECT);
+        moveDeoptimizationActionAndReasonToThread(getMetaAccess().encodeDeoptActionAndReason(action, reason, 0));
         append(new SPARCHotSpotDeoptimizeCallerOp());
     }
 
@@ -279,7 +275,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         }
         if (isConstant(inputVal)) {
             Constant c = asConstant(inputVal);
-            if (canStoreConstant(c, isCompressCandidate(access))) {
+            if (canStoreConstant(c)) {
                 if (inputVal.getKind() == Kind.Object) {
                     append(new StoreConstantOp(kind, storeAddress, c, state, config.useCompressedOops && isCompressCandidate(access)));
                 } else if (inputVal.getKind() == Kind.Long) {
