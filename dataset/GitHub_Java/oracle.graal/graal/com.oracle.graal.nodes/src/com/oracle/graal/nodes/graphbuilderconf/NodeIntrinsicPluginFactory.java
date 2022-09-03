@@ -30,8 +30,8 @@ public interface NodeIntrinsicPluginFactory {
 
         <T> T getInjectedArgument(Class<T> type);
 
-        Stamp getReturnStamp(Class<?> type);
+        Stamp getReturnStamp(Class<?> type, boolean nonNull);
     }
 
-    void registerPlugin(InvocationPlugins plugins, InjectionProvider injection);
+    void registerPlugins(InvocationPlugins plugins, InjectionProvider injection);
 }
