@@ -75,11 +75,7 @@ public class NewObjectSnippets implements Snippets {
     }
 
     static enum ProfileMode {
-        AllocatingMethods,
-        InstanceOrArray,
-        AllocatedTypes,
-        AllocatedTypesInMethods,
-        Total
+        AllocatingMethods, InstanceOrArray, AllocatedTypes, AllocatedTypesInMethods, Total
     }
 
     public static final ProfileMode PROFILE_MODE = ProfileMode.Total;
@@ -280,7 +276,7 @@ public class NewObjectSnippets implements Snippets {
     }
 
     /**
-     * Maximum number of long stores to emit when zeroing an object with a constant size. Larger
+     * Maximum number of long stores to emit when zeroing an object with a constant size Larger
      * objects have their bodies initialized in a loop.
      */
     private static final int MAX_UNROLLED_OBJECT_ZEROING_STORES = 8;
