@@ -66,7 +66,6 @@ public final class SuspendedEvent {
     private final MaterializedFrame haltedFrame;
     private final List<FrameInstance> stack;
     private final List<String> warnings;
-    private volatile boolean kill;
 
     SuspendedEvent(Debugger debugger, Node haltedNode, MaterializedFrame haltedFrame, List<FrameInstance> stack, List<String> warnings) {
         this.debugger = debugger;
@@ -221,15 +220,12 @@ public final class SuspendedEvent {
     }
 
     /**
-     * Prepare to terminate the suspended execution represented by this event.
+     * Terminates the halted execution represented by this event.
      *
      * @since 0.12
      */
-    public void prepareKill() {
-        kill = true;
-    }
-
-    boolean isKillPrepared() {
-        return kill;
+    @SuppressWarnings("static-method")
+    public void kill() {
+        throw new KillException();
     }
 }

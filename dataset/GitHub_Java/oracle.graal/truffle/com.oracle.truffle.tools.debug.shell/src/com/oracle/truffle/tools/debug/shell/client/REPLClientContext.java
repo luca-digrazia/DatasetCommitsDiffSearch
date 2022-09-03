@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -98,9 +98,9 @@ interface REPLClientContext {
     void displayFailReply(String message);
 
     /**
-     * notifies client that current execution has been killed.
+     * Send a message announcing current execution is being killed.
      */
-    void notifyKilled();
+    void displayKillMessage(String message);
 
     /**
      * Recompute the client's command line prompt.

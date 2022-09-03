@@ -79,7 +79,6 @@ import com.oracle.truffle.tools.debug.shell.server.REPLServer;
  * @see REPLServer
  * @see REPLMessage
  */
-@SuppressWarnings("deprecation")
 public class SimpleREPLClient implements REPLClient {
 
     // TODO (mlvdv) Temporarily in hybrid mode; will work either single language or multi (sort of)

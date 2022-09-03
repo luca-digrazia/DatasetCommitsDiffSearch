@@ -579,7 +579,6 @@ public abstract class REPLRemoteCommand extends REPLCommand {
             } else {
                 context.displayFailReply(replies[0].get(REPLMessage.DISPLAY_MSG));
             }
-            throw new REPLContinueException();
         }
     };
 
