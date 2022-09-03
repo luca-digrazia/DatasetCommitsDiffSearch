@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,7 +46,6 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
-import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleOptions;
@@ -227,8 +226,6 @@ public abstract class Accessor {
 
         public abstract boolean isHostAccessAllowed(Object vmObject, Env env);
 
-        public abstract boolean isNativeAccessAllowed(Object vmObject, Env env);
-
         public abstract Object createInternalContext(Object vmObject, Map<String, Object> config, TruffleContext spiContext);
 
         public abstract void initializeInternalContext(Object vmObject, Object contextImpl);
@@ -296,8 +293,6 @@ public abstract class Accessor {
         public abstract boolean isDefaultFileSystem(FileSystem fs);
 
         public abstract String getLanguageHome(Object engineObject);
-
-        public abstract void addToHostClassPath(Object vmObject, TruffleFile entries);
     }
 
     public abstract static class LanguageSupport {

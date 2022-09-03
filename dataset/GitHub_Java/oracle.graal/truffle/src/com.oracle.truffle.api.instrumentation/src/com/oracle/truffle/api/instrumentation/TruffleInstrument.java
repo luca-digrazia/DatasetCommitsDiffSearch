@@ -120,24 +120,10 @@ public abstract class TruffleInstrument {
     protected abstract void onCreate(Env env);
 
     /**
-     * Invoked once on an {@linkplain TruffleInstrument instance} just before all instruments and
-     * languages are going to be disposed, possibly because the underlying
-     * {@linkplain org.graalvm.polyglot.Engine engine} is going to be closed. This method is called
-     * before {@link #onDispose(Env)} and the instrument must remain usable after finalization. The
-     * instrument can prepare for disposal while still having other instruments not disposed yet.
-     *
-     * @param env environment information for the instrument
-     * @since 1.0
-     */
-    protected void onFinalize(Env env) {
-        // default implementation does nothing
-    }
-
-    /**
-     * Invoked once on an {@linkplain TruffleInstrument instance} when it becomes disabled, possibly
-     * because the underlying {@linkplain org.graalvm.polyglot.Engine engine} has been closed. A
-     * disposed instance is no longer usable. If the instrument is re-enabled, the engine will
-     * create a new instance.
+     * Invoked once on an {@linkplain TruffleInstrument instance} when it becomes disabled ,
+     * possibly because the underlying {@linkplain org.graalvm.polyglot.Engine engine} has been
+     * disposed. A disposed instance is no longer usable. If the instrument is re-enabled, the
+     * engine will create a new instance.
      *
      * @param env environment information for the instrument
      * @since 0.12
@@ -408,14 +394,14 @@ public abstract class TruffleInstrument {
                     throw new IllegalStateException("Needs to be inserted into the AST before execution.");
                 }
             }
-        }
 
-        private static boolean checkNullOrInterop(Object obj) {
-            if (obj == null) {
+            private boolean checkNullOrInterop(Object obj) {
+                if (obj == null) {
+                    return true;
+                }
+                AccessorInstrumentHandler.interopAccess().checkInteropType(obj);
                 return true;
             }
-            AccessorInstrumentHandler.interopAccess().checkInteropType(obj);
-            return true;
         }
 
         /**
@@ -510,9 +496,7 @@ public abstract class TruffleInstrument {
         public Object findMetaObject(LanguageInfo language, Object value) {
             AccessorInstrumentHandler.interopAccess().checkInteropType(value);
             final TruffleLanguage.Env env = AccessorInstrumentHandler.engineAccess().getEnvForInstrument(language);
-            Object metaObject = AccessorInstrumentHandler.langAccess().findMetaObject(env, value);
-            assert checkNullOrInterop(metaObject);
-            return metaObject;
+            return AccessorInstrumentHandler.langAccess().findMetaObject(env, value);
         }
 
         /**
@@ -684,12 +668,11 @@ public abstract class TruffleInstrument {
         String name() default "";
 
         /**
-         * The version for instrument in an arbitrary format. It inherits from
-         * {@link org.graalvm.polyglot.Engine#getVersion()} by default.
+         * The version for instrument in an arbitrary format.
          *
          * @since 0.12
          */
-        String version() default "inherit";
+        String version() default "";
 
         /**
          * Specifies whether the instrument is accessible using the polyglot API. Internal

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1382,21 +1382,6 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Adds an entry to the Java host class loader. All classes looked up with
-         * {@link #lookupHostSymbol(String)} will lookup classes with this new entry. If the entry
-         * was already added then calling this method again for the same entry has no effect. Given
-         * entry must not be <code>null</code>.
-         *
-         * @throws SecurityException if the file is not {@link TruffleFile#isReadable() readable}.
-         * @since 1.0
-         */
-        @TruffleBoundary
-        public void addToHostClassPath(TruffleFile entry) {
-            Objects.requireNonNull(entry);
-            AccessAPI.engineAccess().addToHostClassPath(vmObject, entry);
-        }
-
-        /**
          * Looks up a Java class in the top-most scope the host environment. Returns
          * <code>null</code> if no symbol was found or the symbol was not accessible. Symbols might
          * not be accessible if a
@@ -1518,17 +1503,6 @@ public abstract class TruffleLanguage<C> {
         @SuppressWarnings("static-method")
         public Throwable asHostException(Throwable exception) {
             return AccessAPI.engineAccess().asHostException(exception);
-        }
-
-        /**
-         * Returns <code>true</code> if access to native code is generally allowed. If this method
-         * returns <code>false</code> then loading native libraries with the Truffle NFI will fail.
-         *
-         * @since 1.0
-         */
-        @TruffleBoundary
-        public boolean isNativeAccessAllowed() {
-            return AccessAPI.engineAccess().isNativeAccessAllowed(vmObject, this);
         }
 
         /**
@@ -1729,7 +1703,6 @@ public abstract class TruffleLanguage<C> {
          * @return {@link TruffleFile}
          * @since 1.0
          */
-        @TruffleBoundary
         public TruffleFile getTruffleFile(String path) {
             return new TruffleFile(fileSystem, fileSystem.parsePath(path).normalize());
         }
@@ -1741,7 +1714,6 @@ public abstract class TruffleLanguage<C> {
          * @return {@link TruffleFile}
          * @since 1.0
          */
-        @TruffleBoundary
         public TruffleFile getTruffleFile(URI uri) {
             checkDisposed();
             try {
