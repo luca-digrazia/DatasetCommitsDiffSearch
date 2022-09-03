@@ -133,11 +133,6 @@ public class HostedField implements ReadableJavaField, SharedField, Comparable<H
     }
 
     @Override
-    public int getOffset() {
-        return wrapped.getOffset();
-    }
-
-    @Override
     public int hashCode() {
         return wrapped.hashCode();
     }

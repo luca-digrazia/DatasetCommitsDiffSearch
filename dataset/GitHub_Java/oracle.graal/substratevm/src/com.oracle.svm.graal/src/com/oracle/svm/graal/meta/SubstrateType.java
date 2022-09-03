@@ -194,23 +194,18 @@ public class SubstrateType extends NodeClass implements SharedType, Replaced {
     }
 
     @Override
-    public boolean isEnum() {
-        throw new InternalError("isEnum for " + hub.getName() + " unimplemented");
-    }
-
-    @Override
     public int getModifiers() {
         return hub.getModifiers();
     }
 
     @Override
     public boolean isInitialized() {
-        return hub.isInitialized();
+        return true;
     }
 
     @Override
     public void initialize() {
-        hub.ensureInitialized();
+        throw VMError.unimplemented();
     }
 
     @Override
@@ -809,14 +804,12 @@ class SubstrateNodeIterator implements Iterator<Node> {
 
     private boolean computeNextFromField(SubstrateField field) {
         if (SubstrateNodeFieldAccessor.isChildField(field)) {
-            long offset = field.getLocation();
-            next = (Node) UnsafeAccess.UNSAFE.getObject(node, offset);
+            next = (Node) UnsafeAccess.UNSAFE.getObject(node, (long) field.getLocation());
             if (next != null) {
                 return true;
             }
         } else if (SubstrateNodeFieldAccessor.isChildrenField(field)) {
-            long offset = field.getLocation();
-            children = (Object[]) UnsafeAccess.UNSAFE.getObject(node, offset);
+            children = (Object[]) UnsafeAccess.UNSAFE.getObject(node, (long) field.getLocation());
             nextChildInChildren = 0;
             return computeNextFromChildren();
         }
