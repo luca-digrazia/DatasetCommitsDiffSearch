@@ -80,9 +80,11 @@ public class StandardOp {
     public static class JumpOp extends LIRInstruction {
 
         private final LabelRef destination;
+        @State protected LIRFrameState state;
 
-        public JumpOp(LabelRef destination) {
+        public JumpOp(LabelRef destination, LIRFrameState state) {
             this.destination = destination;
+            this.state = state;
         }
 
         @Override
