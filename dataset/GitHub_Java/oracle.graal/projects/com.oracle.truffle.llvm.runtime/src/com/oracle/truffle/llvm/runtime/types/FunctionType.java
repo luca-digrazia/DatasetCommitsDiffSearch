@@ -31,14 +31,12 @@ package com.oracle.truffle.llvm.runtime.types;
 
 import java.util.Arrays;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class FunctionType extends Type {
 
-    @CompilationFinal private Type returnType;
+    private final Type returnType;
 
     private final Type[] argumentTypes;
     private final boolean isVarargs;
@@ -55,11 +53,6 @@ public final class FunctionType extends Type {
 
     public Type getReturnType() {
         return returnType;
-    }
-
-    public void setReturnType(Type returnType) {
-        CompilerAsserts.neverPartOfCompilation();
-        this.returnType = returnType;
     }
 
     public boolean isVarargs() {
@@ -88,13 +81,6 @@ public final class FunctionType extends Type {
     @Override
     public int getSize(DataSpecConverter targetDataLayout) {
         return LLVMHeap.FUNCTION_PTR_SIZE_BYTE;
-    }
-
-    @Override
-    public Type shallowCopy() {
-        final FunctionType copy = new FunctionType(returnType, argumentTypes, isVarargs);
-        copy.setSourceType(getSourceType());
-        return copy;
     }
 
     @Override

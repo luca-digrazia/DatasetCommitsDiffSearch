@@ -33,7 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 
-import com.oracle.truffle.llvm.parser.model.ModelModule;
+import com.oracle.truffle.llvm.parser.model.generators.ModuleGenerator;
 import com.oracle.truffle.llvm.parser.records.Records;
 import com.oracle.truffle.llvm.parser.records.TypesRecord;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
@@ -61,14 +61,14 @@ public final class Types implements ParserListener, Iterable<Type> {
         return t;
     }
 
-    private final ModelModule module;
+    private final ModuleGenerator generator;
 
     private Type[] table = new Type[0];
 
     private int size = 0;
 
-    Types(ModelModule module) {
-        this.module = module;
+    Types(ModuleGenerator generator) {
+        this.generator = generator;
     }
 
     @Override
@@ -146,10 +146,7 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
 
             case VECTOR:
-                if (get(args[1]) instanceof PrimitiveType)
-                    type = new VectorType((PrimitiveType) get(args[1]), (int) args[0]);
-                else
-                    type = new VectorType((PointerType) get(args[1]), (int) args[0]);
+                type = new VectorType((PrimitiveType) get(args[1]), (int) args[0]);
                 break;
 
             case X86_FP80:
@@ -213,10 +210,10 @@ public final class Types implements ParserListener, Iterable<Type> {
         if (table[size] instanceof UnresolvedPointeeType) {
             PointerType pointer = (PointerType) table[((UnresolvedPointeeType) table[size]).getIndex()];
             pointer.setPointeeType(type);
-            module.addGlobalType(pointer);
+            generator.createType(pointer);
         }
         table[size++] = type;
-        module.addGlobalType(type);
+        generator.createType(type);
     }
 
     public Type get(long index) {
