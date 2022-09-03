@@ -29,6 +29,12 @@ import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Andn;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Or;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Popc;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Srl;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Srlx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Sub;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
@@ -65,23 +71,23 @@ public class SPARCBitManipulationOp extends SPARCLIRInstruction {
             switch (opcode) {
                 case IPOPCNT:
                     // clear upper word for 64 bit POPC
-                    masm.srl(src, g0, dst);
-                    masm.popc(dst, dst);
+                    new Srl(src, g0, dst).emit(masm);
+                    new Popc(dst, dst).emit(masm);
                     break;
                 case LPOPCNT:
-                    masm.popc(src, dst);
+                    new Popc(src, dst).emit(masm);
                     break;
                 case BSF:
                     Kind tkind = input.getKind();
                     if (tkind == Kind.Int) {
-                        masm.sub(src, 1, dst);
-                        masm.andn(dst, src, dst);
-                        masm.srl(dst, g0, dst);
-                        masm.popc(dst, dst);
+                        new Sub(src, 1, dst).emit(masm);
+                        new Andn(dst, src, dst).emit(masm);
+                        new Srl(dst, g0, dst).emit(masm);
+                        new Popc(dst, dst).emit(masm);
                     } else if (tkind == Kind.Long) {
-                        masm.sub(src, 1, dst);
-                        masm.andn(dst, src, dst);
-                        masm.popc(dst, dst);
+                        new Sub(src, 1, dst).emit(masm);
+                        new Andn(dst, src, dst).emit(masm);
+                        new Popc(dst, dst).emit(masm);
                     } else {
                         throw GraalInternalError.shouldNotReachHere("missing: " + tkind);
                     }
@@ -91,19 +97,19 @@ public class SPARCBitManipulationOp extends SPARCLIRInstruction {
                     assert ikind == Kind.Int;
                     Register tmp = asRegister(scratch);
                     assert !tmp.equals(dst);
-                    masm.srl(src, 1, tmp);
-                    masm.srl(src, 0, dst);
-                    masm.or(dst, tmp, dst);
-                    masm.srl(dst, 2, tmp);
-                    masm.or(dst, tmp, dst);
-                    masm.srl(dst, 4, tmp);
-                    masm.or(dst, tmp, dst);
-                    masm.srl(dst, 8, tmp);
-                    masm.or(dst, tmp, dst);
-                    masm.srl(dst, 16, tmp);
-                    masm.or(dst, tmp, dst);
-                    masm.popc(dst, dst);
-                    masm.sub(dst, 1, dst);
+                    new Srl(src, 1, tmp).emit(masm);
+                    new Srl(src, 0, dst).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Srl(dst, 2, tmp).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Srl(dst, 4, tmp).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Srl(dst, 8, tmp).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Srl(dst, 16, tmp).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Popc(dst, dst).emit(masm);
+                    new Sub(dst, 1, dst).emit(masm);
                     break;
                 }
                 case LBSR: {
@@ -111,20 +117,20 @@ public class SPARCBitManipulationOp extends SPARCLIRInstruction {
                     assert lkind == Kind.Long;
                     Register tmp = asRegister(scratch);
                     assert !tmp.equals(dst);
-                    masm.srlx(src, 1, tmp);
-                    masm.or(src, tmp, dst);
-                    masm.srlx(dst, 2, tmp);
-                    masm.or(dst, tmp, dst);
-                    masm.srlx(dst, 4, tmp);
-                    masm.or(dst, tmp, dst);
-                    masm.srlx(dst, 8, tmp);
-                    masm.or(dst, tmp, dst);
-                    masm.srlx(dst, 16, tmp);
-                    masm.or(dst, tmp, dst);
-                    masm.srlx(dst, 32, tmp);
-                    masm.or(dst, tmp, dst);
-                    masm.popc(dst, dst);
-                    masm.sub(dst, 1, dst); // This is required to fit the given structure.
+                    new Srlx(src, 1, tmp).emit(masm);
+                    new Or(src, tmp, dst).emit(masm);
+                    new Srlx(dst, 2, tmp).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Srlx(dst, 4, tmp).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Srlx(dst, 8, tmp).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Srlx(dst, 16, tmp).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Srlx(dst, 32, tmp).emit(masm);
+                    new Or(dst, tmp, dst).emit(masm);
+                    new Popc(dst, dst).emit(masm);
+                    new Sub(dst, 1, dst).emit(masm); // This is required to fit the given structure.
                     break;
                 }
                 default:
@@ -134,16 +140,55 @@ public class SPARCBitManipulationOp extends SPARCLIRInstruction {
         } else if (isConstant(input) && isSimm13(crb.asIntConst(input))) {
             switch (opcode) {
                 case IPOPCNT:
-                    masm.popc(crb.asIntConst(input), dst);
+                    new Popc(crb.asIntConst(input), dst).emit(masm);
                     break;
                 case LPOPCNT:
-                    masm.popc(crb.asIntConst(input), dst);
+                    new Popc(crb.asIntConst(input), dst).emit(masm);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
         } else {
             throw GraalInternalError.shouldNotReachHere();
+            // SPARCAddress src = (SPARCAddress) crb.asAddress(input);
+            // switch (opcode) {
+            // case IPOPCNT:
+            // new Ldsw(src, tmp).emit(masm);
+            // // clear upper word for 64 bit POPC
+            // new Srl(tmp, g0, dst).emit(masm);
+            // new Popc(tmp, dst).emit(masm);
+            // break;
+            // case LPOPCNT:
+            // new Ldx(src, tmp).emit(masm);
+            // new Popc(tmp, dst).emit(masm);
+            // break;
+            // case BSF:
+            // assert input.getKind() == Kind.Int;
+            // new Ldsw(src, tmp).emit(masm);
+            // new Srl(tmp, 1, tmp).emit(masm);
+            // new Srl(tmp, 0, dst).emit(masm);
+            // new Or(tmp, tmp, dst).emit(masm);
+            // new Srl(dst, 2, tmp).emit(masm);
+            // new Or(dst, tmp, dst).emit(masm);
+            // new Srl(dst, 4, tmp).emit(masm);
+            // new Or(dst, tmp, dst).emit(masm);
+            // new Srl(dst, 8, tmp).emit(masm);
+            // new Or(dst, tmp, dst).emit(masm);
+            // new Srl(dst, 16, tmp).emit(masm);
+            // new Or(dst, tmp, dst).emit(masm);
+            // new Popc(dst, dst).emit(masm);
+            // new Mov(Kind.Int.getBitCount(), tmp).emit(masm);
+            // new Sub(tmp, dst, dst).emit(masm);
+            // break;
+            // case IBSR:
+            // // masm.bsrl(dst, src);
+            // // countLeadingZerosI_bsr masm.bsrq(dst, src);
+            // // masm.bsrl(dst, src);
+            // case LBSR:
+            // // masm.bsrq(dst, src);
+            // default:
+            // throw GraalInternalError.shouldNotReachHere("missing: " + opcode);
+            // }
         }
     }
 
