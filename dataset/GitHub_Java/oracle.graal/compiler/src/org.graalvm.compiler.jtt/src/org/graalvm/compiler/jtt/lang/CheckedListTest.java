@@ -43,7 +43,7 @@ public final class CheckedListTest extends JTTTest {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes", "serial"})
-    public static void testCast() {
+    public void testCast() {
         final AtomicBoolean addAllWasCalled = new AtomicBoolean();
         ArrayList orig = new ArrayList() {
             @Override
@@ -69,7 +69,7 @@ public final class CheckedListTest extends JTTTest {
         runTest("testCopyOf");
     }
 
-    public static void testCopyOf() {
+    public void testCopyOf() {
         Object[] mixed = new Object[]{"a", "b", 18};
         try {
             Arrays.copyOf(mixed, 4, String[].class);
@@ -84,7 +84,7 @@ public final class CheckedListTest extends JTTTest {
         runTest("testArraycopy");
     }
 
-    public static void testArraycopy() {
+    public void testArraycopy() {
         Object[] mixed = new Object[]{"a", "b", 18};
         try {
             String[] strings = new String[4];
