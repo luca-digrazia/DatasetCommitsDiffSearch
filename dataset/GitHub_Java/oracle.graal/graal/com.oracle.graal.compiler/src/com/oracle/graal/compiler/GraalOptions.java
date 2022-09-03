@@ -196,11 +196,6 @@ public final class GraalOptions {
      */
     public static boolean AllocSSA                           = false;
 
-    /**
-     * Prints all the available GraalOptions.
-     */
-    public static boolean PrintFlags                           = false;
-
     static {
         // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
         assert (DetailedAsserts = true) == true;
