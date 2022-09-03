@@ -41,7 +41,7 @@ import com.oracle.graal.word.*;
 /**
  * Substitutions for {@code com.sun.crypto.provider.AESCrypt} methods.
  */
-@ClassSubstitution(className = "com.sun.crypto.provider.AESCrypt", optional = true)
+@ClassSubstitution(className = "com.sun.crypto.provider.AESCrypt")
 public class AESCryptSubstitutions {
 
     static final long kOffset;

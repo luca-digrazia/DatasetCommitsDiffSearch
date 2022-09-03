@@ -22,46 +22,53 @@
  */
 package com.oracle.graal.hotspot.snippets;
 
-import static com.oracle.graal.hotspot.nodes.CastFromHub.*;
-import static com.oracle.graal.hotspot.nodes.RegisterNode.*;
-import static com.oracle.graal.hotspot.snippets.DirectObjectStoreNode.*;
-import static com.oracle.graal.nodes.extended.UnsafeLoadNode.*;
+import static com.oracle.graal.api.code.UnsignedMath.*;
+import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
+import static com.oracle.graal.nodes.extended.UnsafeArrayCastNode.*;
+import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
+import static com.oracle.graal.snippets.Snippet.Varargs.*;
+import static com.oracle.graal.snippets.SnippetTemplate.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
+import static com.oracle.graal.snippets.nodes.BranchProbabilityNode.*;
 import static com.oracle.graal.snippets.nodes.ExplodeLoopNode.*;
-import static com.oracle.max.asm.target.amd64.AMD64.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
-import com.oracle.graal.snippets.Snippet.Fold;
 import com.oracle.graal.snippets.Snippet.Parameter;
+import com.oracle.graal.snippets.Snippet.VarargsParameter;
+import com.oracle.graal.snippets.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.snippets.SnippetTemplate.Arguments;
-import com.oracle.graal.snippets.SnippetTemplate.Cache;
 import com.oracle.graal.snippets.SnippetTemplate.Key;
-import com.oracle.max.criutils.*;
+import com.oracle.graal.snippets.nodes.*;
+import com.oracle.graal.word.*;
 
 /**
  * Snippets used for implementing NEW, ANEWARRAY and NEWARRAY.
  */
 public class NewObjectSnippets implements SnippetsInterface {
 
+    // @formatter:off
+
     @Snippet
     public static Word allocate(@Parameter("size") int size) {
-        Word thread = asWord(register(r15, wordKind()));
-        Word top = loadWord(thread, threadTlabTopOffset());
-        Word end = loadWord(thread, threadTlabEndOffset());
-        Word newTop = top.plus(size);
+        Word thread = thread();
+        Word top = readTlabTop(thread);
+        Word end = readTlabEnd(thread);
+        Word newTop = top.add(size);
+        // this check might lead to problems if the TLAB is within 16GB of the address space end (checked in c++ code)
         if (newTop.belowOrEqual(end)) {
-            storeObject(thread, 0, threadTlabTopOffset(), newTop);
+            probability(FAST_PATH_PROBABILITY);
+            writeTlabTop(thread, newTop);
             return top;
         }
         return Word.zero();
@@ -70,53 +77,63 @@ public class NewObjectSnippets implements SnippetsInterface {
     @Snippet
     public static Object initializeObject(
                     @Parameter("memory") Word memory,
-                    @Parameter("hub") Object hub,
-                    @Parameter("initialMarkWord") Word initialMarkWord,
-                    @ConstantParameter("size") int size) {
+                    @Parameter("hub") Word hub,
+                    @Parameter("prototypeMarkWord") Word prototypeMarkWord,
+                    @ConstantParameter("size") int size,
+                    @ConstantParameter("fillContents") boolean fillContents,
+                    @ConstantParameter("locked") boolean locked) {
 
-        if (memory == Word.zero()) {
-            return NewInstanceStubCall.call(hub);
+        Object result;
+        if (memory.equal(0)) {
+            new_stub.inc();
+            result = NewInstanceStubCall.call(hub);
+        } else {
+            probability(FAST_PATH_PROBABILITY);
+            if (locked) {
+                formatObject(hub, size, memory, thread().or(biasedLockPattern()), fillContents);
+            } else {
+                formatObject(hub, size, memory, prototypeMarkWord, fillContents);
+            }
+            result = memory.toObject();
         }
-        formatObject(hub, size, memory, initialMarkWord);
-        Object instance = memory.toObject();
-        return castFromHub(verifyOop(instance), hub);
+        return unsafeCast(verifyOop(result), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet
-    public static Object initializeObjectArray(
+    public static Object initializeArray(
                     @Parameter("memory") Word memory,
-                    @Parameter("hub") Object hub,
+                    @Parameter("hub") Word hub,
                     @Parameter("length") int length,
-                    @Parameter("size") int size,
-                    @Parameter("initialMarkWord") Word initialMarkWord,
-                    @ConstantParameter("headerSize") int headerSize) {
-        return initializeArray(memory, hub, length, size, initialMarkWord, headerSize, true);
-    }
-
-    @Snippet
-    public static Object initializePrimitiveArray(
-                    @Parameter("memory") Word memory,
-                    @Parameter("hub") Object hub,
-                    @Parameter("length") int length,
-                    @Parameter("size") int size,
-                    @Parameter("initialMarkWord") Word initialMarkWord,
-                    @ConstantParameter("headerSize") int headerSize) {
-        return initializeArray(memory, hub, length, size, initialMarkWord, headerSize, false);
-    }
-
-    private static Object initializeArray(Word memory, Object hub, int length, int size, Word initialMarkWord, int headerSize, boolean isObjectArray) {
-        if (memory == Word.zero()) {
-            return NewArrayStubCall.call(isObjectArray, hub, length);
+                    @Parameter("allocationSize") int allocationSize,
+                    @Parameter("prototypeMarkWord") Word prototypeMarkWord,
+                    @ConstantParameter("headerSize") int headerSize,
+                    @ConstantParameter("fillContents") boolean fillContents,
+                    @ConstantParameter("locked") boolean locked) {
+        if (locked) {
+            return initializeArray(memory, hub, length, allocationSize, thread().or(biasedLockPattern()), headerSize, fillContents);
+        } else {
+            return initializeArray(memory, hub, length, allocationSize, prototypeMarkWord, headerSize, fillContents);
         }
-        formatArray(hub, size, length, headerSize, memory, initialMarkWord);
-        Object instance = memory.toObject();
-        return castFromHub(verifyOop(instance), hub);
+    }
+
+    private static Object initializeArray(Word memory, Word hub, int length, int allocationSize, Word prototypeMarkWord, int headerSize, boolean fillContents) {
+        Object result;
+        if (memory.equal(0)) {
+            newarray_stub.inc();
+            result = NewArrayStubCall.call(hub, length);
+        } else {
+            probability(FAST_PATH_PROBABILITY);
+            newarray_loopInit.inc();
+            formatArray(hub, allocationSize, length, headerSize, memory, prototypeMarkWord, fillContents);
+            result = memory.toObject();
+        }
+        return unsafeArrayCast(verifyOop(result), length, StampFactory.forNodeIntrinsic());
     }
 
     /**
      * Maximum array length for which fast path allocation is used.
      */
-    private static final int MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH = 0x00FFFFFF;
+    public static final int MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH = 0x00FFFFFF;
 
     @Snippet
     public static Object allocateArrayAndInitialize(
@@ -124,37 +141,46 @@ public class NewObjectSnippets implements SnippetsInterface {
                     @ConstantParameter("alignment") int alignment,
                     @ConstantParameter("headerSize") int headerSize,
                     @ConstantParameter("log2ElementSize") int log2ElementSize,
-                    @ConstantParameter("type") ResolvedJavaType type,
-                    @ConstantParameter("wordKind") Kind wordKind) {
-        if (UnsignedMath.aboveOrEqual(length, MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH)) {
+                    @ConstantParameter("type") ResolvedJavaType type) {
+        if (!belowThan(length, MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH)) {
+            probability(DEOPT_PATH_PROBABILITY);
             // This handles both negative array sizes and very large array sizes
-            DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.RuntimeConstraint);
+            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
-        int size = getArraySize(length, alignment, headerSize, log2ElementSize);
-        Word memory = TLABAllocateNode.allocateVariableSize(wordKind, size);
-        return InitializeArrayNode.initialize(memory, length, size, type);
+        int allocationSize = computeArrayAllocationSize(length, alignment, headerSize, log2ElementSize);
+        Word memory = TLABAllocateNode.allocateVariableSize(allocationSize);
+        return InitializeArrayNode.initialize(memory, length, allocationSize, type, true, false);
     }
 
-    public static int getArraySize(int length, int alignment, int headerSize, int log2ElementSize) {
+    /**
+     * Computes the size of the memory chunk allocated for an array. This size accounts for the array
+     * header size, boy size and any padding after the last element to satisfy object alignment requirements.
+     *
+     * @param length the number of elements in the array
+     * @param alignment the object alignment requirement
+     * @param headerSize the size of the array header
+     * @param log2ElementSize log2 of the size of an element in the array
+     */
+    public static int computeArrayAllocationSize(int length, int alignment, int headerSize, int log2ElementSize) {
         int size = (length << log2ElementSize) + headerSize + (alignment - 1);
         int mask = ~(alignment - 1);
         return size & mask;
     }
 
-    private static Object verifyOop(Object object) {
-        if (verifyOops()) {
-            VerifyOopStubCall.call(object);
+    /**
+     * Calls the runtime stub for implementing MULTIANEWARRAY.
+     */
+    @Snippet
+    public static Object newmultiarray(
+                    @Parameter("hub") Word hub,
+                    @ConstantParameter("rank") int rank,
+                    @VarargsParameter("dimensions") int[] dimensions) {
+        Word dims = DimensionsNode.allocaDimsArray(rank);
+        ExplodeLoopNode.explodeLoop();
+        for (int i = 0; i < rank; i++) {
+            dims.writeInt(i * 4, dimensions[i], ANY_LOCATION);
         }
-        return object;
-    }
-
-    private static Word asWord(Object object) {
-        return Word.fromObject(object);
-    }
-
-    private static Word loadWord(Word address, int offset) {
-        Object value = loadObject(address, 0, offset, true);
-        return asWord(value);
+        return NewMultiArrayStubCall.call(hub, rank, dims);
     }
 
     /**
@@ -167,17 +193,21 @@ public class NewObjectSnippets implements SnippetsInterface {
     /**
      * Formats some allocated memory with an object header zeroes out the rest.
      */
-    private static void formatObject(Object hub, int size, Word memory, Word headerPrototype) {
-        storeObject(memory, 0, markOffset(), headerPrototype);
-        storeObject(memory, 0, hubOffset(), hub);
-        if (size <= MAX_UNROLLED_OBJECT_ZEROING_SIZE) {
-            explodeLoop();
-            for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
-                storeWord(memory, 0, offset, Word.zero());
-            }
-        } else {
-            for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
-                storeWord(memory, 0, offset, Word.zero());
+    private static void formatObject(Word hub, int size, Word memory, Word compileTimePrototypeMarkWord, boolean fillContents) {
+        Word prototypeMarkWord = useBiasedLocking() ? hub.readWord(prototypeMarkWordOffset(), PROTOTYPE_MARK_WORD_LOCATION) : compileTimePrototypeMarkWord;
+        initializeObjectHeader(memory, prototypeMarkWord, hub);
+        if (fillContents) {
+            if (size <= MAX_UNROLLED_OBJECT_ZEROING_SIZE) {
+                new_seqInit.inc();
+                explodeLoop();
+                for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
+                    memory.writeWord(offset, Word.zero(), ANY_LOCATION);
+                }
+            } else {
+                new_loopInit.inc();
+                for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
+                    memory.writeWord(offset, Word.zero(), ANY_LOCATION);
+                }
             }
         }
     }
@@ -185,41 +215,38 @@ public class NewObjectSnippets implements SnippetsInterface {
     /**
      * Formats some allocated memory with an object header zeroes out the rest.
      */
-    private static void formatArray(Object hub, int size, int length, int headerSize, Word memory, Word headerPrototype) {
-        storeObject(memory, 0, markOffset(), headerPrototype);
-        storeObject(memory, 0, hubOffset(), hub);
-        storeInt(memory, 0, arrayLengthOffset(), length);
-        for (int offset = headerSize; offset < size; offset += wordSize()) {
-            storeWord(memory, 0, offset, Word.zero());
+    public static void formatArray(Word hub, int allocationSize, int length, int headerSize, Word memory, Word prototypeMarkWord, boolean fillContents) {
+        memory.writeInt(arrayLengthOffset(), length, ANY_LOCATION);
+        // store hub last as the concurrent garbage collectors assume length is valid if hub field is not null
+        initializeObjectHeader(memory, prototypeMarkWord, hub);
+        if (fillContents) {
+            for (int offset = headerSize; offset < allocationSize; offset += wordSize()) {
+                memory.writeWord(offset, Word.zero(), ANY_LOCATION);
+            }
         }
     }
 
-    public static class Templates {
+    // @formatter:on
 
-        private final Cache cache;
+    public static class Templates extends AbstractTemplates<NewObjectSnippets> {
+
         private final ResolvedJavaMethod allocate;
         private final ResolvedJavaMethod initializeObject;
-        private final ResolvedJavaMethod initializeObjectArray;
-        private final ResolvedJavaMethod initializePrimitiveArray;
+        private final ResolvedJavaMethod initializeArray;
         private final ResolvedJavaMethod allocateArrayAndInitialize;
+        private final ResolvedJavaMethod newmultiarray;
         private final TargetDescription target;
-        private final CodeCacheProvider runtime;
         private final boolean useTLAB;
 
-        public Templates(CodeCacheProvider runtime, TargetDescription target, boolean useTLAB) {
-            this.runtime = runtime;
+        public Templates(CodeCacheProvider runtime, Assumptions assumptions, TargetDescription target, boolean useTLAB) {
+            super(runtime, assumptions, target, NewObjectSnippets.class);
             this.target = target;
-            this.cache = new Cache(runtime);
             this.useTLAB = useTLAB;
-            try {
-                allocate = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("allocate", int.class));
-                initializeObject = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("initializeObject", Word.class, Object.class, Word.class, int.class));
-                initializeObjectArray = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("initializeObjectArray", Word.class, Object.class, int.class, int.class, Word.class, int.class));
-                initializePrimitiveArray = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("initializePrimitiveArray", Word.class, Object.class, int.class, int.class, Word.class, int.class));
-                allocateArrayAndInitialize = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("allocateArrayAndInitialize", int.class, int.class, int.class, int.class, ResolvedJavaType.class, Kind.class));
-            } catch (NoSuchMethodException e) {
-                throw new GraalInternalError(e);
-            }
+            allocate = snippet("allocate", int.class);
+            initializeObject = snippet("initializeObject", Word.class, Word.class, Word.class, int.class, boolean.class, boolean.class);
+            initializeArray = snippet("initializeArray", Word.class, Word.class, int.class, int.class, Word.class, int.class, boolean.class, boolean.class);
+            allocateArrayAndInitialize = snippet("allocateArrayAndInitialize", int.class, int.class, int.class, int.class, ResolvedJavaType.class);
+            newmultiarray = snippet("newmultiarray", Word.class, int.class, int[].class);
         }
 
         /**
@@ -228,21 +255,20 @@ public class NewObjectSnippets implements SnippetsInterface {
         @SuppressWarnings("unused")
         public void lower(NewInstanceNode newInstanceNode, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) newInstanceNode.graph();
-            HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) newInstanceNode.instanceClass();
-            HotSpotKlassOop hub = type.klassOop();
-            int size = type.instanceSize();
-            assert (size % wordSize()) == 0;
-            assert size >= 0;
+            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) newInstanceNode.instanceClass();
+            ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
+            int size = instanceSize(type);
 
             ValueNode memory;
             if (!useTLAB) {
-                memory = ConstantNode.forConstant(new Constant(target.wordKind, 0L), runtime, graph);
+                memory = ConstantNode.defaultForKind(target.wordKind, graph);
             } else {
-                TLABAllocateNode tlabAllocateNode = graph.add(new TLABAllocateNode(size, wordKind()));
+                ConstantNode sizeNode = ConstantNode.forInt(size, graph);
+                TLABAllocateNode tlabAllocateNode = graph.add(new TLABAllocateNode(sizeNode));
                 graph.addBeforeFixed(newInstanceNode, tlabAllocateNode);
                 memory = tlabAllocateNode;
             }
-            InitializeObjectNode initializeNode = graph.add(new InitializeObjectNode(memory, type));
+            InitializeObjectNode initializeNode = graph.add(new InitializeObjectNode(memory, type, newInstanceNode.fillContents(), newInstanceNode.locked()));
             graph.replaceFixedWithFixed(newInstanceNode, initializeNode);
         }
 
@@ -255,129 +281,111 @@ public class NewObjectSnippets implements SnippetsInterface {
             ValueNode lengthNode = newArrayNode.length();
             TLABAllocateNode tlabAllocateNode;
             ResolvedJavaType elementType = newArrayNode.elementType();
-            ResolvedJavaType arrayType = elementType.arrayOf();
-            Kind elementKind = elementType.kind();
+            ResolvedJavaType arrayType = elementType.getArrayClass();
+            Kind elementKind = elementType.getKind();
             final int alignment = target.wordSize;
-            final int headerSize = elementKind.arrayBaseOffset();
+            final int headerSize = HotSpotRuntime.getArrayBaseOffset(elementKind);
             final Integer length = lengthNode.isConstant() ? Integer.valueOf(lengthNode.asConstant().asInt()) : null;
             int log2ElementSize = CodeUtil.log2(target.sizeInBytes(elementKind));
             if (!useTLAB) {
-                ConstantNode zero = ConstantNode.forConstant(new Constant(target.wordKind, 0L), runtime, graph);
-                // value for 'size' doesn't matter as it isn't used since a stub call will be made anyway
+                ConstantNode zero = ConstantNode.defaultForKind(target.wordKind, graph);
+                // value for 'size' doesn't matter as it isn't used since a stub call will be made
+                // anyway
                 // for both allocation and initialization - it just needs to be non-null
                 ConstantNode size = ConstantNode.forInt(-1, graph);
-                InitializeArrayNode initializeNode = graph.add(new InitializeArrayNode(zero, lengthNode, size, arrayType));
+                InitializeArrayNode initializeNode = graph.add(new InitializeArrayNode(zero, lengthNode, size, arrayType, newArrayNode.fillContents(), newArrayNode.locked()));
                 graph.replaceFixedWithFixed(newArrayNode, initializeNode);
-            } else if (length != null && UnsignedMath.belowThan(length, MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH)) {
+            } else if (length != null && belowThan(length, MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH)) {
                 // Calculate aligned size
-                int size = getArraySize(length, alignment, headerSize, log2ElementSize);
+                int size = computeArrayAllocationSize(length, alignment, headerSize, log2ElementSize);
                 ConstantNode sizeNode = ConstantNode.forInt(size, graph);
-                tlabAllocateNode = graph.add(new TLABAllocateNode(size, target.wordKind));
+                tlabAllocateNode = graph.add(new TLABAllocateNode(sizeNode));
                 graph.addBeforeFixed(newArrayNode, tlabAllocateNode);
-                InitializeArrayNode initializeNode = graph.add(new InitializeArrayNode(tlabAllocateNode, lengthNode, sizeNode, arrayType));
+                InitializeArrayNode initializeNode = graph.add(new InitializeArrayNode(tlabAllocateNode, lengthNode, sizeNode, arrayType, newArrayNode.fillContents(), newArrayNode.locked()));
                 graph.replaceFixedWithFixed(newArrayNode, initializeNode);
             } else {
-                Key key = new Key(allocateArrayAndInitialize).
-                                add("alignment", alignment).
-                                add("headerSize", headerSize).
-                                add("log2ElementSize", log2ElementSize).
-                                add("wordKind", target.wordKind).
-                                add("type", arrayType);
+                Key key = new Key(allocateArrayAndInitialize).add("alignment", alignment).add("headerSize", headerSize).add("log2ElementSize", log2ElementSize).add("type", arrayType);
                 Arguments arguments = new Arguments().add("length", lengthNode);
-                SnippetTemplate template = cache.get(key);
+                SnippetTemplate template = cache.get(key, assumptions);
                 Debug.log("Lowering allocateArrayAndInitialize in %s: node=%s, template=%s, arguments=%s", graph, newArrayNode, template, arguments);
-                template.instantiate(runtime, newArrayNode, newArrayNode, arguments);
+                template.instantiate(runtime, newArrayNode, DEFAULT_REPLACER, arguments);
             }
         }
 
         @SuppressWarnings("unused")
         public void lower(TLABAllocateNode tlabAllocateNode, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) tlabAllocateNode.graph();
-            ValueNode size;
-            if (tlabAllocateNode.isSizeConstant()) {
-                size = ConstantNode.forInt(tlabAllocateNode.constantSize(), graph);
-            } else {
-                size = tlabAllocateNode.variableSize();
-            }
+            ValueNode size = tlabAllocateNode.size();
             Key key = new Key(allocate);
             Arguments arguments = arguments("size", size);
-            SnippetTemplate template = cache.get(key);
+            SnippetTemplate template = cache.get(key, assumptions);
             Debug.log("Lowering fastAllocate in %s: node=%s, template=%s, arguments=%s", graph, tlabAllocateNode, template, arguments);
-            template.instantiate(runtime, tlabAllocateNode, tlabAllocateNode, arguments);
+            template.instantiate(runtime, tlabAllocateNode, DEFAULT_REPLACER, arguments);
         }
 
         @SuppressWarnings("unused")
         public void lower(InitializeObjectNode initializeNode, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) initializeNode.graph();
-            HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) initializeNode.type();
-            assert !type.isArrayClass();
-            HotSpotKlassOop hub = type.klassOop();
-            int size = type.instanceSize();
-            assert (size % wordSize()) == 0;
-            assert size >= 0;
-            Key key = new Key(initializeObject).add("size", size);
+            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) initializeNode.type();
+            assert !type.isArray();
+            ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
+            int size = instanceSize(type);
+            Key key = new Key(initializeObject).add("size", size).add("fillContents", initializeNode.fillContents()).add("locked", initializeNode.locked());
             ValueNode memory = initializeNode.memory();
-            Arguments arguments = arguments("memory", memory).add("hub", hub).add("initialMarkWord", type.initialMarkWord());
-            SnippetTemplate template = cache.get(key);
+            Arguments arguments = arguments("memory", memory).add("hub", hub).add("prototypeMarkWord", type.prototypeMarkWord());
+            SnippetTemplate template = cache.get(key, assumptions);
             Debug.log("Lowering initializeObject in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
-            template.instantiate(runtime, initializeNode, initializeNode, arguments);
+            template.instantiate(runtime, initializeNode, DEFAULT_REPLACER, arguments);
         }
 
         @SuppressWarnings("unused")
         public void lower(InitializeArrayNode initializeNode, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) initializeNode.graph();
-            HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) initializeNode.type();
-            ResolvedJavaType elementType = type.componentType();
+            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) initializeNode.type();
+            ResolvedJavaType elementType = type.getComponentType();
             assert elementType != null;
-            HotSpotKlassOop hub = type.klassOop();
-            Kind elementKind = elementType.kind();
-            final int headerSize = elementKind.arrayBaseOffset();
-            Key key = new Key(elementKind.isObject() ? initializeObjectArray : initializePrimitiveArray).add("headerSize", headerSize);
+            ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
+            Kind elementKind = elementType.getKind();
+            final int headerSize = HotSpotRuntime.getArrayBaseOffset(elementKind);
+            Key key = new Key(initializeArray).add("headerSize", headerSize).add("fillContents", initializeNode.fillContents()).add("locked", initializeNode.locked());
             ValueNode memory = initializeNode.memory();
-            Arguments arguments = arguments("memory", memory).add("hub", hub).add("initialMarkWord", type.initialMarkWord()).add("size", initializeNode.size()).add("length", initializeNode.length());
-            SnippetTemplate template = cache.get(key);
-            Debug.log("Lowering initializeObjectArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
-            template.instantiate(runtime, initializeNode, initializeNode, arguments);
+            Arguments arguments = arguments("memory", memory).add("hub", hub).add("prototypeMarkWord", type.prototypeMarkWord()).add("allocationSize", initializeNode.allocationSize()).add("length",
+                            initializeNode.length());
+            SnippetTemplate template = cache.get(key, assumptions);
+            Debug.log("Lowering initializeArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
+            template.instantiate(runtime, initializeNode, DEFAULT_REPLACER, arguments);
+        }
+
+        @SuppressWarnings("unused")
+        public void lower(NewMultiArrayNode newmultiarrayNode, LoweringTool tool) {
+            StructuredGraph graph = (StructuredGraph) newmultiarrayNode.graph();
+            int rank = newmultiarrayNode.dimensionCount();
+            ValueNode[] dims = new ValueNode[rank];
+            for (int i = 0; i < newmultiarrayNode.dimensionCount(); i++) {
+                dims[i] = newmultiarrayNode.dimension(i);
+            }
+            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) newmultiarrayNode.type();
+            ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
+            Key key = new Key(newmultiarray).add("dimensions", vargargs(new int[rank], StampFactory.forKind(Kind.Int))).add("rank", rank);
+            Arguments arguments = arguments("dimensions", dims).add("hub", hub);
+            SnippetTemplate template = cache.get(key, assumptions);
+            template.instantiate(runtime, newmultiarrayNode, DEFAULT_REPLACER, arguments);
+        }
+
+        private static int instanceSize(HotSpotResolvedObjectType type) {
+            int size = type.instanceSize();
+            assert (size % wordSize()) == 0;
+            assert size >= 0;
+            return size;
         }
     }
 
-    @Fold
-    private static boolean verifyOops() {
-        return HotSpotGraalRuntime.getInstance().getConfig().verifyOops;
-    }
+    private static final SnippetCounter.Group countersNew = GraalOptions.SnippetCounters ? new SnippetCounter.Group("NewInstance") : null;
+    private static final SnippetCounter new_seqInit = new SnippetCounter(countersNew, "tlabSeqInit", "TLAB alloc with unrolled zeroing");
+    private static final SnippetCounter new_loopInit = new SnippetCounter(countersNew, "tlabLoopInit", "TLAB alloc with zeroing in a loop");
+    private static final SnippetCounter new_stub = new SnippetCounter(countersNew, "stub", "alloc and zeroing via stub");
 
-    @Fold
-    private static int threadTlabTopOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().threadTlabTopOffset;
-    }
-
-    @Fold
-    private static int threadTlabEndOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().threadTlabEndOffset;
-    }
-
-    @Fold
-    private static Kind wordKind() {
-        return HotSpotGraalRuntime.getInstance().getTarget().wordKind;
-    }
-
-    @Fold
-    private static int wordSize() {
-        return HotSpotGraalRuntime.getInstance().getTarget().wordSize;
-    }
-
-    @Fold
-    private static int markOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().markOffset;
-    }
-
-    @Fold
-    private static int hubOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().hubOffset;
-    }
-
-    @Fold
-    private static int arrayLengthOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().arrayLengthOffset;
-    }
+    private static final SnippetCounter.Group countersNewArray = GraalOptions.SnippetCounters ? new SnippetCounter.Group("NewArray") : null;
+    private static final SnippetCounter newarray_loopInit = new SnippetCounter(countersNewArray, "tlabLoopInit", "TLAB alloc with zeroing in a loop");
+    private static final SnippetCounter newarray_stub = new SnippetCounter(countersNewArray, "stub", "alloc and zeroing via stub");
 }

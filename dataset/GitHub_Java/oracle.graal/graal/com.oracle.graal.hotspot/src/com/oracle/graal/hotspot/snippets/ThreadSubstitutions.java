@@ -23,31 +23,35 @@
 package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
-import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 
-import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.snippets.*;
-import com.oracle.graal.snippets.ClassSubstitution.MacroSubstitution;
 import com.oracle.graal.snippets.ClassSubstitution.MethodSubstitution;
 import com.oracle.graal.word.*;
 
 /**
- * Substitutions for {@link java.lang.Object} methods.
+ * Substitutions for {@link java.lang.Thread} methods.
  */
-@ClassSubstitution(java.lang.Object.class)
-public class ObjectSubstitutions {
+@ClassSubstitution(java.lang.Thread.class)
+public class ThreadSubstitutions {
 
-    @MethodSubstitution(isStatic = false)
-    public static Class<?> getClass(final Object thisObj) {
-        Word hub = loadHub(thisObj);
-        return unsafeCast(hub.readObject(Word.signed(classMirrorOffset()), LocationNode.FINAL_LOCATION), Class.class, true, true);
+    @MethodSubstitution
+    public static Thread currentThread() {
+        return CurrentThread.get();
     }
 
     @MethodSubstitution(isStatic = false)
-    public static int hashCode(final Object thisObj) {
-        return computeHashCode(thisObj);
-    }
+    private static boolean isInterrupted(final Thread thisObject, boolean clearInterrupted) {
+        Word rawThread = HotSpotCurrentRawThreadNode.get();
+        Thread thread = (Thread) rawThread.readObject(threadObjectOffset(), FINAL_LOCATION);
+        if (thisObject == thread) {
+            Word osThread = rawThread.readWord(osThreadOffset(), FINAL_LOCATION);
+            boolean interrupted = osThread.readInt(osThreadInterruptedOffset(), UNKNOWN_LOCATION) != 0;
+            if (!interrupted || !clearInterrupted) {
+                return interrupted;
+            }
+        }
 
-    @MacroSubstitution(macro = ObjectCloneNode.class, isStatic = false)
-    public static native Object clone(Object obj);
+        return ThreadIsInterruptedStubCall.call(thisObject, clearInterrupted) != 0;
+    }
 }
