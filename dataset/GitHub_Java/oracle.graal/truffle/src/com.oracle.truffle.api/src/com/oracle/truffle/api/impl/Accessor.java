@@ -26,10 +26,10 @@ package com.oracle.truffle.api.impl;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionValues;
@@ -81,7 +81,7 @@ public abstract class Accessor {
 
         public abstract void setLanguageSpi(LanguageInfo languageInfo, TruffleLanguage<?> spi);
 
-        public abstract LanguageInfo createLanguage(Object vmObject, String id, String name, String version, Set<String> mimeTypes, boolean internal);
+        public abstract LanguageInfo createLanguage(Object vmObject, String id, String name, String version, Set<String> mimeTypes);
 
         public abstract Object getSourceVM(RootNode rootNode);
 
@@ -103,9 +103,10 @@ public abstract class Accessor {
     }
 
     public abstract static class JavaInteropSupport {
+
         public abstract Node createToJavaNode();
 
-        public abstract Object toJava(Node toJavaNode, Class<?> type, Object value);
+        public abstract Object toJava(Node toJavaNode, Class<?> rawType, Type genericType, Object value, Object polyglotContext);
 
         public abstract Object toJavaGuestObject(Object obj, Object languageContext);
     }
@@ -226,11 +227,14 @@ public abstract class Accessor {
 
         public abstract Throwable asHostException(Throwable exception);
 
+        public abstract ClassCastException newClassCastException(String message, Throwable cause);
+
+        public abstract Object getCurrentHostContext();
+
         public abstract Object legacyTckEnter(Object vm);
 
         public abstract void legacyTckLeave(Object vm, Object prev);
 
-        public abstract <T> T getOrCreateRuntimeData(Object sourceVM, Supplier<T> constructor);
     }
 
     public abstract static class LanguageSupport {
@@ -304,8 +308,6 @@ public abstract class Accessor {
 
         public abstract Iterable<Scope> findTopScopes(Env env);
 
-        public abstract Env patchEnvContext(Env env, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options, String[] applicationArguments);
-
     }
 
     public abstract static class InstrumentSupport {
@@ -367,8 +369,6 @@ public abstract class Accessor {
         public abstract void notifyThreadStarted(Object engine, TruffleContext context, Thread thread);
 
         public abstract void notifyThreadFinished(Object engine, TruffleContext context, Thread thread);
-
-        public abstract void patchInstrumentationHandler(Object instrumentationHandler, DispatchOutputStream out, DispatchOutputStream err, InputStream in);
 
     }
 
@@ -610,14 +610,6 @@ public abstract class Accessor {
             return false;
         }
         return SUPPORT.isGuestCallStackFrame(element);
-    }
-
-    protected void initializeProfile(CallTarget target, Class<?>[] argmentTypes) {
-        SUPPORT.initializeProfile(target, argmentTypes);
-    }
-
-    protected Object callProfiled(CallTarget target, Object... args) {
-        return SUPPORT.callProfiled(target, args);
     }
 
     @SuppressWarnings("deprecation")

@@ -729,8 +729,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
         @Override
         public Object getCurrentHostContext() {
-            PolyglotContextImpl polyglotContext = PolyglotContextImpl.current();
-            return polyglotContext == null ? null : polyglotContext.getHostContext();
+            return PolyglotContextImpl.requireContext().getHostContext();
         }
 
         @Override

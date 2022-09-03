@@ -48,7 +48,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.Executor;
-import java.util.function.Supplier;
 
 import org.graalvm.options.OptionValues;
 
@@ -1071,8 +1070,8 @@ public class PolyglotEngine {
          * evaluate} guest language code that produces the desired language element and then use
          * this method to create a Java object of the appropriate type for Java access to the
          * result. The tutorial <a href=
-         * "{@docRoot}/com/oracle/truffle/tutorial/embedding/package-summary.html"> "Embedding
-         * Truffle Languages in Java"</a> contains examples.
+         * "{@docRoot}/com/oracle/truffle/tutorial/embedding/package-summary.html">
+         * "Embedding Truffle Languages in Java"</a> contains examples.
          *
          * @param <T> the type of the requested view
          * @param representation an interface describing the requested access (must be an interface)
@@ -1157,8 +1156,8 @@ public class PolyglotEngine {
          * evaluate} guest language code that produces the desired language element. If that element
          * is a guest language function, this method allows direct execution without giving the
          * function a Java type. The tutorial <a href=
-         * "{@docRoot}/com/oracle/truffle/tutorial/embedding/package-summary.html"> "Embedding
-         * Truffle Languages in Java"</a> contains examples.
+         * "{@docRoot}/com/oracle/truffle/tutorial/embedding/package-summary.html">
+         * "Embedding Truffle Languages in Java"</a> contains examples.
          *
          * @param args arguments to pass when executing the value
          * @return result of the execution wrapped in a non-null {@link Value}
@@ -1885,6 +1884,16 @@ public class PolyglotEngine {
         }
 
         @Override
+        public ClassCastException newClassCastException(String message, Throwable cause) {
+            return cause == null ? new PolyglotClassCastException(message) : new PolyglotClassCastException(message, cause);
+        }
+
+        @Override
+        public Object getCurrentHostContext() {
+            return null;
+        }
+
+        @Override
         public Object legacyTckEnter(Object vm) {
             return ((PolyglotEngine) vm).enter();
         }
@@ -1892,11 +1901,6 @@ public class PolyglotEngine {
         @Override
         public void legacyTckLeave(Object vm, Object prev) {
             ((PolyglotEngine) vm).leave(prev);
-        }
-
-        @Override
-        public <T> T getOrCreateRuntimeData(Object sourceVM, Supplier<T> constructor) {
-            throw new UnsupportedOperationException("Not supported in legacy engine.");
         }
 
         @Override

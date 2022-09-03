@@ -47,7 +47,6 @@ import com.oracle.truffle.api.nodes.Node;
 abstract class ToJavaNode extends Node {
     static final int LIMIT = 3;
     @Child private Node isExecutable = Message.IS_EXECUTABLE.createNode();
-    @Child private Node isInstantiable = Message.IS_INSTANTIABLE.createNode();
     @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
 
     public abstract Object execute(Object value, Class<?> targetType, Type genericType, Object languageContext);
@@ -165,10 +164,6 @@ abstract class ToJavaNode extends Node {
         return ForeignAccess.sendIsExecutable(isExecutable, object);
     }
 
-    private boolean isInstantiable(TruffleObject object) {
-        return ForeignAccess.sendIsInstantiable(isInstantiable, object);
-    }
-
     private Object convertToObject(TruffleObject truffleObject, Object languageContext) {
         Object primitiveValue = primitive.toPrimitive(truffleObject, null); // unbox
         if (primitiveValue != null) {
@@ -207,11 +202,7 @@ abstract class ToJavaNode extends Node {
             boolean hasSize = (keyClazz == Object.class || Number.class.isAssignableFrom(keyClazz)) && primitive.hasSize(truffleObject);
             if (hasKeys || hasSize) {
                 boolean executable = isExecutable(truffleObject);
-                boolean instantiable = false;
-                if (!executable) {
-                    instantiable = isInstantiable(truffleObject);
-                }
-                obj = TruffleMap.create(keyClazz, valueType.clazz, valueType.type, truffleObject, languageContext, hasKeys, hasSize, executable, instantiable);
+                obj = TruffleMap.create(keyClazz, valueType.clazz, valueType.type, truffleObject, languageContext, hasKeys, hasSize, executable);
             } else {
                 throw newClassCastException(truffleObject, targetType, "has no keys");
             }
