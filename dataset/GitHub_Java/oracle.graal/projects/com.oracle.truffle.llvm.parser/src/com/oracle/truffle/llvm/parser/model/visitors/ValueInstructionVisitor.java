@@ -31,144 +31,109 @@ package com.oracle.truffle.llvm.parser.model.visitors;
 
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.AllocateInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.BinaryOperationInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.BranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CallInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CastInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareExchangeInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ConditionalBranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractElementInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.GetElementPointerInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.IndirectBranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertElementInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.InvokeInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.LandingpadInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.LoadInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.PhiInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ResumeInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReturnInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.SelectInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ShuffleVectorInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.StoreInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchOldInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 
-public interface InstructionVisitorAdapter extends InstructionVisitor {
+public abstract class ValueInstructionVisitor implements InstructionVisitorAdapter {
+
+    public abstract void visitValueInstruction(ValueInstruction valueInstruction);
 
     @Override
-    default void visit(AllocateInstruction allocate) {
+    public void visit(AllocateInstruction allocate) {
+        visitValueInstruction(allocate);
     }
 
     @Override
-    default void visit(BinaryOperationInstruction operation) {
+    public void visit(BinaryOperationInstruction operation) {
+        visitValueInstruction(operation);
     }
 
     @Override
-    default void visit(BranchInstruction branch) {
+    public void visit(CallInstruction call) {
+        visitValueInstruction(call);
     }
 
     @Override
-    default void visit(CallInstruction call) {
+    public void visit(InvokeInstruction call) {
+        visitValueInstruction(call);
     }
 
     @Override
-    default void visit(LandingpadInstruction landingpadInstruction) {
+    public void visit(LandingpadInstruction landingpadInstruction) {
+        visitValueInstruction(landingpadInstruction);
     }
 
     @Override
-    default void visit(CastInstruction cast) {
+    public void visit(CastInstruction cast) {
+        visitValueInstruction(cast);
     }
 
     @Override
-    default void visit(CompareInstruction operation) {
+    public void visit(CompareInstruction operation) {
+        visitValueInstruction(operation);
     }
 
     @Override
-    default void visit(ConditionalBranchInstruction branch) {
+    public void visit(ExtractElementInstruction extract) {
+        visitValueInstruction(extract);
     }
 
     @Override
-    default void visit(ExtractElementInstruction extract) {
+    public void visit(ExtractValueInstruction extract) {
+        visitValueInstruction(extract);
     }
 
     @Override
-    default void visit(ExtractValueInstruction extract) {
+    public void visit(GetElementPointerInstruction gep) {
+        visitValueInstruction(gep);
     }
 
     @Override
-    default void visit(GetElementPointerInstruction gep) {
+    public void visit(InsertElementInstruction insert) {
+        visitValueInstruction(insert);
     }
 
     @Override
-    default void visit(IndirectBranchInstruction branch) {
+    public void visit(InsertValueInstruction insert) {
+        visitValueInstruction(insert);
     }
 
     @Override
-    default void visit(InsertElementInstruction insert) {
+    public void visit(LoadInstruction load) {
+        visitValueInstruction(load);
     }
 
     @Override
-    default void visit(InsertValueInstruction insert) {
+    public void visit(PhiInstruction phi) {
+        visitValueInstruction(phi);
     }
 
     @Override
-    default void visit(LoadInstruction load) {
+    public void visit(SelectInstruction select) {
+        visitValueInstruction(select);
     }
 
     @Override
-    default void visit(PhiInstruction phi) {
+    public void visit(ShuffleVectorInstruction shuffle) {
+        visitValueInstruction(shuffle);
     }
 
     @Override
-    default void visit(ReturnInstruction ret) {
-    }
-
-    @Override
-    default void visit(SelectInstruction select) {
-    }
-
-    @Override
-    default void visit(ShuffleVectorInstruction shuffle) {
-    }
-
-    @Override
-    default void visit(StoreInstruction store) {
-    }
-
-    @Override
-    default void visit(SwitchInstruction select) {
-    }
-
-    @Override
-    default void visit(SwitchOldInstruction select) {
-    }
-
-    @Override
-    default void visit(UnreachableInstruction unreachable) {
-    }
-
-    @Override
-    default void visit(VoidCallInstruction call) {
-    }
-
-    @Override
-    default void visit(InvokeInstruction invoke) {
-    }
-
-    @Override
-    default void visit(VoidInvokeInstruction invoke) {
-    }
-
-    @Override
-    default void visit(ResumeInstruction resume) {
-    }
-
-    @Override
-    default void visit(CompareExchangeInstruction cmpxchg) {
+    public void visit(CompareExchangeInstruction cmpxchg) {
+        visitValueInstruction(cmpxchg);
     }
 }

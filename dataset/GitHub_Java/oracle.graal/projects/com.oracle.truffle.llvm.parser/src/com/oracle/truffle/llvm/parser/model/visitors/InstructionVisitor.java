@@ -58,117 +58,61 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInst
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
 
-public interface InstructionVisitorAdapter extends InstructionVisitor {
+public interface InstructionVisitor {
 
-    @Override
-    default void visit(AllocateInstruction allocate) {
-    }
+    void visit(AllocateInstruction allocate);
 
-    @Override
-    default void visit(BinaryOperationInstruction operation) {
-    }
+    void visit(BinaryOperationInstruction operation);
 
-    @Override
-    default void visit(BranchInstruction branch) {
-    }
+    void visit(BranchInstruction branch);
 
-    @Override
-    default void visit(CallInstruction call) {
-    }
+    void visit(CallInstruction call);
 
-    @Override
-    default void visit(LandingpadInstruction landingpadInstruction) {
-    }
+    void visit(InvokeInstruction call);
 
-    @Override
-    default void visit(CastInstruction cast) {
-    }
+    void visit(CastInstruction cast);
 
-    @Override
-    default void visit(CompareInstruction operation) {
-    }
+    void visit(CompareInstruction operation);
 
-    @Override
-    default void visit(ConditionalBranchInstruction branch) {
-    }
+    void visit(ConditionalBranchInstruction branch);
 
-    @Override
-    default void visit(ExtractElementInstruction extract) {
-    }
+    void visit(ExtractElementInstruction extract);
 
-    @Override
-    default void visit(ExtractValueInstruction extract) {
-    }
+    void visit(ExtractValueInstruction extract);
 
-    @Override
-    default void visit(GetElementPointerInstruction gep) {
-    }
+    void visit(GetElementPointerInstruction gep);
 
-    @Override
-    default void visit(IndirectBranchInstruction branch) {
-    }
+    void visit(IndirectBranchInstruction branch);
 
-    @Override
-    default void visit(InsertElementInstruction insert) {
-    }
+    void visit(InsertElementInstruction insert);
 
-    @Override
-    default void visit(InsertValueInstruction insert) {
-    }
+    void visit(InsertValueInstruction insert);
 
-    @Override
-    default void visit(LoadInstruction load) {
-    }
+    void visit(LoadInstruction load);
 
-    @Override
-    default void visit(PhiInstruction phi) {
-    }
+    void visit(PhiInstruction phi);
 
-    @Override
-    default void visit(ReturnInstruction ret) {
-    }
+    void visit(ReturnInstruction ret);
 
-    @Override
-    default void visit(SelectInstruction select) {
-    }
+    void visit(SelectInstruction select);
 
-    @Override
-    default void visit(ShuffleVectorInstruction shuffle) {
-    }
+    void visit(ShuffleVectorInstruction shuffle);
 
-    @Override
-    default void visit(StoreInstruction store) {
-    }
+    void visit(StoreInstruction store);
 
-    @Override
-    default void visit(SwitchInstruction select) {
-    }
+    void visit(SwitchInstruction select);
 
-    @Override
-    default void visit(SwitchOldInstruction select) {
-    }
+    void visit(SwitchOldInstruction select);
 
-    @Override
-    default void visit(UnreachableInstruction unreachable) {
-    }
+    void visit(UnreachableInstruction unreachable);
 
-    @Override
-    default void visit(VoidCallInstruction call) {
-    }
+    void visit(VoidCallInstruction call);
 
-    @Override
-    default void visit(InvokeInstruction invoke) {
-    }
+    void visit(VoidInvokeInstruction call);
 
-    @Override
-    default void visit(VoidInvokeInstruction invoke) {
-    }
+    void visit(LandingpadInstruction landingpad);
 
-    @Override
-    default void visit(ResumeInstruction resume) {
-    }
+    void visit(ResumeInstruction resume);
 
-    @Override
-    default void visit(CompareExchangeInstruction cmpxchg) {
-    }
+    void visit(CompareExchangeInstruction cmpxchg);
 }
