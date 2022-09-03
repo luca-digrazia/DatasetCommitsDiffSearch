@@ -1219,9 +1219,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         return false;
                     }
                 } else {
-                    if (context == null && inlineInfo.isReplacement) {
-                        assert !inlinedMethod.equals(targetMethod);
-                        if (inlineInfo.isIntrinsic) {
+                    if (context == null && !inlinedMethod.equals(targetMethod)) {
+                        if (inlineInfo.adoptBeforeCallFrameState) {
                             context = new IntrinsicContext(targetMethod, inlinedMethod, args, bci);
                         } else {
                             context = new ReplacementContext(targetMethod, inlinedMethod);
