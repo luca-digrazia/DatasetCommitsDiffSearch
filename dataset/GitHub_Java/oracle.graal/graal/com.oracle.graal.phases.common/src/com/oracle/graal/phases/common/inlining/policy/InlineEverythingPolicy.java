@@ -22,18 +22,17 @@
  */
 package com.oracle.graal.phases.common.inlining.policy;
 
-import static com.oracle.graal.compiler.common.GraalOptions.MaximumDesiredSize;
-import jdk.internal.jvmci.code.BailoutException;
-
+import com.oracle.graal.api.code.BailoutException;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.spi.Replacements;
-import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.common.inlining.walker.MethodInvocation;
 
-public class InlineEverythingPolicy implements InliningPolicy {
+import static com.oracle.graal.compiler.common.GraalOptions.MaximumDesiredSize;
+
+public final class InlineEverythingPolicy implements InliningPolicy {
 
     public boolean continueInlining(StructuredGraph graph) {
-        if (InliningUtil.getNodeCount(graph) >= MaximumDesiredSize.getValue()) {
+        if (graph.getNodeCount() >= MaximumDesiredSize.getValue()) {
             throw new BailoutException("Inline all calls failed. The resulting graph is too large.");
         }
         return true;

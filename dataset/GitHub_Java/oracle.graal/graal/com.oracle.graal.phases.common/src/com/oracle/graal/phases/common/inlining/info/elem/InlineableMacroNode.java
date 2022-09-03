@@ -22,29 +22,35 @@
  */
 package com.oracle.graal.phases.common.inlining.info.elem;
 
-import com.oracle.graal.api.meta.ResolvedJavaMethod;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.inlining.InliningUtil;
-import com.oracle.graal.phases.tiers.HighTierContext;
 
-public interface Inlineable {
+import java.util.Collections;
 
-    static Inlineable getInlineableElement(final ResolvedJavaMethod method, Invoke invoke, HighTierContext context, CanonicalizerPhase canonicalizer) {
-        assert method != null;
-        assert invoke != null;
-        Class<? extends FixedWithNextNode> macroNodeClass = InliningUtil.getMacroNodeClass(context.getReplacements(), method);
-        if (macroNodeClass != null) {
-            return new InlineableMacroNode(macroNodeClass);
-        } else {
-            return new InlineableGraph(method, invoke, context, canonicalizer);
-        }
+public class InlineableMacroNode implements Inlineable {
+
+    private final Class<? extends FixedWithNextNode> macroNodeClass;
+
+    public InlineableMacroNode(Class<? extends FixedWithNextNode> macroNodeClass) {
+        this.macroNodeClass = macroNodeClass;
     }
 
-    int getNodeCount();
+    @Override
+    public int getNodeCount() {
+        return 1;
+    }
 
-    Iterable<Invoke> getInvokes();
+    @Override
+    public Iterable<Invoke> getInvokes() {
+        return Collections.emptyList();
+    }
 
-    double getProbability(Invoke invoke);
+    public Class<? extends FixedWithNextNode> getMacroNodeClass() {
+        return macroNodeClass;
+    }
+
+    public double getProbability(Invoke invoke) {
+        throw GraalInternalError.shouldNotReachHere("No invokes in inlineable");
+    }
 }

@@ -247,7 +247,7 @@ public class InlineableGraph implements Inlineable {
             }
             assert newGraph.start().next() != null : "graph needs to be populated by the GraphBuilderSuite";
 
-            new DeadCodeEliminationPhase(Optional).apply(newGraph);
+            new DeadCodeEliminationPhase(OPTIONAL).apply(newGraph);
 
             if (OptCanonicalizer.getValue()) {
                 canonicalizer.apply(newGraph, context);
