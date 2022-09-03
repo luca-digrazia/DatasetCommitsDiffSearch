@@ -30,9 +30,15 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
+ * Apply to the constructor parameter that corresponds to an object-model DSL property to mark it as
+ * volatile, in the sense of the Java Language Specification section 8.3.1.4. By default, properties
+ * are not volatile.
+ *
  * @see Layout
+ *
+ * @since 0.12
  */
 @Target(ElementType.PARAMETER)
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.SOURCE)
 public @interface Volatile {
 }

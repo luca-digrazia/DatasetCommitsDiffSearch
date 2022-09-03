@@ -30,9 +30,14 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
+ * Apply to the constructor parameter that corresponds to an object-model DSL property to mark it as
+ * being able to contain a null value. By default, properties are non-nullable.
+ *
  * @see Layout
+ *
+ * @since 0.12
  */
 @Target(ElementType.PARAMETER)
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.SOURCE)
 public @interface Nullable {
 }

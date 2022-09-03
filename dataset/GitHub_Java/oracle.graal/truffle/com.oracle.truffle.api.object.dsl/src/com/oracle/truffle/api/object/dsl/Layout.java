@@ -25,215 +25,400 @@
 package com.oracle.truffle.api.object.dsl;
 
 import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.object.DynamicObjectFactory;
+import com.oracle.truffle.api.object.HiddenKey;
 import com.oracle.truffle.api.object.ObjectType;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * A {@link Layout} annotation is attached to an interface that describes an object layout with
- * properties. The interface has a factory method, guards, getters and setters. From this a class is
- * generated that implements these methods and provides very efficient static access to these
- * properties in a {@link DynamicObject}.
+ * Annotate an interface with {@link Layout} to generate an implementation of the interface which
+ * uses object-model properties. {@link Layout} allows you to use the object-model in a similar way
+ * to writing a normal Java class for statically declared and implementation-specific fields. Most
+ * methods generated from an {@link Layout}-annotated interface are suitable for use on the
+ * fast-path.
  *
- * <pre>
- * {@literal@}Layout
- * public interface RectLayout {
- *    ...
- * }
- * </pre>
+ * The name of the interface should end with 'Layout'.
  *
- * The properties are defined by getters and setter method pairs. They should both take a
- * {@link DynamicObject}, and the setter should take a value. The type of this value should match
- * the type of the return value of the getter. This defines an {@code int} property called
- * {@code width}.
+ * {@codesnippet rectlayout}
  *
- * <pre>
- * int getWidth(DynamicObject object);
+ * The generated class is named with the name of the interface and then {@code -Impl}. A singleton
+ * instance of the interface, {@code -Impl.INSTANCE} is available as a static field in the class.
  *
- * void setWidth(DynamicObject object, int value);
- * </pre>
+ * {@codesnippet rectlayoutimpl}
  *
- * A constructor accepts a value for each property, returning a new {@link DynamicObject}. There
- * should be as many parameters as there are properties.
+ * <h2>Factory method</h2>
  *
- * Setters are optional. A property without a setter is final.
+ * A factory method named {@code create-} and then the name of the layout creates instances of the
+ * layout. It returns a {@link DynamicObject}, not an instance of the interface.
  *
- * <pre>
- * DynamicObject createRect(int x, int y, int width, int height);
- * </pre>
+ * {@codesnippet rectlayoutcreate}
  *
- * Guards can tell you if an object has this layout.
+ * <h2>Guards</h2>
  *
- * <pre>
- * boolean isRect(DynamicObject object);
+ * Guards can tell you if an object is using layout. Guards are defined for {@link DynamicObject},
+ * the more general {@link Object} which first checks if the arguments is a {@link DynamicObject},
+ * and {@link ObjectType}, which you can get through the shape of a {@link DynamicObject}. To add a
+ * guard, define the method in your interface.
  *
- * boolean isRect(Object object);
  *
- * boolean isRect(ObjectType objectType);
- * </pre>
+ * {@codesnippet rectlayoutguards}
  *
- * To access the implementation of the interface, use the {@code INSTANCE} static final field of the
- * generated {@code ...Impl} class.
+ * <h2>Properties</h2>
  *
- * <pre>
- * RectLayout rectLayout = RectLayoutImpl.INSTANCE;
- * </pre>
+ * To add properties, define a getter and setter, and add a parameter to the factory method.
  *
- * <p>
- * <strong>Nullability</strong>
- * </p>
+ * {@codesnippet rectlayoutprops}
  *
- * Properties are non-nullable by default - they cannot contain null values and attempting to set
- * them to null in the constructor method or a setter is an assertion failure.
+ * If you don't define a setter, the property will be final. This may improve the performance of the
+ * property.
  *
- * Properties can be marked as nullable by annotating the relevant constructor parameters with
- * {@link Nullable}. Properties with primitive types cannot be nullable.
+ * <h2>Nullable Properties</h2>
  *
- * <pre>
- * DynamicObject createWidget({@literal@}Nullable Object foo);
- * </pre>
+ * By default, properties are non-nullable, which means that they always need an instance of an
+ * object and they cannot be assigned the value {@code null}. This has performance benefits in the
+ * implementation of the object-model.
  *
- * <p>
- * <strong>Volatility</strong>
- * </p>
+ * To make a property nullable so that you can assign {@code null} to it, annotate the constructor
+ * parameter with {@link Nullable}.
  *
- * Properties can have volatile semantics on read and write operations by annotating the relevant
- * constructor parameters with {@link Volatile}.
+ * {@codesnippet nullable}
  *
- * Volatile is not supported for shape properties.
+ * <h2>Volatile Properties</h2>
  *
- * <pre>
- * DynamicObject createWidget({@literal@}Volatile Object foo);
- * </pre>
+ * To define a property with volatile semantics, in the sense of the Java Language Specification
+ * section 8.3.1.4, annotate the constructor parameter with {@link Volatile}. A property annotated
+ * as volatile also allows you to define atomic operation methods in your layout interface for that
+ * property. Methods available are {@code compareAndSet}, in the sense of
+ * {@link AtomicReference#compareAndSet}, and {@code getAndSet}, in the sense of
+ * {@link AtomicReference#getAndSet}.
  *
- * <p>
- * <strong>Compare-and-set and get-and-set operations</strong>
- * </p>
+ * {@codesnippet volatile}
  *
- * If a property is marked with {@link Volatile}, methods providing compare-and-set and get-and-set
- * can be added by declaring the method headers.
+ * Volatile properties generally have lower performance than the default non-volatile properties.
  *
- * <pre>
- * boolean compareAndSetFoo(DynamicObject widget, Object expected_foo, Object foo);
+ * <h2>Semi-Final Properties</h2>
  *
- * Object getAndSet(DynamicObject widget, Object foo);
- * </pre>
+ * It is possible to define a 'back-door' and unsafe setter for otherwise-final properties by
+ * appending {@code -Unsafe} to the setter name.
  *
- * <p>
- * <strong>Semi-Final Properties</strong>
- * </p>
+ * {@codesnippet semifinal}
  *
- * Properties without setters are final, and can be optimized more effectively by the compiler. Some
- * properties need to be modified just once very soon after construction (such as closing a cycle).
- * If you can guarantee that a final reference to the object will not be included in compiled code
- * between construction and needing to set the property, you can define only an unsafe setter, which
- * allows the property to be set while still treating it as final.
+ * Final and semi-final properties may be assumed by a dynamic compiler to not change for a given
+ * instance of an object after it is constructed. Unsafe setters are therefore unsafe as a
+ * modification to the property could be ignored by the dynamic compiler. You should only use unsafe
+ * setters if you have reasoned that it is not possible for the dynamic compiler to compile a
+ * reference to the object and the property before the unsafe setter is used. One use-case is
+ * closing cycles in class graphs, such as the classic class-of-class-is-class problem, where you
+ * normally want the class property to be final for performance but just as the graph is created
+ * this one cycle needs to be closed.
  *
- * Unsafe setters have 'Unsafe' after their name.
+ * Errors due to the incorrect use of unsafe getters are likely to be non-deterministic and
+ * difficult to isolate. Consider making properties temporarily non-final with a conventional getter
+ * if stale value are experienced in dynamically compiled code.
  *
- * <pre>
- * void setWidthUnsafe(DynamicObject object, int value);
- * </pre>
+ * <h2>Shape Properties</h2>
  *
- * <p>
- * <strong>Inheritance</strong>
- * </p>
+ * A shape property is a property that is shared between many objects and does not frequently
+ * change. One intended use-case is a property to store the class of an object, which is likely
+ * shared between many objects and likely does not change after the object is created.
  *
- * One layout can inherit properties from another by having one interface annotated with
- * {@link Layout} extend another.
+ * Shape properties should be cached against an object's shape as there is an extra level of
+ * indirection used to look up their value for an object. They may save space as they are not stored
+ * for all instances.
  *
- * <pre>
- * {@literal@}Layout
- * public interface RectLayout {
+ * It is important to note that changing a shape-property for an existing object is both not a
+ * fast-path operation, and depending on the design of your interpreter is likely ot invalidate
+ * caches.
  *
- *     DynamicObject createRect(int x, int y, int width, int height);
+ * When shape properties are used there is an extra level of indirection, in that a
+ * {@link DynamicObjectFactory} (referred to as the shape, because it is the shape that the factory
+ * object contains that is used to look up shape properties) is created by the layout and then used
+ * when creating new instances. As shape properties are set and changed, multiple factories will be
+ * created and it is up to the user to store and supply these as needed.
  *
- *     boolean isRect(DynamicObject object);
+ * Consider the example of a Java-style object, with a class and a hash code. The class would be a
+ * shape property, as many objects will share the same class, and the hash code will be a normal
+ * property.
  *
- *     int getX(DynamicObject object);
- *     ...
+ * Shape properties are created by parameters in the method that creates the shape. The factory
+ * method then accepts an instance of a factory when creating the object, which is how the instance
+ * knows the value of the class property to use. A getter for a shape property can be defined as
+ * normal.
  *
- * }
+ * {@codesnippet javaobject}
  *
- * {@literal@}Layout
- * public interface ColouredRectLayout extends RectLayout {
+ * When we load our Java interpreter we need to set the class property of the {@code Class} object
+ * to be itself. This means in this one isolated, slow-path, case we need to change a shape property
+ * for an object that is already allocated. Getters for shape properties can be defined for the
+ * {@link DynamicObjectFactory}, and for the {@link ObjectType}.
  *
- *     DynamicObject createRect(int x, int y, int width, int height, Colour colour);
+ * Setters for shape properties are more complex, and they are not intended to be used in the fast
+ * path. Setters can be defined on a {@link DynamicObjectFactory}, in which case they return a new
+ * factory, or on a {@link DynamicObject}, in which they they change the shape of the object. This
+ * is a slow-path operation and is likely to invalidate caches in your interpreter.
  *
- *     boolean isColouredRect(DynamicObject object);
+ * {@codesnippet shapesetters}
  *
- *     Colour getColour(DynamicObject object);
- *     ...
- * }
- * </pre>
+ * Apply this to our example with Java classes:
  *
- * The inheriting layout must have the properties of the inherited layout in its create method.
- * Inherited properties and guards are available from the base-interface as normal in Java.
+ * {@codesnippet closecycle}
  *
- * Instances of the {@code ColouredRectLayout} layout will pass the {@code isRect} guard (so like
- * {@code instanceof}, and properties inherited from {@code RectLayout} can be accessed using
- * {@code RectLayoutImpl.INSTANCE} as well as {@code ColouredRectLayoutImpl.INSTANCE}.
+ * <h2>Layout Inheritance</h2>
  *
- * <p>
- * <strong>Shape Properties</strong>
- * </p>
+ * Inheritance of layout interfaces allows you to model classical class inheritance, such as in a
+ * language like Java. Use normal interface inheritance to make one layout inherit from another. You
+ * then need to add the parameters for super-layouts at the beginning of sub-layout constructor
+ * methods.
  *
- * You may wish to store some properties where the values are common to many objects and do not
- * frequently change in the shape, instead of in the instances. This way you can guard against the
- * value of that property by guarding against the shape.
+ * Inherited shape properties work in a similar way.
  *
- * Guest language class references can be implemented using shape properties.
+ * {@codesnippet inheritanceinterfaces}
  *
- * To create a shape property you define an additional method, {@code createFooShape} that accepts
- * the shape properties as arguments.
+ * {@codesnippet inheritanceuse}
  *
- * <pre>
- * DynamicObjectFactory createFooShape(Object myShapeProperty);
- * </pre>
+ * <h2>Custom Object-Type Superclass</h2>
  *
- * The {@code create} method then takes this factory as well as non-shape properties as before.
+ * Generated layouts use custom {@link ObjectType} subclasses internally. The default base class
+ * that is inherited from is simply {@link ObjectType}. You can change this with the
+ * {@link #objectTypeSuperclass} property on the {@link Layout} annotation.
  *
- * <pre>
- * DynamicObject createRect(DynamicObjectFactory factory, int x, int y, int width, int height);
- * </pre>
+ * <h2>Implicit Casts</h2>
  *
- * Getters and getters for shape properties are defined and used as normal, although the performance
- * of the setter will be much reduced, and the getter will use additional indirection so you may
- * want to cache the result (against the shape).
+ * {@code IntToLong} and {@code IntToDouble} implicit cast flags can be set in the generated layout
+ * by setting {@link #implicitCastIntToLong} or {@link #implicitCastIntToDouble}. This can only be
+ * done in base layouts, not subclassed layouts.
  *
- * You can also use the getter and setter against the {@code DynamicObjectFactory} that
- * {@code createFooShape} returns, with the setter returning a new factory. This allows objects to
- * be created with modified shape properties, and is much more efficient than using the instance
- * setter after creating the object.
+ * <h2>Custom Identifiers</h2>
  *
- * Finally, the getters can be used against an {@code ObjectType}.
+ * By default, internal {@link HiddenKey} identifiers with descriptive names will be created for
+ * your properties automatically. You can also specify the identifiers to use by defining them as
+ * public static final fields in the interface.
  *
- * Shape properties cannot be semi-final.
+ * {@codesnippet customid}
  *
- * <p>
- * <strong>Object Type Superclass</strong>
- * </p>
- *
- * By default the superclass of the generated object type is {@link ObjectType}. You can change
- * this, perhaps to override methods in it, using the {@link #objectTypeSuperclass} property. This
- * can't be used if you are inheriting another layout, as the DSL needs to inherit the object type
- * of the inherited shape.
- *
- * The class used should have empty constructor that is protected or more visible.
- *
- * <p>
- * <strong>Processing</strong>
- * </p>
- *
- * {@link Layout} annotations are processed by {@link OMProcessor}.
+ * @since 0.12
  */
 @Target(ElementType.TYPE)
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.SOURCE)
 public @interface Layout {
 
-    String objectTypeSuperclass() default "ObjectType";
+    Class<? extends ObjectType> objectTypeSuperclass() default ObjectType.class;
+
+    boolean implicitCastIntToLong() default false;
+
+    boolean implicitCastIntToDouble() default false;
+
+}
+
+class Snippets {
+
+    // BEGIN: rectlayout
+    @Layout
+    private interface RectLayout {
+
+    }
+
+    // END: rectlayout
+
+    private static class RectLayoutImpl {
+        public static final RectLayoutImpl INSTANCE = new RectLayoutImpl();
+    }
+
+    static Object rectLayoutImpl() {
+        return
+        // BEGIN: rectlayoutimpl
+        RectLayoutImpl.INSTANCE;
+        // END: rectlayoutimpl
+    }
+
+    interface InterfaceSnippets {
+        // BEGIN: rectlayoutcreate
+        DynamicObject createRect();
+
+        // END: rectlayoutcreate
+
+        // BEGIN: rectlayoutguards
+        boolean isRect(DynamicObject object);
+
+        boolean isRect(Object object);
+
+        boolean isRect(ObjectType objectType);
+
+        // END: rectlayoutguards
+
+        // BEGIN: rectlayoutprops
+        DynamicObject createRect(int x, int y, int width, int height);
+
+        int getX(DynamicObject object);
+
+        void setX(DynamicObject object, int value);
+
+        int getWidth(DynamicObject object);
+
+        void setWidth(DynamicObject object, int value);
+
+        // END: rectlayoutprops
+
+        // BEGIN: nullable
+        DynamicObject createObject(@Nullable Object nullableProperty);
+
+        // END: nullable
+
+        // BEGIN: volatile
+        boolean compareAndSetWidth(DynamicObject object,
+                        int expectedValue, int newValue);
+
+        int getAndSet(DynamicObject object, int value);
+
+        // END: volatile
+
+        // BEGIN: semifinal
+        void setValueUnsafe(DynamicObject object, Object value);
+
+        // END: semifinal
+
+        class JavaClass {
+        }
+
+        // BEGIN: javaobject
+        @Layout
+        interface JavaObjectLayout {
+
+            DynamicObjectFactory createJavaObjectShape(JavaClass klass);
+
+            DynamicObject createJavaObject(DynamicObjectFactory factory, int hashCode);
+
+            JavaClass getKlass(DynamicObjectFactory factory);
+
+            JavaClass getKlass(ObjectType objectType);
+
+            JavaClass getKlass(DynamicObject object);
+
+            int getHashCode(DynamicObject object);
+
+        }
+
+        // END: javaobject
+
+        // BEGIN: shapesetters
+        DynamicObjectFactory setKlass(DynamicObjectFactory factory, JavaClass value);
+
+        void setKlass(DynamicObject object, JavaClass value);
+        // END: shapesetters
+    }
+
+    static class JavaObjectImpl {
+
+        static final JavaObjectImpl INSTANCE = new JavaObjectImpl();
+
+        @SuppressWarnings("unused")
+        Object createJavaObject(Object x, Object y) {
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        Object createJavaObjectShape(Object x) {
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        void setKlass(Object x, Object y) {
+        }
+
+    }
+
+    Object defaultHashCode() {
+        return null;
+    }
+
+    void closeCycle() {
+        Object
+        // BEGIN: closecycle
+        javaClassObject = JavaObjectImpl.INSTANCE.createJavaObject(
+                        JavaObjectImpl.INSTANCE.createJavaObjectShape(null),
+                        defaultHashCode());
+
+        JavaObjectImpl.INSTANCE.setKlass(javaClassObject, javaClassObject);
+        // END: closecycle
+    }
+
+    // BEGIN: inheritanceinterfaces
+    @Layout
+    interface BaseLayout {
+
+        DynamicObject createBase(int a);
+
+        boolean isBase(DynamicObject object);
+
+        int getA(DynamicObject object);
+
+        void setA(DynamicObject object, int value);
+
+    }
+
+    @Layout
+    interface SuperLayout extends BaseLayout {
+
+        DynamicObject createSuper(int a, int b);
+
+        int getB(DynamicObject object);
+
+        void setB(DynamicObject object, int value);
+    }
+
+    // END: inheritanceinterfaces
+
+    static class BaseImpl {
+
+        static final BaseImpl INSTANCE = new BaseImpl();
+
+        @SuppressWarnings("unused")
+        boolean isBase(Object x) {
+            return false;
+        }
+
+        @SuppressWarnings("unused")
+        Object getA(Object x) {
+            return null;
+        }
+
+    }
+
+    static class SuperImpl {
+
+        static final SuperImpl INSTANCE = new SuperImpl();
+
+        @SuppressWarnings("unused")
+        DynamicObject createSuper(int x, int y) {
+            return null;
+        }
+
+    }
+
+    void inheritanceUse() {
+        // BEGIN: inheritanceuse
+        DynamicObject object = SuperImpl.INSTANCE.createSuper(14, 2);
+        BaseImpl.INSTANCE.isBase(object);
+        BaseImpl.INSTANCE.getA(object);
+        // END: inheritanceuse
+    }
+
+    // Checkstyle: stop
+    // BEGIN: customid
+    @Layout
+    interface CustomIdentifierLayout {
+
+        public static final String A_IDENTIFIER = "A";
+
+        DynamicObject createCustomIdentifier(int a);
+
+    }
+    // END: customid
+    // Checkstyle: resume
 
 }
