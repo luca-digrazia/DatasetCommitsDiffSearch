@@ -32,8 +32,8 @@ package com.oracle.truffle.llvm.runtime.types;
 import java.util.Arrays;
 
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
-import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public class FunctionType implements Type, ValueSymbol {
 
@@ -43,17 +43,12 @@ public class FunctionType implements Type, ValueSymbol {
 
     private final boolean isVarArg;
 
-    private String name = ValueSymbol.UNKNOWN;
+    private String name = LLVMIdentifier.UNKNOWN;
 
     public FunctionType(Type type, Type[] args, boolean isVarArg) {
         this.type = type;
         this.args = args;
         this.isVarArg = isVarArg;
-    }
-
-    @Override
-    public void accept(TypeVisitor visitor) {
-        visitor.visit(this);
     }
 
     public Type[] getArgumentTypes() {
@@ -99,7 +94,7 @@ public class FunctionType implements Type, ValueSymbol {
 
     @Override
     public void setName(String name) {
-        this.name = "@" + name;
+        this.name = LLVMIdentifier.toGlobalIdentifier(name);
     }
 
     @Override

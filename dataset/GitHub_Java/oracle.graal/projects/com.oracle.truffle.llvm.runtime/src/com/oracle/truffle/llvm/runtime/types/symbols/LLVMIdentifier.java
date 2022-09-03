@@ -104,7 +104,12 @@ public final class LLVMIdentifier {
             final char c = unescaped.charAt(i);
             if (c == '\"' || c < ' ' || c > '~') {
                 // use the format "\xx" where xx is the hex-value of c
-                builder.append(String.format("\\%02x", c & 0xff));
+                builder.append("\\");
+                final String hexVal = Integer.toHexString(c);
+                for (int j = 0; j < hexVal.length() - 2; j++) {
+                    builder.append('0');
+                }
+                builder.append(hexVal);
             } else {
                 builder.append(c);
             }

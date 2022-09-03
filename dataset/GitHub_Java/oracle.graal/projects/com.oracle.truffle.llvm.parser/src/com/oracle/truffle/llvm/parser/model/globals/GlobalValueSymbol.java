@@ -30,10 +30,10 @@
 package com.oracle.truffle.llvm.parser.model.globals;
 
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
-import com.oracle.truffle.llvm.parser.model.enums.Visibility;
 import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
@@ -45,20 +45,17 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
 
     private final int align;
 
-    private String name = ValueSymbol.UNKNOWN;
+    private String name = LLVMIdentifier.UNKNOWN;
 
     private Symbol value = null;
 
     private final Linkage linkage;
 
-    private final Visibility visibility;
-
-    GlobalValueSymbol(Type type, int initialiser, int align, Linkage linkage, Visibility visibility) {
+    GlobalValueSymbol(Type type, int initialiser, int align, long linkage) {
         this.type = type;
         this.initialiser = initialiser;
         this.align = align;
-        this.linkage = linkage;
-        this.visibility = visibility;
+        this.linkage = Linkage.decode((int) linkage);
     }
 
     public abstract void accept(ModelVisitor visitor);
@@ -98,10 +95,6 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
         return value;
     }
 
-    public Visibility getVisibility() {
-        return visibility;
-    }
-
     public void initialise(Symbols symbols) {
         if (getInitialiser() > 0) {
             value = symbols.getSymbol(getInitialiser() - 1);
@@ -110,7 +103,7 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
 
     @Override
     public void setName(String name) {
-        this.name = "@" + name;
+        this.name = LLVMIdentifier.toGlobalIdentifier(name);
     }
 
     @Override

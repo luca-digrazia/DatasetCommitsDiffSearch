@@ -37,9 +37,9 @@ import java.util.Map;
 
 import com.oracle.truffle.llvm.parser.model.symbols.constants.Constant;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.AggregateConstant;
-import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
@@ -162,10 +162,6 @@ public final class Symbols {
             this.name = null;
         }
 
-        @Override
-        public void accept(ConstantVisitor visitor) {
-        }
-
         void addDependent(Symbol dependent) {
             dependents.add(dependent);
         }
@@ -198,7 +194,7 @@ public final class Symbols {
 
         @Override
         public String toString() {
-            return String.format("ForwardReference[name=%s]", name == null ? UNKNOWN : name);
+            return String.format("ForwardReference[name=%s]", name == null ? LLVMIdentifier.UNKNOWN : name);
         }
     }
 }

@@ -27,44 +27,22 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.parser.model.symbols.instructions;
+package com.oracle.truffle.llvm.runtime.types.symbols;
 
-import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
-import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
+public interface ValueSymbol extends Symbol {
 
-public abstract class ValueInstruction implements Instruction, ValueSymbol {
+    default int getAlign() {
+        return 0;
+    }
 
-    private final Type type;
-
-    private String name = LLVMIdentifier.UNKNOWN;
-
-    ValueInstruction(Type type) {
-        this.type = type;
+    default String getName() {
+        return LLVMIdentifier.UNKNOWN;
     }
 
     @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public Type getType() {
-        return type;
-    }
-
-    @Override
-    public boolean hasName() {
+    default boolean hasName() {
         return true;
     }
 
-    @Override
-    public boolean isTerminating() {
-        return false;
-    }
-
-    @Override
-    public void setName(String name) {
-        this.name = LLVMIdentifier.toLocalIdentifier(name);
-    }
+    void setName(String name);
 }

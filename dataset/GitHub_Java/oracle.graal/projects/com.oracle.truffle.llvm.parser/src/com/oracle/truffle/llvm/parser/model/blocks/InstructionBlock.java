@@ -39,7 +39,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.BinaryOperation
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.BranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CallInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CastInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareExchangeInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ConditionalBranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractElementInstruction;
@@ -49,11 +48,8 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.IndirectBranchI
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertElementInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.InvokeInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.LandingpadInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.LoadInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.PhiInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ResumeInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReturnInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.SelectInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ShuffleVectorInstruction;
@@ -63,10 +59,9 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchOldInstru
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
 import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitor;
+import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.VoidType;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
@@ -123,37 +118,11 @@ public final class InstructionBlock implements ValueSymbol {
     }
 
     public void createCall(Type type, int target, int[] arguments, long visibility, long linkage) {
-        if (type == VoidType.INSTANCE) {
+        if (type == MetaType.VOID) {
             addInstruction(VoidCallInstruction.fromSymbols(function.getSymbols(), target, arguments, visibility, linkage));
         } else {
             addInstruction(CallInstruction.fromSymbols(function.getSymbols(), type, target, arguments, visibility, linkage));
         }
-    }
-
-    public void createCompareExchange(Type type, int ptr, int cmp, int replace, boolean isVolatile, long successOrdering, long synchronizationScope, long failureOrdering, boolean addExtractValue,
-                    boolean isWeak) {
-        addInstruction(CompareExchangeInstruction.fromSymbols(function.getSymbols(), type, ptr, cmp, replace, isVolatile, successOrdering, synchronizationScope, failureOrdering, isWeak));
-        if (addExtractValue) {
-            throw new UnsupportedOperationException("CMPXCHG must return a struct! The old behaviour of returning the value is not supported!");
-        }
-    }
-
-    public void createInvoke(Type type, int target, int[] arguments, long visibility, long linkage, int regularSuccessorBlock, int unwindSuccessorBlock) {
-        if (type instanceof VoidType) {
-            addInstruction(VoidInvokeInstruction.fromSymbols(function.getSymbols(), target, arguments, visibility, linkage, function.getBlock(regularSuccessorBlock),
-                            function.getBlock(unwindSuccessorBlock)));
-        } else {
-            addInstruction(InvokeInstruction.fromSymbols(function.getSymbols(), type, target, arguments, visibility, linkage, function.getBlock(regularSuccessorBlock),
-                            function.getBlock(unwindSuccessorBlock)));
-        }
-    }
-
-    public void createLandingpad(Type type, boolean isCleanup, long[] clauseTypes, long[] clauseTODO) {
-        addInstruction(LandingpadInstruction.generate(function.getSymbols(), type, isCleanup, clauseTypes, clauseTODO));
-    }
-
-    public void createResume(@SuppressWarnings("unused") Type type) {
-        addInstruction(ResumeInstruction.generate());
     }
 
     public void createCast(Type type, int opcode, int value) {
@@ -251,7 +220,7 @@ public final class InstructionBlock implements ValueSymbol {
 
     @Override
     public Type getType() {
-        return VoidType.INSTANCE;
+        return MetaType.VOID;
     }
 
     @Override
