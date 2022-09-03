@@ -35,13 +35,11 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Introspectable;
 import com.oracle.truffle.api.dsl.Introspection;
-import com.oracle.truffle.api.dsl.Introspection.IntrospectedSpecialization;
+import com.oracle.truffle.api.dsl.Introspection.SpecializationInfo;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.TypeSystem;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
-import com.oracle.truffle.api.dsl.internal.DSLOptions;
-import com.oracle.truffle.api.dsl.internal.DSLOptions.DSLGenerator;
 import com.oracle.truffle.api.dsl.test.IntrospectionTestFactory.FallbackNodeGen;
 import com.oracle.truffle.api.dsl.test.IntrospectionTestFactory.Introspection1NodeGen;
 import com.oracle.truffle.api.nodes.Node;
@@ -49,16 +47,57 @@ import com.oracle.truffle.api.nodes.Node;
 public class IntrospectionTest {
 
     @TypeSystem
-    @DSLOptions(defaultGenerator = DSLGenerator.FLAT)
-    public static class ReflectionTypeSystem {
+    public static class IntrospectionTypeSystem {
 
     }
 
-    @TypeSystemReference(ReflectionTypeSystem.class)
+    @TypeSystemReference(IntrospectionTypeSystem.class)
     @Introspectable
     public static class ReflectableNode extends Node {
 
     }
+
+    @SuppressWarnings("unused")
+    @TypeSystemReference(IntrospectionTypeSystem.class)
+    // BEGIN: com.oracle.truffle.api.dsl.test.IntrospectionTest
+    @Introspectable
+    abstract static class NegateNode extends Node {
+
+        abstract Object execute(Object o);
+
+        @Specialization(guards = "cachedvalue == value", limit = "1")
+        protected static int doInt(int value,
+                        @Cached("value") int cachedvalue) {
+            return -cachedvalue;
+        }
+
+        @Specialization(replaces = "doInt")
+        protected static int doGeneric(int value) {
+            return -value;
+        }
+    }
+
+    @Test
+    public void testUsingIntrospection() {
+        NegateNode node = IntrospectionTestFactory.NegateNodeGen.create();
+        SpecializationInfo info;
+
+        node.execute(1);
+        info = Introspection.getSpecialization(node, "doInt");
+        assertEquals(1, info.getInstances());
+
+        node.execute(1);
+        info = Introspection.getSpecialization(node, "doInt");
+        assertEquals(1, info.getInstances());
+
+        node.execute(2);
+        info = Introspection.getSpecialization(node, "doInt");
+        assertEquals(0, info.getInstances());
+
+        info = Introspection.getSpecialization(node, "doGeneric");
+        assertEquals(1, info.getInstances());
+    }
+    // END: com.oracle.truffle.api.dsl.test.IntrospectionTest
 
     public abstract static class Introspection1Node extends ReflectableNode {
 
@@ -78,7 +117,7 @@ public class IntrospectionTest {
     @Test
     public void testReflection1() {
         Introspection1Node node = Introspection1NodeGen.create();
-        IntrospectedSpecialization specialization = Introspection.getSpecialization(node, "doInt");
+        SpecializationInfo specialization = Introspection.getSpecialization(node, "doInt");
         assertSpecializationEquals(specialization, Introspection.getSpecializations(node).get(0));
         assertEquals("doInt", specialization.getMethodName());
         assertFalse(specialization.isActive());
@@ -196,7 +235,7 @@ public class IntrospectionTest {
     public void testFallbackReflection() {
         FallbackNode node = FallbackNodeGen.create();
 
-        IntrospectedSpecialization specialization = Introspection.getSpecialization(node, "doFallback");
+        SpecializationInfo specialization = Introspection.getSpecialization(node, "doFallback");
         assertSpecializationEquals(specialization, Introspection.getSpecializations(node).get(1));
         assertEquals("doFallback", specialization.getMethodName());
         assertFalse(specialization.isActive());
@@ -228,7 +267,7 @@ public class IntrospectionTest {
         }
     }
 
-    private static void assertSpecializationEquals(IntrospectedSpecialization s1, IntrospectedSpecialization s2) {
+    private static void assertSpecializationEquals(SpecializationInfo s1, SpecializationInfo s2) {
         assertEquals(s1.getMethodName(), s2.getMethodName());
         assertEquals(s1.isActive(), s2.isActive());
         assertEquals(s1.isExcluded(), s2.isExcluded());
@@ -245,8 +284,16 @@ public class IntrospectionTest {
 
     }
 
+    @SuppressWarnings("deprecation")
+    @com.oracle.truffle.api.dsl.internal.DSLOptions(defaultGenerator = com.oracle.truffle.api.dsl.internal.DSLOptions.DSLGenerator.DEFAULT)
+    @TypeSystem
+    public static class SomeReflectionTS {
+
+    }
+
     @ExpectError("Reflection is not supported by the used DSL layout. Only the flat DSL layout supports reflection.")
     @Introspectable
+    @TypeSystemReference(SomeReflectionTS.class)
     public abstract static class SomeReflection1Node extends Node {
 
         abstract Object execute(Object o);
