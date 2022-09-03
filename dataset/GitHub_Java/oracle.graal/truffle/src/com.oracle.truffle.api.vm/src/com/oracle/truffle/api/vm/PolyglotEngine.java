@@ -79,8 +79,6 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.ComputeInExecutor.Info;
 import com.oracle.truffle.api.vm.PolyglotRootNode.EvalRootNode;
 import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import org.graalvm.polyglot.io.FileSystem;
 
@@ -577,7 +575,7 @@ public class PolyglotEngine {
             if (onlyInitialized && lang.getEnv(false) == null) {
                 continue;
             }
-            TruffleLanguage<?> spi = lang.shared.spi;
+            TruffleLanguage<?> spi = VMAccessor.NODES.getLanguageSpi(lang.shared.language);
             if (languageClazz.isInstance(spi)) {
                 return lang;
             }
@@ -1086,11 +1084,6 @@ public class PolyglotEngine {
         }
 
         @Override
-        public Env getLanguageEnv(Object languageContextVMObject, LanguageInfo otherLanguage) {
-            return null;
-        }
-
-        @Override
         public <C, T extends TruffleLanguage<C>> C getCurrentContext(Class<T> languageClass) {
             PolyglotEngine engine = PolyglotEngine.GLOBAL_PROFILE.get();
             if (engine == null) {
@@ -1118,7 +1111,7 @@ public class PolyglotEngine {
                 throw new IllegalStateException("No current language available.");
             }
             Language language = engine.getLanguage(languageClass);
-            return languageClass.cast(language.shared.spi);
+            return languageClass.cast(VMAccessor.NODES.getLanguageSpi(language.shared.language));
         }
 
         @Override
@@ -1293,6 +1286,15 @@ public class PolyglotEngine {
                     return name.get();
                 }
             };
+        }
+
+        @Override
+        public <C> com.oracle.truffle.api.impl.FindContextNode<C> createFindContextNode(TruffleLanguage<C> lang) {
+            Object vm = getCurrentVM();
+            if (vm == null) {
+                throw new IllegalStateException("Cannot access current vm.");
+            }
+            return new FindContextNodeImpl<>(findEnv(vm, lang.getClass(), true));
         }
 
         @Override
@@ -1511,23 +1513,8 @@ public class PolyglotEngine {
         }
 
         @Override
-        public Handler getLogHandler() {
-            return PolyglotLogHandler.INSTANCE;
-        }
-
-        @Override
-        public LogRecord createLogRecord(Level level, String loggerName, String message, String className, String methodName, Object[] parameters, Throwable thrown) {
-            return PolyglotLogHandler.createLogRecord(level, loggerName, message, className, methodName, parameters, thrown);
-        }
-
-        @Override
-        public Object getCurrentOuterContext() {
-            return null;
-        }
-
-        @Override
-        public Map<String, Level> getLogLevels(Object context) {
-            return Collections.emptyMap();
+        public Logger getLogger(String loggerName, String resourceBundleName) {
+            return PolyglotLogger.LoggerCache.getInstance().getOrCreateLogger(loggerName, resourceBundleName);
         }
     }
 }
