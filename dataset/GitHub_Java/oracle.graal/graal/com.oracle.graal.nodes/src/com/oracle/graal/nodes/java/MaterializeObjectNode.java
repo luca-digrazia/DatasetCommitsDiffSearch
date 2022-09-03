@@ -22,27 +22,24 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.util.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 @NodeInfo(nameTemplate = "Materialize {p#type/s}")
-public final class MaterializeObjectNode extends FixedWithNextNode implements EscapeAnalyzable, Lowerable, Node.IterableNodeType, Canonicalizable {
+public final class MaterializeObjectNode extends FixedWithNextNode implements Lowerable, Node.IterableNodeType {
 
     @Input private final NodeInputList<ValueNode> values;
     private final ResolvedJavaType type;
     private final EscapeField[] fields;
 
-    public MaterializeObjectNode(ResolvedJavaType type, EscapeField[] fields) {
+    public MaterializeObjectNode(ResolvedJavaType type, EscapeField[] fields, ValueNode[] values) {
         super(StampFactory.exactNonNull(type));
         this.type = type;
         this.fields = fields;
-        this.values = new NodeInputList<>(this, fields.length);
+        this.values = new NodeInputList<>(this, values);
     }
 
     public ResolvedJavaType type() {
@@ -53,7 +50,7 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Es
         return fields;
     }
 
-    public NodeInputList<ValueNode> values() {
+    public NodeInputList<ValueNode> getValues() {
         return values;
     }
 
@@ -64,9 +61,9 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Es
             ResolvedJavaType element = type.componentType();
             NewArrayNode newArray;
             if (element.kind() == Kind.Object) {
-                newArray = graph.add(new NewObjectArrayNode(element, ConstantNode.forInt(fields.length, graph), false));
+                newArray = graph.add(new NewObjectArrayNode(element, ConstantNode.forInt(fields.length, graph)));
             } else {
-                newArray = graph.add(new NewPrimitiveArrayNode(element, ConstantNode.forInt(fields.length, graph), false));
+                newArray = graph.add(new NewPrimitiveArrayNode(element, ConstantNode.forInt(fields.length, graph)));
             }
             this.replaceAtUsages(newArray);
             graph.addAfterFixed(this, newArray);
@@ -80,7 +77,7 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Es
 
             graph.removeFixed(this);
         } else {
-            NewInstanceNode newInstance = graph.add(new NewInstanceNode(type, false));
+            NewInstanceNode newInstance = graph.add(new NewInstanceNode(type));
             this.replaceAtUsages(newInstance);
             graph.addAfterFixed(this, newInstance);
 
@@ -92,48 +89,6 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Es
             }
 
             graph.removeFixed(this);
-        }
-    }
-
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (usages().isEmpty()) {
-            return null;
-        } else {
-            return this;
-        }
-    }
-
-    @Override
-    public EscapeOp getEscapeOp() {
-        return new EscapeOpImpl();
-    }
-
-    private final class EscapeOpImpl extends EscapeOp {
-
-        @Override
-        public ResolvedJavaType type() {
-            return type;
-        }
-
-        @Override
-        public EscapeField[] fields() {
-            return fields;
-        }
-
-        @Override
-        public ValueNode[] fieldState() {
-            return values.toArray(new ValueNode[values.size()]);
-        }
-
-        @Override
-        public void beforeUpdate(Node usage) {
-            throw new UnsupportedOperationException("MaterializeNode can only be escape analyzed using partial escape analysis");
-        }
-
-        @Override
-        public int updateState(VirtualObjectNode node, Node current, Map<Object, Integer> fieldIndex, ValueNode[] fieldState) {
-            throw new UnsupportedOperationException("MaterializeNode can only be escape analyzed using partial escape analysis");
         }
     }
 }

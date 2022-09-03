@@ -22,57 +22,169 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import java.util.*;
+import java.util.concurrent.*;
+
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph.InputChangedListener;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 public class CanonicalizerPhase extends Phase {
     private static final int MAX_ITERATION_PER_NODE = 10;
     private static final DebugMetric METRIC_CANONICALIZED_NODES = Debug.metric("CanonicalizedNodes");
     private static final DebugMetric METRIC_CANONICALIZATION_CONSIDERED_NODES = Debug.metric("CanonicalizationConsideredNodes");
+    private static final DebugMetric METRIC_INFER_STAMP_CALLED = Debug.metric("InferStampCalled");
+    private static final DebugMetric METRIC_STAMP_CHANGED = Debug.metric("StampChanged");
     private static final DebugMetric METRIC_SIMPLIFICATION_CONSIDERED_NODES = Debug.metric("SimplificationConsideredNodes");
+    public static final DebugMetric METRIC_GLOBAL_VALUE_NUMBERING_HITS = Debug.metric("GlobalValueNumberingHits");
 
-    private boolean newNodes;
-    private final CiTarget target;
-    private final CiAssumptions assumptions;
-    private final RiRuntime runtime;
+    private final int newNodesMark;
+    private final TargetDescription target;
+    private final Assumptions assumptions;
+    private final MetaAccessProvider runtime;
+    private final IsImmutablePredicate immutabilityPredicate;
+    private final Iterable<Node> initWorkingSet;
 
-    public CanonicalizerPhase(CiTarget target, RiRuntime runtime, CiAssumptions assumptions) {
-        this(target, runtime, false, assumptions);
+    private NodeWorkList workList;
+    private Tool tool;
+    private List<Node> snapshotTemp;
+
+    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions) {
+        this(target, runtime, assumptions, null, 0, null);
     }
 
-    public CanonicalizerPhase(CiTarget target, RiRuntime runtime, boolean newNodes, CiAssumptions assumptions) {
-        this.newNodes = newNodes;
+    /**
+     * @param target
+     * @param runtime
+     * @param assumptions
+     * @param workingSet the initial working set of nodes on which the canonicalizer works, should be an auto-grow node bitmap
+     * @param immutabilityPredicate
+     */
+    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, IsImmutablePredicate immutabilityPredicate) {
+        this(target, runtime, assumptions, workingSet, 0, immutabilityPredicate);
+    }
+
+    /**
+     * @param newNodesMark only the {@linkplain Graph#getNewNodes(int) new nodes} specified by
+     *            this mark are processed otherwise all nodes in the graph are processed
+     */
+    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
+        this(target, runtime, assumptions, null, newNodesMark, immutabilityPredicate);
+    }
+
+    private CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
+        this.newNodesMark = newNodesMark;
         this.target = target;
         this.assumptions = assumptions;
         this.runtime = runtime;
+        this.immutabilityPredicate = immutabilityPredicate;
+        this.initWorkingSet = workingSet;
+        this.snapshotTemp = new ArrayList<>();
     }
 
     @Override
     protected void run(StructuredGraph graph) {
-        NodeWorkList nodeWorkList = graph.createNodeWorkList(!newNodes, MAX_ITERATION_PER_NODE);
-        if (newNodes) {
-            nodeWorkList.addAll(graph.getNewNodes());
+        if (initWorkingSet == null) {
+            workList = graph.createNodeWorkList(newNodesMark == 0, MAX_ITERATION_PER_NODE);
+            if (newNodesMark > 0) {
+                workList.addAll(graph.getNewNodes(newNodesMark));
+            }
+        } else {
+            workList = graph.createNodeWorkList(false, MAX_ITERATION_PER_NODE);
+            workList.addAll(initWorkingSet);
         }
-
-        canonicalize(graph, nodeWorkList, runtime, target, assumptions);
+        tool = new Tool(workList, runtime, target, assumptions, immutabilityPredicate);
+        processWorkSet(graph);
     }
 
-    public static void canonicalize(StructuredGraph graph, NodeWorkList nodeWorkList, RiRuntime runtime, CiTarget target, CiAssumptions assumptions) {
-        graph.trackInputChange(nodeWorkList);
-        Tool tool = new Tool(nodeWorkList, runtime, target, assumptions);
-        for (Node node : nodeWorkList) {
+    public interface IsImmutablePredicate {
+        /**
+         * Determines if a given constant is an object/array whose current
+         * fields/elements will never change.
+         */
+        boolean apply(Constant constant);
+    }
+
+    private void processWorkSet(StructuredGraph graph) {
+        graph.trackInputChange(new InputChangedListener() {
+            @Override
+            public void inputChanged(Node node) {
+                workList.addAgain(node);
+            }
+        });
+
+        for (Node n : workList) {
+            processNode(n, graph);
+        }
+
+        graph.stopTrackingInputChange();
+    }
+
+    private void processNode(Node node, StructuredGraph graph) {
+        if (node.isAlive()) {
             METRIC_PROCESSED_NODES.increment();
-            if (node instanceof Canonicalizable) {
-                METRIC_CANONICALIZATION_CONSIDERED_NODES.increment();
-                Debug.log("Canonicalizer: work on %s", node);
-                graph.mark();
-                ValueNode canonical = ((Canonicalizable) node).canonical(tool);
+
+            if (tryGlobalValueNumbering(node, graph)) {
+                return;
+            }
+            int mark = graph.getMark();
+            if (!tryKillUnused(node)) {
+                node.inputs().filter(GraphUtil.isFloatingNode()).snapshotTo(snapshotTemp);
+                if (!tryCanonicalize(node, graph, tool)) {
+                    tryInferStamp(node, graph);
+                } else {
+                    for (Node in : snapshotTemp) {
+                        if (in.isAlive() && in.usages().isEmpty()) {
+                            GraphUtil.killWithUnusedFloatingInputs(in);
+                        }
+                    }
+                }
+                snapshotTemp.clear();
+            }
+
+            for (Node newNode : graph.getNewNodes(mark)) {
+                workList.add(newNode);
+            }
+        }
+    }
+
+    private static boolean tryKillUnused(Node node) {
+        if (node.isAlive() && GraphUtil.isFloatingNode().apply(node) && node.usages().isEmpty()) {
+            GraphUtil.killWithUnusedFloatingInputs(node);
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean tryGlobalValueNumbering(Node node, StructuredGraph graph) {
+        if (node.getNodeClass().valueNumberable()) {
+            Node newNode = graph.findDuplicate(node);
+            if (newNode != null) {
+                assert !(node instanceof FixedNode || newNode instanceof FixedNode);
+                node.replaceAtUsages(newNode);
+                node.safeDelete();
+                METRIC_GLOBAL_VALUE_NUMBERING_HITS.increment();
+                Debug.log("GVN applied and new node is %1s", newNode);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean tryCanonicalize(final Node node, final StructuredGraph graph, final SimplifierTool tool) {
+        if (node instanceof Canonicalizable) {
+            assert !(node instanceof Simplifiable);
+            METRIC_CANONICALIZATION_CONSIDERED_NODES.increment();
+            return Debug.scope("CanonicalizeNode", node, new Callable<Boolean>(){
+                public Boolean call() {
+                    ValueNode canonical = ((Canonicalizable) node).canonical(tool);
 //     cases:                                           original node:
 //                                         |Floating|Fixed-unconnected|Fixed-connected|
 //                                         --------------------------------------------
@@ -85,53 +197,75 @@ public class CanonicalizerPhase extends Phase {
 //                          Fixed-connected|   2    |        X        |       6       |
 //                                         --------------------------------------------
 //       X: must not happen (checked with assertions)
-                if (canonical != node) {
-                    METRIC_CANONICALIZED_NODES.increment();
-                    if (node instanceof FloatingNode) {
-                        if (canonical == null) {
-                            // case 1
-                            graph.removeFloating((FloatingNode) node);
-                        } else {
-                            // case 2
-                            assert !(canonical instanceof FixedNode) || canonical.predecessor() != null : node + " -> " + canonical +
-                                            " : replacement should be floating or fixed and connected";
-                            graph.replaceFloating((FloatingNode) node, canonical);
-                        }
+                    if (canonical == node) {
+                        Debug.log("Canonicalizer: work on %s", node);
+                        return false;
                     } else {
-                        assert node instanceof FixedWithNextNode && node.predecessor() != null : node + " -> " + canonical + " : node should be fixed & connected (" + node.predecessor() + ")";
-                        if (canonical == null) {
-                            // case 3
-                            graph.removeFixed((FixedWithNextNode) node);
-                        } else if (canonical instanceof FloatingNode) {
-                            // case 4
-                            graph.replaceFixedWithFloating((FixedWithNextNode) node, (FloatingNode) canonical);
-                        } else {
-                            assert canonical instanceof FixedNode;
-                            if (canonical.predecessor() == null) {
-                                assert !canonical.cfgSuccessors().iterator().hasNext() : "replacement " + canonical + " shouldn't have successors";
-                                // case 5
-                                graph.replaceFixedWithFixed((FixedWithNextNode) node, (FixedWithNextNode) canonical);
+                        Debug.log("Canonicalizer: replacing %s with %s", node, canonical);
+                        METRIC_CANONICALIZED_NODES.increment();
+                        if (node instanceof FloatingNode) {
+                            if (canonical == null) {
+                                // case 1
+                                graph.removeFloating((FloatingNode) node);
                             } else {
-                                assert canonical.cfgSuccessors().iterator().hasNext() : "replacement " + canonical + " should have successors";
-                                // case 6
-                                node.replaceAtUsages(canonical);
+                                // case 2
+                                assert !(canonical instanceof FixedNode) || (canonical.predecessor() != null || canonical instanceof StartNode) : node + " -> " + canonical +
+                                                " : replacement should be floating or fixed and connected";
+                                graph.replaceFloating((FloatingNode) node, canonical);
+                            }
+                        } else {
+                            assert node instanceof FixedWithNextNode && node.predecessor() != null : node + " -> " + canonical + " : node should be fixed & connected (" + node.predecessor() + ")";
+                            if (canonical == null) {
+                                // case 3
                                 graph.removeFixed((FixedWithNextNode) node);
+                            } else if (canonical instanceof FloatingNode) {
+                                // case 4
+                                graph.replaceFixedWithFloating((FixedWithNextNode) node, (FloatingNode) canonical);
+                            } else {
+                                assert canonical instanceof FixedNode;
+                                if (canonical.predecessor() == null) {
+                                    assert !canonical.cfgSuccessors().iterator().hasNext() : "replacement " + canonical + " shouldn't have successors";
+                                    // case 5
+                                    graph.replaceFixedWithFixed((FixedWithNextNode) node, (FixedWithNextNode) canonical);
+                                } else {
+                                    assert canonical.cfgSuccessors().iterator().hasNext() : "replacement " + canonical + " should have successors";
+                                    // case 6
+                                    node.replaceAtUsages(canonical);
+                                    graph.removeFixed((FixedWithNextNode) node);
+                                }
                             }
                         }
+                        return true;
                     }
-                    nodeWorkList.addAll(graph.getNewNodes());
                 }
-            } else if (node instanceof Simplifiable) {
-                METRIC_SIMPLIFICATION_CONSIDERED_NODES.increment();
-                ((Simplifiable) node).simplify(tool);
-            }
+            });
+        } else if (node instanceof Simplifiable) {
+            Debug.log("Canonicalizer: simplifying %s", node);
+            METRIC_SIMPLIFICATION_CONSIDERED_NODES.increment();
+            ((Simplifiable) node).simplify(tool);
         }
-        graph.stopTrackingInputChange();
-        while (graph.getUsagesDroppedNodesCount() > 0) {
-            for (Node n : graph.getAndCleanUsagesDroppedNodes()) {
-                if (!n.isDeleted() && n.usages().size() == 0 && n instanceof FloatingNode) {
-                    n.clearInputs();
-                    n.safeDelete();
+        return node.isDeleted();
+    }
+
+    /**
+     * Calls {@link ValueNode#inferStamp()} on the node and, if it returns true (which means that the stamp has
+     * changed), re-queues the node's usages . If the stamp has changed then this method also checks if the stamp
+     * now describes a constant integer value, in which case the node is replaced with a constant.
+     */
+    private void tryInferStamp(Node node, StructuredGraph graph) {
+        if (node.isAlive() && node instanceof ValueNode) {
+            ValueNode valueNode = (ValueNode) node;
+            METRIC_INFER_STAMP_CALLED.increment();
+            if (valueNode.inferStamp()) {
+                METRIC_STAMP_CHANGED.increment();
+                if (valueNode.stamp() instanceof IntegerStamp && valueNode.integerStamp().lowerBound() == valueNode.integerStamp().upperBound()) {
+                    ValueNode replacement = ConstantNode.forIntegerKind(valueNode.kind(), valueNode.integerStamp().lowerBound(), graph);
+                    Debug.log("Canonicalizer: replacing %s with %s (inferStamp)", valueNode, replacement);
+                    valueNode.replaceAtUsages(replacement);
+                } else {
+                    for (Node usage : valueNode.usages()) {
+                        workList.addAgain(usage);
+                    }
                 }
             }
         }
@@ -139,16 +273,18 @@ public class CanonicalizerPhase extends Phase {
 
     private static final class Tool implements SimplifierTool {
 
-        private final NodeWorkList nodeWorkList;
-        private final RiRuntime runtime;
-        private final CiTarget target;
-        private final CiAssumptions assumptions;
+        private final NodeWorkList nodeWorkSet;
+        private final MetaAccessProvider runtime;
+        private final TargetDescription target;
+        private final Assumptions assumptions;
+        private final IsImmutablePredicate immutabilityPredicate;
 
-        public Tool(NodeWorkList nodeWorkList, RiRuntime runtime, CiTarget target, CiAssumptions assumptions) {
-            this.nodeWorkList = nodeWorkList;
+        public Tool(NodeWorkList nodeWorkSet, MetaAccessProvider runtime, TargetDescription target, Assumptions assumptions, IsImmutablePredicate immutabilityPredicate) {
+            this.nodeWorkSet = nodeWorkSet;
             this.runtime = runtime;
             this.target = target;
             this.assumptions = assumptions;
+            this.immutabilityPredicate = immutabilityPredicate;
         }
 
         @Override
@@ -161,7 +297,7 @@ public class CanonicalizerPhase extends Phase {
          * @return the current target or {@code null} if no target is available in the current context.
          */
         @Override
-        public CiTarget target() {
+        public TargetDescription target() {
             return target;
         }
 
@@ -169,18 +305,23 @@ public class CanonicalizerPhase extends Phase {
          * @return an object that can be used for recording assumptions or {@code null} if assumptions are not allowed in the current context.
          */
         @Override
-        public CiAssumptions assumptions() {
+        public Assumptions assumptions() {
             return assumptions;
         }
 
         @Override
-        public RiRuntime runtime() {
+        public MetaAccessProvider runtime() {
             return runtime;
         }
 
         @Override
         public void addToWorkList(Node node) {
-            nodeWorkList.add(node);
+            nodeWorkSet.add(node);
+        }
+
+        @Override
+        public boolean isImmutable(Constant objectConstant) {
+            return immutabilityPredicate != null && immutabilityPredicate.apply(objectConstant);
         }
     }
 }

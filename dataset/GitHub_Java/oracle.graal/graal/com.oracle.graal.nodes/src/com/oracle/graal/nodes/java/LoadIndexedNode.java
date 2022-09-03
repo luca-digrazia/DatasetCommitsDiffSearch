@@ -22,17 +22,18 @@
  */
 package com.oracle.graal.nodes.java;
 
+import java.lang.reflect.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code LoadIndexedNode} represents a read from an element of an array.
  */
-public final class LoadIndexedNode extends AccessIndexedNode implements Node.IterableNodeType, Virtualizable {
+public final class LoadIndexedNode extends AccessIndexedNode implements Canonicalizable, Node.IterableNodeType {
 
     /**
      * Creates a new LoadIndexedNode.
@@ -46,27 +47,27 @@ public final class LoadIndexedNode extends AccessIndexedNode implements Node.Ite
 
     private static Stamp createStamp(ValueNode array, Kind kind) {
         if (kind == Kind.Object && array.objectStamp().type() != null) {
-            return StampFactory.declared(array.objectStamp().type().getComponentType());
+            return StampFactory.declared(array.objectStamp().type().componentType());
         } else {
             return StampFactory.forKind(kind);
         }
     }
 
     @Override
-    public void virtualize(VirtualizerTool tool) {
-        VirtualObjectNode virtualArray = tool.getVirtualState(array());
-        if (virtualArray != null) {
-            ValueNode indexValue = tool.getReplacedValue(index());
-            int index = indexValue.isConstant() ? indexValue.asConstant().asInt() : -1;
-            if (index >= 0 && index < virtualArray.entryCount()) {
-                ValueNode result = tool.getVirtualEntry(virtualArray, index);
-                VirtualObjectNode virtualResult = tool.getVirtualState(result);
-                if (virtualResult != null) {
-                    tool.replaceWithVirtual(virtualResult);
-                } else {
-                    tool.replaceWithValue(result);
+    public ValueNode canonical(CanonicalizerTool tool) {
+        MetaAccessProvider runtime = tool.runtime();
+        if (runtime != null && index().isConstant() && array().isConstant() && !array().isNullConstant()) {
+            Constant arrayConst = array().asConstant();
+            if (tool.isImmutable(arrayConst)) {
+                int index = index().asConstant().asInt();
+                Object array = arrayConst.asObject();
+                int length = Array.getLength(array);
+                if (index >= 0 && index < length) {
+                    return ConstantNode.forConstant(elementKind().readUnsafeConstant(array,
+                                    elementKind().arrayBaseOffset() + index * elementKind().arrayIndexScale()), runtime, graph());
                 }
             }
         }
+        return this;
     }
 }

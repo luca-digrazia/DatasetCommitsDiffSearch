@@ -30,7 +30,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code StoreIndexedNode} represents a write to an array element.
  */
-public final class StoreIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable {
+public final class StoreIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable {
 
     @Input private ValueNode value;
     @Input(notDataflow = true) private FrameState stateAfter;
@@ -63,18 +63,5 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
     public StoreIndexedNode(ValueNode array, ValueNode index, Kind elementKind, ValueNode value, long leafGraphId) {
         super(StampFactory.forVoid(), array, index, elementKind, leafGraphId);
         this.value = value;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        State arrayState = tool.getObjectState(array());
-        if (arrayState != null && arrayState.getState() == EscapeState.Virtual) {
-            ValueNode indexValue = tool.getReplacedValue(index());
-            int index = indexValue.isConstant() ? indexValue.asConstant().asInt() : -1;
-            if (index >= 0 && index < arrayState.getVirtualObject().entryCount()) {
-                tool.setVirtualEntry(arrayState, index, value());
-                tool.delete();
-            }
-        }
     }
 }
