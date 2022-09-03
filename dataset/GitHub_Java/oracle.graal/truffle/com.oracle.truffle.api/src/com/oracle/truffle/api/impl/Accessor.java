@@ -46,11 +46,6 @@ import java.util.Collection;
  */
 public abstract class Accessor {
 
-    @SuppressWarnings("all")
-    protected final Collection<ClassLoader> loaders() {
-        return TruffleLocator.loaders();
-    }
-
     public abstract static class Nodes {
         @SuppressWarnings("rawtypes")
         public abstract Class<? extends TruffleLanguage> findLanguage(RootNode n);
@@ -90,6 +85,8 @@ public abstract class Accessor {
 
         @SuppressWarnings("rawtypes")
         public abstract Object findLanguage(Class<? extends TruffleLanguage> language);
+
+        public abstract Collection<ClassLoader> allLoaders();
     }
 
     public abstract static class LanguageSupport {
@@ -185,26 +182,12 @@ public abstract class Accessor {
         }.getRootNode();
 
         conditionallyInitDebugger();
-        conditionallyInitEngine();
     }
 
     @SuppressWarnings("all")
     private static void conditionallyInitDebugger() throws IllegalStateException {
         try {
             Class.forName("com.oracle.truffle.api.debug.Debugger", true, Accessor.class.getClassLoader());
-        } catch (ClassNotFoundException ex) {
-            boolean assertOn = false;
-            assert assertOn = true;
-            if (!assertOn) {
-                throw new IllegalStateException(ex);
-            }
-        }
-    }
-
-    @SuppressWarnings("all")
-    private static void conditionallyInitEngine() throws IllegalStateException {
-        try {
-            Class.forName("com.oracle.truffle.api.vm.PolyglotEngine", true, Accessor.class.getClassLoader());
         } catch (ClassNotFoundException ex) {
             boolean assertOn = false;
             assert assertOn = true;
