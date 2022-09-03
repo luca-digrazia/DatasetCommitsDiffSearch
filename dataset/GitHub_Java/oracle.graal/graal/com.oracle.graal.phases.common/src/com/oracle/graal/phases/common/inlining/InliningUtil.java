@@ -177,8 +177,8 @@ public class InliningUtil {
         return false;
     }
 
-    private static void logNotInlined(Invoke invoke, int inliningDepth, ResolvedJavaMethod method, String msg) {
-        logNotInlinedMethodAndReturnNull(invoke, inliningDepth, method, msg, new Object[0]);
+    private static InlineInfo logNotInlined(Invoke invoke, int inliningDepth, ResolvedJavaMethod method, String msg) {
+        return logNotInlinedMethodAndReturnNull(invoke, inliningDepth, method, msg, new Object[0]);
     }
 
     private static InlineInfo logNotInlinedMethodAndReturnNull(Invoke invoke, int inliningDepth, ResolvedJavaMethod method, String msg, Object... args) {
@@ -338,21 +338,18 @@ public class InliningUtil {
             TypeProfileProxyNode typeProfileProxyNode = (TypeProfileProxyNode) receiver;
             typeProfile = typeProfileProxyNode.getProfile();
         } else {
-            logNotInlined(invoke, data.inliningDepth(), targetMethod, "no type profile exists");
-            return null;
+            return logNotInlined(invoke, data.inliningDepth(), targetMethod, "no type profile exists");
         }
 
         ProfiledType[] ptypes = typeProfile.getTypes();
         if (ptypes == null || ptypes.length <= 0) {
-            logNotInlined(invoke, data.inliningDepth(), targetMethod, "no types in profile");
-            return null;
+            return logNotInlined(invoke, data.inliningDepth(), targetMethod, "no types in profile");
         }
         ResolvedJavaType contextType = invoke.getContextType();
         double notRecordedTypeProbability = typeProfile.getNotRecordedProbability();
         if (ptypes.length == 1 && notRecordedTypeProbability == 0) {
             if (!optimisticOpts.inlineMonomorphicCalls()) {
-                logNotInlined(invoke, data.inliningDepth(), targetMethod, "inlining monomorphic calls is disabled");
-                return null;
+                return logNotInlined(invoke, data.inliningDepth(), targetMethod, "inlining monomorphic calls is disabled");
             }
 
             ResolvedJavaType type = ptypes[0].getType();
@@ -381,8 +378,7 @@ public class InliningUtil {
             for (int i = 0; i < ptypes.length; i++) {
                 ResolvedJavaMethod concrete = ptypes[i].getType().resolveMethod(targetMethod, contextType);
                 if (concrete == null) {
-                    logNotInlined(invoke, data.inliningDepth(), targetMethod, "could not resolve method");
-                    return null;
+                    return logNotInlined(invoke, data.inliningDepth(), targetMethod, "could not resolve method");
                 }
                 int index = concreteMethods.indexOf(concrete);
                 double curProbability = ptypes[i].getProbability();
@@ -442,8 +438,7 @@ public class InliningUtil {
 
             for (ResolvedJavaMethod concrete : concreteMethods) {
                 if (!checkTargetConditions(data, replacements, invoke, concrete, optimisticOpts)) {
-                    logNotInlined(invoke, data.inliningDepth(), targetMethod, "it is a polymorphic method call and at least one invoked method cannot be inlined");
-                    return null;
+                    return logNotInlined(invoke, data.inliningDepth(), targetMethod, "it is a polymorphic method call and at least one invoked method cannot be inlined");
                 }
             }
             return new MultiTypeGuardInlineInfo(invoke, concreteMethods, concreteMethodsProbabilities, usedTypes, typesToConcretes, notRecordedTypeProbability);
