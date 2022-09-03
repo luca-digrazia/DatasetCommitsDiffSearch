@@ -30,11 +30,10 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
 /**
  * Iterator for iterating over a list of values. Subclasses must overwrite one of the doValue
- * methods. Clients should not use this interface directly but call
+ * methods. Clients should not use this class directly but call
  * {@link InstructionValueProcedureBase#processValue} instead.
  */
-@FunctionalInterface
-public interface InstructionValueProcedure {
+public abstract class InstructionValueProcedure extends InstructionValueProcedureBase {
 
     /**
      * Iterator method to be overwritten.
@@ -45,5 +44,11 @@ public interface InstructionValueProcedure {
      * @param flags A set of flags for the value.
      * @return The new value to replace the value that was passed in.
      */
-    Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags);
+    public abstract Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags);
+
+    @Override
+    public final Value processValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+        assert !(value instanceof CompositeValue) : String.format("Must not visit CompositeValues! Instruction: %s Value: %s", instruction, value);
+        return doValue(instruction, value, mode, flags);
+    }
 }

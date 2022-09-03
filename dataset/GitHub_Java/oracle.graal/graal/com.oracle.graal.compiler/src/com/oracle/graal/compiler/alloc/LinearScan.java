@@ -926,7 +926,7 @@ public final class LinearScan {
                                             ins.forEachState(new ValueProcedure() {
 
                                                 @Override
-                                                public Value doValue(Value liveStateOperand, OperandMode mode, EnumSet<OperandFlag> flags) {
+                                                public Value doValue(Value liveStateOperand) {
                                                     Debug.log("operand=%s", liveStateOperand);
                                                     return liveStateOperand;
                                                 }
@@ -1127,7 +1127,7 @@ public final class LinearScan {
             op.forEachRegisterHint(targetValue, mode, new ValueProcedure() {
 
                 @Override
-                public Value doValue(Value registerHint, OperandMode valueMode, EnumSet<OperandFlag> valueFlags) {
+                public Value doValue(Value registerHint) {
                     if (isVariableOrRegister(registerHint)) {
                         Interval from = getOrCreateInterval((AllocatableValue) registerHint);
                         Interval to = getOrCreateInterval((AllocatableValue) targetValue);
