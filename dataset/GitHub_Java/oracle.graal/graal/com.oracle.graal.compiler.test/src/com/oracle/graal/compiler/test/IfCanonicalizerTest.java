@@ -31,7 +31,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * In the following tests, the usages of local variable "a" are replaced with the integer constant
@@ -145,7 +144,7 @@ public class IfCanonicalizerTest extends GraalCompilerTest {
             n.replaceFirstInput(local, constant);
         }
         Debug.dump(graph, "Graph");
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), new Assumptions(false), replacements));
+        new CanonicalizerPhase.Instance(runtime(), new Assumptions(false), true).apply(graph);
         for (FrameState fs : local.usages().filter(FrameState.class).snapshot()) {
             fs.replaceFirstInput(local, null);
         }
