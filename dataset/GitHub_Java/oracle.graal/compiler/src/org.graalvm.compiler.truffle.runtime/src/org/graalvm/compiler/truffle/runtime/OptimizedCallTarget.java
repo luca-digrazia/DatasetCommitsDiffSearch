@@ -76,7 +76,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.SpeculationLog;
-
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleFirstTierCompilation;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
 
 /**
@@ -337,10 +337,9 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      * synchronously. Returns <code>false</code> if compilation was not scheduled or is happening in
      * the background. Use {@link #isCompiling()} to find out whether it is actually compiling.
      */
-    public final boolean compile(boolean lastTierCompilation) {
-        if (isValid() && !isCurrentCompilationOverriding(lastTierCompilation)) {
+    public final boolean compile() {
+        if (isValidInLastTier())
             return true;
-        }
         if (!isCompiling()) {
             if (!runtime().acceptForCompilation(getRootNode())) {
                 return false;
@@ -350,14 +349,14 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             // Do not try to compile this target concurrently,
             // but do not block other threads if compilation is not asynchronous.
             synchronized (this) {
-                if (isValid() && !isCurrentCompilationOverriding(lastTierCompilation)) {
+                if (isValidInLastTier()) {
                     return true;
                 }
                 if (this.compilationProfile == null) {
                     initialize();
                 }
                 if (!isCompiling()) {
-                    this.compilationTask = task = runtime().submitForCompilation(this, lastTierCompilation);
+                    this.compilationTask = task = runtime().submitForCompilation(this);
                 }
             }
             if (task != null) {
@@ -371,8 +370,19 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return false;
     }
 
-    private boolean isCurrentCompilationOverriding(boolean lastTierCompilation) {
-        return lastTierCompilation && !isValidLastTier();
+    private boolean isValidInLastTier() {
+        if (TruffleCompilerOptions.TruffleMultiTier.getValue(getOptions())) {
+            // We should still complete the high-tier compilation request if low-tier code was
+            // installed.
+            if ((TruffleFirstTierCompilation.getValue(getOptions()) && isValid()) || isValidLastTier()) {
+                return true;
+            }
+        } else {
+            if (isValid()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public final boolean isCompiling() {

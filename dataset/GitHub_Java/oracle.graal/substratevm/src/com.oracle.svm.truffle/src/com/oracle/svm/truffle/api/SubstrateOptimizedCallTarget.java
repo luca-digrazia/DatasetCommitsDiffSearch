@@ -76,8 +76,7 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
 
     @Override
     public boolean isValidLastTier() {
-        // TODO: GR-11926 Support multi-tier compilation in SVM.
-        return true;
+        throw GraalError.unimplemented("Multi-tier compilation not yet supported in SVM.");
     }
 
     @Override

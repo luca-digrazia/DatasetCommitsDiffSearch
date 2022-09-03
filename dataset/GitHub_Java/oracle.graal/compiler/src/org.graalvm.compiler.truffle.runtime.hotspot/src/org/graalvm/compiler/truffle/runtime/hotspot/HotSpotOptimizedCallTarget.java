@@ -24,66 +24,31 @@
  */
 package org.graalvm.compiler.truffle.runtime.hotspot;
 
-import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
-import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
-import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
-import org.graalvm.compiler.truffle.common.TruffleCompiler;
+import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleInstalledCode;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.TruffleCallBoundary;
 
 import com.oracle.truffle.api.nodes.RootNode;
 
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.hotspot.HotSpotNmethod;
-
 /**
- * A HotSpot specific {@link OptimizedCallTarget} whose machine code (if any) is represented by an
- * associated {@link InstalledCode}.
+ * A HotSpot specific {@link OptimizedCallTarget} that whose machine code (if any) is represented by
+ * an associated {@link HotSpotTruffleInstalledCode}.
  */
-public class HotSpotOptimizedCallTarget extends OptimizedCallTarget implements OptimizedAssumptionDependency {
-
-    /**
-     * Initial value for {@link #installedCode}.
-     */
-    private static final InstalledCode INVALID_CODE = new InstalledCode(null);
-
+public class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     /**
      * This field is read by the code injected by {@code TruffleCallBoundaryInstrumentationFactory}
-     * into a method annotated by {@link TruffleCallBoundary}. The injected code assumes this field
-     * is never null hence the use of {@link #INVALID_CODE}.
+     * into a method annotated by {@link TruffleCallBoundary}.
      */
-    private InstalledCode installedCode;
+    private HotSpotTruffleInstalledCode installedCode;
 
-    public HotSpotOptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode) {
+    public HotSpotOptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode, HotSpotTruffleInstalledCode installedCode) {
         super(sourceCallTarget, rootNode);
-        this.installedCode = INVALID_CODE;
+        this.installedCode = installedCode;
     }
 
-    @Override
-    public boolean soleExecutionEntryPoint() {
-        // This relies on the check for a non-default nmethod in `setInstalledCode`
-        return true;
-    }
-
-    /**
-     * This method may only be called during compilation, and only by the compiling thread.
-     */
-    public void setInstalledCode(InstalledCode code) {
-        if (installedCode != code) {
-            invalidateCode();
-        }
-        if (code instanceof HotSpotNmethod) {
-            HotSpotNmethod nmethod = (HotSpotNmethod) code;
-            if (nmethod.isDefault()) {
-                throw new IllegalArgumentException("Cannot install a default nmethod for a " + getClass().getSimpleName());
-            }
-        }
+    public void setInstalledCode(HotSpotTruffleInstalledCode code) {
+        invalidateCode();
         installedCode = code;
-    }
-
-    @Override
-    public CompilableTruffleAST getCompilable() {
-        return this;
     }
 
     @Override
@@ -93,8 +58,7 @@ public class HotSpotOptimizedCallTarget extends OptimizedCallTarget implements O
 
     @Override
     public boolean isValidLastTier() {
-        InstalledCode code = installedCode;
-        return code.isValid() && code.getName().endsWith(TruffleCompiler.SECOND_TIER_COMPILATION_SUFFIX);
+        return installedCode.isValid() && !installedCode.isFirstTier();
     }
 
     @Override
@@ -107,10 +71,5 @@ public class HotSpotOptimizedCallTarget extends OptimizedCallTarget implements O
     @Override
     public long getCodeAddress() {
         return installedCode.getAddress();
-    }
-
-    @Override
-    public void invalidate() {
-        invalidate(null, null);
     }
 }

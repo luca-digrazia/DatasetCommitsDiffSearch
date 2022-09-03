@@ -35,7 +35,6 @@ public interface TruffleInliningPolicy {
     double calculateScore(TruffleInliningProfile profile);
 
     static TruffleInliningPolicy getInliningPolicy(OptionValues options) {
-        // TODO: Pass information about the current compilation task here.
         if (TruffleCompilerOptions.TruffleFirstTierCompilation.getValue(options)) {
             return new NoInliningPolicy();
         } else {

@@ -32,15 +32,26 @@ import jdk.vm.ci.runtime.JVMCI;
 
 public class HotSpotTruffleInstalledCode extends InstalledCode implements OptimizedAssumptionDependency {
     private final CompilableTruffleAST compilable;
+    private final boolean firstTier;
 
-    public HotSpotTruffleInstalledCode(CompilableTruffleAST compilable) {
+    public HotSpotTruffleInstalledCode(CompilableTruffleAST compilable, boolean firstTier) {
         super(compilable == null ? null : compilable.getName());
         this.compilable = compilable;
+        this.firstTier = firstTier;
     }
 
     @Override
     public CompilableTruffleAST getCompilable() {
         return compilable;
+    }
+
+    /**
+     * Returns true if this code was produced in the first tier compilation.
+     *
+     * @see org.graalvm.compiler.truffle.common.TruffleCompilerOptions#TruffleMultiTier
+     */
+    public boolean isFirstTier() {
+        return firstTier;
     }
 
     @Override

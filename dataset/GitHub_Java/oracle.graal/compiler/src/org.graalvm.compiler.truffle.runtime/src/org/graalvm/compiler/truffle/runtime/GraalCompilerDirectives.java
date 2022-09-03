@@ -24,20 +24,22 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
+
 /**
  * Directives that influence the optimizations of the Truffle compiler.
  */
 public class GraalCompilerDirectives {
-    /**
-     * Returns a boolean value indicating whether the method is executed in the first tier Truffle
-     * compilation.
-     *
-     * @see PolyglotCompilerOptions.MultiTier
-     *
-     * @return {@code true} when executed in the first tier Truffle compilation, {@code false}
-     *         otherwise.
-     */
-    public static boolean inFirstTier() {
-        return false;
-    }
+  /**
+   * Returns a boolean value indicating whether the method is executed in the first tier Truffle
+   * compilation.
+   *
+   * @see TruffleCompilerOptions#TruffleMultiTier
+   *
+   * @return {@code true} when executed in the first tier Truffle compilation, {@code false}
+   *         otherwise.
+   */
+  public static boolean inFirstTier() {
+      return false;
+  }
 }

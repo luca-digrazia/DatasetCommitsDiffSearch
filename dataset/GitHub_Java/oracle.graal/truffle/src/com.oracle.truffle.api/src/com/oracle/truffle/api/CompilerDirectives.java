@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,6 +47,8 @@ import java.lang.annotation.Target;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 
+import com.oracle.truffle.api.nodes.ControlFlowException;
+
 /**
  * Directives that influence the optimizations of the Truffle compiler. All of the operations have
  * no effect when executed in the Truffle interpreter.
@@ -54,8 +56,12 @@ import java.util.concurrent.Callable;
  * @since 0.8 or earlier
  */
 public final class CompilerDirectives {
-
-    private CompilerDirectives() {
+    /**
+     * @deprecated accidentally public - don't use
+     * @since 0.8 or earlier
+     */
+    @Deprecated
+    public CompilerDirectives() {
     }
 
     /** @since 0.8 or earlier */
@@ -263,11 +269,18 @@ public final class CompilerDirectives {
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
     public @interface TruffleBoundary {
+        /**
+         * Determines whether this method throws a {@link ControlFlowException}.
+         *
+         * @since 0.8 or earlier
+         * @deprecated use {@link #transferToInterpreterOnException()}
+         */
+        @Deprecated
+        boolean throwsControlFlowException() default false;
 
         /**
-         * Determines whether execution should be transferred to the interpreter if an exception is
-         * thrown across this boundary, in which case the caller's compiled code is invalidated and
-         * will not transfer to the interpreter on exceptions for this method again.
+         * Determines whether execution should be transferred to the interpreter in the case that an
+         * exception is thrown across this boundary.
          *
          * @since 0.28
          */
@@ -342,119 +355,4 @@ public final class CompilerDirectives {
             throw new ClassCastException();
         }
     }
-
-    /**
-     * Indicates a code path that is not supposed to be reached during compilation or
-     * interpretation. Reaching this method is considered a fatal internal error and execution
-     * should not continue. Transfers to interpreter and
-     * {@link CompilerDirectives#transferToInterpreterAndInvalidate() invalidates} the compiled code
-     * and throws an {@link AssertionError} when invoked.
-     * <p>
-     * This method returns a runtime exception to be conveniently used in combination with Java
-     * throw statements, for example:
-     *
-     * <pre>
-     * if (expectedCondition) {
-     *     return 42;
-     * } else {
-     *     throw shouldNotReachHere();
-     * }
-     * </pre>
-     *
-     * @since 20.2
-     */
-    public static RuntimeException shouldNotReachHere() {
-        transferToInterpreterAndInvalidate();
-        throw shouldNotReachHere(null, null);
-    }
-
-    /**
-     * Indicates a code path that is not supposed to be reached during compilation or
-     * interpretation. If it is reached then it is considered fatal internal error and execution
-     * typically should not continue. Transfers to interpreter and
-     * {@link CompilerDirectives#transferToInterpreterAndInvalidate() invalidates} the compiled code
-     * and throws an {@link AssertionError} when reached unexpectedly.
-     * <p>
-     * This method returns a runtime exception to be conveniently used in combination with Java
-     * throw statements, for example:
-     *
-     * <pre>
-     * if (expectedCondition) {
-     *     return 42;
-     * } else {
-     *     throw shouldNotReachHere("Additional message");
-     * }
-     * </pre>
-     *
-     * @param message an additional message for the exception thrown.
-     * @since 20.2
-     */
-    public static RuntimeException shouldNotReachHere(String message) {
-        transferToInterpreterAndInvalidate();
-        throw shouldNotReachHere(message, null);
-    }
-
-    /**
-     * Indicates a code path that is not supposed to be reached during compilation or
-     * interpretation. If it is reached then it is considered fatal internal error and execution
-     * typically should not continue. Transfers to interpreter and
-     * {@link CompilerDirectives#transferToInterpreterAndInvalidate() invalidates} the compiled code
-     * and throws an {@link AssertionError} when reached unexpectedly.
-     * <p>
-     * This method returns a runtime exception to be conveniently used in combination with Java
-     * throw statements, for example:
-     *
-     * <pre>
-     * if (expectedCondition) {
-     *     return 42;
-     * } else {
-     *     throw shouldNotReachHere("Additional message");
-     * }
-     * </pre>
-     *
-     * @param cause the cause if an exception was responsible for the unexpected case.
-     * @since 20.2
-     */
-    public static RuntimeException shouldNotReachHere(Throwable cause) {
-        transferToInterpreterAndInvalidate();
-        throw shouldNotReachHere(null, cause);
-    }
-
-    /**
-     * Indicates a code path that is not supposed to be reached during compilation or
-     * interpretation. If it is reached then it is considered fatal internal error and execution
-     * typically should not continue. Transfers to interpreter and
-     * {@link CompilerDirectives#transferToInterpreterAndInvalidate() invalidates} the compiled code
-     * and throws an {@link AssertionError} when reached unexpectedly.
-     * <p>
-     * This method returns a runtime exception to be conveniently used in combination with Java
-     * throw statements, for example:
-     *
-     * <pre>
-     * if (expectedCondition) {
-     *     return 42;
-     * } else {
-     *     throw shouldNotReachHere("Additional message");
-     * }
-     * </pre>
-     *
-     * @param message an additional message for the exception thrown.
-     * @param cause the cause if an exception was responsible for the unexpected case.
-     *
-     * @since 20.2
-     */
-    public static RuntimeException shouldNotReachHere(String message, Throwable cause) {
-        transferToInterpreterAndInvalidate();
-        throw new ShouldNotReachHere(message, cause);
-    }
-
-    @SuppressWarnings("serial")
-    static final class ShouldNotReachHere extends RuntimeException {
-
-        ShouldNotReachHere(String message, Throwable cause) {
-            super(message, cause);
-        }
-
-    }
-
 }
