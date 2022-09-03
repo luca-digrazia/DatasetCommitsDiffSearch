@@ -52,6 +52,7 @@ import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.NativeToCompar
 import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.ToComparableValueNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
@@ -178,7 +179,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
     @ImportStatic(ForeignToLLVMType.class)
     protected abstract static class ManagedToComparableValue extends Node {
 
-        abstract LLVMAddress execute(VirtualFrame frame, Object obj);
+        abstract LLVMAddress execute(Object obj);
 
         @Specialization
         protected LLVMAddress doAddress(long address) {
@@ -205,8 +206,13 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected LLVMAddress doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive address, @Cached("create(I64)") ForeignToLLVM toLLVM) {
-            return LLVMAddress.fromLong((long) toLLVM.executeWithTarget(frame, address.getValue()));
+        protected LLVMAddress doLLVMFunction(LLVMFunction address) {
+            return LLVMAddress.fromLong(address.getFunctionPointer());
+        }
+
+        @Specialization
+        protected LLVMAddress doLLVMBoxedPrimitive(LLVMBoxedPrimitive address, @Cached("create(I64)") ForeignToLLVM toLLVM) {
+            return LLVMAddress.fromLong((long) toLLVM.executeWithTarget(address.getValue()));
         }
     }
 
@@ -227,7 +233,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         @SuppressWarnings("unused")
         protected LLVMAddress doManaged(VirtualFrame frame, Object obj, LLVMObjectNativeLibrary lib,
                         @Cached("createToComparable()") ManagedToComparableValue toComparable) {
-            return toComparable.execute(frame, obj);
+            return toComparable.execute(obj);
         }
 
         static ManagedToComparableValue createToComparable() {
@@ -304,7 +310,12 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
 
         @Specialization
         boolean doFunctionDescriptor(LLVMFunctionDescriptor f1, LLVMFunctionDescriptor f2) {
-            return f1 == f2;
+            return f1.getFunctionId() == f2.getFunctionId();
+        }
+
+        @Specialization(replaces = "doFunctionDescriptor")
+        boolean doFunction(LLVMFunction f1, LLVMFunction f2) {
+            return f1.getFunctionPointer() == f2.getFunctionPointer();
         }
 
         @Specialization(guards = "val1.getClass() != val2.getClass()")
