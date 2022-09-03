@@ -42,7 +42,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Filter;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -72,7 +71,7 @@ final class PolyglotLogger extends Logger {
     private PolyglotLogger() {
         this(ROOT_NAME, null);
         addHandlerInternal(ForwardingHandler.INSTANCE);
-        setParentInternal(Logger.getLogger(ROOT_NAME));
+        setParent(Logger.getLogger(ROOT_NAME));
     }
 
     @Override
@@ -103,13 +102,16 @@ final class PolyglotLogger extends Logger {
     }
 
     @Override
-    public Level getLevel() {
-        return levelObj;
+    public void setLevel(final Level level) {
+        synchronized (childrenLock) {
+            this.levelObj = level;
+            updateLevelNum();
+        }
     }
 
     @Override
-    public void setLevel(final Level level) {
-        throw new SecurityException("Reconfiguration of a PolyglotLogger is not allowed.");
+    public Level getLevel() {
+        return levelObj;
     }
 
     @Override
@@ -118,125 +120,7 @@ final class PolyglotLogger extends Logger {
     }
 
     @Override
-    public void setFilter(Filter newFilter) throws SecurityException {
-        throw new SecurityException("Reconfiguration of a PolyglotLogger is not allowed.");
-    }
-
-    @Override
-    public Logger getParent() {
-        return parent;
-    }
-
-    @Override
     public void setParent(final Logger newParent) {
-        throw new SecurityException("Reconfiguration of a PolyglotLogger is not allowed.");
-    }
-
-    @Override
-    public void log(final LogRecord record) {
-        if (!isLoggable(record.getLevel())) {
-            return;
-        }
-        logSlowPath(record);
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    private boolean isLoggableSlowPath(final PolyglotContextImpl context, Level level) {
-        return LoggerCache.getInstance().isLoggable(getName(), context, level);
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    private void logSlowPath(final LogRecord record) {
-        final Filter filter = getFilter();
-        if (filter != null && !filter.isLoggable(record)) {
-            return;
-        }
-
-        for (Logger current = this; current != null; current = current.getParent()) {
-            for (Handler handler : current.getHandlers()) {
-                handler.publish(record);
-            }
-            if (!current.getUseParentHandlers()) {
-                break;
-            }
-        }
-    }
-
-    private void removeChild(final ChildLoggerRef child) {
-        synchronized (childrenLock) {
-            if (children != null) {
-                for (Iterator<ChildLoggerRef> it = children.iterator(); it.hasNext();) {
-                    if (it.next() == child) {
-                        it.remove();
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
-    private void updateLevelNum() {
-        int value;
-        if (levelObj != null) {
-            value = levelObj.intValue();
-            if (parent != null) {
-                value = Math.min(value, getParentLevelNum());
-            }
-        } else if (parent != null) {
-            value = getParentLevelNum();
-        } else {
-            value = DEFAULT_VALUE;
-        }
-        setLevelNum(value);
-        if (children != null) {
-            for (ChildLoggerRef ref : children) {
-                final PolyglotLogger logger = ref.get();
-                if (logger != null) {
-                    logger.updateLevelNum();
-                }
-            }
-        }
-    }
-
-    private int getParentLevelNum() {
-        if (parent.getClass() == PolyglotLogger.class) {
-            return ((PolyglotLogger) parent).getLevelNum();
-        } else {
-            final Level level = parent.getLevel();
-            return level != null ? level.intValue() : DEFAULT_VALUE;
-        }
-    }
-
-    private int getLevelNum() {
-        if (!levelNumStable.isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-        }
-        return levelNum;
-    }
-
-    private boolean setLevelNum(final int value) {
-        if (this.levelNum != value) {
-            this.levelNum = value;
-            final Assumption currentAssumtion = levelNumStable;
-            levelNumStable = Truffle.getRuntime().createAssumption("Log Level Value stable for: " + getName());
-            currentAssumtion.invalidate();
-            return true;
-        }
-        return false;
-    }
-
-    private void setLevelInternal(final Level level) {
-        synchronized (childrenLock) {
-            this.levelObj = level;
-            updateLevelNum();
-        }
-    }
-
-    private void addHandlerInternal(final Handler handler) {
-        super.addHandler(handler);
-    }
-
-    private void setParentInternal(final Logger newParent) {
         Objects.requireNonNull(newParent, "Parent must be non null.");
         synchronized (childrenLock) {
             ChildLoggerRef found = null;
@@ -268,9 +152,80 @@ final class PolyglotLogger extends Logger {
         }
     }
 
+    @Override
+    public Logger getParent() {
+        return parent;
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private boolean isLoggableSlowPath(final PolyglotContextImpl context, Level level) {
+        return LoggerCache.getInstance().isLoggable(getName(), context, level);
+    }
+
+    private void removeChild(final ChildLoggerRef child) {
+        synchronized (childrenLock) {
+            if (children != null) {
+                for (Iterator<ChildLoggerRef> it = children.iterator(); it.hasNext();) {
+                    if (it.next() == child) {
+                        it.remove();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    private void updateLevelNum() {
+        int value;
+        if (levelObj != null) {
+            value = levelObj.intValue();
+        } else if (parent != null) {
+            if (parent.getClass() == PolyglotLogger.class) {
+                value = ((PolyglotLogger) parent).getLevelNum();
+            } else {
+                Level level = parent.getLevel();
+                value = level != null ? level.intValue() : DEFAULT_VALUE;
+            }
+        } else {
+            value = DEFAULT_VALUE;
+        }
+        if (setLevelNum(value)) {
+            if (children != null) {
+                for (ChildLoggerRef ref : children) {
+                    final PolyglotLogger logger = ref.get();
+                    if (logger != null) {
+                        logger.updateLevelNum();
+                    }
+                }
+            }
+        }
+    }
+
+    private int getLevelNum() {
+        if (!levelNumStable.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+        }
+        return levelNum;
+    }
+
+    private boolean setLevelNum(final int value) {
+        if (this.levelNum != value) {
+            this.levelNum = value;
+            final Assumption currentAssumtion = levelNumStable;
+            levelNumStable = Truffle.getRuntime().createAssumption("Log Level Value stable for: " + getName());
+            currentAssumtion.invalidate();
+            return true;
+        }
+        return false;
+    }
+
+    private void addHandlerInternal(final Handler handler) {
+        super.addHandler(handler);
+    }
+
     private static void cleanupFreedReferences() {
         for (int i = 0; i < MAX_CLEANED_REFS; i++) {
-            final AbstractLoggerRef ref = (AbstractLoggerRef) loggersRefQueue.poll();
+            final AbstractLoggerRef<?> ref = (AbstractLoggerRef<?>) loggersRefQueue.poll();
             if (ref == null) {
                 break;
             }
@@ -278,15 +233,14 @@ final class PolyglotLogger extends Logger {
         }
     }
 
-    private abstract static class AbstractLoggerRef extends WeakReference<PolyglotLogger> implements Closeable {
+    private abstract static class AbstractLoggerRef<T extends Logger> extends WeakReference<T> implements Closeable {
         private final AtomicBoolean closed;
 
-        AbstractLoggerRef(final PolyglotLogger logger) {
-            super(logger, loggersRefQueue);
+        AbstractLoggerRef(final T t) {
+            super(t, loggersRefQueue);
             this.closed = new AtomicBoolean();
         }
 
-        @Override
         public abstract void close();
 
         boolean shouldClose() {
@@ -294,7 +248,7 @@ final class PolyglotLogger extends Logger {
         }
     }
 
-    private static final class ChildLoggerRef extends AbstractLoggerRef {
+    private static final class ChildLoggerRef extends AbstractLoggerRef<PolyglotLogger> {
 
         private volatile Reference<PolyglotLogger> parent;
 
@@ -326,7 +280,7 @@ final class PolyglotLogger extends Logger {
         private final PolyglotLogger polyglotRootLogger;
         private final Map<String, NamedLoggerRef> loggers;
         private final LoggerNode root;
-        private final Map<PolyglotContextImpl, Map<String, Level>> levelsByContext;
+        private final Map<Object, Map<String, Level>> levelsByContext;
         private Map<String, Level> effectiveLevels;
 
         private LoggerCache() {
@@ -338,7 +292,7 @@ final class PolyglotLogger extends Logger {
             this.effectiveLevels = Collections.emptyMap();
         }
 
-        void addLogLevelsForContext(final PolyglotContextImpl context, final Map<String, Level> addedLevels) {
+        void addLogLevelsForContext(final Object context, final Map<String, Level> addedLevels) {
             if (!addedLevels.isEmpty()) {
                 synchronized (this) {
                     levelsByContext.put(context, addedLevels);
@@ -356,11 +310,8 @@ final class PolyglotLogger extends Logger {
             }
         }
 
-        synchronized void removeLogLevelsForContext(final PolyglotContextImpl context) {
+        synchronized void removeLogLevelsForContext(final Object context) {
             final Map<String, Level> levels = levelsByContext.remove(context);
-            if (context.logHandler != null) {
-                context.logHandler.close();
-            }
             if (levels != null && !levels.isEmpty()) {
                 final Collection<String> removedLevels = new HashSet<>();
                 final Collection<String> changedLevels = new HashSet<>();
@@ -418,8 +369,8 @@ final class PolyglotLogger extends Logger {
             return found;
         }
 
-        private synchronized PolyglotLogger getLogger(final String loggerName) {
-            PolyglotLogger res = null;
+        private synchronized Logger getLogger(final String loggerName) {
+            Logger res = null;
             final NamedLoggerRef ref = loggers.get(loggerName);
             if (ref != null) {
                 res = ref.get();
@@ -430,7 +381,7 @@ final class PolyglotLogger extends Logger {
             return res;
         }
 
-        private boolean addLogger(final PolyglotLogger logger) {
+        private boolean addLogger(final Logger logger) {
             final String loggerName = logger.getName();
             if (loggerName == null) {
                 throw new NullPointerException("Logger must have non null name.");
@@ -454,7 +405,7 @@ final class PolyglotLogger extends Logger {
                 node.setLoggerRef(ref);
                 final Logger parentLogger = node.findParentLogger();
                 if (parentLogger != null) {
-                    logger.setParentInternal(parentLogger);
+                    logger.setParent(parentLogger);
                 }
                 node.updateChildParents();
                 ref.setNode(node);
@@ -468,13 +419,13 @@ final class PolyglotLogger extends Logger {
 
         private void reconfigure(final Collection<? extends String> removedLoggers, final Collection<? extends String> changedLoogers) {
             for (String loggerName : removedLoggers) {
-                final PolyglotLogger logger = getLogger(loggerName);
+                final Logger logger = getLogger(loggerName);
                 if (logger != null) {
-                    logger.setLevelInternal(null);
+                    logger.setLevel(null);
                 }
             }
             for (String loggerName : changedLoogers) {
-                final PolyglotLogger logger = getLogger(loggerName);
+                final Logger logger = getLogger(loggerName);
                 if (logger != null) {
                     setLoggerLevel(logger, loggerName);
                     createParents(loggerName);
@@ -484,10 +435,10 @@ final class PolyglotLogger extends Logger {
             }
         }
 
-        private void setLoggerLevel(final PolyglotLogger logger, final String loggerName) {
+        private void setLoggerLevel(final Logger logger, final String loggerName) {
             final Level l = getEffectiveLevel(loggerName);
             if (l != null) {
-                logger.setLevelInternal(l);
+                logger.setLevel(l);
             }
         }
 
@@ -538,7 +489,7 @@ final class PolyglotLogger extends Logger {
                         final Map<String, Level> currentEffectiveLevels,
                         final Set<String> removed,
                         final Map<String, Level> added,
-                        final Map<PolyglotContextImpl, Map<String, Level>> levelsByContext,
+                        final Map<Object, Map<String, Level>> levelsByContext,
                         final Collection<? super String> removedLevels,
                         final Collection<? super String> changedLevels) {
             final Map<String, Level> newEffectiveLevels = new HashMap<>(currentEffectiveLevels);
@@ -567,13 +518,10 @@ final class PolyglotLogger extends Logger {
             return newEffectiveLevels;
         }
 
-        private static Level findMinLevel(final String loggerName, final Map<PolyglotContextImpl, Map<String, Level>> levelsByContext) {
+        private static Level findMinLevel(final String loggerName, final Map<Object, Map<String, Level>> levelsByContext) {
             Level min = null;
             for (Map<String, Level> levels : levelsByContext.values()) {
                 Level level = levels.get(loggerName);
-                if (level == null) {
-                    continue;
-                }
                 if (min == null) {
                     min = level;
                 } else {
@@ -587,11 +535,11 @@ final class PolyglotLogger extends Logger {
             return l1.intValue() < l2.intValue() ? l1 : l2;
         }
 
-        private final class NamedLoggerRef extends AbstractLoggerRef {
+        private final class NamedLoggerRef extends AbstractLoggerRef<Logger> {
             private final String loggerName;
             private LoggerNode node;
 
-            NamedLoggerRef(final PolyglotLogger logger, final String loggerName) {
+            NamedLoggerRef(final Logger logger, final String loggerName) {
                 super(logger);
                 this.loggerName = loggerName;
             }
@@ -651,9 +599,9 @@ final class PolyglotLogger extends Logger {
                     return;
                 }
                 for (LoggerNode child : children.values()) {
-                    PolyglotLogger childLogger = child.loggerRef != null ? child.loggerRef.get() : null;
+                    Logger childLogger = child.loggerRef != null ? child.loggerRef.get() : null;
                     if (childLogger != null) {
-                        childLogger.setParentInternal(parentLogger);
+                        childLogger.setParent(parentLogger);
                     } else {
                         child.updateChildParentsImpl(parentLogger);
                     }
@@ -669,6 +617,7 @@ final class PolyglotLogger extends Logger {
         private ForwardingHandler() {
         }
 
+        @CompilerDirectives.TruffleBoundary
         @Override
         public void publish(final LogRecord record) {
             final Handler handler = findDelegate();
@@ -677,6 +626,7 @@ final class PolyglotLogger extends Logger {
             }
         }
 
+        @CompilerDirectives.TruffleBoundary
         @Override
         public void flush() {
             final Handler handler = findDelegate();
@@ -685,6 +635,7 @@ final class PolyglotLogger extends Logger {
             }
         }
 
+        @CompilerDirectives.TruffleBoundary
         @Override
         public void close() throws SecurityException {
             final Handler handler = findDelegate();
