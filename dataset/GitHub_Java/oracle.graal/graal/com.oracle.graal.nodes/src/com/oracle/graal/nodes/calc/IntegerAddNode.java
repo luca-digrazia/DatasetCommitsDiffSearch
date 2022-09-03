@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,98 +23,86 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "+")
-public class IntegerAddNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable, TypeFeedbackProvider {
+public class IntegerAddNode extends IntegerArithmeticNode implements NarrowableArithmeticNode {
 
-    public IntegerAddNode(Kind kind, ValueNode x, ValueNode y) {
-        super(kind, x, y);
+    public static IntegerAddNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new IntegerAddNodeGen(x, y) : new IntegerAddNode(x, y);
+    }
+
+    protected IntegerAddNode(ValueNode x, ValueNode y) {
+        super(StampTool.add(x.stamp(), y.stamp()), x, y);
     }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.add(x().integerStamp(), y().integerStamp()));
+        return updateStamp(StampTool.add(getX().stamp(), getY().stamp()));
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && !y().isConstant()) {
-            return graph().unique(new IntegerAddNode(kind(), y(), x()));
+    public Constant evalConst(Constant... inputs) {
+        assert inputs.length == 2;
+        return Constant.forPrimitiveInt(PrimitiveStamp.getBits(stamp()), inputs[0].asLong() + inputs[1].asLong());
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        if (forX.isConstant() && !forY.isConstant()) {
+            return IntegerAddNode.create(forY, forX);
         }
-        if (x().isConstant()) {
-            if (kind() == Kind.Int) {
-                return ConstantNode.forInt(x().asConstant().asInt() + y().asConstant().asInt(), graph());
-            } else {
-                assert kind() == Kind.Long;
-                return ConstantNode.forLong(x().asConstant().asLong() + y().asConstant().asLong(), graph());
+        if (forX instanceof IntegerSubNode) {
+            IntegerSubNode sub = (IntegerSubNode) forX;
+            if (sub.getY() == forY) {
+                // (a - b) + b
+                return sub.getX();
             }
-        } else if (y().isConstant()) {
-            long c = y().asConstant().asLong();
+        }
+        if (forY instanceof IntegerSubNode) {
+            IntegerSubNode sub = (IntegerSubNode) forY;
+            if (sub.getY() == forX) {
+                // b + (a - b)
+                return sub.getX();
+            }
+        }
+        if (forX.isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(forX.asConstant(), forY.asConstant()));
+        } else if (forY.isConstant()) {
+            long c = forY.asConstant().asLong();
             if (c == 0) {
-                return x();
+                return forX;
             }
             // canonicalize expressions like "(a + 1) + 2"
-            BinaryNode reassociated = BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
+            BinaryNode reassociated = BinaryNode.reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
             if (reassociated != this) {
                 return reassociated;
             }
-            if (c < 0) {
-                if (kind() == Kind.Int) {
-                    return IntegerArithmeticNode.sub(x(), ConstantNode.forInt((int) -c, graph()));
-                } else {
-                    assert kind() == Kind.Long;
-                    return IntegerArithmeticNode.sub(x(), ConstantNode.forLong(-c, graph()));
-                }
-            }
         }
-        if (x() instanceof NegateNode) {
-            return IntegerArithmeticNode.sub(y(), ((NegateNode) x()).x());
+        if (forX instanceof NegateNode) {
+            return IntegerArithmeticNode.sub(forY, ((NegateNode) forX).getValue());
+        } else if (forY instanceof NegateNode) {
+            return IntegerArithmeticNode.sub(forX, ((NegateNode) forY).getValue());
         }
         return this;
     }
 
-    public static boolean isIntegerAddition(ValueNode result, ValueNode a, ValueNode b) {
-        Kind kind = result.kind();
-        if (kind != a.kind() || kind != b.kind() || !(kind.isInt() || kind.isLong())) {
-            return false;
-        }
-        if (result.isConstant() && a.isConstant() && b.isConstant()) {
-            if (kind.isInt()) {
-                return result.asConstant().asInt() == a.asConstant().asInt() + b.asConstant().asInt();
-            } else if (kind.isLong()) {
-                return result.asConstant().asLong() == a.asConstant().asLong() + b.asConstant().asLong();
-            }
-        } else if (result instanceof IntegerAddNode) {
-            IntegerAddNode add = (IntegerAddNode) result;
-            return (add.x() == a && add.y() == b) || (add.y() == a && add.x() == b);
-        }
-        return false;
-    }
-
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        Value op1 = gen.operand(x());
-        assert op1 != null : x() + ", this=" + this;
-        Value op2 = gen.operand(y());
-        if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), gen)) {
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        Value op1 = builder.operand(getX());
+        assert op1 != null : getX() + ", this=" + this;
+        Value op2 = builder.operand(getY());
+        if (!getY().isConstant() && !FloatAddNode.livesLonger(this, getY(), builder)) {
             Value op = op1;
             op1 = op2;
             op2 = op;
         }
-        gen.setResult(this, gen.emitAdd(op1, op2));
-    }
-
-    @Override
-    public void typeFeedback(TypeFeedbackTool tool) {
-        if (y().isConstant() && !x().isConstant()) {
-            tool.addScalar(this).setTranslated(y().asConstant(), tool.queryScalar(x()));
-        } else if (x().isConstant() && !y().isConstant()) {
-            tool.addScalar(this).setTranslated(x().asConstant(), tool.queryScalar(y()));
-        }
+        builder.setResult(this, gen.emitAdd(op1, op2));
     }
 }

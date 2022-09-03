@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,60 +24,92 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "+")
-public final class FloatAddNode extends FloatArithmeticNode implements Canonicalizable {
+public class FloatAddNode extends FloatArithmeticNode {
 
-    public FloatAddNode(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
-        super(kind, x, y, isStrictFP);
+    public static FloatAddNode create(ValueNode x, ValueNode y, boolean isStrictFP) {
+        return USE_GENERATED_NODES ? new FloatAddNodeGen(x, y, isStrictFP) : new FloatAddNode(x, y, isStrictFP);
+    }
+
+    protected FloatAddNode(ValueNode x, ValueNode y, boolean isStrictFP) {
+        super(x.stamp().unrestricted(), x, y, isStrictFP);
+    }
+
+    public Constant evalConst(Constant... inputs) {
+        assert inputs.length == 2;
+        assert inputs[0].getKind() == inputs[1].getKind();
+        if (inputs[0].getKind() == Kind.Float) {
+            return Constant.forFloat(inputs[0].asFloat() + inputs[1].asFloat());
+        } else {
+            assert inputs[0].getKind() == Kind.Double;
+            return Constant.forDouble(inputs[0].asDouble() + inputs[1].asDouble());
+        }
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && !y().isConstant()) {
-            return graph().unique(new FloatAddNode(kind(), y(), x(), isStrictFP()));
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        if (forX.isConstant() && !forY.isConstant()) {
+            return FloatAddNode.create(forY, forX, isStrictFP());
         }
-        if (x().isConstant()) {
-            if (kind() == Kind.Float) {
-                return ConstantNode.forFloat(x().asConstant().asFloat() + y().asConstant().asFloat(), graph());
-            } else {
-                assert kind() == Kind.Double;
-                return ConstantNode.forDouble(x().asConstant().asDouble() + y().asConstant().asDouble(), graph());
+        if (forX.isConstant()) {
+            return ConstantNode.forConstant(evalConst(forX.asConstant(), forY.asConstant()), null);
+        }
+        // Constant 0.0 can't be eliminated since it can affect the sign of the result.
+        // Constant -0.0 is an additive identity.
+        if (forY.isConstant()) {
+            @SuppressWarnings("hiding")
+            Constant y = forY.asConstant();
+            switch (y.getKind()) {
+                case Float:
+                    // use Float.compare because -0.0f == 0.0f
+                    if (Float.compare(y.asFloat(), -0.0f) == 0) {
+                        return forX;
+                    }
+                    break;
+                case Double:
+                    // use Double.compare because -0.0 == 0.0
+                    if (Double.compare(y.asDouble(), -0.0) == 0) {
+                        return forX;
+                    }
+                    break;
+                default:
+                    throw GraalGraphInternalError.shouldNotReachHere();
             }
-        } else if (y().isConstant()) {
-            if (kind() == Kind.Float) {
-                float c = y().asConstant().asFloat();
-                if (c == 0.0f) {
-                    return x();
-                }
-            } else {
-                assert kind() == Kind.Double;
-                double c = y().asConstant().asDouble();
-                if (c == 0.0) {
-                    return x();
-                }
-            }
+        }
+        /*
+         * JVM spec, Chapter 6, dsub/fsub bytecode: For double subtraction, it is always the case
+         * that a-b produces the same result as a+(-b).
+         */
+        if (forX instanceof NegateNode) {
+            return FloatSubNode.create(forY, ((NegateNode) forX).getValue(), isStrictFP());
+        }
+        if (forY instanceof NegateNode) {
+            return FloatSubNode.create(forX, ((NegateNode) forY).getValue(), isStrictFP());
         }
         return this;
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        Value op1 = gen.operand(x());
-        Value op2 = gen.operand(y());
-        if (!y().isConstant() && !livesLonger(this, y(), gen)) {
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        Value op1 = builder.operand(getX());
+        Value op2 = builder.operand(getY());
+        if (!getY().isConstant() && !livesLonger(this, getY(), builder)) {
             Value op = op1;
             op1 = op2;
             op2 = op;
         }
-        gen.setResult(this, gen.emitAdd(op1, op2));
+        builder.setResult(this, gen.emitAdd(op1, op2));
     }
 
-    public static boolean livesLonger(ValueNode after, ValueNode value, ArithmeticLIRGenerator gen) {
+    public static boolean livesLonger(ValueNode after, ValueNode value, NodeMappableLIRBuilder builder) {
         for (Node usage : value.usages()) {
-            if (usage != after && usage instanceof ValueNode && gen.operand(((ValueNode) usage)) != null) {
+            if (usage != after && usage instanceof ValueNode && builder.hasOperand(((ValueNode) usage))) {
                 return true;
             }
         }

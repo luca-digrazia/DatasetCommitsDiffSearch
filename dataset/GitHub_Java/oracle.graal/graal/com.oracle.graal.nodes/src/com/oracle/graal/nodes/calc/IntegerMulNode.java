@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,54 +22,72 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "*")
-public final class IntegerMulNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
+public class IntegerMulNode extends IntegerArithmeticNode implements NarrowableArithmeticNode {
 
-    public IntegerMulNode(CiKind kind, ValueNode x, ValueNode y) {
-        super(kind, x, y);
+    public static IntegerMulNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new IntegerMulNodeGen(x, y) : new IntegerMulNode(x, y);
+    }
+
+    protected IntegerMulNode(ValueNode x, ValueNode y) {
+        super(x.stamp().unrestricted(), x, y);
+        assert x.stamp().isCompatible(y.stamp());
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && !y().isConstant()) {
-            return graph().unique(new IntegerMulNode(kind(), y(), x()));
+    public Constant evalConst(Constant... inputs) {
+        assert inputs.length == 2;
+        return Constant.forPrimitiveInt(PrimitiveStamp.getBits(stamp()), inputs[0].asLong() * inputs[1].asLong());
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        if (forX.isConstant() && !forY.isConstant()) {
+            return IntegerMulNode.create(forY, forX);
         }
-        if (x().isConstant()) {
-            if (kind() == CiKind.Int) {
-                return ConstantNode.forInt(x().asConstant().asInt() * y().asConstant().asInt(), graph());
-            } else {
-                assert kind() == CiKind.Long;
-                return ConstantNode.forLong(x().asConstant().asLong() * y().asConstant().asLong(), graph());
-            }
-        } else if (y().isConstant()) {
-            long c = y().asConstant().asLong();
+        if (forX.isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(forX.asConstant(), forY.asConstant()));
+        } else if (forY.isConstant()) {
+            long c = forY.asConstant().asLong();
             if (c == 1) {
-                return x();
+                return forX;
             }
             if (c == 0) {
-                return ConstantNode.forInt(0, graph());
+                return ConstantNode.forIntegerStamp(stamp(), 0);
             }
-            if (c > 0 && CiUtil.isPowerOf2(c)) {
-                return graph().unique(new LeftShiftNode(kind(), x(), ConstantNode.forInt(CiUtil.log2(c), graph())));
+            long abs = Math.abs(c);
+            if (abs > 0 && CodeUtil.isPowerOf2(abs)) {
+                LeftShiftNode shift = LeftShiftNode.create(forX, ConstantNode.forInt(CodeUtil.log2(abs)));
+                if (c < 0) {
+                    return NegateNode.create(shift);
+                } else {
+                    return shift;
+                }
             }
+            // canonicalize expressions like "(a * 1) * 2"
+            return BinaryNode.reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
         }
         return this;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        CiValue op1 = gen.operand(x());
-        CiValue op2 = gen.operand(y());
-        if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), gen)) {
-            CiValue op = op1;
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        Value op1 = builder.operand(getX());
+        Value op2 = builder.operand(getY());
+        if (!getY().isConstant() && !FloatAddNode.livesLonger(this, getY(), builder)) {
+            Value op = op1;
             op1 = op2;
             op2 = op;
         }
-        gen.setResult(this, gen.emitMul(op1, op2));
+        builder.setResult(this, gen.emitMul(op1, op2));
     }
 }

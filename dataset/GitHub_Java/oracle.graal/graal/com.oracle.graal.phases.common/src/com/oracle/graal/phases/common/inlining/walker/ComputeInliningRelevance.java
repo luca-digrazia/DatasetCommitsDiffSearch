@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.phases.common.inlining.walker;
 
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
+
 import java.util.*;
 import java.util.function.*;
 
@@ -69,10 +71,10 @@ public class ComputeInliningRelevance {
             rootScope = new Scope(graph.start(), null);
         } else {
             if (nodeRelevances == null) {
-                nodeRelevances = Node.newIdentityMap(EXPECTED_MIN_INVOKE_COUNT + graph.getNodeCount() / EXPECTED_INVOKE_RATIO);
+                nodeRelevances = newNodeIdentityMap(EXPECTED_MIN_INVOKE_COUNT + graph.getNodeCount() / EXPECTED_INVOKE_RATIO);
             }
             NodeWorkList workList = graph.createNodeWorkList();
-            Map<LoopBeginNode, Scope> loops = Node.newIdentityMap(EXPECTED_LOOP_COUNT);
+            Map<LoopBeginNode, Scope> loops = newNodeIdentityMap(EXPECTED_LOOP_COUNT);
 
             loops.put(null, new Scope(graph.start(), null));
             for (LoopBeginNode loopBegin : graph.getNodes(LoopBeginNode.class)) {
@@ -114,7 +116,7 @@ public class ComputeInliningRelevance {
                         parent = loops.get(null);
                         break;
                     } else {
-                        assert current.getClass() == MergeNode.class : current;
+                        assert current.getNodeClass().is(MergeNode.class) : current;
                         // follow any path upwards - it doesn't matter which one
                         current = ((MergeNode) current).forwardEndAt(0);
                     }

@@ -30,6 +30,7 @@ import java.util.Map.Entry;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -84,7 +85,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
     @Override
     public void print(Graph graph, String title, SchedulePhase predefinedSchedule) {
         beginGraph(title);
-        Set<Node> noBlockNodes = Node.newNodeHashSet();
+        Set<Node> noBlockNodes = new HashSet<>();
         SchedulePhase schedule = predefinedSchedule;
         if (schedule == null && tryToSchedule) {
             if (PrintIdealGraphSchedule.getValue()) {
@@ -173,9 +174,9 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
                     printProperty(bit, "true");
                 }
             }
-            if (node.getClass() == BeginNode.class) {
+            if (node.getNodeClass().is(BeginNode.class)) {
                 printProperty("shortName", "B");
-            } else if (node.getClass() == EndNode.class) {
+            } else if (node.getNodeClass().is(EndNode.class)) {
                 printProperty("shortName", "E");
             }
             if (node.predecessor() != null) {
@@ -212,24 +213,24 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
 
             // successors
             int fromIndex = 0;
-            NodePosIterator succIter = node.successors().iterator();
+            NodeClassIterator succIter = node.successors().iterator();
             while (succIter.hasNext()) {
                 Position position = succIter.nextPosition();
-                Node successor = position.get(node);
+                Node successor = node.getNodeClass().get(node, position);
                 if (successor != null) {
-                    edges.add(new Edge(node.toString(Verbosity.Id), fromIndex, successor.toString(Verbosity.Id), 0, position.getName()));
+                    edges.add(new Edge(node.toString(Verbosity.Id), fromIndex, successor.toString(Verbosity.Id), 0, node.getNodeClass().getName(position)));
                 }
                 fromIndex++;
             }
 
             // inputs
             int toIndex = 1;
-            NodePosIterator inputIter = node.inputs().iterator();
+            NodeClassIterator inputIter = node.inputs().iterator();
             while (inputIter.hasNext()) {
                 Position position = inputIter.nextPosition();
-                Node input = position.get(node);
+                Node input = node.getNodeClass().get(node, position);
                 if (input != null) {
-                    edges.add(new Edge(input.toString(Verbosity.Id), input.successors().count(), node.toString(Verbosity.Id), toIndex, position.getName()));
+                    edges.add(new Edge(input.toString(Verbosity.Id), input.successors().count(), node.toString(Verbosity.Id), toIndex, node.getNodeClass().getName(position)));
                 }
                 toIndex++;
             }
@@ -249,7 +250,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
         endSuccessors();
         beginBlockNodes();
 
-        Set<Node> nodes = Node.newNodeHashSet();
+        Set<Node> nodes = new HashSet<>();
 
         if (nodeToBlock != null) {
             for (Node n : graph.getNodes()) {
@@ -270,7 +271,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
                 }
             }
 
-            Set<Node> snapshot = Node.newNodeHashSet(nodes);
+            Set<Node> snapshot = new HashSet<>(nodes);
             // add all framestates and phis to their blocks
             for (Node node : snapshot) {
                 if (node instanceof StateSplit && ((StateSplit) node).stateAfter() != null) {

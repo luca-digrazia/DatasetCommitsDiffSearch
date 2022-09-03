@@ -882,15 +882,13 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 BciBlock successor = currentBlock.jsrSuccessor;
                 assert successor.startBci == dest : successor.startBci + " != " + dest + " @" + bci();
                 JsrScope scope = currentBlock.jsrScope;
-                int nextBci = getStream().nextBCI();
                 if (!successor.jsrScope.pop().equals(scope)) {
                     throw new JsrNotSupportedBailout("unstructured control flow (internal limitation)");
                 }
-                if (successor.jsrScope.nextReturnAddress() != nextBci) {
+                if (successor.jsrScope.nextReturnAddress() != getStream().nextBCI()) {
                     throw new JsrNotSupportedBailout("unstructured control flow (internal limitation)");
                 }
-                ConstantNode nextBciNode = getJsrConstant(nextBci);
-                frameState.push(Kind.Int, nextBciNode);
+                frameState.push(Kind.Int, ConstantNode.forInt(getStream().nextBCI(), currentGraph));
                 appendGoto(createTarget(successor, frameState));
             }
 
@@ -900,21 +898,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 ValueNode local = frameState.loadLocal(localIndex);
                 JsrScope scope = currentBlock.jsrScope;
                 int retAddress = scope.nextReturnAddress();
-                ConstantNode returnBciNode = getJsrConstant(retAddress);
-                LogicNode guard = IntegerEqualsNode.create(local, returnBciNode);
-                guard = currentGraph.unique(guard);
-                append(FixedGuardNode.create(guard, JavaSubroutineMismatch, InvalidateReprofile));
+                append(FixedGuardNode.create(currentGraph.unique(IntegerEqualsNode.create(local, ConstantNode.forInt(retAddress, currentGraph))), JavaSubroutineMismatch, InvalidateReprofile));
                 if (!successor.jsrScope.equals(scope.pop())) {
                     throw new JsrNotSupportedBailout("unstructured control flow (ret leaves more than one scope)");
                 }
                 appendGoto(createTarget(successor, frameState));
-            }
-
-            private ConstantNode getJsrConstant(long bci) {
-                Constant nextBciConstant = new RawConstant(bci);
-                Stamp nextBciStamp = StampFactory.forConstant(nextBciConstant);
-                ConstantNode nextBciNode = ConstantNode.create(nextBciConstant, nextBciStamp);
-                return currentGraph.unique(nextBciNode);
             }
 
             @Override

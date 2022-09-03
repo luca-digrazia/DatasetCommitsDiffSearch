@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.graph.Edges.Type.*;
-
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
@@ -52,7 +50,7 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
     @Successor BeginNode trueSuccessor;
     @Successor BeginNode falseSuccessor;
     @Input(InputType.Condition) LogicNode condition;
-    protected double trueSuccessorProbability;
+    private double trueSuccessorProbability;
 
     public LogicNode condition() {
         return condition;
@@ -228,15 +226,14 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
                 FixedWithNextNode falseNext = (FixedWithNextNode) falseSucc.next();
                 NodeClass nodeClass = trueNext.getNodeClass();
                 if (trueNext.getClass() == falseNext.getClass()) {
-                    if (nodeClass.getEdges(Inputs).areEqualIn(trueNext, falseNext) && trueNext.valueEquals(falseNext)) {
+                    if (nodeClass.inputsEqual(trueNext, falseNext) && nodeClass.valueEqual(trueNext, falseNext)) {
                         falseNext.replaceAtUsages(trueNext);
                         graph().removeFixed(falseNext);
                         GraphUtil.unlinkFixedNode(trueNext);
                         graph().addBeforeFixed(this, trueNext);
                         for (Node usage : trueNext.usages().snapshot()) {
                             if (usage.isAlive()) {
-                                NodeClass usageNodeClass = usage.getNodeClass();
-                                if (usageNodeClass.valueNumberable() && !usageNodeClass.isLeafNode()) {
+                                if (usage.getNodeClass().valueNumberable() && !usage.isLeafNode()) {
                                     Node newNode = graph().findDuplicate(usage);
                                     if (newNode != null) {
                                         usage.replaceAtUsages(newNode);
