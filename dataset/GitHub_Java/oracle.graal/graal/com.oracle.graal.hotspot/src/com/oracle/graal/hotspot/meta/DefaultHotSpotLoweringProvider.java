@@ -155,9 +155,9 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 newObjectSnippets.lower((VerifyHeapNode) n, registers, runtime, tool);
             }
-        } else if (n instanceof RawMonitorEnterNode) {
+        } else if (n instanceof MonitorEnterNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                monitorSnippets.lower((RawMonitorEnterNode) n, registers, tool);
+                monitorSnippets.lower((MonitorEnterNode) n, registers, tool);
             }
         } else if (n instanceof MonitorExitNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
