@@ -66,7 +66,6 @@ import com.oracle.svm.core.util.VMError;
 // TODO: This should be in some other package (svm.core.jdk?)
 // but then it can not use the non-public classes in this package.
 /** Native methods from jdk/src/share/native/java/net/net_util.c translated to Java. */
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class JavaNetNetUtil {
 
     /* Private constructor: No instances. */
@@ -532,7 +531,6 @@ class JavaNetNetUtil {
 }
 
 /** Native methods from jdk/src/solaris/native/java/net/net_util_md.c translated to Java. */
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class JavaNetNetUtilMD {
 
     /* Private constructor: No instances. */
@@ -2114,7 +2112,6 @@ class JavaNetNetUtilMD {
 }
 
 /** Native methods (and macros) from src/share/vm/prims/jni.cpp translated to Java. */
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class VmPrimsJNI {
     /* Do not re-format commented-out code: @formatter:off */
 
@@ -2199,7 +2196,6 @@ class VmPrimsJNI {
 
 /** Translations of methods from src/os/bsd/vm/os_bsd.inline.hpp or src/os/bsd/vm/os_bsd.cpp. */
 // TODO: Maybe this should be Target_bsd_vm_os?
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class Target_os {
     /* Do not re-format commented-out code: @formatter:off */
 
@@ -2295,7 +2291,7 @@ class Target_os {
         // 164   RESTARTABLE( (size_t) ::read(fd, buf, (size_t) nBytes), res);
         do {
             res = Unistd.read(fd, buf, WordFactory.unsigned(nBytes)).rawValue();
-        } while ((res == VmRuntimeOS.OSReturn.OS_ERR()) && (Errno.errno() == Errno.EINTR()));
+        } while ((res == VmRuntimeOS.OSReturn.OS_ERR()) || (Errno.errno() == Errno.EINTR()));
         // 165   return res;
         return res;
     }
@@ -2312,7 +2308,7 @@ class Target_os {
         // 4095 RESTARTABLE(::ioctl(fd, FIONREAD, pbytes), ret);
         do {
             ret = Ioctl.ioctl(fd, Ioctl.FIONREAD(), pbytes);
-        } while ((ret == VmRuntimeOS.OSReturn.OS_ERR()) && (Errno.errno() == Errno.EINTR()));
+        } while ((ret == VmRuntimeOS.OSReturn.OS_ERR()) || (Errno.errno() == Errno.EINTR()));
         // 4096
         // 4097 //%% note ioctl can return 0 when successful, JVM_SocketAvailable
         // 4098 // is expected to return 0 on failure and 1 on success to the jdk.
@@ -2328,7 +2324,7 @@ class Target_os {
             int _result;
             do {
                 _result = (int) Socket.send(fd, buf, WordFactory.unsigned(nBytes), flags).rawValue();
-            } while ((_result == VmRuntimeOS.OSReturn.OS_ERR()) && (Errno.errno() == Errno.EINTR()));
+            } while ((_result == VmRuntimeOS.OSReturn.OS_ERR()) || (Errno.errno() == Errno.EINTR()));
             return _result;
         } while (false);
     }
@@ -2340,7 +2336,7 @@ class Target_os {
             int _result;
             do {
                 _result = (int) Socket.sendto(fd, buf, WordFactory.unsigned(n), flags, addr, addr_len).rawValue();
-            } while ((_result == VmRuntimeOS.OSReturn.OS_ERR()) && (Errno.errno() == Errno.EINTR()));
+            } while ((_result == VmRuntimeOS.OSReturn.OS_ERR()) || (Errno.errno() == Errno.EINTR()));
             return _result;
         } while (false);
     }
@@ -2352,7 +2348,7 @@ class Target_os {
             int _result;
             do {
                 _result = (int) Socket.recvfrom(fd, buf, WordFactory.unsigned(n), flags, addr, addr_len).rawValue();
-            } while ((_result == VmRuntimeOS.OSReturn.OS_ERR()) && (Errno.errno() == Errno.EINTR()));
+            } while ((_result == VmRuntimeOS.OSReturn.OS_ERR()) || (Errno.errno() == Errno.EINTR()));
             return _result;
         } while (false);
     }
@@ -2389,7 +2385,6 @@ class Target_os {
 }
 
 /** Translations from src/share/vm/runtime/os.hpp. */
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class VmRuntimeOS {
 
     /* Do not re-format commented-out code: @formatter:off */
@@ -2432,7 +2427,6 @@ class VmRuntimeOS {
 }
 
 /** Translations from src/share/javavm/export/jvm.h. */
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class JavavmExportJvm {
 
     // 1100 #define JVM_IO_ERR (-1)
