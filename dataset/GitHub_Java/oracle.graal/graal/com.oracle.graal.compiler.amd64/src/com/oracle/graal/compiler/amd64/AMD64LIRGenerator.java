@@ -981,14 +981,16 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     protected void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
-        // a temp is needed for loading object constants
         boolean needsTemp = key.getKind() == Kind.Object;
         append(new StrategySwitchOp(strategy, keyTargets, defaultTarget, key, needsTemp ? newVariable(key.getKind()) : Value.ILLEGAL));
     }
 
     @Override
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
-        append(new TableSwitchOp(lowKey, defaultTarget, targets, key, newVariable(target().wordKind), newVariable(key.getPlatformKind())));
+        // Making a copy of the switch value is necessary because jump table destroys the input
+        // value
+        Variable tmp = emitMove(key);
+        append(new TableSwitchOp(lowKey, defaultTarget, targets, tmp, newVariable(target().wordKind)));
     }
 
     @Override

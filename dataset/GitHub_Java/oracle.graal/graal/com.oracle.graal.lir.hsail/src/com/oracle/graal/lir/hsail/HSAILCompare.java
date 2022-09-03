@@ -34,11 +34,7 @@ import com.oracle.graal.lir.*;
  * Implementation of compare operations.
  */
 public enum HSAILCompare {
-    ICMP,
-    LCMP,
-    ACMP,
-    FCMP,
-    DCMP;
+    ICMP, LCMP, ACMP, FCMP, DCMP;
 
     public static class CompareOp extends HSAILLIRInstruction {
 

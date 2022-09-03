@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -100,7 +100,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public boolean canStoreConstant(Constant c, boolean isCompressed) {
+    public boolean canStoreConstant(Constant c) {
         // Operand b must be in the .reg state space.
         return false;
     }
@@ -153,9 +153,9 @@ public class PTXLIRGenerator extends LIRGenerator {
             append(new PTXParameterOp(params, true));
         }
 
-        for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
-            Value paramValue = params[param.index()];
-            Annotation[] annos = graph.method().getParameterAnnotations()[param.index()];
+        for (LocalNode local : graph.getNodes(LocalNode.class)) {
+            Value param = params[local.index()];
+            Annotation[] annos = graph.method().getParameterAnnotations()[local.index()];
             Warp warpAnnotation = null;
 
             if (annos != null) {
@@ -166,9 +166,9 @@ public class PTXLIRGenerator extends LIRGenerator {
                 }
             }
             if (warpAnnotation != null) {
-                setResult(param, emitWarpParam(paramValue.getKind(), warpAnnotation));
+                setResult(local, emitWarpParam(param.getKind(), warpAnnotation));
             } else {
-                setResult(param, emitLoadParam(paramValue.getKind(), paramValue, null));
+                setResult(local, emitLoadParam(param.getKind(), param, null));
             }
         }
     }
@@ -776,12 +776,6 @@ public class PTXLIRGenerator extends LIRGenerator {
     @Override
     public void emitByteSwap(Variable result, Value input) {
         throw GraalInternalError.unimplemented("PTXLIRGenerator.emitByteSwap()");
-    }
-
-    @Override
-    public void emitCharArrayEquals(Variable result, Value array1, Value array2, Value length) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented();
     }
 
     @Override

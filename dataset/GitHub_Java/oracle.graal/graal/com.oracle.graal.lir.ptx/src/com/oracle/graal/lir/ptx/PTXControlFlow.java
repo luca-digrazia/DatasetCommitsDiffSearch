@@ -85,11 +85,12 @@ public class PTXControlFlow {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            if (crb.isSuccessorEdge(trueDestination)) {
+            int sourceIndex = crb.getCurrentBlockIndex();
+            if (trueDestination.isCodeEmittingOrderSuccessorEdge(sourceIndex)) {
                 masm.bra(masm.nameOf(falseDestination.label()), predRegNum);
             } else {
                 masm.bra(masm.nameOf(trueDestination.label()));
-                if (!crb.isSuccessorEdge(falseDestination)) {
+                if (!falseDestination.isCodeEmittingOrderSuccessorEdge(sourceIndex)) {
                     masm.jmp(falseDestination.label());
                 }
             }

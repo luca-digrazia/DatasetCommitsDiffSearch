@@ -188,13 +188,14 @@ public class HSAILControlFlow {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            if (crb.isSuccessorEdge(trueDestination)) {
+            int sourceIndex = crb.getCurrentBlockIndex();
+            if (trueDestination.isCodeEmittingOrderSuccessorEdge(sourceIndex)) {
                 HSAILCompare.emit(crb, masm, condition.negate(), x, y, z, !unordered);
                 masm.cbr(masm.nameOf(falseDestination.label()));
             } else {
                 HSAILCompare.emit(crb, masm, condition, x, y, z, unordered);
                 masm.cbr(masm.nameOf(trueDestination.label()));
-                if (!crb.isSuccessorEdge(falseDestination)) {
+                if (!falseDestination.isCodeEmittingOrderSuccessorEdge(sourceIndex)) {
                     masm.jmp(falseDestination.label());
                 }
             }
