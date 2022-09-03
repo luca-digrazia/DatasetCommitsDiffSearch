@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,36 +30,21 @@
 package com.oracle.truffle.llvm.nodes.control;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.GenerateWrapper;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
-import com.oracle.truffle.api.instrumentation.ProbeNode;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.api.instrumentation.Instrumentable;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.nodes.wrappers.LLVMBrUnconditionalNodeWrapper;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@GenerateWrapper
-public abstract class LLVMBrUnconditionalNode extends LLVMControlFlowNode implements InstrumentableNode {
+@Instrumentable(factory = LLVMBrUnconditionalNodeWrapper.class)
+public abstract class LLVMBrUnconditionalNode extends LLVMControlFlowNode {
 
-    public static LLVMBrUnconditionalNode create(int successor, LLVMExpressionNode phi, LLVMSourceLocation sourceSection) {
+    public static LLVMBrUnconditionalNode create(int successor, LLVMExpressionNode phi, SourceSection sourceSection) {
         return new LLVMBrUnconditionalNodeImpl(successor, phi, sourceSection);
     }
 
-    protected LLVMBrUnconditionalNode(LLVMBrUnconditionalNode delegate) {
-        super(delegate.getSourceLocation());
-    }
-
-    public LLVMBrUnconditionalNode(LLVMSourceLocation source) {
-        super(source);
-    }
-
-    @Override
-    public WrapperNode createWrapper(ProbeNode probe) {
-        return new LLVMBrUnconditionalNodeWrapper(this, this, probe);
-    }
-
-    @Override
-    public boolean isInstrumentable() {
-        return getSourceLocation() != null;
+    public LLVMBrUnconditionalNode(SourceSection sourceSection) {
+        super(sourceSection);
     }
 
     public abstract int getSuccessor();
@@ -71,7 +56,7 @@ public abstract class LLVMBrUnconditionalNode extends LLVMControlFlowNode implem
         @Child private LLVMExpressionNode phi;
         private final int successor;
 
-        private LLVMBrUnconditionalNodeImpl(int successor, LLVMExpressionNode phi, LLVMSourceLocation sourceSection) {
+        private LLVMBrUnconditionalNodeImpl(int successor, LLVMExpressionNode phi, SourceSection sourceSection) {
             super(sourceSection);
             this.successor = successor;
             this.phi = phi;

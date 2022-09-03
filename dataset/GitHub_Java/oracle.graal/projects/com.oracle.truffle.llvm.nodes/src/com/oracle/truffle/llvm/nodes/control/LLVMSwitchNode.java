@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.nodes.control;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.Instrumentable;
-import com.oracle.truffle.api.profiles.ValueProfile;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.wrappers.LLVMSwitchNodeWrapper;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
@@ -45,21 +44,13 @@ public abstract class LLVMSwitchNode extends LLVMControlFlowNode {
         super(sourceSection);
     }
 
-    public abstract Object executeCondition(VirtualFrame frame);
-
-    public abstract int[] getSuccessors();
-
-    public abstract LLVMExpressionNode getCase(int i);
-
-    public static class LLVMSwitchNodeImpl extends LLVMSwitchNode {
+    private static class LLVMSwitchNodeImpl extends LLVMSwitchNode {
         @Children private final LLVMExpressionNode[] phiNodes;
         @Child protected LLVMExpressionNode cond;
         @Children protected final LLVMExpressionNode[] cases;
         @CompilationFinal(dimensions = 1) private final int[] successors;
 
-        private final ValueProfile conditionValueClass = ValueProfile.createClassProfile();
-
-        public LLVMSwitchNodeImpl(int[] successors, LLVMExpressionNode[] phiNodes, LLVMExpressionNode cond, LLVMExpressionNode[] cases, SourceSection sourceSection) {
+        LLVMSwitchNodeImpl(int[] successors, LLVMExpressionNode[] phiNodes, LLVMExpressionNode cond, LLVMExpressionNode[] cases, SourceSection sourceSection) {
             super(sourceSection);
             assert successors.length == cases.length + 1 : "the last entry of the successors array must be the default case";
             this.successors = successors;
@@ -70,7 +61,7 @@ public abstract class LLVMSwitchNode extends LLVMControlFlowNode {
 
         @Override
         public Object executeCondition(VirtualFrame frame) {
-            return conditionValueClass.profile(cond.executeGeneric(frame));
+            return null;
         }
 
         @Override
@@ -94,4 +85,57 @@ public abstract class LLVMSwitchNode extends LLVMControlFlowNode {
         }
     }
 
+    public abstract Object executeCondition(VirtualFrame frame);
+
+    public abstract int[] getSuccessors();
+
+    public abstract LLVMExpressionNode getCase(int i);
+
+    public static final class LLVMI8SwitchNode extends LLVMSwitchNodeImpl {
+        public LLVMI8SwitchNode(LLVMExpressionNode cond, LLVMExpressionNode[] cases, int[] successors, LLVMExpressionNode[] phiNodes, SourceSection source) {
+            super(successors, phiNodes, cond, cases, source);
+        }
+
+        @Override
+        public Object executeCondition(VirtualFrame frame) {
+            return cond.executeI8(frame);
+        }
+
+    }
+
+    public static final class LLVMI16SwitchNode extends LLVMSwitchNodeImpl {
+        public LLVMI16SwitchNode(LLVMExpressionNode cond, LLVMExpressionNode[] cases, int[] successors, LLVMExpressionNode[] phiNodes, SourceSection source) {
+            super(successors, phiNodes, cond, cases, source);
+        }
+
+        @Override
+        public Object executeCondition(VirtualFrame frame) {
+            return cond.executeI16(frame);
+        }
+
+    }
+
+    public static final class LLVMI32SwitchNode extends LLVMSwitchNodeImpl {
+        public LLVMI32SwitchNode(LLVMExpressionNode cond, LLVMExpressionNode[] cases, int[] successors, LLVMExpressionNode[] phiNodes, SourceSection source) {
+            super(successors, phiNodes, cond, cases, source);
+        }
+
+        @Override
+        public Object executeCondition(VirtualFrame frame) {
+            return cond.executeI32(frame);
+        }
+
+    }
+
+    public static final class LLVMI64SwitchNode extends LLVMSwitchNodeImpl {
+        public LLVMI64SwitchNode(LLVMExpressionNode cond, LLVMExpressionNode[] cases, int[] successors, LLVMExpressionNode[] phiNodes, SourceSection source) {
+            super(successors, phiNodes, cond, cases, source);
+        }
+
+        @Override
+        public Object executeCondition(VirtualFrame frame) {
+            return cond.executeI64(frame);
+        }
+
+    }
 }
