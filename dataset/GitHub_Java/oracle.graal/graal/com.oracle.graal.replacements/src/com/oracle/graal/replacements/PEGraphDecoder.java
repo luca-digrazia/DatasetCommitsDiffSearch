@@ -22,72 +22,33 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.java.BytecodeParserOptions.DumpDuringGraphBuilding;
-import static com.oracle.graal.java.BytecodeParserOptions.FailedLoopExplosionIsFatal;
-import static com.oracle.graal.java.BytecodeParserOptions.MaximumLoopExplosionCount;
-import static jdk.internal.jvmci.common.JVMCIError.unimplemented;
+import static com.oracle.graal.java.BytecodeParser.Options.*;
+import static jdk.internal.jvmci.common.JVMCIError.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.internal.jvmci.code.Architecture;
-import jdk.internal.jvmci.code.BailoutException;
-import jdk.internal.jvmci.code.BytecodePosition;
-import jdk.internal.jvmci.meta.ConstantReflectionProvider;
-import jdk.internal.jvmci.meta.DeoptimizationAction;
-import jdk.internal.jvmci.meta.DeoptimizationReason;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.JavaType;
-import jdk.internal.jvmci.meta.MetaAccessProvider;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
-import jdk.internal.jvmci.options.Option;
-import jdk.internal.jvmci.options.OptionValue;
+import jdk.internal.jvmci.code.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.graphbuilderconf.InlineInvokePlugin;
+import com.oracle.graal.debug.*;
+
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.InlineInvokePlugin.InlineInfo;
-import com.oracle.graal.graphbuilderconf.IntrinsicContext;
-import com.oracle.graal.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
-import com.oracle.graal.graphbuilderconf.LoopExplosionPlugin;
-import com.oracle.graal.graphbuilderconf.ParameterPlugin;
-import com.oracle.graal.java.GraphBuilderPhase;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.CallTargetNode;
+import com.oracle.graal.java.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.EncodedGraph;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.InvokeWithExceptionNode;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.SimpleInfopointNode;
-import com.oracle.graal.nodes.SimplifyingGraphDecoder;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.UnwindNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.IntegerSwitchNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.java.MonitorIdNode;
-import com.oracle.graal.nodes.spi.StampProvider;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.common.inlining.InliningUtil;
+import com.oracle.graal.phases.common.inlining.*;
 
 /**
  * A graph decoder that performs partial evaluation, i.e., that performs method inlining and
@@ -105,7 +66,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
     public static class Options {
         @Option(help = "Maximum inlining depth during partial evaluation before reporting an infinite recursion")//
-        public static final OptionValue<Integer> InliningDepthError = new OptionValue<>(300);
+        public static final OptionValue<Integer> InliningDepthError = new OptionValue<>(200);
     }
 
     protected class PEMethodScope extends MethodScope {

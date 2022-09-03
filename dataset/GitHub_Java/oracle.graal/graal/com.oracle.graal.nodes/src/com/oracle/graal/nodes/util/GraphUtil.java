@@ -22,41 +22,17 @@
  */
 package com.oracle.graal.nodes.util;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Iterator;
+import java.util.*;
 
-import jdk.internal.jvmci.code.BailoutException;
-import jdk.internal.jvmci.code.BytecodePosition;
-import jdk.internal.jvmci.code.SourceStackTrace;
-import jdk.internal.jvmci.meta.ConstantReflectionProvider;
-import jdk.internal.jvmci.meta.MetaAccessProvider;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeWorkList;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.graph.iterators.NodePredicate;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopEndNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.spi.ArrayLengthProvider;
-import com.oracle.graal.nodes.spi.LimitedValueProxy;
-import com.oracle.graal.nodes.spi.ValueProxy;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
 
 public class GraphUtil {
 
@@ -164,9 +140,6 @@ public class GraphUtil {
                     if (usage.isAlive()) {
                         if (usage instanceof PhiNode) {
                             usage.replaceFirstInput(node, null);
-                            if (!((PhiNode) usage).hasValidInput()) {
-                                propagateKill(usage);
-                            }
                         } else {
                             propagateKill(usage);
                         }

@@ -22,34 +22,17 @@
  */
 package com.oracle.graal.nodes;
 
-import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
+import static jdk.internal.jvmci.common.JVMCIError.*;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.Fields;
-import com.oracle.graal.compiler.common.util.TypeReader;
-import com.oracle.graal.compiler.common.util.UnsafeArrayTypeReader;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Edges;
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.graph.NodeList;
-import com.oracle.graal.graph.NodeSuccessorList;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.util.*;
+import com.oracle.graal.graph.*;
 
 /**
  * Decoder for {@link EncodedGraph encoded graphs} produced by {@link GraphEncoder}. Support for
@@ -278,6 +261,7 @@ public class GraphDecoder {
         try (Debug.Scope scope = Debug.scope("GraphDecoder", graph)) {
             MethodScope methodScope = new MethodScope(graph, encodedGraph, LoopExplosionKind.NONE);
             decode(methodScope, null);
+            cleanupGraph(methodScope, null);
             methodScope.graph.verify();
         } catch (Throwable ex) {
             Debug.handle(ex);
@@ -756,7 +740,6 @@ public class GraphDecoder {
     }
 
     protected void readProperties(MethodScope methodScope, Node node) {
-        node.setNodeContext(readObject(methodScope));
         Fields fields = node.getNodeClass().getData();
         for (int pos = 0; pos < fields.getCount(); pos++) {
             if (fields.getType(pos).isPrimitive()) {
