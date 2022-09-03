@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,18 @@
  */
 package com.oracle.graal.replacements.verifier;
 
-import java.lang.annotation.*;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.List;
 
-import javax.annotation.processing.*;
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-import javax.lang.model.util.*;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
 
 public abstract class AbstractVerifier {
 
@@ -37,14 +43,22 @@ public abstract class AbstractVerifier {
         this.env = env;
     }
 
-    public abstract void verify(Element element, AnnotationMirror annotation);
+    public abstract void verify(Element element, AnnotationMirror annotation, PluginGenerator generator);
 
     public abstract Class<? extends Annotation> getAnnotationClass();
 
     @SuppressWarnings("unchecked")
     protected static <T> T resolveAnnotationValue(Class<T> expectedType, AnnotationValue value) {
         if (value == null) {
-            throw new NullPointerException("Value must not be null.");
+            return null;
+        }
+        if (expectedType.isArray()) {
+            ArrayList<Object> result = new ArrayList<>();
+            List<AnnotationValue> l = (List<AnnotationValue>) value.getValue();
+            for (AnnotationValue el : l) {
+                result.add(resolveAnnotationValue(expectedType.getComponentType(), el));
+            }
+            return (T) result.toArray((Object[]) Array.newInstance(expectedType.getComponentType(), result.size()));
         }
         Object unboxedValue = value.getValue();
         if (unboxedValue != null) {

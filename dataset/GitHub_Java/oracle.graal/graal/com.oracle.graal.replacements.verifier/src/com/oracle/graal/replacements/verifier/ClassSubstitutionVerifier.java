@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,25 @@
  */
 package com.oracle.graal.replacements.verifier;
 
-import java.lang.annotation.*;
+import java.lang.annotation.Annotation;
 
-import javax.annotation.processing.*;
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-import javax.tools.Diagnostic.*;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.tools.Diagnostic.Kind;
 
-import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.api.replacements.ClassSubstitution;
 
 public final class ClassSubstitutionVerifier extends AbstractVerifier {
 
     private static final String TYPE_VALUE = "value";
     private static final String STRING_VALUE = "className";
     private static final String OPTIONAL = "optional";
-    private static final String STRING_VALUE_DEFAULT = "";
 
     public ClassSubstitutionVerifier(ProcessingEnvironment env) {
         super(env);
@@ -48,7 +52,7 @@ public final class ClassSubstitutionVerifier extends AbstractVerifier {
     }
 
     @Override
-    public void verify(Element element, AnnotationMirror classSubstitution) {
+    public void verify(Element element, AnnotationMirror classSubstitution, PluginGenerator generator) {
         if (!element.getKind().isClass()) {
             assert false : "Element is guaranteed to be a class.";
             return;
@@ -69,26 +73,33 @@ public final class ClassSubstitutionVerifier extends AbstractVerifier {
         assert typeValue != null && stringValue != null && optionalValue != null;
 
         TypeMirror type = resolveAnnotationValue(TypeMirror.class, typeValue);
-        String className = resolveAnnotationValue(String.class, stringValue);
+        String[] classNames = resolveAnnotationValue(String[].class, stringValue);
         boolean optional = resolveAnnotationValue(Boolean.class, optionalValue);
-        if (!classSubstition.getAnnotationType().equals(type)) {
-            if (!className.equals(STRING_VALUE_DEFAULT)) {
+
+        if (type.getKind() != TypeKind.DECLARED) {
+            env.getMessager().printMessage(Kind.ERROR, "The provided class must be a declared type.", sourceElement, classSubstition, typeValue);
+            return null;
+        }
+
+        if (!classSubstition.getAnnotationType().asElement().equals(((DeclaredType) type).asElement())) {
+            if (classNames.length != 0) {
                 String msg = "The usage of value and className is exclusive.";
                 env.getMessager().printMessage(Kind.ERROR, msg, sourceElement, classSubstition, stringValue);
                 env.getMessager().printMessage(Kind.ERROR, msg, sourceElement, classSubstition, typeValue);
             }
-            if (type.getKind() != TypeKind.DECLARED) {
-                env.getMessager().printMessage(Kind.ERROR, "The provided class must be a declared type.", sourceElement, classSubstition, typeValue);
-                return null;
-            }
+
             return (TypeElement) ((DeclaredType) type).asElement();
         }
 
-        if (!className.equals(STRING_VALUE_DEFAULT)) {
-            TypeElement typeElement = env.getElementUtils().getTypeElement(className);
-            if (typeElement == null && !optional) {
-                env.getMessager().printMessage(Kind.ERROR, String.format("The class '%s' was not found on the classpath.", stringValue), sourceElement, classSubstition, stringValue);
+        if (classNames.length != 0) {
+            TypeElement typeElement = null;
+            for (String className : classNames) {
+                typeElement = env.getElementUtils().getTypeElement(className);
+                if (typeElement == null && !optional) {
+                    env.getMessager().printMessage(Kind.ERROR, String.format("The class '%s' was not found on the classpath.", stringValue), sourceElement, classSubstition, stringValue);
+                }
             }
+
             return typeElement;
         }
 

@@ -42,7 +42,7 @@ public class ForeignAccessToStringTest {
     }
 
     private static class SimpleTestingFactory implements ForeignAccess.Factory {
-        SimpleTestingFactory() {
+        public SimpleTestingFactory() {
         }
 
         @Override

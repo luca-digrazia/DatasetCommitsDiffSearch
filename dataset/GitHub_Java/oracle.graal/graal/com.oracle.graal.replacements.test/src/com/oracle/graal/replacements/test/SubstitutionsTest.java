@@ -55,7 +55,7 @@ public class SubstitutionsTest extends GraalCompilerTest {
     static class TestMemory extends FixedWithNextNode implements MemoryNode {
         private static final NodeClass<TestMemory> TYPE = NodeClass.create(TestMemory.class);
 
-        protected TestMemory() {
+        public TestMemory() {
             super(TYPE, StampFactory.forVoid());
         }
 
@@ -69,7 +69,7 @@ public class SubstitutionsTest extends GraalCompilerTest {
 
         @Input(Memory) MemoryNode memory;
 
-        protected TestGuard(ValueNode memory) {
+        public TestGuard(ValueNode memory) {
             super(TYPE, StampFactory.forVoid());
             this.memory = (MemoryNode) memory;
         }
@@ -84,7 +84,7 @@ public class SubstitutionsTest extends GraalCompilerTest {
 
         @Input(Guard) GuardingNode guard;
 
-        protected TestValue(ValueNode guard) {
+        public TestValue(ValueNode guard) {
             super(TYPE, StampFactory.forKind(JavaKind.Int));
             this.guard = (GuardingNode) guard;
         }
