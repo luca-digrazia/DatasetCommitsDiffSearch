@@ -64,8 +64,8 @@ import com.oracle.truffle.api.source.Source;
 
 /**
  * Gate way into the world of {@link TruffleLanguage Truffle languages}. {@link #buildNew()
- * Instantiate} your own portal into the isolated, multi-language system with all the registered
- * languages ready for your use. A {@link PolyglotEngine} runs inside of a <em>JVM</em>. There can
+ * Instantiate} your own portal into the isolated, multi language system with all the registered
+ * languages ready for your use. A {@link PolyglotEngine} runs inside of a <em>JVM</em>, there can
  * however be multiple instances (some would say tenants) of {@link PolyglotEngine} running next to
  * each other in a single <em>JVM</em> with a complete mutual isolation. There is 1:N mapping
  * between <em>JVM</em> and {@link PolyglotEngine}.
@@ -79,13 +79,10 @@ import com.oracle.truffle.api.source.Source;
  * {@link PolyglotEngine} is in inter-operability between all Truffle languages. There is 1:N
  * mapping between {@link PolyglotEngine} and {@link TruffleLanguage Truffle language
  * implementations}.
- *
- * <h2>Usage</h2>
- *
  * <p>
- * Use {@link #buildNew()} to create a new isolated portal ready for execution of various languages.
- * All the languages in a single portal see each others exported global symbols and can cooperate.
- * Use {@link #buildNew()} multiple times to create different, isolated environments that are
+ * Use {@link #buildNew()} to create new isolated portal ready for execution of various languages.
+ * All the languages in a single portal see each other exported global symbols and can cooperate.
+ * Use {@link #buildNew()} multiple times to create different, isolated portal environment
  * completely separated from each other.
  * <p>
  * Once instantiated use {@link #eval(com.oracle.truffle.api.source.Source)} with a reference to a
@@ -93,15 +90,7 @@ import com.oracle.truffle.api.source.Source;
  * {@link #eval(com.oracle.truffle.api.source.Source)}. Support for individual languages is
  * initialized on demand - e.g. once a file of certain MIME type is about to be processed, its
  * appropriate engine (if found), is initialized. Once an engine gets initialized, it remains so,
- * until the virtual machine is garbage collected.
- * <p>
- * For using a {@link TruffleLanguage language} with a custom setup or configuration, the necessary
- * parameters should be communicated to the {@link PolyglotEngine} - either via
- * {@link PolyglotEngine.Builder#config} as exposed by the language implementation or by evaluating
- * appropriate "prelude" scripts via {@link PolyglotEngine.Language#eval}. Another possibility is to
- * pre-register various {@link PolyglotEngine.Builder#globalSymbol global objects} and make them
- * available to the {@link PolyglotEngine}. Configuration parameters are obtained for instance by
- * parsing command line arguments.
+ * until the virtual machine isn't garbage collected.
  * <p>
  * The engine is single-threaded and tries to enforce that. It records the thread it has been
  * {@link Builder#build() created} by and checks that all subsequent calls are coming from the same
@@ -706,7 +695,7 @@ public class PolyglotEngine {
 
     /**
      * just to make javac happy.
-     *
+     * 
      * @param event
      */
     void dispatchSuspendedEvent(Object event) {
@@ -714,7 +703,7 @@ public class PolyglotEngine {
 
     /**
      * just to make javac happy.
-     *
+     * 
      * @param event
      */
     void dispatchExecutionEvent(Object event) {
