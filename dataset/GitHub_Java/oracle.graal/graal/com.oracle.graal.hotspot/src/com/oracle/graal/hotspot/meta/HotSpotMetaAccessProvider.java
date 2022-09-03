@@ -83,14 +83,12 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
     private static final int ACTION_MASK = 0x07;
     private static final int REASON_SHIFT = 3;
     private static final int REASON_MASK = 0x1f;
-    private static final int DEBUG_SHIFT = 8;
-    private static final int DEBUG_MASK = 0xffff;
 
     @Override
-    public Constant encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason, short speculationId) {
+    public Constant encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason) {
         int actionValue = convertDeoptAction(action);
         int reasonValue = convertDeoptReason(reason);
-        Constant c = Constant.forInt(~((speculationId << DEBUG_SHIFT) | (reasonValue << REASON_SHIFT) | (actionValue << ACTION_SHIFT)));
+        Constant c = Constant.forInt(~(((reasonValue) << REASON_SHIFT) + ((actionValue) << ACTION_SHIFT)));
         return c;
     }
 
@@ -104,10 +102,6 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
         int actionValue = ((~constant.asInt()) >> ACTION_SHIFT) & ACTION_MASK;
         DeoptimizationAction action = convertDeoptAction(actionValue);
         return action;
-    }
-
-    public short decodeSpeculationId(Constant constant) {
-        return (short) (((~constant.asInt()) >> DEBUG_SHIFT) & DEBUG_MASK);
     }
 
     public int convertDeoptAction(DeoptimizationAction action) {

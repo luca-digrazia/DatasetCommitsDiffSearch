@@ -70,11 +70,9 @@ public interface MetaAccessProvider {
     /**
      * Encodes a deoptimization action and a deoptimization reason in an integer value.
      * 
-     * @param speculationId a speculation ID returned by SpeculationLog.addSpeculation
-     * 
      * @return the encoded value as an integer
      */
-    Constant encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason, short speculationId);
+    Constant encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason);
 
     DeoptimizationReason decodeDeoptReason(Constant constant);
 
