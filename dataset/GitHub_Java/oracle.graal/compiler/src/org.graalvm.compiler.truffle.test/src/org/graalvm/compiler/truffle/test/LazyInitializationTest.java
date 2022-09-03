@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,7 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.Java8OrEarlier;
+import static org.graalvm.compiler.serviceprovider.GraalServices.Java8OrEarlier;
 import static org.graalvm.compiler.test.SubprocessUtil.getVMCommandLine;
 import static org.graalvm.compiler.test.SubprocessUtil.withoutDebuggerArguments;
 
@@ -85,9 +85,7 @@ public class LazyInitializationTest {
     @Test
     public void testSLTck() throws IOException, InterruptedException {
         Assume.assumeFalse(TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompileImmediately));
-        List<String> vmCommandLine = getVMCommandLine();
-        Assume.assumeFalse("Explicitly enables JVMCI compiler", vmCommandLine.contains("-XX:JVMCIJavaMode=SharedLibrary") || vmCommandLine.contains("-XX:+UseJVMCICompiler"));
-        List<String> vmArgs = withoutDebuggerArguments(vmCommandLine);
+        List<String> vmArgs = withoutDebuggerArguments(getVMCommandLine());
         vmArgs.add(Java8OrEarlier ? "-XX:+TraceClassLoading" : "-Xlog:class+init=info");
         vmArgs.add("-dsa");
         vmArgs.add("-da");
