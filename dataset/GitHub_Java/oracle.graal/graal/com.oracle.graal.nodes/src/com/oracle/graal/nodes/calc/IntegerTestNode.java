@@ -22,27 +22,20 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
-
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.BinaryOpLogicNode;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-
-import jdk.vm.ci.meta.TriState;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * This node will perform a "test" operation on its arguments. Its result is equivalent to the
  * expression "(x &amp; y) == 0", meaning that it will return true if (and only if) no bit is set in
  * both x and y.
  */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_2)
+@NodeInfo
 public final class IntegerTestNode extends BinaryOpLogicNode implements BinaryCommutative<ValueNode> {
     public static final NodeClass<IntegerTestNode> TYPE = NodeClass.create(IntegerTestNode.class);
 
