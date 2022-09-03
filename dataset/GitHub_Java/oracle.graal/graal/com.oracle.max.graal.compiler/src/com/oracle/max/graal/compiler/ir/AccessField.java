@@ -23,7 +23,6 @@
 package com.oracle.max.graal.compiler.ir;
 
 import java.lang.reflect.*;
-import java.util.*;
 
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -101,12 +100,5 @@ public abstract class AccessField extends StateSplit {
      */
     public boolean isVolatile() {
         return Modifier.isVolatile(field.accessFlags());
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("field", field);
-        return properties;
     }
 }

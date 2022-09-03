@@ -33,18 +33,19 @@ public class LoweringPhase extends Phase {
     @Override
     protected void run(Graph graph) {
         NodeMap<Node> javaBlockNodes = graph.createNodeMap();
+        NodeBitMap nodeBitMap = graph.createNodeBitMap();
         for (Node n : graph.getNodes()) {
             if (n instanceof FixedNode) {
                 LoweringOp op = n.lookup(LoweringOp.class);
                 if (op != null) {
-                    Node javaBlockNode = getJavaBlockNode(javaBlockNodes, n);
+                    Node javaBlockNode = getJavaBlockNode(javaBlockNodes, n, nodeBitMap);
                 }
             }
 
         }
     }
 
-    private Node getJavaBlockNode(NodeMap<Node> javaBlockNodes, Node n) {
+    private Node getJavaBlockNode(NodeMap<Node> javaBlockNodes, Node n, NodeBitMap nodeBitMap) {
         assert n instanceof FixedNode;
         if (javaBlockNodes.get(n) == null) {
 
@@ -60,16 +61,16 @@ public class LoweringPhase extends Phase {
             assert count > 0;
             if (count == 1) {
                 if (Schedule.trueSuccessorCount(truePred) == 1) {
-                    javaBlockNodes.set(n, getJavaBlockNode(javaBlockNodes, truePred));
+                    javaBlockNodes.set(n, getJavaBlockNode(javaBlockNodes, truePred, nodeBitMap));
                 } else {
-                    // Single predecessor is a split => we are our own Java block node.
+                    // Single predecessor is a split => we are our own block node.
                     javaBlockNodes.set(n, n);
                 }
             } else {
                 Node dominator = null;
                 for (Node pred : n.predecessors()) {
                     if (pred instanceof FixedNode) {
-                       dominator = getCommonDominator(javaBlockNodes, dominator, pred);
+                       dominator = getCommonDominator(dominator, pred, nodeBitMap);
                     }
                 }
             }
@@ -79,7 +80,7 @@ public class LoweringPhase extends Phase {
         return javaBlockNodes.get(n);
     }
 
-    private Node getCommonDominator(NodeMap<Node> javaBlockNodes, Node a, Node b) {
+    private Node getCommonDominator(Node a, Node b, NodeBitMap map) {
         if (a == null) {
             return b;
         }
@@ -88,7 +89,8 @@ public class LoweringPhase extends Phase {
             return a;
         }
 
-        Node cur = getJavaBlockNode(javaBlockNodes, a);
+
+        map.clearAll();
     }
 
     public interface LoweringOp extends Op {

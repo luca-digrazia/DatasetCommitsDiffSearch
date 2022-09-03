@@ -85,7 +85,11 @@ public final class ArrayLength extends FloatingNode {
 
     @Override
     public boolean valueEqual(Node i) {
-        return i instanceof ArrayLength;
+        if (i instanceof ArrayLength) {
+            ArrayLength o = (ArrayLength) i;
+            return array() == o.array();
+        }
+        return false;
     }
 
     @Override
