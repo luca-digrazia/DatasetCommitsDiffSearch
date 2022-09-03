@@ -30,7 +30,9 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
-import com.oracle.graal.graph.Node.*;
+import com.oracle.graal.graph.Node.Input;
+import com.oracle.graal.graph.Node.Successor;
+import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.graph.spi.*;
 
 /**
@@ -833,7 +835,6 @@ public final class NodeClass extends FieldIntrospection {
             if (input != null) {
                 Node newInput = duplicationReplacement.replacement(input, true);
                 node.updateUsages(null, newInput);
-                assert Node.verifyUniqueIfExternal(newInput, node.graph());
                 putNode(node, inputOffsets[index], newInput);
             }
             index++;
@@ -886,7 +887,6 @@ public final class NodeClass extends FieldIntrospection {
             Node oldNode = list.get(i);
             if (oldNode != null) {
                 Node newNode = duplicationReplacement.replacement(oldNode, true);
-                assert Node.verifyUniqueIfExternal(newNode, node.graph());
                 result.set(i, newNode);
             }
         }
@@ -971,7 +971,6 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     public boolean replaceFirstInput(Node node, Node old, Node other) {
-        assert Node.verifyUniqueIfExternal(other, node.graph());
         int index = 0;
         while (index < directInputCount) {
             Node input = getNode(node, inputOffsets[index]);
@@ -1190,7 +1189,6 @@ public final class NodeClass extends FieldIntrospection {
                 return new Iterator<NodeClass.Position>() {
                     int i = 0;
 
-                    @Override
                     public void remove() {
                         throw new UnsupportedOperationException();
                     }
@@ -1221,7 +1219,6 @@ public final class NodeClass extends FieldIntrospection {
                 return new Iterator<NodeClass.Position>() {
                     int i = 0;
 
-                    @Override
                     public void remove() {
                         throw new UnsupportedOperationException();
                     }
@@ -1269,9 +1266,6 @@ public final class NodeClass extends FieldIntrospection {
         InplaceUpdateClosure replacementClosure = new InplaceUpdateClosure() {
 
             public Node replacement(Node node, boolean isInput) {
-                if (node.isExternal() && node instanceof ValueNumberable) {
-                    return graph.uniqueWithoutAdd(node);
-                }
                 Node target = newNodes.get(node);
                 if (target == null) {
                     Node replacement = node;
@@ -1319,7 +1313,7 @@ public final class NodeClass extends FieldIntrospection {
                     newNodes.put(node, replacement);
                 } else {
                     Node newNode = node.clone(graph, false);
-                    assert newNode.inputs().isEmpty() || newNode.usages().isEmpty();
+                    assert newNode.inputs().count() == 0 || newNode.usages().count() == 0;
                     assert newNode.getClass() == node.getClass();
                     newNodes.put(node, newNode);
                 }

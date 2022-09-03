@@ -32,7 +32,6 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.word.*;
 import com.oracle.graal.word.Word.Operation;
 
@@ -59,7 +58,7 @@ public class WordTypeVerificationPhase extends Phase {
          * modifies the stamp of nodes, we copy the graph before running the verification.
          */
         StructuredGraph graph = inputGraph.copy();
-        InferStamps.inferStamps(graph);
+        wordAccess.inferStamps(graph);
 
         for (ValueNode node : graph.getNodes().filter(ValueNode.class)) {
             if (!node.recordsUsages()) {
@@ -82,6 +81,7 @@ public class WordTypeVerificationPhase extends Phase {
                 } else if (usage instanceof StoreIndexedNode) {
                     verify(!isWord(node) || ((StoreIndexedNode) usage).array() != node, node, usage, "cannot store to word value");
                     verify(!isWord(node) || ((StoreIndexedNode) usage).index() != node, node, usage, "cannot use word value as index");
+                    verify(!isWord(node) || ((StoreIndexedNode) usage).value() != node, node, usage, "cannot store word value to array");
                 } else if (usage instanceof MethodCallTargetNode) {
                     MethodCallTargetNode callTarget = (MethodCallTargetNode) usage;
                     verifyInvoke(node, callTarget);
@@ -90,9 +90,9 @@ public class WordTypeVerificationPhase extends Phase {
                     verify(!isWord(node) || ((ObjectEqualsNode) usage).y() != node, node, usage, "cannot use word type in comparison");
                 } else if (usage instanceof ArrayLengthNode) {
                     verify(!isWord(node) || ((ArrayLengthNode) usage).array() != node, node, usage, "cannot get array length from word value");
-                } else if (usage instanceof ValuePhiNode) {
+                } else if (usage instanceof PhiNode) {
                     if (!(node instanceof MergeNode)) {
-                        ValuePhiNode phi = (ValuePhiNode) usage;
+                        PhiNode phi = (PhiNode) usage;
                         for (ValueNode input : phi.values()) {
                             verify(isWord(node) == isWord(input), node, input, "cannot merge word and non-word values");
                         }

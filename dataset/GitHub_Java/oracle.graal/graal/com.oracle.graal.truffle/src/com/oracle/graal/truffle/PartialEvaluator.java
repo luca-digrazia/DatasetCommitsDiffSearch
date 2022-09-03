@@ -34,7 +34,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.java.*;
@@ -105,7 +104,7 @@ public class PartialEvaluator {
 
         final StructuredGraph graph = new StructuredGraph(executeHelperMethod);
 
-        Debug.scope("createGraph", graph, new Runnable() {
+        Debug.scope("createGraph", new Runnable() {
 
             @Override
             public void run() {
@@ -131,10 +130,6 @@ public class PartialEvaluator {
 
                 // Make sure frame does not escape.
                 expandTree(graph, assumptions);
-
-                if (Thread.interrupted()) {
-                    return;
-                }
 
                 new VerifyFrameDoesNotEscapePhase().apply(graph, false);
 
@@ -212,7 +207,7 @@ public class PartialEvaluator {
 
                     if (inlineGraph != null) {
                         int nodeCountBefore = graph.getNodeCount();
-                        Mark mark = graph.getMark();
+                        int mark = graph.getMark();
                         InliningUtil.inline(methodCallTargetNode.invoke(), inlineGraph, false);
                         if (Debug.isDumpEnabled()) {
                             int nodeCountAfter = graph.getNodeCount();
@@ -221,10 +216,6 @@ public class PartialEvaluator {
                         canonicalizer.applyIncremental(graph, phaseContext, mark);
                         changed = true;
                     }
-                }
-
-                if (Thread.interrupted()) {
-                    return;
                 }
 
                 if (graph.getNodeCount() > TruffleCompilerOptions.TruffleGraphMaxNodes.getValue()) {

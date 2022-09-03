@@ -32,7 +32,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.java.*;
@@ -115,7 +114,7 @@ public final class TruffleCache {
                 CanonicalizerPhase canonicalizerPhase = new CanonicalizerPhase(!AOTCompilation.getValue());
                 PartialEscapePhase partialEscapePhase = new PartialEscapePhase(false, canonicalizerPhase);
 
-                Mark mark = null;
+                int mark = 0;
                 while (true) {
 
                     partialEscapePhase.apply(graph, phaseContext);
@@ -129,7 +128,7 @@ public final class TruffleCache {
 
                     boolean inliningProgress = false;
                     for (MethodCallTargetNode methodCallTarget : graph.getNodes(MethodCallTargetNode.class)) {
-                        if (graph.getMark().equals(mark)) {
+                        if (graph.getMark() != mark) {
                             // Make sure macro substitutions such as
                             // CompilerDirectives.transferToInterpreter get processed first.
                             for (Node newNode : graph.getNewNodes(mark)) {
@@ -154,7 +153,7 @@ public final class TruffleCache {
                                 }
                             }
                             List<ValueNode> argumentSnapshot = methodCallTarget.arguments().snapshot();
-                            Mark beforeInvokeMark = graph.getMark();
+                            int beforeInvokeMark = graph.getMark();
                             expandInvoke(methodCallTarget);
                             for (Node arg : argumentSnapshot) {
                                 if (arg != null && arg.recordsUsages()) {
