@@ -67,9 +67,10 @@ public class IterativeInliningPhase extends BasePhase<HighTierContext> {
 
                     Map<Invoke, Double> hints = PEAInliningHints.getValue() ? PartialEscapePhase.getHints(graph) : null;
 
-                    InliningPhase inlining = new InliningPhase(hints);
+                    InliningPhase inlining = new InliningPhase(context.getRuntime(), hints, context.getReplacements(), context.getAssumptions(), context.getGraphCache(), context.getPhasePlan(),
+                                    context.getOptimisticOptimizations());
                     inlining.setMaxMethodsPerInlining(simple ? 1 : Integer.MAX_VALUE);
-                    inlining.apply(graph, context);
+                    inlining.apply(graph);
                     progress |= inlining.getInliningCount() > 0;
 
                     new DeadCodeEliminationPhase().apply(graph);
