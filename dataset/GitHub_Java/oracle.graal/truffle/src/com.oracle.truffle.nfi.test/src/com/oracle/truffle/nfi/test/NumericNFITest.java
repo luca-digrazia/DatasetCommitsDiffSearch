@@ -1,42 +1,26 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.nfi.test;
 
@@ -56,10 +40,11 @@ import org.junit.runners.Parameterized.Parameters;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.nfi.test.interop.BoxedPrimitive;
 import com.oracle.truffle.nfi.test.interop.TestCallback;
 import com.oracle.truffle.nfi.types.NativeSimpleType;
@@ -98,13 +83,14 @@ public class NumericNFITest extends NFITest {
     }
 
     static long unboxNumber(Object arg) {
-        Assert.assertTrue("isNumber", UNCACHED_INTEROP.isNumber(arg));
-        Assert.assertTrue("fitsInLong", UNCACHED_INTEROP.fitsInLong(arg));
-        try {
-            return UNCACHED_INTEROP.asLong(arg);
-        } catch (UnsupportedMessageException ex) {
-            throw new AssertionError(ex);
+        Object value = arg;
+        while (value instanceof TruffleObject) {
+            TruffleObject obj = (TruffleObject) value;
+            Assert.assertTrue("isBoxed", isBoxed(obj));
+            value = unbox(obj);
         }
+        Assert.assertThat(value, is(instanceOf(Number.class)));
+        return ((Number) value).longValue();
     }
 
     private void checkExpected(String thing, long expected, Object arg) {
@@ -134,7 +120,10 @@ public class NumericNFITest extends NFITest {
                 break;
             case POINTER:
                 Assert.assertThat(thing + " type", value, is(instanceOf(TruffleObject.class)));
-                unboxNumber(value); // for the assertions
+                TruffleObject obj = (TruffleObject) value;
+                Assert.assertTrue(thing + " is boxed", isBoxed(obj));
+                value = unbox(obj);
+                Assert.assertThat("unboxed " + thing, value, is(instanceOf(Long.class)));
                 break;
             default:
                 Assert.fail();
@@ -180,13 +169,12 @@ public class NumericNFITest extends NFITest {
         }
     }
 
-    private final TruffleObject callback = new TestCallback(1, (args) -> {
-        checkExpectedArg(42 + 1, args[0]);
-        return unboxNumber(args[0]) + 5;
-    });
-
     @Test
     public void testCallback(@Inject(TestCallbackNode.class) CallTarget callTarget) {
+        TruffleObject callback = new TestCallback(1, (args) -> {
+            checkExpectedArg(42 + 1, args[0]);
+            return unboxNumber(args[0]) + 5;
+        });
         Object ret = callTarget.call(callback, 42);
         checkExpectedRet((42 + 6) * 2, ret);
     }
@@ -198,19 +186,19 @@ public class NumericNFITest extends NFITest {
 
         final TruffleObject getIncrement = lookupAndBind("callback_ret_" + type, String.format("() : (%s):%s", type, type));
 
-        @Child InteropLibrary getIncrementInterop = getInterop(getIncrement);
-        @Child InteropLibrary closureInterop = getInterop();
+        @Child Node executeGetIncrement = Message.EXECUTE.createNode();
+        @Child Node executeClosure = Message.EXECUTE.createNode();
 
         @Override
         public Object executeTest(VirtualFrame frame) throws InteropException {
-            Object functionPtr = getIncrementInterop.execute(getIncrement);
+            Object functionPtr = ForeignAccess.sendExecute(executeGetIncrement, getIncrement);
             checkIsClosure(functionPtr);
-            return closureInterop.execute(functionPtr, 42);
+            return ForeignAccess.sendExecute(executeClosure, (TruffleObject) functionPtr, 42);
         }
 
         @TruffleBoundary
         private void checkIsClosure(Object value) {
-            Assert.assertTrue("closure", UNCACHED_INTEROP.isExecutable(value));
+            Assert.assertThat("closure", value, is(instanceOf(TruffleObject.class)));
         }
     }
 
@@ -236,22 +224,23 @@ public class NumericNFITest extends NFITest {
         }
     }
 
-    private final TruffleObject wrap = new TestCallback(1, (args) -> {
-        Assert.assertThat("argument", args[0], is(instanceOf(TruffleObject.class)));
-        TruffleObject fn = (TruffleObject) args[0];
-        TruffleObject wrapped = new TestCallback(1, (innerArgs) -> {
-            checkExpectedArg(6, innerArgs[0]);
-            try {
-                return UNCACHED_INTEROP.execute(fn, unboxNumber(innerArgs[0]) * 3);
-            } catch (InteropException ex) {
-                throw new AssertionError(ex);
-            }
-        });
-        return wrapped;
-    });
-
     @Test
     public void testPingPong(@Inject(TestPingPongNode.class) CallTarget callTarget) {
+
+        TruffleObject wrap = new TestCallback(1, (args) -> {
+            Assert.assertThat("argument", args[0], is(instanceOf(TruffleObject.class)));
+            TruffleObject fn = (TruffleObject) args[0];
+            TruffleObject wrapped = new TestCallback(1, (innerArgs) -> {
+                checkExpectedArg(6, innerArgs[0]);
+                try {
+                    return ForeignAccess.sendExecute(Message.EXECUTE.createNode(), fn, unboxNumber(innerArgs[0]) * 3);
+                } catch (InteropException ex) {
+                    throw new AssertionError(ex);
+                }
+            });
+            return wrapped;
+        });
+
         Object ret = callTarget.call(wrap, 5);
         checkExpectedRet(38, ret);
     }

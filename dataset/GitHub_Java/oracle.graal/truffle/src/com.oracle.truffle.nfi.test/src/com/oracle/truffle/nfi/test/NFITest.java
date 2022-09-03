@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,7 @@ package com.oracle.truffle.nfi.test;
 
 import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.ClassRule;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -36,30 +37,47 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.tck.TruffleRunner;
+import org.graalvm.polyglot.Context;
 
 public class NFITest {
+
+    @ClassRule public static TruffleRunner.RunWithPolyglotRule runWithPolyglot = new TruffleRunner.RunWithPolyglotRule(Context.newBuilder().allowNativeAccess(true));
 
     protected static TruffleObject defaultLibrary;
     protected static TruffleObject testLibrary;
 
     private static CallTarget lookupAndBind;
 
+    private static TruffleObject loadLibrary(String lib) {
+        String testBackend = System.getProperty("native.test.backend");
+        String sourceString;
+        if (testBackend != null) {
+            sourceString = String.format("with %s %s", testBackend, lib);
+        } else {
+            sourceString = lib;
+        }
+
+        Source source = Source.newBuilder(sourceString).name("loadLibrary").mimeType("application/x-native").build();
+        CallTarget target = runWithPolyglot.getTruffleTestEnv().parse(source);
+        return (TruffleObject) target.call();
+    }
+
     @BeforeClass
     public static void loadLibraries() {
-        PolyglotEngine engine = PolyglotEngine.newBuilder().build();
-        defaultLibrary = engine.eval(Source.newBuilder("default").name("(load default)").mimeType("application/x-native").build()).as(TruffleObject.class);
-        testLibrary = engine.eval(Source.newBuilder("load '" + System.getProperty("native.test.lib") + "'").name("(load test)").mimeType("application/x-native").build()).as(TruffleObject.class);
+        defaultLibrary = loadLibrary("default");
+        testLibrary = loadLibrary("load '" + System.getProperty("native.test.lib") + "'");
         lookupAndBind = Truffle.getRuntime().createCallTarget(new LookupAndBindNode());
     }
 
     private static final class LookupAndBindNode extends RootNode {
 
         @Child Node lookupSymbol = Message.READ.createNode();
-        @Child Node bind = Message.createInvoke(1).createNode();
+        @Child Node bind = Message.INVOKE.createNode();
 
         private LookupAndBindNode() {
             super(null);
@@ -75,6 +93,7 @@ public class NFITest {
                 TruffleObject symbol = (TruffleObject) ForeignAccess.sendRead(lookupSymbol, library, symbolName);
                 return ForeignAccess.sendInvoke(bind, symbol, "bind", signature);
             } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
                 throw new AssertionError(e);
             }
         }
@@ -110,13 +129,13 @@ public class NFITest {
 
         @Child Node execute;
 
-        protected SendExecuteNode(String symbol, String signature, int argCount) {
-            this(lookupAndBind(symbol, signature), argCount);
+        protected SendExecuteNode(String symbol, String signature) {
+            this(lookupAndBind(symbol, signature));
         }
 
-        protected SendExecuteNode(TruffleObject receiver, int argCount) {
+        protected SendExecuteNode(TruffleObject receiver) {
             this.receiver = receiver;
-            execute = Message.createExecute(argCount).createNode();
+            execute = Message.EXECUTE.createNode();
         }
 
         @Override
@@ -131,5 +150,21 @@ public class NFITest {
 
     protected static TruffleObject lookupAndBind(TruffleObject library, String name, String signature) {
         return (TruffleObject) lookupAndBind.call(library, name, signature);
+    }
+
+    protected static boolean isBoxed(TruffleObject obj) {
+        return ForeignAccess.sendIsBoxed(Message.IS_BOXED.createNode(), obj);
+    }
+
+    protected static Object unbox(TruffleObject obj) {
+        try {
+            return ForeignAccess.sendUnbox(Message.UNBOX.createNode(), obj);
+        } catch (UnsupportedMessageException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    protected static boolean isNull(TruffleObject foreignObject) {
+        return ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), foreignObject);
     }
 }
