@@ -24,6 +24,8 @@
  */
 package org.graalvm.compiler.nodes;
 
+import static org.graalvm.compiler.graph.Graph.SourcePositionTracking.Default;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -182,7 +184,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         private int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
         private boolean useProfilingInfo = true;
         private boolean recordInlinedMethods = true;
-        private boolean trackNodeSourcePosition;
+        private SourcePositionTracking trackNodeSourcePosition = Default;
         private final OptionValues options;
         private Cancellable cancellable = null;
         private final DebugContext debug;
@@ -293,9 +295,14 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             return this;
         }
 
+        public Builder trackNodeSourcePosition(SourcePositionTracking tracking) {
+            this.trackNodeSourcePosition = tracking;
+            return this;
+        }
+
         public Builder trackNodeSourcePosition(boolean flag) {
             if (flag) {
-                this.trackNodeSourcePosition = true;
+                this.trackNodeSourcePosition = SourcePositionTracking.Track;
             }
             return this;
         }
@@ -391,13 +398,13 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                     boolean useProfilingInfo,
                     boolean isSubstitution,
                     List<ResolvedJavaMethod> methods,
-                    boolean trackNodeSourcePosition,
+                    SourcePositionTracking trackNodeSourcePosition,
                     CompilationIdentifier compilationId,
                     OptionValues options,
                     DebugContext debug,
                     Cancellable cancellable,
                     NodeSourcePosition context) {
-        super(name, options, debug, trackNodeSourcePosition);
+        super(name, options, debug);
         this.setStart(add(new StartNode()));
         this.rootMethod = method;
         this.graphId = uniqueGraphIds.incrementAndGet();
@@ -409,6 +416,8 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         this.useProfilingInfo = useProfilingInfo;
         this.isSubstitution = isSubstitution;
         assert checkIsSubstitutionInvariants(method, isSubstitution);
+        this.trackNodeSourcePosition = trackNodeSourcePosition;
+        assert trackNodeSourcePosition != null;
         this.cancellable = cancellable;
         this.inliningLog = new InliningLog(rootMethod, GraalOptions.TraceInlining.getValue(options));
         this.callerContext = context;

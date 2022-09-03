@@ -90,7 +90,6 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
                         trackNodeSourcePosition(graphBuilderConfig.trackNodeSourcePosition()).
                         method(method).
                         setIsSubstitution(isSubstitution).
-                        cancellable(graph.getCancellable()).
                         build();
         // @formatter:on
         try (DebugContext.Scope scope = debug.scope("createGraph", graphToEncode)) {

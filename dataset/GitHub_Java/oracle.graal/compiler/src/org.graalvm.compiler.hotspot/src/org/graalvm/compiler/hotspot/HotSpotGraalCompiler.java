@@ -139,7 +139,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
             }
             CompilationTask task = new CompilationTask(jvmciRuntime, this, hsRequest, true, installAsDefault, options);
             CompilationRequestResult r = null;
-            try (DebugContext debug = graalRuntime.openDebugContext(options, task.getCompilationIdentifier(), method, getDebugHandlersFactories(), DebugContext.DEFAULT_LOG_STREAM);
+            try (DebugContext debug = graalRuntime.openDebugContext(options, task.getCompilationIdentifier(), method, getDebugHandlersFactories());
                             Activation a = debug.activate()) {
                 r = task.runCompilation(debug);
             }
