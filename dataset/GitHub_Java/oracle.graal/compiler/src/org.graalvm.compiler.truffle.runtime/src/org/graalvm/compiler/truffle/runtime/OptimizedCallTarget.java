@@ -752,9 +752,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                     if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplittingDumpDecisions)) {
                         pullOutParentChain(onlyCaller, toDump);
                     }
-                    if (callerTarget.maybeSetNeedsSplit(depth + 1, toDump)) {
-                        needsSplit = true;
-                    }
+                    needsSplit |= callerTarget.maybeSetNeedsSplit(depth + 1, toDump);
                 }
             }
         } else {
