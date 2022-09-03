@@ -22,16 +22,18 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import jdk.internal.jvmci.code.CompilationResult.DataSectionReference;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.AllocatableValue;
 
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.StandardOp.NoOp;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.Variable;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
  * Loads the constant section base into a register.
@@ -52,8 +54,8 @@ import com.oracle.graal.lir.asm.*;
  * this case absolute addressing (without using the base pointer is used). See also:
  * CodeInstaller::pd_patch_DataSectionReference
  *
- * @see SPARCMove#loadFromConstantTable(CompilationResultBuilder, SPARCMacroAssembler, Kind,
- *      Register, Register, SPARCDelayedControlTransfer, Runnable)
+ * @see SPARCMove#loadFromConstantTable(CompilationResultBuilder, SPARCMacroAssembler, int,
+ *      Register, jdk.vm.ci.meta.Constant, Register, SPARCDelayedControlTransfer)
  */
 public class SPARCLoadConstantTableBaseOp extends SPARCLIRInstruction {
     public static final LIRInstructionClass<SPARCLoadConstantTableBaseOp> TYPE = LIRInstructionClass.create(SPARCLoadConstantTableBaseOp.class);
@@ -71,16 +73,11 @@ public class SPARCLoadConstantTableBaseOp extends SPARCLIRInstruction {
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         Register baseRegister = asRegister(base);
-        DataSectionReference ref = new DataSectionReference();
-        ref.setOffset(0);
-        crb.compilationResult.recordDataPatch(masm.position(), ref);
-        // TODO: (sa) Make this relocation shorter (right now it takes always 8 instructions)
-        new SPARCMacroAssembler.Setx(0, baseRegister, true).emit(masm);
-        /**
-         * Place the base register into the center of the reachable 8k range. This bias is reflected
-         * in CodeInstaller::pd_patch_DataSectionReference (jvmciCodeInstaller_sparc.cpp)
-         */
-        masm.sub(baseRegister, -1 & ~((1 << 12) - 1), baseRegister);
+        int beforePosition = masm.position();
+        masm.rdpc(baseRegister);
+        // Must match with CodeInstaller::pd_patch_DataSectionReference
+        masm.add(baseRegister, (int) SPARCAssembler.minSimm(13), baseRegister);
+        masm.sub(baseRegister, beforePosition, baseRegister);
     }
 
     public AllocatableValue getResult() {

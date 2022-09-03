@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,21 +24,20 @@ package com.oracle.graal.hotspot.sparc;
 
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.sparc.SPARC.g0;
+import jdk.vm.ci.code.InfopointReason;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.ValueUtil;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.meta.AllocatableValue;
 
 import com.oracle.graal.asm.sparc.SPARCAddress;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
 import com.oracle.graal.lir.sparc.SPARCLIRInstruction;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.code.site.InfopointReason;
-import jdk.vm.ci.meta.AllocatableValue;
 
 /**
  * Emits a safepoint poll.
@@ -50,9 +49,9 @@ public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
 
     @State protected LIRFrameState state;
     @Use({OperandFlag.REG}) AllocatableValue safepointPollAddress;
-    private final GraalHotSpotVMConfig config;
+    private final HotSpotVMConfig config;
 
-    public SPARCHotSpotSafepointOp(LIRFrameState state, GraalHotSpotVMConfig config, LIRGeneratorTool tool) {
+    public SPARCHotSpotSafepointOp(LIRFrameState state, HotSpotVMConfig config, LIRGeneratorTool tool) {
         super(TYPE, SIZE);
         this.state = state;
         this.config = config;
@@ -65,7 +64,7 @@ public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
         emitCode(crb, masm, config, false, state, asRegister(safepointPollAddress));
     }
 
-    public static void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm, GraalHotSpotVMConfig config, boolean atReturn, LIRFrameState state, Register safepointPollAddress) {
+    public static void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm, HotSpotVMConfig config, boolean atReturn, LIRFrameState state, Register safepointPollAddress) {
         crb.recordMark(atReturn ? config.MARKID_POLL_RETURN_FAR : config.MARKID_POLL_FAR);
         if (state != null) {
             final int pos = masm.position();
@@ -79,9 +78,9 @@ public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
         public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
         @Def({OperandFlag.REG}) protected AllocatableValue result;
-        private final GraalHotSpotVMConfig config;
+        private final HotSpotVMConfig config;
 
-        public SPARCLoadSafepointPollAddress(AllocatableValue result, GraalHotSpotVMConfig config) {
+        public SPARCLoadSafepointPollAddress(AllocatableValue result, HotSpotVMConfig config) {
             super(TYPE, SIZE);
             this.result = result;
             this.config = config;
