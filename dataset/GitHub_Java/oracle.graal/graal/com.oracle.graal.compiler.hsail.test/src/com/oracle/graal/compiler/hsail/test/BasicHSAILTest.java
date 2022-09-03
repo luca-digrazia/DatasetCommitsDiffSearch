@@ -22,16 +22,27 @@
  */
 package com.oracle.graal.compiler.hsail.test;
 
+import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.*;
+
 import org.junit.*;
 
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.compiler.hsail.HSAILCompilationResult;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.gpu.*;
+import com.oracle.graal.hotspot.hsail.*;
+import com.oracle.graal.hsail.*;
 
 /**
  * Test class for small Java methods compiled to HSAIL kernels.
  */
 public class BasicHSAILTest extends GraalCompilerTest {
+
+    public BasicHSAILTest() {
+        super(HSAIL.class);
+    }
 
     public void testAdd() {
         test("testAddSnippet");
@@ -325,10 +336,23 @@ public class BasicHSAILTest extends GraalCompilerTest {
         out[gid] = val;
     }
 
-    private void test(String snippet) {
-        StructuredGraph graph = parse(snippet);
-        HSAILCompilationResult compResult = HSAILCompilationResult.getHSAILCompilationResult(graph);
-        compResult.dumpCompilationResult();
+    @Override
+    protected HSAILHotSpotBackend getBackend() {
+        Backend backend = super.getBackend();
+        Assume.assumeTrue(backend instanceof HSAILHotSpotBackend);
+        return (HSAILHotSpotBackend) backend;
+    }
+
+    private void test(final String snippet) {
+        try (DebugConfigScope dcs = Debug.setConfig(new DelegatingDebugConfig().disable(INTERCEPT))) {
+            try (Scope s = Debug.scope("HSAILCodeGen")) {
+                ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
+                ExternalCompilationResult hsailCode = getBackend().compileKernel(method, false);
+                Debug.log("HSAIL code generated for %s:%n%s", snippet, hsailCode.getCodeString());
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
+        }
     }
 
     public static void nBodySpill(float[] inxyz, float[] outxyz, float[] invxyz, float[] outvxyz, int gid) {

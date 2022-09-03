@@ -25,6 +25,7 @@ package com.oracle.graal.hotspot.test;
 import static com.oracle.graal.debug.internal.MemUseTrackerImpl.*;
 import static com.oracle.graal.hotspot.CompileTheWorld.*;
 import static com.oracle.graal.hotspot.CompileTheWorld.Options.*;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
 
 import com.oracle.graal.api.runtime.*;
@@ -51,7 +52,7 @@ import com.oracle.graal.printer.*;
  *     mx --vm server vm -XX:-UseGraalClassLoader -G:CompileTheWorldClasspath=$HOME/SPECjvm2008/SPECjvm2008.jar -cp @com.oracle.graal.hotspot.test com.oracle.graal.hotspot.test.MemoryUsageBenchmark
  * </pre>
  */
-public class MemoryUsageBenchmark extends HotSpotGraalCompilerTest {
+public class MemoryUsageBenchmark extends GraalCompilerTest {
 
     public static int simple(int a, int b) {
         return a + b;

@@ -85,7 +85,7 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
         }
 
         // Force compilation
-        InstalledCode code = getCode(testMethod);
+        InstalledCode code = getCode(testMethod, parseEager(testMethod));
         assert optional || code != null;
 
         for (int i = 0; i < args1.length; i++) {

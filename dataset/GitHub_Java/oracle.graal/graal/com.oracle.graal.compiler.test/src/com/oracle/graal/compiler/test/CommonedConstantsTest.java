@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.lang.reflect.Array;
+import java.lang.reflect.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Test;
-
-import com.oracle.graal.phases.common.AbstractInliningPhase;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.phases.common.*;
 
 /**
  * Tests any optimization that commons loads of non-inlineable constants.
@@ -90,7 +89,7 @@ public class CommonedConstantsTest extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        createSuites().getHighTier().findPhase(AbstractInliningPhase.class).remove();
+        getSuites().getHighTier().findPhase(AbstractInliningPhase.class).remove();
         test1Snippet(new String(alphabet));
 
         test("test1Snippet", (Object) null);
@@ -114,7 +113,7 @@ public class CommonedConstantsTest extends GraalCompilerTest {
 
     @Test
     public void test2() {
-        assert createSuites().getHighTier().findPhase(AbstractInliningPhase.class).hasNext();
+        assert getSuites().getHighTier().findPhase(AbstractInliningPhase.class).hasNext();
         test2Snippet(new String(alphabet));
 
         test("test2Snippet", (Object) null);

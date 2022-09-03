@@ -26,12 +26,16 @@ import java.lang.reflect.*;
 
 import org.junit.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 
 /**
  * Tests the implementation of Array.createInstance.
  */
 public class DynamicNewArrayTest extends GraalCompilerTest {
+
+    private class Element {
+    }
 
     @Test
     public void test1() {
@@ -61,6 +65,23 @@ public class DynamicNewArrayTest extends GraalCompilerTest {
     @Test
     public void test6() {
         test("dynamic", null, 5);
+    }
+
+    @Test
+    public void test7() {
+        test("dynamic", void.class, 5);
+    }
+
+    @Test
+    public void testStub() {
+        ResolvedJavaMethod method = getResolvedJavaMethod("dynamic");
+        // this will use the stub call because Element[] is not loaded
+        Result actual1 = executeActual(method, null, Element.class, 7);
+        // this call will use the fast path
+        Result actual2 = executeActual(method, null, Element.class, 7);
+        Result expected = executeExpected(method, null, Element.class, 7);
+        assertEquals(actual1, expected);
+        assertEquals(actual2, expected);
     }
 
     public static Object test1snippet() {

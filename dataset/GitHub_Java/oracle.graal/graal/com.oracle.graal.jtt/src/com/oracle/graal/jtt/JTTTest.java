@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 
 /**
  * Base class for the JTT tests.
@@ -57,8 +56,8 @@ public class JTTTest extends GraalCompilerTest {
     }
 
     @Override
-    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
-        StructuredGraph graph = super.parseEager(m, allowAssumptions);
+    protected StructuredGraph parseEager(ResolvedJavaMethod m) {
+        StructuredGraph graph = super.parseEager(m);
         if (argsToBind != null) {
             Object receiver = isStatic(m.getModifiers()) ? null : this;
             Object[] args = argsWithReceiver(receiver, argsToBind);
@@ -67,7 +66,7 @@ public class JTTTest extends GraalCompilerTest {
             for (int i = 0; i < args.length; i++) {
                 ParameterNode param = graph.getParameter(i);
                 if (param != null) {
-                    JavaConstant c = getSnippetReflection().forBoxed(parameterTypes[i].getKind(), args[i]);
+                    Constant c = getSnippetReflection().forBoxed(parameterTypes[i].getKind(), args[i]);
                     ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
                     param.replaceAtUsages(replacement);
                 } else {

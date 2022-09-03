@@ -24,17 +24,21 @@ package com.oracle.graal.jtt.jdk;
 
 import org.junit.*;
 
-import com.oracle.graal.jtt.*;
-
 import sun.misc.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.jtt.*;
+
 public class Unsafe_compareAndSwap extends JTTTest {
+
     static final Unsafe unsafe = UnsafeAccess01.getUnsafe();
     static final long valueOffset;
     static {
         try {
             valueOffset = unsafe.objectFieldOffset(Unsafe_compareAndSwap.class.getDeclaredField("value"));
-        } catch (Exception ex) { throw new Error(ex); }
+        } catch (Exception ex) {
+            throw new Error(ex);
+        }
     }
 
     public static String test(Unsafe_compareAndSwap u, Object o, String expected, String newValue) {
@@ -51,7 +55,7 @@ public class Unsafe_compareAndSwap extends JTTTest {
     private static final Unsafe_compareAndSwap instance = new Unsafe_compareAndSwap();
 
     @Override
-    protected void before() {
+    protected void before(ResolvedJavaMethod m) {
         instance.value = "a";
     }
 

@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.jtt.loop;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Test;
-
-import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -48,7 +47,7 @@ public class LoopNewInstance extends JTTTest {
 
         private boolean exists;
 
-        Blop() {
+        public Blop() {
             if (!exists) {
                 count++;
             }

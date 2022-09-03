@@ -73,7 +73,8 @@ public class CompiledMethodTest extends GraalCompilerTest {
     @Test
     public void test3() {
         final ResolvedJavaMethod javaMethod = getResolvedJavaMethod("testMethod");
-        InstalledCode compiledMethod = getCode(javaMethod);
+        final StructuredGraph graph = parseEager(javaMethod);
+        InstalledCode compiledMethod = getCode(javaMethod, graph);
         try {
             Object result = compiledMethod.executeVarargs("1", "2", "3");
             Assert.assertEquals("1 2 3", result);
@@ -85,7 +86,8 @@ public class CompiledMethodTest extends GraalCompilerTest {
     @Test
     public void test4() {
         final ResolvedJavaMethod javaMethod = getResolvedJavaMethod("testMethodVirtual");
-        InstalledCode compiledMethod = getCode(javaMethod);
+        final StructuredGraph graph = parseEager(javaMethod);
+        InstalledCode compiledMethod = getCode(javaMethod, graph);
         try {
             f1 = "0";
             Object result = compiledMethod.executeVarargs(this, "1", "2", "3");

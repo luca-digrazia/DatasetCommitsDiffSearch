@@ -40,12 +40,12 @@ public class InstalledCodeExecuteHelperTest extends GraalCompilerTest {
     @Test
     public void test1() throws InvalidInstalledCodeException {
         final ResolvedJavaMethod fooMethod = getResolvedJavaMethod("foo");
-        final HotSpotInstalledCode fooCode = (HotSpotInstalledCode) getCode(fooMethod);
+        final HotSpotInstalledCode fooCode = (HotSpotInstalledCode) getCode(fooMethod, parseEager(fooMethod));
 
         argsToBind = new Object[]{fooCode};
 
         final ResolvedJavaMethod benchmarkMethod = getResolvedJavaMethod("benchmark");
-        final HotSpotInstalledCode installedBenchmarkCode = (HotSpotInstalledCode) getCode(benchmarkMethod);
+        final HotSpotInstalledCode installedBenchmarkCode = (HotSpotInstalledCode) getCode(benchmarkMethod, parseEager(benchmarkMethod));
 
         Assert.assertEquals(Integer.valueOf(42), benchmark(fooCode));
 
