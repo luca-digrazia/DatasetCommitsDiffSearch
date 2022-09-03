@@ -111,7 +111,9 @@ public class SchedulePhase extends Phase {
     }
 
     /**
-     * Assigns a block to the given node. This method expects that PhiNodes and FixedNodes are already assigned to a block.
+     * Assigns a block to the given node. This method expects that PhiNodes and FixedNodes are already assigned to a
+     * block, since they should already have been placed by {@link ControlFlowGraph#identifyBlocks()}.
+     * This method will also try to
      */
     private void assignBlockToNode(ScheduledNode node) {
         assert !node.isDeleted();
@@ -128,7 +130,7 @@ public class SchedulePhase extends Phase {
         Block block;
         if (latestBlock == null) {
             block = earliestBlock(node);
-        } else if (GraalOptions.ScheduleOutOfLoops && !(node instanceof VirtualObjectNode)) {
+        } else if (GraalOptions.ScheduleOutOfLoops && !(node instanceof VirtualObjectFieldNode) && !(node instanceof VirtualObjectNode)) {
             Block earliestBlock = earliestBlock(node);
             block = scheduleOutOfLoops(node, latestBlock, earliestBlock);
             assert earliestBlock.dominates(block) : "Graph can not be scheduled : inconsistent for " + node + " (" + earliestBlock + " needs to dominate " + block + ")";
@@ -258,26 +260,22 @@ public class SchedulePhase extends Phase {
                     closure.apply(mergeBlock.getPredecessors().get(i));
                 }
             }
-        } else if (usage instanceof VirtualState) {
+        } else if (usage instanceof FrameState) {
             // The following logic does not work if node is a PhiNode, but this method is never called for PhiNodes.
-            for (Node unscheduledUsage : usage.usages()) {
-                if (unscheduledUsage instanceof VirtualState) {
+            for (Node frameStateUsage : usage.usages()) {
+                if (frameStateUsage instanceof FrameState) {
                     // If a FrameState is an outer FrameState this method behaves as if the inner FrameState was the actual usage, by recursing.
-                    blocksForUsage(node, unscheduledUsage, closure);
-                } else if (unscheduledUsage instanceof MergeNode) {
-                    // Only FrameStates can be connected to MergeNodes.
-                    assert usage instanceof FrameState;
+                    blocksForUsage(node, frameStateUsage, closure);
+                } else if (frameStateUsage instanceof MergeNode) {
                     // If a FrameState belongs to a MergeNode then it's inputs will be placed at the common dominator of all EndNodes.
-                    for (Node pred : unscheduledUsage.cfgPredecessors()) {
+                    for (Node pred : frameStateUsage.cfgPredecessors()) {
                         closure.apply(cfg.getNodeToBlock().get(pred));
                     }
                 } else {
-                    // For the time being, only FrameStates can be connected to StateSplits.
-                    assert usage instanceof FrameState;
-                    assert unscheduledUsage instanceof StateSplit;
                     // Otherwise: Put the input into the same block as the usage.
-                    assignBlockToNode((ScheduledNode) unscheduledUsage);
-                    closure.apply(cfg.getNodeToBlock().get(unscheduledUsage));
+                    assert frameStateUsage instanceof StateSplit;
+                    assignBlockToNode((ScheduledNode) frameStateUsage);
+                    closure.apply(cfg.getNodeToBlock().get(frameStateUsage));
                 }
             }
         } else {
@@ -353,14 +351,13 @@ public class SchedulePhase extends Phase {
         blockToNodesMap.put(b, sortedInstructions);
     }
 
-    private void addUnscheduledToSorting(Block b, VirtualState state, List<ScheduledNode> sortedInstructions, NodeBitMap visited) {
+    private void addFrameStateToSorting(Block b, FrameState state, List<ScheduledNode> sortedInstructions, NodeBitMap visited) {
         if (state != null) {
-            // UnscheduledNodes should never be marked as visited.
             assert !visited.isMarked(state);
 
             for (Node input : state.inputs()) {
-                if (input instanceof VirtualState) {
-                    addUnscheduledToSorting(b, (VirtualState) input, sortedInstructions, visited);
+                if (input instanceof FrameState) {
+                    addFrameStateToSorting(b, (FrameState) input, sortedInstructions, visited);
                 } else {
                     addToSorting(b, (ScheduledNode) input, sortedInstructions, visited);
                 }
@@ -389,7 +386,7 @@ public class SchedulePhase extends Phase {
 
         addToSorting(b, (ScheduledNode) i.predecessor(), sortedInstructions, visited);
         visited.mark(i);
-        addUnscheduledToSorting(b, state, sortedInstructions, visited);
+        addFrameStateToSorting(b, state, sortedInstructions, visited);
         assert write == null || !visited.isMarked(write);
         addToSorting(b, write, sortedInstructions, visited);
 

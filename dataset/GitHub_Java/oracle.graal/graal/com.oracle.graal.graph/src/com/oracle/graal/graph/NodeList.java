@@ -25,12 +25,13 @@ import java.util.*;
 
 import com.oracle.graal.graph.iterators.*;
 
-public abstract class NodeList<T extends Node> extends AbstractList<T> implements NodeIterable<T> {
+public abstract class NodeList<T extends Node> extends NodeIterable<T> implements List<T> {
 
     protected static final Node[] EMPTY_NODE_ARRAY = new Node[0];
 
     protected Node[] nodes;
     private int size;
+    private int modCount;
     protected final int initialSize;
 
     protected NodeList() {
@@ -55,7 +56,7 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
             this.nodes = new Node[elements.length];
             for (int i = 0; i < elements.length; i++) {
                 this.nodes[i] = elements[i];
-                assert this.nodes[i] == null || !this.nodes[i].isDeleted() : "Initializing nodelist with deleted element : " + nodes[i];
+                assert this.nodes[i] == null || !this.nodes[i].isDeleted();
             }
         }
     }
@@ -254,13 +255,6 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
         return (List<T>) Arrays.asList(Arrays.copyOf(this.nodes, this.size));
     }
 
-    @Override
-    public void snapshotTo(List<T> to) {
-        for (int i = 0; i < size; i++) {
-            to.add(get(i));
-        }
-    }
-
     @SuppressWarnings("unchecked")
     public void setAll(NodeList<T> values) {
         incModCount();
@@ -333,6 +327,46 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
     }
 
     @Override
+    public boolean addAll(int index, Collection< ? extends T> c) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public boolean removeAll(Collection< ? > c) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public boolean retainAll(Collection< ? > c) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public void add(int index, T element) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public int lastIndexOf(Object o) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public ListIterator<T> listIterator() {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public ListIterator<T> listIterator(int index) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public List<T> subList(int fromIndex, int toIndex) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append('[');
@@ -344,42 +378,5 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
         }
         sb.append(']');
         return sb.toString();
-    }
-
-    @Override
-    public NodeIterable<T> until(final T u) {
-        return new FilteredNodeIterable<>(this).until(u);
-    }
-    @Override
-    public NodeIterable<T> until(final Class<? extends T> clazz) {
-        return new FilteredNodeIterable<>(this).until(clazz);
-    }
-    @Override
-    @SuppressWarnings("unchecked")
-    public <F extends T> NodeIterable<F> filter(Class<F> clazz) {
-        return (NodeIterable<F>) new FilteredNodeIterable<>(this).and(NodePredicates.isA(clazz));
-    }
-    @Override
-    public NodeIterable<T> filterInterface(Class<?> iface) {
-        return new FilteredNodeIterable<>(this).and(NodePredicates.isAInterface(iface));
-    }
-    @Override
-    public FilteredNodeIterable<T> filter(NodePredicate predicate) {
-        return new FilteredNodeIterable<>(this).and(predicate);
-    }
-    @Override
-    public FilteredNodeIterable<T> nonNull() {
-        return new FilteredNodeIterable<>(this).and(NodePredicates.isNotNull());
-    }
-    @Override
-    public NodeIterable<T> distinct() {
-        return new FilteredNodeIterable<>(this).distinct();
-    }
-    @Override
-    public T first() {
-        if (size() > 0) {
-            return get(0);
-        }
-        return null;
     }
 }

@@ -36,8 +36,6 @@ import com.oracle.graal.nodes.virtual.*;
 
 public class BoxingEliminationPhase extends Phase {
 
-    private int virtualIds = Integer.MIN_VALUE;
-
     @Override
     protected void run(StructuredGraph graph) {
         if (graph.getNodes(UnboxNode.class).isNotEmpty()) {
@@ -107,7 +105,7 @@ public class BoxingEliminationPhase extends Phase {
         }
     }
 
-    private void tryEliminate(BoxNode boxNode) {
+    private static void tryEliminate(BoxNode boxNode) {
 
         assert boxNode.objectStamp().isExactType();
         virtualizeUsages(boxNode, boxNode.source(), boxNode.objectStamp().type());
@@ -124,12 +122,12 @@ public class BoxingEliminationPhase extends Phase {
         ((StructuredGraph) boxNode.graph()).removeFixed(boxNode);
     }
 
-    private void virtualizeUsages(ValueNode boxNode, ValueNode replacement, ResolvedJavaType exactType) {
+    private static void virtualizeUsages(ValueNode boxNode, ValueNode replacement, ResolvedJavaType exactType) {
         ValueNode virtualValueNode = null;
         VirtualObjectNode virtualObjectNode = null;
         for (Node n : boxNode.usages().filter(NodePredicates.isA(VirtualState.class)).snapshot()) {
             if (virtualValueNode == null) {
-                virtualObjectNode = n.graph().unique(new BoxedVirtualObjectNode(virtualIds++, exactType, replacement));
+                virtualObjectNode = n.graph().unique(new BoxedVirtualObjectNode(exactType, replacement));
             }
             n.replaceFirstInput(boxNode, virtualObjectNode);
         }
