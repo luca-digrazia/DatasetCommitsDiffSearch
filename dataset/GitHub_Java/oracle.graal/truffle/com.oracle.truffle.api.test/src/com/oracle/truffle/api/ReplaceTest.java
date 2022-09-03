@@ -97,7 +97,7 @@ public class ReplaceTest {
 
         @Children private final ValueNode[] children;
 
-        TestRootNode(ValueNode[] children) {
+        public TestRootNode(ValueNode[] children) {
             super(TestingLanguage.class, null, null);
             this.children = children;
         }
@@ -114,7 +114,7 @@ public class ReplaceTest {
 
     abstract class ValueNode extends Node {
 
-        ValueNode() {
+        public ValueNode() {
         }
 
         abstract int execute();
@@ -124,7 +124,7 @@ public class ReplaceTest {
 
         private final String value;
 
-        UnresolvedNode(String value) {
+        public UnresolvedNode(String value) {
             this.value = value;
         }
 

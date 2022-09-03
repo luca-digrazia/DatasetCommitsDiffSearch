@@ -167,10 +167,17 @@ public class ToolTestUtil {
     }
 
     abstract static class ToolTestLangNode extends Node {
-        public abstract Object execute(VirtualFrame frame);
+        private final SourceSection section;
+
+        public abstract Object execute(VirtualFrame vFrame);
 
         protected ToolTestLangNode(SourceSection ss) {
-            super(ss);
+            this.section = ss;
+        }
+
+        @Override
+        public SourceSection getSourceSection() {
+            return section;
         }
     }
 
@@ -205,14 +212,14 @@ public class ToolTestUtil {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            eventHandlerNode.enter(child, frame);
+        public Object execute(VirtualFrame vFrame) {
+            eventHandlerNode.enter(child, vFrame);
             Object result;
             try {
-                result = child.execute(frame);
-                eventHandlerNode.returnValue(child, frame, result);
+                result = child.execute(vFrame);
+                eventHandlerNode.returnValue(child, vFrame, result);
             } catch (Exception e) {
-                eventHandlerNode.returnExceptional(child, frame, e);
+                eventHandlerNode.returnExceptional(child, vFrame, e);
                 throw (e);
             }
             return result;
@@ -231,7 +238,7 @@ public class ToolTestUtil {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
+        public Object execute(VirtualFrame vFrame) {
             return new Integer(this.value);
         }
     }
@@ -250,8 +257,8 @@ public class ToolTestUtil {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            return new Integer(((Integer) leftChild.execute(frame)).intValue() + ((Integer) rightChild.execute(frame)).intValue());
+        public Object execute(VirtualFrame vFrame) {
+            return new Integer(((Integer) leftChild.execute(vFrame)).intValue() + ((Integer) rightChild.execute(vFrame)).intValue());
         }
     }
 
@@ -274,8 +281,8 @@ public class ToolTestUtil {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            return body.execute(frame);
+        public Object execute(VirtualFrame vFrame) {
+            return body.execute(vFrame);
         }
 
         @Override
@@ -307,8 +314,8 @@ public class ToolTestUtil {
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            return body.execute(frame);
+        public Object execute(VirtualFrame vFrame) {
+            return body.execute(vFrame);
         }
 
         @Override

@@ -81,7 +81,7 @@ public class SourceSectionTest {
 
     @NodeChild("a")
     static class MutableSourceSectionNode extends ValueNode {
-        // BEGIN: MutableSourceSectionNode
+        // BEGIN: source.section.mutable
         @CompilerDirectives.CompilationFinal private SourceSection section;
 
         final void changeSourceSection(SourceSection sourceSection) {
@@ -94,7 +94,7 @@ public class SourceSectionTest {
             return section;
         }
 
-        // END: MutableSourceSectionNode
+        // END: source.section.mutable
 
         @Specialization(guards = "a == 1")
         int do1(int a) {
@@ -129,7 +129,7 @@ public class SourceSectionTest {
 
     @NodeChild("a")
     static class NodeWithFixedSourceSection extends ValueNode {
-        // BEGIN: NodeWithFixedSourceSection
+        // BEGIN: source.section.fixed
         private final SourceSection section;
 
         public NodeWithFixedSourceSection(SourceSection section) {
@@ -141,7 +141,7 @@ public class SourceSectionTest {
             return section;
         }
 
-        // END: NodeWithFixedSourceSection
+        // END: source.section.fixed
 
         @CreateCast("a")
         public ValueNode cast(ValueNode node) {

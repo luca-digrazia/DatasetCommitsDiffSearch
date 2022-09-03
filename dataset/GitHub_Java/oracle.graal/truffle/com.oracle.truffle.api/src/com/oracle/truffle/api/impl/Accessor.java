@@ -33,7 +33,6 @@ import java.lang.ref.WeakReference;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -111,7 +110,7 @@ public abstract class Accessor {
             }
         };
         lng.hashCode();
-        new Node(null) {
+        new Node() {
         }.getRootNode();
 
         try {
@@ -278,7 +277,6 @@ public abstract class Accessor {
     @SuppressWarnings("unused")
     protected Closeable executionStart(Object vm, int currentDepth, Debugger debugger, Source s) {
         vm.getClass();
-        CompilerAsserts.neverPartOfCompilation();
         final Object prev = CURRENT_VM.get();
         final Closeable debugClose = DEBUG.executionStart(vm, prev == null ? 0 : -1, debugger, s);
         if (!(vm == previousVM.get())) {

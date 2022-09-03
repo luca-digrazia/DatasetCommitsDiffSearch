@@ -22,20 +22,27 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import java.math.*;
+import java.math.BigInteger;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.dsl.GenerateNodeFactory;
+import com.oracle.truffle.api.dsl.ImplicitCast;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.TypeCast;
+import com.oracle.truffle.api.dsl.TypeCheck;
+import com.oracle.truffle.api.dsl.TypeSystem;
+import com.oracle.truffle.api.dsl.TypeSystemReference;
+import com.oracle.truffle.api.dsl.internal.DSLOptions;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 public class TypeSystemTest {
 
     @TypeSystem({byte.class, short.class, int.class, long.class, double.class, boolean.class, BigInteger.class, String.class, CallTarget.class, BExtendsAbstract.class, CExtendsAbstract.class,
                     Abstract.class, Interface.class, Object[].class})
-    @DSLOptions(useNewLayout = true)
+    @DSLOptions
     static class SimpleTypes {
 
         static int intCheck;
@@ -75,11 +82,6 @@ public class TypeSystemTest {
     public static class ValueNode extends Node {
 
         public ValueNode() {
-            super(null);
-        }
-
-        public ValueNode(SourceSection sourceSection) {
-            super(sourceSection);
         }
 
         public int executeInt(VirtualFrame frame) throws UnexpectedResultException {

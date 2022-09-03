@@ -167,7 +167,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @return an approximation of the source code represented by this Node
      */
     @ExplodeLoop
-    public SourceSection getEncapsulatingSourceSection() {
+    public final SourceSection getEncapsulatingSourceSection() {
         Node current = this;
         while (current != null) {
             final SourceSection currentSection = current.getSourceSection();
