@@ -25,7 +25,6 @@
 package org.graalvm.component.installer;
 
 import java.io.File;
-import java.io.IOError;
 import org.graalvm.component.installer.model.ComponentRegistry;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -37,6 +36,7 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.Collections;
@@ -118,7 +118,7 @@ public final class ComponentInstaller {
         System.err.println(BUNDLE.getString("INFO_Usage")); // NOI18N
     }
 
-    static void printErr(String messageKey, Object... args) {
+    static RuntimeException err(String messageKey, Object... args) {
         String s;
 
         if (args == null || args.length == 0) {
@@ -127,10 +127,6 @@ public final class ComponentInstaller {
             s = MessageFormat.format(BUNDLE.getString(messageKey), args);
         }
         System.err.println(s);
-    }
-
-    static RuntimeException err(String messageKey, Object... args) {
-        printErr(messageKey, args);
         printHelp();
         System.exit(1);
         throw new RuntimeException("should not reach here");
@@ -207,7 +203,7 @@ public final class ComponentInstaller {
         } catch (DirectoryNotEmptyException ex) {
             env.error("INSTALLER_DirectoryNotEmpty", ex, ex.getMessage()); // NOI18N
             return 2;
-        } catch (IOError | IOException ex) {
+        } catch (IOException ex) {
             env.error("INSTALLER_IOException", ex, ex.getMessage()); // NOI18N
             return 2;
         } catch (MetadataException ex) {
@@ -235,13 +231,13 @@ public final class ComponentInstaller {
         String graalHome = System.getProperty("GRAAL_HOME", System.getenv("GRAAL_HOME")); // NOI18N
         Path graalPath = null;
         if (graalHome != null) {
-            graalPath = SystemUtils.fromUserString(graalHome);
+            graalPath = Paths.get(graalHome);
         } else {
             URL loc = getClass().getProtectionDomain().getCodeSource().getLocation();
             try {
                 File f = new File(loc.toURI());
                 if (f != null) {
-                    graalPath = f.toPath().resolve(SystemUtils.fromCommonString(GRAAL_DEFAULT_RELATIVE_PATH)).toAbsolutePath();
+                    graalPath = f.toPath().resolve(GRAAL_DEFAULT_RELATIVE_PATH).normalize();
                 }
             } catch (URISyntaxException ex) {
                 Logger.getLogger(ComponentInstaller.class.getName()).log(Level.SEVERE, null, ex);
@@ -250,10 +246,10 @@ public final class ComponentInstaller {
         if (graalPath == null) {
             throw env.failure("ERROR_NoGraalVMDirectory", null);
         }
-        if (!Files.isDirectory(graalPath) || !Files.exists(graalPath.resolve(SystemUtils.fileName("release")))) {
+        if (!Files.isDirectory(graalPath) || !Files.exists(graalPath.resolve("release"))) {
             throw env.failure("ERROR_InvalidGraalVMDirectory", null, graalPath);
         }
-        if (!Files.isDirectory(storagePath = graalPath.resolve(SystemUtils.fromCommonString(PATH_COMPONENT_STORAGE)))) {
+        if (!Files.isDirectory(storagePath = graalPath.resolve(PATH_COMPONENT_STORAGE))) {
             throw env.failure("ERROR_InvalidGraalVMDirectory", null, graalPath);
         }
         graalHomePath = graalPath;
@@ -279,17 +275,7 @@ public final class ComponentInstaller {
     }
 
     private URL getCatalogURL(Feedback f) {
-        String def;
-        if (catalogURL != null) {
-            def = catalogURL;
-        } else {
-            String envVar = System.getenv(CommonConstants.ENV_CATALOG_URL);
-            if (envVar != null) {
-                def = envVar;
-            } else {
-                def = f.l10n("Installer_BuiltingCatalogURL");
-            }
-        }
+        String def = catalogURL != null ? catalogURL : f.l10n("Installer_BuiltingCatalogURL");
         String s = System.getProperty(CommonConstants.SYSPROP_CATALOG_URL, def);
         try {
             return new URL(s);

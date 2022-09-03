@@ -28,13 +28,11 @@ import org.graalvm.component.installer.ChunkedConnection;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.graalvm.component.installer.persist.test.Handler;
-import org.junit.Assert;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -105,7 +103,7 @@ public class FileDownloaderTest extends NetworkTestBase {
 
     class Check extends FA {
         int state;
-        boolean verbose = true;
+
         int cnt = 0;
         StringBuilder bar = new StringBuilder("[                    ]");
         String bcksp = "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
@@ -123,18 +121,8 @@ public class FileDownloaderTest extends NetworkTestBase {
         }
 
         @Override
-        public void output(String bundleKey, Object... params) {
-            if (state == 0 && verbose) {
-                Assert.assertNotEquals("MSG_Downloading", bundleKey);
-            }
-        }
-
-        @Override
         public boolean verboseOutput(String bundleKey, Object... params) {
             switch (state) {
-                case 0:
-                    assertEquals("MSG_DownloadingVerbose", bundleKey);
-                    break;
                 case 5:
                     if ("MSG_DownloadingDone".equals(bundleKey)) {
                         state++;
@@ -211,8 +199,7 @@ public class FileDownloaderTest extends NetworkTestBase {
             @Override
             public void connect() throws IOException {
                 try {
-                    // called twice, default timeout is 5 secs
-                    Thread.sleep(1000);
+                    Thread.sleep(3000);
                 } catch (InterruptedException ex) {
                 }
                 super.connect();
@@ -225,7 +212,6 @@ public class FileDownloaderTest extends NetworkTestBase {
         delegateFeedback(check);
         FileDownloader dn = new FileDownloader("test",
                         u, this);
-        verbose = true;
         dn.setVerbose(true);
         dn.setDisplayProgress(true);
 
@@ -257,7 +243,7 @@ public class FileDownloaderTest extends NetworkTestBase {
             @Override
             public void connect() throws IOException {
                 try {
-                    Thread.sleep(2000);
+                    Thread.sleep(3000);
                 } catch (InterruptedException ex) {
                 }
                 super.connect();
@@ -267,7 +253,6 @@ public class FileDownloaderTest extends NetworkTestBase {
 
         Handler.bind(u.toString(), directConnect);
         Check check = new Check();
-        check.verbose = false;
         delegateFeedback(check);
         FileDownloader dn = new FileDownloader("test",
                         u, this);
@@ -286,62 +271,6 @@ public class FileDownloaderTest extends NetworkTestBase {
         dn.download();
     }
 
-    /**
-     * Checks that a proxy connection which results in HTTP 500 will not override delayed direct
-     * connection.
-     * 
-     * @throws Exception
-     */
-    @Test
-    public void testDownloadProxy500() throws Exception {
-        URL clu = getClass().getResource("data/truffleruby2.jar");
-        URL u = new URL("test://graalvm.io/download/truffleruby.zip");
-
-        ChunkedConnection directConnect = new ChunkedConnection(
-                        u,
-                        clu.openConnection()) {
-            @Override
-            public void connect() throws IOException {
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException ex) {
-                }
-                super.connect();
-            }
-        };
-
-        HttpURLConnection proxyCon = new HttpURLConnection(u) {
-            @Override
-            public void disconnect() {
-            }
-
-            @Override
-            public boolean usingProxy() {
-                return true;
-            }
-
-            @Override
-            public void connect() throws IOException {
-                responseCode = 500;
-            }
-        };
-
-        Handler.bind(u.toString(), directConnect);
-        Handler.bindProxy(u.toString(), proxyCon);
-        Check check = new Check();
-        check.verbose = false;
-        delegateFeedback(check);
-        FileDownloader dn = new FileDownloader("test",
-                        u, this);
-        dn.setVerbose(true);
-        dn.setDisplayProgress(true);
-
-        dn.envHttpProxy = "http://localhost:11111";
-        dn.envHttpsProxy = "http://localhost:11111";
-
-        dn.download();
-    }
-
     @Test
     public void testDownloadFailure() throws Exception {
         URL clu = getClass().getResource("data/truffleruby2.jar");
@@ -352,7 +281,6 @@ public class FileDownloaderTest extends NetworkTestBase {
                         clu.openConnection());
         Handler.bind(u.toString(), conn);
         Check check = new Check();
-        check.verbose = false;
         delegateFeedback(check);
         FileDownloader dn = new FileDownloader("test",
                         u, this);
