@@ -49,10 +49,9 @@ import org.graalvm.nativeimage.c.function.CFunction.Transition;
 
 /**
  * Annotation for an invocation method defined in a sub-interface of {@link CFunctionPointer}. The
- * method is called with C calling conventions. See {@link CFunction} for more details on the
- * invocation.
+ * method is called with C calling conventions.
  *
- * @since 19.0
+ * @since 1.0
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
@@ -61,7 +60,7 @@ public @interface InvokeCFunctionPointer {
     /**
      * The Java-to-C thread transition code used when calling the function.
      *
-     * @since 19.0
+     * @since 1.0
      */
     Transition transition() default Transition.TO_NATIVE;
 }
