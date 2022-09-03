@@ -76,7 +76,7 @@ public class ImplicitExplicitExportTest {
     }
 
     @Test
-    public void explicitExportFound() throws IOException {
+    public void explicitExportFound() {
         // @formatter:off
         vm.eval(Source.newBuilder("explicit.ahoj=42").name("Fourty two").mimeType(L1).build());
         Object ret = vm.eval(Source.newBuilder("return=ahoj").name("Return").mimeType(L3).build()
@@ -86,7 +86,7 @@ public class ImplicitExplicitExportTest {
     }
 
     @Test
-    public void implicitExportFound() throws IOException {
+    public void implicitExportFound() {
         // @formatter:off
         vm.eval(Source.newBuilder("implicit.ahoj=42").name("Fourty two").mimeType(L1).build()
         );
@@ -97,21 +97,7 @@ public class ImplicitExplicitExportTest {
     }
 
     @Test
-    public void implicitExportFoundDirect() throws IOException {
-        // @formatter:off
-        vm.eval(
-            Source.newBuilder("implicit.ahoj=42").
-                name("Fourty two").
-                mimeType(L1).
-                build()
-        );
-        Object ret = vm.findGlobalSymbol("ahoj").get();
-        // @formatter:on
-        assertEquals("42", ret);
-    }
-
-    @Test
-    public void explicitExportPreferred2() throws IOException {
+    public void explicitExportPreferred2() {
         // @formatter:off
         vm.eval(Source.newBuilder("implicit.ahoj=42").name("Fourty two").mimeType(L1).build()
         );
@@ -125,18 +111,7 @@ public class ImplicitExplicitExportTest {
     }
 
     @Test
-    public void explicitExportPreferredDirect() throws IOException {
-        // @formatter:off
-        vm.eval(Source.newBuilder("implicit.ahoj=42").name("Fourty two").mimeType(L1).build());
-        vm.eval(Source.newBuilder("explicit.ahoj=43").name("Fourty three").mimeType(L2).build());
-        Object ret = vm.findGlobalSymbol("ahoj").get();
-        // @formatter:on
-        assertEquals("Explicit import from L2 is used", "43", ret);
-        assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").get());
-    }
-
-    @Test
-    public void explicitExportPreferred1() throws IOException {
+    public void explicitExportPreferred1() {
         // @formatter:off
         vm.eval(Source.newBuilder("explicit.ahoj=43").name("Fourty three").mimeType(L1).build()
         );
@@ -196,7 +171,7 @@ public class ImplicitExplicitExportTest {
 
         @Override
         protected Object findExportedSymbol(Ctx context, String globalName, boolean onlyExplicit) {
-            if (onlyExplicit && context.explicit.containsKey(globalName)) {
+            if (context.explicit.containsKey(globalName)) {
                 return context.explicit.get(globalName);
             }
             if (!onlyExplicit && context.implicit.containsKey(globalName)) {
@@ -216,7 +191,7 @@ public class ImplicitExplicitExportTest {
         }
 
         @Override
-        protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
+        protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) {
             return null;
         }
 

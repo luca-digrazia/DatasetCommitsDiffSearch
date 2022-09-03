@@ -30,7 +30,7 @@ import java.util.List;
 
 import org.junit.Test;
 
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.ImplicitExplicitExportTest.Ctx;
 import static com.oracle.truffle.api.vm.ImplicitExplicitExportTest.L1;
@@ -42,6 +42,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import org.junit.After;
+import org.junit.Assert;
 
 import static org.junit.Assert.assertSame;
 
@@ -88,10 +89,12 @@ public class EngineTest {
             PolyglotEngine.Value value = language1.eval(Source.newBuilder("throwInteropException").name("interopTest").mimeType("content/unknown").build());
             value.as(Object.class);
         } catch (Exception e) {
-            assertEquals("Expecting UnsupportedTypeException", UnsupportedTypeException.class, e.getClass());
-            return;
+            if (e instanceof InteropException) {
+                return;
+            }
+            Assert.fail(String.format("expected InteropException but was %s in %s", e.getCause(), e));
         }
-        fail("Expected UnsupportedTypeException, got none");
+        Assert.fail("expected InteropException.");
     }
 
     @Test

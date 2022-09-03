@@ -44,6 +44,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.Source;
@@ -60,22 +61,27 @@ import com.oracle.truffle.api.source.Source;
 public abstract class SLEvalBuiltin extends SLBuiltinNode {
 
     @Specialization(guards = {"stringsEqual(cachedMimeType, mimeType)", "stringsEqual(cachedCode, code)"})
-    public Object evalCached(String mimeType, String code,
+    public Object evalCached(VirtualFrame frame, String mimeType, String code,
                     @Cached("mimeType") String cachedMimeType,
                     @Cached("code") String cachedCode,
                     @Cached("create(parse(mimeType, code))") DirectCallNode callNode) {
-        return callNode.call(new Object[]{});
+        return callNode.call(frame, new Object[]{});
     }
 
     @TruffleBoundary
-    @Specialization(replaces = "evalCached")
+    @Specialization(contains = "evalCached")
     public Object evalUncached(String mimeType, String code) {
         return parse(mimeType, code).call();
     }
 
     protected CallTarget parse(String mimeType, String code) {
         final Source source = Source.newBuilder(code).name("(eval)").mimeType(mimeType).build();
-        return getContext().parse(source);
+
+        try {
+            return getContext().parse(source);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException(ex);
+        }
     }
 
     /* Work around findbugs warning in generate code. */

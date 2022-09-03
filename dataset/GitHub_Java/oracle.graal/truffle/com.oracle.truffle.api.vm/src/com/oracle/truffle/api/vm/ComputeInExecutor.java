@@ -60,11 +60,8 @@ abstract class ComputeInExecutor<R> implements Runnable {
     }
 
     private void exceptionCheck() throws RuntimeException {
-        if (exception instanceof RuntimeException) {
-            throw (RuntimeException) exception;
-        }
         if (exception != null) {
-            throw new RuntimeException(exception);
+            throw raise(RuntimeException.class, exception);
         }
     }
 
@@ -86,11 +83,7 @@ abstract class ComputeInExecutor<R> implements Runnable {
         try {
             result = compute();
         } catch (Exception ex) {
-            if (ex.getClass() == RuntimeException.class && ex.getCause() != null) {
-                exception = ex.getCause();
-            } else {
-                exception = ex;
-            }
+            exception = ex;
         } finally {
             if (executor != null) {
                 synchronized (this) {
@@ -106,5 +99,10 @@ abstract class ComputeInExecutor<R> implements Runnable {
     @Override
     public final String toString() {
         return "value=" + result + ",exception=" + exception + ",computed=" + done;
+    }
+
+    @SuppressWarnings({"unchecked", "unused"})
+    static <E extends Throwable> E raise(Class<E> castTo, Throwable ex) throws E {
+        throw (E) ex;
     }
 }
