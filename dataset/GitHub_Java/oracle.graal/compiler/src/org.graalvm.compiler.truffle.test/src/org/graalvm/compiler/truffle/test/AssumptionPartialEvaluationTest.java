@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -90,7 +90,7 @@ public class AssumptionPartialEvaluationTest extends PartialEvaluationTest {
         boolean valid = true;
 
         @Override
-        public void onAssumptionInvalidated(Object source, CharSequence reason) {
+        public void invalidate() {
             valid = false;
         }
 
@@ -119,7 +119,7 @@ public class AssumptionPartialEvaluationTest extends PartialEvaluationTest {
         int invalidated = 0;
         for (int i = 0; i < deps.length; i++) {
             if (i % 2 == 0) {
-                deps[i].onAssumptionInvalidated(assumption, null);
+                deps[i].invalidate();
                 invalidated++;
             }
         }
@@ -127,7 +127,7 @@ public class AssumptionPartialEvaluationTest extends PartialEvaluationTest {
         Assert.assertEquals(invalidated, assumption.countDependencies());
 
         for (int i = 0; i < deps.length; i++) {
-            deps[i].onAssumptionInvalidated(assumption, null);
+            deps[i].invalidate();
         }
         assumption.removeInvalidDependencies();
         Assert.assertEquals(0, assumption.countDependencies());

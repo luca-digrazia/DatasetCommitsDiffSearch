@@ -33,10 +33,9 @@ import jdk.vm.ci.code.InstalledCode;
 public interface OptimizedAssumptionDependency {
 
     /**
-     * Called when a depended-on assumption is invalidated, with the intention to invalidate the
-     * machine code referenced by this object.
+     * Invalidates the machine code referenced by this object.
      */
-    void onAssumptionInvalidated(Object source, CharSequence reason);
+    void invalidate();
 
     /**
      * Determines if the machine code referenced by this object is valid.
