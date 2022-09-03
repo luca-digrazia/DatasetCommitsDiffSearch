@@ -49,14 +49,8 @@ final class SourceImpl extends Source implements Cloneable {
         return clone;
     }
 
-    private static long nextCheck;
-
     static synchronized void registerSource(SourceImpl source) {
-        long now = System.currentTimeMillis();
-        if (nextCheck < now) {
-            findSource(null);
-            nextCheck = now + 1000;
-        }
+        findSource(null);
         SOURCES = new Ref(source, SOURCES);
     }
 
