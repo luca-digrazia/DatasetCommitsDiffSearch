@@ -29,14 +29,22 @@ import com.oracle.graal.nodes.spi.*;
 /**
  * This stamp represents the illegal type. Values with this type can not exist at run time.
  */
-public final class IllegalStamp extends Stamp {
+public final class IllegalStamp extends PrimitiveStamp {
 
-    private IllegalStamp() {
+    private final Kind kind;
+
+    public IllegalStamp(Kind kind) {
+        super(0);
+        this.kind = kind;
+    }
+
+    public Kind kind() {
+        return kind;
     }
 
     @Override
     public Kind getStackKind() {
-        return Kind.Illegal;
+        return kind;
     }
 
     @Override
@@ -56,12 +64,12 @@ public final class IllegalStamp extends Stamp {
 
     @Override
     public ResolvedJavaType javaType(MetaAccessProvider metaAccess) {
-        throw GraalInternalError.shouldNotReachHere("illegal stamp has no Java type");
+        return null;
     }
 
     @Override
     public Stamp meet(Stamp other) {
-        return this;
+        return other;
     }
 
     @Override
@@ -71,22 +79,19 @@ public final class IllegalStamp extends Stamp {
 
     @Override
     public boolean isCompatible(Stamp stamp) {
-        return false;
+        if (this == stamp) {
+            return true;
+        }
+        if (stamp instanceof IllegalStamp) {
+            IllegalStamp other = (IllegalStamp) stamp;
+            return kind == other.kind;
+        } else {
+            return stamp.isCompatible(this);
+        }
     }
 
     @Override
     public String toString() {
         return "ILLEGAL";
-    }
-
-    @Override
-    public boolean isLegal() {
-        return false;
-    }
-
-    private static IllegalStamp instance = new IllegalStamp();
-
-    static IllegalStamp getInstance() {
-        return instance;
     }
 }

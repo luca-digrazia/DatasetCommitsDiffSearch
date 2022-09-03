@@ -24,10 +24,11 @@ package com.oracle.graal.loop;
 
 import java.util.*;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.util.*;
 
@@ -40,7 +41,7 @@ public class LoopFragmentInside extends LoopFragment {
      * peeling case. In the unrolling case they will be used as the value that replace the loop-phis
      * of the duplicated inside fragment
      */
-    private Map<ValuePhiNode, ValueNode> mergedInitializers;
+    private Map<PhiNode, ValueNode> mergedInitializers;
     private final DuplicationReplacement dataFixBefore = new DuplicationReplacement() {
 
         @Override
@@ -167,14 +168,18 @@ public class LoopFragmentInside extends LoopFragment {
 
     private static PhiNode patchPhi(StructuredGraph graph, PhiNode phi, MergeNode merge) {
         PhiNode ret;
-        if (phi instanceof ValuePhiNode) {
-            ret = new ValuePhiNode(phi.stamp(), merge);
-        } else if (phi instanceof GuardPhiNode) {
-            ret = new GuardPhiNode(merge);
-        } else if (phi instanceof MemoryPhiNode) {
-            ret = new MemoryPhiNode(merge, ((MemoryPhiNode) phi).getLocationIdentity());
-        } else {
-            throw GraalInternalError.shouldNotReachHere();
+        switch (phi.type()) {
+            case Value:
+                ret = new PhiNode(phi.stamp(), merge);
+                break;
+            case Guard:
+                ret = new PhiNode(PhiType.Guard, merge);
+                break;
+            case Memory:
+                ret = new MemoryPhiNode(merge, ((MemoryPhiNode) phi).getLocationIdentity());
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere();
         }
         return graph.addWithoutUnique(ret);
     }
@@ -214,7 +219,7 @@ public class LoopFragmentInside extends LoopFragment {
             for (int i = 0; i < phi.valueCount(); i++) {
                 ValueNode v = phi.valueAt(i);
                 if (loopBegin.isPhiAtMerge(v)) {
-                    PhiNode newV = peel.getDuplicatedNode((ValuePhiNode) v);
+                    PhiNode newV = peel.getDuplicatedNode((PhiNode) v);
                     if (newV != null) {
                         phi.setValueAt(i, newV);
                     }
@@ -225,7 +230,7 @@ public class LoopFragmentInside extends LoopFragment {
 
     /**
      * Gets the corresponding value in this fragment.
-     *
+     * 
      * @param b original value
      * @return corresponding value in the peel
      */
@@ -303,7 +308,7 @@ public class LoopFragmentInside extends LoopFragment {
                         }
                     });
                 }
-                mergedInitializers.put((ValuePhiNode) phi, initializer);
+                mergedInitializers.put(phi, initializer);
             }
         }
         return newExit;
