@@ -39,10 +39,6 @@ public class NodesToDoubles {
         nodeProbabilities.put(n, value);
     }
 
-    public boolean contains(FixedNode n) {
-        return nodeProbabilities.containsKey(n);
-    }
-
     public double get(FixedNode n) {
         Double value = nodeProbabilities.get(n);
         assert value != null;

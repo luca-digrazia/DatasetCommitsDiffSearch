@@ -653,12 +653,7 @@ public class InliningUtil {
                     assert concretesProbability >= 0.0;
                     probability[i] = concretesProbability;
                     if (i > 0) {
-                        double prevProbability = probability[i - 1];
-                        if (prevProbability == 1.0) {
-                            probability[i] = 1.0;
-                        } else {
-                            probability[i] = Math.max(0.0, probability[i] / (1.0 - prevProbability));
-                        }
+                        probability[i] = Math.max(0.0, probability[i] / 1.0 - probability[i - 1]);
                     }
                 }
 

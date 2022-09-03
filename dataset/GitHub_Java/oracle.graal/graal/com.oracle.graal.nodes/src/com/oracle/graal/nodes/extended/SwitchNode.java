@@ -34,7 +34,7 @@ import com.oracle.graal.nodes.type.*;
  */
 public abstract class SwitchNode extends ControlSplitNode {
 
-    @Successor private final NodeSuccessorList<AbstractBeginNode> successors;
+    @Successor protected final NodeSuccessorList<AbstractBeginNode> successors;
     @Input private ValueNode value;
     private double[] keyProbabilities;
     private int[] keySuccessors;
