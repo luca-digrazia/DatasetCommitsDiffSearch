@@ -39,42 +39,23 @@ import com.oracle.truffle.object.Transition.ObjectTypeTransition;
 import com.oracle.truffle.object.Transition.RemovePropertyTransition;
 import com.oracle.truffle.object.Transition.ReservePrimitiveArrayTransition;
 
-/** @since 0.17 or earlier */
 public abstract class LayoutStrategy {
-    /**
-     * @since 0.17 or earlier
-     */
-    protected LayoutStrategy() {
-    }
-
-    /** @since 0.17 or earlier */
-    @Deprecated protected static final LocationFactory DEFAULT_LAYOUT_FACTORY = new LocationFactory() {
+    protected static final LocationFactory DEFAULT_LAYOUT_FACTORY = new LocationFactory() {
         public Location createLocation(Shape shape, Object value) {
             return ((ShapeImpl) shape).allocator().locationForValue(value, true, value != null);
         }
     };
 
-    /** @since 0.18 */
-    protected LocationFactory getDefaultLocationFactory() {
-        return DEFAULT_LAYOUT_FACTORY;
-    }
-
-    /** @since 0.17 or earlier */
     protected abstract boolean updateShape(DynamicObject object);
 
-    /** @since 0.17 or earlier */
     protected abstract ShapeImpl ensureValid(ShapeImpl newShape);
 
-    /** @since 0.17 or earlier */
     protected abstract ShapeImpl ensureSpace(ShapeImpl shape, Location location);
 
-    /** @since 0.17 or earlier */
     public abstract BaseAllocator createAllocator(LayoutImpl shape);
 
-    /** @since 0.17 or earlier */
     public abstract BaseAllocator createAllocator(ShapeImpl shape);
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl defineProperty(ShapeImpl shape, Object key, Object value, int flags, LocationFactory locationFactory) {
         ShapeImpl oldShape = shape;
         if (!oldShape.isValid()) {
@@ -84,7 +65,6 @@ public abstract class LayoutStrategy {
         return defineProperty(oldShape, key, value, flags, locationFactory, existing);
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl defineProperty(ShapeImpl oldShape, Object key, Object value, int flags, LocationFactory locationFactory, Property existing) {
         if (existing == null) {
             Property property = Property.create(key, locationFactory.createLocation(oldShape, value), flags);
@@ -103,7 +83,6 @@ public abstract class LayoutStrategy {
         }
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl definePropertyGeneralize(ShapeImpl oldShape, Property oldProperty, Object value, LocationFactory locationFactory) {
         if (oldProperty.getLocation() instanceof DeclaredLocation) {
             Property property = oldProperty.relocate(locationFactory.createLocation(oldShape, value));
@@ -113,7 +92,6 @@ public abstract class LayoutStrategy {
         }
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl definePropertyChangeFlags(ShapeImpl oldShape, Property oldProperty, Object value, int flags) {
         Location oldLocation = oldProperty.getLocation();
         Location newLocation;
@@ -127,7 +105,6 @@ public abstract class LayoutStrategy {
         return newShape;
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl generalizeProperty(Property oldProperty, Object value, ShapeImpl currentShape, ShapeImpl nextShape) {
         Location oldLocation = oldProperty.getLocation();
         Location newLocation = currentShape.allocator().locationForValueUpcast(value, oldLocation);
@@ -136,15 +113,13 @@ public abstract class LayoutStrategy {
         return newShape;
     }
 
-    /** @since 0.17 or earlier */
     protected void propertySetFallback(Property property, DynamicObject store, Object value, ShapeImpl currentShape) {
         ShapeImpl oldShape = currentShape;
-        ShapeImpl newShape = defineProperty(oldShape, property.getKey(), value, property.getFlags(), getDefaultLocationFactory());
+        ShapeImpl newShape = defineProperty(oldShape, property.getKey(), value, property.getFlags(), DEFAULT_LAYOUT_FACTORY);
         Property newProperty = newShape.getProperty(property.getKey());
         newProperty.setSafe(store, value, oldShape, newShape);
     }
 
-    /** @since 0.17 or earlier */
     protected void propertySetWithShapeFallback(Property property, DynamicObject store, Object value, ShapeImpl currentShape, ShapeImpl nextShape) {
         ShapeImpl oldShape = currentShape;
         ShapeImpl newNextShape = generalizeProperty(property, value, oldShape, nextShape);
@@ -152,7 +127,6 @@ public abstract class LayoutStrategy {
         newProperty.setSafe(store, value, oldShape, newNextShape);
     }
 
-    /** @since 0.17 or earlier */
     protected void objectDefineProperty(DynamicObjectImpl object, Object key, Object value, int flags, LocationFactory locationFactory, ShapeImpl currentShape) {
         ShapeImpl oldShape = currentShape;
         Property oldProperty = oldShape.getProperty(key);
@@ -166,31 +140,26 @@ public abstract class LayoutStrategy {
         }
     }
 
-    /** @since 0.17 or earlier */
     protected void objectRemoveProperty(DynamicObjectImpl object, Property property, ShapeImpl currentShape) {
         ShapeImpl oldShape = currentShape;
         ShapeImpl newShape = oldShape.removeProperty(property);
         reshapeAfterDelete(object, oldShape, newShape, ShapeImpl.findCommonAncestor(oldShape, newShape));
     }
 
-    /** @since 0.17 or earlier */
     protected void reshapeAfterDelete(DynamicObjectImpl object, ShapeImpl oldShape, ShapeImpl newShape, ShapeImpl deletedParentShape) {
         DynamicObject original = object.cloneWithShape(oldShape);
         object.setShapeAndResize(newShape);
         object.copyProperties(original, deletedParentShape);
     }
 
-    /** @since 0.17 or earlier */
     protected static Property relocateShadow(Property property, Location newLocation) {
         return ((PropertyImpl) property).relocateShadow(newLocation);
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl replaceProperty(ShapeImpl shape, Property oldProperty, Property newProperty) {
         return directReplaceProperty(shape, oldProperty, newProperty);
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl removeProperty(ShapeImpl shape, Property property) {
         RemovePropertyTransition transition = new RemovePropertyTransition(property);
         ShapeImpl cachedShape = shape.queryTransition(transition);
@@ -222,7 +191,6 @@ public abstract class LayoutStrategy {
         }
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl directReplaceProperty(ShapeImpl shape, Property oldProperty, Property newProperty) {
         Transition replacePropertyTransition = new Transition.DirectReplacePropertyTransition(oldProperty, newProperty);
         ShapeImpl cachedShape = shape.queryTransition(replacePropertyTransition);
@@ -237,12 +205,10 @@ public abstract class LayoutStrategy {
         return newShape;
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl addProperty(ShapeImpl shape, Property property) {
         return addProperty(shape, property, true);
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl addProperty(ShapeImpl shape, Property property, boolean ensureValid) {
         assert property.isShadow() || !(shape.hasProperty(property.getKey())) : "duplicate property " + property.getKey();
 
@@ -259,7 +225,6 @@ public abstract class LayoutStrategy {
         return newShape;
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl applyTransition(ShapeImpl shape, Transition transition, boolean append) {
         if (transition instanceof AddPropertyTransition) {
             Property property = ((AddPropertyTransition) transition).getProperty();
@@ -286,7 +251,6 @@ public abstract class LayoutStrategy {
         }
     }
 
-    /** @since 0.17 or earlier */
     protected ShapeImpl addPrimitiveExtensionArray(ShapeImpl shape) {
         LayoutImpl layout = shape.getLayout();
         assert layout.hasPrimitiveExtensionArray() && !shape.hasPrimitiveArray();
@@ -304,8 +268,6 @@ public abstract class LayoutStrategy {
 
     /**
      * Get the (parent) shape that holds the given property.
-     *
-     * @since 0.17 or earlier
      */
     protected static ShapeImpl getShapeFromProperty(ShapeImpl shape, Object propertyName) {
         ShapeImpl current = shape;
@@ -322,8 +284,6 @@ public abstract class LayoutStrategy {
 
     /**
      * Get the (parent) shape that holds the given property.
-     *
-     * @since 0.17 or earlier
      */
     protected static ShapeImpl getShapeFromProperty(ShapeImpl shape, Property prop) {
         ShapeImpl current = shape;
