@@ -40,8 +40,6 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.UnmodifiableEconomicMap;
-import org.graalvm.compiler.api.replacements.MethodSubstitution;
-import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.core.common.CancellationBailoutException;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.GraalOptions;
@@ -189,7 +187,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         private Cancellable cancellable = null;
         private final DebugContext debug;
         private NodeSourcePosition callerContext;
-        private boolean isSubstitution;
 
         /**
          * Creates a builder for a graph.
@@ -217,14 +214,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
 
         public Builder name(String s) {
             this.name = s;
-            return this;
-        }
-
-        /**
-         * @see StructuredGraph#isSubstitution
-         */
-        public Builder setIsSubstitution(boolean flag) {
-            this.isSubstitution = flag;
             return this;
         }
 
@@ -314,22 +303,8 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
 
         public StructuredGraph build() {
             List<ResolvedJavaMethod> inlinedMethods = recordInlinedMethods ? new ArrayList<>() : null;
-            // @formatter:off
-            return new StructuredGraph(name,
-                            rootMethod,
-                            entryBCI,
-                            assumptions,
-                            speculationLog,
-                            useProfilingInfo,
-                            isSubstitution,
-                            inlinedMethods,
-                            trackNodeSourcePosition,
-                            compilationId,
-                            options,
-                            debug,
-                            cancellable,
-                            callerContext);
-            // @formatter:on
+            return new StructuredGraph(name, rootMethod, entryBCI, assumptions, speculationLog, useProfilingInfo, inlinedMethods,
+                            trackNodeSourcePosition, compilationId, options, debug, cancellable, callerContext);
         }
     }
 
@@ -348,8 +323,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     private boolean isAfterExpandLogic = false;
     private final boolean useProfilingInfo;
     private final Cancellable cancellable;
-    private final boolean isSubstitution;
-
     /**
      * The assumptions made while constructing and transforming this graph.
      */
@@ -396,7 +369,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                     Assumptions assumptions,
                     SpeculationLog speculationLog,
                     boolean useProfilingInfo,
-                    boolean isSubstitution,
                     List<ResolvedJavaMethod> methods,
                     SourcePositionTracking trackNodeSourcePosition,
                     CompilationIdentifier compilationId,
@@ -414,25 +386,11 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         this.methods = methods;
         this.speculationLog = speculationLog;
         this.useProfilingInfo = useProfilingInfo;
-        this.isSubstitution = isSubstitution;
-        assert checkIsSubstitutionInvariants(method, isSubstitution);
         this.trackNodeSourcePosition = trackNodeSourcePosition;
         assert trackNodeSourcePosition != null;
         this.cancellable = cancellable;
         this.inliningLog = new InliningLog(rootMethod, GraalOptions.TraceInlining.getValue(options));
         this.callerContext = context;
-    }
-
-    private static boolean checkIsSubstitutionInvariants(ResolvedJavaMethod method, boolean isSubstitution) {
-        if (method != null) {
-            if (method.getAnnotation(Snippet.class) != null || method.getAnnotation(MethodSubstitution.class) != null) {
-                assert isSubstitution : "Graph for method " + method.format("%H.%n(%p)") +
-                                " annotated by " + Snippet.class.getName() + " or " +
-                                MethodSubstitution.class.getName() +
-                                " must have its `isSubstitution` field set to true";
-            }
-        }
-        return true;
     }
 
     public void setLastSchedule(ScheduleResult result) {
@@ -577,7 +535,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                         assumptions == null ? null : new Assumptions(),
                         speculationLog,
                         useProfilingInfo,
-                        isSubstitution,
                         methods != null ? new ArrayList<>(methods) : null,
                         trackNodeSourcePosition,
                         newCompilationId,
@@ -899,15 +856,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
      */
     public boolean useProfilingInfo() {
         return useProfilingInfo;
-    }
-
-    /**
-     * Returns true if this graph is built without parsing the {@linkplain #method() root method} or
-     * if the root method is annotated by {@link Snippet} or {@link MethodSubstitution}. This is
-     * preferred over querying annotations directly as querying annotations can cause class loading.
-     */
-    public boolean isSubstitution() {
-        return isSubstitution;
     }
 
     /**
