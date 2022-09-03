@@ -52,7 +52,7 @@ public final class SLRootNode extends RootNode {
         super(null, frameDescriptor);
         /* Deep copy the body before any specialization occurs during execution. */
         this.uninitializedBodyNode = NodeUtil.cloneNode(bodyNode);
-        this.bodyNode = bodyNode;
+        this.bodyNode = adoptChild(bodyNode);
         this.name = name;
     }
 
