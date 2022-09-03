@@ -99,7 +99,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
          * the jump. When the block is seen the second time, a {@link MergeNode} is created to
          * correctly merge the now two different predecessor states.
          */
-        @NodeInfo
         protected static class BlockPlaceholderNode extends FixedWithNextNode {
 
             /*
@@ -537,7 +536,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode genAnd(Kind kind, ValueNode x, ValueNode y) {
-                return AndNode.create(x, y);
+                return new AndNode(x, y);
             }
 
             @Override

@@ -40,10 +40,10 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.debug.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.options.*;
@@ -253,8 +253,8 @@ public class MonitorSnippets implements Snippets {
             // assuming both the stack pointer and page_size have their least
             // significant 2 bits cleared and page_size is a power of 2
             final Word alignedMask = Word.unsigned(wordSize() - 1);
-            final Word stackPointer = registerAsWord(stackPointerRegister).add(config().stackBias);
-            if (probability(VERY_SLOW_PATH_PROBABILITY, currentMark.subtract(stackPointer).and(alignedMask.subtract(pageSize())).notEqual(0))) {
+            final Word stackPointer = registerAsWord(stackPointerRegister);
+            if (probability(VERY_SLOW_PATH_PROBABILITY, currentMark.subtract(stackPointer.add(config().stackBias)).and(alignedMask.subtract(pageSize())).notEqual(0))) {
                 // Most likely not a recursive lock, go into a slow runtime call
                 traceObject(trace, "+lock{stub:failed-cas}", object, true);
                 monitorenterStubC(MONITORENTER, object, lock);
@@ -495,8 +495,8 @@ public class MonitorSnippets implements Snippets {
                 if (nodes.isEmpty()) {
                     // Only insert the nodes if this is the first monitorenter being lowered.
                     JavaType returnType = initCounter.getMethod().getSignature().getReturnType(initCounter.getMethod().getDeclaringClass());
-                    MethodCallTargetNode callTarget = graph.add(MethodCallTargetNode.create(InvokeKind.Static, initCounter.getMethod(), new ValueNode[0], returnType));
-                    InvokeNode invoke = graph.add(InvokeNode.create(callTarget, 0));
+                    MethodCallTargetNode callTarget = graph.add(new MethodCallTargetNode(InvokeKind.Static, initCounter.getMethod(), new ValueNode[0], returnType));
+                    InvokeNode invoke = graph.add(new InvokeNode(callTarget, 0));
                     invoke.setStateAfter(graph.start().stateAfter());
                     graph.addAfterFixed(graph.start(), invoke);
 
@@ -508,10 +508,10 @@ public class MonitorSnippets implements Snippets {
                         returnType = checkCounter.getMethod().getSignature().getReturnType(checkCounter.getMethod().getDeclaringClass());
                         String msg = "unbalanced monitors in " + graph.method().format("%H.%n(%p)") + ", count = %d";
                         ConstantNode errMsg = ConstantNode.forConstant(HotSpotObjectConstant.forObject(msg), providers.getMetaAccess(), graph);
-                        callTarget = graph.add(MethodCallTargetNode.create(InvokeKind.Static, checkCounter.getMethod(), new ValueNode[]{errMsg}, returnType));
-                        invoke = graph.add(InvokeNode.create(callTarget, 0));
+                        callTarget = graph.add(new MethodCallTargetNode(InvokeKind.Static, checkCounter.getMethod(), new ValueNode[]{errMsg}, returnType));
+                        invoke = graph.add(new InvokeNode(callTarget, 0));
                         List<ValueNode> stack = Collections.emptyList();
-                        FrameState stateAfter = FrameState.create(graph.method(), BytecodeFrame.AFTER_BCI, new ValueNode[0], stack, new ValueNode[0], new MonitorIdNode[0], false, false);
+                        FrameState stateAfter = new FrameState(graph.method(), BytecodeFrame.AFTER_BCI, new ValueNode[0], stack, new ValueNode[0], new MonitorIdNode[0], false, false);
                         invoke.setStateAfter(graph.add(stateAfter));
                         graph.addBeforeFixed(ret, invoke);
 
