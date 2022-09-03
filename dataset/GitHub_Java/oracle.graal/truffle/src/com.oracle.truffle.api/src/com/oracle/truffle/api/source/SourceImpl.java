@@ -28,8 +28,6 @@ import java.net.URI;
 import java.net.URL;
 import java.util.Objects;
 
-import org.graalvm.polyglot.io.ByteSequence;
-
 final class SourceImpl extends Source {
 
     private final Key key;
@@ -56,30 +54,7 @@ final class SourceImpl extends Source {
 
     @Override
     public CharSequence getCharacters() {
-        if (hasCharacters()) {
-            return (CharSequence) key.content;
-        } else {
-            throw new UnsupportedOperationException();
-        }
-    }
-
-    @Override
-    public ByteSequence getBytes() {
-        if (hasBytes()) {
-            return (ByteSequence) key.content;
-        } else {
-            throw new UnsupportedOperationException();
-        }
-    }
-
-    @Override
-    public boolean hasBytes() {
-        return key.content instanceof ByteSequence;
-    }
-
-    @Override
-    public boolean hasCharacters() {
-        return key.content instanceof CharSequence;
+        return key.characters;
     }
 
     @Override
@@ -105,11 +80,6 @@ final class SourceImpl extends Source {
     @Override
     public boolean isInternal() {
         return key.internal;
-    }
-
-    @Override
-    boolean isLegacy() {
-        return key.legacy;
     }
 
     @Override
@@ -166,7 +136,7 @@ final class SourceImpl extends Source {
 
     static final class Key {
 
-        final Object content;
+        final CharSequence characters;
         final URI uri;
         final URL url;
         final String name;
@@ -176,11 +146,9 @@ final class SourceImpl extends Source {
         final boolean internal;
         final boolean interactive;
         final boolean cached;
-        // TODO remove legacy field with deprecated Source builders.
-        final boolean legacy;
 
-        Key(Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy) {
-            this.content = content;
+        Key(CharSequence characters, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached) {
+            this.characters = characters;
             this.mimeType = mimeType;
             this.language = languageId;
             this.name = name;
@@ -190,12 +158,11 @@ final class SourceImpl extends Source {
             this.cached = cached;
             this.url = url;
             this.uri = uri;
-            this.legacy = legacy;
         }
 
         @Override
         public int hashCode() {
-            int result = 31 * 1 + ((content == null) ? 0 : content.hashCode());
+            int result = 31 * 1 + ((characters == null) ? 0 : characters.hashCode());
             result = 31 * result + (interactive ? 1231 : 1237);
             result = 31 * result + (internal ? 1231 : 1237);
             result = 31 * result + (cached ? 1231 : 1237);
@@ -215,7 +182,7 @@ final class SourceImpl extends Source {
             } else if (!(obj instanceof Key)) {
                 return false;
             }
-            assert content != null;
+            assert characters != null;
             Key other = (Key) obj;
             /*
              * Compare characters last as it is likely the most expensive comparison in the worst
@@ -230,48 +197,31 @@ final class SourceImpl extends Source {
                             interactive == other.interactive && //
                             internal == other.internal &&
                             cached == other.cached &&
-                            compareContent(other);
+                            compareCharacters(other);
         }
 
-        private boolean compareContent(Key other) {
-            Object otherContent = other.content;
-            if (content instanceof CharSequence && otherContent instanceof CharSequence) {
-                return compareCharacters((CharSequence) content, (CharSequence) otherContent);
-            } else if (content instanceof ByteSequence && otherContent instanceof ByteSequence) {
-                return compareBytes((ByteSequence) content, (ByteSequence) otherContent);
-            } else {
-                return false;
-            }
-        }
-
-        private static boolean compareBytes(ByteSequence bytes, ByteSequence other) {
-            if (bytes == other) {
-                return true;
-            } else if (bytes == null) {
-                return false;
-            } else if (bytes.length() != other.length()) {
-                return false;
-            } else {
-                // trusted class
-                return bytes.equals(other);
-            }
-        }
-
-        private static boolean compareCharacters(CharSequence characters, CharSequence other) {
-            if (characters == other) {
+        private boolean compareCharacters(Key other) {
+            CharSequence otherCharacters = other.characters;
+            if (characters == otherCharacters) {
                 return true;
             } else if (characters == null) {
                 return false;
-            } else if (characters.length() != other.length()) {
+            } else if (characters.length() != otherCharacters.length()) {
                 return false;
             } else {
-                assert other != null;
-                return Objects.equals(characters.toString(), other.toString());
+                assert otherCharacters != null;
+                return Objects.equals(characters.toString(), otherCharacters.toString());
             }
         }
 
-        SourceImpl toSource() {
+        SourceImpl toSourceInterned() {
+            assert cached;
             return new SourceImpl(this);
+        }
+
+        SourceImpl toSourceNotInterned() {
+            assert !cached;
+            return new SourceImpl(this, this);
         }
 
     }
