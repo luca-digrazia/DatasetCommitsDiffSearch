@@ -25,24 +25,33 @@ package com.oracle.graal.hotspot;
 import java.lang.annotation.*;
 
 /**
- * Refers to a C++ constant in the VM.
+ * Refers to a C++ type in the VM.
  */
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface HotSpotVMConstant {
+public @interface HotSpotVMType {
 
     /**
-     * Returns the name of the constant.
+     * Types of information this annotation can return.
+     */
+    enum Type {
+        /**
+         * Returns the size of the type (C++ {@code sizeof()}).
+         */
+        SIZE;
+    }
+
+    /**
+     * Specifies what type of information to return.
      *
-     * @return name of constant
+     * @see Type
+     */
+    Type get();
+
+    /**
+     * Returns the name of the type.
+     *
+     * @return name of type
      */
     String name();
-
-    /**
-     * List of architectures where this constant is required. Names are derived from
-     * {@link HotSpotVMConfig#getHostArchitectureName()}. An empty list implies that the constant is
-     * required on all architectures.
-     */
-    String[] archs() default {};
-
 }
