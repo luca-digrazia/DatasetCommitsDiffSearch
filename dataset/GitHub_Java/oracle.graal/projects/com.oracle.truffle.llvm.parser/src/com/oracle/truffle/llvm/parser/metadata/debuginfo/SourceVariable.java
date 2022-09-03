@@ -35,12 +35,11 @@ import java.util.HashSet;
 import java.util.List;
 
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
-import com.oracle.truffle.llvm.parser.model.symbols.constants.UndefinedConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgDeclareInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgValueInstruction;
 import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
@@ -112,17 +111,7 @@ public final class SourceVariable implements SymbolImpl {
     }
 
     public boolean isSingleValue() {
-        if (values == null || values.size() != 1 || fragments != null) {
-            return false;
-        }
-
-        if (declarations == null || declarations.isEmpty()) {
-            return true;
-        } else if (declarations.size() == 1) {
-            final DbgDeclareInstruction dbgDeclare = declarations.iterator().next();
-            return dbgDeclare.getValue() instanceof UndefinedConstant;
-        }
-        return false;
+        return !hasDeclaration() && values != null && values.size() == 1 && fragments == null;
     }
 
     public DbgValueInstruction getSingleValue() {
