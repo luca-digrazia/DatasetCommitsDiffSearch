@@ -25,31 +25,28 @@ package com.oracle.graal.replacements;
 import static com.oracle.graal.java.BytecodeParserOptions.DumpDuringGraphBuilding;
 import static com.oracle.graal.java.BytecodeParserOptions.FailedLoopExplosionIsFatal;
 import static com.oracle.graal.java.BytecodeParserOptions.MaximumLoopExplosionCount;
-import static jdk.vm.ci.common.JVMCIError.unimplemented;
+import static jdk.internal.jvmci.common.JVMCIError.unimplemented;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.options.Option;
-import jdk.vm.ci.options.OptionValue;
+import jdk.internal.jvmci.code.Architecture;
+import jdk.internal.jvmci.code.BailoutException;
+import jdk.internal.jvmci.code.BytecodePosition;
+import jdk.internal.jvmci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.meta.DeoptimizationAction;
+import jdk.internal.jvmci.meta.DeoptimizationReason;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.JavaType;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.options.Option;
+import jdk.internal.jvmci.options.OptionValue;
 
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
@@ -85,7 +82,6 @@ import com.oracle.graal.nodes.StateSplit;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.UnwindNode;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.ForeignCallNode;
 import com.oracle.graal.nodes.extended.IntegerSwitchNode;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
 import com.oracle.graal.nodes.java.MonitorIdNode;
@@ -627,34 +623,13 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
     protected abstract EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method, boolean isIntrinsic);
 
-    @SuppressWarnings("try")
     @Override
     protected void handleFixedNode(MethodScope s, LoopScope loopScope, int nodeOrderId, FixedNode node) {
         PEMethodScope methodScope = (PEMethodScope) s;
         if (node instanceof SimpleInfopointNode && methodScope.isInlinedMethod()) {
             InliningUtil.addSimpleInfopointCaller((SimpleInfopointNode) node, methodScope.getBytecodePosition());
-
-        } else if (node instanceof ForeignCallNode) {
-            ForeignCallNode foreignCall = (ForeignCallNode) node;
-            if (foreignCall.getBci() == BytecodeFrame.UNKNOWN_BCI) {
-                foreignCall.setBci(methodScope.invokeData.invoke.bci());
-            }
         }
-
-        BytecodePosition pos = node.getNodeContext(BytecodePosition.class);
-        if (pos != null && methodScope.isInlinedMethod()) {
-            BytecodePosition newPosition = pos.addCaller(methodScope.getBytecodePosition());
-            try (DebugCloseable scope = node.graph().withoutNodeContext()) {
-                super.handleFixedNode(s, loopScope, nodeOrderId, node);
-            }
-            if (node.isAlive()) {
-                node.setNodeContext(newPosition);
-                node.verify();
-            }
-        } else {
-            super.handleFixedNode(s, loopScope, nodeOrderId, node);
-        }
-
+        super.handleFixedNode(s, loopScope, nodeOrderId, node);
     }
 
     @Override
@@ -730,12 +705,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         PEMethodScope methodScope = (PEMethodScope) s;
 
         if (methodScope.isInlinedMethod()) {
-            BytecodePosition pos = node.getNodeContext(BytecodePosition.class);
-            if (pos != null) {
-                BytecodePosition bytecodePosition = methodScope.getBytecodePosition();
-                node.setNodeContext(pos.addCaller(bytecodePosition));
-                node.verify();
-            }
             if (node instanceof FrameState) {
                 FrameState frameState = (FrameState) node;
 
@@ -743,16 +712,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 if (frameState.bci < 0) {
                     ensureExceptionStateDecoded(methodScope);
                 }
-                List<ValueNode> invokeArgsList = null;
-                if (frameState.bci == BytecodeFrame.BEFORE_BCI) {
-                    /*
-                     * We know that the argument list is only used in this case, so avoid the List
-                     * allocation for "normal" bcis.
-                     */
-                    invokeArgsList = Arrays.asList(methodScope.arguments);
-                }
-                return InliningUtil.processFrameState(frameState, methodScope.invokeData.invoke, methodScope.method, methodScope.exceptionState, methodScope.outerState, true, methodScope.method,
-                                invokeArgsList);
+                return InliningUtil.processFrameState(frameState, methodScope.invokeData.invoke, methodScope.method, methodScope.exceptionState, methodScope.outerState, true);
 
             } else if (node instanceof MonitorIdNode) {
                 ensureOuterStateDecoded(methodScope);
