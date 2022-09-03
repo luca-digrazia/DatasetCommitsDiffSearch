@@ -41,7 +41,6 @@ import static org.graalvm.word.LocationIdentity.any;
 import java.lang.ref.Reference;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
-import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
@@ -192,7 +191,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
     public DefaultHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
-        super(metaAccess, foreignCalls, target, runtime.getVMConfig().useCompressedOops);
+        super(metaAccess, foreignCalls, target);
         this.runtime = runtime;
         this.registers = registers;
         this.constantReflection = constantReflection;
@@ -491,18 +490,20 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         }
     }
 
-    private CompressEncoding getOopEncoding() {
-        return runtime.getVMConfig().getOopEncoding();
+    @Override
+    protected Stamp loadStamp(Stamp stamp, JavaKind kind, boolean compressible) {
+        if (kind == JavaKind.Object && compressible && runtime.getVMConfig().useCompressedOops) {
+            return HotSpotNarrowOopStamp.compressed((ObjectStamp) stamp, runtime.getVMConfig().getOopEncoding());
+        }
+        return super.loadStamp(stamp, kind, compressible);
     }
 
     @Override
-    protected Stamp loadCompressedStamp(ObjectStamp stamp) {
-        return HotSpotNarrowOopStamp.compressed(stamp, getOopEncoding());
-    }
-
-    @Override
-    protected ValueNode newCompressionNode(CompressionOp op, ValueNode value) {
-        return new HotSpotCompressionNode(op, value, getOopEncoding());
+    protected ValueNode implicitLoadConvert(JavaKind kind, ValueNode value, boolean compressible) {
+        if (kind == JavaKind.Object && compressible && runtime.getVMConfig().useCompressedOops) {
+            return new HotSpotCompressionNode(CompressionOp.Uncompress, value, runtime.getVMConfig().getOopEncoding());
+        }
+        return super.implicitLoadConvert(kind, value, compressible);
     }
 
     @Override
@@ -510,6 +511,14 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         HotSpotResolvedJavaField field = (HotSpotResolvedJavaField) f;
         JavaConstant base = constantReflection.asJavaClass(field.getDeclaringClass());
         return ConstantNode.forConstant(base, metaAccess, graph);
+    }
+
+    @Override
+    protected ValueNode implicitStoreConvert(JavaKind kind, ValueNode value, boolean compressible) {
+        if (kind == JavaKind.Object && compressible && runtime.getVMConfig().useCompressedOops) {
+            return new HotSpotCompressionNode(CompressionOp.Compress, value, runtime.getVMConfig().getOopEncoding());
+        }
+        return super.implicitStoreConvert(kind, value, compressible);
     }
 
     @Override
@@ -785,10 +794,5 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     @Override
     public int arrayLengthOffset() {
         return runtime.getVMConfig().arrayOopDescLengthOffset();
-    }
-
-    @Override
-    protected final JavaKind getStorageKind(ResolvedJavaField field) {
-        return field.getJavaKind();
     }
 }
