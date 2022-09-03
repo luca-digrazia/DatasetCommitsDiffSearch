@@ -38,9 +38,9 @@ public class TraceUtil {
 
     public static AbstractBlockBase<?> getBestTraceInterPredecessor(TraceBuilderResult<?> traceResult, AbstractBlockBase<?> block) {
         AbstractBlockBase<?> bestPred = null;
-        int bestTraceId = traceResult.getTraceForBlock(block).getId();
+        int bestTraceId = traceResult.getTraceForBlock(block);
         for (AbstractBlockBase<?> pred : block.getPredecessors()) {
-            int predTraceId = traceResult.getTraceForBlock(pred).getId();
+            int predTraceId = traceResult.getTraceForBlock(pred);
             if (predTraceId < bestTraceId) {
                 bestPred = pred;
                 bestTraceId = predTraceId;
