@@ -297,6 +297,7 @@ public final class CPUSampler implements Closeable {
      * @since 0.29
      */
     public synchronized void setCollecting(boolean collecting) {
+        verifyConfigAllowed();
         if (this.collecting != collecting) {
             this.collecting = collecting;
             resetSampling();
