@@ -319,7 +319,7 @@ final class PolyglotLanguageContext implements VMObject {
 
     }
 
-    static final class Generic {
+    final static class Generic {
         private Generic() {
             throw new AssertionError("no instances");
         }

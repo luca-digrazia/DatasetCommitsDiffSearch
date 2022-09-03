@@ -66,11 +66,7 @@ public final class TruffleContext implements AutoCloseable {
     final Object impl;
 
     TruffleContext(TruffleLanguage.Env env, Map<String, Object> config) {
-        this.impl = AccessAPI.engineAccess().createInternalContext(env.getVMObject(), config, this);
-    }
-
-    TruffleContext(Object impl) {
-        this.impl = impl;
+        this.impl = AccessAPI.engineAccess().createInternalContext(env.getVMObject(), config);
     }
 
     private TruffleContext() {
@@ -92,26 +88,14 @@ public final class TruffleContext implements AutoCloseable {
     }
 
     /**
-     * Get a parent context of this context, if any. This provides the hierarchy of inner contexts.
-     *
-     * @return a parent context, or <code>null</code> if there is no parent
-     * @since 0.30
-     */
-    @TruffleBoundary
-    public TruffleContext getParent() {
-        return AccessAPI.engineAccess().getParentContext(impl);
-    }
-
-    /**
      * Enters this context and returns an object representing the previous context. Calls to enter
      * must be followed by a call to {@link #leave(Object)} in a finally block and the previous
      * context must be passed as an argument. It is allowed to enter a context multiple times from
      * the same thread. If the context is currently not entered by any thread then it is allowed be
-     * entered by an arbitrary thread. Entering the context from two or more different threads at
-     * the same time is possible, unless one of the loaded languages denies access to the thread, in
-     * which case an {@link IllegalStateException} is thrown. The result of the enter function is
-     * unspecified and must only be passed to {@link #leave(Object)}. The result value must not be
-     * stored permanently.
+     * entered by an arbitrary thread. Entering the context from two different threads at the same
+     * time causes an {@link IllegalStateException}. The result of the enter function is unspecified
+     * and must only be passed to {@link #leave(Object)}. The result value must not be stored
+     * permanently.
      * <p>
      * Entering a language context is designed for compilation and is most efficient if the
      * {@link TruffleContext context} instance is compilation final.
