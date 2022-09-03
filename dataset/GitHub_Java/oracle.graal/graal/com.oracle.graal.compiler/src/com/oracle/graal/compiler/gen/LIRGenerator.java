@@ -493,6 +493,11 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
         append(new ParametersOp(params));
 
+        XirSnippet prologue = xir.genPrologue(null, method);
+        if (prologue != null) {
+            emitXir(prologue, null, null, false);
+        }
+
         for (LocalNode local : graph.getNodes(LocalNode.class)) {
             CiValue param = params[local.index()];
             assert param.kind == local.kind().stackKind();
@@ -585,13 +590,24 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     @Override
+    public void visitExceptionObject(ExceptionObjectNode x) {
+        XirSnippet snippet = xir.genExceptionObject(site(x));
+        LIRDebugInfo info = state();
+        emitXir(snippet, x, info, true);
+    }
+
+    @Override
     public void visitReturn(ReturnNode x) {
         CiValue operand = CiValue.IllegalValue;
         if (!x.kind().isVoid()) {
             operand = resultOperandFor(x.kind());
             emitMove(operand(x.result()), operand);
         }
-        emitReturn(operand);
+        XirSnippet epilogue = xir.genEpilogue(site(x), method);
+        if (epilogue != null) {
+            emitXir(epilogue, x, null, false);
+            emitReturn(operand);
+        }
     }
 
     protected abstract void emitReturn(CiValue input);
@@ -605,11 +621,11 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         moveToPhi(end.merge(), end);
     }
 
-    /**
-     * Runtime specific classes can override this to insert a safepoint at the end of a loop.
-     */
     @Override
     public void visitLoopEnd(LoopEndNode x) {
+        if (GraalOptions.GenLoopSafepoints && x.hasSafepointPolling()) {
+            emitSafepointPoll(x);
+        }
     }
 
     private ArrayList<CiValue> phiValues = new ArrayList<>();
@@ -652,6 +668,14 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             return newOperand;
         } else {
             return result;
+        }
+    }
+
+
+    public void emitSafepointPoll(FixedNode x) {
+        if (!lastState.method().noSafepointPolls()) {
+            XirSnippet snippet = xir.genSafepointPoll(site(x));
+            emitXir(snippet, x, state(), false);
         }
     }
 
