@@ -26,19 +26,16 @@ package com.oracle.truffle.tools.profiler.impl;
 
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.tools.profiler.CPUSampler;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.PolyglotRuntime;
+import com.oracle.truffle.tools.profiler.CPUTracer;
 import com.oracle.truffle.tools.profiler.MemoryTracer;
-import org.graalvm.options.OptionCategory;
-import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
-
-import java.util.LinkedList;
-import java.util.List;
 
 /**
  * The {@linkplain TruffleInstrument instrument} for the memory tracer.
  *
- * @since 0.29
+ * @since 0.30
  */
 @TruffleInstrument.Registration(id = MemoryTracerInstrument.ID, name = "Memory Tracer", version = "0.1", services = {MemoryTracer.class})
 public class MemoryTracerInstrument extends TruffleInstrument {
@@ -46,7 +43,7 @@ public class MemoryTracerInstrument extends TruffleInstrument {
     /**
      * Default constructor.
      *
-     * @since 0.29
+     * @since 0.30
      */
     public MemoryTracerInstrument() {
     }
@@ -54,14 +51,22 @@ public class MemoryTracerInstrument extends TruffleInstrument {
     /**
      * A string used to identify the tracer, i.e. as the name of the tool.
      *
-     * @since 0.29
+     * @since 0.30
      */
     public static final String ID = "memtracer";
-    private static MemoryTracer tracer;
+    private MemoryTracer tracer;
     private static ProfilerToolFactory<MemoryTracer> factory;
-    OptionDescriptors descriptors = null;
 
+    /**
+     * Sets the factory which instantiates the {@link MemoryTracer}.
+     *
+     * @param factory the factory which instantiates the {@link MemoryTracer}.
+     * @since 0.30
+     */
     public static void setFactory(ProfilerToolFactory<MemoryTracer> factory) {
+        if (factory == null || !factory.getClass().getName().startsWith("com.oracle.truffle.tools.profiler")) {
+            throw new IllegalArgumentException("Wrong factory: " + factory);
+        }
         MemoryTracerInstrument.factory = factory;
     }
 
@@ -71,22 +76,38 @@ public class MemoryTracerInstrument extends TruffleInstrument {
             Class.forName(MemoryTracer.class.getName(), true, MemoryTracer.class.getClassLoader());
         } catch (ClassNotFoundException ex) {
             // Can not happen
+            throw new AssertionError();
         }
+    }
+
+    /**
+     * Does a lookup in the runtime instruments of the engine and returns an instance of the
+     * {@link CPUTracer}.
+     * 
+     * @since 0.30
+     */
+    public static MemoryTracer getTracer(PolyglotEngine engine) {
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get(ID);
+        if (instrument == null) {
+            throw new IllegalStateException("Memory Tracer is not installed.");
+        }
+        instrument.setEnabled(true);
+        return instrument.lookup(MemoryTracer.class);
     }
 
     /**
      * Called to create the Instrument.
      *
      * @param env environment information for the instrument
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     protected void onCreate(Env env) {
         tracer = factory.create(env);
         if (env.getOptions().get(MemoryTracerCLI.ENABLED)) {
             tracer.setFilter(getSourceSectionFilter(env));
-            tracer.setCollecting(true);
             tracer.setStackLimit(env.getOptions().get(MemoryTracerCLI.STACK_LIMIT));
+            tracer.setCollecting(true);
         }
         env.registerService(tracer);
     }
@@ -104,40 +125,23 @@ public class MemoryTracerInstrument extends TruffleInstrument {
 
     /**
      * @return A list of the options provided by the {@link MemoryTracer}.
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     protected OptionDescriptors getOptionDescriptors() {
-        List<OptionDescriptor> descriptorList = new LinkedList<>();
-        descriptorList.add(OptionDescriptor.newBuilder(MemoryTracerCLI.ENABLED, ID).category(OptionCategory.USER).help("Enable the Memory Tracer (default:false).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(MemoryTracerCLI.OUTPUT, ID + ".Output").category(OptionCategory.USER).help(
-                "Print a 'typehistogram', 'histogram' or 'calltree' as output (default:histogram).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(MemoryTracerCLI.STACK_LIMIT, ID + ".StackLimit").category(OptionCategory.USER).help("Maximum number of maximum stack elements.").build());
-        descriptorList.add(OptionDescriptor.newBuilder(MemoryTracerCLI.TRACE_ROOTS, ID + ".TraceRoots").category(OptionCategory.USER).help("Capture roots when tracing (default:true).").build());
-        descriptorList.add(
-                OptionDescriptor.newBuilder(MemoryTracerCLI.TRACE_STATEMENTS, ID + ".TraceStatements").category(OptionCategory.USER).help("Capture statements when tracing (default:false).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(MemoryTracerCLI.TRACE_CALLS, ID + ".TraceCalls").category(OptionCategory.USER).help("Capture calls when tracing (default:false).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(MemoryTracerCLI.TRACE_INTERNAL, ID + ".TraceInternal").category(OptionCategory.USER).help("Capture internal elements (default:false).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(MemoryTracerCLI.FILTER_ROOT, ID + ".FilterRootName").category(OptionCategory.USER).help(
-                "Wildcard filter for program roots. (eg. Math.*, default:*).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(MemoryTracerCLI.FILTER_FILE, ID + ".FilterFile").category(OptionCategory.USER).help(
-                "Wildcard filter for source file paths. (eg. *program*.sl, default:*).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(MemoryTracerCLI.FILTER_LANGUAGE, ID + ".FilterLanguage").category(OptionCategory.USER).help(
-                "Only profile languages with mime-type. (eg. +, default:no filter).").build());
-        descriptors = OptionDescriptors.create(descriptorList);
-        return descriptors;
+        return new MemoryTracerCLIOptionDescriptors();
     }
 
     /**
      * Called when the Instrument is to be disposed.
      *
      * @param env environment information for the instrument
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     protected void onDispose(Env env) {
         if (env.getOptions().get(MemoryTracerCLI.ENABLED)) {
-            MemoryTracerCLI.handleOutput(env, tracer, descriptors);
+            MemoryTracerCLI.handleOutput(env, tracer);
         }
         tracer.close();
     }
