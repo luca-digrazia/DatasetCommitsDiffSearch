@@ -40,7 +40,6 @@ import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
-import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
@@ -64,14 +63,12 @@ import com.oracle.svm.core.posix.headers.Pthread;
 import com.oracle.svm.core.posix.headers.Pthread.pthread_attr_t;
 import com.oracle.svm.core.posix.headers.Sched;
 import com.oracle.svm.core.posix.headers.Time;
-import com.oracle.svm.core.posix.headers.Unistd;
 import com.oracle.svm.core.posix.headers.darwin.DarwinPthread;
 import com.oracle.svm.core.posix.headers.linux.LinuxPthread;
 import com.oracle.svm.core.posix.pthread.PthreadConditionUtils;
 import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.thread.ParkEvent;
 import com.oracle.svm.core.thread.ParkEvent.ParkEventFactory;
-import com.oracle.svm.core.util.UnsignedUtils;
 import com.oracle.svm.core.util.VMError;
 
 public final class PosixJavaThreads extends JavaThreads {
@@ -94,15 +91,15 @@ public final class PosixJavaThreads extends JavaThreads {
         PosixUtils.checkStatusIs0(
                         Pthread.pthread_attr_setdetachstate(attributes, Pthread.PTHREAD_CREATE_DETACHED()),
                         "PosixJavaThreads.start0: pthread_attr_init");
-        UnsignedWord threadStackSize = WordFactory.unsigned(stackSize);
+        long threadStackSize = stackSize;
         /* If there is a chosen stack size, use it as the stack size. */
-        if (threadStackSize.notEqual(WordFactory.zero())) {
+        if (threadStackSize != 0) {
             /* Make sure the chosen stack size is large enough. */
-            threadStackSize = UnsignedUtils.max(threadStackSize, Pthread.PTHREAD_STACK_MIN());
-            /* Make sure the chosen stack size is a multiple of the system page size. */
-            threadStackSize = UnsignedUtils.roundUp(threadStackSize, WordFactory.unsigned(Unistd.getpagesize()));
+            if ((threadStackSize < 0) || (threadStackSize < PTHREAD_STACK_MIN())) {
+                threadStackSize = PTHREAD_STACK_MIN();
+            }
             PosixUtils.checkStatusIs0(
-                            Pthread.pthread_attr_setstacksize(attributes, threadStackSize),
+                            Pthread.pthread_attr_setstacksize(attributes, WordFactory.unsigned(threadStackSize)),
                             "PosixJavaThreads.start0: pthread_attr_setstacksize");
         }
 
