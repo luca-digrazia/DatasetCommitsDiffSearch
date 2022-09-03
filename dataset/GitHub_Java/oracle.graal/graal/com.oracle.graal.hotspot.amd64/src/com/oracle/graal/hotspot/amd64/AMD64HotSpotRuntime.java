@@ -36,7 +36,6 @@ import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
 import static com.oracle.graal.hotspot.nodes.VerifyOopStubCall.*;
-import static com.oracle.graal.hotspot.nodes.WriteBarrierStubCall.*;
 import static com.oracle.graal.hotspot.snippets.AESCryptSubstitutions.DecryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.snippets.AESCryptSubstitutions.EncryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.snippets.CipherBlockChainingSubstitutions.DecryptAESCryptStubCall.*;
@@ -88,11 +87,6 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg0: object */ javaCallingConvention(Kind.Object,
                 /* arg1:   lock */                       word));
 
-       addRuntimeCall(G1_WB_SLOW, config.g1WBSlowStub,
-                        /*        temps */ null,
-                        /*          ret */ ret(Kind.Void),
-                        /* arg0: object */ javaCallingConvention(Kind.Object));
-       
         addRuntimeCall(MONITOREXIT, config.monitorExitStub,
                 /*        temps */ null,
                 /*          ret */ ret(Kind.Void),
@@ -183,6 +177,17 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg3:      r */                         word,
               /* arg4: inLength */                         Kind.Int));
 
+        addRuntimeCall(AMD64HotSpotBackend.EXCEPTION_HANDLER, config.handleExceptionStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void));
+
+        addRuntimeCall(AMD64HotSpotBackend.DEOPT_HANDLER, config.handleDeoptStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void));
+
+        addRuntimeCall(AMD64HotSpotBackend.IC_MISS_HANDLER, config.inlineCacheMissStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void));
         // @formatter:on
 
     }
