@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.hosted;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,14 +50,11 @@ import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
-import com.oracle.svm.hosted.FeatureImpl.AfterRegistrationAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.DuringSetupAccessImpl;
 import com.oracle.svm.hosted.meta.HostedType;
 import com.oracle.svm.hosted.meta.MethodPointer;
 
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
@@ -108,7 +106,6 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
      * errors without immediately aborting image building.
      */
     private UnsupportedFeatures unsupportedFeatures;
-    private MetaAccessProvider metaAccess;
 
     public static ClassInitializationFeature singleton() {
         return (ClassInitializationFeature) ImageSingletons.lookup(RuntimeClassInitializationSupport.class);
@@ -157,8 +154,6 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
         ImageSingletons.add(RuntimeClassInitializationSupport.class, this);
-
-        metaAccess = ((AfterRegistrationAccessImpl) access).getMetaAccess();
 
         processOption(access, Options.DelayClassInitialization, this::delayClassInitialization);
         processOption(access, Options.RerunClassInitialization, this::rerunClassInitialization);
@@ -240,7 +235,7 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
          */
         for (Map.Entry<Class<?>, InitKind> entry : classInitKinds.entrySet()) {
             if (entry.getValue() == InitKind.DELAY && !UnsafeAccess.UNSAFE.shouldBeInitialized(entry.getKey())) {
-                throw UserError.abort("Class that is marked for delaying initialization to run time got initialized during image building: " + entry.getKey().getTypeName());
+                throw UserError.abort("Class that is marked for delaying initialization to runtime got initialized during image building: " + entry.getKey().getTypeName());
             }
         }
     }
@@ -249,11 +244,7 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
         ClassInitializationInfo info;
         if (shouldInitializeAtRuntime(type)) {
             AnalysisMethod classInitializer = type.getClassInitializer();
-            /*
-             * If classInitializer.getCode() returns null then the type failed to initialize due to
-             * verification issues triggered by missing types.
-             */
-            if (classInitializer != null && classInitializer.getCode() != null) {
+            if (classInitializer != null) {
                 access.registerAsCompiled(classInitializer);
             }
             info = new ClassInitializationInfo(MethodPointer.factory(classInitializer));
@@ -279,11 +270,15 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
     }
 
     private static boolean declaresDefaultMethods(ResolvedJavaType type) {
-        if (!type.isInterface()) {
+        return declaresDefaultMethods(toAnalysisType(type).getJavaClass());
+    }
+
+    private static boolean declaresDefaultMethods(Class<?> clazz) {
+        if (!clazz.isInterface()) {
             /* Only interfaces can declare default methods. */
             return false;
         }
-        for (ResolvedJavaMethod method : type.getDeclaredMethods()) {
+        for (Method method : clazz.getDeclaredMethods()) {
             if (method.isDefault()) {
                 assert !Modifier.isStatic(method.getModifiers()) : "Default method that is static?";
                 return true;
@@ -329,7 +324,7 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
     private InitKind processInterfaces(Class<?> clazz, boolean memoizeEager) {
         InitKind result = InitKind.EAGER;
         for (Class<?> iface : clazz.getInterfaces()) {
-            if (declaresDefaultMethods(metaAccess.lookupJavaType(iface))) {
+            if (declaresDefaultMethods(iface)) {
                 /*
                  * An interface that declares default methods is initialized when a class
                  * implementing it is initialized. So we need to inherit the InitKind from such an
@@ -358,11 +353,10 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
             return InitKind.EAGER;
 
         } catch (Throwable ex) {
-            if (NativeImageOptions.ReportUnsupportedElementsAtRuntime.getValue() || NativeImageOptions.AllowIncompleteClasspath.getValue()) {
+            if (NativeImageOptions.ReportUnsupportedElementsAtRuntime.getValue()) {
                 System.out.println("Warning: class initialization of class " + clazz.getTypeName() + " failed with exception " +
-                                ex.getClass().getTypeName() + (ex.getMessage() == null ? "" : ": " + ex.getMessage()) + ". This class will be initialized at run time because either option " +
-                                SubstrateOptionsParser.commandArgument(NativeImageOptions.ReportUnsupportedElementsAtRuntime, "+") + " or option " +
-                                SubstrateOptionsParser.commandArgument(NativeImageOptions.AllowIncompleteClasspath, "+") + " is used for image building. " +
+                                ex.getClass().getTypeName() + (ex.getMessage() == null ? "" : ": " + ex.getMessage()) + ". This class will be initialized at runtime because option " +
+                                SubstrateOptionsParser.commandArgument(NativeImageOptions.ReportUnsupportedElementsAtRuntime, "+") + " is used for image building. " +
                                 "Use the option " + SubstrateOptionsParser.commandArgument(Options.DelayClassInitialization, clazz.getTypeName()) +
                                 " to explicitly request delayed initialization of this class.");
 
@@ -443,7 +437,7 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
     private static void checkEagerInitialization(Class<?> clazz) {
         if (clazz.isPrimitive() || clazz.isArray()) {
             throw UserError.abort("Primitive types and array classes are initialized eagerly because initialization is side-effect free. " +
-                            "It is not possible (and also not useful) to register them for run time initialization: " + clazz.getTypeName());
+                            "It is not possible (and also not useful) to register them for runtime initialization: " + clazz.getTypeName());
         }
     }
 }

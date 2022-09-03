@@ -366,24 +366,8 @@ public class SubstrateOptionsParser {
             if (helpLen > 0 && helpMsg.charAt(helpLen - 1) != '.') {
                 helpMsg += '.';
             }
-            boolean stringifiedArrayValue = false;
-            Object defaultValue = descriptor.getOptionKey().getDefaultValue();
-            if (defaultValue != null && defaultValue.getClass().isArray()) {
-                Object[] defaultValues = (Object[]) defaultValue;
-                if (defaultValues.length == 1) {
-                    defaultValue = defaultValues[0];
-                } else {
-                    for (int i = 0; i < defaultValues.length; i++) {
-                        if (defaultValues[i] instanceof String) {
-                            defaultValues[i] = '"' + String.valueOf(defaultValues[i]) + '"';
-                        }
-                    }
-                    defaultValue = Arrays.toString(defaultValues);
-                    stringifiedArrayValue = true;
-                }
-            }
             if (descriptor.getOptionValueType() == Boolean.class) {
-                Boolean val = (Boolean) defaultValue;
+                Boolean val = (Boolean) descriptor.getOptionKey().getDefaultValue();
                 if (helpLen != 0) {
                     helpMsg += ' ';
                 }
@@ -394,10 +378,11 @@ public class SubstrateOptionsParser {
                 }
                 printOption(out, prefix + "\u00b1" + entry.getKey(), helpMsg);
             } else {
-                if (!stringifiedArrayValue && defaultValue instanceof String) {
-                    defaultValue = '"' + String.valueOf(defaultValue) + '"';
+                Object def = descriptor.getOptionKey().getDefaultValue();
+                if (def instanceof String) {
+                    def = '"' + String.valueOf(def) + '"';
                 }
-                printOption(out, prefix + entry.getKey() + "=" + defaultValue, helpMsg);
+                printOption(out, prefix + entry.getKey() + "=" + def, helpMsg);
             }
         }
     }

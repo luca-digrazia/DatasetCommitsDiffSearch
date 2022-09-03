@@ -47,9 +47,9 @@ public class OptionUtils {
         for (String value : values) {
             if (value != null && !value.isEmpty()) {
                 for (String component : value.split(delimiter)) {
-                    String trimmed = component.trim();
-                    if (!trimmed.isEmpty()) {
-                        result.add(trimmed);
+                    component = component.trim();
+                    if (!component.isEmpty()) {
+                        result.add(component);
                     }
                 }
             }

@@ -115,7 +115,7 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> UseOnlyWritableBootImageHeap = new HostedOptionKey<>(false);
 
     @Option(help = "Support multiple isolates. ")//
-    public static final HostedOptionKey<Boolean> SpawnIsolates = new HostedOptionKey<>(true);
+    public static final HostedOptionKey<Boolean> SpawnIsolates = new HostedOptionKey<>(false);
 
     @Option(help = "Trace VMOperation execution.")//
     public static final RuntimeOptionKey<Boolean> TraceVMOperations = new RuntimeOptionKey<>(false);
@@ -165,9 +165,6 @@ public class SubstrateOptions {
 
     @Option(help = "Resources describing program elements to be made accessible via JNI (see JNIConfigurationFiles).", type = OptionType.User)//
     public static final HostedOptionKey<String[]> JNIConfigurationResources = new HostedOptionKey<>(null);
-
-    @Option(help = "Report information about known JNI elements when lookup fails", type = OptionType.User)//
-    public static final HostedOptionKey<Boolean> JNIVerboseLookupErrors = new HostedOptionKey<>(false);
 
     /*
      * Object and array allocation options.
@@ -238,9 +235,6 @@ public class SubstrateOptions {
 
     @Option(help = "Maximum number of nodes in a method so that it is considered trivial, if it does not have any invokes.")//
     public static final HostedOptionKey<Integer> MaxNodesInTrivialLeafMethod = new HostedOptionKey<>(40);
-
-    @Option(help = "Saves stack base pointer on the stack on method entry.")//
-    public static final HostedOptionKey<Boolean> UseStackBasePointer = new HostedOptionKey<>(false);
 
     public static FoldedPredicate makeFilter(String[] definedFilters) {
         if (definedFilters != null) {
