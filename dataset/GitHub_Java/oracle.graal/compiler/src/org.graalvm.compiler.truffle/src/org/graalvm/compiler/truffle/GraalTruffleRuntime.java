@@ -86,7 +86,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.CompilerOptions;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -114,14 +113,6 @@ import jdk.vm.ci.meta.SpeculationLog;
 public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     private final Map<RootCallTarget, Void> callTargets = Collections.synchronizedMap(new WeakHashMap<RootCallTarget, Void>());
-
-    /**
-     * Used only to reset state for native image compilation.
-     */
-    protected void clearCallTargets() {
-        assert TruffleOptions.AOT : "Must be called only in AOT mode.";
-        callTargets.clear();
-    }
 
     protected abstract static class BackgroundCompileQueue implements CompilerThreadFactory.DebugConfigAccess {
         private final ExecutorService compileQueue;
@@ -585,37 +576,24 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
         if (!mayBeAsynchronous) {
             try {
-                waitForFutureAndKeepInterrupt(future);
+                future.get();
             } catch (ExecutionException e) {
                 if (TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown) && !(e.getCause() instanceof BailoutException && !((BailoutException) e.getCause()).isPermanent())) {
                     throw new RuntimeException(e.getCause());
                 } else {
-                    // silently ignored
+                    // silenlty ignored
                 }
+            } catch (InterruptedException e) {
+                /*
+                 * Compilation cancellation happens cooperatively. A compiler thread (which is a VM
+                 * thread) must never throw an interrupted exception.
+                 */
+                GraalError.shouldNotReachHere(e);
             } catch (CancellationException e) {
                 /*
                  * Silently ignored as future might have undergone a "soft" cancel(false).
                  */
             }
-        }
-    }
-
-    private static void waitForFutureAndKeepInterrupt(Future<?> future) throws ExecutionException {
-        // We want to keep the interrupt bit if we are interrupted.
-        // But we also want to maintain the semantics of foreground compilation:
-        // waiting for the compilation to finish, even if it takes long,
-        // so that compilation errors or effects are still properly waited for.
-        boolean interrupted = false;
-        while (true) {
-            try {
-                future.get();
-                break;
-            } catch (InterruptedException e) {
-                interrupted = true;
-            }
-        }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
         }
     }
 
