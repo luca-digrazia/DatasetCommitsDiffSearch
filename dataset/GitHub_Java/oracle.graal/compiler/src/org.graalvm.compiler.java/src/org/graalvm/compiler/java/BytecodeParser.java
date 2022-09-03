@@ -1145,7 +1145,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected ValueNode genUnsignedRightShift(ValueNode x, ValueNode y) {
-        return UnsignedRightShiftNode.create(x, y, NodeView.DEFAULT);
+        return new UnsignedRightShiftNode(x, y);
     }
 
     protected ValueNode genAnd(ValueNode x, ValueNode y) {
