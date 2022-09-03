@@ -318,7 +318,9 @@ class NativeImage {
         getJars(bootDir).forEach((Consumer<? super Path>) this::addImageBuilderBootClasspath);
     }
 
-    private void completeOptionArgs() {
+    private void applyOptionArgs() {
+        optionRegistry.applyOptions(this);
+
         /* Determine if truffle is needed- any MacroOption of kind Language counts */
         LinkedHashSet<EnabledOption> enabledLanguages = optionRegistry.getEnabledOptions(MacroOptionKind.Language);
         for (EnabledOption enabledOption : optionRegistry.getEnabledOptions()) {
@@ -337,14 +339,10 @@ class NativeImage {
                         .map(lang -> lang.getProperty("LauncherClass"))
                         .filter(Objects::nonNull).collect(Collectors.toSet());
         if (launcherClasses.size() > 1) {
-            /* Use polyglot as image name if not defined on command line */
-            if (customImageBuilderArgs.stream().noneMatch(arg -> arg.startsWith(oHName))) {
-                replaceArg(imageBuilderArgs, oHName, "polyglot");
-            }
-            if (customImageBuilderArgs.stream().noneMatch(arg -> arg.startsWith(oHClass))) {
-                /* and the PolyglotLauncher as main class if not defined on command line */
-                replaceArg(imageBuilderArgs, oHClass, "org.graalvm.launcher.PolyglotLauncher");
-            }
+            /* Use polyglot as image name */
+            replaceArg(imageBuilderArgs, oHName, "polyglot");
+            /* and the PolyglotLauncher as main class */
+            replaceArg(imageBuilderArgs, oHClass, "org.graalvm.launcher.PolyglotLauncher");
             /* Collect the launcherClasses for enabledLanguages. */
             addImageBuilderJavaArgs("-Dcom.oracle.graalvm.launcher.launcherclasses=" + launcherClasses.stream().collect(Collectors.joining(",")));
         }
@@ -417,7 +415,7 @@ class NativeImage {
     private void completeImageBuildArgs(String[] args) {
         List<String> leftoverArgs = processNativeImageArgs(args);
 
-        completeOptionArgs();
+        applyOptionArgs();
 
         /* If no customImageClasspath was specified put "." on classpath */
         if (customImageClasspath.isEmpty()) {
