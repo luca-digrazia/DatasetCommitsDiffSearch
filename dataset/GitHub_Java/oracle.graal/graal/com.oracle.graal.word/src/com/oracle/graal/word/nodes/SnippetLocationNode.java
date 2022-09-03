@@ -31,7 +31,6 @@ import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -56,19 +55,11 @@ public class SnippetLocationNode extends LocationNode implements Canonicalizable
 
     public static SnippetLocationNode create(SnippetReflectionProvider snippetReflection, ValueNode identity, ValueNode kind, ValueNode displacement, ValueNode index, ValueNode indexScaling,
                     Graph graph) {
-        return graph.unique(SnippetLocationNode.create(snippetReflection, identity, kind, displacement, index, indexScaling));
-    }
-
-    public static SnippetLocationNode create(SnippetReflectionProvider snippetReflection, ValueNode locationIdentity, ValueNode kind, ValueNode displacement) {
-        return new SnippetLocationNodeGen(snippetReflection, locationIdentity, kind, displacement);
+        return graph.unique(new SnippetLocationNode(snippetReflection, identity, kind, displacement, index, indexScaling));
     }
 
     SnippetLocationNode(@InjectedNodeParameter SnippetReflectionProvider snippetReflection, ValueNode locationIdentity, ValueNode kind, ValueNode displacement) {
         this(snippetReflection, locationIdentity, kind, displacement, null, null);
-    }
-
-    public static SnippetLocationNode create(SnippetReflectionProvider snippetReflection, ValueNode locationIdentity, ValueNode kind, ValueNode displacement, ValueNode index, ValueNode indexScaling) {
-        return new SnippetLocationNodeGen(snippetReflection, locationIdentity, kind, displacement, index, indexScaling);
     }
 
     SnippetLocationNode(@InjectedNodeParameter SnippetReflectionProvider snippetReflection, ValueNode locationIdentity, ValueNode kind, ValueNode displacement, ValueNode index, ValueNode indexScaling) {

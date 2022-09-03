@@ -28,8 +28,8 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
@@ -41,10 +41,6 @@ import com.oracle.graal.word.*;
 public class CurrentJavaThreadNode extends FloatingNode implements LIRLowerable {
 
     private LIRKind wordKind;
-
-    public static CurrentJavaThreadNode create(Kind kind) {
-        return new CurrentJavaThreadNodeGen(kind);
-    }
 
     CurrentJavaThreadNode(Kind kind) {
         super(StampFactory.forKind(kind));

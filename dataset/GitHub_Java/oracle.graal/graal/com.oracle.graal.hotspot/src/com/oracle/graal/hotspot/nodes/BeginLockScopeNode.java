@@ -24,8 +24,8 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -41,10 +41,6 @@ import com.oracle.graal.word.*;
 public class BeginLockScopeNode extends AbstractMemoryCheckpoint implements LIRLowerable, MonitorEnter, MemoryCheckpoint.Single {
 
     private int lockDepth;
-
-    public static BeginLockScopeNode create(int lockDepth) {
-        return new BeginLockScopeNodeGen(lockDepth);
-    }
 
     BeginLockScopeNode(int lockDepth) {
         super(null);

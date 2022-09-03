@@ -26,7 +26,7 @@ import static com.oracle.graal.api.meta.LocationIdentity.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -44,10 +44,6 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
 
     private Kind elementKind;
 
-    public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
-        return new UnsafeArrayCopyNodeGen(src, srcPos, dest, destPos, length, layoutHelper, elementKind);
-    }
-
     UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
         super(StampFactory.forVoid());
         assert layoutHelper == null || elementKind == null;
@@ -60,19 +56,11 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
         this.elementKind = elementKind;
     }
 
-    public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
-        return new UnsafeArrayCopyNodeGen(src, srcPos, dest, destPos, length, elementKind);
-    }
-
-    UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
+    private UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
         this(src, srcPos, dest, destPos, length, null, elementKind);
     }
 
-    public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
-        return new UnsafeArrayCopyNodeGen(src, srcPos, dest, destPos, length, layoutHelper);
-    }
-
-    UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
+    private UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
         this(src, srcPos, dest, destPos, length, layoutHelper, null);
     }
 
