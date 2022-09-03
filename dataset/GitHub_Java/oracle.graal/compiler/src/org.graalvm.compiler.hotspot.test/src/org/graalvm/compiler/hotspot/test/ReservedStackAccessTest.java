@@ -88,6 +88,7 @@ public class ReservedStackAccessTest extends HotSpotGraalCompilerTest {
         assertTrue(passed);
     }
 
+
     static class ReentrantLockTest {
 
         private ReentrantLock[] lockArray;
