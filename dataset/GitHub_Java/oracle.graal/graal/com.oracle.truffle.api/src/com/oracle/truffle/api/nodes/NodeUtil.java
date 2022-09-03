@@ -27,7 +27,6 @@ package com.oracle.truffle.api.nodes;
 import java.io.*;
 import java.lang.annotation.*;
 import java.lang.reflect.*;
-import java.security.*;
 import java.util.*;
 
 import sun.misc.*;
@@ -161,13 +160,9 @@ public final class NodeUtil {
         private static final ClassValue<NodeClass> nodeClasses = new ClassValue<NodeClass>() {
             @SuppressWarnings("unchecked")
             @Override
-            protected NodeClass computeValue(final Class<?> clazz) {
+            protected NodeClass computeValue(Class<?> clazz) {
                 assert Node.class.isAssignableFrom(clazz);
-                return AccessController.doPrivileged(new PrivilegedAction<NodeClass>() {
-                    public NodeClass run() {
-                        return new NodeClass((Class<? extends Node>) clazz, unsafeFieldOffsetProvider);
-                    }
-                });
+                return new NodeClass((Class<? extends Node>) clazz, unsafeFieldOffsetProvider);
             }
         };
 
