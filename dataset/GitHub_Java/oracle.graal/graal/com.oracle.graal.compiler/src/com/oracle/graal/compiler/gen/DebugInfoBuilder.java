@@ -23,30 +23,28 @@
 package com.oracle.graal.compiler.gen;
 
 import java.util.*;
-import java.util.Map.*;
+import java.util.Map.Entry;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.virtual.nodes.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.meta.*;
 
 /**
  * Builds {@link LIRFrameState}s from {@link FrameState}s.
  */
 public class DebugInfoBuilder {
 
-    protected final NodeValueMap nodeValueMap;
+    protected final NodeMap<Value> nodeOperands;
 
-    public DebugInfoBuilder(NodeValueMap nodeValueMap) {
-        this.nodeValueMap = nodeValueMap;
+    public DebugInfoBuilder(NodeMap<Value> nodeOperands) {
+        this.nodeOperands = nodeOperands;
     }
 
     protected final Map<VirtualObjectNode, VirtualObject> virtualObjects = Node.newMap();
@@ -115,6 +113,7 @@ public class DebugInfoBuilder {
         }
         objectStates.clear();
 
+        assert frame.validateFormat(false);
         return newLIRFrameState(exceptionEdge, frame, virtualObjectsArray);
     }
 
@@ -147,7 +146,7 @@ public class DebugInfoBuilder {
                 caller = computeFrameForState(state.outerFrameState());
             }
             return new BytecodeFrame(caller, state.method(), state.bci, state.rethrowException(), state.duringCall(), values, numLocals, numStack, numLocks);
-        } catch (JVMCIError e) {
+        } catch (GraalInternalError e) {
             throw e.addContext("FrameState: ", state);
         }
     }
@@ -194,7 +193,7 @@ public class DebugInfoBuilder {
                 EscapeObjectState state = objectStates.get(obj);
                 if (state == null && obj.entryCount() > 0) {
                     // null states occur for objects with 0 fields
-                    throw new JVMCIError("no mapping found for virtual object %s", obj);
+                    throw new GraalInternalError("no mapping found for virtual object %s", obj);
                 }
                 if (state instanceof MaterializedObjectState) {
                     return toValue(((MaterializedObjectState) state).materializedValue());
@@ -217,7 +216,7 @@ public class DebugInfoBuilder {
 
                 } else if (value != null) {
                     STATE_VARIABLES.increment();
-                    Value operand = nodeValueMap.operand(value);
+                    Value operand = nodeOperands.get(value);
                     assert operand != null && (operand instanceof Variable || operand instanceof JavaConstant) : operand + " for " + value;
                     return operand;
 
@@ -227,7 +226,7 @@ public class DebugInfoBuilder {
                     return Value.ILLEGAL;
                 }
             }
-        } catch (JVMCIError e) {
+        } catch (GraalInternalError e) {
             throw e.addContext("toValue: ", value);
         }
     }

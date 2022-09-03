@@ -85,7 +85,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
 
     /**
      * True if this is a position inside an exception handler before the exception object has been
-     * consumed. In this case, {@link #numStack} {@code == 1} and {@link #getStackValue(int)
+     * consumed. In this case, {@link #numStack == 1} and {@link #getStackValue(int)
      * getStackValue(0)} is the location of the exception object. If deoptimization happens at this
      * position, the interpreter will rethrow the exception instead of executing the bytecode
      * instruction at this position.
@@ -130,13 +130,6 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * snippet frame states.
      */
     public static final int INVALID_FRAMESTATE_BCI = -6;
-
-    /**
-     * Determines if a given BCI matches one of the synthetic BCI contants defined in this class.
-     */
-    public static boolean isSyntheticBci(int bci) {
-        return bci < 0;
-    }
 
     /**
      * Creates a new frame object.
