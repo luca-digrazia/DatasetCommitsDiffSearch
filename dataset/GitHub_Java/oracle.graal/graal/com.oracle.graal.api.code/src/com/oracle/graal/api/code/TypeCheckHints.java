@@ -86,7 +86,7 @@ public class TypeCheckHints {
                         double totalHintProbability = 0.0d;
                         for (ProfiledType ptype : ptypes) {
                             ResolvedJavaType hint = ptype.getType();
-                            if (type != null && type.isAssignableFrom(hint)) {
+                            if (type != null && hint.isAssignableTo(type)) {
                                 hintTypes[hintCount++] = hint;
                                 totalHintProbability += ptype.getProbability();
                             }
