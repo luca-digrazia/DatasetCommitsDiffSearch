@@ -148,8 +148,7 @@ public abstract class Source {
             final WeakReference<Source> pathRef = nameToSource.get(path);
             source = pathRef == null ? null : pathRef.get();
             if (source == null) {
-                final FileSourceImpl content = new FileSourceImpl(file, fileName, path);
-                source = new Impl(content);
+                source = new FileSourceImpl(file, fileName, path);
                 nameToSource.put(path, new WeakReference<>(source));
             }
         }
@@ -413,13 +412,7 @@ public abstract class Source {
         this.mimeType = mimeType;
     }
 
-    Content content() {
-        return null;
-    }
-
-    void reset() {
-        content().reset();
-    }
+    abstract void reset();
 
     /**
      * Returns the name of this resource holding a guest language program. An example would be the
@@ -428,9 +421,7 @@ public abstract class Source {
      * @return the name of the guest language program
      * @since 0.8 or earlier
      */
-    public String getName() {
-        return content().getName();
-    }
+    public abstract String getName();
 
     /**
      * Returns a short version of the name of the resource holding a guest language program (as
@@ -440,18 +431,14 @@ public abstract class Source {
      * @return the short name of the guest language program
      * @since 0.8 or earlier
      */
-    public String getShortName() {
-        return content().getShortName();
-    }
+    public abstract String getShortName();
 
     /**
      * The normalized, canonical name if the source is a file.
      *
      * @since 0.8 or earlier
      */
-    public String getPath() {
-        return content().getPath();
-    }
+    public abstract String getPath();
 
     /**
      * The URL if the source is retrieved via URL.
@@ -459,31 +446,14 @@ public abstract class Source {
      * @return URL or <code>null</code>
      * @since 0.8 or earlier
      */
-    public URL getURL() {
-        return content().getURL();
-    }
+    public abstract URL getURL();
 
     /**
      * Access to the source contents.
      *
      * @since 0.8 or earlier
      */
-    public Reader getReader() {
-        try {
-            return content().getReader();
-        } catch (final IOException ex) {
-            return new Reader() {
-                @Override
-                public int read(char[] cbuf, int off, int len) throws IOException {
-                    throw ex;
-                }
-
-                @Override
-                public void close() throws IOException {
-                }
-            };
-        }
-    }
+    public abstract Reader getReader();
 
     /**
      * Access to the source contents.
@@ -508,9 +478,7 @@ public abstract class Source {
      *
      * @since 0.8 or earlier
      */
-    public String getCode() {
-        return content().getCode();
-    }
+    public abstract String getCode();
 
     /**
      * Returns a subsection of the code test.
@@ -735,7 +703,7 @@ public abstract class Source {
      * different source types.
      */
     Object getHashKey() {
-        return content() == null ? getName() : content().getHashKey();
+        return getName();
     }
 
     final TextMap getTextMap() {
@@ -802,36 +770,4 @@ public abstract class Source {
         return mimeType.equals(other.mimeType);
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof Source) {
-            Source other = (Source) obj;
-            if (content() == null) {
-                return super.equals(obj);
-            }
-            return content().equals(other.content()) && equalMime(other);
-        }
-        return false;
-    }
-
-    @Override
-    public int hashCode() {
-        if (content() == null) {
-            return super.hashCode();
-        }
-        return content().hashCode();
-    }
-
-    private static class Impl extends Source implements Cloneable {
-        private final Content content;
-
-        Impl(Content content) {
-            this.content = content;
-        }
-
-        @Override
-        Content content() {
-            return content;
-        }
-    }
 }

@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.source;
 
-import java.io.IOException;
 import java.io.Reader;
 import java.net.URL;
 import java.nio.ByteBuffer;
@@ -33,7 +32,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 
-final class BytesSourceImpl extends Content {
+final class BytesSourceImpl extends Source implements Cloneable {
 
     private final String name;
     private final byte[] bytes;
@@ -103,18 +102,15 @@ final class BytesSourceImpl extends Content {
     }
 
     @Override
-    int getCodeLength() {
-        return length;
+    void checkRange(int charIndex, int rangeLength) {
+        if (!(charIndex >= 0 && rangeLength >= 0 && charIndex + rangeLength <= length)) {
+            throw new IllegalArgumentException("text positions out of range");
+        }
     }
 
     @Override
-    String findMimeType() throws IOException {
-        return null;
-    }
-
-    @Override
-    Object getHashKey() {
-        return bytes;
+    TextMap createTextMap() {
+        return TextMap.fromString(getCode());
     }
 
 }
