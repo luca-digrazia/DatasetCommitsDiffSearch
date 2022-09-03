@@ -34,7 +34,6 @@ import org.graalvm.compiler.options.OptionValues;
 
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.util.CompletionExecutor;
-import com.oracle.svm.core.option.APIOption;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.image.AbstractBootImage;
@@ -104,7 +103,6 @@ public class NativeImageOptions {
     @Option(help = "Suppress console normal output for unittests")//
     public static final HostedOptionKey<Boolean> SuppressStdout = new HostedOptionKey<>(false);
 
-    @APIOption(name = "report-unsupported-elements-at-runtime")//
     @Option(help = "Report usage of unsupported methods and fields at run time when they are accessed the first time, instead of as an error during image building", type = User)//
     public static final HostedOptionKey<Boolean> ReportUnsupportedElementsAtRuntime = new HostedOptionKey<Boolean>(false) {
         @Override
@@ -116,20 +114,11 @@ public class NativeImageOptions {
     @Option(help = "Report the original exception cause for unsupported features.")//
     public static final HostedOptionKey<Boolean> ReportUnsupportedFeaturesCause = new HostedOptionKey<>(false);
 
-    /**
-     * Enum with all C standards.
-     *
-     * When changing this enum, please change the CStandard option help message and keep the
-     * standards in the chronological orders.
-     */
     public enum CStandards {
+        /* When changing this enum, please change the CStandard option help message. */
         C89,
         C99,
-        C11;
-
-        public boolean compatibleWith(CStandards standard) {
-            return this.compareTo(standard) >= 0;
-        }
+        C11
     }
 
     @Option(help = "C standard to use in header files. Possible values are: [C89, C99, C11]", type = User)//
@@ -170,6 +159,9 @@ public class NativeImageOptions {
 
     @Option(help = "Print unsafe operation offset warnings.)")//
     public static final HostedOptionKey<Boolean> UnsafeOffsetWarningsAreFatal = new HostedOptionKey<>(false);
+
+    @Option(help = "Automatically enable TruffleFeature when Truffle API is on bootstrap class path.)")//
+    public static final HostedOptionKey<Boolean> TruffleFeature = new HostedOptionKey<>(true);
 
     public static int getMaximumNumberOfConcurrentThreads(OptionValues optionValues) {
         int maxNumberOfThreads = NativeImageOptions.NumberOfThreads.getValue(optionValues);
