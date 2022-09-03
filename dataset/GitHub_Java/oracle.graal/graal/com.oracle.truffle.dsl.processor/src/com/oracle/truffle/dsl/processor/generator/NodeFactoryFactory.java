@@ -240,10 +240,13 @@ class NodeFactoryFactory {
     }
 
     private CodeExecutableElement createCreateMethod(ExecutableElement constructor) {
+        Modifier visibility = ElementUtils.getVisibility(constructor.getModifiers());
         CodeExecutableElement method = CodeExecutableElement.clone(context.getEnvironment(), constructor);
         method.setSimpleName(CodeNames.of("create"));
         method.getModifiers().clear();
-        method.getModifiers().add(Modifier.PUBLIC);
+        if (visibility != null) {
+            method.getModifiers().add(visibility);
+        }
         method.getModifiers().add(Modifier.STATIC);
         method.setReturnType(node.getNodeType());
 
