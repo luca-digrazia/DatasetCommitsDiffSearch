@@ -22,15 +22,15 @@
  */
 package org.graalvm.compiler.truffle;
 
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleSplitting;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleSplittingMaxCalleeSize;
+
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.NodeUtil.NodeCountFilter;
 import com.oracle.truffle.api.nodes.RootNode;
-
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleSplitting;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleSplittingMaxCalleeSize;
 
 public final class DefaultTruffleSplittingStrategy implements TruffleSplittingStrategy {
 
@@ -93,7 +93,7 @@ public final class DefaultTruffleSplittingStrategy implements TruffleSplittingSt
         }
 
         // Disable splitting if it will cause a split-only recursion
-        if (isRecursiveSplit(call)) {
+        if (splittingWillCauseSplitOnlyRecursion(call)) {
             return false;
         }
 
@@ -104,28 +104,15 @@ public final class DefaultTruffleSplittingStrategy implements TruffleSplittingSt
         return countPolymorphic(call) >= 1;
     }
 
-    private static boolean isRecursiveSplit(OptimizedDirectCallNode call) {
+    private static boolean splittingWillCauseSplitOnlyRecursion(OptimizedDirectCallNode call) {
         final OptimizedCallTarget splitCandidateTarget = call.getCallTarget();
 
-        OptimizedCallTarget callRootTarget = (OptimizedCallTarget) call.getRootNode().getCallTarget();
-        OptimizedCallTarget callSourceTarget = callRootTarget.getSourceCallTarget();
-        while (callSourceTarget != null) {
-            if (callSourceTarget == splitCandidateTarget) {
+        OptimizedCallTarget rootTarget = (OptimizedCallTarget) call.getRootNode().getCallTarget();
+        while (rootTarget.getSourceCallTarget() != null) {
+            if (rootTarget.getSourceCallTarget() == splitCandidateTarget) {
                 return true;
             }
-            final OptimizedDirectCallNode splitCallSite = callRootTarget.getCallSiteForSplit();
-            if (splitCallSite == null) {
-                break;
-            }
-            final RootNode splitCallSiteRootNode = splitCallSite.getRootNode();
-            if (splitCallSiteRootNode == null) {
-                break;
-            }
-            callRootTarget = (OptimizedCallTarget) splitCallSiteRootNode.getCallTarget();
-            if (callRootTarget == null) {
-                break;
-            }
-            callSourceTarget = callRootTarget.getSourceCallTarget();
+            rootTarget = (OptimizedCallTarget) rootTarget.getCallSiteForSplit().getRootNode().getCallTarget();
         }
         return false;
     }
