@@ -110,7 +110,7 @@ final class TruffleFunction<T, R> implements Function<T, R> {
         }
 
         @Override
-        public String get() {
+        public final String get() {
             return "TruffleFunction<" + receiverClass + ", " + returnType + ">.apply";
         }
 

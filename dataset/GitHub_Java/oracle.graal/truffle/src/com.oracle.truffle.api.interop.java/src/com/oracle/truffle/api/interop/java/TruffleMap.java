@@ -47,6 +47,7 @@ import java.util.function.Supplier;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.impl.Accessor.EngineSupport;
 import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.Message;
@@ -330,7 +331,7 @@ class TruffleMap<K, V> extends AbstractMap<K, V> {
             public boolean equals(Object obj) {
                 if (this == obj) {
                     return true;
-                } else if (obj == null || getClass() != obj.getClass()) {
+                } else if (getClass() != obj.getClass()) {
                     return false;
                 }
                 Key other = (Key) obj;
@@ -338,7 +339,7 @@ class TruffleMap<K, V> extends AbstractMap<K, V> {
             }
         }
 
-        private abstract static class TruffleMapNode extends HostEntryRootNode<TruffleObject> implements Supplier<String> {
+        private static abstract class TruffleMapNode extends HostEntryRootNode<TruffleObject> implements Supplier<String> {
 
             final TruffleMapCache cache;
             @Child protected Node hasSize = Message.HAS_SIZE.createNode();

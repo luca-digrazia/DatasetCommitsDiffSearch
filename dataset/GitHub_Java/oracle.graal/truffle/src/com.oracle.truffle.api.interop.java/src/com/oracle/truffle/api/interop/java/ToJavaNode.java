@@ -35,7 +35,6 @@ import java.util.function.Function;
 
 import org.graalvm.polyglot.Value;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.Cached;
@@ -91,14 +90,7 @@ abstract class ToJavaNode extends Node {
         } else if (targetType.isAssignableFrom(value.getClass())) {
             convertedValue = value;
         } else {
-            CompilerDirectives.transferToInterpreter();
-            String reason;
-            if (isAssignableFromTrufflePrimitiveType(targetType)) {
-                reason = "Invalid or lossy primitive coercion.";
-            } else {
-                reason = "Unsupported target type.";
-            }
-            throw JavaInteropErrors.cannotConvert(languageContext, value, targetType, reason);
+            throw newClassCastException(value, targetType, null);
         }
         return convertedValue;
     }
@@ -216,7 +208,7 @@ abstract class ToJavaNode extends Node {
         Object obj;
         if (primitive.isNull(truffleObject)) {
             if (targetType.isPrimitive()) {
-                throw JavaInteropErrors.nullCoercion(languageContext, truffleObject, targetType);
+                throw newNullPointerException(targetType);
             }
             return null;
         } else if (JavaObject.isJavaInstance(targetType, truffleObject)) {
@@ -232,7 +224,7 @@ abstract class ToJavaNode extends Node {
                 TypeAndClass<?> elementType = getGenericParameterType(genericType, 0);
                 obj = TruffleList.create(languageContext, truffleObject, implementsFunction, elementType.clazz, elementType.type);
             } else {
-                throw JavaInteropErrors.cannotConvert(languageContext, truffleObject, targetType, "Value must have array elements.");
+                throw newClassCastException(truffleObject, targetType, "has no size");
             }
         } else if (targetType == Map.class) {
             Class<?> keyClazz = getGenericParameterType(genericType, 0).clazz;
@@ -246,7 +238,7 @@ abstract class ToJavaNode extends Node {
                 boolean implementsFunction = shouldImplementFunction(truffleObject);
                 obj = TruffleMap.create(languageContext, truffleObject, implementsFunction, keyClazz, valueType.clazz, valueType.type);
             } else {
-                throw JavaInteropErrors.cannotConvert(languageContext, truffleObject, targetType, "Value must have members or array elements.");
+                throw newClassCastException(truffleObject, targetType, "has no keys");
             }
         } else if (targetType == Function.class) {
             TypeAndClass<?> returnType = getGenericParameterType(genericType, 0);
@@ -255,13 +247,13 @@ abstract class ToJavaNode extends Node {
             } else if (!TruffleOptions.AOT && ForeignAccess.sendHasKeys(hasKeysNode, truffleObject)) {
                 obj = JavaInteropReflect.newProxyInstance(targetType, truffleObject, languageContext);
             } else {
-                throw JavaInteropErrors.cannotConvert(languageContext, truffleObject, targetType, "Value must be executable or instantiable.");
+                throw newClassCastException(truffleObject, targetType, null);
             }
         } else if (targetType.isArray()) {
             if (primitive.hasSize(truffleObject)) {
                 obj = truffleObjectToArray(truffleObject, targetType, genericType, languageContext);
             } else {
-                throw JavaInteropErrors.cannotConvert(languageContext, truffleObject, targetType, "Value must have array elements.");
+                throw newClassCastException(truffleObject, targetType, "has no size");
             }
         } else if (!TruffleOptions.AOT && targetType.isInterface()) {
             if (JavaInterop.isJavaFunctionInterface(targetType) && (isExecutable(truffleObject) || isInstantiable(truffleObject))) {
@@ -273,14 +265,13 @@ abstract class ToJavaNode extends Node {
                     // legacy support
                     obj = JavaInteropReflect.newProxyInstance(targetType, truffleObject, languageContext);
                 } else {
-                    throw JavaInteropErrors.cannotConvert(languageContext, truffleObject, targetType, "Value must have members.");
+                    throw newClassCastException(truffleObject, targetType, null);
                 }
             }
         } else {
-            throw JavaInteropErrors.cannotConvert(languageContext, truffleObject, targetType, "Unsupported target type.");
+            throw newClassCastException(truffleObject, targetType, null);
         }
 
-        assert targetType.isInstance(obj);
         return targetType.cast(obj);
     }
 
@@ -296,6 +287,19 @@ abstract class ToJavaNode extends Node {
 
     private static boolean isSupportedMapKeyType(Class<?> keyType) {
         return keyType == Object.class || keyType == String.class || keyType == Long.class || keyType == Integer.class || keyType == Number.class;
+    }
+
+    @TruffleBoundary
+    private static ClassCastException newClassCastException(Object value, Type targetType, String reason) {
+        String message = "Cannot convert " + (value == null ? "null" : value.getClass().getName()) + " to " + targetType.getTypeName() + (reason == null ? "" : ": " + reason);
+        return newClassCastException(message);
+    }
+
+    @TruffleBoundary
+    private static NullPointerException newNullPointerException(Type targetType) {
+        String message = "Cannot convert null to " + targetType.getTypeName();
+        EngineSupport engine = JavaInterop.ACCESSOR.engine();
+        return engine != null ? engine.newNullPointerException(message, null) : new NullPointerException(message);
     }
 
     @TruffleBoundary

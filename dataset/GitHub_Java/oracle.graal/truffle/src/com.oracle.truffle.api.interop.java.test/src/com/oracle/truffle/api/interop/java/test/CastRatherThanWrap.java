@@ -33,9 +33,10 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.vm.PolyglotEngine;
 
-@SuppressWarnings("deprecation")
 public class CastRatherThanWrap {
 
     private Runnable exec;
@@ -78,11 +79,11 @@ public class CastRatherThanWrap {
 
     @Test
     public void castTruffleObjectIfPossible() throws Exception {
-        com.oracle.truffle.api.vm.PolyglotEngine.newBuilder().build().dispose();
+        PolyglotEngine.newBuilder().build().dispose();
         ExecutableObject execObj = new ExecutableObject();
-        TruffleObject thiz = com.oracle.truffle.api.interop.java.JavaInterop.asTruffleObject(this);
+        TruffleObject thiz = JavaInterop.asTruffleObject(this);
 
-        ForeignAccess.sendInvoke(Message.INVOKE.createNode(), thiz, "acceptRunnable", execObj);
+        ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), thiz, "acceptRunnable", execObj);
 
         assertEquals("ExecutableObject was passed as Runnable unwrapped", execObj, this.exec);
     }
