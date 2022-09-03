@@ -135,23 +135,24 @@ public class DominatorConditionalEliminationPhase extends Phase {
 
             List<Runnable> undoOperations = new ArrayList<>();
 
-            preprocess(block, undoOperations);
+            if (preprocess(block, undoOperations)) {
 
-            // Process always reached block first.
-            Block postdominator = block.getPostdominator();
-            if (postdominator != null && postdominator.getDominator() == block) {
-                processBlock(postdominator);
-            }
-
-            // Now go for the other dominators.
-            for (Block dominated : block.getDominated()) {
-                if (dominated != postdominator) {
-                    assert dominated.getDominator() == block;
-                    processBlock(dominated);
+                // Process always reached block first.
+                Block postdominator = block.getPostdominator();
+                if (postdominator != null && postdominator.getDominator() == block) {
+                    processBlock(postdominator);
                 }
-            }
 
-            postprocess(undoOperations);
+                // Now go for the other dominators.
+                for (Block dominated : block.getDominated()) {
+                    if (dominated != postdominator) {
+                        assert dominated.getDominator() == block;
+                        processBlock(dominated);
+                    }
+                }
+
+                postprocess(undoOperations);
+            }
         }
 
         private static void postprocess(List<Runnable> undoOperations) {
@@ -160,17 +161,23 @@ public class DominatorConditionalEliminationPhase extends Phase {
             }
         }
 
-        private void preprocess(Block block, List<Runnable> undoOperations) {
+        private boolean preprocess(Block block, List<Runnable> undoOperations) {
             AbstractBeginNode beginNode = block.getBeginNode();
-            if (beginNode instanceof LoopExitNode && beginNode.isAlive()) {
-                LoopExitNode loopExitNode = (LoopExitNode) beginNode;
-                this.loopExits.push(loopExitNode);
-                undoOperations.add(() -> loopExits.pop());
-            }
-            for (Node n : blockToNodes.apply(block)) {
-                if (n.isAlive()) {
-                    processNode(n, undoOperations);
+            if (beginNode.isAlive() || (beginNode instanceof MergeNode && beginNode.next().isAlive())) {
+                if (beginNode instanceof LoopExitNode) {
+                    LoopExitNode loopExitNode = (LoopExitNode) beginNode;
+                    this.loopExits.push(loopExitNode);
+                    undoOperations.add(() -> loopExits.pop());
                 }
+                for (Node n : blockToNodes.apply(block)) {
+                    if (n.isAlive()) {
+                        processNode(n, undoOperations);
+                    }
+                }
+                return true;
+            } else {
+                // Control flow has been deleted by previous eliminations.
+                return false;
             }
         }
 

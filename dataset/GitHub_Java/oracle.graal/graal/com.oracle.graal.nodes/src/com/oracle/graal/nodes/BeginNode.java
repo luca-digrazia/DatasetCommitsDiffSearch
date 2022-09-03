@@ -22,18 +22,12 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
-public final class BeginNode extends AbstractBeginNode implements Simplifiable {
+@NodeInfo
+public final class BeginNode extends AbstractBeginNode {
 
     public static final NodeClass<BeginNode> TYPE = NodeClass.create(BeginNode.class);
 
@@ -52,21 +46,6 @@ public final class BeginNode extends AbstractBeginNode implements Simplifiable {
         } else {
             // This begin node can be removed and all guards moved up to the preceding begin node.
             prepareDelete();
-            graph().removeFixed(this);
-        }
-    }
-
-    @Override
-    public void simplify(SimplifierTool tool) {
-        FixedNode prev = (FixedNode) this.predecessor();
-        if (prev == null) {
-            // This is the start node.
-        } else if (prev instanceof ControlSplitNode) {
-            // This begin node is necessary.
-        } else {
-            // This begin node can be removed and all guards moved up to the preceding begin node.
-            prepareDelete();
-            tool.addToWorkList(next());
             graph().removeFixed(this);
         }
     }
