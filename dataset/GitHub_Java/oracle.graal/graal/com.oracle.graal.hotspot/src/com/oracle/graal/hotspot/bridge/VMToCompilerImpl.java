@@ -27,6 +27,7 @@ import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.CompilationTask.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.java.GraphBuilderPhase.*;
+import static com.oracle.graal.phases.common.InliningUtil.*;
 
 import java.io.*;
 import java.lang.reflect.*;
@@ -48,7 +49,6 @@ import com.oracle.graal.nodes.debug.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.phases.common.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.replacements.*;
 
@@ -319,7 +319,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         CompilationStatistics.clear(phase);
         if (graalRuntime.getConfig().ciTime) {
             parsedBytecodesPerSecond = MetricRateInPhase.snapshot(phase, parsedBytecodesPerSecond, BytecodesParsed, CompilationTime, TimeUnit.SECONDS);
-            inlinedBytecodesPerSecond = MetricRateInPhase.snapshot(phase, inlinedBytecodesPerSecond, InliningUtil.InlinedBytecodes, CompilationTime, TimeUnit.SECONDS);
+            inlinedBytecodesPerSecond = MetricRateInPhase.snapshot(phase, inlinedBytecodesPerSecond, InlinedBytecodes, CompilationTime, TimeUnit.SECONDS);
         }
     }
 

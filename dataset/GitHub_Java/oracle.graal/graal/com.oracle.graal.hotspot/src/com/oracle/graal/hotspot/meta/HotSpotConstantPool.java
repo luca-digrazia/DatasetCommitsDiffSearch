@@ -43,13 +43,13 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     @Override
     public int length() {
-        return runtime().getCompilerToVM().constantPoolLength(type);
+        return graalRuntime().getCompilerToVM().constantPoolLength(type);
     }
 
     @Override
     public Object lookupConstant(int cpi) {
         assert cpi != 0;
-        Object constant = runtime().getCompilerToVM().lookupConstantInPool(type, cpi);
+        Object constant = graalRuntime().getCompilerToVM().lookupConstantInPool(type, cpi);
         return constant;
     }
 
@@ -61,26 +61,26 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     @Override
     public Object lookupAppendix(int cpi, int opcode) {
         assert Bytecodes.isInvoke(opcode);
-        return runtime().getCompilerToVM().lookupAppendixInPool(type, cpi, (byte) opcode);
+        return graalRuntime().getCompilerToVM().lookupAppendixInPool(type, cpi, (byte) opcode);
     }
 
     @Override
     public JavaMethod lookupMethod(int cpi, int opcode) {
-        return runtime().getCompilerToVM().lookupMethodInPool(type, cpi, (byte) opcode);
+        return graalRuntime().getCompilerToVM().lookupMethodInPool(type, cpi, (byte) opcode);
     }
 
     @Override
     public JavaType lookupType(int cpi, int opcode) {
-        return runtime().getCompilerToVM().lookupTypeInPool(type, cpi);
+        return graalRuntime().getCompilerToVM().lookupTypeInPool(type, cpi);
     }
 
     @Override
     public JavaField lookupField(int cpi, int opcode) {
-        return runtime().getCompilerToVM().lookupFieldInPool(type, cpi, (byte) opcode);
+        return graalRuntime().getCompilerToVM().lookupFieldInPool(type, cpi, (byte) opcode);
     }
 
     @Override
     public void loadReferencedType(int cpi, int opcode) {
-        runtime().getCompilerToVM().lookupReferencedTypeInPool(type, cpi, (byte) opcode);
+        graalRuntime().getCompilerToVM().lookupReferencedTypeInPool(type, cpi, (byte) opcode);
     }
 }

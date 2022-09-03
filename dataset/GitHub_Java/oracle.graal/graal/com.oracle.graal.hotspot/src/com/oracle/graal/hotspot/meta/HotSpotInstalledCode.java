@@ -43,9 +43,8 @@ public class HotSpotInstalledCode extends CompilerObject implements InstalledCod
     private final HotSpotResolvedJavaMethod method;
     private final boolean isDefault;
     private final Graph graph;
-    long codeBlob;
+    long nmethod;
     long start;
-    boolean isNmethod;
 
     public HotSpotInstalledCode(HotSpotResolvedJavaMethod method, Graph graph, boolean isDefault) {
         this.method = method;
@@ -57,8 +56,8 @@ public class HotSpotInstalledCode extends CompilerObject implements InstalledCod
         return isDefault;
     }
 
-    public long getCodeBlob() {
-        return codeBlob;
+    public long getMethodAddress() {
+        return nmethod;
     }
 
     public Graph getGraph() {
@@ -72,29 +71,26 @@ public class HotSpotInstalledCode extends CompilerObject implements InstalledCod
 
     @Override
     public boolean isValid() {
-        return !isNmethod || graalRuntime().getCompilerToVM().isInstalledCodeValid(codeBlob);
+        return graalRuntime().getCompilerToVM().isInstalledCodeValid(nmethod);
     }
 
     @Override
     public void invalidate() {
-        if (isNmethod) {
-            graalRuntime().getCompilerToVM().invalidateInstalledCode(codeBlob);
-        }
+        graalRuntime().getCompilerToVM().invalidateInstalledCode(nmethod);
     }
 
     @Override
     public String toString() {
-        return String.format("InstalledCode[method=%s, codeBlob=0x%x]", method, codeBlob);
+        return String.format("InstalledCode[method=%s, nmethod=0x%x]", method, nmethod);
     }
 
     @Override
     public Object execute(Object arg1, Object arg2, Object arg3) throws InvalidInstalledCodeException {
-        assert isNmethod;
         assert method.getSignature().getParameterCount(!Modifier.isStatic(method.getModifiers())) == 3;
         assert method.getSignature().getParameterKind(0) == Kind.Object;
         assert method.getSignature().getParameterKind(1) == Kind.Object;
         assert !Modifier.isStatic(method.getModifiers()) || method.getSignature().getParameterKind(2) == Kind.Object;
-        return graalRuntime().getCompilerToVM().executeCompiledMethod(arg1, arg2, arg3, codeBlob);
+        return graalRuntime().getCompilerToVM().executeCompiledMethod(arg1, arg2, arg3, nmethod);
     }
 
     private boolean checkArgs(Object... args) {
@@ -113,9 +109,8 @@ public class HotSpotInstalledCode extends CompilerObject implements InstalledCod
 
     @Override
     public Object executeVarargs(Object... args) throws InvalidInstalledCodeException {
-        assert isNmethod;
         assert checkArgs(args);
-        return graalRuntime().getCompilerToVM().executeCompiledMethodVarargs(args, codeBlob);
+        return graalRuntime().getCompilerToVM().executeCompiledMethodVarargs(args, nmethod);
     }
 
     @Override
@@ -125,6 +120,6 @@ public class HotSpotInstalledCode extends CompilerObject implements InstalledCod
 
     @Override
     public byte[] getCode() {
-        return graalRuntime().getCompilerToVM().getCode(codeBlob);
+        return graalRuntime().getCompilerToVM().getCode(nmethod);
     }
 }

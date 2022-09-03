@@ -47,7 +47,7 @@ final class SPARCHotSpotGraalRuntime extends HotSpotGraalRuntime {
     @Override
     protected TargetDescription createTarget() {
         // SPARC: Create target description.
-        throw new InternalError("NYI");
+        return null;
     }
 
     @Override

@@ -313,7 +313,6 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     @Override
     public boolean isAssignableFrom(ResolvedJavaType other) {
-        assert other != null;
         if (other instanceof HotSpotResolvedObjectType) {
             HotSpotResolvedObjectType otherType = (HotSpotResolvedObjectType) other;
             return javaMirror.isAssignableFrom(otherType.javaMirror);
@@ -539,15 +538,6 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
             assert !result[i].isConstructor();
         }
         return result;
-    }
-
-    /**
-     * Gets all methods and constructors declared by this class, including the {@code <clinit>}
-     * method if there is one. The latter is not made accessible via standard Java reflection.
-     */
-    public ResolvedJavaMethod[] getMethods() {
-        HotSpotResolvedJavaMethod[] methods = graalRuntime().getCompilerToVM().getMethods(this);
-        return methods;
     }
 
     @Override

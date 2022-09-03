@@ -28,15 +28,16 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 
 /**
  * Gets the address of the C++ JavaThread object for the current thread.
  */
-public final class CurrentJavaThreadNode extends FloatingNode implements LIRLowerable {
+public class CurrentJavaThreadNode extends FloatingNode implements LIRLowerable {
 
-    private CurrentJavaThreadNode() {
-        super(null);
+    public CurrentJavaThreadNode() {
+        super(StampFactory.forWord());
     }
 
     @Override
@@ -53,8 +54,8 @@ public final class CurrentJavaThreadNode extends FloatingNode implements LIRLowe
         }
     }
 
-    @NodeIntrinsic(setStampFromReturnType = true)
+    @NodeIntrinsic
     public static Word get() {
-        return Word.unsigned(unsafeReadWord(Thread.currentThread(), eetopOffset()));
+        return Word.box(unsafeReadWord(Thread.currentThread(), eetopOffset()));
     }
 }
