@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,20 +36,15 @@ public final class HotSpotCompiledNmethod extends HotSpotCompiledCode {
     public final int id;
     public final long ctask;
 
-    public HotSpotCompiledNmethod(HotSpotResolvedJavaMethod method, CompilationResult compResult) {
-        this(method, compResult, 0L);
+    public HotSpotCompiledNmethod(TargetDescription target, HotSpotResolvedJavaMethod method, CompilationResult compResult) {
+        this(target, method, compResult, 0L);
     }
 
-    public HotSpotCompiledNmethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long ctask) {
-        super(compResult);
+    public HotSpotCompiledNmethod(TargetDescription target, HotSpotResolvedJavaMethod method, CompilationResult compResult, long ctask) {
+        super(target, compResult);
         this.method = method;
         this.entryBCI = compResult.getEntryBCI();
         this.id = compResult.getId();
         this.ctask = ctask;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "[" + id + ":" + method.format("%H.%n(%p)%r@") + entryBCI + "]";
     }
 }
