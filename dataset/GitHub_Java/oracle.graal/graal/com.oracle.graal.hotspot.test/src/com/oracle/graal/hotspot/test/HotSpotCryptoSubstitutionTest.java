@@ -75,7 +75,7 @@ public class HotSpotCryptoSubstitutionTest extends GraalCompilerTest {
         aesExpected.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding", input));
         aesExpected.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding", input));
 
-        if (compileAndInstall("com.sun.crypto.provider.AESCrypt", "encryptBlock", "decryptBlock")) {
+        if (compiledAndInstall("com.sun.crypto.provider.AESCrypt", "encryptBlock", "decryptBlock")) {
             ByteArrayOutputStream actual = new ByteArrayOutputStream();
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding", input));
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding", input));
@@ -86,7 +86,7 @@ public class HotSpotCryptoSubstitutionTest extends GraalCompilerTest {
         desExpected.write(runEncryptDecrypt(desKey, "DESede/CBC/NoPadding", input));
         desExpected.write(runEncryptDecrypt(desKey, "DESede/CBC/PKCS5Padding", input));
 
-        if (compileAndInstall("com.sun.crypto.provider.CipherBlockChaining", "encrypt", "decrypt")) {
+        if (compiledAndInstall("com.sun.crypto.provider.CipherBlockChaining", "encrypt", "decrypt")) {
             ByteArrayOutputStream actual = new ByteArrayOutputStream();
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding", input));
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding", input));
@@ -102,20 +102,20 @@ public class HotSpotCryptoSubstitutionTest extends GraalCompilerTest {
     /**
      * Compiles and installs the substitution for some specified methods. Once installed, the next
      * execution of the methods will use the newly installed code.
-     *
+     * 
      * @param className the name of the class for which substitutions are available
      * @param methodNames the names of the substituted methods
      * @return true if at least one substitution was compiled and installed
      */
-    private boolean compileAndInstall(String className, String... methodNames) {
+    private boolean compiledAndInstall(String className, String... methodNames) {
         boolean atLeastOneCompiled = false;
         for (String methodName : methodNames) {
             Method method = lookup(className, methodName);
             if (method != null) {
                 ResolvedJavaMethod installedCodeOwner = getMetaAccess().lookupJavaMethod(method);
-                StructuredGraph subst = getReplacements().getMethodSubstitution(installedCodeOwner);
-                if (subst != null) {
-                    StructuredGraph graph = subst.copy();
+                StructuredGraph graph = getReplacements().getMethodSubstitution(installedCodeOwner);
+                if (graph != null) {
+                    graph = graph.copy();
                     Assert.assertNotNull(getCode(installedCodeOwner, graph, true));
                     atLeastOneCompiled = true;
                 } else {
@@ -127,7 +127,7 @@ public class HotSpotCryptoSubstitutionTest extends GraalCompilerTest {
     }
 
     private static Method lookup(String className, String methodName) {
-        Class<?> c;
+        Class c;
         try {
             c = Class.forName(className);
             for (Method m : c.getDeclaredMethods()) {
@@ -180,7 +180,7 @@ public class HotSpotCryptoSubstitutionTest extends GraalCompilerTest {
         return result;
     }
 
-    private static byte[] readClassfile16(Class<? extends HotSpotCryptoSubstitutionTest> c) throws IOException {
+    private static byte[] readClassfile16(Class c) throws IOException {
         String classFilePath = "/" + c.getName().replace('.', '/') + ".class";
         InputStream stream = c.getResourceAsStream(classFilePath);
         int bytesToRead = stream.available();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,25 +20,20 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot;
+package com.oracle.graal.hotspot.sparc;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 
-/**
- * {@link HotSpotCompiledCode} destined for installation as an nmethod.
- */
-public final class HotSpotCompiledNmethod extends HotSpotCompiledCode {
+public class SPARCHotSpotCodeCacheProvider extends HotSpotCodeCacheProvider {
 
-    private static final long serialVersionUID = 1492412603674834024L;
-    public final HotSpotResolvedJavaMethod method;
-    public final int entryBCI;
-    public final int id;
+    public SPARCHotSpotCodeCacheProvider(HotSpotGraalRuntime runtime, TargetDescription target) {
+        super(runtime, target);
+    }
 
-    public HotSpotCompiledNmethod(TargetDescription target, HotSpotResolvedJavaMethod method, CompilationResult compResult) {
-        super(target, compResult);
-        this.method = method;
-        this.entryBCI = compResult.getEntryBCI();
-        this.id = compResult.getId();
+    @Override
+    protected RegisterConfig createRegisterConfig() {
+        return new SPARCHotSpotRegisterConfig(getTarget(), runtime.getConfig());
     }
 }

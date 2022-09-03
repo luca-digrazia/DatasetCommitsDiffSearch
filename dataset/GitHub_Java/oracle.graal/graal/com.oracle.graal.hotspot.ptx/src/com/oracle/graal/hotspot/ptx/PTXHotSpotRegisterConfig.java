@@ -29,8 +29,8 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.lir.Variable;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.*;
 
 public class PTXHotSpotRegisterConfig implements RegisterConfig {
 
@@ -71,11 +71,6 @@ public class PTXHotSpotRegisterConfig implements RegisterConfig {
     public Register[] getCallerSaveRegisters() {
         // No caller save registers; return empty array
         return new Register[]{};
-    }
-
-    @Override
-    public boolean areAllAllocatableRegistersCallerSaved() {
-        throw GraalInternalError.unimplemented();
     }
 
     @Override
