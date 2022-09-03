@@ -26,9 +26,7 @@ import java.io.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.vis.*;
-import com.sun.c1x.*;
 import com.sun.c1x.observer.*;
-import com.sun.c1x.value.*;
 
 /**
  * Observes compilation events and uses {@link GraphvizPrinter} to produce a control flow graph in the DOT language
@@ -38,11 +36,9 @@ import com.sun.c1x.value.*;
  */
 public class GraphvizPrinterObserver implements CompilationObserver {
 
-    private final boolean pdf;
     private int n;
 
-    public GraphvizPrinterObserver(boolean pdf) {
-        this.pdf = pdf;
+    public GraphvizPrinterObserver() {
     }
 
     public void compilationStarted(CompilationEvent event) {
@@ -59,42 +55,18 @@ public class GraphvizPrinterObserver implements CompilationObserver {
             String name = event.getMethod().holder().name();
             name = name.substring(1, name.length() - 1).replace('/', '.');
             name = name + "." + event.getMethod().name();
-            String filename = name + "_" + (n++) + "_" + event.getLabel();
-
-            OutputStream out = null;
             try {
-                if (pdf) {
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                    GraphvizPrinter printer = new GraphvizPrinter(buffer);
-                    if (C1XOptions.OmitDOTFrameStates) {
-                        printer.addOmittedClass(FrameState.class);
-                    }
-                    printer.begin(name);
-                    printer.print(graph, true);
-                    printer.end();
+                FileOutputStream stream = new FileOutputStream(name + "_" + n + "_" + event.getLabel() + ".gv");
+                n++;
 
-                    out = new FileOutputStream(filename + ".pdf");
-                    GraphvizRunner.process(GraphvizRunner.DOT_LAYOUT, new ByteArrayInputStream(buffer.toByteArray()), out, "pdf");
-                } else {
-                    out = new FileOutputStream(filename + ".gv");
+                GraphvizPrinter printer = new GraphvizPrinter(stream);
+                printer.begin(name);
+                printer.print(graph, true);
+                printer.end();
 
-                    GraphvizPrinter printer = new GraphvizPrinter(out);
-                    if (C1XOptions.OmitDOTFrameStates) {
-                        printer.addOmittedClass(FrameState.class);
-                    }
-                    printer.begin(name);
-                    printer.print(graph, true);
-                    printer.end();
-                }
+                stream.close();
             } catch (IOException e) {
                 e.printStackTrace();
-            } finally {
-                if (out != null) {
-                    try {
-                        out.close();
-                    } catch (IOException e) {
-                    }
-                }
             }
         }
     }

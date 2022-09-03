@@ -126,13 +126,7 @@ public class C1XCompiler extends ObservableCompiler {
             addCompilationObserver(new CFGPrinterObserver());
         }
         if (C1XOptions.PrintDOTGraphToFile) {
-            addCompilationObserver(new GraphvizPrinterObserver(false));
-        }
-        if (C1XOptions.PrintDOTGraphToPdf) {
-            addCompilationObserver(new GraphvizPrinterObserver(true));
-        }
-        if (C1XOptions.PrintIdealGraphToFile) {
-            addCompilationObserver(new IdealGraphPrinterObserver());
+            addCompilationObserver(new GraphvizPrinterObserver());
         }
     }
 
