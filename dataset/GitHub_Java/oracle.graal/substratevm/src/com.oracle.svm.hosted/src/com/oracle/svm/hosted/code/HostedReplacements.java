@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -51,7 +49,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * Snippets are parsed before the static analysis using {@link SubstrateReplacements}. This ensures
  * that snippets do not use analysis-specific nodes - they are parsed using the same
  * {@link BytecodeParser} subclass also used for parsing the snippets we use for runtime
- * compilation. The parsing uses the {@link AnalysisUniverse}.
+ * compilation. The parsing using the {@link AnalysisUniverse}.
  *
  * We cannot parse snippets again before compilation with the {@link HostedUniverse}: the static
  * analysis does not see the individual methods that are inlined into snippets, only the final graph
