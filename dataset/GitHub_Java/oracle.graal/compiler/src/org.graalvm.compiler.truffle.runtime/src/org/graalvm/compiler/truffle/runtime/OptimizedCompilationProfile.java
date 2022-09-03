@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -159,7 +157,7 @@ public class OptimizedCompilationProfile {
     void profileDirectCall(Object[] args) {
         Assumption typesAssumption = profiledArgumentTypesAssumption;
         if (typesAssumption == null) {
-            if (CompilerDirectives.inInterpreterOrLowTier()) {
+            if (CompilerDirectives.inInterpreter()) {
                 initializeProfiledArgumentTypes(args);
             }
         } else {
@@ -200,7 +198,7 @@ public class OptimizedCompilationProfile {
 
     final void profileReturnValue(Object result) {
         Assumption returnTypeAssumption = profiledReturnTypeAssumption;
-        if (CompilerDirectives.inInterpreterOrLowTier() && returnTypeAssumption == null) {
+        if (CompilerDirectives.inInterpreter() && returnTypeAssumption == null) {
             // we only profile return values in the interpreter as we don't want to deoptimize
             // for immediate compiles.
             if (TruffleCompilerOptions.getValue(TruffleReturnTypeSpeculation)) {
@@ -288,7 +286,7 @@ public class OptimizedCompilationProfile {
     final void interpreterCall(OptimizedCallTarget callTarget) {
         int intCallCount = ++interpreterCallCount;
         int intAndLoopCallCount = ++interpreterCallAndLoopCount;
-        if (CompilerDirectives.inInterpreter() && !callTarget.isCompiling() && !compilationFailed) {
+        if (!callTarget.isCompiling() && !compilationFailed) {
             // check if call target is hot enough to get compiled, but took not too long to get hot
             if ((intAndLoopCallCount >= compilationCallAndLoopThreshold && intCallCount >= compilationCallThreshold && !isDeferredCompile(callTarget)) ||
                             TruffleCompilerOptions.getValue(TruffleCompileImmediately)) {
