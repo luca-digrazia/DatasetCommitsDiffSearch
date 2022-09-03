@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +23,7 @@
 package com.oracle.graal.truffle;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.truffle.OptimizedCallTargetLog.*;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 import java.util.*;
@@ -45,11 +46,11 @@ import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.common.inlining.info.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
-import com.oracle.graal.truffle.debug.*;
 import com.oracle.graal.truffle.nodes.*;
 import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.graal.truffle.nodes.frame.*;
@@ -66,7 +67,7 @@ public class PartialEvaluator {
 
     private final Providers providers;
     private final CanonicalizerPhase canonicalizer;
-    private Set<JavaConstant> constantReceivers;
+    private Set<Constant> constantReceivers;
     private final TruffleCache truffleCache;
     private final SnippetReflectionProvider snippetReflection;
     private final ResolvedJavaMethod callDirectMethod;
@@ -74,7 +75,8 @@ public class PartialEvaluator {
 
     public PartialEvaluator(Providers providers, TruffleCache truffleCache) {
         this.providers = providers;
-        this.canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue());
+        CustomCanonicalizer customCanonicalizer = new PartialEvaluatorCanonicalizer(providers.getMetaAccess(), providers.getConstantReflection());
+        this.canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue(), customCanonicalizer);
         this.snippetReflection = Graal.getRequiredCapability(SnippetReflectionProvider.class);
         this.truffleCache = truffleCache;
         this.callDirectMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod());
@@ -203,7 +205,7 @@ public class PartialEvaluator {
 
     private void createHistogram() {
         DebugHistogram histogram = Debug.createHistogram("Expanded Truffle Nodes");
-        for (JavaConstant c : constantReceivers) {
+        for (Constant c : constantReceivers) {
             String javaName = providers.getMetaAccess().lookupJavaType(c).toJavaName(false);
 
             // The DSL uses nested classes with redundant names - only show the inner class
@@ -229,7 +231,7 @@ public class PartialEvaluator {
                 try (Indent id1 = Debug.logAndIndent("try inlining %s, kind = %s", methodCallTargetNode.targetMethod(), kind)) {
                     if (kind == InvokeKind.Static || kind == InvokeKind.Special) {
                         if ((TraceTruffleCompilationHistogram.getValue() || TraceTruffleCompilationDetails.getValue()) && kind == InvokeKind.Special && methodCallTargetNode.receiver().isConstant()) {
-                            constantReceivers.add(methodCallTargetNode.receiver().asJavaConstant());
+                            constantReceivers.add(methodCallTargetNode.receiver().asConstant());
                         }
 
                         Replacements replacements = providers.getReplacements();
@@ -294,7 +296,7 @@ public class PartialEvaluator {
             for (ParameterNode param : graphCopy.getNodes(ParameterNode.class).snapshot()) {
                 ValueNode arg = arguments.get(param.index());
                 if (arg.isConstant()) {
-                    JavaConstant constant = arg.asJavaConstant();
+                    Constant constant = arg.asConstant();
                     param.usages().snapshotTo(modifiedNodes);
                     param.replaceAndDelete(ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy));
                 } else {
@@ -302,7 +304,7 @@ public class PartialEvaluator {
                     if (length != null && length.isConstant()) {
                         param.usages().snapshotTo(modifiedNodes);
                         ParameterNode newParam = graphCopy.addWithoutUnique(ParameterNode.create(param.index(), param.stamp()));
-                        param.replaceAndDelete(graphCopy.addWithoutUnique(PiArrayNode.create(newParam, ConstantNode.forInt(length.asJavaConstant().asInt(), graphCopy), param.stamp())));
+                        param.replaceAndDelete(graphCopy.addWithoutUnique(PiArrayNode.create(newParam, ConstantNode.forInt(length.asConstant().asInt(), graphCopy), param.stamp())));
                     }
                 }
             }
@@ -371,7 +373,7 @@ public class PartialEvaluator {
             if (TruffleCompilerOptions.TraceTrufflePerformanceWarnings.getValue()) {
                 Map<String, Object> properties = new LinkedHashMap<>();
                 properties.put("callNode", callNode);
-                TracePerformanceWarningsListener.logPerformanceWarning("A direct call within the Truffle AST is not reachable anymore. Call node could not be inlined.", properties);
+                logPerformanceWarning("A direct call within the Truffle AST is not reachable anymore. Call node could not be inlined.", properties);
             }
         }
 
@@ -380,7 +382,7 @@ public class PartialEvaluator {
                 Map<String, Object> properties = new LinkedHashMap<>();
                 properties.put("originalTarget", decision.getTarget());
                 properties.put("callNode", callNode);
-                TracePerformanceWarningsListener.logPerformanceWarning(String.format("CallTarget changed during compilation. Call node could not be inlined."), properties);
+                logPerformanceWarning(String.format("CallTarget changed during compilation. Call node could not be inlined."), properties);
             }
             decision = null;
         }
@@ -432,7 +434,7 @@ public class PartialEvaluator {
             throw new AssertionError(String.format("Method argument for method '%s' is not constant.", callDirectMethod.toString()));
         }
 
-        JavaConstant constantCallNode = node.asJavaConstant();
+        Constant constantCallNode = node.asConstant();
         Object value = snippetReflection.asObject(constantCallNode);
 
         if (!(value instanceof OptimizedDirectCallNode)) {
