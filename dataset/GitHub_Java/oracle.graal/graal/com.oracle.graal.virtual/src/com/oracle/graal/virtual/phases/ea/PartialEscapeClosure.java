@@ -238,7 +238,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                     }
                 });
                 for (ObjectState obj : state.getStates()) {
-                    if (obj.isVirtual() && obj.hasLocks()) {
+                    if (obj.isVirtual() && obj.getLockCount() > 0) {
                         virtual.add(obj);
                     }
                 }
@@ -502,6 +502,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                     }
                     int virtual = 0;
                     ObjectState startObj = objStates[0];
+                    int lockCount = startObj.getLockCount();
                     boolean locksMatch = true;
                     ValueNode singleValue = startObj.isVirtual() ? null : startObj.getMaterializedValue();
                     for (ObjectState obj : objStates) {
@@ -513,7 +514,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 singleValue = null;
                             }
                         }
-                        locksMatch &= obj.locksEqual(startObj);
+                        locksMatch &= obj.getLockCount() == lockCount;
                     }
 
                     assert virtual < states.size() || locksMatch : "mismatching lock counts at " + merge;
@@ -530,9 +531,9 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 ensureMaterialized(state, obj, predecessor.getEndNode(), blockEffects.get(predecessor), METRIC_MATERIALIZATIONS_MERGE);
                                 afterMergeEffects.addPhiInput(materializedValuePhi, obj.getMaterializedValue());
                             }
-                            newState.addObject(object, new ObjectState(object, materializedValuePhi, EscapeState.Global, null));
+                            newState.addObject(object, new ObjectState(object, materializedValuePhi, EscapeState.Global, lockCount));
                         } else {
-                            newState.addObject(object, new ObjectState(object, singleValue, EscapeState.Global, null));
+                            newState.addObject(object, new ObjectState(object, singleValue, EscapeState.Global, lockCount));
                         }
                     } else {
                         assert virtual == states.size();
@@ -566,7 +567,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 values[index] = phis[index];
                             }
                         }
-                        newState.addObject(object, new ObjectState(object, values, EscapeState.Virtual, startObj.getLocks()));
+                        newState.addObject(object, new ObjectState(object, values, EscapeState.Virtual, lockCount));
                     }
                 }
 
@@ -637,7 +638,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                             }
                         }
                         mergeEffects.addFloatingNode(virtual, "valueObjectNode");
-                        newState.addObject(virtual, new ObjectState(virtual, Arrays.copyOf(phis, phis.length, ValueNode[].class), EscapeState.Virtual, null));
+                        newState.addObject(virtual, new ObjectState(virtual, Arrays.copyOf(phis, phis.length, ValueNode[].class), EscapeState.Virtual, 0));
                         newState.addAndMarkAlias(virtual, virtual, usages);
                         newState.addAndMarkAlias(virtual, phi, usages);
                     } else {
