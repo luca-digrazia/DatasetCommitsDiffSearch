@@ -376,8 +376,8 @@ public final class REPLServer {
                     event.prepareStepInto(1);
                 }
                 try {
-                    FrameInstance frameInstance = frameNumber == 0 ? null : event.getStack().get(frameNumber);
-                    final Object result = event.eval(code, frameInstance);
+                    FrameInstance frame = frameNumber == 0 ? null : event.getStack().get(frameNumber);
+                    final Object result = event.eval(code, frame);
                     return (result instanceof Value) ? ((Value) result).get() : result;
                 } finally {
                     event.prepareContinue();
@@ -392,7 +392,7 @@ public final class REPLServer {
             if (value == null) {
                 return "<empty>";
             }
-            return trim(event.toString(value, event.getStack().get(frameNumber)), trim);
+            return trim(event.toString(frameNumber, value), trim);
         }
 
         /**

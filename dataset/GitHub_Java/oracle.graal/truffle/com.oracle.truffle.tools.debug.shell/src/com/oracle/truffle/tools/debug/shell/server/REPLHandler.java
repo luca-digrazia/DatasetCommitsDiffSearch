@@ -37,11 +37,11 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
+import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.ASTPrinter;
 import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.LocationPrinter;
 import com.oracle.truffle.tools.debug.shell.server.REPLServer.BreakpointInfo;
 import com.oracle.truffle.tools.debug.shell.server.REPLServer.Context;
 import com.oracle.truffle.tools.debug.shell.server.REPLServer.REPLVisualizer;
-import java.io.File;
 
 /**
  * Server-side REPL implementation of an
@@ -200,7 +200,7 @@ public abstract class REPLHandler {
             final String lookupFile = (path == null || path.isEmpty()) ? fileName : path;
             Source source = null;
             try {
-                source = Source.newBuilder(new File(lookupFile)).build();
+                source = Source.fromFileName(lookupFile, false);
             } catch (Exception ex) {
                 return finishReplyFailed(reply, ex);
             }
@@ -240,7 +240,7 @@ public abstract class REPLHandler {
             final String lookupFile = (path == null || path.isEmpty()) ? fileName : path;
             Source source = null;
             try {
-                source = Source.newBuilder(new File(lookupFile)).build();
+                source = Source.fromFileName(lookupFile, true);
             } catch (Exception ex) {
                 return finishReplyFailed(reply, ex);
             }
@@ -422,7 +422,7 @@ public abstract class REPLHandler {
             }
             reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, fileName);
             try {
-                Source source = Source.newBuilder(new File(fileName)).build();
+                Source source = Source.fromFileName(fileName);
                 if (source == null) {
                     return finishReplyFailed(reply, "file \"" + fileName + "\" not found");
                 } else {
@@ -562,7 +562,7 @@ public abstract class REPLHandler {
             final String fileName = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME);
             final boolean stepInto = com.oracle.truffle.tools.debug.shell.REPLMessage.TRUE.equals(request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.STEP_INTO));
             try {
-                final Source fileSource = Source.newBuilder(new File(fileName)).build();
+                final Source fileSource = Source.fromFileName(fileName);
                 replServer.getCurrentContext().eval(fileSource, stepInto);
                 reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, fileName);
                 return finishReplySucceeded(reply, fileName + "  loaded");
@@ -670,6 +670,44 @@ public abstract class REPLHandler {
         }
     };
 
+    public static final REPLHandler TRUFFLE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE) {
+
+        @Override
+        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
+            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
+            final ASTPrinter astPrinter = replServer.getASTPrinter();
+            final String topic = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC);
+            reply.put(com.oracle.truffle.tools.debug.shell.REPLMessage.TOPIC, topic);
+            Node node = replServer.getCurrentContext().getNodeAtHalt();
+            if (node == null) {
+                return finishReplyFailed(reply, "no current AST node");
+            }
+            final Integer depth = request.getIntValue(com.oracle.truffle.tools.debug.shell.REPLMessage.AST_DEPTH);
+            if (depth == null) {
+                return finishReplyFailed(reply, "missing AST depth");
+            }
+            try {
+                switch (topic) {
+                    case com.oracle.truffle.tools.debug.shell.REPLMessage.AST:
+                        while (node.getParent() != null) {
+                            node = node.getParent();
+                        }
+                        final String astText = astPrinter.displayAST(node, depth, replServer.getCurrentContext().getNodeAtHalt());
+                        return finishReplySucceeded(reply, astText);
+                    case com.oracle.truffle.tools.debug.shell.REPLMessage.SUBTREE:
+                    case com.oracle.truffle.tools.debug.shell.REPLMessage.SUB:
+                        final String subTreeText = astPrinter.displayAST(node, depth);
+                        return finishReplySucceeded(reply, subTreeText);
+                    default:
+                        return finishReplyFailed(reply, "Unknown \"" + com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE.toString() + "\" topic");
+                }
+
+            } catch (Exception ex) {
+                return finishReplyFailed(reply, ex);
+            }
+        }
+    };
+
     public static final REPLHandler UNSET_BREAK_CONDITION_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.UNSET_BREAK_CONDITION) {
 
         @Override
@@ -694,4 +732,30 @@ public abstract class REPLHandler {
         }
     };
 
+    public static final REPLHandler TRUFFLE_NODE_HANDLER = new REPLHandler(com.oracle.truffle.tools.debug.shell.REPLMessage.TRUFFLE_NODE) {
+
+        @Override
+        public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request, REPLServer replServer) {
+            final com.oracle.truffle.tools.debug.shell.REPLMessage reply = createReply();
+            final Node node = replServer.getCurrentContext().getNodeAtHalt();
+            if (node == null) {
+                return finishReplyFailed(reply, "no current AST node");
+            }
+
+            try {
+                final StringBuilder sb = new StringBuilder();
+                sb.append(replServer.getASTPrinter().displayNodeWithInstrumentation(node));
+                final SourceSection sourceSection = node.getSourceSection();
+                if (sourceSection != null) {
+                    final String code = sourceSection.getCode();
+                    sb.append(" \"");
+                    sb.append(code.substring(0, Math.min(code.length(), 15)));
+                    sb.append("...\"");
+                }
+                return finishReplySucceeded(reply, sb.toString());
+            } catch (Exception ex) {
+                return finishReplyFailed(reply, ex);
+            }
+        }
+    };
 }
