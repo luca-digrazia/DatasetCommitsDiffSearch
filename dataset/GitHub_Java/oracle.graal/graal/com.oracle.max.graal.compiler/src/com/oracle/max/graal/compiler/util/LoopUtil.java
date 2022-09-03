@@ -34,7 +34,6 @@ import com.oracle.max.graal.compiler.util.GraphUtil.ColorSplitingLambda;
 import com.oracle.max.graal.compiler.util.GraphUtil.ColoringLambda;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
 import com.sun.cri.ci.*;
 
 public class LoopUtil {
@@ -790,7 +789,7 @@ public class LoopUtil {
                     return (StateSplit) fixedNode;
                 }
             } else {
-                FixedNode current = branches.poll();
+                // FixedNode current = branches.poll();
                 // TODO (gd) find appropriate point : will be useful if a loop exit goes "up" as a result of making a branch dead in the loop body
             }
         }

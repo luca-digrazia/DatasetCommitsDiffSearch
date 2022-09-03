@@ -30,7 +30,6 @@ import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
 
 
 public class IdentifyBlocksPhase extends Phase {
@@ -141,12 +140,12 @@ public class IdentifyBlocksPhase extends Phase {
                         block = null;
                     }
                     block = assignBlockNew(currentNode, block);
-                    if (currentNode.predecessor() == null) {
+                    if (currentNode.predecessors().size() == 0) {
                         // Either dead code or at a merge node => stop iteration.
                         break;
                     }
                     Node prev = currentNode;
-                    currentNode = currentNode.predecessor();
+                    currentNode = currentNode.singlePredecessor();
                     assert !currentNode.isDeleted() : prev + " " + currentNode;
                 }
             }
@@ -162,9 +161,9 @@ public class IdentifyBlocksPhase extends Phase {
                     predBlock.addSuccessor(block);
                 }
             } else {
-                if (n.predecessor() != null) {
-                    if (isFixed(n.predecessor())) {
-                        Block predBlock = nodeToBlock.get(n.predecessor());
+                for (Node pred : n.predecessors()) {
+                    if (isFixed(pred)) {
+                        Block predBlock = nodeToBlock.get(pred);
                         predBlock.addSuccessor(block);
                     }
                 }
@@ -401,8 +400,8 @@ public class IdentifyBlocksPhase extends Phase {
                     return false;
                 }
             }
-            if (n.predecessor() != null) {
-                if (!checkNodesAbove(allowedBlocks, n.predecessor())) {
+            for (Node pred : n.predecessors()) {
+                if (!checkNodesAbove(allowedBlocks, pred)) {
                     return false;
                 }
             }
@@ -445,7 +444,7 @@ public class IdentifyBlocksPhase extends Phase {
             int idx = sortedInstructions.indexOf(b.lastNode());
             boolean canNotMove = false;
             for (int i = idx + 1; i < sortedInstructions.size(); i++) {
-                if (sortedInstructions.get(i).inputContains(b.lastNode())) {
+                if (sortedInstructions.get(i).inputs().contains(b.lastNode())) {
                     canNotMove = true;
                     break;
                 }
@@ -473,9 +472,7 @@ public class IdentifyBlocksPhase extends Phase {
 
         if (i instanceof WriteNode) {
             // TODO(tw): Make sure every ReadNode that is connected to the same memory state is executed before every write node.
-            WriteNode wn = (WriteNode) i;
-            // TODO: Iterate over variablePart.
-//            wn.variableInputs();
+            // WriteNode wn = (WriteNode) i;
         }
 
         FrameState state = null;
@@ -490,8 +487,8 @@ public class IdentifyBlocksPhase extends Phase {
             }
         }
 
-        if (i.predecessor() != null) {
-            addToSorting(b, i.predecessor(), sortedInstructions, map);
+        for (Node pred : i.predecessors()) {
+            addToSorting(b, pred, sortedInstructions, map);
         }
 
         map.mark(i);
