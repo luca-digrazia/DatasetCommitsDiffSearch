@@ -517,8 +517,8 @@ public class PTXAssembler extends AbstractPTXAssembler {
         emitString("@%p" + pred + " " + "bra" + " " + tgt + ";");
     }
 
-    public final void bra(String src) {
-        emitString("bra " + src + ";");
+    public final void bra(String targetIdentifier) {
+        emitString("bra " + targetIdentifier + ";");
     }
 
     public final void bra_uni(String tgt) {
@@ -715,23 +715,8 @@ public class PTXAssembler extends AbstractPTXAssembler {
         emitString("ret.uni;" + " " + "");
     }
 
-    public enum BooleanOperator {
-        AND("and"), OR("or"), XOR("xor");
-
-        private final String output;
-
-        private BooleanOperator(String out) {
-            this.output = out;
-        }
-
-        public String getOperator() {
-            return output + ".";
-        }
-    }
-
     public static class Setp {
 
-        private BooleanOperator booleanOperator;
         private ConditionOperator operator;
         private Value first, second;
         private Kind kind;
@@ -743,15 +728,6 @@ public class PTXAssembler extends AbstractPTXAssembler {
             setPredicate(predicateRegisterNumber);
             setKind();
             setConditionOperator(operatorForConditon(condition));
-        }
-
-        public Setp(Condition condition, BooleanOperator operator, Value first, Value second, int predicateRegisterNumber) {
-            setFirst(first);
-            setSecond(second);
-            setPredicate(predicateRegisterNumber);
-            setKind();
-            setConditionOperator(operatorForConditon(condition));
-            setBooleanOperator(operator);
         }
 
         public void setFirst(Value v) {
@@ -768,10 +744,6 @@ public class PTXAssembler extends AbstractPTXAssembler {
 
         public void setConditionOperator(ConditionOperator co) {
             operator = co;
-        }
-
-        public void setBooleanOperator(BooleanOperator bo) {
-            booleanOperator = bo;
         }
 
         private ConditionOperator operatorForConditon(Condition condition) {
@@ -911,14 +883,7 @@ public class PTXAssembler extends AbstractPTXAssembler {
         }
 
         public void emit(PTXAssembler asm) {
-
-            if (booleanOperator != null) {
-                asm.emitString("setp." + operator.getOperator() + "." + booleanOperator.getOperator() + typeForKind(kind) + " %p" + predicate + emitValue(first) + emitValue(second) + ", %r;"); // Predicates
-// need to be objects
-
-            } else {
-                asm.emitString("setp." + operator.getOperator() + "." + typeForKind(kind) + " %p" + predicate + emitValue(first) + emitValue(second) + ";");
-            }
+            asm.emitString("setp." + operator.getOperator() + "." + typeForKind(kind) + " %p" + predicate + emitValue(first) + emitValue(second) + ";");
         }
     }
 
