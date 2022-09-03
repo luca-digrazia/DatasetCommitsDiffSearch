@@ -25,7 +25,6 @@
 package org.graalvm.compiler.hotspot.meta;
 
 import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
-import static org.graalvm.compiler.hotspot.HotSpotBackend.GHASH_PROCESS_BLOCKS;
 import static org.graalvm.compiler.hotspot.meta.HotSpotAOTProfilingPlugin.Options.TieredAOT;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.JAVA_THREAD_THREAD_OBJECT_LOCATION;
 import static org.graalvm.compiler.java.BytecodeParserOptions.InlineDuringParsing;
@@ -56,6 +55,7 @@ import org.graalvm.compiler.hotspot.replacements.CRC32Substitutions;
 import org.graalvm.compiler.hotspot.replacements.CallSiteTargetNode;
 import org.graalvm.compiler.hotspot.replacements.CipherBlockChainingSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.ClassGetHubNode;
+import org.graalvm.compiler.hotspot.replacements.GHASHSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.HotSpotArraySubstitutions;
 import org.graalvm.compiler.hotspot.replacements.HotSpotClassSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.IdentityHashCodeNode;
@@ -69,7 +69,6 @@ import org.graalvm.compiler.hotspot.replacements.SHASubstitutions;
 import org.graalvm.compiler.hotspot.replacements.ThreadSubstitutions;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopyNode;
 import org.graalvm.compiler.hotspot.word.HotSpotWordTypes;
-import org.graalvm.compiler.nodes.ComputeObjectAddressNode;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.NodeView;
@@ -77,7 +76,6 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.calc.IntegerConvertNode;
 import org.graalvm.compiler.nodes.calc.LeftShiftNode;
-import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.ForeignCallPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
@@ -169,7 +167,7 @@ public class HotSpotGraphBuilderPlugins {
                 registerCRC32CPlugins(invocationPlugins, config, replacementBytecodeProvider);
                 registerBigIntegerPlugins(invocationPlugins, config, replacementBytecodeProvider);
                 registerSHAPlugins(invocationPlugins, config, replacementBytecodeProvider);
-                registerGHASHPlugins(invocationPlugins, config, metaAccess, foreignCalls);
+                registerGHASHPlugins(invocationPlugins, config, replacementBytecodeProvider);
                 registerUnsafePlugins(invocationPlugins, replacementBytecodeProvider);
                 StandardGraphBuilderPlugins.registerInvocationPlugins(metaAccess, snippetReflection, invocationPlugins, replacementBytecodeProvider, true, false);
                 registerArrayPlugins(invocationPlugins, replacementBytecodeProvider);
@@ -511,36 +509,11 @@ public class HotSpotGraphBuilderPlugins {
         }
     }
 
-    private static void registerGHASHPlugins(InvocationPlugins plugins, GraalHotSpotVMConfig config, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls) {
+    private static void registerGHASHPlugins(InvocationPlugins plugins, GraalHotSpotVMConfig config, BytecodeProvider bytecodeProvider) {
         if (config.useGHASHIntrinsics()) {
             assert config.ghashProcessBlocks != 0L;
-            Registration r = new Registration(plugins, "com.sun.crypto.provider.GHASH");
-            r.register5("processBlocks",
-                            byte[].class,
-                            int.class,
-                            int.class,
-                            long[].class,
-                            long[].class,
-                            new InvocationPlugin() {
-                                @Override
-                                public boolean apply(GraphBuilderContext b,
-                                                ResolvedJavaMethod targetMethod,
-                                                Receiver receiver,
-                                                ValueNode data,
-                                                ValueNode inOffset,
-                                                ValueNode blocks,
-                                                ValueNode state,
-                                                ValueNode hashSubkey) {
-                                    int longArrayBaseOffset = metaAccess.getArrayBaseOffset(JavaKind.Long);
-                                    int byteArrayBaseOffset = metaAccess.getArrayBaseOffset(JavaKind.Byte);
-                                    ValueNode dataOffset = AddNode.create(ConstantNode.forInt(byteArrayBaseOffset), inOffset, NodeView.DEFAULT);
-                                    ComputeObjectAddressNode dataAddress = new ComputeObjectAddressNode(data, dataOffset);
-                                    ComputeObjectAddressNode stateAddress = new ComputeObjectAddressNode(state, ConstantNode.forInt(longArrayBaseOffset));
-                                    ComputeObjectAddressNode hashSubkeyAddress = new ComputeObjectAddressNode(hashSubkey, ConstantNode.forInt(longArrayBaseOffset));
-                                    b.addWithInputs(new ForeignCallNode(foreignCalls, GHASH_PROCESS_BLOCKS, stateAddress, hashSubkeyAddress, dataAddress, blocks));
-                                    return true;
-                                }
-                            });
+            Registration r = new Registration(plugins, "com.sun.crypto.provider.GHASH", bytecodeProvider);
+            r.registerMethodSubstitution(GHASHSubstitutions.class, GHASHSubstitutions.processBlocksName, "processBlocks", byte[].class, int.class, int.class, long[].class, long[].class);
         }
     }
 
