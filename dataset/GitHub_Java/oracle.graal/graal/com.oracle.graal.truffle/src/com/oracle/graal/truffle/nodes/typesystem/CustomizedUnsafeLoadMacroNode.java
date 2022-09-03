@@ -47,7 +47,11 @@ public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode im
     private static final int CONDITION_ARGUMENT_INDEX = 2;
     private static final int LOCATION_ARGUMENT_INDEX = 3;
 
-    public CustomizedUnsafeLoadMacroNode(Invoke invoke) {
+    public static CustomizedUnsafeLoadMacroNode create(Invoke invoke) {
+        return new CustomizedUnsafeLoadMacroNode(invoke);
+    }
+
+    protected CustomizedUnsafeLoadMacroNode(Invoke invoke) {
         super(invoke, "The location argument could not be resolved to a constant.");
         assert arguments.size() == ARGUMENT_COUNT;
     }
@@ -60,14 +64,14 @@ public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode im
             ValueNode offsetArgument = arguments.get(OFFSET_ARGUMENT_INDEX);
             ValueNode conditionArgument = arguments.get(CONDITION_ARGUMENT_INDEX);
             LocationIdentity locationIdentity;
-            if (locationArgument.isNullConstant()) {
+            if (locationArgument.asJavaConstant().isNull()) {
                 locationIdentity = LocationIdentity.ANY_LOCATION;
             } else {
                 locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
             }
             CompareNode compare = CompareNode.createCompareNode(Condition.EQ, conditionArgument, ConstantNode.forBoolean(true));
             Kind returnKind = this.getTargetMethod().getSignature().getReturnKind();
-            return new UnsafeLoadNode(objectArgument, offsetArgument, returnKind, locationIdentity, compare);
+            return UnsafeLoadNode.create(objectArgument, offsetArgument, returnKind, locationIdentity, compare);
         }
         return this;
     }
