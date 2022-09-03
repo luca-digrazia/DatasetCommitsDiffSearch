@@ -86,11 +86,6 @@ public final class CompilerImpl implements Compiler, Remote {
     private final CiTarget target;
     private final RiXirGenerator generator;
     private final RiRegisterConfig registerConfig;
-    private final HotSpotVMConfig config;
-
-    public HotSpotVMConfig getConfig() {
-        return config;
-    }
 
     private CompilerImpl(VMEntries entries) {
 
@@ -117,7 +112,7 @@ public final class CompilerImpl implements Compiler, Remote {
         vmExits = exits;
 
         // initialize compiler and GraalOptions
-        config = vmEntries.getConfiguration();
+        HotSpotVMConfig config = vmEntries.getConfiguration();
         config.check();
 
         // these options are important - graal will not generate correct code without them
