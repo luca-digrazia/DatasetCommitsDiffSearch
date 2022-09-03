@@ -78,6 +78,7 @@ public abstract class Launcher {
     private boolean helpTools;
     private boolean helpLanguages;
     private boolean seenPolyglot;
+    private File logFile;
 
     private VersionAction versionAction = VersionAction.None;
 
@@ -102,6 +103,10 @@ public abstract class Launcher {
 
     final void setPolyglot(boolean polyglot) {
         seenPolyglot = polyglot;
+    }
+
+    final File getLogFile() {
+        return logFile;
     }
 
     private Engine getTempEngine() {
@@ -483,7 +488,7 @@ public abstract class Launcher {
                 if (!descriptor.getName().startsWith("engine.") && !descriptor.getName().startsWith("compiler.")) {
                     continue;
                 }
-                if (!descriptor.isDeprecated() && descriptor.getCategory().ordinal() == helpCategory.ordinal()) {
+                if (descriptor.getCategory().ordinal() == helpCategory.ordinal()) {
                     engineOptions.add(asPrintableOption(descriptor));
                 }
             }
@@ -514,7 +519,7 @@ public abstract class Launcher {
         for (Instrument instrument : instruments) {
             List<PrintableOption> options = new ArrayList<>();
             for (OptionDescriptor descriptor : instrument.getOptions()) {
-                if (!descriptor.isDeprecated() && descriptor.getCategory().ordinal() == optionCategory.ordinal()) {
+                if (descriptor.getCategory().ordinal() == optionCategory.ordinal()) {
                     options.add(asPrintableOption(descriptor));
                 }
             }
@@ -540,7 +545,7 @@ public abstract class Launcher {
         for (Language language : languages) {
             List<PrintableOption> options = new ArrayList<>();
             for (OptionDescriptor descriptor : language.getOptions()) {
-                if (!descriptor.isDeprecated() && descriptor.getCategory().ordinal() == optionCategory.ordinal()) {
+                if (descriptor.getCategory().ordinal() == optionCategory.ordinal()) {
                     options.add(asPrintableOption(descriptor));
                 }
             }
@@ -622,7 +627,10 @@ public abstract class Launcher {
                     group = group.substring(0, index);
                 }
                 if ("log".equals(group)) {
-                    if (key.endsWith(".level")) {
+                    if (key.equals("log.file")) {
+                        logFile = new File(value);
+                        return true;
+                    } else if (key.endsWith(".level")) {
                         try {
                             Level.parse(value);
                             options.put(key, value);
@@ -645,9 +653,6 @@ public abstract class Launcher {
                     descriptor.getKey().getType().convert(value);
                 } catch (IllegalArgumentException e) {
                     throw abort(String.format("Invalid argument %s specified. %s'", arg, e.getMessage()));
-                }
-                if (descriptor.isDeprecated()) {
-                    System.err.println("Warning: Option '" + descriptor.getName() + "' is deprecated and might be removed from future versions.");
                 }
                 // use the full name of the found descriptor
                 options.put(descriptor.getName(), value);
@@ -764,7 +769,7 @@ public abstract class Launcher {
     }
 
     static void printOption(OptionCategory optionCategory, OptionDescriptor descriptor) {
-        if (!descriptor.isDeprecated() && descriptor.getCategory().ordinal() == optionCategory.ordinal()) {
+        if (descriptor.getCategory().ordinal() == optionCategory.ordinal()) {
             printOption(asPrintableOption(descriptor));
         }
     }
