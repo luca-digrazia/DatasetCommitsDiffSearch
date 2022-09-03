@@ -22,17 +22,14 @@
  */
 package com.oracle.graal.phases.verify;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import static com.oracle.graal.api.meta.MetaUtil.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.nodes.CallTargetNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.phases.VerifyPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * Verifies that no argument to one of the {@link Debug#log(String)} methods is the result of
@@ -44,7 +41,7 @@ public class VerifyDebugUsage extends VerifyPhase<PhaseContext> {
 
     @Override
     protected boolean verify(StructuredGraph graph, PhaseContext context) {
-        for (MethodCallTargetNode t : graph.getNodes(MethodCallTargetNode.TYPE)) {
+        for (MethodCallTargetNode t : graph.getNodes(MethodCallTargetNode.class)) {
             ResolvedJavaMethod callee = t.targetMethod();
             ResolvedJavaType debugType = context.getMetaAccess().lookupJavaType(Debug.class);
             if (callee.getDeclaringClass().equals(debugType)) {
@@ -60,15 +57,8 @@ public class VerifyDebugUsage extends VerifyPhase<PhaseContext> {
                                     String holder = m.getDeclaringClass().getName();
                                     if (holder.equals("Ljava/lang/StringBuilder;") || holder.equals("Ljava/lang/StringBuffer;")) {
                                         StackTraceElement e = graph.method().asStackTraceElement(invoke.bci());
-                                        throw new VerificationError(String.format("%s: parameter %d of call to %s appears to be a String concatenation expression.%n" +
-                                                        "    Use one of the multi-parameter Debug.log() methods or Debug.logv() instead.", e, argIdx, callee.format("%H.%n(%p)")));
-                                    }
-                                    if (m.getSignature().getParameterCount(false) == 0 && m.getSignature().getReturnType(m.getDeclaringClass()).equals(
-                                                    context.getMetaAccess().lookupJavaType(String.class))) {
-                                        StackTraceElement e = graph.method().asStackTraceElement(invoke.bci());
-                                        throw new VerificationError(String.format("%s: parameter %d of call to %s appears to be a toString call without a parameter. %n " +
-                                                        "   Calls to toString() are made by Debug.log() and should thus be avoided.", e,
-                                                        argIdx, callee.format("%H.%n(%p)")));
+                                        throw new VerificationError(String.format("%s: parameter %d of call to %s appears to be a String concatenation expression.%n"
+                                                        + "    Use one of the multi-parameter Debug.log() methods or Debug.logv() instead.", e, argIdx, format("%H.%n(%p)", callee)));
                                     }
                                 }
                             }
