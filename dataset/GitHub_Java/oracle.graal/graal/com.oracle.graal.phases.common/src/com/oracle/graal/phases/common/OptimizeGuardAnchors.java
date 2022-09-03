@@ -103,7 +103,7 @@ public class OptimizeGuardAnchors extends Phase {
 
             if (otherGuards.size() == successorCount - 1) {
                 AbstractBeginNode anchor = computeOptimalAnchor(cfg.get(), AbstractBeginNode.prevBegin(controlSplit));
-                GuardNode newGuard = controlSplit.graph().unique(new GuardNode(guard.condition(), anchor, guard.reason(), guard.action(), guard.negated(), guard.getSpeculation()));
+                GuardNode newGuard = controlSplit.graph().unique(new GuardNode(guard.condition(), anchor, guard.reason(), guard.action(), guard.negated()));
                 for (GuardNode otherGuard : otherGuards) {
                     otherGuard.replaceAndDelete(newGuard);
                 }
@@ -115,8 +115,7 @@ public class OptimizeGuardAnchors extends Phase {
     }
 
     private static boolean compatibleGuards(GuardNode guard, GuardNode conditonGuard) {
-        return conditonGuard.negated() == guard.negated() && conditonGuard.action() == guard.action() && conditonGuard.reason() == guard.reason() &&
-                        conditonGuard.getSpeculation().equals(guard.getSpeculation());
+        return conditonGuard.negated() == guard.negated() && conditonGuard.action() == guard.action() && conditonGuard.reason() == guard.reason();
     }
 
     private static AbstractBeginNode findMinimumUsagesSuccessor(ControlSplitNode controlSplit) {
