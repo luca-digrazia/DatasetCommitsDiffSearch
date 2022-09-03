@@ -24,9 +24,7 @@
  */
 package com.oracle.svm.driver;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,7 +34,6 @@ import java.util.ServiceLoader;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.graalvm.compiler.options.OptionDescriptor;
@@ -62,15 +59,13 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
         final String helpText;
         final boolean hasPathArguments;
         final boolean defaultFinal;
-        final List<Function<Object, Object>> valueTransformers;
 
-        OptionInfo(String builderOption, String defaultValue, String helpText, boolean hasPathArguments, boolean defaultFinal, List<Function<Object, Object>> valueTransformers) {
+        OptionInfo(String builderOption, String defaultValue, String helpText, boolean hasPathArguments, boolean defaultFinal) {
             this.builderOption = builderOption;
             this.defaultValue = defaultValue;
             this.helpText = helpText;
             this.hasPathArguments = hasPathArguments;
             this.defaultFinal = defaultFinal;
-            this.valueTransformers = valueTransformers;
         }
     }
 
@@ -82,7 +77,7 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             apiOptions = ImageSingletons.lookup(APIOptionCollector.class).options;
         } else {
             List<Class<? extends OptionDescriptors>> optionDescriptorsList = new ArrayList<>();
-            ServiceLoader<OptionDescriptors> serviceLoader = ServiceLoader.load(OptionDescriptors.class, nativeImage.getClass().getClassLoader());
+            ServiceLoader<OptionDescriptors> serviceLoader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
             for (OptionDescriptors optionDescriptors : serviceLoader) {
                 optionDescriptorsList.add(optionDescriptors.getClass());
             }
@@ -149,21 +144,9 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                     defaultValue = apiAnnotation.fixedValue()[0];
                 }
 
-                List<Function<Object, Object>> valueTransformers = new ArrayList<>(apiAnnotation.valueTransformer().length);
-                for (Class<? extends Function<Object, Object>> transformerClass : apiAnnotation.valueTransformer()) {
-                    try {
-                        Constructor<? extends Function<Object, Object>> constructor = transformerClass.getDeclaredConstructor();
-                        constructor.setAccessible(true);
-                        valueTransformers.add(constructor.newInstance());
-                    } catch (NoSuchMethodException | InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
-                        throw VMError.shouldNotReachHere(
-                                        "Class specified as valueTransformer for @APIOption " + apiOptionName + " cannot be loaded or instantiated: " + transformerClass.getTypeName(), ex);
-                    }
-                }
-
                 apiOptions.put(apiOptionName,
                                 new APIOptionHandler.OptionInfo(builderOption, defaultValue, helpText, apiAnnotation.kind().equals(APIOptionKind.Paths),
-                                                booleanOption || apiAnnotation.fixedValue().length > 0, valueTransformers));
+                                                booleanOption || apiAnnotation.fixedValue().length > 0));
             }
         } catch (NoSuchFieldException e) {
             /* Does not qualify as APIOption */
@@ -201,11 +184,7 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                                     .map(this::tryCanonicalize)
                                     .collect(Collectors.joining(","));
                 }
-                Object transformed = optionValue;
-                for (Function<Object, Object> transformer : option.valueTransformers) {
-                    transformed = transformer.apply(transformed);
-                }
-                builderOption += transformed.toString();
+                builderOption += optionValue;
             }
             return builderOption;
         }
