@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,44 +22,69 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "<")
 public final class FloatLessThanNode extends CompareNode {
+    public static final NodeClass<FloatLessThanNode> TYPE = NodeClass.create(FloatLessThanNode.class);
 
-    private final boolean unorderedIsTrue;
-
-    /**
-     * Constructs a new floating point comparison node.
-     *
-     * @param x the instruction producing the first input to the instruction
-     * @param y the instruction that produces the second input to this instruction
-     * @param unorderedIsTrue whether a comparison that is undecided (involving NaNs, etc.) leads to a "true" result
-     */
     public FloatLessThanNode(ValueNode x, ValueNode y, boolean unorderedIsTrue) {
-        super(x, y);
-        assert x.kind().isFloatOrDouble();
-        assert y.kind().isFloatOrDouble();
-        this.unorderedIsTrue = unorderedIsTrue;
+        super(TYPE, Condition.LT, unorderedIsTrue, x, y);
+        assert x.stamp() instanceof FloatStamp && y.stamp() instanceof FloatStamp;
+        assert x.stamp().isCompatible(y.stamp());
     }
 
-    @Override
-    public Condition condition() {
-        return Condition.LT;
-    }
-
-    @Override
-    public boolean unorderedIsTrue() {
-        return unorderedIsTrue;
-    }
-
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x() == y() && !unorderedIsTrue()) {
-            return ConstantNode.forBoolean(false, graph());
+    public static LogicNode create(ValueNode x, ValueNode y, boolean unorderedIsTrue, ConstantReflectionProvider constantReflection) {
+        LogicNode result = CompareNode.tryConstantFold(Condition.LT, x, y, constantReflection, unorderedIsTrue);
+        if (result != null) {
+            return result;
+        } else {
+            return new FloatLessThanNode(x, y, unorderedIsTrue);
         }
-        return super.canonical(tool);
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        ValueNode result = super.canonical(tool, forX, forY);
+        if (result != this) {
+            return result;
+        }
+        if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY) && !unorderedIsTrue()) {
+            return LogicConstantNode.contradiction();
+        }
+        return this;
+    }
+
+    @Override
+    protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
+        if (newX.stamp() instanceof FloatStamp && newY.stamp() instanceof FloatStamp) {
+            return new FloatLessThanNode(newX, newY, unorderedIsTrue);
+        } else if (newX.stamp() instanceof IntegerStamp && newY.stamp() instanceof IntegerStamp) {
+            return new IntegerLessThanNode(newX, newY);
+        }
+        throw GraalInternalError.shouldNotReachHere();
+    }
+
+    @Override
+    public Stamp getSucceedingStampForX(boolean negated) {
+        return null;
+    }
+
+    @Override
+    public Stamp getSucceedingStampForY(boolean negated) {
+        return null;
+    }
+
+    @Override
+    public TriState tryFold(Stamp xStampGeneric, Stamp yStampGeneric) {
+        return TriState.UNKNOWN;
     }
 }
