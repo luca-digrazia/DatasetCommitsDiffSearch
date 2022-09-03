@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -31,12 +32,21 @@ import com.oracle.graal.nodes.type.*;
 public class SafepointNode extends DeoptimizingFixedWithNextNode implements LIRLowerable {
 
     public SafepointNode() {
-        super(StampFactory.forVoid());
+        this(StampFactory.forVoid());
+    }
+
+    public SafepointNode(Stamp stamp) {
+        super(stamp);
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
         gen.visitSafepointNode(this);
+    }
+
+    @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return null;
     }
 
     @Override
