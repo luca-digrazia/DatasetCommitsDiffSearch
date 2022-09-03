@@ -26,22 +26,17 @@ package com.oracle.truffle.api.interop.java.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import java.util.List;
 
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.PolyglotException;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
+import static org.junit.Assert.fail;
 
 public class PrimitiveRawArrayInteropTest {
-
     private Object[] objArr;
     private byte[] byteArr;
     private short[] shortArr;
@@ -96,19 +91,10 @@ public class PrimitiveRawArrayInteropTest {
     private TruffleObject obj;
     private RawInterop interop;
 
-    private Context context;
-
     @Before
     public void initObjects() {
-        context = Context.create();
-        context.enter();
         obj = JavaInterop.asTruffleObject(this);
         interop = JavaInterop.asJavaObject(RawInterop.class, obj);
-    }
-
-    @After
-    public void leave() {
-        context.leave();
     }
 
     @Test
@@ -128,10 +114,8 @@ public class PrimitiveRawArrayInteropTest {
     public void exceptionIsPropagated() {
         try {
             assertNull(interop.arr(30));
-        } catch (PolyglotException hostException) {
-            assertTrue("Expected HostException but got: " + hostException.getClass(), hostException.isHostException());
-            WrongArgument wrongArgument = (WrongArgument) hostException.asHostException();
-            assertEquals(30, wrongArgument.type);
+        } catch (WrongArgument ex) {
+            assertEquals(30, ex.type);
             return;
         }
         fail("WrongArgument should have been thrown");
