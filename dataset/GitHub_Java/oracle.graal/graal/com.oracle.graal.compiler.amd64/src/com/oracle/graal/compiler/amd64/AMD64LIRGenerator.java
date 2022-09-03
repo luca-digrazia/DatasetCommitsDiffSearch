@@ -147,9 +147,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         if (src instanceof AMD64AddressValue) {
             return new LeaOp(dst, (AMD64AddressValue) src);
         } else if (isRegister(src) || isStackSlot(dst)) {
-            return new MoveFromRegOp(dst.getKind(), dst, src);
+            return new MoveFromRegOp(dst, src);
         } else {
-            return new MoveToRegOp(dst.getKind(), dst, src);
+            return new MoveToRegOp(dst, src);
         }
     }
 
@@ -246,8 +246,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueLabel, LabelRef falseLabel, double trueLabelProbability) {
-        boolean mirrored = emitCompare(cmpKind, left, right);
+    public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueLabel, LabelRef falseLabel, double trueLabelProbability) {
+        boolean mirrored = emitCompare(left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
         switch (left.getKind().getStackKind()) {
             case Int:
@@ -276,8 +276,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitConditionalMove(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
-        boolean mirrored = emitCompare(cmpKind, left, right);
+    public Variable emitConditionalMove(Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
+        boolean mirrored = emitCompare(left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
 
         Variable result = newVariable(trueValue.getKind());
@@ -314,16 +314,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    protected void emitCompareOp(PlatformKind cmpKind, Variable left, Value right) {
-        switch ((Kind) cmpKind) {
-            case Byte:
-            case Boolean:
-                append(new CompareOp(BCMP, left, right));
-                break;
-            case Short:
-            case Char:
-                append(new CompareOp(SCMP, left, right));
-                break;
+    protected void emitCompareOp(Variable left, Value right) {
+        switch (left.getKind().getStackKind()) {
             case Int:
                 append(new CompareOp(ICMP, left, right));
                 break;
@@ -345,16 +337,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     protected void emitCompareMemoryConOp(Kind kind, AMD64AddressValue address, Value value, LIRFrameState state) {
-        assert kind.getStackKind() == value.getKind().getStackKind();
+        assert kind == value.getKind();
         switch (kind) {
-            case Byte:
-            case Boolean:
-                append(new CompareMemoryOp(BCMP, kind, address, value, state));
-                break;
-            case Short:
-            case Char:
-                append(new CompareMemoryOp(SCMP, kind, address, value, state));
-                break;
             case Int:
                 append(new CompareMemoryOp(ICMP, kind, address, value, state));
                 break;
@@ -369,14 +353,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     protected void emitCompareRegMemoryOp(Kind kind, Value value, AMD64AddressValue address, LIRFrameState state) {
         AMD64Compare opcode = null;
         switch (kind) {
-            case Byte:
-            case Boolean:
-                opcode = BCMP;
-                break;
-            case Short:
-            case Char:
-                opcode = SCMP;
-                break;
             case Int:
                 opcode = ICMP;
                 break;
@@ -406,7 +382,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
      * @param b the right operand of the comparison
      * @return true if the left and right operands were switched, false otherwise
      */
-    private boolean emitCompare(PlatformKind cmpKind, Value a, Value b) {
+    private boolean emitCompare(Value a, Value b) {
         Variable left;
         Value right;
         boolean mirrored;
@@ -419,7 +395,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             right = loadNonConst(b);
             mirrored = false;
         }
-        emitCompareOp(cmpKind, left, right);
+        emitCompareOp(left, right);
         return mirrored;
     }
 
@@ -900,7 +876,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             append(new BinaryRegConst(AMD64Arithmetic.LAND, result, asAllocatable(inputVal), Constant.forLong(mask)));
             return result;
         } else {
-            assert inputVal.getKind().getStackKind() == Kind.Int;
+            assert inputVal.getKind() == Kind.Int;
             Variable result = newVariable(Kind.Int);
             int mask = (int) IntegerStamp.defaultMask(fromBits);
             append(new BinaryRegConst(AMD64Arithmetic.IAND, result, asAllocatable(inputVal), Constant.forInt(mask)));
@@ -1011,12 +987,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public void emitReturn(Value input) {
-        AllocatableValue operand = Value.ILLEGAL;
-        if (input != null) {
-            operand = resultOperandFor(input.getKind());
-            emitMove(operand, input);
-        }
-        append(new ReturnOp(operand));
+        append(new ReturnOp(input));
     }
 
     @Override

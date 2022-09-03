@@ -27,7 +27,7 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.AMD64Move.MemOp;
 import com.oracle.graal.lir.asm.*;
@@ -45,7 +45,7 @@ public class AMD64TestMemoryOp extends MemOp {
     @Override
     public void emitMemAccess(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         if (isRegister(y)) {
-            switch (kind) {
+            switch (y.getKind()) {
                 case Int:
                     masm.testl(asIntReg(y), address.toAddress());
                     break;
@@ -56,7 +56,7 @@ public class AMD64TestMemoryOp extends MemOp {
                     throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isConstant(y)) {
-            switch (kind) {
+            switch (y.getKind()) {
                 case Int:
                     masm.testl(address.toAddress(), crb.asIntConst(y));
                     break;
