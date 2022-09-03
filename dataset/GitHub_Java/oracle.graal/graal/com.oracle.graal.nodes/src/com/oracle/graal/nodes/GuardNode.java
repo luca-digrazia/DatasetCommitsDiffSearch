@@ -40,17 +40,17 @@ import com.oracle.graal.nodes.type.*;
  * maximum flexibility for the guard node and guarantees that deoptimization occurs only if the
  * control flow would have reached the guarded node (without taking exceptions into account).
  */
-@NodeInfo(nameTemplate = "Guard(!={p#negated}) {p#reason/s}", allowedUsageTypes = {InputType.Guard})
+@NodeInfo(nameTemplate = "Guard(!={p#negated}) {p#reason/s}")
 public class GuardNode extends FloatingGuardedNode implements Canonicalizable, IterableNodeType, GuardingNode, GuardedNode {
 
-    @Input(InputType.Condition) private LogicNode condition;
+    @Input private LogicNode condition;
     private final DeoptimizationReason reason;
     private Constant speculation;
     private DeoptimizationAction action;
     private boolean negated;
 
     public GuardNode(LogicNode condition, GuardingNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, Constant speculation) {
-        super(StampFactory.forVoid(), anchor);
+        super(StampFactory.dependency(), anchor);
         this.condition = condition;
         this.reason = reason;
         this.action = action;
@@ -109,6 +109,11 @@ public class GuardNode extends FloatingGuardedNode implements Canonicalizable, I
             if (c.getValue() != negated) {
                 return graph().start();
             }
+        } else if (negated && condition() instanceof ShortCircuitOrNode) {
+            ShortCircuitOrNode or = (ShortCircuitOrNode) condition();
+            GuardNode firstGuard = graph().unique(new GuardNode(or.getX(), getGuard(), reason, action, !or.isXNegated(), speculation));
+            GuardNode secondGuard = graph().unique(new GuardNode(or.getY(), firstGuard, reason, action, !or.isYNegated(), speculation));
+            return secondGuard;
         }
         return this;
     }
