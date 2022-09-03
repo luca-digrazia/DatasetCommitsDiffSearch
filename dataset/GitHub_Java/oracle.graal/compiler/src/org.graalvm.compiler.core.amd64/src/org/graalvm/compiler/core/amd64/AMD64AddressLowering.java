@@ -29,7 +29,6 @@ import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.PrimitiveStamp;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
@@ -59,7 +58,7 @@ public class AMD64AddressLowering extends AddressLowering {
     }
 
     private static boolean checkAddressBitWidth(ValueNode value) {
-        return value == null || value.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp || IntegerStamp.getBits(value.stamp(NodeView.DEFAULT)) == ADDRESS_BITS;
+        return value == null || value.stamp() instanceof AbstractPointerStamp || IntegerStamp.getBits(value.stamp()) == ADDRESS_BITS;
     }
 
     /**
@@ -187,8 +186,8 @@ public class AMD64AddressLowering extends AddressLowering {
         if (c != null) {
             return improveConstDisp(address, node, c, null, shift, negateExtractedDisplacement);
         } else {
-            if (node.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
-                assert PrimitiveStamp.getBits(node.stamp(NodeView.DEFAULT)) == ADDRESS_BITS;
+            if (node.stamp() instanceof IntegerStamp) {
+                assert PrimitiveStamp.getBits(node.stamp()) == ADDRESS_BITS;
 
                 /*
                  * we can't swallow zero-extends because of multiple reasons:
