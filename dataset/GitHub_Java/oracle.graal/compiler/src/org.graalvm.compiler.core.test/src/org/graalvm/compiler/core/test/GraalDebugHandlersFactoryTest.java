@@ -36,7 +36,6 @@ import org.graalvm.compiler.debug.PathUtilities;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.test.AddExports;
-import org.junit.Assume;
 import org.junit.Test;
 
 @AddExports("jdk.internal.vm.compiler/org.graalvm.compiler.printer")
@@ -45,11 +44,7 @@ public class GraalDebugHandlersFactoryTest extends GraalCompilerTest {
     @Test
     public void createUniqueTest() throws Exception {
         Field maxFileNameLengthField = PathUtilities.class.getDeclaredField("MAX_FILE_NAME_LENGTH");
-        try {
-            maxFileNameLengthField.setAccessible(true);
-        } catch (RuntimeException ex) {
-            Assume.assumeFalse("If InaccessibleObjectException is thrown, skip the test, we are on JDK9", ex.getClass().getSimpleName().equals("InaccessibleObjectException"));
-        }
+        maxFileNameLengthField.setAccessible(true);
         int maxFileNameLength = maxFileNameLengthField.getInt(null);
         Method createUniqueMethod = PathUtilities.class.getDeclaredMethod("createUnique", OptionValues.class, OptionKey.class, String.class, String.class, String.class, boolean.class);
         createUniqueMethod.setAccessible(true);
