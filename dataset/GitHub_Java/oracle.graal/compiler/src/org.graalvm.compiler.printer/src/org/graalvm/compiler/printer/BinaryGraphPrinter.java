@@ -203,7 +203,7 @@ public class BinaryGraphPrinter implements
     }
 
     @Override
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     public void nodeProperties(GraphInfo info, Node node, Map<String, Object> props) {
         node.getDebugProperties((Map) props);
         Graph graph = info.graph;
@@ -273,7 +273,7 @@ public class BinaryGraphPrinter implements
         return null;
     }
 
-    private static void findExtraNodes(Node node, Collection<? super Node> extraNodes) {
+    private void findExtraNodes(Node node, Collection<? super Node> extraNodes) {
         if (node instanceof AbstractMergeNode) {
             AbstractMergeNode merge = (AbstractMergeNode) node;
             for (PhiNode phi : merge.phis()) {
@@ -320,8 +320,8 @@ public class BinaryGraphPrinter implements
     @Override
     public Collection<? extends Node> edgeNodes(GraphInfo graph, Node node, Edges port, int i) {
         if (i < port.getDirectCount()) {
-            Node single = Edges.getNode(node, port.getOffsets(), i);
-            return Collections.singletonList(single);
+            node = Edges.getNode(node, port.getOffsets(), i);
+            return Collections.singletonList(node);
         } else {
             return Edges.getNodeList(node, port.getOffsets(), i);
         }

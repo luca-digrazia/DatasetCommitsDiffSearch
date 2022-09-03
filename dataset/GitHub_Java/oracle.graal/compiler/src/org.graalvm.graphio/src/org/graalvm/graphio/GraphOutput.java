@@ -108,7 +108,7 @@ public final class GraphOutput<G, M> implements Closeable {
      * @param <N> the type of the nodes
      * @param <M> the type of the methods
      */
-    public static final class Builder<G, N, M> {
+    public final static class Builder<G, N, M> {
         private final GraphStructure<G, N, ?, ?> structure;
         private GraphElements<M, ?, ?, ?> elements = null;
         private GraphTypes types = DefaultGraphTypes.DEFAULT;
@@ -121,35 +121,35 @@ public final class GraphOutput<G, M> implements Closeable {
         /**
          * Associates different implementation of types.
          *
-         * @param graphTypes implementation of types and enum recognition
+         * @param types implementation of types and enum recognition
          * @return this builder
          */
-        public Builder<G, N, M> types(GraphTypes graphTypes) {
-            this.types = graphTypes;
+        public Builder<G, N, M> types(GraphTypes types) {
+            this.types = types;
             return this;
         }
 
         /**
          * Associates implementation of blocks.
          *
-         * @param graphBlocks the blocks implementation
+         * @param blocks the blocks implementation
          * @return this builder
          */
-        public Builder<G, N, M> blocks(GraphBlocks<G, ?, N> graphBlocks) {
-            this.blocks = graphBlocks;
+        public Builder<G, N, M> blocks(GraphBlocks<G, ?, N> blocks) {
+            this.blocks = blocks;
             return this;
         }
 
         /**
          * Associates implementation of graph elements.
          *
-         * @param graphElements the elements implementation
+         * @param elements the elements implementation
          * @return this builder
          */
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        public <E> Builder<G, N, E> elements(GraphElements<E, ?, ?, ?> graphElements) {
-            this.elements = (GraphElements) graphElements;
-            return (Builder<G, N, E>) this;
+        @SuppressWarnings("unchecked")
+        public <M> Builder<G, N, M> elements(GraphElements<M, ?, ?, ?> elements) {
+            this.elements = (GraphElements) elements;
+            return (Builder<G, N, M>) this;
         }
 
         /**
