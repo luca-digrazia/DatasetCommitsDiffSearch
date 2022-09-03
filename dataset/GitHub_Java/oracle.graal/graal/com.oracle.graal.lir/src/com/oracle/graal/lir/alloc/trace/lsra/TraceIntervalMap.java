@@ -25,7 +25,7 @@ package com.oracle.graal.lir.alloc.trace.lsra;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.alloc.TraceMap;
 
-public final class TraceIntervalMap extends TraceMap<IntervalData> {
+final class TraceIntervalMap extends TraceMap<IntervalData> {
 
     TraceIntervalMap(TraceBuilderResult<?> traceBuilderResult) {
         super(traceBuilderResult);
