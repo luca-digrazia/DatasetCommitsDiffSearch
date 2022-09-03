@@ -35,7 +35,6 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.debug.OpaqueNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.extended.LoadMethodNode;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
@@ -113,13 +112,12 @@ public class GuardedIntrinsicTest extends GraalCompilerTest {
     @Override
     protected StructuredGraph parseForCompile(ResolvedJavaMethod method, CompilationIdentifier compilationId, OptionValues options) {
         graph = super.parseForCompile(method, compilationId, options);
-        parsedForCompile = (StructuredGraph) graph.copy();
+        parsedForCompile = (StructuredGraph) graph.copy(graph.getDebug());
         return graph;
     }
 
     @Override
-    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
-        InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
+    protected void registerInvocationPlugins(InvocationPlugins invocationPlugins) {
         Registration r = new Registration(invocationPlugins, Super.class);
 
         r.register1("getAge", Receiver.class, new InvocationPlugin() {
@@ -131,7 +129,7 @@ public class GuardedIntrinsicTest extends GraalCompilerTest {
                 return true;
             }
         });
-        return super.editGraphBuilderConfiguration(conf);
+        super.registerInvocationPlugins(invocationPlugins);
     }
 
     public static int referenceMakeSuperAge() {
@@ -146,6 +144,11 @@ public class GuardedIntrinsicTest extends GraalCompilerTest {
     public void test01() {
         Super inheritsHC = new Super();
         Person overridesHC = new Person(0);
+
+        // Ensure the profile for getSuperAge includes both receiver types
+        getSuperAge(inheritsHC);
+        getSuperAge(overridesHC);
+
         test("getSuperAge", inheritsHC);
         test("getSuperAge", overridesHC);
 
