@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,8 +36,6 @@ import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.impl.TVMCI;
 import com.oracle.truffle.api.nodes.RootNode;
-import org.graalvm.compiler.truffle.common.TruffleCompilation;
-import org.graalvm.compiler.truffle.common.VoidGraphStructure;
 
 final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTarget> {
 
@@ -97,7 +95,7 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
     @Override
     protected GraalTestContext createTestContext(String testName) {
         final Map<String, Object> optionsMap = TruffleRuntimeOptions.asMap(TruffleRuntimeOptions.getOptions());
-        TruffleDebugContext debugContext = truffleRuntime.getTruffleCompiler().openDebugContext(optionsMap, null);
+        TruffleDebugContext debugContext = truffleRuntime.getTruffleCompiler().openDebugContext(optionsMap, null, null);
         return new GraalTestContext(testName, debugContext);
     }
 
@@ -111,12 +109,11 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
     public void finishWarmup(GraalTestContext testContext, OptimizedCallTarget callTarget) {
         TruffleCompiler compiler = truffleRuntime.getTruffleCompiler();
         OptionValues options = TruffleRuntimeOptions.getOptions();
-        try (TruffleCompilation compilation = compiler.openCompilation(callTarget)) {
-            try (AutoCloseable s = testContext.debug.scope("UnitTest")) {
-                truffleRuntime.doCompile(testContext.debug, compilation, options, callTarget, null);
-            } catch (Throwable e) {
-                throw new InternalError(e);
-            }
+        String compilationId = compiler.getCompilationIdentifier(callTarget);
+        try (AutoCloseable s = testContext.debug.scope("UnitTest")) {
+            truffleRuntime.doCompile(testContext.debug, compilationId, options, callTarget, null);
+        } catch (Throwable e) {
+            throw new InternalError(e);
         }
     }
 }

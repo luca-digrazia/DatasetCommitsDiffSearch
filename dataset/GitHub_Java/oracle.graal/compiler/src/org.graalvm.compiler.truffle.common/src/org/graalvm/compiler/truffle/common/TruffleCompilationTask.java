@@ -44,8 +44,4 @@ public interface TruffleCompilationTask {
     default boolean isFirstTier() {
         return !isLastTier();
     }
-
-    default int tier() {
-        return isFirstTier() ? 1 : 2;
-    }
 }
