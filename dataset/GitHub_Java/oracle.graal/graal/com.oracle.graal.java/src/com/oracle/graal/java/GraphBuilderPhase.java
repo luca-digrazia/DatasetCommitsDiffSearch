@@ -793,9 +793,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     frameState.clearNonLiveLocals(currentBlock, liveness, false);
 
                     InvokeWithExceptionNode invoke = createInvokeWithException(callTarget, resultType);
-                    BeginNode beginNode = currentGraph.add(KillingBeginNode.create(LocationIdentity.ANY_LOCATION));
-                    invoke.setNext(beginNode);
-                    lastInstr = beginNode;
+
+                    BciBlock nextBlock = currentBlock.getSuccessor(0);
+                    invoke.setNext(createTarget(nextBlock, frameState));
                 }
             }
 
@@ -813,7 +813,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 DispatchBeginNode exceptionEdge = handleException(null, bci());
                 InvokeWithExceptionNode invoke = append(InvokeWithExceptionNode.create(callTarget, exceptionEdge, bci()));
                 frameState.pushReturn(resultType, invoke);
-                invoke.setStateAfter(frameState.create(stream.nextBCI()));
+                BciBlock nextBlock = currentBlock.getSuccessor(0);
+                invoke.setStateAfter(frameState.create(nextBlock.startBci));
                 return invoke;
             }
 
@@ -1064,7 +1065,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 assert currentBlock == null || currentBlock.getId() < block.getId() : "must not be backward branch";
                 assert block.firstInstruction.next() == null : "bytecodes already parsed for block";
 
-                if (block.firstInstruction instanceof BeginNode && !(block.firstInstruction instanceof MergeNode)) {
+                if (block.firstInstruction instanceof BeginNode) {
                     /*
                      * This is the second time we see this block. Create the actual MergeNode and
                      * the End Node for the already existing edge. For simplicity, we leave the
@@ -1078,13 +1079,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     MergeNode mergeNode = currentGraph.add(MergeNode.create());
                     FixedNode next = placeholder.next();
 
-                    if (placeholder.predecessor() instanceof ControlSplitNode) {
-                        placeholder.setNext(end);
-                    } else {
-                        placeholder.replaceAtPredecessor(end);
-                        placeholder.safeDelete();
-                    }
-
+                    placeholder.setNext(end);
                     mergeNode.addForwardEnd(end);
                     mergeNode.setNext(next);
 
