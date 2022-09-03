@@ -26,14 +26,16 @@ import javax.annotation.processing.*;
 import javax.lang.model.element.*;
 import javax.tools.Diagnostic.Kind;
 
-import com.oracle.truffle.dsl.processor.ast.*;
+import com.oracle.truffle.dsl.processor.java.model.*;
 
 /**
  * THIS IS NOT PUBLIC API.
  */
 public class Log {
 
-    public static final boolean DEBUG = false;
+    public static boolean isDebug() {
+        return false;
+    }
 
     private final ProcessingEnvironment processingEnv;
 

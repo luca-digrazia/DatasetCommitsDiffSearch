@@ -36,11 +36,9 @@ import com.oracle.truffle.dsl.processor.model.*;
 public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeData> {
 
     private final List<TypeMirror> frameTypes;
-    private final NodeChildData child;
 
-    public ExecutableTypeMethodParser(ProcessorContext context, NodeData node, NodeChildData child, List<TypeMirror> frameTypes) {
+    public ExecutableTypeMethodParser(ProcessorContext context, NodeData node, List<TypeMirror> frameTypes) {
         super(context, node);
-        this.child = child;
         this.frameTypes = frameTypes;
         setParseNullOnError(false);
         getParser().setEmitErrors(false);
@@ -56,19 +54,9 @@ public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeD
         TypeSystemData typeSystem = getNode().getTypeSystem();
         List<TypeMirror> allowedTypes = typeSystem.getPrimitiveTypeMirrors();
         Set<String> allowedIdentifiers = typeSystem.getTypeIdentifiers();
-
-        if (child != null) {
-            for (NodeExecutionData executeWith : child.getExecuteWith()) {
-                ParameterSpec parameter = spec.addRequired(new ParameterSpec(executeWith.getName(), allowedTypes, allowedIdentifiers));
-                parameter.setExecution(executeWith);
-                parameter.setSignature(true);
-            }
-        } else {
-            for (ParameterSpec originalSpec : requiredSpecs) {
-                spec.addRequired(new ParameterSpec(originalSpec, allowedTypes, allowedIdentifiers));
-            }
+        for (ParameterSpec originalSpec : requiredSpecs) {
+            spec.addRequired(new ParameterSpec(originalSpec, allowedTypes, allowedIdentifiers));
         }
-
         spec.setIgnoreAdditionalSpecifications(true);
         spec.setIgnoreAdditionalParameters(true);
         spec.setVariableRequiredParameters(true);

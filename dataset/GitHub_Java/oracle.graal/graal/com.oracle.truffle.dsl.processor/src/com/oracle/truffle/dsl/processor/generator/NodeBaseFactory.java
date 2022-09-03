@@ -138,9 +138,8 @@ class NodeBaseFactory {
     }
 
     public static List<ExecutableElement> findUserConstructors(TypeMirror nodeType) {
-        TypeElement type = ElementUtils.fromTypeMirror(nodeType);
         List<ExecutableElement> constructors = new ArrayList<>();
-        for (ExecutableElement constructor : ElementFilter.constructorsIn(type.getEnclosedElements())) {
+        for (ExecutableElement constructor : ElementFilter.constructorsIn(ElementUtils.fromTypeMirror(nodeType).getEnclosedElements())) {
             if (constructor.getModifiers().contains(PRIVATE)) {
                 continue;
             }
@@ -151,9 +150,7 @@ class NodeBaseFactory {
         }
 
         if (constructors.isEmpty()) {
-            CodeExecutableElement executable = new CodeExecutableElement(null, ElementUtils.getSimpleName(nodeType));
-            ElementUtils.setVisibility(executable.getModifiers(), ElementUtils.getVisibility(type.getModifiers()));
-            constructors.add(executable);
+            constructors.add(new CodeExecutableElement(null, ElementUtils.getSimpleName(nodeType)));
         }
 
         return constructors;
@@ -442,7 +439,6 @@ class NodeBaseFactory {
 
     private CodeExecutableElement createUserConstructor(CodeTypeElement type, ExecutableElement superConstructor) {
         CodeExecutableElement method = new CodeExecutableElement(null, type.getSimpleName().toString());
-        ElementUtils.setVisibility(method.getModifiers(), ElementUtils.getVisibility(superConstructor.getModifiers()));
         CodeTreeBuilder builder = method.createBuilder();
 
         if (superConstructor != null) {
@@ -1842,12 +1838,12 @@ class NodeBaseFactory {
     /**
      * <pre>
      * variant1 $condition != null
-     *
+     * 
      * $type $name = defaultValue($type);
      * if ($condition) {
      *     $name = $value;
      * }
-     *
+     * 
      * variant2 $condition != null
      * $type $name = $value;
      * </pre>
