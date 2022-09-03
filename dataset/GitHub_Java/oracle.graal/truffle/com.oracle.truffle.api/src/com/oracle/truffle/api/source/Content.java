@@ -54,8 +54,4 @@ abstract class Content {
     int getCodeLength() {
         return getCode().length();
     }
-
-    void appendCode(CharSequence chars) {
-        throw new UnsupportedOperationException();
-    }
 }

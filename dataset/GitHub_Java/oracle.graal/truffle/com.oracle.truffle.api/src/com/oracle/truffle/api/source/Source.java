@@ -247,8 +247,7 @@ public abstract class Source {
      */
     public static Source fromAppendableText(String description) {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromAppendableText from compiled code");
-        Content content = new AppendableLiteralSourceImpl(description);
-        return new Impl(content);
+        return new AppendableLiteralSourceImpl(description);
     }
 
     /**
@@ -281,8 +280,7 @@ public abstract class Source {
      */
     public static Source fromNamedAppendableText(String name) {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromNamedAppendable from compiled code");
-        final Content content = new AppendableLiteralSourceImpl(name);
-        final Source source = new Impl(content);
+        final Source source = new AppendableLiteralSourceImpl(name);
         nameToSource.put(name, new WeakReference<>(source));
         return source;
     }
@@ -604,8 +602,7 @@ public abstract class Source {
      * @since 0.8 or earlier
      */
     public void appendCode(CharSequence chars) {
-        content().appendCode(chars);
-        clearTextMap();
+        throw new UnsupportedOperationException();
     }
 
     /**

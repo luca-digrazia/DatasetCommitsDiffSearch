@@ -87,7 +87,7 @@ final class BytesSourceImpl extends Content {
         } catch (CharacterCodingException ex) {
             return "";
         }
-        return code = chb.toString();
+        return chb.toString();
     }
 
     @Override
