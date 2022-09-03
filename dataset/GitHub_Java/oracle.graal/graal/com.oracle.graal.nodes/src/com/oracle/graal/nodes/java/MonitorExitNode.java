@@ -58,7 +58,7 @@ public final class MonitorExitNode extends AccessMonitorNode implements Virtuali
 
     @Override
     public void simplify(SimplifierTool tool) {
-        if (escapedReturnValue != null && stateAfter() != null && stateAfter().bci != FrameState.AFTER_BCI) {
+        if (escapedReturnValue != null && stateAfter().bci != FrameState.AFTER_BCI) {
             ValueNode returnValue = escapedReturnValue;
             setEscapedReturnValue(null);
             tool.removeIfUnused(returnValue);
@@ -77,6 +77,9 @@ public final class MonitorExitNode extends AccessMonitorNode implements Virtuali
         assert stateAfter().bci != FrameState.AFTER_BCI || state == null;
         if (state != null && state.getState() == EscapeState.Virtual && state.getVirtualObject().hasIdentity()) {
             MonitorIdNode removedLock = state.removeLock();
+            if (removedLock != getMonitorId()) {
+                throw new GraalInternalError("mismatch at %s: %s vs. %s", this, removedLock, getMonitorId());
+            }
             assert removedLock == getMonitorId() : "mismatch at " + this + ": " + removedLock + " vs. " + getMonitorId();
             tool.delete();
         }

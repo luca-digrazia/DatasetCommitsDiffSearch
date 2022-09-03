@@ -244,8 +244,8 @@ public final class FrameState extends VirtualState implements IterableNodeType {
 
     /**
      * Creates a copy of this frame state with one stack element of type popKind popped from the
-     * stack and the values in pushedValues pushed on the stack. The pushedValues will be formatted
-     * correctly in slot encoding: a long or double will be followed by a null slot.
+     * stack and the values in pushedValues pushed on the stack. The pushedValues are expected to be
+     * in slot encoding: a long or double is followed by a null slot.
      */
     public FrameState duplicateModified(int newBci, boolean newRethrowException, Kind popKind, ValueNode... pushedValues) {
         ArrayList<ValueNode> copy = new ArrayList<>(values.subList(0, localsSize + stackSize));
@@ -254,15 +254,10 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                 copy.remove(copy.size() - 1);
             }
             ValueNode lastSlot = copy.get(copy.size() - 1);
-            assert lastSlot.getKind().getStackKind() == popKind.getStackKind();
+            assert lastSlot.kind().getStackKind() == popKind.getStackKind();
             copy.remove(copy.size() - 1);
         }
-        for (ValueNode node : pushedValues) {
-            copy.add(node);
-            if (node.getKind() == Kind.Long || node.getKind() == Kind.Double) {
-                copy.add(null);
-            }
-        }
+        Collections.addAll(copy, pushedValues);
         int newStackSize = copy.size() - localsSize;
         copy.addAll(values.subList(localsSize + stackSize, values.size()));
 
@@ -404,7 +399,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         assertTrue(values.size() - localsSize - stackSize == monitorIds.size(), "mismatch in number of locks");
         for (ValueNode value : values) {
             assertTrue(value == null || !value.isDeleted(), "frame state must not contain deleted nodes");
-            assertTrue(value == null || value instanceof VirtualObjectNode || (value.getKind() != Kind.Void), "unexpected value: %s", value);
+            assertTrue(value == null || value instanceof VirtualObjectNode || (value.kind() != Kind.Void), "unexpected value: %s", value);
         }
         return super.verify();
     }
@@ -415,9 +410,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
             closure.apply(this, value);
         }
         for (MonitorIdNode monitorId : monitorIds) {
-            if (monitorId != null) {
-                closure.apply(this, monitorId);
-            }
+            closure.apply(this, monitorId);
         }
         for (EscapeObjectState state : virtualObjectMappings) {
             state.applyToNonVirtual(closure);

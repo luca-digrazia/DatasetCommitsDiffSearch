@@ -34,6 +34,7 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graph.iterators.*;
@@ -424,6 +425,7 @@ public class MonitorSnippets implements Snippets {
         public void lower(MonitorEnterNode monitorenterNode, HotSpotRegistersProvider registers, LoweringTool tool) {
             StructuredGraph graph = monitorenterNode.graph();
             checkBalancedMonitors(graph, tool);
+            FrameState stateAfter = monitorenterNode.stateAfter();
 
             Arguments args;
             if (useFastLocking) {
@@ -433,15 +435,24 @@ public class MonitorSnippets implements Snippets {
             }
             args.add("object", monitorenterNode.object());
             args.addConst("lockDepth", monitorenterNode.getMonitorId().getLockDepth());
+            boolean tracingEnabledForMethod = stateAfter != null && (isTracingEnabledForMethod(stateAfter.method()) || isTracingEnabledForMethod(graph.method()));
             args.addConst("threadRegister", registers.getThreadRegister());
             args.addConst("stackPointerRegister", registers.getStackPointerRegister());
-            args.addConst("trace", isTracingEnabledForType(monitorenterNode.object()) || isTracingEnabledForMethod(graph.method()));
+            args.addConst("trace", isTracingEnabledForType(monitorenterNode.object()) || tracingEnabledForMethod);
 
-            template(args).instantiate(providers.getMetaAccess(), monitorenterNode, DEFAULT_REPLACER, args);
+            Map<Node, Node> nodes = template(args).instantiate(providers.getMetaAccess(), monitorenterNode, DEFAULT_REPLACER, args);
+
+            for (Node n : nodes.values()) {
+                if (n instanceof BeginLockScopeNode) {
+                    BeginLockScopeNode begin = (BeginLockScopeNode) n;
+                    begin.setStateAfter(stateAfter);
+                }
+            }
         }
 
         public void lower(MonitorExitNode monitorexitNode, LoweringTool tool) {
             StructuredGraph graph = monitorexitNode.graph();
+            FrameState stateAfter = monitorexitNode.stateAfter();
 
             Arguments args;
             if (useFastLocking) {
@@ -451,9 +462,16 @@ public class MonitorSnippets implements Snippets {
             }
             args.add("object", monitorexitNode.object());
             args.addConst("lockDepth", monitorexitNode.getMonitorId().getLockDepth());
-            args.addConst("trace", isTracingEnabledForType(monitorexitNode.object()) || isTracingEnabledForMethod(graph.method()));
+            args.addConst("trace", isTracingEnabledForType(monitorexitNode.object()) || isTracingEnabledForMethod(stateAfter.method()) || isTracingEnabledForMethod(graph.method()));
 
-            template(args).instantiate(providers.getMetaAccess(), monitorexitNode, DEFAULT_REPLACER, args);
+            Map<Node, Node> nodes = template(args).instantiate(providers.getMetaAccess(), monitorexitNode, DEFAULT_REPLACER, args);
+
+            for (Node n : nodes.values()) {
+                if (n instanceof EndLockScopeNode) {
+                    EndLockScopeNode end = (EndLockScopeNode) n;
+                    end.setStateAfter(stateAfter);
+                }
+            }
         }
 
         static boolean isTracingEnabledForType(ValueNode object) {
@@ -503,7 +521,7 @@ public class MonitorSnippets implements Snippets {
                     StructuredGraph inlineeGraph = providers.getReplacements().getSnippet(initCounter.getMethod());
                     InliningUtil.inline(invoke, inlineeGraph, false);
 
-                    List<ReturnNode> rets = graph.getNodes(ReturnNode.class).snapshot();
+                    List<ReturnNode> rets = graph.getNodes().filter(ReturnNode.class).snapshot();
                     for (ReturnNode ret : rets) {
                         returnType = checkCounter.getMethod().getSignature().getReturnType(checkCounter.getMethod().getDeclaringClass());
                         String msg = "unbalanced monitors in " + MetaUtil.format("%H.%n(%p)", graph.method()) + ", count = %d";
