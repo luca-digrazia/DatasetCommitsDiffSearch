@@ -246,7 +246,7 @@ public class SchedulePhase extends Phase {
             assert mergeBlock != null : "no block for merge " + merge.toString(Verbosity.Id);
             for (int i = 0; i < phi.valueCount(); ++i) {
                 if (phi.valueAt(i) == node) {
-                    if (mergeBlock.getPredecessorCount() <= i) {
+                    if (mergeBlock.getPredecessors().size() <= i) {
                         TTY.println(merge.toString());
                         TTY.println(phi.toString());
                         TTY.println(merge.cfgPredecessors().toString());
