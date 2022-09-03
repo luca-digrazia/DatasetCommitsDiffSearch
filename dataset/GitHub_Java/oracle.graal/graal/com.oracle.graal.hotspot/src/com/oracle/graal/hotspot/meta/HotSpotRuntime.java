@@ -203,7 +203,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
 
     protected abstract RegisterConfig createRegisterConfig(boolean globalStubConfig);
 
-    public void installSnippets(SnippetInstaller installer, Assumptions assumptions) {
+    public void installSnippets(SnippetInstaller installer) {
         installer.install(SystemSnippets.class);
         installer.install(UnsafeSnippets.class);
         installer.install(ArrayCopySnippets.class);
@@ -213,10 +213,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
         installer.install(NewObjectSnippets.class);
         installer.install(MonitorSnippets.class);
 
-        checkcastSnippets = new CheckCastSnippets.Templates(this, assumptions);
-        instanceofSnippets = new InstanceOfSnippets.Templates(this, assumptions);
-        newObjectSnippets = new NewObjectSnippets.Templates(this, assumptions, graalRuntime.getTarget(), config.useTLAB);
-        monitorSnippets = new MonitorSnippets.Templates(this, assumptions, config.useFastLocking);
+        checkcastSnippets = new CheckCastSnippets.Templates(this);
+        instanceofSnippets = new InstanceOfSnippets.Templates(this);
+        newObjectSnippets = new NewObjectSnippets.Templates(this, graalRuntime.getTarget(), config.useTLAB);
+        monitorSnippets = new MonitorSnippets.Templates(this, config.useFastLocking);
     }
 
 
@@ -330,7 +330,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public ResolvedJavaType lookupJavaType(Constant constant) {
-        return (ResolvedJavaType) graalRuntime.getCompilerToVM().getJavaType(constant);
+        if (!constant.getKind().isObject() || constant.isNull()) {
+            return null;
+        }
+        Object o = constant.asObject();
+        return HotSpotResolvedJavaType.fromClass(o.getClass());
     }
 
     @Override
@@ -363,7 +367,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public int lookupArrayLength(Constant array) {
-        return graalRuntime.getCompilerToVM().getArrayLength(array);
+        if (!array.getKind().isObject() || array.isNull() || !array.asObject().getClass().isArray()) {
+            throw new IllegalArgumentException(array + " is not an array");
+        }
+        return Array.getLength(array.asObject());
     }
 
     @Override
@@ -388,7 +395,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
                 AbstractCallTargetNode loweredCallTarget = null;
                 if (callTarget.invokeKind() == InvokeKind.Virtual &&
                     GraalOptions.InlineVTableStubs &&
-                    (GraalOptions.AlwaysInlineVTableStubs || invoke.isMegamorphic())) {
+                    (GraalOptions.AlwaysInlineVTableStubs || invoke.isPolymorphic())) {
 
                     HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
                     if (!hsMethod.getDeclaringClass().isInterface()) {
@@ -540,7 +547,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
             assert loadHub.kind() == wordKind;
             LocationNode location = LocationNode.create(LocationNode.FINAL_LOCATION, wordKind, config.hubOffset, graph);
             ValueNode object = loadHub.object();
-            assert !object.isConstant();
             ValueNode guard = tool.createNullCheckGuard(object, StructuredGraph.INVALID_GRAPH_ID);
             ReadNode hub = graph.add(new ReadNode(object, location, wordStamp()));
             hub.dependencies().add(guard);
@@ -569,7 +575,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
             newObjectSnippets.lower((NewMultiArrayNode) n, tool);
         } else {
             assert false : "Node implementing Lowerable not handled: " + n;
-            throw GraalInternalError.shouldNotReachHere();
         }
     }
 
