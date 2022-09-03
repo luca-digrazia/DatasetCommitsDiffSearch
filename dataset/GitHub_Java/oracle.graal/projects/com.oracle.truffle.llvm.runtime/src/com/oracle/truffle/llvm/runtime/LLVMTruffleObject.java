@@ -143,7 +143,7 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
                         CompilerDirectives.transferToInterpreterAndInvalidate();
                         isNull = insert(Message.IS_NULL.createNode());
                     }
-                    return object.getObject() == null || ForeignAccess.sendIsNull(isNull, object.getObject());
+                    return ForeignAccess.sendIsNull(isNull, object.getObject());
                 }
             }
 
