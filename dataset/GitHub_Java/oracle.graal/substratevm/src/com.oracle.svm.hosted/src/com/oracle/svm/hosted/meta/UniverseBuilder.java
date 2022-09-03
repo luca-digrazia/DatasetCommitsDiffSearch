@@ -81,9 +81,8 @@ import com.oracle.svm.hosted.substitute.DeletedMethod;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.ExceptionHandler;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
-import jdk.vm.ci.meta.UnresolvedJavaType;
 
 public class UniverseBuilder {
 
@@ -244,12 +243,7 @@ public class UniverseBuilder {
         ExceptionHandler[] sHandlers = new ExceptionHandler[aHandlers.length];
         for (int i = 0; i < aHandlers.length; i++) {
             ExceptionHandler h = aHandlers[i];
-            JavaType catchType = h.getCatchType();
-            if (h.getCatchType() instanceof AnalysisType) {
-                catchType = makeType((AnalysisType) catchType);
-            } else {
-                assert catchType == null || catchType instanceof UnresolvedJavaType;
-            }
+            ResolvedJavaType catchType = makeType((AnalysisType) h.getCatchType());
             sHandlers[i] = new ExceptionHandler(h.getStartBCI(), h.getEndBCI(), h.getHandlerBCI(), h.catchTypeCPI(), catchType);
         }
 
