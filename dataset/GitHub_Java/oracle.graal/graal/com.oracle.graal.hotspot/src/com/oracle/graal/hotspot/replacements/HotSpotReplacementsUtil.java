@@ -24,7 +24,7 @@ package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider.*;
+import static com.oracle.graal.hotspot.meta.HotSpotRuntime.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import sun.misc.*;
 
@@ -34,6 +34,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.replacements.nodes.*;
@@ -47,7 +48,7 @@ import com.oracle.graal.word.*;
 public class HotSpotReplacementsUtil {
 
     public static HotSpotVMConfig config() {
-        return runtime().getConfig();
+        return graalRuntime().getConfig();
     }
 
     @Fold
@@ -198,22 +199,22 @@ public class HotSpotReplacementsUtil {
 
     @Fold
     public static Kind getWordKind() {
-        return runtime().getTarget().wordKind;
+        return graalRuntime().getTarget().wordKind;
     }
 
     @Fold
     public static Register threadRegister() {
-        return runtime().getProviders().getRegisters().getThreadRegister();
+        return graalRuntime().getRuntime().threadRegister();
     }
 
     @Fold
     public static Register stackPointerRegister() {
-        return runtime().getProviders().getRegisters().getStackPointerRegister();
+        return graalRuntime().getRuntime().stackPointerRegister();
     }
 
     @Fold
     public static int wordSize() {
-        return runtime().getTarget().wordSize;
+        return graalRuntime().getTarget().wordSize;
     }
 
     @Fold
@@ -343,17 +344,17 @@ public class HotSpotReplacementsUtil {
 
     @Fold
     public static int arrayBaseOffset(Kind elementKind) {
-        return HotSpotGraalRuntime.getArrayBaseOffset(elementKind);
+        return HotSpotRuntime.getArrayBaseOffset(elementKind);
     }
 
     @Fold
     public static int arrayIndexScale(Kind elementKind) {
-        return HotSpotGraalRuntime.getArrayIndexScale(elementKind);
+        return HotSpotRuntime.getArrayIndexScale(elementKind);
     }
 
     @Fold
     public static int instanceHeaderSize() {
-        return config().useCompressedClassPointers ? (2 * wordSize()) - 4 : 2 * wordSize();
+        return config().useCompressedKlassPointers ? (2 * wordSize()) - 4 : 2 * wordSize();
     }
 
     @Fold
@@ -485,7 +486,7 @@ public class HotSpotReplacementsUtil {
 
     public static Word loadWordFromObject(Object object, int offset) {
         assert offset != hubOffset() : "Use loadHubIntrinsic instead";
-        return loadWordFromObjectIntrinsic(object, offset, getWordKind());
+        return loadWordFromObjectIntrinsic(object, 0, offset, getWordKind());
     }
 
     @NodeIntrinsic(value = ReadRegisterNode.class, setStampFromReturnType = true)
@@ -493,8 +494,8 @@ public class HotSpotReplacementsUtil {
 
     @SuppressWarnings("unused")
     @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
-    private static Word loadWordFromObjectIntrinsic(Object object, long offset, @ConstantNodeParameter Kind wordKind) {
-        return Word.unsigned(unsafeReadWord(object, offset));
+    private static Word loadWordFromObjectIntrinsic(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter Kind wordKind) {
+        return Word.unsigned(unsafeReadWord(object, offset + displacement));
     }
 
     @SuppressWarnings("unused")
