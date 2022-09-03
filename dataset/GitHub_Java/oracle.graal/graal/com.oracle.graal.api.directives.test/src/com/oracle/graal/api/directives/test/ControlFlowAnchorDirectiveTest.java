@@ -22,29 +22,18 @@
  */
 package com.oracle.graal.api.directives.test;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Repeatable;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.lang.annotation.*;
+import java.util.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.graal.api.directives.GraalDirectives;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.debug.ControlFlowAnchorNode;
+import com.oracle.graal.api.directives.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.debug.*;
 
 public class ControlFlowAnchorDirectiveTest extends GraalCompilerTest {
 
@@ -167,7 +156,6 @@ public class ControlFlowAnchorDirectiveTest extends GraalCompilerTest {
         while (ret > 1) {
             GraalDirectives.controlFlowAnchor();
             if (ret % 2 == 0) {
-                GraalDirectives.controlFlowAnchor();
                 ret /= 2;
             } else {
                 ret = 3 * ret + 1;
@@ -177,6 +165,7 @@ public class ControlFlowAnchorDirectiveTest extends GraalCompilerTest {
 
     @Test
     public void testPeel() {
+        test("verifyPeelSnippet", 42);
         test("preventPeelSnippet", 42);
     }
 
