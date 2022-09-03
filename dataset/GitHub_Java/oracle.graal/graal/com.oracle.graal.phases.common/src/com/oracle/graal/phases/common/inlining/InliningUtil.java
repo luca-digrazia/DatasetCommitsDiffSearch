@@ -41,9 +41,8 @@ import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.Fingerprint;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.TTY;
-import com.oracle.graal.graph.GraalGraphError;
+import com.oracle.graal.graph.GraalGraphJVMCIError;
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.Node;
@@ -80,7 +79,6 @@ import com.oracle.graal.nodes.UnwindNode;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.ValuePhiNode;
 import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.debug.instrumentation.InstrumentationNode;
 import com.oracle.graal.nodes.extended.ForeignCallNode;
 import com.oracle.graal.nodes.extended.GuardingNode;
 import com.oracle.graal.nodes.java.ExceptionObjectNode;
@@ -91,8 +89,10 @@ import com.oracle.graal.nodes.spi.Replacements;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.phases.common.inlining.info.InlineInfo;
+import com.oracle.graal.phases.common.instrumentation.nodes.InstrumentationNode;
 
 import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -372,7 +372,7 @@ public class InliningUtil {
         }
 
         if (UseGraalInstrumentation.getValue()) {
-            detachInstrumentation(invoke);
+            removeAttachedInstrumentation(invoke);
         }
         finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph.getAssumptions(), inlineGraph, canonicalizedNodes);
 
@@ -741,7 +741,7 @@ public class InliningUtil {
         return replacements.getSubstitution(target, invokeBci);
     }
 
-    public static FixedWithNextNode inlineMacroNode(Invoke invoke, ResolvedJavaMethod concrete, Class<? extends FixedWithNextNode> macroNodeClass) throws GraalError {
+    public static FixedWithNextNode inlineMacroNode(Invoke invoke, ResolvedJavaMethod concrete, Class<? extends FixedWithNextNode> macroNodeClass) throws JVMCIError {
         StructuredGraph graph = invoke.asNode().graph();
         if (!concrete.equals(((MethodCallTargetNode) invoke.callTarget()).targetMethod())) {
             assert ((MethodCallTargetNode) invoke.callTarget()).invokeKind().hasReceiver();
@@ -762,18 +762,16 @@ public class InliningUtil {
         return macroNode;
     }
 
-    private static FixedWithNextNode createMacroNodeInstance(Class<? extends FixedWithNextNode> macroNodeClass, Invoke invoke) throws GraalError {
+    private static FixedWithNextNode createMacroNodeInstance(Class<? extends FixedWithNextNode> macroNodeClass, Invoke invoke) throws JVMCIError {
         try {
             Constructor<?> cons = macroNodeClass.getDeclaredConstructor(Invoke.class);
             return (FixedWithNextNode) cons.newInstance(invoke);
         } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
-            throw new GraalGraphError(e).addContext(invoke.asNode()).addContext("macroSubstitution", macroNodeClass);
+            throw new GraalGraphJVMCIError(e).addContext(invoke.asNode()).addContext("macroSubstitution", macroNodeClass);
         }
     }
 
-    /**
-     * This method exclude InstrumentationNode from inlining heuristics.
-     */
+    // exclude InstrumentationNode for inlining heuristics
     public static int getNodeCount(StructuredGraph graph) {
         if (UseGraalInstrumentation.getValue()) {
             return graph.getNodeCount() - graph.getNodes().filter(InstrumentationNode.class).count();
@@ -782,15 +780,12 @@ public class InliningUtil {
         }
     }
 
-    /**
-     * This method detach the instrumentation attached to the given Invoke. It is called when the
-     * given Invoke is inlined.
-     */
-    public static void detachInstrumentation(Invoke invoke) {
+    public static void removeAttachedInstrumentation(Invoke invoke) {
         FixedNode invokeNode = invoke.asNode();
-        for (InstrumentationNode instrumentation : invokeNode.usages().filter(InstrumentationNode.class).snapshot()) {
+        for (InstrumentationNode instrumentation : invokeNode.usages().filter(InstrumentationNode.class)) {
             if (instrumentation.target() == invoke) {
-                instrumentation.replaceFirstInput(instrumentation.target(), null);
+                GraphUtil.unlinkFixedNode(instrumentation);
+                instrumentation.safeDelete();
             }
         }
     }
