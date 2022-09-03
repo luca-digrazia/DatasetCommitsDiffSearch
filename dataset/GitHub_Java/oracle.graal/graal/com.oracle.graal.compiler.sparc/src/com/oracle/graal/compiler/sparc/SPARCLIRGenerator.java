@@ -357,7 +357,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
-        append(new StrategySwitchOp(strategy, keyTargets, defaultTarget, key, newVariable(key.getLIRKind())));
+        // a temp is needed for loading long and object constants
+        boolean needsTemp = key.getKind() == Kind.Long || key.getKind() == Kind.Object;
+        append(new StrategySwitchOp(strategy, keyTargets, defaultTarget, key, needsTemp ? newVariable(key.getLIRKind()) : Value.ILLEGAL));
     }
 
     @Override
@@ -936,7 +938,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             append(new BinaryRegConst(SPARCArithmetic.LAND, result, asAllocatable(inputVal), Constant.forLong(mask), null));
             return result;
         } else {
-            assert inputVal.getKind() == Kind.Int || inputVal.getKind() == Kind.Short || inputVal.getKind() == Kind.Byte || inputVal.getKind() == Kind.Char : inputVal.getKind();
+            assert inputVal.getKind() == Kind.Int || inputVal.getKind() == Kind.Short || inputVal.getKind() == Kind.Byte : inputVal.getKind();
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
             long mask = IntegerStamp.defaultMask(fromBits);
             Constant constant = Constant.forInt((int) mask);

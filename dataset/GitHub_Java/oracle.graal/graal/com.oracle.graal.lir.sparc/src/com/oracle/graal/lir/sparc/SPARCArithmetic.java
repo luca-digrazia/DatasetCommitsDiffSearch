@@ -32,6 +32,7 @@ import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.sparc.*;
@@ -253,7 +254,7 @@ public enum SPARCArithmetic {
 
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) protected Value result;
-        @Alive({REG, CONST}) protected Value x;
+        @Use({REG, CONST}) protected Value x;
         @Alive({REG, CONST}) protected Value y;
         @Temp({REG}) protected Value scratch1;
         @Temp({REG}) protected Value scratch2;
@@ -423,7 +424,6 @@ public enum SPARCArithmetic {
                     break;
                 case DAND:
                     SPARCAddress addr = (SPARCAddress) crb.recordDataReferenceInCode(asConstant(src2), 4);
-                    addr = SPARCMove.guaranueeLoadable(addr, masm);
                     new Lddf(addr, asDoubleReg(dst)).emit(masm);
                     new Fandd(asDoubleReg(src1), asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
                     break;
@@ -582,10 +582,6 @@ public enum SPARCArithmetic {
         } else if (isConstant(src2)) {
             switch (opcode) {
                 case IREM:
-                    assert !src1.equals(scratch1);
-                    assert !src1.equals(scratch2);
-                    assert !src2.equals(scratch1);
-                    // But src2 can be scratch2
                     assert isSimm13(crb.asIntConst(src2));
                     exceptionOffset = masm.position();
                     new Sdivx(asIntReg(src1), crb.asIntConst(src2), asIntReg(scratch1)).emit(masm);
@@ -597,10 +593,6 @@ public enum SPARCArithmetic {
                     break;
                 case LREM:
                     assert isSimm13(crb.asIntConst(src2));
-                    assert !src1.equals(scratch1);
-                    assert !src1.equals(scratch2);
-                    assert !src2.equals(scratch1);
-                    // But src2 can be scratch2
                     exceptionOffset = masm.position();
                     new Sdivx(asLongReg(src1), crb.asIntConst(src2), asLongReg(scratch1)).emit(masm);
                     new Mulx(asLongReg(scratch1), crb.asIntConst(src2), asLongReg(scratch2)).emit(masm);
@@ -608,10 +600,6 @@ public enum SPARCArithmetic {
                     break;
                 case LUREM:
                     assert isSimm13(crb.asIntConst(src2));
-                    assert !src1.equals(scratch1);
-                    assert !src1.equals(scratch2);
-                    assert !src2.equals(scratch1);
-                    // But src2 can be scratch2
                     exceptionOffset = masm.position();
                     new Udivx(asLongReg(src1), crb.asIntConst(src2), asLongReg(scratch1)).emit(masm);
                     new Mulx(asLongReg(scratch1), crb.asIntConst(src2), asLongReg(scratch2)).emit(masm);
@@ -628,9 +616,6 @@ public enum SPARCArithmetic {
                         new Setx(crb.asLongConst(src1), asLongReg(scratch2), false).emit(masm);
                         srcLeft = scratch2;
                     }
-                    assert !asLongReg(srcLeft).equals(asLongReg(scratch1));
-                    assert !asLongReg(src2).equals(asLongReg(scratch1));
-                    // But src2 can be scratch2
                     exceptionOffset = masm.position();
                     new Sdivx(asLongReg(srcLeft), asLongReg(src2), asLongReg(scratch1)).emit(masm);
                     new Mulx(asLongReg(scratch1), asLongReg(src2), asLongReg(scratch1)).emit(masm);
@@ -641,8 +626,6 @@ public enum SPARCArithmetic {
                         new Setx(crb.asLongConst(src1), asLongReg(scratch2), false).emit(masm);
                         srcLeft = scratch2;
                     }
-                    assert !asLongReg(srcLeft).equals(asLongReg(scratch1));
-                    assert !asLongReg(src2).equals(asLongReg(scratch1));
                     exceptionOffset = masm.position();
                     new Udivx(asLongReg(srcLeft), asLongReg(src2), asLongReg(scratch1)).emit(masm);
                     new Mulx(asLongReg(scratch1), asLongReg(src2), asLongReg(scratch1)).emit(masm);
@@ -653,16 +636,12 @@ public enum SPARCArithmetic {
                         new Setx(crb.asIntConst(src1), asIntReg(scratch2), false).emit(masm);
                         srcLeft = scratch2;
                     }
-                    assert !asIntReg(srcLeft).equals(asIntReg(scratch1));
-                    assert !asIntReg(src2).equals(asIntReg(scratch1));
                     exceptionOffset = masm.position();
                     new Sdivx(asIntReg(srcLeft), asIntReg(src2), asIntReg(scratch1)).emit(masm);
                     new Mulx(asIntReg(scratch1), asIntReg(src2), asIntReg(scratch1)).emit(masm);
                     new Sub(asIntReg(srcLeft), asIntReg(scratch1), asIntReg(dst)).emit(masm);
                     break;
                 case IUREM:
-                    assert !asIntReg(dst).equals(asIntReg(scratch1));
-                    assert !asIntReg(dst).equals(asIntReg(scratch2));
                     new Srl(asIntReg(src1), 0, asIntReg(scratch1)).emit(masm);
                     new Srl(asIntReg(src2), 0, asIntReg(dst)).emit(masm);
                     exceptionOffset = masm.position();
@@ -838,7 +817,7 @@ public enum SPARCArithmetic {
             case IUSHR:
             case IUDIV:
             case IUREM:
-                rk = result.getKind().getStackKind();
+                rk = result.getKind();
                 xsk = x.getKind().getStackKind();
                 ysk = y.getKind().getStackKind();
                 boolean valid = false;
@@ -921,14 +900,12 @@ public enum SPARCArithmetic {
                     new Srax(asIntReg(result), 32, asIntReg(result)).emit(masm);
                     break;
                 case IUMUL:
-                    assert !asIntReg(scratch).equals(asIntReg(result));
                     new Srl(asIntReg(x), 0, asIntReg(scratch)).emit(masm);
                     new Srl(asIntReg(y), 0, asIntReg(result)).emit(masm);
                     new Mulx(asIntReg(result), asIntReg(scratch), asIntReg(result)).emit(masm);
                     new Srlx(asIntReg(result), 32, asIntReg(result)).emit(masm);
                     break;
                 case LMUL:
-                    assert !asLongReg(scratch).equals(asLongReg(result));
                     new Umulxhi(asLongReg(x), asLongReg(y), asLongReg(result)).emit(masm);
 
                     new Srlx(asLongReg(x), 63, asLongReg(scratch)).emit(masm);
