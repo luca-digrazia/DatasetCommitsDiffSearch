@@ -309,10 +309,9 @@ public final class Interval {
         OneSpillStore,
 
         /**
-         * The interval is spilled multiple times or is spilled in a loop. Place the store somewhere
-         * on the dominator path between the definition and the usages.
+         * The interval is spilled multiple times.
          */
-        SpillInDominator,
+        MultipleSpills,
 
         /**
          * The interval should be stored immediately after its definition to prevent multiple
@@ -655,7 +654,7 @@ public final class Interval {
     }
 
     void setSpillDefinitionPos(int pos) {
-        assert spillState() == SpillState.SpillInDominator || spillDefinitionPos() == -1 : "cannot set the position twice";
+        assert spillState() == SpillState.MultipleSpills || spillDefinitionPos() == -1 : "cannot set the position twice";
         splitParent().spillDefinitionPos = pos;
     }
 

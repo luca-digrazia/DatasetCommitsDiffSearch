@@ -455,11 +455,11 @@ public final class LinearScan {
 
             case OneSpillStore: {
                 // the interval is spilled more then once
-                interval.setSpillState(SpillState.SpillInDominator);
+                interval.setSpillState(SpillState.MultipleSpills);
                 break;
             }
 
-            case SpillInDominator:
+            case MultipleSpills:
             case StoreAtDefinition:
             case StartInMemory:
             case NoOptimization:
@@ -1887,7 +1887,7 @@ public final class LinearScan {
 
     private void findSpillPosition() {
         for (Interval interval : intervals) {
-            if (interval != null && interval.isSplitParent() && interval.spillState() == SpillState.SpillInDominator) {
+            if (interval != null && interval.isSplitParent() && interval.spillState() == SpillState.MultipleSpills) {
                 AbstractBlock<?> defBlock = blockForId(interval.spillDefinitionPos());
                 AbstractBlock<?> spillBlock = null;
                 try (Indent indent = Debug.logAndIndent("interval %s (%s)", interval, defBlock)) {
