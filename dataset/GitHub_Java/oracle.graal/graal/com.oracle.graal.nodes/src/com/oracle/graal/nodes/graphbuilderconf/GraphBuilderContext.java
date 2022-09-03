@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,49 +25,31 @@ package com.oracle.graal.nodes.graphbuilderconf;
 import static com.oracle.graal.compiler.common.type.StampFactory.objectNonNull;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.FixedGuardNode;
+import com.oracle.graal.nodes.LogicNode;
 import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.nodes.type.StampTool;
+
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Used by a {@link GraphBuilderPlugin} to interface with an object that parses the bytecode of a
  * single {@linkplain #getMethod() method} as part of building a {@linkplain #getGraph() graph} .
  */
-public interface GraphBuilderContext {
-
-    /**
-     * Raw operation for adding a node to the graph when neither {@link #add} nor
-     * {@link #addPush(JavaKind, ValueNode)} can be used.
-     *
-     * @return either the node added or an equivalent node
-     */
-    <T extends ValueNode> T append(T value);
-
-    /**
-     * Adds the given node to the graph and also adds recursively all referenced inputs.
-     *
-     * @param value the node to be added to the graph
-     * @return either the node added or an equivalent node
-     */
-    <T extends ValueNode> T recursiveAppend(T value);
+public interface GraphBuilderContext extends GraphBuilderTool {
 
     /**
      * Pushes a given value to the frame state stack using an explicit kind. This should be used
@@ -143,24 +125,11 @@ public interface GraphBuilderContext {
      *
      * @param targetMethod the method being intrinsified
      * @param substitute the intrinsic implementation
-     * @param args the arguments with which to inline the invocation
+     * @param receiver the receiver, or null for static methods
+     * @param argsIncludingReceiver the arguments with which to inline the invocation
+     * @return whether the intrinsification was successful
      */
-    void intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args);
-
-    StampProvider getStampProvider();
-
-    MetaAccessProvider getMetaAccess();
-
-    default Assumptions getAssumptions() {
-        return getGraph().getAssumptions();
-    }
-
-    ConstantReflectionProvider getConstantReflection();
-
-    /**
-     * Gets the graph being constructed.
-     */
-    StructuredGraph getGraph();
+    boolean intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, InvocationPlugin.Receiver receiver, ValueNode[] argsIncludingReceiver);
 
     /**
      * Creates a snap shot of the current frame state with the BCI of the instruction after the one
@@ -177,8 +146,8 @@ public interface GraphBuilderContext {
     GraphBuilderContext getParent();
 
     /**
-     * Gets the first ancestor parsing context that is not parsing a
-     * {@linkplain #parsingIntrinsic() intrinsic}.
+     * Gets the first ancestor parsing context that is not parsing a {@linkplain #parsingIntrinsic()
+     * intrinsic}.
      */
     default GraphBuilderContext getNonIntrinsicAncestor() {
         GraphBuilderContext ancestor = getParent();
@@ -208,13 +177,9 @@ public interface GraphBuilderContext {
      */
     JavaType getInvokeReturnType();
 
-    default Stamp getInvokeReturnStamp() {
+    default StampPair getInvokeReturnStamp(Assumptions assumptions) {
         JavaType returnType = getInvokeReturnType();
-        if (returnType.getJavaKind() == JavaKind.Object && returnType instanceof ResolvedJavaType) {
-            return StampFactory.declared((ResolvedJavaType) returnType);
-        } else {
-            return StampFactory.forKind(returnType.getJavaKind());
-        }
+        return StampFactory.forDeclaredType(assumptions, returnType, false);
     }
 
     /**
@@ -230,6 +195,7 @@ public interface GraphBuilderContext {
      * Determines if this parsing context is within the bytecode of an intrinsic or a method inlined
      * by an intrinsic.
      */
+    @Override
     default boolean parsingIntrinsic() {
         return getIntrinsic() != null;
     }
@@ -248,12 +214,11 @@ public interface GraphBuilderContext {
      */
     default ValueNode nullCheckedValue(ValueNode value) {
         if (!StampTool.isPointerNonNull(value.stamp())) {
-            IsNullNode condition = getGraph().unique(new IsNullNode(value));
+            LogicNode condition = getGraph().unique(IsNullNode.create(value));
             ObjectStamp receiverStamp = (ObjectStamp) value.stamp();
             Stamp stamp = receiverStamp.join(objectNonNull());
             FixedGuardNode fixedGuard = append(new FixedGuardNode(condition, NullCheckException, InvalidateReprofile, true));
-            PiNode nonNullReceiver = getGraph().unique(new PiNode(value, stamp));
-            nonNullReceiver.setGuard(fixedGuard);
+            PiNode nonNullReceiver = getGraph().unique(new PiNode(value, stamp, fixedGuard));
             // TODO: Propogating the non-null into the frame state would
             // remove subsequent null-checks on the same value. However,
             // it currently causes an assertion failure when merging states.

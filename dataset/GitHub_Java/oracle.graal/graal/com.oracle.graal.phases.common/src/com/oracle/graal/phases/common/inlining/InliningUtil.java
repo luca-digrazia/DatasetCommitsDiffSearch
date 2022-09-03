@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.phases.common.inlining;
 
+import static com.oracle.graal.compiler.common.GraalOptions.HotSpotPrintInlining;
 import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
@@ -32,17 +33,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.function.Function;
 
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.compiler.common.util.Util;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.Fingerprint;
 import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.GraalGraphError;
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
@@ -57,7 +57,6 @@ import com.oracle.graal.nodes.AbstractMergeNode;
 import com.oracle.graal.nodes.BeginNode;
 import com.oracle.graal.nodes.CallTargetNode;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ControlSinkNode;
 import com.oracle.graal.nodes.DeoptimizeNode;
 import com.oracle.graal.nodes.EndNode;
 import com.oracle.graal.nodes.FixedGuardNode;
@@ -114,8 +113,24 @@ public class InliningUtil {
         printInlining(info.methodAt(0), info.invoke(), inliningDepth, success, msg, args);
     }
 
+    /**
+     * Print a HotSpot-style inlining message to the console.
+     */
     private static void printInlining(final ResolvedJavaMethod method, final Invoke invoke, final int inliningDepth, final boolean success, final String msg, final Object... args) {
-        Util.printInlining(method, invoke.bci(), inliningDepth, success, msg, args);
+        if (HotSpotPrintInlining.getValue()) {
+            // 1234567
+            TTY.print("        ");     // print timestamp
+            // 1234
+            TTY.print("     ");        // print compilation number
+            // % s ! b n
+            TTY.printf("%c%c%c%c%c ", ' ', method.isSynchronized() ? 's' : ' ', ' ', ' ', method.isNative() ? 'n' : ' ');
+            TTY.print("     ");        // more indent
+            TTY.print("    ");         // initial inlining indent
+            for (int i = 0; i < inliningDepth; i++) {
+                TTY.print("  ");
+            }
+            TTY.println(String.format("@ %d  %s   %s%s", invoke.bci(), methodName(method, null), success ? "" : "not inlining ", String.format(msg, args)));
+        }
     }
 
     public static void logInlinedMethod(InlineInfo info, int inliningDepth, boolean allowLogging, String msg, Object... args) {
@@ -639,49 +654,44 @@ public class InliningUtil {
     }
 
     public static ValueNode mergeReturns(AbstractMergeNode merge, List<? extends ReturnNode> returnNodes, List<Node> canonicalizedNodes) {
-        return mergeValueProducers(merge, returnNodes, canonicalizedNodes, returnNode -> returnNode.result());
-    }
-
-    public static <T extends ControlSinkNode> ValueNode mergeValueProducers(AbstractMergeNode merge, List<? extends T> valueProducers, List<Node> canonicalizedNodes,
-                    Function<T, ValueNode> valueFunction) {
-        ValueNode singleResult = null;
-        PhiNode phiResult = null;
-        for (T valueProducer : valueProducers) {
-            ValueNode result = valueFunction.apply(valueProducer);
+        ValueNode singleReturnValue = null;
+        PhiNode returnValuePhi = null;
+        for (ReturnNode returnNode : returnNodes) {
+            ValueNode result = returnNode.result();
             if (result != null) {
-                if (phiResult == null && (singleResult == null || singleResult == result)) {
-                    /* Only one result value, so no need yet for a phi node. */
-                    singleResult = result;
+                if (returnValuePhi == null && (singleReturnValue == null || singleReturnValue == result)) {
+                    /* Only one return value, so no need yet for a phi node. */
+                    singleReturnValue = result;
 
-                } else if (phiResult == null) {
-                    /* Found a second result value, so create phi node. */
-                    phiResult = merge.graph().addWithoutUnique(new ValuePhiNode(result.stamp().unrestricted(), merge));
+                } else if (returnValuePhi == null) {
+                    /* Found a second return value, so create phi node. */
+                    returnValuePhi = merge.graph().addWithoutUnique(new ValuePhiNode(result.stamp().unrestricted(), merge));
                     if (canonicalizedNodes != null) {
-                        canonicalizedNodes.add(phiResult);
+                        canonicalizedNodes.add(returnValuePhi);
                     }
                     for (int i = 0; i < merge.forwardEndCount(); i++) {
-                        phiResult.addInput(singleResult);
+                        returnValuePhi.addInput(singleReturnValue);
                     }
-                    phiResult.addInput(result);
+                    returnValuePhi.addInput(result);
 
                 } else {
                     /* Multiple return values, just add to existing phi node. */
-                    phiResult.addInput(result);
+                    returnValuePhi.addInput(result);
                 }
             }
 
             // create and wire up a new EndNode
             EndNode endNode = merge.graph().add(new EndNode());
             merge.addForwardEnd(endNode);
-            valueProducer.replaceAndDelete(endNode);
+            returnNode.replaceAndDelete(endNode);
         }
 
-        if (phiResult != null) {
-            assert phiResult.verify();
-            phiResult.inferStamp();
-            return phiResult;
+        if (returnValuePhi != null) {
+            assert returnValuePhi.verify();
+            returnValuePhi.inferStamp();
+            return returnValuePhi;
         } else {
-            return singleResult;
+            return singleReturnValue;
         }
     }
 
