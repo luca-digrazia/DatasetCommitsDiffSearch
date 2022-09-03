@@ -36,7 +36,6 @@ import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
@@ -334,28 +333,28 @@ public class WriteBarrierSnippets implements Snippets {
             super(providers, target);
         }
 
-        public void lower(SerialWriteBarrier writeBarrier, LoweringTool tool) {
+        public void lower(SerialWriteBarrier writeBarrier) {
             if (writeBarrier.alwaysNull()) {
                 writeBarrier.graph().removeFixed(writeBarrier);
                 return;
             }
-            Arguments args = new Arguments(serialWriteBarrier, writeBarrier.graph().getGuardsStage(), tool.getLoweringStage());
+            Arguments args = new Arguments(serialWriteBarrier, writeBarrier.graph().getGuardsStage());
             args.add("object", writeBarrier.getObject());
             args.add("location", writeBarrier.getLocation());
             args.addConst("usePrecise", writeBarrier.usePrecise());
             template(args).instantiate(providers.getMetaAccess(), writeBarrier, DEFAULT_REPLACER, args);
         }
 
-        public void lower(SerialArrayRangeWriteBarrier arrayRangeWriteBarrier, LoweringTool tool) {
-            Arguments args = new Arguments(serialArrayRangeWriteBarrier, arrayRangeWriteBarrier.graph().getGuardsStage(), tool.getLoweringStage());
+        public void lower(SerialArrayRangeWriteBarrier arrayRangeWriteBarrier) {
+            Arguments args = new Arguments(serialArrayRangeWriteBarrier, arrayRangeWriteBarrier.graph().getGuardsStage());
             args.add("object", arrayRangeWriteBarrier.getObject());
             args.add("startIndex", arrayRangeWriteBarrier.getStartIndex());
             args.add("length", arrayRangeWriteBarrier.getLength());
             template(args).instantiate(providers.getMetaAccess(), arrayRangeWriteBarrier, DEFAULT_REPLACER, args);
         }
 
-        public void lower(G1PreWriteBarrier writeBarrierPre, HotSpotRegistersProvider registers, LoweringTool tool) {
-            Arguments args = new Arguments(g1PreWriteBarrier, writeBarrierPre.graph().getGuardsStage(), tool.getLoweringStage());
+        public void lower(G1PreWriteBarrier writeBarrierPre, HotSpotRegistersProvider registers) {
+            Arguments args = new Arguments(g1PreWriteBarrier, writeBarrierPre.graph().getGuardsStage());
             args.add("object", writeBarrierPre.getObject());
             args.add("expectedObject", writeBarrierPre.getExpectedObject());
             args.add("location", writeBarrierPre.getLocation());
@@ -366,8 +365,8 @@ public class WriteBarrierSnippets implements Snippets {
             template(args).instantiate(providers.getMetaAccess(), writeBarrierPre, DEFAULT_REPLACER, args);
         }
 
-        public void lower(G1ReferentFieldReadBarrier readBarrier, HotSpotRegistersProvider registers, LoweringTool tool) {
-            Arguments args = new Arguments(g1ReferentReadBarrier, readBarrier.graph().getGuardsStage(), tool.getLoweringStage());
+        public void lower(G1ReferentFieldReadBarrier readBarrier, HotSpotRegistersProvider registers) {
+            Arguments args = new Arguments(g1ReferentReadBarrier, readBarrier.graph().getGuardsStage());
             args.add("object", readBarrier.getObject());
             args.add("expectedObject", readBarrier.getExpectedObject());
             args.add("location", readBarrier.getLocation());
@@ -378,12 +377,12 @@ public class WriteBarrierSnippets implements Snippets {
             template(args).instantiate(providers.getMetaAccess(), readBarrier, DEFAULT_REPLACER, args);
         }
 
-        public void lower(G1PostWriteBarrier writeBarrierPost, HotSpotRegistersProvider registers, LoweringTool tool) {
+        public void lower(G1PostWriteBarrier writeBarrierPost, HotSpotRegistersProvider registers) {
             if (writeBarrierPost.alwaysNull()) {
                 writeBarrierPost.graph().removeFixed(writeBarrierPost);
                 return;
             }
-            Arguments args = new Arguments(g1PostWriteBarrier, writeBarrierPost.graph().getGuardsStage(), tool.getLoweringStage());
+            Arguments args = new Arguments(g1PostWriteBarrier, writeBarrierPost.graph().getGuardsStage());
             args.add("object", writeBarrierPost.getObject());
             args.add("value", writeBarrierPost.getValue());
             args.add("location", writeBarrierPost.getLocation());
@@ -393,8 +392,8 @@ public class WriteBarrierSnippets implements Snippets {
             template(args).instantiate(providers.getMetaAccess(), writeBarrierPost, DEFAULT_REPLACER, args);
         }
 
-        public void lower(G1ArrayRangePreWriteBarrier arrayRangeWriteBarrier, HotSpotRegistersProvider registers, LoweringTool tool) {
-            Arguments args = new Arguments(g1ArrayRangePreWriteBarrier, arrayRangeWriteBarrier.graph().getGuardsStage(), tool.getLoweringStage());
+        public void lower(G1ArrayRangePreWriteBarrier arrayRangeWriteBarrier, HotSpotRegistersProvider registers) {
+            Arguments args = new Arguments(g1ArrayRangePreWriteBarrier, arrayRangeWriteBarrier.graph().getGuardsStage());
             args.add("object", arrayRangeWriteBarrier.getObject());
             args.add("startIndex", arrayRangeWriteBarrier.getStartIndex());
             args.add("length", arrayRangeWriteBarrier.getLength());
@@ -402,8 +401,8 @@ public class WriteBarrierSnippets implements Snippets {
             template(args).instantiate(providers.getMetaAccess(), arrayRangeWriteBarrier, DEFAULT_REPLACER, args);
         }
 
-        public void lower(G1ArrayRangePostWriteBarrier arrayRangeWriteBarrier, HotSpotRegistersProvider registers, LoweringTool tool) {
-            Arguments args = new Arguments(g1ArrayRangePostWriteBarrier, arrayRangeWriteBarrier.graph().getGuardsStage(), tool.getLoweringStage());
+        public void lower(G1ArrayRangePostWriteBarrier arrayRangeWriteBarrier, HotSpotRegistersProvider registers) {
+            Arguments args = new Arguments(g1ArrayRangePostWriteBarrier, arrayRangeWriteBarrier.graph().getGuardsStage());
             args.add("object", arrayRangeWriteBarrier.getObject());
             args.add("startIndex", arrayRangeWriteBarrier.getStartIndex());
             args.add("length", arrayRangeWriteBarrier.getLength());
