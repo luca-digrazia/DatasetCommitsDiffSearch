@@ -46,7 +46,6 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.SpeculationLog;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
@@ -233,13 +232,13 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     @TruffleCallBoundary
     protected final Object callBoundary(Object[] args) {
-        if (CompilerDirectives.inInterpreter()) {
+        if (CompilerDirectives.inInterpreterOrLowTier()) {
             // We are called and we are still in Truffle interpreter mode.
             if (CompilerDirectives.inInterpreter() && isValid()) {
                 // Native entry stubs were deoptimized => reinstall.
                 runtime().bypassedInstalledCode();
             }
-            if (getCompilationProfile().interpreterCall(this)) {
+            if (getCompilationProfile().interpreterOrLowTierCall(this)) {
                 // synchronous compile -> call again to take us to the compiled code
                 return doInvoke(args);
             }
@@ -249,19 +248,8 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return callRoot(args);
     }
 
-    @CompilerDirectives.TruffleBoundary
-    protected void printYerself() {
-        TTY.println("Opt compiled method called: " + this);
-    }
-
     // Note: {@code PartialEvaluator} looks up this method by name and signature.
     protected final Object callRoot(Object[] originalArguments) {
-        if (CompilerDirectives.inLowTier()) {
-            getCompilationProfile().lowTierCall(this);
-        }
-        if (CompilerDirectives.inCompiledCode() && !CompilerDirectives.inLowTier()) {
-            printYerself();
-        }
         Object[] args = originalArguments;
         OptimizedCompilationProfile profile = this.compilationProfile;
         if (CompilerDirectives.inCompiledCode() && profile != null) {

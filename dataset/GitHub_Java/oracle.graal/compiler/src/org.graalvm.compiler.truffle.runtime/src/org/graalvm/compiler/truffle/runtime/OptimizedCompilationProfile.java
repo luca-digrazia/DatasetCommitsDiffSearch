@@ -290,7 +290,6 @@ public class OptimizedCompilationProfile {
         ensureProfiling(1, replaceBackoff);
     }
 
-    @SuppressWarnings("try")
     final boolean interpreterOrLowTierCall(OptimizedCallTarget callTarget) {
         if (lowTierEnabled) {
             int intCallCount = ++interpreterCallCount;
@@ -299,9 +298,7 @@ public class OptimizedCompilationProfile {
                 // check if call target is hot enough to get compiled in low tier, but took not too long to get hot
                 if ((intAndLoopCallCount >= compilationCallAndLoopThreshold && intCallCount >= compilationCallThreshold && !isDeferredCompile(callTarget)) ||
                                 compileImmediately) {
-                    try (TruffleCompilerOptions.TruffleOptionsOverrideScope o = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleLowTierCompilation, true, TruffleCompilerOptions.TruffleLowTierProfiling, true)) {
-                        return callTarget.compile();
-                    }
+                    return callTarget.compile();
                 }
             } else if (CompilerDirectives.inLowTier() && !callTarget.isCompiling() && !compilationFailed) {
                 if ((intAndLoopCallCount >= compilationCallAndLoopThreshold && intCallCount >= compilationCallThreshold) || compileImmediately) {
