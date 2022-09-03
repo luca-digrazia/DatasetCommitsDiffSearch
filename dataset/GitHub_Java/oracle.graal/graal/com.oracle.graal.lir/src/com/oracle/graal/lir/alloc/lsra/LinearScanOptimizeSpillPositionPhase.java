@@ -28,7 +28,7 @@ import static jdk.internal.jvmci.code.ValueUtil.*;
 import java.util.*;
 
 import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.alloc.*;
@@ -40,7 +40,7 @@ import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.*;
 
-public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase {
+final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase {
 
     private static final DebugMetric betterSpillPos = Debug.metric("BetterSpillPosition");
     private static final DebugMetric betterSpillPosWithLowerProbability = Debug.metric("BetterSpillPositionWithLowerProbability");
@@ -58,10 +58,9 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
         allocator.printIntervals("After optimize spill position");
     }
 
-    @SuppressWarnings("try")
     private void optimizeSpillPosition() {
         try (Indent indent0 = Debug.logAndIndent("OptimizeSpillPositions")) {
-            LIRInsertionBuffer[] insertionBuffers = new LIRInsertionBuffer[allocator.getLIR().linearScanOrder().size()];
+            LIRInsertionBuffer[] insertionBuffers = new LIRInsertionBuffer[allocator.ir.linearScanOrder().size()];
             for (Interval interval : allocator.intervals()) {
                 optimizeInterval(insertionBuffers, interval);
             }
@@ -74,7 +73,6 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
         }
     }
 
-    @SuppressWarnings("try")
     private void optimizeInterval(LIRInsertionBuffer[] insertionBuffers, Interval interval) {
         if (interval == null || !interval.isSplitParent() || interval.spillState() != SpillState.SpillInDominator) {
             return;
@@ -156,7 +154,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
             if (insertionBuffer == null) {
                 insertionBuffer = new LIRInsertionBuffer();
                 insertionBuffers[spillBlock.getId()] = insertionBuffer;
-                insertionBuffer.init(allocator.getLIR().getLIRforBlock(spillBlock));
+                insertionBuffer.init(allocator.ir.getLIRforBlock(spillBlock));
             }
             int spillOpId = allocator.getFirstLirInstructionId(spillBlock);
             // insert spill move
@@ -191,8 +189,8 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
         public AbstractBlockBase<?> next() {
             AbstractBlockBase<?> currentBlock = block;
             int nextBlockIndex = block.getLinearScanNumber() + 1;
-            if (nextBlockIndex < allocator.sortedBlocks().size()) {
-                block = allocator.sortedBlocks().get(nextBlockIndex);
+            if (nextBlockIndex < allocator.sortedBlocks.size()) {
+                block = allocator.sortedBlocks.get(nextBlockIndex);
                 if (range.to <= allocator.getFirstLirInstructionId(block)) {
                     range = range.next;
                     if (range == Range.EndMarker) {
