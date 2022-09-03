@@ -22,7 +22,6 @@ import android.database.sqlite.SQLiteDatabase;
 import org.litepal.parser.LitePalAttr;
 import org.litepal.parser.LitePalParser;
 import org.litepal.tablemanager.Connector;
-import org.litepal.util.BaseUtility;
 
 /**
  * LitePal is an Android library that allows developers to use SQLite database extremely easy.
@@ -62,18 +61,15 @@ public class LitePal {
      *          The database to switch to.
      */
     public static void use(LitePalDB litePalDB) {
-        String dbNameInXML = null;
-        if (BaseUtility.isLitePalXMLExists()) {
-            LitePalParser.parseLitePalConfiguration();
-            dbNameInXML = LitePalAttr.getInstance().getDbName();
-        }
+        LitePalParser.parseLitePalConfiguration();
         LitePalAttr litePalAttr = LitePalAttr.getInstance();
+        String dbNameInXML = litePalAttr.getDbName();
         litePalAttr.setDbName(litePalDB.getDbName());
         litePalAttr.setVersion(litePalDB.getVersion());
         litePalAttr.setStorage(litePalDB.isExternalStorage() ? "external" : "internal");
         litePalAttr.setClassNames(litePalDB.getClassNames());
-        // set the extra key name only when use database other than default or litepal.xml not exists
-        if (dbNameInXML == null || !dbNameInXML.equalsIgnoreCase(litePalDB.getDbName())) {
+        // set the extra key name only when use database other than default
+        if (!dbNameInXML.equalsIgnoreCase(litePalDB.getDbName())) {
             litePalAttr.setExtraKeyName(litePalDB.getDbName());
             litePalAttr.setCases("lower");
         }
