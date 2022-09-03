@@ -27,6 +27,7 @@ package com.oracle.truffle.tools.profiler.impl;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.tools.profiler.CPUSampler;
+import com.oracle.truffle.tools.profiler.CPUTracer;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
@@ -87,15 +88,15 @@ public class CPUSamplerInstrument extends TruffleInstrument {
             sampler.setDelay(env.getOptions().get(CPUSamplerCLI.DELAY_PERIOD));
             sampler.setStackLimit(env.getOptions().get(CPUSamplerCLI.STACK_LIMIT));
             sampler.setFilter(getSourceSectionFilter(env));
-            sampler.setMode(env.getOptions().get(CPUSamplerCLI.MODE));
+            sampler.setExcludeInlinedRoots(env.getOptions().get(CPUSamplerCLI.MODE) == CPUSamplerCLI.Mode.COMPILED);
             sampler.setCollecting(true);
         }
         env.registerService(sampler);
     }
 
     private static SourceSectionFilter getSourceSectionFilter(Env env) {
-        final CPUSampler.Mode mode = env.getOptions().get(CPUSamplerCLI.MODE);
-        final boolean statements = mode == CPUSampler.Mode.STATEMENTS;
+        CPUSamplerCLI.Mode mode = env.getOptions().get(CPUSamplerCLI.MODE);
+        final boolean statements = mode == CPUSamplerCLI.Mode.STATEMENTS;
         final boolean internals = env.getOptions().get(CPUSamplerCLI.SAMPLE_INTERNAL);
         final Object[] filterRootName = env.getOptions().get(CPUSamplerCLI.FILTER_ROOT);
         final Object[] filterFile = env.getOptions().get(CPUSamplerCLI.FILTER_FILE);
