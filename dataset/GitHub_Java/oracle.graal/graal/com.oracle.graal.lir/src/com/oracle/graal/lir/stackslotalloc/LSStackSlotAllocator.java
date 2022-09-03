@@ -108,7 +108,7 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
         private void allocate() {
             Debug.dump(lir, "After StackSlot numbering");
 
-            long currentFrameSize = StackSlotAllocator.allocatedFramesize.isEnabled() ? frameMapBuilder.getFrameMap().currentFrameSize() : 0;
+            long currentFrameSize = Debug.isMeterEnabled() ? frameMapBuilder.getFrameMap().currentFrameSize() : 0;
             Set<LIRInstruction> usePos;
             // step 2: build intervals
             try (Scope s = Debug.scope("StackSlotAllocationBuildIntervals"); Indent indent = Debug.logAndIndent("BuildIntervals"); DebugCloseable t = BuildIntervalsTimer.start()) {
@@ -136,7 +136,7 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
                 assignStackSlots(usePos);
             }
             Debug.dump(lir, "After StackSlot assignment");
-            if (StackSlotAllocator.allocatedFramesize.isEnabled()) {
+            if (Debug.isMeterEnabled()) {
                 StackSlotAllocator.allocatedFramesize.add(frameMapBuilder.getFrameMap().currentFrameSize() - currentFrameSize);
             }
         }

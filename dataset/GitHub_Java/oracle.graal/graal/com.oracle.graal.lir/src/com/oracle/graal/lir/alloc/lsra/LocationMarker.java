@@ -54,55 +54,10 @@ public final class LocationMarker extends AllocationPhase {
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
-        new Marker<B>(lirGenRes.getLIR(), lirGenRes.getFrameMap()).build();
+        new Marker(lirGenRes.getLIR(), lirGenRes.getFrameMap()).build();
     }
 
-    /**
-     * Ensures that an element is only in the worklist once.
-     *
-     * @param <T>
-     */
-    static class UniqueWorkList<T extends AbstractBlockBase<T>> extends ArrayDeque<T> {
-        private static final long serialVersionUID = 8009554570990975712L;
-        BitSet valid;
-
-        public UniqueWorkList(int size) {
-            this.valid = new BitSet(size);
-        }
-
-        @Override
-        public T poll() {
-            T result = super.poll();
-            if (result != null) {
-                valid.set(result.getId(), false);
-            }
-            return result;
-        }
-
-        @Override
-        public boolean add(T pred) {
-            if (!valid.get(pred.getId())) {
-                valid.set(pred.getId(), true);
-                return super.add(pred);
-            }
-            return false;
-        }
-
-        @Override
-        public boolean addAll(Collection<? extends T> collection) {
-            boolean changed = false;
-            for (T element : collection) {
-                if (!valid.get(element.getId())) {
-                    valid.set(element.getId(), true);
-                    super.add(element);
-                    changed = true;
-                }
-            }
-            return changed;
-        }
-    }
-
-    private static final class Marker<T extends AbstractBlockBase<T>> {
+    private static final class Marker {
         private final LIR lir;
         private final FrameMap frameMap;
         private final RegisterAttributes[] registerAttributes;
@@ -117,17 +72,16 @@ public final class LocationMarker extends AllocationPhase {
             liveOutMap = new BlockMap<>(lir.getControlFlowGraph());
         }
 
-        @SuppressWarnings("unchecked")
-        void build() {
-            UniqueWorkList<T> worklist = new UniqueWorkList<>(lir.getControlFlowGraph().getBlocks().size());
+        private void build() {
+            Deque<AbstractBlockBase<?>> worklist = new ArrayDeque<>();
             for (int i = lir.getControlFlowGraph().getBlocks().size() - 1; i >= 0; i--) {
-                worklist.add((T) lir.getControlFlowGraph().getBlocks().get(i));
+                worklist.add(lir.getControlFlowGraph().getBlocks().get(i));
             }
             for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
                 liveInMap.put(block, frameMap.initReferenceMap(true));
             }
             while (!worklist.isEmpty()) {
-                AbstractBlockBase<T> block = worklist.poll();
+                AbstractBlockBase<?> block = worklist.poll();
                 processBlock(block, worklist);
             }
         }
@@ -147,7 +101,7 @@ public final class LocationMarker extends AllocationPhase {
             return false;
         }
 
-        private void processBlock(AbstractBlockBase<T> block, UniqueWorkList<T> worklist) {
+        private void processBlock(AbstractBlockBase<?> block, Deque<AbstractBlockBase<?>> worklist) {
             if (updateOutBlock(block)) {
                 try (Indent indent = Debug.logAndIndent("handle block %s", block)) {
                     BlockClosure closure = new BlockClosure(liveOutMap.get(block).clone());
