@@ -27,7 +27,6 @@ import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
@@ -35,7 +34,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 
 /**
@@ -94,20 +92,15 @@ public class WriteBarrierVerificationPhase extends Phase {
         final Node previous = node.predecessor();
         final boolean validatePreBarrier = HotSpotReplacementsUtil.useG1GC() && (isObjectWrite(node) || !((ArrayRangeWriteNode) node).isInitialization());
         if (isObjectWrite(node)) {
-            return (isObjectBarrier(node, next) || StampTool.isPointerAlwaysNull(getValueWritten(node))) && (!validatePreBarrier || isObjectBarrier(node, previous));
+            return next instanceof WriteBarrier && validateBarrier((FixedAccessNode) node, (WriteBarrier) next) &&
+                            (!validatePreBarrier || (previous instanceof WriteBarrier && validateBarrier((FixedAccessNode) node, (WriteBarrier) previous)));
+
         } else if (isObjectArrayRangeWrite(node)) {
-            return (isArrayBarrier(node, next) || StampTool.isPointerAlwaysNull(getValueWritten(node))) && (!validatePreBarrier || isArrayBarrier(node, previous));
+            return ((next instanceof ArrayRangeWriteBarrier) && ((ArrayRangeWriteNode) node).getArray() == ((ArrayRangeWriteBarrier) next).getObject()) &&
+                            (!validatePreBarrier || ((previous instanceof ArrayRangeWriteBarrier) && ((ArrayRangeWriteNode) node).getArray() == ((ArrayRangeWriteBarrier) previous).getObject()));
         } else {
             return true;
         }
-    }
-
-    private static boolean isObjectBarrier(FixedWithNextNode node, final Node next) {
-        return next instanceof WriteBarrier && validateBarrier((FixedAccessNode) node, (WriteBarrier) next);
-    }
-
-    private static boolean isArrayBarrier(FixedWithNextNode node, final Node next) {
-        return (next instanceof ArrayRangeWriteBarrier) && ((ArrayRangeWriteNode) node).getArray() == ((ArrayRangeWriteBarrier) next).getObject();
     }
 
     private static boolean isObjectWrite(Node node) {
@@ -134,18 +127,6 @@ public class WriteBarrierVerificationPhase extends Phase {
          * barriers inside loops, derived from writes outside loops, can not be permitted.
          */
         return ((node instanceof DeoptimizingNode) && ((DeoptimizingNode) node).canDeoptimize()) || (node instanceof LoopBeginNode);
-    }
-
-    private static ValueNode getValueWritten(FixedWithNextNode write) {
-        if (write instanceof WriteNode) {
-            return ((WriteNode) write).value();
-        } else if (write instanceof LoweredCompareAndSwapNode) {
-            return ((LoweredCompareAndSwapNode) write).getNewValue();
-        } else if (write instanceof LoweredAtomicReadAndWriteNode) {
-            return ((LoweredAtomicReadAndWriteNode) write).getNewValue();
-        } else {
-            throw GraalInternalError.shouldNotReachHere(String.format("unexpected write node %s", write));
-        }
     }
 
     private static boolean validateBarrier(FixedAccessNode write, WriteBarrier barrier) {
