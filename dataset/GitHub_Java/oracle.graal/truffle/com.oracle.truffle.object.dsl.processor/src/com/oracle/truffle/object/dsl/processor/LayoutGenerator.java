@@ -46,11 +46,7 @@ public class LayoutGenerator {
     public void generate(final PrintStream stream) {
         stream.printf("package %s;%n", layout.getPackageName());
         stream.println();
-
-        if (layout.hasFinalProperties() || layout.hasNonNullableProperties()) {
-            stream.println("import java.util.EnumSet;");
-        }
-
+        stream.println("import java.util.EnumSet;");
         stream.println("import com.oracle.truffle.api.object.*;");
 
         if (!layout.getShapeProperties().isEmpty()) {
@@ -521,23 +517,21 @@ public class LayoutGenerator {
             stream.println("    ");
         }
 
-        if (layout.hasDynamicObjectGuard() || layout.hasGettersOrSetters()) {
-            if (layout.hasDynamicObjectGuard()) {
-                stream.println("    @Override");
-                stream.print("    public");
-            } else {
-                stream.print("    private");
-            }
-
-            if (!layout.hasObjectTypeGuard()) {
-                stream.printf(" static");
-            }
-
-            stream.printf(" boolean is%s(DynamicObject object) {%n", layout.getName());
-            stream.printf("        return is%s(object.getShape().getObjectType());%n", layout.getName());
-            stream.println("    }");
-            stream.println("    ");
+        if (layout.hasDynamicObjectGuard()) {
+            stream.println("    @Override");
+            stream.print("    public");
+        } else {
+            stream.print("    private");
         }
+
+        if (!layout.hasObjectTypeGuard()) {
+            stream.printf(" static");
+        }
+
+        stream.printf(" boolean is%s(DynamicObject object) {%n", layout.getName());
+        stream.printf("        return is%s(object.getShape().getObjectType());%n", layout.getName());
+        stream.println("    }");
+        stream.println("    ");
 
         if (layout.hasObjectTypeGuard()) {
             stream.println("    @Override");
