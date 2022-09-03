@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.graph.Graph.*;
-
 import java.lang.annotation.*;
 import java.util.*;
 
@@ -121,18 +119,9 @@ public abstract class Node implements Cloneable, Formattable {
     // therefore points to the next Node of the same type.
     Node typeCacheNext;
 
-    private static final int INLINE_USAGE_COUNT = 2;
-    private static final Node[] NO_NODES = {};
-
-    /**
-     * Head of usage list. The elements of the usage list in order are {@link #usage0},
-     * {@link #usage1} and {@link #extraUsages}. The first null entry terminates the list.
-     */
-    private Node usage0;
-    private Node usage1;
-    private Node[] extraUsages = NO_NODES;
-
+    private NodeUsagesList usages;
     private Node predecessor;
+    private int modCount;
 
     public Node() {
         this.graph = null;
@@ -167,184 +156,8 @@ public abstract class Node implements Cloneable, Formattable {
         return getNodeClass().getSuccessorIterable(this);
     }
 
-    class NodeUsageIterator implements Iterator<Node> {
-
-        private final int expectedModCount = usageModCount();
-        int index = -1;
-        Node current;
-
-        private void advance() {
-            assert index == -1 || current != null;
-            current = null;
-            index++;
-            if (index == 0) {
-                current = usage0;
-            } else if (index == 1) {
-                current = usage1;
-            } else {
-                if (index - INLINE_USAGE_COUNT < extraUsages.length) {
-                    current = extraUsages[index - INLINE_USAGE_COUNT];
-                }
-            }
-        }
-
-        public NodeUsageIterator() {
-            advance();
-        }
-
-        public boolean hasNext() {
-            assert expectedModCount == usageModCount();
-            return current != null;
-        }
-
-        public Node next() {
-            assert expectedModCount == usageModCount();
-            Node result = current;
-            if (result == null) {
-                throw new NoSuchElementException();
-            }
-            advance();
-            return result;
-        }
-
-        public void remove() {
-            throw new UnsupportedOperationException();
-        }
-    }
-
-    class NodeUsageIterable extends AbstractNodeIterable<Node> {
-
-        public NodeUsageIterator iterator() {
-            return new NodeUsageIterator();
-        }
-
-        @Override
-        public boolean isEmpty() {
-            return usage0 == null;
-        }
-
-        @Override
-        public boolean isNotEmpty() {
-            return usage0 != null;
-        }
-
-        @Override
-        public int count() {
-            if (usage0 == null) {
-                return 0;
-            }
-            if (usage1 == null) {
-                return 1;
-            }
-            int count = 2;
-            for (int i = 0; i < extraUsages.length && extraUsages[i] != null; i++) {
-                count++;
-            }
-            return count;
-        }
-    }
-
-    /**
-     * Gets the list of nodes that use this node (e.g., as an input).
-     */
     public final NodeIterable<Node> usages() {
-        return new NodeUsageIterable();
-    }
-
-    /**
-     * Adds a given node to this node's {@linkplain #usages() usages}.
-     * 
-     * @param node the node to add
-     */
-    private void addUsage(Node node) {
-        incUsageModCount();
-        if (usage0 == null) {
-            usage0 = node;
-        } else if (usage1 == null) {
-            usage1 = node;
-        } else {
-            int length = extraUsages.length;
-            int start = extraUsages.length >> 1;
-            if (start < length && extraUsages[start] == null) {
-                start = 0;
-            }
-            for (int i = start; i < length; i++) {
-                if (extraUsages[i] == null) {
-                    extraUsages[i] = node;
-                    return;
-                }
-            }
-            extraUsages = Arrays.copyOf(extraUsages, length * 2 + 1);
-            extraUsages[length] = node;
-        }
-    }
-
-    private Node removeFirstExtraUsage() {
-        Node res = null;
-        if (extraUsages.length > 0) {
-            res = extraUsages[0];
-            for (int i = 1; i < extraUsages.length; ++i) {
-                Node n = extraUsages[i];
-                extraUsages[i - 1] = n;
-                if (n == null) {
-                    break;
-                }
-            }
-            extraUsages[extraUsages.length - 1] = null;
-        }
-        return res;
-    }
-
-    /**
-     * Removes a given node from this node's {@linkplain #usages() usages}.
-     * 
-     * @param node the node to remove
-     * @return whether or not {@code usage} was in the usage list
-     */
-    private boolean removeUsage(Node node) {
-        // It is critical that this method maintains the invariant that
-        // the usage list has no null element preceding a non-null element
-        incUsageModCount();
-        if (usage0 == null) {
-            return false;
-        }
-        if (usage0 == node) {
-            usage0 = usage1;
-            if (usage1 != null) {
-                usage1 = removeFirstExtraUsage();
-            }
-            return true;
-        }
-        if (usage1 == null) {
-            return false;
-        }
-        if (usage1 == node) {
-            usage1 = removeFirstExtraUsage();
-            return true;
-        }
-        int length = extraUsages.length;
-        for (int i = 0; i < length; i++) {
-            if (extraUsages[i] == node) {
-                for (int j = i + 1; j < length; j++) {
-                    Node toMove = extraUsages[j];
-                    extraUsages[j - 1] = toMove;
-                    if (toMove == null) {
-                        break;
-                    }
-                }
-                extraUsages[length - 1] = null;
-
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void clearUsages() {
-        incUsageModCount();
-        usage0 = null;
-        usage1 = null;
-        extraUsages = NO_NODES;
+        return usages;
     }
 
     public final Node predecessor() {
@@ -352,29 +165,11 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     final int modCount() {
-        if (MODIFICATION_COUNTS_ENABLED && graph != null) {
-            return graph.modCount(this);
-        }
-        return 0;
+        return modCount;
     }
 
     final void incModCount() {
-        if (MODIFICATION_COUNTS_ENABLED && graph != null) {
-            graph.incModCount(this);
-        }
-    }
-
-    final int usageModCount() {
-        if (MODIFICATION_COUNTS_ENABLED && graph != null) {
-            return graph.usageModCount(this);
-        }
-        return 0;
-    }
-
-    final void incUsageModCount() {
-        if (MODIFICATION_COUNTS_ENABLED && graph != null) {
-            graph.incUsageModCount(this);
-        }
+        modCount++;
     }
 
     public boolean isDeleted() {
@@ -390,6 +185,7 @@ public abstract class Node implements Cloneable, Formattable {
      * newInput: removes this node from oldInput's usages and adds this node to newInput's usages.
      */
     protected void updateUsages(Node oldInput, Node newInput) {
+        assert assertTrue(usages != null, "usages == null while adding %s to %s", newInput, this);
         if (oldInput != newInput) {
             if (oldInput != null) {
                 boolean result = removeThisFromUsages(oldInput);
@@ -400,7 +196,8 @@ public abstract class Node implements Cloneable, Formattable {
                 if (inputChanged != null) {
                     inputChanged.nodeChanged(this);
                 }
-                newInput.addUsage(this);
+                assert newInput.usages != null : "not yet added? " + newInput;
+                newInput.usages.add(this);
             } else if (oldInput != null && oldInput.usages().isEmpty()) {
                 NodeChangedListener nodeChangedListener = graph.usagesDroppedZero;
                 if (nodeChangedListener != null) {
@@ -416,6 +213,7 @@ public abstract class Node implements Cloneable, Formattable {
      * this node to newSuccessor's predecessors.
      */
     protected void updatePredecessor(Node oldSuccessor, Node newSuccessor) {
+        assert assertTrue(usages != null, "usages == null while adding %s to %s", newSuccessor, this);
         if (oldSuccessor != newSuccessor) {
             if (oldSuccessor != null) {
                 assert assertTrue(oldSuccessor.predecessor == this, "wrong predecessor in old successor (%s): %s", oldSuccessor, oldSuccessor.predecessor);
@@ -432,6 +230,7 @@ public abstract class Node implements Cloneable, Formattable {
         assert assertTrue(id == INITIAL_ID, "unexpected id: %d", id);
         this.graph = newGraph;
         newGraph.register(this);
+        usages = new NodeUsagesList();
         for (Node input : inputs()) {
             updateUsages(null, input);
         }
@@ -454,7 +253,7 @@ public abstract class Node implements Cloneable, Formattable {
 
     public void replaceAtUsages(Node other) {
         assert checkReplaceWith(other);
-        for (Node usage : usages()) {
+        for (Node usage : usages) {
             boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
             assert assertTrue(result, "not found in inputs, usage: %s", usage);
             if (other != null) {
@@ -462,10 +261,10 @@ public abstract class Node implements Cloneable, Formattable {
                 if (inputChanged != null) {
                     inputChanged.nodeChanged(usage);
                 }
-                other.addUsage(usage);
+                other.usages.add(usage);
             }
         }
-        clearUsages();
+        usages.clear();
     }
 
     public void replaceAtPredecessor(Node other) {
@@ -515,7 +314,11 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     private boolean removeThisFromUsages(Node n) {
-        return n.removeUsage(this);
+        if (n.usages.remove(this)) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     public void clearSuccessors() {
@@ -529,7 +332,7 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     private boolean checkDeletion() {
-        assertTrue(usages().isEmpty(), "cannot delete node %s because of usages: %s", this, usages());
+        assertTrue(usages.isEmpty(), "cannot delete node %s because of usages: %s", this, usages);
         assertTrue(predecessor == null, "cannot delete node %s because of predecessor: %s", this, predecessor);
         return true;
     }
@@ -552,7 +355,7 @@ public abstract class Node implements Cloneable, Formattable {
         NodeClass clazz = getNodeClass();
         clazz.copyInputs(this, newNode);
         for (Node input : inputs()) {
-            input.addUsage(newNode);
+            input.usages.add(newNode);
         }
         return newNode;
     }
@@ -570,10 +373,9 @@ public abstract class Node implements Cloneable, Formattable {
         newNode.typeCacheNext = null;
         newNode.id = INITIAL_ID;
         into.register(newNode);
-        newNode.usage0 = null;
-        newNode.usage1 = null;
-        newNode.extraUsages = NO_NODES;
+        newNode.usages = new NodeUsagesList();
         newNode.predecessor = null;
+        newNode.modCount = 0;
         return newNode;
     }
 
@@ -774,10 +576,10 @@ public abstract class Node implements Cloneable, Formattable {
         }
 
         if (precision > 0) {
-            if (!usages().isEmpty()) {
+            if (this.usages.count() > 0) {
                 formatter.format(" usages={");
                 int z = 0;
-                for (Node usage : usages()) {
+                for (Node usage : this.usages) {
                     if (z != 0) {
                         formatter.format(", ");
                     }
