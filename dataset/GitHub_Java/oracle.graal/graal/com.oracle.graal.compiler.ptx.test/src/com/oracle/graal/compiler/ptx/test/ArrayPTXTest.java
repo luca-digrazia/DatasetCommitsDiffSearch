@@ -22,35 +22,29 @@
  */
 package com.oracle.graal.compiler.ptx.test;
 
-import static com.oracle.graal.lir.ptx.Warp.ThreadDimension.*;
-
-import com.oracle.graal.lir.ptx.Warp;
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import org.junit.Test;
+
+import org.junit.*;
 
 public class ArrayPTXTest extends PTXTestBase {
 
+    @Ignore
     @Test
     public void testArray() {
-        int[] arrayI = {
-            1, 2, 3, 4, 5, 6, 7, 8, 9,
-        };
-        invoke(compile("testStoreArray1I"), arrayI, 2);
-        printReport("testStoreArray1I: " + Arrays.toString(arrayI));
-        // compile("testArray1J");
-        // compile("testArray1B");
-        // compile("testArray1S");
-        // compile("testArray1C");
-        // compile("testArray1F");
-        // compile("testArray1D");
-        // compile("testArray1L");
-        // compile("testStoreArray1I");
-        // compile("testStoreArray1J");
-        // compile("testStoreArray1B");
-        // compile("testStoreArray1S");
-        // compile("testStoreArray1F");
-        // compile("testStoreArray1D");
+        compile("testArray1I");
+        compile("testArray1J");
+        compile("testArray1B");
+        compile("testArray1S");
+        compile("testArray1C");
+        compile("testArray1F");
+        compile("testArray1D");
+        compile("testArray1L");
+        compile("testStoreArray1I");
+        compile("testStoreArray1J");
+        compile("testStoreArray1B");
+        compile("testStoreArray1S");
+        compile("testStoreArray1F");
+        compile("testStoreArray1D");
     }
 
     public static int testArray1I(int[] array, int i) {
@@ -85,8 +79,8 @@ public class ArrayPTXTest extends PTXTestBase {
         return array[i];
     }
 
-    public static void testStoreArray1I(int[] array, @Warp(dimension = X) int i) {
-        array[i] = 42;
+    public static void testStoreArray1I(int[] array, int i, int val) {
+        array[i] = val;
     }
 
     public static void testStoreArray1B(byte[] array, int i, byte val) {
@@ -107,12 +101,6 @@ public class ArrayPTXTest extends PTXTestBase {
 
     public static void testStoreArray1D(double[] array, int i, double val) {
         array[i] = val;
-    }
-
-    public static void printReport(String message) {
-        // CheckStyle: stop system..print check
-        System.out.println(message);
-        // CheckStyle: resume system..print check
     }
 
     public static void main(String[] args) {
