@@ -37,10 +37,11 @@ import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderContext.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
+import com.oracle.graal.java.GraphBuilderContext.Replacement;
 import com.oracle.graal.java.GraphBuilderPhase.Instance.BytecodeParser;
+import com.oracle.graal.java.GraphBuilderPlugin.LoadFieldPlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.LoadIndexedPlugin;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
@@ -357,7 +358,7 @@ public abstract class AbstractBytecodeParser {
         }
     }
 
-    protected abstract void genStoreIndexed(ValueNode array, ValueNode index, Kind kind, ValueNode value);
+    protected abstract ValueNode genStoreIndexed(ValueNode array, ValueNode index, Kind kind, ValueNode value);
 
     private void genStoreIndexed(Kind kind) {
         emitExplicitExceptions(frameState.peek(2), frameState.peek(1));
@@ -365,7 +366,7 @@ public abstract class AbstractBytecodeParser {
         ValueNode value = frameState.pop(kind.getStackKind());
         ValueNode index = frameState.ipop();
         ValueNode array = frameState.apop();
-        genStoreIndexed(array, index, kind, value);
+        append(genStoreIndexed(array, index, kind, value));
     }
 
     private void stackOp(int opcode) {
@@ -869,7 +870,7 @@ public abstract class AbstractBytecodeParser {
         EXPLICIT_EXCEPTIONS.increment();
     }
 
-    protected abstract void genStoreField(ValueNode receiver, ResolvedJavaField field, ValueNode value);
+    protected abstract ValueNode genStoreField(ValueNode receiver, ResolvedJavaField field, ValueNode value);
 
     private void genPutField(JavaField field) {
         emitExplicitExceptions(frameState.peek(1), null);
@@ -877,7 +878,7 @@ public abstract class AbstractBytecodeParser {
         ValueNode value = frameState.pop(field.getKind().getStackKind());
         ValueNode receiver = frameState.apop();
         if (field instanceof ResolvedJavaField && ((ResolvedJavaField) field).getDeclaringClass().isInitialized()) {
-            genStoreField(receiver, (ResolvedJavaField) field, value);
+            appendOptimizedStoreField(genStoreField(receiver, (ResolvedJavaField) field, value));
         } else {
             handleUnresolvedStoreField(field, value, receiver);
         }
@@ -902,10 +903,14 @@ public abstract class AbstractBytecodeParser {
     private void genPutStatic(JavaField field) {
         ValueNode value = frameState.pop(field.getKind().getStackKind());
         if (field instanceof ResolvedJavaField && ((ResolvedJavaType) field.getDeclaringClass()).isInitialized()) {
-            genStoreField(null, (ResolvedJavaField) field, value);
+            appendOptimizedStoreField(genStoreField(null, (ResolvedJavaField) field, value));
         } else {
             handleUnresolvedStoreField(field, value, null);
         }
+    }
+
+    protected void appendOptimizedStoreField(ValueNode store) {
+        append(store);
     }
 
     protected void appendOptimizedLoadField(Kind kind, ValueNode load) {
@@ -926,9 +931,9 @@ public abstract class AbstractBytecodeParser {
 
     protected abstract void genReturn(ValueNode x, Kind kind);
 
-    protected abstract void genMonitorEnter(ValueNode x, int bci);
+    protected abstract ValueNode genMonitorEnter(ValueNode x);
 
-    protected abstract void genMonitorExit(ValueNode x, ValueNode returnValue, int bci);
+    protected abstract ValueNode genMonitorExit(ValueNode x, ValueNode returnValue);
 
     protected abstract void genJsr(int dest);
 
@@ -1033,7 +1038,7 @@ public abstract class AbstractBytecodeParser {
 
     protected abstract ValueNode appendConstant(JavaConstant constant);
 
-    protected abstract <T extends ValueNode> T append(T v);
+    protected abstract ValueNode append(ValueNode v);
 
     protected boolean isNeverExecutedCode(double probability) {
         return probability == 0 && optimisticOpts.removeNeverExecutedCode();
@@ -1288,8 +1293,8 @@ public abstract class AbstractBytecodeParser {
         case ATHROW         : genThrow(); break;
         case CHECKCAST      : genCheckCast(); break;
         case INSTANCEOF     : genInstanceOf(); break;
-        case MONITORENTER   : genMonitorEnter(frameState.apop(), stream.nextBCI()); break;
-        case MONITOREXIT    : genMonitorExit(frameState.apop(), null, stream.nextBCI()); break;
+        case MONITORENTER   : genMonitorEnter(frameState.apop()); break;
+        case MONITOREXIT    : genMonitorExit(frameState.apop(), null); break;
         case MULTIANEWARRAY : genNewMultiArray(stream.readCPI()); break;
         case IFNULL         : genIfNull(Condition.EQ); break;
         case IFNONNULL      : genIfNull(Condition.NE); break;
