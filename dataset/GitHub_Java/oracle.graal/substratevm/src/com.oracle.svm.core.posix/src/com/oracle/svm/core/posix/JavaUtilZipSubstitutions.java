@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,14 +30,11 @@ import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
-import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
@@ -47,6 +44,7 @@ import com.oracle.svm.core.jdk.JDK11OrLater;
 import com.oracle.svm.core.posix.headers.LibC;
 import com.oracle.svm.core.posix.headers.ZLib;
 import com.oracle.svm.core.posix.headers.ZLib.z_stream;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 @TargetClass(java.util.zip.Adler32.class)
@@ -420,7 +418,7 @@ final class Util_java_util_zip_Deflater_JDK11OrLater {
 final class Util_java_util_zip_Deflater_JDK10OrEarlier {
 
     static int update(Object obj, int len, z_stream strm) {
-        Target_java_util_zip_Deflater instance = SubstrateUtil.cast(obj, Target_java_util_zip_Deflater.class);
+        Target_java_util_zip_Deflater instance = KnownIntrinsics.unsafeCast(obj, Target_java_util_zip_Deflater.class);
         instance.off += instance.len - strm.avail_in();
         instance.len = strm.avail_in();
         return len - strm.avail_out();
@@ -667,7 +665,7 @@ final class Util_java_util_zip_Inflater_JDK11OrLater {
     // @formatter:on
     @SuppressWarnings({"cast"})
     static long doInflate(final Object obj, long addr, CCharPointer input, int inputLen, CCharPointer output, int outputLen) throws DataFormatException {
-        Target_java_util_zip_Inflater instance = SubstrateUtil.cast(obj, Target_java_util_zip_Inflater.class);
+        Target_java_util_zip_Inflater instance = KnownIntrinsics.unsafeCast(obj, Target_java_util_zip_Inflater.class);
         z_stream strm = WordFactory.pointer(addr);
         int inputUsed = 0;
         int outputUsed = 0;
@@ -708,7 +706,7 @@ final class Util_java_util_zip_Inflater_JDK11OrLater {
 
 final class Util_java_util_zip_Inflater_JDK10OrEarlier {
     static int update(Object obj, int len, z_stream strm) {
-        Target_java_util_zip_Inflater instance = SubstrateUtil.cast(obj, Target_java_util_zip_Inflater.class);
+        Target_java_util_zip_Inflater instance = KnownIntrinsics.unsafeCast(obj, Target_java_util_zip_Inflater.class);
         instance.off += instance.len - strm.avail_in();
         instance.len = strm.avail_in();
         return len - strm.avail_out();
@@ -734,14 +732,5 @@ final class Util_java_util_zip_Inflater {
 }
 
 /** Dummy class to have a class with the file's name. */
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 public final class JavaUtilZipSubstitutions {
-}
-
-@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
-@CLibrary("zip")
-final class JavaUtilZipJNISubstitutions {
-
-    private JavaUtilZipJNISubstitutions() {
-    }
 }
