@@ -31,9 +31,11 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
@@ -140,7 +142,7 @@ public final class Target_java_lang_ClassLoader {
     @Substitute //
     @TargetElement(onlyWith = JDK9OrLater.class) //
     @SuppressWarnings({"unused"})
-    Class<?> loadClass(Target_java_lang_Module module, String name) {
+    final Class<?> loadClass(Target_java_lang_Module module, String name) {
         throw VMError.unsupportedFeature("JDK9OrLater: Target_java_lang_ClassLoader.loadClass(Target_java_lang_Module, String)");
     }
 
@@ -178,7 +180,7 @@ public final class Target_java_lang_ClassLoader {
 
     @Substitute //
     @SuppressWarnings({"unused"}) //
-    private Class<?> findLoadedClass0(String name) {
+    private final Class<?> findLoadedClass0(String name) {
         /* See open/src/hotspot/share/prims/jvm.cpp#958. */
         throw VMError.unsupportedFeature("Target_java_lang_ClassLoader.findLoadedClass0(String)");
     }
@@ -193,7 +195,7 @@ public final class Target_java_lang_ClassLoader {
     @Substitute //
     @TargetElement(onlyWith = JDK9OrLater.class) //
     @SuppressWarnings({"unused"})
-    public Package getDefinedPackage(String name) {
+    public final Package getDefinedPackage(String name) {
         throw VMError.unsupportedFeature("JDK9OrLater: Target_java_lang_ClassLoader.getDefinedPackage(String name)");
     }
 }
