@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ public class LitePalContentHandler extends DefaultHandler {
 	private LitePalAttr litePalAttr;
 
 	/**
-	 * Characters in the <>characters</> tag. Decide to not use this method
+	 * Characters in the characters tag. Decide to not use this method
 	 * temporarily. Use value attribute instead.
 	 */
 	@Override
@@ -97,7 +97,13 @@ public class LitePalContentHandler extends DefaultHandler {
 					litePalAttr.setCases(attributes.getValue(i).trim());
 				}
 			}
-		}
+		} else if (LitePalParser.NODE_STORAGE.equalsIgnoreCase(localName)) {
+            for (int i = 0; i < attributes.getLength(); i++) {
+                if (LitePalParser.ATTR_VALUE.equalsIgnoreCase(attributes.getLocalName(i))) {
+                    litePalAttr.setStorage(attributes.getValue(i).trim());
+                }
+            }
+        }
 	}
 
 }
