@@ -45,19 +45,19 @@ public abstract class AbstractInliningPolicy implements InliningPolicy {
         this.hints = hints;
     }
 
-    protected double computeMaximumSize(double relevance, int configuredMaximum) {
+    public double computeMaximumSize(double relevance, int configuredMaximum) {
         double inlineRatio = Math.min(RelevanceCapForInlining.getValue(), relevance);
         return configuredMaximum * inlineRatio;
     }
 
-    protected double getInliningBonus(InlineInfo info) {
+    public double getInliningBonus(InlineInfo info) {
         if (hints != null && hints.containsKey(info.invoke())) {
             return hints.get(info.invoke());
         }
         return 1;
     }
 
-    protected boolean isIntrinsic(Replacements replacements, InlineInfo info) {
+    public boolean isIntrinsic(Replacements replacements, InlineInfo info) {
         if (AlwaysInlineIntrinsics.getValue()) {
             return onlyIntrinsics(replacements, info);
         } else {
@@ -86,7 +86,7 @@ public abstract class AbstractInliningPolicy implements InliningPolicy {
         return true;
     }
 
-    protected static int previousLowLevelGraphSize(InlineInfo info) {
+    public static int previousLowLevelGraphSize(InlineInfo info) {
         int size = 0;
         for (int i = 0; i < info.numberOfMethods(); i++) {
             ResolvedJavaMethod m = info.methodAt(i);
@@ -99,7 +99,7 @@ public abstract class AbstractInliningPolicy implements InliningPolicy {
         return size;
     }
 
-    protected static int determineNodeCount(InlineInfo info) {
+    public static int determineNodeCount(InlineInfo info) {
         int nodes = 0;
         for (int i = 0; i < info.numberOfMethods(); i++) {
             InliningUtil.Inlineable elem = info.inlineableElementAt(i);
@@ -110,7 +110,7 @@ public abstract class AbstractInliningPolicy implements InliningPolicy {
         return nodes;
     }
 
-    protected static double determineInvokeProbability(ToDoubleFunction<FixedNode> probabilities, InlineInfo info) {
+    public static double determineInvokeProbability(ToDoubleFunction<FixedNode> probabilities, InlineInfo info) {
         double invokeProbability = 0;
         for (int i = 0; i < info.numberOfMethods(); i++) {
             InliningUtil.Inlineable callee = info.inlineableElementAt(i);
