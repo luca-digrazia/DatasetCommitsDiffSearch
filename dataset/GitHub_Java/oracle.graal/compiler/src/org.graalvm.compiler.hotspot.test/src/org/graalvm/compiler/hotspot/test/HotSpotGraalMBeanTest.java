@@ -24,17 +24,17 @@ package org.graalvm.compiler.hotspot.test;
 
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
-import javax.management.Attribute;
 import javax.management.MBeanAttributeInfo;
 import javax.management.MBeanInfo;
 import javax.management.MBeanServer;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import org.graalvm.compiler.hotspot.HotSpotGraalMBean;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import org.junit.Test;
 
 public class HotSpotGraalMBeanTest {
@@ -80,32 +80,18 @@ public class HotSpotGraalMBeanTest {
 
         HotSpotGraalMBean realBean = HotSpotGraalMBean.create();
         assertNotNull("Bean is registered", name = realBean.ensureRegistered(false));
-        final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
 
-        ObjectInstance bean = server.getObjectInstance(name);
+        ObjectInstance bean = ManagementFactory.getPlatformMBeanServer().getObjectInstance(name);
         assertNotNull("Bean is registered", bean);
-        MBeanInfo info = server.getMBeanInfo(name);
+        MBeanInfo info = ManagementFactory.getPlatformMBeanServer().getMBeanInfo(name);
         assertNotNull("Info is found", info);
-
-        MBeanAttributeInfo printCompilation = null;
         for (MBeanAttributeInfo attr : info.getAttributes()) {
-            if (attr.getName().equals("PrintCompilation")) {
+            if (attr.getName().equals("Dump")) {
+                assertFalse("Read only now", attr.isWritable());
                 assertTrue("Readable", attr.isReadable());
-                assertTrue("Writable", attr.isWritable());
-                printCompilation = attr;
-                break;
+                return;
             }
         }
-        assertNotNull("PrintCompilation found", printCompilation);
-        assertEquals("true/false", Boolean.class.getName(), printCompilation.getType());
-
-        Attribute printOn = new Attribute(printCompilation.getName(), Boolean.TRUE);
-
-        Object before = server.getAttribute(name, printCompilation.getName());
-        server.setAttribute(name, printOn);
-        Object after = server.getAttribute(name, printCompilation.getName());
-
-        assertNull("Default value was not set", before);
-        assertEquals("Changed to on", Boolean.TRUE, after);
+        fail("No Dump attribute found");
     }
 }

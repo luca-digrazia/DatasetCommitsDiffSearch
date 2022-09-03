@@ -32,6 +32,7 @@ import javax.management.AttributeList;
 import javax.management.AttributeNotFoundException;
 import javax.management.DynamicMBean;
 import javax.management.InstanceAlreadyExistsException;
+import javax.management.InvalidAttributeValueException;
 import javax.management.MBeanAttributeInfo;
 import javax.management.MBeanException;
 import javax.management.MBeanInfo;
@@ -48,7 +49,6 @@ import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.util.EconomicMap;
-import org.graalvm.util.UnmodifiableEconomicMap;
 
 public final class HotSpotGraalMBean implements DynamicMBean {
     private static Object mBeanServerField;
@@ -114,10 +114,6 @@ public final class HotSpotGraalMBean implements DynamicMBean {
     @SuppressWarnings("unused")
     OptionValues optionsFor(OptionValues values, ResolvedJavaMethod forMethod) {
         ensureRegistered(true);
-        return currentMap(values);
-    }
-
-    private OptionValues currentMap(OptionValues values) {
         if (changes.isEmpty()) {
             return values;
         }
@@ -126,31 +122,17 @@ public final class HotSpotGraalMBean implements DynamicMBean {
 
     @Override
     public Object getAttribute(String attribute) {
-        UnmodifiableEconomicMap<OptionKey<?>, Object> map = currentMap(options).getMap();
-        for (OptionKey<?> k : map.getKeys()) {
+        for (OptionKey<?> k : options.getMap().getKeys()) {
             if (k.getName().equals(attribute)) {
-                return map.get(k);
+                return options.getMap().get(k);
             }
         }
         return null;
     }
 
     @Override
-    public void setAttribute(Attribute attribute) throws AttributeNotFoundException {
-        Attribute newAttr = setImpl(attribute);
-        if (newAttr == null) {
-            throw new AttributeNotFoundException();
-        }
-    }
-
-    private Attribute setImpl(Attribute attribute) {
-        for (OptionDescriptor option : allOptionDescriptors()) {
-            if (option.getName().equals(attribute.getName())) {
-                changes.put(option.getOptionKey(), attribute.getValue());
-                return attribute;
-            }
-        }
-        return null;
+    public void setAttribute(Attribute attribute) throws AttributeNotFoundException, InvalidAttributeValueException, MBeanException, ReflectionException {
+        throw new InvalidAttributeValueException();
     }
 
     @Override
@@ -167,14 +149,7 @@ public final class HotSpotGraalMBean implements DynamicMBean {
 
     @Override
     public AttributeList setAttributes(AttributeList attributes) {
-        AttributeList setOk = new AttributeList();
-        for (Attribute attr : attributes.asList()) {
-            Attribute newAttr = setImpl(attr);
-            if (newAttr != null) {
-                setOk.add(newAttr);
-            }
-        }
-        return setOk;
+        throw new IllegalStateException();
     }
 
     @Override
@@ -186,8 +161,10 @@ public final class HotSpotGraalMBean implements DynamicMBean {
     public MBeanInfo getMBeanInfo() {
         List<MBeanAttributeInfo> attrs = new ArrayList<>();
         if (registered != null) {
-            for (OptionDescriptor descr : allOptionDescriptors()) {
-                attrs.add(new MBeanAttributeInfo(descr.getName(), descr.getType().getName(), descr.getHelp(), true, true, false));
+            for (Iterator<OptionDescriptors> it = OptionsParser.getOptionsLoader().iterator(); it.hasNext();) {
+                for (OptionDescriptor descr : it.next()) {
+                    attrs.add(new MBeanAttributeInfo(descr.getName(), descr.getType().getName(), descr.getHelp(), true, false, false));
+                }
             }
         }
         return new MBeanInfo(
@@ -195,16 +172,6 @@ public final class HotSpotGraalMBean implements DynamicMBean {
                         "Graal",
                         attrs.toArray(new MBeanAttributeInfo[attrs.size()]),
                         null, null, null);
-    }
-
-    private static Iterable<OptionDescriptor> allOptionDescriptors() {
-        List<OptionDescriptor> arr = new ArrayList<>();
-        for (Iterator<OptionDescriptors> it = OptionsParser.getOptionsLoader().iterator(); it.hasNext();) {
-            for (OptionDescriptor descr : it.next()) {
-                arr.add(descr);
-            }
-        }
-        return arr;
     }
 
 }
