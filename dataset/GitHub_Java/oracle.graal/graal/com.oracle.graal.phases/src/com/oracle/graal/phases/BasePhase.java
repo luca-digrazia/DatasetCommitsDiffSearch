@@ -26,7 +26,6 @@ import java.util.regex.*;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugMemUseTracker.Closeable;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.nodes.*;
 
@@ -41,7 +40,6 @@ public abstract class BasePhase<C> {
 
     private final DebugTimer phaseTimer;
     private final DebugMetric phaseMetric;
-    private final DebugMemUseTracker phaseMemUseTracker;
 
     private static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
 
@@ -53,7 +51,6 @@ public abstract class BasePhase<C> {
     protected BasePhase() {
         phaseTimer = Debug.timer("PhaseTime_%s", getClass());
         phaseMetric = Debug.metric("PhaseCount_%s", getClass());
-        phaseMemUseTracker = Debug.memUseTracker("PhaseMemUse_%s", getClass());
     }
 
     protected BasePhase(String name) {
@@ -61,7 +58,6 @@ public abstract class BasePhase<C> {
         this.name = name;
         phaseTimer = Debug.timer("PhaseTime_%s", getClass());
         phaseMetric = Debug.metric("PhaseCount_%s", getClass());
-        phaseMemUseTracker = Debug.memUseTracker("PhaseMemUse_%s", getClass());
     }
 
     protected CharSequence getDetailedName() {
@@ -73,7 +69,7 @@ public abstract class BasePhase<C> {
     }
 
     public final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
-        try (TimerCloseable a = phaseTimer.start(); Scope s = Debug.scope(getClass(), this); Closeable c = phaseMemUseTracker.start()) {
+        try (TimerCloseable a = phaseTimer.start(); Scope s = Debug.scope(getClass(), this)) {
             BasePhase.this.run(graph, context);
             phaseMetric.increment();
             if (dumpGraph && Debug.isDumpEnabled()) {
