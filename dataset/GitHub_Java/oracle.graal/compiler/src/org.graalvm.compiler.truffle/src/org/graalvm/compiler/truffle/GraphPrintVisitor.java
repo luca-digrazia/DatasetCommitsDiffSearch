@@ -65,6 +65,11 @@ final class GraphPrintVisitor extends ProtocolImpl<RootCallTarget, NodeElement, 
     }
 
     @Override
+    protected Void findMethod(Object obj) {
+        return null;
+    }
+
+    @Override
     public NodeClass nodeClass(Object o) {
         Object obj = o;
         if (obj instanceof NodeElement) {
@@ -84,8 +89,8 @@ final class GraphPrintVisitor extends ProtocolImpl<RootCallTarget, NodeElement, 
     }
 
     @Override
-    public Object nodeClassType(NodeClass nodeClass) {
-        return nodeClass.getType();
+    protected Class<?> findJavaClass(NodeClass clazz) {
+        return clazz.getType();
     }
 
     @Override
@@ -96,6 +101,10 @@ final class GraphPrintVisitor extends ProtocolImpl<RootCallTarget, NodeElement, 
     @Override
     public int nodeId(NodeElement n) {
         return n.id;
+    }
+
+    @Override
+    protected void findExtraNodes(NodeElement node, Collection<? super NodeElement> extraNodes) {
     }
 
     @Override
@@ -119,6 +128,31 @@ final class GraphPrintVisitor extends ProtocolImpl<RootCallTarget, NodeElement, 
             final Object value = entry.getValue();
             props.put(entry.getKey(), Objects.toString(value));
         }
+    }
+
+    @Override
+    protected List<NodeElement> findBlockNodes(RootCallTarget info, Void block) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    protected int findBlockId(Void sux) {
+        return -1;
+    }
+
+    @Override
+    protected List<Void> findBlocks(RootCallTarget graph) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    protected List<Void> findBlockSuccessors(Void block) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    protected String formatTitle(RootCallTarget graph, int ident, String format, Object... args) {
+        return String.format(format, args) + " [" + ident + "]";
     }
 
     @Override
@@ -154,6 +188,142 @@ final class GraphPrintVisitor extends ProtocolImpl<RootCallTarget, NodeElement, 
     @Override
     public Collection<? extends NodeElement> edgeNodes(RootCallTarget graph, NodeElement node, EdgeType edges, int index) {
         return edges == EdgeType.PARENT ? Collections.emptyList() : node.out;
+    }
+
+    @Override
+    protected Object findEnumClass(Object enumValue) {
+        if (enumValue instanceof Enum<?>) {
+            return enumValue.getClass();
+        }
+        return null;
+    }
+
+    @Override
+    protected int findEnumOrdinal(Object obj) {
+        if (obj instanceof Enum<?>) {
+            return ((Enum<?>) obj).ordinal();
+        }
+        return -1;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    protected String[] findEnumTypeValues(Object clazz) {
+        if (clazz instanceof Class<?>) {
+            Class<? extends Enum<?>> enumClass = (Class<? extends Enum<?>>) clazz;
+            Enum<?>[] constants = enumClass.getEnumConstants();
+            if (constants != null) {
+                String[] names = new String[constants.length];
+                for (int i = 0; i < constants.length; i++) {
+                    names[i] = constants[i].name();
+                }
+                return names;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    protected String findJavaTypeName(Object obj) {
+        if (obj instanceof Class<?>) {
+            return ((Class<?>) obj).getName();
+        }
+        return null;
+    }
+
+    @Override
+    protected byte[] findMethodCode(Void method) {
+        return null;
+    }
+
+    @Override
+    protected int findMethodModifiers(Void method) {
+        return 0;
+    }
+
+    @Override
+    protected Void findMethodSignature(Void method) {
+        return null;
+    }
+
+    @Override
+    protected String findMethodName(Void method) {
+        return null;
+    }
+
+    @Override
+    protected Object findMethodDeclaringClass(Void method) {
+        return null;
+    }
+
+    @Override
+    protected int findFieldModifiers(Void field) {
+        return 0;
+    }
+
+    @Override
+    protected String findFieldTypeName(Void field) {
+        return null;
+    }
+
+    @Override
+    protected String findFieldName(Void field) {
+        return null;
+    }
+
+    @Override
+    protected Object findFieldDeclaringClass(Void field) {
+        return null;
+    }
+
+    @Override
+    protected Void findJavaField(Object object) {
+        return null;
+    }
+
+    @Override
+    protected Void findSignature(Object object) {
+        return null;
+    }
+
+    @Override
+    protected int findSignatureParameterCount(Void signature) {
+        return 0;
+    }
+
+    @Override
+    protected String findSignatureParameterTypeName(Void signature, int index) {
+        return null;
+    }
+
+    @Override
+    protected String findSignatureReturnTypeName(Void signature) {
+        return null;
+    }
+
+    @Override
+    protected Void findNodeSourcePosition(Object object) {
+        return null;
+    }
+
+    @Override
+    protected Void findNodeSourcePositionMethod(Void pos) {
+        return null;
+    }
+
+    @Override
+    protected Void findNodeSourcePositionCaller(Void pos) {
+        return null;
+    }
+
+    @Override
+    protected int findNodeSourcePositionBCI(Void pos) {
+        return 0;
+    }
+
+    @Override
+    protected StackTraceElement findMethodStackTraceElement(Void method, int bci, Void pos) {
+        return null;
     }
 
     static class NodeElement {
@@ -210,7 +380,7 @@ final class GraphPrintVisitor extends ProtocolImpl<RootCallTarget, NodeElement, 
 
     GraphPrintVisitor(WritableByteChannel ch) throws IOException {
         super(ch);
-        structure = this;
+        assignStructure(this);
     }
 
     /** @since 0.8 or earlier */

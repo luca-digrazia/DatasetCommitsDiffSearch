@@ -27,20 +27,16 @@ import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
 import java.util.Map;
 
-final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition>
+public abstract class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition>
                 extends GraphProtocol<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> {
-    private final GraphStructure<Graph, Node, NodeClass, Port> structure;
-    private final GraphTypes types;
-    private final GraphBlocks<Graph, Block, Node> blocks;
-    private final GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements;
+    private GraphStructure<Graph, Node, NodeClass, Port> structure;
 
-    ProtocolImpl(GraphStructure<Graph, Node, NodeClass, Port> structure, GraphTypes enums, GraphBlocks<Graph, Block, Node> blocks,
-                    GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements, WritableByteChannel channel) throws IOException {
+    protected ProtocolImpl(WritableByteChannel channel) throws IOException {
         super(channel);
+    }
+
+    protected final void assignStructure(GraphStructure<Graph, Node, NodeClass, Port> structure) {
         this.structure = structure;
-        this.types = enums;
-        this.blocks = blocks;
-        this.elements = elements;
     }
 
     @Override
@@ -113,161 +109,8 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
     }
 
     @Override
-    protected final Collection<? extends Node> findNodes(Graph graph, Node node, Port port, int i) {
+    protected Collection<? extends Node> findNodes(Graph graph, Node node, Port port, int i) {
         return structure.edgeNodes(graph, node, port, i);
     }
 
-    @Override
-    protected Object findJavaClass(NodeClass clazz) {
-        return structure.nodeClassType(clazz);
-    }
-
-    @Override
-    protected final Object findEnumClass(Object enumValue) {
-        return types.findEnumClass(enumValue);
-    }
-
-    @Override
-    protected final int findEnumOrdinal(Object obj) {
-        return types.findEnumOrdinal(obj);
-    }
-
-    @Override
-    protected final String[] findEnumTypeValues(Object clazz) {
-        return types.findEnumTypeValues(clazz);
-    }
-
-    @Override
-    protected String findJavaTypeName(Object obj) {
-        return types.typeName(obj);
-    }
-
-    @Override
-    protected Collection<? extends Node> findBlockNodes(Graph info, Block block) {
-        return blocks.blockNodes(info, block);
-    }
-
-    @Override
-    protected int findBlockId(Block block) {
-        return blocks.blockId(block);
-    }
-
-    @Override
-    protected Collection<? extends Block> findBlocks(Graph graph) {
-        return blocks.blocks(graph);
-    }
-
-    @Override
-    protected Collection<? extends Block> findBlockSuccessors(Block block) {
-        return blocks.blockSuccessors(block);
-    }
-
-    @Override
-    protected ResolvedJavaMethod findMethod(Object obj) {
-        return elements == null ? null : elements.method(obj);
-    }
-
-    @Override
-    protected byte[] findMethodCode(ResolvedJavaMethod method) {
-        return elements.methodCode(method);
-    }
-
-    @Override
-    protected int findMethodModifiers(ResolvedJavaMethod method) {
-        return elements.methodModifiers(method);
-    }
-
-    @Override
-    protected Signature findMethodSignature(ResolvedJavaMethod method) {
-        return elements.methodSignature(method);
-    }
-
-    @Override
-    protected String findMethodName(ResolvedJavaMethod method) {
-        return elements.methodName(method);
-    }
-
-    @Override
-    protected Object findMethodDeclaringClass(ResolvedJavaMethod method) {
-        return elements.methodDeclaringClass(method);
-    }
-
-    @Override
-    protected int findFieldModifiers(ResolvedJavaField field) {
-        return elements.fieldModifiers(field);
-    }
-
-    @Override
-    protected String findFieldTypeName(ResolvedJavaField field) {
-        return elements.fieldTypeName(field);
-    }
-
-    @Override
-    protected String findFieldName(ResolvedJavaField field) {
-        return elements.fieldName(field);
-    }
-
-    @Override
-    protected Object findFieldDeclaringClass(ResolvedJavaField field) {
-        return elements.fieldDeclaringClass(field);
-    }
-
-    @Override
-    protected ResolvedJavaField findJavaField(Object object) {
-        return elements == null ? null : elements.field(object);
-    }
-
-    @Override
-    protected Signature findSignature(Object object) {
-        return elements == null ? null : elements.signature(object);
-    }
-
-    @Override
-    protected int findSignatureParameterCount(Signature signature) {
-        return elements.signatureParameterCount(signature);
-    }
-
-    @Override
-    protected String findSignatureParameterTypeName(Signature signature, int index) {
-        return elements.signatureParameterTypeName(signature, index);
-    }
-
-    @Override
-    protected String findSignatureReturnTypeName(Signature signature) {
-        return elements.signatureReturnTypeName(signature);
-    }
-
-    @Override
-    protected NodeSourcePosition findNodeSourcePosition(Object object) {
-        return elements == null ? null : elements.nodeSourcePosition(object);
-    }
-
-    @Override
-    protected ResolvedJavaMethod findNodeSourcePositionMethod(NodeSourcePosition pos) {
-        return elements.nodeSourcePositionMethod(pos);
-    }
-
-    @Override
-    protected NodeSourcePosition findNodeSourcePositionCaller(NodeSourcePosition pos) {
-        return elements.nodeSourcePositionCaller(pos);
-    }
-
-    @Override
-    protected int findNodeSourcePositionBCI(NodeSourcePosition pos) {
-        return elements.nodeSourcePositionBCI(pos);
-    }
-
-    @Override
-    protected StackTraceElement findMethodStackTraceElement(ResolvedJavaMethod method, int bci, NodeSourcePosition pos) {
-        return elements.methodStackTraceElement(method, bci, pos);
-    }
-
-    @Override
-    protected void findExtraNodes(Node node, Collection<? super Node> extraNodes) {
-    }
-
-    @Override
-    protected String formatTitle(Graph graph, int id, String format, Object... args) {
-        return String.format(format, args) + " [" + id + "]";
-    }
 }
