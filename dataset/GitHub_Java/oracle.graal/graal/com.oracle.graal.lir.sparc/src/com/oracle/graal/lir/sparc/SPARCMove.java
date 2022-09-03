@@ -63,10 +63,10 @@ public class SPARCMove {
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             if (isRegister(result)) {
-                const2reg(crb, masm, result, g0, constant, getDelayedControlTransfer());
+                const2reg(crb, masm, result, g0, constant, delayedControlTransfer);
             } else if (isStackSlot(result)) {
                 StackSlot slot = asStackSlot(result);
-                const2stack(crb, masm, slot, g0, constant, getDelayedControlTransfer(), constant);
+                const2stack(crb, masm, slot, g0, constant, delayedControlTransfer, constant);
             }
         }
 
@@ -103,13 +103,13 @@ public class SPARCMove {
             Register baseRegister = asRegister(constantTableBase);
             if (isRegister(result)) {
                 Register resultRegister = asRegister(result);
-                loadFromConstantTable(crb, masm, constantKind, baseRegister, resultRegister, getDelayedControlTransfer(), recordReference);
+                loadFromConstantTable(crb, masm, constantKind, baseRegister, resultRegister, delayedControlTransfer, recordReference);
             } else if (isStackSlot(result)) {
                 try (ScratchRegister scratch = masm.getScratchRegister()) {
                     Register scratchRegister = scratch.getRegister();
-                    loadFromConstantTable(crb, masm, constantKind, baseRegister, scratchRegister, getDelayedControlTransfer(), recordReference);
+                    loadFromConstantTable(crb, masm, constantKind, baseRegister, scratchRegister, delayedControlTransfer, recordReference);
                     StackSlot slot = asStackSlot(result);
-                    reg2stack(crb, masm, slot, scratchRegister.asValue(), getDelayedControlTransfer());
+                    reg2stack(crb, masm, slot, scratchRegister.asValue(), delayedControlTransfer);
                 }
             }
         }
@@ -131,7 +131,7 @@ public class SPARCMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            move(crb, masm, getResult(), getInput(), getDelayedControlTransfer());
+            move(crb, masm, getResult(), getInput(), delayedControlTransfer);
         }
 
         @Override
@@ -184,7 +184,7 @@ public class SPARCMove {
         }
 
         private void moveDirect(CompilationResultBuilder crb, SPARCMacroAssembler masm, Kind inputKind, Kind resultKind) {
-            getDelayedControlTransfer().emitControlTransfer(crb, masm);
+            delayedControlTransfer.emitControlTransfer(crb, masm);
             if (resultKind == Float) {
                 if (inputKind == Int || inputKind == Short || inputKind == Char || inputKind == Byte) {
                     masm.movwtos(asIntReg(input), asFloatReg(result));
@@ -220,7 +220,7 @@ public class SPARCMove {
                 Register scratch = sc.getRegister();
                 SPARCAddress tempAddress = generateSimm13OffsetLoad((SPARCAddress) crb.asAddress(temp), masm, scratch);
                 masm.st(asRegister(input), tempAddress, resultKindSize);
-                getDelayedControlTransfer().emitControlTransfer(crb, masm);
+                delayedControlTransfer.emitControlTransfer(crb, masm);
                 masm.ld(tempAddress, asRegister(result), resultKindSize, false);
             }
         }
@@ -275,7 +275,7 @@ public class SPARCMove {
 
         @Override
         public void emitMemAccess(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitLoad(crb, masm, address.toAddress(), result, signExtend, kind, getDelayedControlTransfer(), state);
+            emitLoad(crb, masm, address.toAddress(), result, signExtend, kind, delayedControlTransfer, state);
         }
     }
 
@@ -295,7 +295,7 @@ public class SPARCMove {
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             SPARCAddress address = addressValue.toAddress();
-            loadEffectiveAddress(crb, masm, address, asLongReg(result), getDelayedControlTransfer());
+            loadEffectiveAddress(crb, masm, address, asLongReg(result), delayedControlTransfer);
         }
     }
 
@@ -339,7 +339,7 @@ public class SPARCMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            getDelayedControlTransfer().emitControlTransfer(crb, masm);
+            delayedControlTransfer.emitControlTransfer(crb, masm);
             masm.membar(barriers);
         }
     }
@@ -359,7 +359,7 @@ public class SPARCMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            getDelayedControlTransfer().emitControlTransfer(crb, masm);
+            delayedControlTransfer.emitControlTransfer(crb, masm);
             SPARCAddress addr = input.toAddress();
             crb.recordImplicitException(masm.position(), state);
             // Just need to check whether this is a valid address or not; alignment is not
@@ -397,7 +397,7 @@ public class SPARCMove {
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             move(crb, masm, result, newValue, SPARCDelayedControlTransfer.DUMMY);
-            compareAndSwap(crb, masm, address, cmpValue, result, getDelayedControlTransfer());
+            compareAndSwap(crb, masm, address, cmpValue, result, delayedControlTransfer);
         }
     }
 
@@ -417,7 +417,7 @@ public class SPARCMove {
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             SPARCAddress address = (SPARCAddress) crb.asAddress(slot);
-            loadEffectiveAddress(crb, masm, address, asLongReg(result), getDelayedControlTransfer());
+            loadEffectiveAddress(crb, masm, address, asLongReg(result), delayedControlTransfer);
         }
     }
 
@@ -452,7 +452,7 @@ public class SPARCMove {
 
         @Override
         public void emitMemAccess(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitStore(input, address.toAddress(), kind, getDelayedControlTransfer(), state, crb, masm);
+            emitStore(input, address.toAddress(), kind, delayedControlTransfer, state, crb, masm);
         }
     }
 
@@ -475,7 +475,7 @@ public class SPARCMove {
             try (ScratchRegister sc = masm.getScratchRegister()) {
                 Register scratch = sc.getRegister();
                 SPARCAddress addr = generateSimm13OffsetLoad(address.toAddress(), masm, scratch);
-                getDelayedControlTransfer().emitControlTransfer(crb, masm);
+                delayedControlTransfer.emitControlTransfer(crb, masm);
                 if (state != null) {
                     crb.recordImplicitException(masm.position(), state);
                 }

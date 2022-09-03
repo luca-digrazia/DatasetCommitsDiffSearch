@@ -117,7 +117,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         }
     }
 
-    protected LIRInstruction createMove(AllocatableValue dst, Value src) {
+    protected SPARCLIRInstruction createMove(AllocatableValue dst, Value src) {
         boolean srcIsSlot = isStackSlotValue(src);
         boolean dstIsSlot = isStackSlotValue(dst);
         if (src instanceof SPARCAddressValue) {
