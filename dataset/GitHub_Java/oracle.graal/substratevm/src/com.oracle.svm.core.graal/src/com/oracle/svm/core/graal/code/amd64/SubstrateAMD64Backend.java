@@ -767,7 +767,7 @@ public class SubstrateAMD64Backend extends Backend {
     }
 
     protected AMD64ArithmeticLIRGenerator createArithmeticLIRGen(RegisterValue nullRegisterValue) {
-        return new AMD64ArithmeticLIRGenerator(nullRegisterValue);
+        return new AMD64ArithmeticLIRGenerator(nullRegisterValue, null);
     }
 
     protected static SubstrateAMD64RegisterConfig getRegisterConfig(LIRGenerationResult lirGenRes) {
@@ -858,11 +858,7 @@ public class SubstrateAMD64Backend extends Backend {
     }
 
     @Override
-    public CompiledCode createCompiledCode(ResolvedJavaMethod method,
-                    CompilationRequest compilationRequest,
-                    CompilationResult compilationResult,
-                    boolean isDefault,
-                    OptionValues options) {
+    public CompiledCode createCompiledCode(ResolvedJavaMethod method, CompilationRequest compilationRequest, CompilationResult compilationResult) {
         return new SubstrateCompiledCode(compilationResult);
     }
 

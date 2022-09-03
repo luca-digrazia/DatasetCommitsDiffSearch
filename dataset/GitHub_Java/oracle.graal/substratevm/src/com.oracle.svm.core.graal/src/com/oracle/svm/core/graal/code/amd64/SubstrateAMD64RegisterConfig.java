@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,8 +24,6 @@
  */
 package com.oracle.svm.core.graal.code.amd64;
 
-import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
-import static com.oracle.svm.core.util.VMError.unimplemented;
 import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rbx;
 import static jdk.vm.ci.amd64.AMD64.rcx;
@@ -50,9 +50,12 @@ import static jdk.vm.ci.amd64.AMD64.valueRegistersSSE;
 
 import java.util.ArrayList;
 
+import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.config.ObjectLayout;
+import com.oracle.svm.core.graal.code.SubstrateCallingConvention;
 import com.oracle.svm.core.graal.meta.SubstrateRegisterConfig;
+import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.CallingConvention;
@@ -74,12 +77,8 @@ import jdk.vm.ci.meta.ValueKind;
 
 public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
 
-    public enum ConfigKind {
-        NORMAL,
-        NATIVE_TO_JAVA,
-    }
-
     private final TargetDescription target;
+    private final int nativeParamsStackOffset;
     private final RegisterArray generalParameterRegs;
     private final RegisterArray xmmParameterRegs;
     private final RegisterArray allocatableRegs;
@@ -88,24 +87,50 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
     private final MetaAccessProvider metaAccess;
     private final Register threadRegister;
     private final Register heapBaseRegister;
+    private final boolean useBasePointer;
 
-    public SubstrateAMD64RegisterConfig(ConfigKind config, MetaAccessProvider metaAccess, TargetDescription target) {
+    public SubstrateAMD64RegisterConfig(ConfigKind config, MetaAccessProvider metaAccess, TargetDescription target, boolean useBasePointer) {
         this.target = target;
         this.metaAccess = metaAccess;
+        this.useBasePointer = useBasePointer;
 
-        // This is the Linux 64-bit ABI for parameters.
-        generalParameterRegs = new RegisterArray(rdi, rsi, rdx, rcx, r8, r9);
-        xmmParameterRegs = new RegisterArray(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
+        if (OS.getCurrent() == OS.WINDOWS) {
+            // This is the Windows 64-bit ABI for parameters.
+            generalParameterRegs = new RegisterArray(rcx, rdx, r8, r9);
+            xmmParameterRegs = new RegisterArray(xmm0, xmm1, xmm2, xmm3);
 
-        heapBaseRegister = SubstrateOptions.UseHeapBaseRegister.getValue() ? r14 : null;
-        threadRegister = SubstrateOptions.MultiThreaded.getValue() ? r15 : null;
+            // Windows reserves space on the stack for first 4 native parameters
+            // even though they are passed in registers.
+            nativeParamsStackOffset = 4 * target.wordSize;
 
-        ArrayList<Register> regs = new ArrayList<>(valueRegistersSSE.asList());
-        regs.remove(rsp);
-        regs.remove(rbp);
-        regs.remove(heapBaseRegister);
-        regs.remove(threadRegister);
-        allocatableRegs = new RegisterArray(regs);
+            heapBaseRegister = SubstrateOptions.SpawnIsolates.getValue() ? r14 : null;
+            threadRegister = SubstrateOptions.MultiThreaded.getValue() ? r15 : null;
+
+            ArrayList<Register> regs = new ArrayList<>(valueRegistersSSE.asList());
+            regs.remove(rsp);
+            regs.remove(rbp);
+            regs.remove(heapBaseRegister);
+            regs.remove(threadRegister);
+            allocatableRegs = new RegisterArray(regs);
+        } else {
+            // This is the Linux 64-bit ABI for parameters.
+            generalParameterRegs = new RegisterArray(rdi, rsi, rdx, rcx, r8, r9);
+            xmmParameterRegs = new RegisterArray(xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
+
+            nativeParamsStackOffset = 0;
+
+            heapBaseRegister = SubstrateOptions.SpawnIsolates.getValue() ? r14 : null;
+            threadRegister = SubstrateOptions.MultiThreaded.getValue() ? r15 : null;
+
+            ArrayList<Register> regs = new ArrayList<>(valueRegistersSSE.asList());
+            regs.remove(rsp);
+            if (useBasePointer) {
+                regs.remove(rbp);
+            }
+            regs.remove(heapBaseRegister);
+            regs.remove(threadRegister);
+            allocatableRegs = new RegisterArray(regs);
+        }
 
         switch (config) {
             case NORMAL:
@@ -117,11 +142,15 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
                  * rbp must be last in the list, so that it gets the location closest to the saved
                  * return address.
                  */
-                calleeSaveRegisters = new RegisterArray(rbx, r12, r13, r14, r15, rbp);
+                if (OS.getCurrent() == OS.WINDOWS) {
+                    calleeSaveRegisters = new RegisterArray(rbx, rdi, rsi, r12, r13, r14, r15, rbp);
+                } else {
+                    calleeSaveRegisters = new RegisterArray(rbx, r12, r13, r14, r15, rbp);
+                }
                 break;
 
             default:
-                throw shouldNotReachHere();
+                throw VMError.shouldNotReachHere();
 
         }
         attributesMap = RegisterAttributes.createMap(this, AMD64.allRegisters);
@@ -144,7 +173,7 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
             case Void:
                 return null;
             default:
-                throw shouldNotReachHere();
+                throw VMError.shouldNotReachHere();
         }
     }
 
@@ -190,8 +219,25 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
 
     @Override
     public RegisterArray getCallingConventionRegisters(Type type, JavaKind kind) {
-        throw unimplemented();
-        // return null;
+        switch (kind) {
+            case Boolean:
+            case Byte:
+            case Short:
+            case Char:
+            case Int:
+            case Long:
+            case Object:
+                return generalParameterRegs;
+            case Float:
+            case Double:
+                return xmmParameterRegs;
+            default:
+                throw VMError.shouldNotReachHere();
+        }
+    }
+
+    public boolean shouldUseBasePointer() {
+        return this.useBasePointer;
     }
 
     @Override
@@ -208,7 +254,7 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
          * We have to reserve a slot between return address and outgoing parameters for the deopt
          * frame handle. Exception: calls to native methods.
          */
-        int currentStackOffset = (type.nativeABI ? 0 : target.wordSize);
+        int currentStackOffset = (type.nativeABI ? nativeParamsStackOffset : target.wordSize);
 
         JavaKind[] kinds = new JavaKind[locations.length];
         for (int i = 0; i < parameterTypes.length; i++) {
@@ -236,7 +282,7 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
                     }
                     break;
                 default:
-                    throw shouldNotReachHere();
+                    throw VMError.shouldNotReachHere();
             }
 
             if (locations[i] == null) {
@@ -248,9 +294,7 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
 
         JavaKind returnKind = returnType == null ? JavaKind.Void : ObjectLayout.getCallSignatureKind(isEntryPoint, (ResolvedJavaType) returnType, metaAccess, target);
         AllocatableValue returnLocation = returnKind == JavaKind.Void ? Value.ILLEGAL : getReturnRegister(returnKind).asValue(valueKindFactory.getValueKind(returnKind.getStackKind()));
-        SubstrateCallingConvention callingConvention = new SubstrateCallingConvention(currentStackOffset, returnLocation, locations);
-        callingConvention.setArgumentStorageKinds(kinds);
-        return callingConvention;
+        return new SubstrateCallingConvention(type, kinds, currentStackOffset, returnLocation, locations);
     }
 
     @Override
