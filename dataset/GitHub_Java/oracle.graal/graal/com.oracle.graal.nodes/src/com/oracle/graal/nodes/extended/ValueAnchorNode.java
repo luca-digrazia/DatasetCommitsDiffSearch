@@ -28,27 +28,18 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * The ValueAnchor instruction keeps non-CFG (floating) nodes above a certain point in the graph.
  */
-public final class ValueAnchorNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType, Virtualizable, GuardingNode {
-
-    @Input private final NodeInputList<ValueNode> anchored;
+public final class ValueAnchorNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType, Virtualizable {
 
     public ValueAnchorNode(ValueNode... values) {
-        this(false, values);
+        super(StampFactory.dependency(), values);
     }
-
-    public ValueAnchorNode(boolean permanent, ValueNode... values) {
-        super(StampFactory.dependency());
-        this.permanent = permanent;
-        this.anchored = new NodeInputList<>(this, values);
-    }
-
-    private final boolean permanent;
 
     @Override
     public void generate(LIRGeneratorTool gen) {
@@ -56,27 +47,24 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
     }
 
     public void addAnchoredNode(ValueNode value) {
-        if (!anchored.contains(value)) {
-            this.anchored.add(value);
+        if (!this.dependencies().contains(value)) {
+            this.dependencies().add(value);
         }
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (permanent) {
-            return this;
-        }
         if (this.predecessor() instanceof ValueAnchorNode) {
             ValueAnchorNode previousAnchor = (ValueAnchorNode) this.predecessor();
             if (previousAnchor.usages().isEmpty()) { // avoid creating cycles
                 // transfer values and remove
-                for (ValueNode node : anchored.nonNull().distinct()) {
+                for (ValueNode node : dependencies().nonNull().distinct()) {
                     previousAnchor.addAnchoredNode(node);
                 }
                 return previousAnchor;
             }
         }
-        for (Node node : anchored.nonNull().and(isNotA(FixedNode.class))) {
+        for (Node node : dependencies().nonNull().and(isNotA(FixedNode.class))) {
             if (node instanceof ConstantNode) {
                 continue;
             }
@@ -100,20 +88,19 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (permanent) {
-            return;
+        // don't process this node if it is anchoring the return value
+        if (next() instanceof MonitorExitNode) {
+            MonitorExitNode monitorExit = (MonitorExitNode) next();
+            if (monitorExit.stateAfter() != null && monitorExit.stateAfter().bci == FrameState.AFTER_BCI && monitorExit.next() instanceof ReturnNode) {
+                return;
+            }
         }
-        for (ValueNode node : anchored.nonNull().and(isNotA(AbstractBeginNode.class))) {
+        for (ValueNode node : dependencies().nonNull().and(isNotA(BeginNode.class))) {
             State state = tool.getObjectState(node);
             if (state == null || state.getState() != EscapeState.Virtual) {
                 return;
             }
         }
         tool.delete();
-    }
-
-    @Override
-    public ValueNode asNode() {
-        return this;
     }
 }
