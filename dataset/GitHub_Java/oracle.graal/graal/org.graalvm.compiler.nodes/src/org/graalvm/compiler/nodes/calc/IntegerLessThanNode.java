@@ -55,7 +55,7 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
     }
 
     public static LogicNode create(ValueNode x, ValueNode y) {
-        return OP.create(x, y);
+        return OP.createCanonical(x, y);
     }
 
     @Override
@@ -199,7 +199,7 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
         }
 
         @Override
-        protected IntegerLowerThanNode createNode(ValueNode x, ValueNode y) {
+        protected IntegerLowerThanNode create(ValueNode x, ValueNode y) {
             return new IntegerLessThanNode(x, y);
         }
 

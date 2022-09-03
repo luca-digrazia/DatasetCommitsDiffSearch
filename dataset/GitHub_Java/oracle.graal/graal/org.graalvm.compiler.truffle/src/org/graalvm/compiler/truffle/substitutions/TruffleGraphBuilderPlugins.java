@@ -648,8 +648,7 @@ public class TruffleGraphBuilderPlugins {
                 } else {
                     locationIdentity = ObjectLocationIdentity.create(location.asJavaConstant());
                 }
-                LogicNode compare = b.addWithInputs(CompareNode.createCompareNode(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, Condition.EQ, condition,
-                                ConstantNode.forBoolean(true, object.graph())));
+                LogicNode compare = b.addWithInputs(CompareNode.createCompareNode(Condition.EQ, condition, ConstantNode.forBoolean(true, object.graph()), b.getConstantReflection()));
                 ConditionAnchorNode anchor = b.add(new ConditionAnchorNode(compare));
                 b.addPush(returnKind, b.add(new GuardedUnsafeLoadNode(b.addNonNullCast(object), offset, returnKind, locationIdentity, anchor)));
                 return true;
