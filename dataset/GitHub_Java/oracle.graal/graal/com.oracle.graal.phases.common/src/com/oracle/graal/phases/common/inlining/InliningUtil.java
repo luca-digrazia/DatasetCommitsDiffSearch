@@ -401,7 +401,6 @@ public class InliningUtil {
         if (inlineGraph.hasUnsafeAccess()) {
             graph.markUnsafeAccess();
         }
-        assert inlineGraph.getSpeculationLog() == null : "Only the root graph should have a speculation log";
 
         return returnValue;
     }
