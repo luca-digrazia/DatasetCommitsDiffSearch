@@ -31,8 +31,6 @@ import java.util.*;
 import sun.misc.*;
 
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.Graph.NodeEvent;
 import com.oracle.graal.graph.Graph.NodeEventListener;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
@@ -687,9 +685,6 @@ public abstract class Node implements Cloneable, Formattable {
             if (listener != null) {
                 listener.inputChanged(node);
             }
-            if (Fingerprint.ENABLED) {
-                Fingerprint.submit("%s: %s", NodeEvent.INPUT_CHANGED, node);
-            }
         }
     }
 
@@ -699,9 +694,6 @@ public abstract class Node implements Cloneable, Formattable {
             NodeEventListener listener = graph.nodeEventListener;
             if (listener != null) {
                 listener.usagesDroppedToZero(node);
-            }
-            if (Fingerprint.ENABLED) {
-                Fingerprint.submit("%s: %s", NodeEvent.ZERO_USAGES, node);
             }
         }
     }
