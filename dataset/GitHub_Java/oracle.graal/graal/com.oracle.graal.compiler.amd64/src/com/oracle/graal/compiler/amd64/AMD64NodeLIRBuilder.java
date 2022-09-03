@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,18 +23,12 @@
 
 package com.oracle.graal.compiler.amd64;
 
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.*;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp.*;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.*;
+import static com.oracle.graal.lir.amd64.AMD64Arithmetic.*;
 
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
-import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp;
-import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
-import com.oracle.graal.asm.amd64.AMD64Assembler.SSEOp;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.gen.*;
@@ -114,27 +108,6 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
         return (Kind) gen.getLIRKind(access.asNode().stamp()).getPlatformKind();
     }
 
-    protected OperandSize getMemorySize(Access access) {
-        switch (getMemoryKind(access)) {
-            case Boolean:
-            case Byte:
-                return OperandSize.BYTE;
-            case Char:
-            case Short:
-                return OperandSize.WORD;
-            case Int:
-                return OperandSize.DWORD;
-            case Long:
-                return OperandSize.QWORD;
-            case Float:
-                return OperandSize.SS;
-            case Double:
-                return OperandSize.SD;
-            default:
-                throw GraalInternalError.shouldNotReachHere("unsupported memory access type " + getMemoryKind(access));
-        }
-    }
-
     protected AMD64AddressValue makeAddress(Access access) {
         return (AMD64AddressValue) access.accessLocation().generateAddress(this, gen, operand(access.object()));
     }
@@ -203,7 +176,6 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
         LabelRef falseLabel = getLIRBlock(x.falseSuccessor());
         double trueLabelProbability = x.probability(x.trueSuccessor());
         Kind kind = getMemoryKind(access);
-        OperandSize size = kind == Kind.Long ? QWORD : DWORD;
         if (value.isConstant()) {
             if (kind != kind.getStackKind()) {
                 return null;
@@ -214,61 +186,83 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
                 return null;
             }
             return builder -> {
-                gen.append(new AMD64CompareMemoryConstOp(AMD64MIOp.TEST, size, makeAddress(access), constant, getState(access)));
+                gen.append(new AMD64TestMemoryOp(kind, makeAddress(access), constant, getState(access)));
                 gen.append(new BranchOp(Condition.EQ, trueLabel, falseLabel, trueLabelProbability));
                 return null;
             };
         } else {
             return builder -> {
-                gen.append(new AMD64CompareMemoryOp(AMD64RMOp.TEST, size, gen.asAllocatable(operand(value)), makeAddress(access), getState(access)));
+                gen.append(new AMD64TestMemoryOp(kind, makeAddress(access), operand(value), getState(access)));
                 gen.append(new BranchOp(Condition.EQ, trueLabel, falseLabel, trueLabelProbability));
                 return null;
             };
         }
     }
 
-    protected ComplexMatchResult emitConvertMemoryOp(PlatformKind kind, AMD64RMOp op, OperandSize size, Access access) {
-        return builder -> {
-            AMD64AddressValue address = makeAddress(access);
-            LIRFrameState state = getState(access);
-            return getLIRGeneratorTool().emitConvertMemoryOp(kind, op, size, address, state);
-        };
+    protected Value emitConvert2MemoryOp(PlatformKind kind, AMD64Arithmetic op, Access access) {
+        AMD64AddressValue address = makeAddress(access);
+        LIRFrameState state = getState(access);
+        return getLIRGeneratorTool().emitConvert2MemoryOp(kind, op, address, state);
+    }
+
+    private Value emitFloatConvertMemory(FloatConvertNode op, Access access) {
+        switch (op.getFloatConvert()) {
+            case D2F:
+                return emitConvert2MemoryOp(Kind.Float, D2F, access);
+            case D2I:
+                return emitConvert2MemoryOp(Kind.Int, D2I, access);
+            case D2L:
+                return emitConvert2MemoryOp(Kind.Long, D2L, access);
+            case F2D:
+                return emitConvert2MemoryOp(Kind.Double, F2D, access);
+            case F2I:
+                return emitConvert2MemoryOp(Kind.Int, F2I, access);
+            case F2L:
+                return emitConvert2MemoryOp(Kind.Long, F2L, access);
+            case I2D:
+                return emitConvert2MemoryOp(Kind.Double, I2D, access);
+            case I2F:
+                return emitConvert2MemoryOp(Kind.Float, I2F, access);
+            case L2D:
+                return emitConvert2MemoryOp(Kind.Double, L2D, access);
+            case L2F:
+                return emitConvert2MemoryOp(Kind.Float, L2F, access);
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
     }
 
     private ComplexMatchResult emitSignExtendMemory(Access access, int fromBits, int toBits) {
         assert fromBits <= toBits && toBits <= 64;
         Kind kind = null;
-        AMD64RMOp op;
-        OperandSize size;
+        AMD64Arithmetic op = null;
         if (fromBits == toBits) {
             return null;
         } else if (toBits > 32) {
             kind = Kind.Long;
-            size = QWORD;
             // sign extend to 64 bits
             switch (fromBits) {
                 case 8:
-                    op = MOVSXB;
+                    op = B2L;
                     break;
                 case 16:
-                    op = MOVSX;
+                    op = S2L;
                     break;
                 case 32:
-                    op = MOVSXD;
+                    op = I2L;
                     break;
                 default:
                     throw GraalInternalError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
             }
         } else {
             kind = Kind.Int;
-            size = DWORD;
             // sign extend to 32 bits (smaller values are internally represented as 32 bit values)
             switch (fromBits) {
                 case 8:
-                    op = MOVSXB;
+                    op = B2I;
                     break;
                 case 16:
-                    op = MOVSX;
+                    op = S2I;
                     break;
                 case 32:
                     return null;
@@ -277,7 +271,13 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
             }
         }
         if (kind != null && op != null) {
-            return emitConvertMemoryOp(kind, op, size, access);
+            Kind localKind = kind;
+            AMD64Arithmetic localOp = op;
+            return new ComplexMatchResult() {
+                public Value evaluate(NodeLIRBuilder builder) {
+                    return emitConvert2MemoryOp(localKind, localOp, access);
+                }
+            };
         }
         return null;
     }
@@ -286,6 +286,66 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
         AMD64AddressValue address = makeAddress(access);
         LIRFrameState state = getState(access);
         return getLIRGeneratorTool().emitLoad(to, address, state);
+    }
+
+    protected AMD64Arithmetic getOp(ValueNode operation, Access access) {
+        Kind memoryKind = getMemoryKind(access);
+        if (operation.getClass() == AddNode.class) {
+            switch (memoryKind) {
+                case Int:
+                    return IADD;
+                case Long:
+                    return LADD;
+                case Float:
+                    return FADD;
+                case Double:
+                    return DADD;
+            }
+        } else if (operation.getClass() == AndNode.class) {
+            switch (memoryKind) {
+                case Int:
+                    return IAND;
+                case Long:
+                    return LAND;
+            }
+        } else if (operation.getClass() == OrNode.class) {
+            switch (memoryKind) {
+                case Int:
+                    return IOR;
+                case Long:
+                    return LOR;
+            }
+        } else if (operation.getClass() == XorNode.class) {
+            switch (memoryKind) {
+                case Int:
+                    return IXOR;
+                case Long:
+                    return LXOR;
+            }
+        } else if (operation.getClass() == SubNode.class) {
+            switch (memoryKind) {
+                case Int:
+                    return ISUB;
+                case Long:
+                    return LSUB;
+                case Float:
+                    return FSUB;
+                case Double:
+                    return DSUB;
+            }
+        } else if (operation.getClass() == MulNode.class) {
+            switch (memoryKind) {
+                case Int:
+                    return IMUL;
+                case Long:
+                    return LMUL;
+                case Float:
+                    return FMUL;
+                case Double:
+                    return DMUL;
+            }
+        }
+        return null;
     }
 
     @MatchRule("(If (IntegerTest Read=access value))")
@@ -332,74 +392,24 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
         return null;
     }
 
-    private ComplexMatchResult binaryRead(AMD64RMOp op, OperandSize size, ValueNode value, Access access) {
-        return builder -> getLIRGeneratorTool().emitBinaryMemory(op, size, getLIRGeneratorTool().asAllocatable(operand(value)), makeAddress(access), getState(access));
-    }
-
     @MatchRule("(Add value Read=access)")
-    @MatchRule("(Add value FloatingRead=access)")
-    public ComplexMatchResult addMemory(ValueNode value, Access access) {
-        OperandSize size = getMemorySize(access);
-        if (size.isXmmType()) {
-            return binaryRead(SSEOp.ADD, size, value, access);
-        } else {
-            return binaryRead(ADD.getRMOpcode(size), size, value, access);
-        }
-    }
-
     @MatchRule("(Sub value Read=access)")
-    @MatchRule("(Sub value FloatingRead=access)")
-    public ComplexMatchResult subMemory(ValueNode value, Access access) {
-        OperandSize size = getMemorySize(access);
-        if (size.isXmmType()) {
-            return binaryRead(SSEOp.SUB, size, value, access);
-        } else {
-            return binaryRead(SUB.getRMOpcode(size), size, value, access);
-        }
-    }
-
     @MatchRule("(Mul value Read=access)")
-    @MatchRule("(Mul value FloatingRead=access)")
-    public ComplexMatchResult mulMemory(ValueNode value, Access access) {
-        OperandSize size = getMemorySize(access);
-        if (size.isXmmType()) {
-            return binaryRead(SSEOp.MUL, size, value, access);
-        } else {
-            return binaryRead(AMD64RMOp.IMUL, size, value, access);
-        }
-    }
-
-    @MatchRule("(And value Read=access)")
-    @MatchRule("(And value FloatingRead=access)")
-    public ComplexMatchResult andMemory(ValueNode value, Access access) {
-        OperandSize size = getMemorySize(access);
-        if (size.isXmmType()) {
-            return null;
-        } else {
-            return binaryRead(AND.getRMOpcode(size), size, value, access);
-        }
-    }
-
     @MatchRule("(Or value Read=access)")
-    @MatchRule("(Or value FloatingRead=access)")
-    public ComplexMatchResult orMemory(ValueNode value, Access access) {
-        OperandSize size = getMemorySize(access);
-        if (size.isXmmType()) {
-            return null;
-        } else {
-            return binaryRead(OR.getRMOpcode(size), size, value, access);
-        }
-    }
-
     @MatchRule("(Xor value Read=access)")
+    @MatchRule("(And value Read=access)")
+    @MatchRule("(Add value FloatingRead=access)")
+    @MatchRule("(Sub value FloatingRead=access)")
+    @MatchRule("(Mul value FloatingRead=access)")
+    @MatchRule("(Or value FloatingRead=access)")
     @MatchRule("(Xor value FloatingRead=access)")
-    public ComplexMatchResult xorMemory(ValueNode value, Access access) {
-        OperandSize size = getMemorySize(access);
-        if (size.isXmmType()) {
-            return null;
-        } else {
-            return binaryRead(XOR.getRMOpcode(size), size, value, access);
+    @MatchRule("(And value FloatingRead=access)")
+    public ComplexMatchResult binaryRead(BinaryNode root, ValueNode value, Access access) {
+        AMD64Arithmetic op = getOp(root, access);
+        if (op != null) {
+            return builder -> getLIRGeneratorTool().emitBinaryMemory(op, getMemoryKind(access), getLIRGeneratorTool().asAllocatable(operand(value)), makeAddress(access), getState(access));
         }
+        return null;
     }
 
     @MatchRule("(Write Narrow=narrow location value)")
@@ -437,30 +447,8 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
     @MatchRule("(FloatConvert Read=access)")
     @MatchRule("(FloatConvert FloatingRead=access)")
     public ComplexMatchResult floatConvert(FloatConvertNode root, Access access) {
-        switch (root.getFloatConvert()) {
-            case D2F:
-                return emitConvertMemoryOp(Kind.Float, SSEOp.CVTSD2SS, SD, access);
-            case D2I:
-                return emitConvertMemoryOp(Kind.Int, SSEOp.CVTTSD2SI, DWORD, access);
-            case D2L:
-                return emitConvertMemoryOp(Kind.Long, SSEOp.CVTTSD2SI, QWORD, access);
-            case F2D:
-                return emitConvertMemoryOp(Kind.Double, SSEOp.CVTSS2SD, SS, access);
-            case F2I:
-                return emitConvertMemoryOp(Kind.Int, SSEOp.CVTTSS2SI, DWORD, access);
-            case F2L:
-                return emitConvertMemoryOp(Kind.Long, SSEOp.CVTTSS2SI, QWORD, access);
-            case I2D:
-                return emitConvertMemoryOp(Kind.Double, SSEOp.CVTSI2SD, DWORD, access);
-            case I2F:
-                return emitConvertMemoryOp(Kind.Float, SSEOp.CVTSI2SS, DWORD, access);
-            case L2D:
-                return emitConvertMemoryOp(Kind.Double, SSEOp.CVTSI2SD, QWORD, access);
-            case L2F:
-                return emitConvertMemoryOp(Kind.Float, SSEOp.CVTSI2SS, QWORD, access);
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
+        return builder -> emitFloatConvertMemory(root, access);
+
     }
 
     @MatchRule("(Reinterpret Read=access)")
