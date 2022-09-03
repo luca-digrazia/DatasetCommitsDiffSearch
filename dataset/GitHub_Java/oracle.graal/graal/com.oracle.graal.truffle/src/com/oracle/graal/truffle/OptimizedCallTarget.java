@@ -50,7 +50,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
         this.originalInvokeCounter = compilationThreshold;
         this.rootNode.setCallTarget(this);
 
-        if (TruffleCallTargetProfiling.getValue()) {
+        if (TruffleProfiling.getValue()) {
             registerCallTarget(this);
         }
     }
@@ -75,7 +75,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
 
     @Override
     public Object call(PackedFrame caller, Arguments args) {
-        if (TruffleCallTargetProfiling.getValue()) {
+        if (TruffleProfiling.getValue()) {
             callCount++;
         }
         if (CompilerDirectives.injectBranchProbability(CompilerDirectives.FASTPATH_PROBABILITY, compiledMethod != null)) {
@@ -138,7 +138,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
                                     (timeCompilationFinished - timeCompilationStarted) / 1e6, (timePartialEvaluationFinished - timeCompilationStarted) / 1e6,
                                     (timeCompilationFinished - timePartialEvaluationFinished) / 1e6, nodeCountPartialEval, nodeCountLowered, codeSize);
                 }
-                if (TruffleCallTargetProfiling.getValue()) {
+                if (TruffleProfiling.getValue()) {
                     resetProfiling();
                 }
             }
@@ -237,16 +237,16 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
             return inlined;
         }
 
-        private static void printCallSiteInfo(InliningPolicy policy, List<InlinableCallSiteInfo> inlinableCallSites, String msg) {
+        private void printCallSiteInfo(InliningPolicy policy, List<InlinableCallSiteInfo> inlinableCallSites, String msg) {
             for (InlinableCallSiteInfo candidate : inlinableCallSites) {
                 printCallSiteInfo(policy, candidate, msg);
             }
         }
 
-        private static void printCallSiteInfo(InliningPolicy policy, InlinableCallSiteInfo callSite, String msg) {
+        private void printCallSiteInfo(InliningPolicy policy, InlinableCallSiteInfo callSite, String msg) {
             String calls = String.format("%4s/%4s", callSite.getCallCount(), policy.callerInvocationCount);
             String nodes = String.format("%3s/%3s", callSite.getInlineNodeCount(), policy.callerNodeCount);
-            OUT.printf("[truffle] %-9s %-50s |Nodes %6s |Calls %6s %7.3f |%s\n", msg, callSite.getCallSite(), nodes, calls, policy.metric(callSite), callSite.getCallSite().getCallTarget());
+            OUT.printf("[truffle] %-9s %-50s |Nodes %6s |Calls %6s %7.3f |into %s\n", msg, callSite.getCallSite(), nodes, calls, policy.metric(callSite), target.getRootNode());
         }
 
         private static final class InliningPolicy {
@@ -405,7 +405,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
 
     private static Map<OptimizedCallTarget, Integer> callTargets;
     static {
-        if (TruffleCallTargetProfiling.getValue()) {
+        if (TruffleProfiling.getValue()) {
             callTargets = new WeakHashMap<>();
 
             Runtime.getRuntime().addShutdownHook(new Thread() {
