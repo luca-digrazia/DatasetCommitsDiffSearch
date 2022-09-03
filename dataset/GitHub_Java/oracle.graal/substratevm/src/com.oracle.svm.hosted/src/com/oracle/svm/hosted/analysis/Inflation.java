@@ -30,7 +30,6 @@ import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedType;
-import java.lang.reflect.MalformedParameterizedTypeException;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
@@ -79,7 +78,6 @@ import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import org.graalvm.compiler.core.common.SuppressSVMWarnings;
 
 public class Inflation extends BigBang {
     private Set<AnalysisField> handledUnknownValueFields;
@@ -283,19 +281,7 @@ public class Inflation extends BigBang {
         Class<?> javaClass = type.getJavaClass();
 
         TypeVariable<?>[] typeParameters = javaClass.getTypeParameters();
-
-        Type[] allGenericInterfaces;
-        try {
-            allGenericInterfaces = javaClass.getGenericInterfaces();
-        } catch (MalformedParameterizedTypeException t) {
-            /*
-             * Loading generic interfaces can fail due to missing types. Ignore the exception and
-             * return an empty array.
-             */
-            allGenericInterfaces = new Type[0];
-        }
-
-        Type[] genericInterfaces = Arrays.stream(allGenericInterfaces).filter(this::filterGenericInterfaces).toArray(Type[]::new);
+        Type[] genericInterfaces = Arrays.stream(javaClass.getGenericInterfaces()).filter(this::filterGenericInterfaces).toArray(Type[]::new);
         Type[] cachedGenericInterfaces = genericInterfacesMap.computeIfAbsent(new GenericInterfacesEncodingKey(genericInterfaces), k -> genericInterfaces);
         Type genericSuperClass = javaClass.getGenericSuperclass();
         hub.setGenericInfo(GenericInfo.factory(typeParameters, cachedGenericInterfaces, genericSuperClass));
@@ -305,19 +291,7 @@ public class Inflation extends BigBang {
         Class<?> javaClass = type.getJavaClass();
 
         AnnotatedType annotatedSuperclass = javaClass.getAnnotatedSuperclass();
-
-        AnnotatedType[] allAnnotatedInterfaces;
-        try {
-            allAnnotatedInterfaces = javaClass.getAnnotatedInterfaces();
-        } catch (MalformedParameterizedTypeException t) {
-            /*
-             * Loading annotated interfaces can fail due to missing types. Ignore the exception and
-             * return an empty array.
-             */
-            allAnnotatedInterfaces = new AnnotatedType[0];
-        }
-
-        AnnotatedType[] annotatedInterfaces = Arrays.stream(allAnnotatedInterfaces)
+        AnnotatedType[] annotatedInterfaces = Arrays.stream(javaClass.getAnnotatedInterfaces())
                         .filter(ai -> filterGenericInterfaces(ai.getType())).toArray(AnnotatedType[]::new);
         AnnotatedType[] cachedAnnotatedInterfaces = annotatedInterfacesMap.computeIfAbsent(
                         new AnnotatedInterfacesEncodingKey(annotatedInterfaces), k -> annotatedInterfaces);
@@ -607,20 +581,6 @@ public class Inflation extends BigBang {
         if (illegalCalleesPattern.matcher(calleeName).find()) {
             String callerName = caller.format("%H.%n");
             if (targetCallersPattern.matcher(callerName).find()) {
-                SuppressSVMWarnings suppress = caller.getAnnotation(SuppressSVMWarnings.class);
-                AnalysisType callerType = caller.getDeclaringClass();
-                while (suppress == null && callerType != null) {
-                    suppress = callerType.getAnnotation(SuppressSVMWarnings.class);
-                    callerType = callerType.getEnclosingType();
-                }
-                if (suppress != null) {
-                    String[] reasons = suppress.value();
-                    for (String r : reasons) {
-                        if (r.equals("AllowUseOfStreamAPI")) {
-                            return true;
-                        }
-                    }
-                }
                 String message = "Illegal: Graal/Truffle use of Stream API: " + calleeName;
                 int bci = srcPosition.getBCI();
                 String trace = caller.asStackTraceElement(bci).toString();
