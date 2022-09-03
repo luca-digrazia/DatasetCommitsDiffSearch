@@ -23,12 +23,24 @@
 package com.oracle.graal.debug.internal;
 
 import static com.oracle.graal.debug.DebugCloseable.*;
+import static java.lang.Thread.*;
+
+import java.lang.management.*;
+
 import com.oracle.graal.debug.*;
+import com.sun.management.ThreadMXBean;
 
 public final class MemUseTrackerImpl extends AccumulatedDebugValue implements DebugMemUseTracker {
 
+    private static final ThreadMXBean threadMXBean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+
+    /**
+     * The amount of memory allocated by {@link ThreadMXBean#getThreadAllocatedBytes(long)} itself.
+     */
+    private static final long threadMXBeanOverhead = -getCurrentThreadAllocatedBytes() + getCurrentThreadAllocatedBytes();
+
     public static long getCurrentThreadAllocatedBytes() {
-        return Management.getCurrentThreadAllocatedBytes();
+        return threadMXBean.getThreadAllocatedBytes(currentThread().getId()) - threadMXBeanOverhead;
     }
 
     /**
