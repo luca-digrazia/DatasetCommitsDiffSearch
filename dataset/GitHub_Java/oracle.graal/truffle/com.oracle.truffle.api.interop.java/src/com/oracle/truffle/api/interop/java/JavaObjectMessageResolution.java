@@ -213,7 +213,7 @@ class JavaObjectMessageResolution {
 
     }
 
-    @Resolve(message = "KEYS")
+    @Resolve(message = "PROPERTIES")
     abstract static class PropertiesNode extends Node {
         public Object access(JavaObject receiver) {
             final Field[] fields = receiver.clazz.getFields();
